@@ -959,7 +959,7 @@ def test_br_g_28_inventory_and_integrity_payload_versions_are_kind_aware() -> No
     encoded_inventory = encode_inventory_request(inventory)
     encoded_integrity = encode_integrity_request(integrity)
     assert json.loads(encoded_inventory)["version"] == 2
-    assert json.loads(encoded_integrity)["version"] == 1
+    assert json.loads(encoded_integrity)["version"] == 2
     assert decode_inventory_request(encoded_inventory) == inventory
     assert decode_integrity_request(encoded_integrity) == integrity
 
@@ -987,11 +987,11 @@ def test_br_g_28_inventory_and_integrity_payload_versions_are_kind_aware() -> No
                 separators=(",", ":"),
             ).encode()
         )
-    integrity_v2 = json.loads(encoded_integrity)
-    integrity_v2["version"] = 2
+    integrity_v1 = json.loads(encoded_integrity)
+    integrity_v1["version"] = 1
     with pytest.raises(ValueError):
         decode_integrity_request(
-            json.dumps(integrity_v2, separators=(",", ":")).encode()
+            json.dumps(integrity_v1, separators=(",", ":")).encode()
         )
     for malformed in (2.0, "2", True):
         malformed_inventory = json.loads(encoded_inventory)
@@ -1003,7 +1003,7 @@ def test_br_g_28_inventory_and_integrity_payload_versions_are_kind_aware() -> No
                     separators=(",", ":"),
                 ).encode()
             )
-    for malformed in (1.0, "1", True):
+    for malformed in (2.0, "2", True):
         malformed_integrity = json.loads(encoded_integrity)
         malformed_integrity["version"] = malformed
         with pytest.raises(ValueError):

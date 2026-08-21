@@ -148,10 +148,11 @@ version 1-3 payloads are refused instead of being guessed into the changed
 contract. Progress-continuation hardening advances the shared plan/execution
 codec to strict version 5, requires an exact bounded byte high-water on every
 execution set, and refuses versions 1-4 rather than resetting a resumed task's
-aggregate bar. Inventory request payloads advance to
-version 2 for recursive subtree scope while integrity requests stay at version
-1; their strict shared validator is therefore kind-aware rather than enforcing
-one version for both kinds.
+aggregate bar. Inventory request payloads advance to version 2 for recursive
+subtree scope. The independent standalone-integrity continuation also advances
+to strict version 2 to retain its physical-read total high-water and aggregate
+recording status; the shared validator remains kind-aware rather than treating
+either number as a global workflow-schema version.
 
 The payload round-trips the fingerprinted
 `SyncOptions.propagate_source_casing` seam as a required field. A payload that
@@ -228,6 +229,26 @@ item result in reviewed plan order. The execute phase summary remains
 compound-only; a plain execute cancellation does not invent a
 verification-shaped phase.
 
+An escaping ordinary execute exception follows the same authority rule. The
+workflow constructs its failed result from the `ExecutionSet`'s settled-item
+state, fixed reviewed byte budget, and aggregate byte high-water rather than
+asking the generic runner to reinterpret the latest lossy Progress snapshot.
+Fresh commitment or preflight failure/cancellation does the same before the
+executor or run recording opens, retaining `UNRUN` disposition and the
+phase-free result shape while still reporting the reviewed byte budget.
+Plain execution retains its phase-free result shape; linked execution adds the
+execute phase summary. Failure to enter the run-recording context likewise
+returns continuation-derived counters with degraded recording, while a context
+exit failure is secondary to an already-computed filesystem/result truth and
+degrades recording without replacing that truth. Cooperative control and
+`BaseException` causes still escape; a secondary context-exit failure is noted
+without replacing them. If that happens while pausing, the active execute or
+verify continuation is first degraded and recaptured, so paused cancellation
+or resume cannot recover an `OK` aggregate from the failed recording owner.
+During linked verification, the phase summary counts
+successfully emitted reliable outcome identities as a floor, so a later
+continuation-bookkeeping failure cannot erase an already-published settlement.
+
 Fresh preflight still runs on every resume. If an already-started execute
 continuation is refused or faults there, workflow reopens the same run only to
 finish it as `FAILED+RAN`, with settled execute counters preserved; it never
@@ -236,6 +257,10 @@ settled execute filesystem status and adds a zero-work incomplete verify phase.
 All terminal paths after recorder entry share one finish-once boundary.
 `PauseRequested`, `KeyboardInterrupt`, `SystemExit`, and other
 `BaseException` subclasses are not normalized into a workflow failure.
+`PauseRequested` or `Canceled` raised by the recording factory or its entry
+boundary likewise remains a control transition: pause escapes for custody
+snapshotting, while cancellation projects authoritative continuation counters
+without reopening the recording factory or consulting lossy Progress.
 A resumed execution canceled at the dispatcher's entry checkpoint is settled
 from its retained payload before `invocation.run()`, so the same finish-once
 ledger boundary runs. Once that exact cancellation settlement is elected, its
@@ -286,6 +311,22 @@ freshly inventories and guards those remaining rows without adding a newly
 appeared row. Inventory and plan register pause unsupported and remain
 cooperatively cancelable. The production interface registry contains all six
 current workflow kinds, and the CLI reaches each through the shared service.
+
+After integrity selection, running cancellation or ordinary failure derives
+terminal item and byte counters from that live continuation rather than the
+latest lossy Progress snapshot. Canceling a paused baseline, verify, or
+rebaseline session decodes and settles the exact stored continuation without
+reopening the workflow. Its strict v2 payload persists `processed_bytes`, the
+nondecreasing physical-read `bytes_total_high_water`, and one-way aggregate
+`recording`; a resumed invocation or paused cancellation cannot regress those
+axes. The byte pair measures attempted physical work rather than durable
+publication, while accumulated reliable outcomes and recorded evidence remain
+the independent settlement and durability authority. The same request-level
+`FAILED+RAN` projection applies if resumed volume resolution is offline or
+ambiguous, its refresh is incomplete, or recorder setup fails before
+`IntegritySelection` can be reconstructed. Fresh resolution refusal remains
+`REFUSED+UNRUN`; a fresh incomplete refresh remains `FAILED+RAN` with zero work
+counters.
 
 Frozen resume selection does not materialize the location's complete inventory:
 the workflow extracts canonical location-owned row IDs and asks the repository
@@ -362,11 +403,23 @@ the retained detail objects. Stage 6 replaces that summary path with grouped
 SQL aggregation over those primitive columns and database-paged detail in
 stable `item_order`; phase summaries remain whole.
 
+Workflow result byte counters retain the central attempted-work meaning from
+`ARCHITECTURE.md` §2.3. The execute projection uses its fixed reviewed budget
+and aggregate high-water even when some streamed bytes were rolled back before
+publication; standalone integrity uses physical-read work and its final
+nondecreasing budget. A compound result exposes those domains in separate
+phase summaries and projects execute at the top level rather than summing
+copy and verification. Consumers must use reliable item outcomes, published
+evidence, and ledger state—never the byte high-water—to infer durable content.
+
 Paused compound execution continues from an explicit discriminated
 continuation after fresh preflight. `phase=execute` carries execution status
 and published evidence; `phase=verify` carries `PostCopySelection`'s transient
 candidates plus completed ids/bytes, settled filesystem status, the execute
-phase, compound-current recording, and ordered missing-evidence ids. Frozen
+phase, compound-current recording, and ordered missing-evidence ids. Its phase
+projection reconstructs the verifier's nondecreasing physical budget as
+reviewed admission plus abandoned-attempt work and completed-stream overrun,
+so terminal or resumed summaries cannot regress below emitted Progress. Frozen
 `ExecutionSet.recording` remains execution truth; compound-current recording
 may degrade later but cannot recover `DEGRADED` to `OK`. Resume never infers
 phase from prior events or re-emits a completed reliable result. The compound
@@ -380,10 +433,10 @@ mutation.
 
 The continuation is process-local custody state, not a durable recovery
 format. `InMemorySessionStore.load_all()` deliberately returns no sessions;
-closing the process offers no execute/verify resume even though the strict v3
-codec itself can round-trip an in-process snapshot.
-Splitting integrity continuation payloads is deferred: the existing exact
-candidate/completed-state payload remains until a named late-run pause
+closing the process offers no execute/verify resume even though the strict
+execution payload v5 codec can round-trip an in-process snapshot.
+Splitting standalone-integrity continuation payloads is deferred: its exact v2
+candidate/completed/authority payload remains until a named late-run pause
 reserialization benchmark over large `completed_bytes` demonstrates that it
 misses the bridge pause-latency budget.
 

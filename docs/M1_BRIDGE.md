@@ -492,10 +492,11 @@ serve the range; BR-G-27 pins the query plan.
 render incomplete scope and its reason distinctly from a clean refresh.
 
 Inventory workflow payload v2 carries subtree roots separately from exact
-paths and rejects v1. Integrity payload remains v1 because its folder scope is
-frozen into existing exact subjects. The shared decoder accepts explicit
-`(expected_kind, expected_version)` and rejects wrong-kind or wrong-version
-bodies.
+paths and rejects v1. The independently versioned integrity payload advances to
+strict v2 so paused custody retains its physical-read total high-water and
+aggregate recording status beside frozen exact subjects. The shared decoder
+accepts explicit `(expected_kind, expected_version)` and rejects wrong-kind or
+wrong-version bodies.
 
 Integrity continuation restructuring remains deferred until a late-run pause
 benchmark over representative 10k, 100k, and large-folder subject sets proves a
@@ -2289,10 +2290,10 @@ headings are organizational, not lane ownership.
   path. *Not satisfied by* a `LIKE` query with escaping, an index merely present
   in the schema, or a plan that reports a scan.
 - **BR-G-28 — Inventory and integrity codecs version independently.** Inventory
-  v2 round-trips and rejects v1; integrity v1 still round-trips; a wrong-kind
+  v2 round-trips and rejects v1; integrity v2 round-trips and rejects v1; a wrong-kind
   body is rejected at either version; and the shared validator's version guard
   is proven kind-aware and exact-type (`2.0`, `"2"`, and `true` do not denote
-  inventory v2, with the equivalent malformed integrity-v1 cases rejected).
+  either v2 contract).
   *Not satisfied by* separate test-only decoders or by testing only the two
   accepted payloads, which misses cross-kind and coercible-version acceptance.
 
@@ -2986,7 +2987,7 @@ the contract.
 | Planner helper behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_planner.py` | `_depth`, `_parent`, and `_is_descendant` are pure relocations; no cleanup or semantic drift is allowed / A |
 | Scanner hostile names, cancellation, and walk completeness | `.\.venv\Scripts\python.exe -m pytest -q tests/test_scanner.py` | Parameterizing the walk must preserve literal names, escaped/unrepresentable reporting, identity-cycle handling, cancellation checks, and every existing incompleteness cause / B |
 | Recorder receipt, range, and transaction behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_recorder_inventory_integrity.py tests/test_recorder_concurrency.py` | Scope enters the payload hash and missing marking gains a third branch; idempotent transaction and concurrency behavior must not weaken / B, D |
-| Inventory/integrity payload and pause behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_inventory_workflow.py tests/test_inventory_runtime.py tests/test_payload_roundtrip.py` | A kind-aware shared validator and expanded frozen subject set must preserve integrity v1, pause order, and incomplete-scope settlement / B, C, D |
+| Inventory/integrity payload and pause behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_inventory_workflow.py tests/test_inventory_runtime.py tests/test_payload_roundtrip.py` | A kind-aware shared validator and expanded frozen subject set must preserve strict integrity v2 authority, pause order, and incomplete-scope settlement / B, C, D |
 | Service facade and import boundary | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/test_package.py` then `.\.venv\Scripts\lint-imports.exe` | New lifts, state, launcher, and web adapter must preserve primitives-only views, lazy CLI imports, shutdown order, and every layer edge / D, slices 1–3 |
 
 A lane runs every row naming it; integration lane D runs all Stage 5.5 rows.

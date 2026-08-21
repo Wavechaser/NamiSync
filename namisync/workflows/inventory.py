@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import json
 import os
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Callable, Mapping, Protocol
+from typing import Callable, Iterator, Mapping, Protocol
 
 from namisync.core.events import PhaseChanged
+from namisync.core.evidence import RecordingStatus
 from namisync.core.integrity import (
     IntegrityMode,
+    IntegrityOutcome,
     IntegrityRunResult,
     IntegritySelection,
     IntegritySelectionItem,
@@ -53,9 +56,11 @@ from namisync.core.root_authority import (
     admit_root_chain,
 )
 from namisync.core.session import (
+    Canceled,
     Disposition,
     FailureDetail,
     OperationResult,
+    PauseRequested,
     RunContext,
     SessionState,
 )
@@ -253,6 +258,8 @@ class IntegrityWorkflowRequest:
     completed_bytes: tuple[tuple[str, int], ...] = ()
     processed_bytes: int = 0
     refresh_generation: int = 0
+    bytes_total_high_water: int = 0
+    recording: RecordingStatus = RecordingStatus.OK
 
     def __post_init__(self) -> None:
         if not self.request_id:
@@ -278,14 +285,32 @@ class IntegrityWorkflowRequest:
             raise ValueError(
                 "completed integrity items must belong to the saved selection"
             )
+        if any(type(size) is not int for _, size in self.completed_bytes):
+            raise TypeError("completed integrity byte counts must be integers")
         if any(size < 0 for _, size in self.completed_bytes):
             raise ValueError("completed integrity byte counts cannot be negative")
+        if type(self.processed_bytes) is not int:
+            raise TypeError("integrity processed bytes must be an integer")
         if self.processed_bytes > 0 and not self.selection_item_ids:
             raise ValueError(
                 "integrity progress requires the saved admitted selection"
             )
         if self.processed_bytes < sum(size for _, size in self.completed_bytes):
             raise ValueError("processed bytes cannot trail completed bytes")
+        if type(self.bytes_total_high_water) is not int:
+            raise TypeError("integrity byte-total high-water must be an integer")
+        if self.bytes_total_high_water < self.processed_bytes:
+            raise ValueError(
+                "integrity byte-total high-water cannot trail processed bytes"
+            )
+        if self.bytes_total_high_water > 0 and not self.selection_item_ids:
+            raise ValueError(
+                "integrity byte-total high-water requires the saved admitted selection"
+            )
+        if not isinstance(self.recording, RecordingStatus):
+            raise TypeError("integrity recording status has the wrong type")
+        if type(self.refresh_generation) is not int:
+            raise TypeError("inventory refresh generation must be an integer")
         if self.refresh_generation < 0:
             raise ValueError("inventory refresh generation cannot be negative")
 
@@ -588,103 +613,318 @@ def run_integrity(
     deps: IntegrityDependencies,
     *,
     selection_sink: Callable[[IntegritySelection], None] | None = None,
+    recording_sink: Callable[[RecordingStatus], None] | None = None,
 ) -> OperationResult:
-    resolution = resolve_binding(request.binding, deps.resolver)
-    if resolution.state != VolumeResolutionState.RESOLVED:
-        deps.save_details(
-            InventoryDetails(
-                request.request_id,
-                resolution,
-                selected_paths=request.selected_paths,
+    try:
+        resolution = resolve_binding(request.binding, deps.resolver)
+        if resolution.state != VolumeResolutionState.RESOLVED:
+            deps.save_details(
+                InventoryDetails(
+                    request.request_id,
+                    resolution,
+                    selected_paths=request.selected_paths,
+                )
             )
+            refused = _refused_resolution(resolution)
+            if request.refresh_generation > 0:
+                assert refused.error is not None
+                return _integrity_request_terminal_result(
+                    request,
+                    SessionState.FAILED,
+                    recording=request.recording,
+                    items=(),
+                    error=refused.error,
+                )
+            return refused
+        if resolution.root_path is None or resolution.selected_mount is None:
+            raise RuntimeError("resolved integrity root lacks its current mount")
+    except PauseRequested:
+        raise
+    except Canceled:
+        return _integrity_request_terminal_result(
+            request,
+            SessionState.CANCELED,
+            recording=request.recording,
+            items=(),
+            canceled=True,
         )
-        return _refused_resolution(resolution)
-    if resolution.root_path is None or resolution.selected_mount is None:
-        raise RuntimeError("resolved integrity root lacks its current mount")
+    except Exception as error:
+        return _integrity_request_terminal_result(
+            request,
+            SessionState.FAILED,
+            recording=request.recording,
+            items=(),
+            error=FailureDetail(type(error).__name__, logical_error_text(error)),
+        )
     root = resolution.root_path
     scope_token = f"{request.request_id}:refresh:{request.refresh_generation}"
-    with LedgerRecorder(
-        deps.ledger_path, clock=deps.clock, managed_roots=(root,)
-    ) as recorder:
-        host_id, location_id, scan = _register_and_scan(
-            request.request_id,
-            scope_token,
-            request.binding,
-            resolution,
-            request.selected_paths,
-            (),
-            ctx,
+    selection: IntegritySelection | None = None
+    observed_outcomes: list[IntegrityOutcome] = []
+    observed_recording = request.recording
+    close_degraded = [False]
+    try:
+        with _integrity_recorder(
             deps,
-            recorder,
-        )
-        recorded = recorder.record_inventory(
-            InventoryCommand(
-                location_id,
-                host_id,
-                scan,
-                scope_token,
-                deps.clock.now(),
-            )
-        )
-        deps.save_details(
-            InventoryDetails(
+            root,
+            close_degraded=close_degraded,
+        ) as recorder:
+            host_id, location_id, scan = _register_and_scan(
                 request.request_id,
+                scope_token,
+                request.binding,
                 resolution,
-                location_id,
-                recorded.observed_count,
-                recorded.missing_count,
-                scan.complete,
                 request.selected_paths,
-                scan.warnings,
+                (),
+                ctx,
+                deps,
+                recorder,
             )
-        )
-        if not scan.complete and not (
-            request.selected_paths
-            and _subject_local_incompleteness(scan)
-        ):
-            return OperationResult(
-                SessionState.FAILED,
-                error=FailureDetail(
+            recorded = recorder.record_inventory(
+                InventoryCommand(
+                    location_id,
+                    host_id,
+                    scan,
+                    scope_token,
+                    deps.clock.now(),
+                )
+            )
+            deps.save_details(
+                InventoryDetails(
+                    request.request_id,
+                    resolution,
+                    location_id,
+                    recorded.observed_count,
+                    recorded.missing_count,
+                    scan.complete,
+                    request.selected_paths,
+                    scan.warnings,
+                )
+            )
+            if not scan.complete and not (
+                request.selected_paths
+                and _subject_local_incompleteness(scan)
+            ):
+                error = FailureDetail(
                     "InventoryScopeIncomplete",
                     "inventory refresh was not authoritative",
+                )
+                if request.refresh_generation > 0:
+                    return _integrity_request_terminal_result(
+                        request,
+                        SessionState.FAILED,
+                        recording=observed_recording,
+                        items=(),
+                        error=error,
+                    )
+                return OperationResult(SessionState.FAILED, error=error)
+            with LedgerRepository(deps.ledger_path) as repository:
+                rows = _integrity_rows(
+                    repository,
+                    location_id,
+                    request.mode,
+                    request.selected_paths,
+                    request.stale_before,
+                    request.selection_item_ids,
+                    frozenset(item_id for item_id, _ in request.completed_bytes),
+                )
+            selection = _integrity_selection(request, rows, root)
+            if selection_sink is not None:
+                selection_sink(selection)
+            ctx.emit(PhaseChanged(request.mode.value))
+            runner = deps.runners.get(request.mode)
+            if runner is None:
+                raise RuntimeError(
+                    f"integrity runner is not configured: {request.mode.value}"
+                )
+
+            def observe_verification(body: object) -> None:
+                nonlocal observed_recording
+                ctx.emit(body)
+                if not isinstance(body, IntegrityOutcome):
+                    return
+                observed_outcomes.append(body)
+                if body.recording is RecordingStatus.DEGRADED:
+                    observed_recording = RecordingStatus.DEGRADED
+
+            verification_context = replace(
+                deps.verifier_context(
+                    RunContext(observe_verification, ctx.checkpoint)
+                ),
+                root_authority=RootAuthority(
+                    logical_root=resolution.root_path,
+                    reviewed_anchor=resolution.selected_mount,
+                    expected_volume_id=request.binding.volume_id,
                 ),
             )
-        with LedgerRepository(deps.ledger_path) as repository:
-            rows = _integrity_rows(
-                repository,
-                location_id,
-                request.mode,
-                request.selected_paths,
-                request.stale_before,
-                request.selection_item_ids,
-                frozenset(item_id for item_id, _ in request.completed_bytes),
-            )
-        selection = _integrity_selection(request, rows, root)
-        if selection_sink is not None:
-            selection_sink(selection)
-        ctx.emit(PhaseChanged(request.mode.value))
-        runner = deps.runners.get(request.mode)
-        if runner is None:
-            raise RuntimeError(f"integrity runner is not configured: {request.mode.value}")
-        verification_context = replace(
-            deps.verifier_context(ctx),
-            root_authority=RootAuthority(
-                logical_root=resolution.root_path,
-                reviewed_anchor=resolution.selected_mount,
-                expected_volume_id=request.binding.volume_id,
-            ),
+            result = runner(selection, verification_context, recorder)
+            if not isinstance(result, IntegrityRunResult):
+                raise TypeError("integrity runner must return IntegrityRunResult")
+    except PauseRequested:
+        recording = _integrity_recording(
+            observed_recording,
+            close_degraded=close_degraded[0],
         )
-        result = runner(selection, verification_context, recorder)
-    bytes_total = sum(
-        0 if item.expected_stat is None else item.expected_stat.size
-        for item in selection.items
-    )
-    return OperationResult(
+        if recording_sink is not None:
+            recording_sink(recording)
+        raise
+    except Canceled:
+        recording = _integrity_recording(
+            observed_recording,
+            close_degraded=close_degraded[0],
+        )
+        if selection is None:
+            return _integrity_request_terminal_result(
+                request,
+                SessionState.CANCELED,
+                recording=recording,
+                items=tuple(observed_outcomes),
+                canceled=True,
+            )
+        return _integrity_terminal_result(
+            selection,
+            SessionState.CANCELED,
+            recording=recording,
+            items=tuple(observed_outcomes),
+            canceled=True,
+        )
+    except Exception as error:
+        recording = _integrity_recording(
+            observed_recording,
+            close_degraded=close_degraded[0],
+        )
+        failure = FailureDetail(type(error).__name__, logical_error_text(error))
+        if selection is None:
+            return _integrity_request_terminal_result(
+                request,
+                SessionState.FAILED,
+                recording=recording,
+                items=tuple(observed_outcomes),
+                error=failure,
+            )
+        return _integrity_terminal_result(
+            selection,
+            SessionState.FAILED,
+            recording=recording,
+            items=tuple(observed_outcomes),
+            error=failure,
+        )
+
+    return _integrity_terminal_result(
+        selection,
         SessionState.COMPLETED,
-        recording=result.recording,
+        recording=_integrity_recording(
+            observed_recording,
+            result.recording,
+            close_degraded=close_degraded[0],
+        ),
         items=result.outcomes,
+    )
+
+
+def settle_canceled_integrity(
+    request: IntegrityWorkflowRequest,
+    disposition: Disposition,
+) -> OperationResult:
+    """Settle one paused standalone integrity session without reopening work."""
+
+    if disposition is not Disposition.RAN:
+        raise ValueError("started integrity cancellation must retain RAN disposition")
+    return OperationResult(
+        SessionState.CANCELED,
+        recording=request.recording,
+        disposition=disposition,
+        canceled=True,
+        bytes_done=request.processed_bytes,
+        bytes_total=request.bytes_total_high_water,
+    )
+
+
+@contextmanager
+def _integrity_recorder(
+    deps: IntegrityDependencies,
+    root: str,
+    *,
+    close_degraded: list[bool],
+) -> Iterator[LedgerRecorder]:
+    """Close the ledger owner without replacing an in-flight primary signal."""
+
+    try:
+        recorder = LedgerRecorder(
+            deps.ledger_path,
+            clock=deps.clock,
+            managed_roots=(root,),
+        )
+    except Exception:
+        close_degraded[0] = True
+        raise
+    try:
+        yield recorder
+    except BaseException:
+        try:
+            recorder.close()
+        except Exception:
+            close_degraded[0] = True
+        raise
+    else:
+        try:
+            recorder.close()
+        except Exception:
+            close_degraded[0] = True
+            raise
+
+
+def _integrity_recording(
+    *statuses: RecordingStatus,
+    close_degraded: bool,
+) -> RecordingStatus:
+    if close_degraded or any(
+        status is RecordingStatus.DEGRADED for status in statuses
+    ):
+        return RecordingStatus.DEGRADED
+    return RecordingStatus.OK
+
+
+def _integrity_terminal_result(
+    selection: IntegritySelection,
+    status: SessionState,
+    *,
+    recording: RecordingStatus,
+    items: tuple[IntegrityOutcome, ...],
+    canceled: bool = False,
+    error: FailureDetail | None = None,
+) -> OperationResult:
+    return OperationResult(
+        status,
+        recording=recording,
+        disposition=Disposition.RAN,
+        canceled=canceled,
+        items=items,
         bytes_done=selection.processed_bytes,
-        bytes_total=max(bytes_total, selection.processed_bytes),
+        bytes_total=selection.bytes_total_high_water,
+        error=error,
+    )
+
+
+def _integrity_request_terminal_result(
+    request: IntegrityWorkflowRequest,
+    status: SessionState,
+    *,
+    recording: RecordingStatus,
+    items: tuple[IntegrityOutcome, ...],
+    canceled: bool = False,
+    error: FailureDetail | None = None,
+) -> OperationResult:
+    """Project truth available before the persisted selection is rebuilt."""
+
+    return OperationResult(
+        status,
+        recording=recording,
+        disposition=Disposition.RAN,
+        canceled=canceled,
+        items=items,
+        bytes_done=request.processed_bytes,
+        bytes_total=request.bytes_total_high_water,
+        error=error,
     )
 
 
@@ -758,7 +998,7 @@ def decode_inventory_request(payload: bytes) -> InventoryWorkflowRequest:
 def encode_integrity_request(request: IntegrityWorkflowRequest) -> bytes:
     return _json_bytes(
         {
-            "version": 1,
+            "version": 2,
             "kind": "integrity",
             "request_id": request.request_id,
             "binding": _binding_dict(request.binding),
@@ -772,13 +1012,15 @@ def encode_integrity_request(request: IntegrityWorkflowRequest) -> bytes:
             "selection_item_ids": list(request.selection_item_ids),
             "completed_bytes": [list(item) for item in request.completed_bytes],
             "processed_bytes": request.processed_bytes,
+            "bytes_total_high_water": request.bytes_total_high_water,
+            "recording": request.recording.value,
             "refresh_generation": request.refresh_generation,
         }
     )
 
 
 def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
-    value = _payload(payload, "integrity", 1)
+    value = _payload(payload, "integrity", 2)
     _expect_keys(
         value,
         {
@@ -792,6 +1034,8 @@ def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
             "selection_item_ids",
             "completed_bytes",
             "processed_bytes",
+            "bytes_total_high_water",
+            "recording",
             "refresh_generation",
         },
         "integrity payload",
@@ -833,6 +1077,13 @@ def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
         processed_bytes=_integer(
             value["processed_bytes"],
             "integrity.processed_bytes",
+        ),
+        bytes_total_high_water=_integer(
+            value["bytes_total_high_water"],
+            "integrity.bytes_total_high_water",
+        ),
+        recording=RecordingStatus(
+            _string(value["recording"], "integrity.recording")
         ),
         refresh_generation=_integer(
             value["refresh_generation"],
@@ -1098,7 +1349,22 @@ def _integrity_selection(
         )
         for row in rows
     )
-    return IntegritySelection(items, completed, request.processed_bytes)
+    pending_admission = request.processed_bytes + sum(
+        item.expected_stat.size
+        for item in items
+        if item.item_id not in completed
+        and item.expected_state is InventoryState.PRESENT
+        and item.expected_stat is not None
+    )
+    return IntegritySelection(
+        items=items,
+        _completed_bytes=completed,
+        _processed_bytes=request.processed_bytes,
+        _bytes_total_high_water=max(
+            request.bytes_total_high_water,
+            pending_admission,
+        ),
+    )
 
 
 def _subject_local_incompleteness(scan: ScanResult) -> bool:

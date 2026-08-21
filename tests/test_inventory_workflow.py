@@ -13,6 +13,7 @@ import pytest
 from xxhash import xxh3_128
 
 import namisync.workflows.inventory as inventory_workflow
+from namisync.core.events import Progress
 from namisync.core.evidence import RecordingStatus
 from namisync.core.integrity import (
     IntegrityMode,
@@ -46,7 +47,9 @@ from namisync.core.pathing import (
 from namisync.core.recording import InventoryCommand
 from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
+    Canceled,
     Disposition,
+    OperationResult,
     PauseRequested,
     RunContext,
     SessionState,
@@ -77,6 +80,7 @@ from namisync.workflows.inventory import (
     resolve_binding,
     run_integrity,
     run_inventory,
+    settle_canceled_integrity,
 )
 
 from _db_fixtures import FakeClock, attestation, plan, setup_recorder
@@ -760,6 +764,75 @@ def test_integrity_wakeup_rechecks_clone_before_scan_or_hash(tmp_path: Path) -> 
     assert runner_calls == 0
 
 
+@pytest.mark.parametrize(
+    "available_mounts, expected_resolution",
+    [
+        ((), VolumeResolutionState.OFFLINE),
+        (("mount", "clone"), VolumeResolutionState.AMBIGUOUS),
+    ],
+)
+def test_resumed_integrity_resolution_failure_retains_continuation_authority(
+    tmp_path: Path,
+    available_mounts: tuple[str, ...],
+    expected_resolution: VolumeResolutionState,
+) -> None:
+    mount = tmp_path / "mount"
+    clone = tmp_path / "clone"
+    mount.mkdir()
+    clone.mkdir()
+    resolver = _Resolver(
+        *(mount if name == "mount" else clone for name in available_mounts)
+    )
+    scanner = _Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    deps = IntegrityDependencies(
+        ledger_path=tmp_path / "ledger.db",
+        scanner=scanner,
+        resolver=resolver,
+        clock=FakeClock(),
+        host_key="host",
+        host_name="Host",
+        save_details=details.append,
+    )
+
+    fresh = run_integrity(
+        IntegrityWorkflowRequest(
+            "fresh-resolution-failure",
+            _binding(mount),
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        deps,
+    )
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "resume-resolution-failure",
+            _binding(mount),
+            IntegrityMode.VERIFY,
+            selection_item_ids=("1:saved",),
+            processed_bytes=13,
+            bytes_total_high_water=21,
+            recording=RecordingStatus.DEGRADED,
+            refresh_generation=1,
+        ),
+        _context(),
+        deps,
+    )
+
+    assert fresh.status is SessionState.REFUSED
+    assert fresh.disposition is Disposition.UNRUN
+    assert (fresh.bytes_done, fresh.bytes_total) == (0, 0)
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.recording is RecordingStatus.DEGRADED
+    assert (result.bytes_done, result.bytes_total) == (13, 21)
+    assert result.error is not None
+    assert result.error.type_name == "VolumeResolution"
+    assert details[-1].resolution.state is expected_resolution
+    assert scanner.calls == []
+
+
 def test_incomplete_selected_integrity_refresh_runs_no_hash_and_is_not_unrun_refusal(
     tmp_path: Path,
 ) -> None:
@@ -810,6 +883,65 @@ def test_incomplete_selected_integrity_refresh_runs_no_hash_and_is_not_unrun_ref
     assert result.disposition is Disposition.RAN
     assert result.error is not None
     assert result.error.type_name == "InventoryScopeIncomplete"
+    assert runner_calls == 0
+
+
+def test_resumed_incomplete_integrity_refresh_retains_continuation_authority(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file(),))
+    resolver = _Resolver(mount)
+    details: list[InventoryDetails] = []
+    deps = _dependencies(tmp_path / "ledger.db", scanner, resolver, details)
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=resolver,
+    )
+    run_inventory(prepared, _context(), deps)
+    scanner.complete = False
+    runner_calls = 0
+
+    def runner(*_args):
+        nonlocal runner_calls
+        runner_calls += 1
+        raise AssertionError("incomplete resumed refresh must not hash")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "resume-incomplete",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+            selection_item_ids=("1:saved",),
+            processed_bytes=13,
+            bytes_total_high_water=21,
+            recording=RecordingStatus.DEGRADED,
+            refresh_generation=1,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=deps.ledger_path,
+            scanner=deps.scanner,
+            resolver=deps.resolver,
+            clock=deps.clock,
+            host_key=deps.host_key,
+            host_name=deps.host_name,
+            save_details=deps.save_details,
+            runners={IntegrityMode.VERIFY: runner},
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.recording is RecordingStatus.DEGRADED
+    assert (result.bytes_done, result.bytes_total) == (13, 21)
+    assert result.error is not None
+    assert result.error.type_name == "InventoryScopeIncomplete"
+    assert details[-1].complete is False
     assert runner_calls == 0
 
 
@@ -983,6 +1115,349 @@ def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
         IntegrityResult.VERIFIED,
     ]
     assert details[-1].warnings == (warning,)
+
+
+@pytest.mark.parametrize(
+    "error_type, expected_status, expected_canceled",
+    [
+        (Canceled, SessionState.CANCELED, True),
+        (RuntimeError, SessionState.FAILED, False),
+    ],
+)
+def test_integrity_terminal_control_uses_live_selection_authority(
+    tmp_path: Path,
+    error_type: type[Exception],
+    expected_status: SessionState,
+    expected_canceled: bool,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    run_inventory(prepared, _context(), inventory_deps)
+    emitted: list[object] = []
+
+    def runner(selection, verifier_context, _recorder):
+        item = selection.pending[0]
+        selection.note_bytes_processed(3)
+        selection.advance_bytes_total_high_water(7)
+        verifier_context.run.emit(
+            Progress(
+                phase=IntegrityMode.VERIFY.value,
+                items_done=selection.completed_count,
+                items_total=len(selection.items),
+                bytes_done=selection.processed_bytes,
+                bytes_total=7,
+                current_path=item.display_path,
+            )
+        )
+        outcome = IntegrityOutcome(
+            item_id=item.item_id,
+            row_id=item.row_id,
+            location_id=item.location_id,
+            path=item.display_path,
+            result=IntegrityResult.VERIFIED,
+            phase=IntegrityMode.VERIFY.value,
+        )
+        verifier_context.run.emit(outcome)
+        selection.mark_completed(item.item_id, 3)
+        raise error_type("runner stopped")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "selection-authority",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(emitted.append, lambda: None),
+        IntegrityDependencies(
+            ledger_path=inventory_deps.ledger_path,
+            scanner=inventory_deps.scanner,
+            resolver=inventory_deps.resolver,
+            clock=inventory_deps.clock,
+            host_key=inventory_deps.host_key,
+            host_name=inventory_deps.host_name,
+            save_details=inventory_deps.save_details,
+            verifier_context=lambda context: VerifierContext(
+                run=context,
+                clock=inventory_deps.clock,
+                hasher_factory=xxh3_128,
+            ),
+            runners={IntegrityMode.VERIFY: runner},
+        ),
+    )
+
+    assert result.status is expected_status
+    assert result.canceled is expected_canceled
+    assert (result.bytes_done, result.bytes_total) == (3, 7)
+    assert len(result.items) == 1
+    assert [event.phase for event in emitted if isinstance(event, Progress)] == [
+        IntegrityMode.VERIFY.value
+    ]
+    if expected_status is SessionState.FAILED:
+        assert result.error is not None
+        assert result.error.type_name == "RuntimeError"
+
+
+def test_fresh_integrity_context_failure_retains_admitted_byte_total(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    run_inventory(prepared, _context(), inventory_deps)
+
+    def fail_context(_context: RunContext) -> VerifierContext:
+        raise RuntimeError("verifier context failed after admission")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "fresh-context-failure",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=inventory_deps.ledger_path,
+            scanner=inventory_deps.scanner,
+            resolver=inventory_deps.resolver,
+            clock=inventory_deps.clock,
+            host_key=inventory_deps.host_key,
+            host_name=inventory_deps.host_name,
+            save_details=inventory_deps.save_details,
+            verifier_context=fail_context,
+            runners={
+                IntegrityMode.VERIFY: lambda *_args: pytest.fail(
+                    "runner started after context failure"
+                )
+            },
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert (result.bytes_done, result.bytes_total) == (0, 7)
+    assert result.error is not None
+    assert result.error.type_name == "RuntimeError"
+
+
+@pytest.mark.parametrize(
+    "runner_exit, expected_status",
+    [
+        ("cancel", SessionState.CANCELED),
+        ("pause", None),
+        ("return", SessionState.FAILED),
+    ],
+)
+def test_integrity_recorder_close_failure_preserves_primary_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    runner_exit: str,
+    expected_status: SessionState | None,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    run_inventory(prepared, _context(), inventory_deps)
+
+    original_close = inventory_workflow.LedgerRecorder.close
+
+    def failing_close(recorder) -> None:
+        original_close(recorder)
+        raise RuntimeError("close failed")
+
+    monkeypatch.setattr(
+        inventory_workflow.LedgerRecorder,
+        "close",
+        failing_close,
+    )
+
+    def runner(selection, _verifier_context, _recorder):
+        selection.note_bytes_processed(3)
+        selection.advance_bytes_total_high_water(7)
+        if runner_exit == "cancel":
+            raise Canceled("cancel wins")
+        if runner_exit == "pause":
+            raise PauseRequested("pause wins")
+        return IntegrityRunResult((), RecordingStatus.OK)
+
+    def invoke() -> OperationResult:
+        return run_integrity(
+            IntegrityWorkflowRequest(
+                f"close-{runner_exit}",
+                prepared.binding,
+                IntegrityMode.VERIFY,
+            ),
+            _context(),
+            IntegrityDependencies(
+                ledger_path=inventory_deps.ledger_path,
+                scanner=inventory_deps.scanner,
+                resolver=inventory_deps.resolver,
+                clock=inventory_deps.clock,
+                host_key=inventory_deps.host_key,
+                host_name=inventory_deps.host_name,
+                save_details=inventory_deps.save_details,
+                verifier_context=lambda context: VerifierContext(
+                    run=context,
+                    clock=inventory_deps.clock,
+                    hasher_factory=xxh3_128,
+                ),
+                runners={IntegrityMode.VERIFY: runner},
+            ),
+        )
+
+    if runner_exit == "pause":
+        with pytest.raises(PauseRequested, match="pause wins"):
+            invoke()
+        return
+
+    result = invoke()
+
+    assert result.status is expected_status
+    assert result.canceled is (runner_exit == "cancel")
+    assert result.recording is RecordingStatus.DEGRADED
+    assert (result.bytes_done, result.bytes_total) == (3, 7)
+    if runner_exit == "return":
+        assert result.error is not None
+        assert result.error.type_name == "RuntimeError"
+        assert result.error.message == "close failed"
+
+
+@pytest.mark.parametrize(
+    "error, expected_status, expected_canceled",
+    [
+        (Canceled("stop before selection rebuild"), SessionState.CANCELED, True),
+        (PermissionError("recorder unavailable"), SessionState.FAILED, False),
+    ],
+)
+def test_resumed_integrity_setup_failure_uses_request_high_water(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    error: Exception,
+    expected_status: SessionState,
+    expected_canceled: bool,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    emitted: list[object] = []
+
+    def fail_recorder(*_args, **_kwargs):
+        raise error
+
+    monkeypatch.setattr(inventory_workflow, "LedgerRecorder", fail_recorder)
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "resumed-setup",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+            selection_item_ids=("1:a",),
+            processed_bytes=7,
+            bytes_total_high_water=19,
+            refresh_generation=1,
+        ),
+        RunContext(emitted.append, lambda: None),
+        IntegrityDependencies(
+            ledger_path=inventory_deps.ledger_path,
+            scanner=inventory_deps.scanner,
+            resolver=inventory_deps.resolver,
+            clock=inventory_deps.clock,
+            host_key=inventory_deps.host_key,
+            host_name=inventory_deps.host_name,
+            save_details=inventory_deps.save_details,
+            verifier_context=lambda context: VerifierContext(
+                run=context,
+                clock=inventory_deps.clock,
+                hasher_factory=xxh3_128,
+            ),
+            runners={
+                IntegrityMode.VERIFY: lambda *_args: pytest.fail(
+                    "runner reopened after setup failure"
+                )
+            },
+        ),
+    )
+
+    assert result.status is expected_status
+    assert result.canceled is expected_canceled
+    assert result.recording is RecordingStatus.DEGRADED
+    assert (result.bytes_done, result.bytes_total) == (7, 19)
+    assert emitted == []
+    if expected_status is SessionState.FAILED:
+        assert result.error is not None
+        assert result.error.type_name == "PermissionError"
+
+
+def test_paused_integrity_cancellation_uses_persisted_total_high_water() -> None:
+    request = IntegrityWorkflowRequest(
+        "paused",
+        LocationBinding(
+            VOLUME_ID,
+            "managed",
+            "M:",
+            ("M:",),
+            False,
+        ),
+        IntegrityMode.BASELINE,
+        selection_item_ids=("1:a", "1:b"),
+        completed_bytes=(("1:a", 7),),
+        processed_bytes=11,
+        bytes_total_high_water=23,
+        recording=RecordingStatus.DEGRADED,
+        refresh_generation=1,
+    )
+
+    result = settle_canceled_integrity(request, Disposition.RAN)
+
+    assert result.status is SessionState.CANCELED
+    assert result.canceled is True
+    assert result.disposition is Disposition.RAN
+    assert result.recording is RecordingStatus.DEGRADED
+    assert (result.bytes_done, result.bytes_total) == (11, 23)
+    with pytest.raises(ValueError, match="retain RAN"):
+        settle_canceled_integrity(request, Disposition.UNRUN)
 
 
 def test_integrity_resume_uses_a_new_inventory_refresh_receipt(tmp_path: Path) -> None:
@@ -1269,10 +1744,63 @@ def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:
         selection_item_ids=("7:11",),
         completed_bytes=(("7:11", 13),),
         processed_bytes=13,
+        bytes_total_high_water=17,
+        recording=RecordingStatus.DEGRADED,
     )
 
+    encoded_integrity = encode_integrity_request(integrity)
+    integrity_body = json.loads(encoded_integrity)
+
     assert decode_inventory_request(encode_inventory_request(inventory)) == inventory
-    assert decode_integrity_request(encode_integrity_request(integrity)) == integrity
+    assert decode_integrity_request(encoded_integrity) == integrity
+    assert integrity_body["version"] == 2
+    assert set(integrity_body) == {
+        "version",
+        "kind",
+        "request_id",
+        "binding",
+        "mode",
+        "selected_paths",
+        "stale_before",
+        "selection_item_ids",
+        "completed_bytes",
+        "processed_bytes",
+        "bytes_total_high_water",
+        "recording",
+        "refresh_generation",
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("completed_bytes", (("7:11", True),)),
+        ("processed_bytes", True),
+        ("bytes_total_high_water", True),
+        ("refresh_generation", True),
+    ],
+)
+def test_integrity_request_rejects_boolean_counters(
+    field: str,
+    value: object,
+) -> None:
+    fields: dict[str, object] = {
+        "request_id": "integrity-bool-counter",
+        "binding": LocationBinding(
+            VOLUME_ID,
+            "managed",
+            "M:\\",
+            ("M:\\",),
+            False,
+            7,
+        ),
+        "mode": IntegrityMode.VERIFY,
+        "selection_item_ids": ("7:11",),
+    }
+    fields[field] = value
+
+    with pytest.raises(TypeError):
+        IntegrityWorkflowRequest(**fields)  # type: ignore[arg-type]
 
 
 def test_inventory_and_integrity_codecs_reject_coercive_or_ambiguous_json() -> None:
@@ -1296,6 +1824,7 @@ def test_inventory_and_integrity_codecs_reject_coercive_or_ambiguous_json() -> N
         selection_item_ids=("7:11",),
         completed_bytes=(("7:11", 13),),
         processed_bytes=13,
+        bytes_total_high_water=13,
     )
 
     invalid_inventory = json.loads(encode_inventory_request(inventory))
@@ -1342,6 +1871,112 @@ def test_inventory_and_integrity_codecs_reject_coercive_or_ambiguous_json() -> N
     with pytest.raises(ValueError):
         decode_integrity_request(
             json.dumps(invalid_integrity, separators=(",", ":")).encode()
+        )
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("bytes_total_high_water", 13.0),
+        ("bytes_total_high_water", "13"),
+        ("bytes_total_high_water", True),
+        ("bytes_total_high_water", None),
+        ("recording", 1),
+        ("recording", "unknown"),
+    ],
+)
+def test_integrity_v2_codec_rejects_invalid_authority_scalars(
+    field: str,
+    value: object,
+) -> None:
+    request = IntegrityWorkflowRequest(
+        request_id="integrity-v2-scalars",
+        binding=LocationBinding(
+            VOLUME_ID,
+            "managed",
+            "M:\\",
+            ("M:\\",),
+            False,
+            7,
+        ),
+        mode=IntegrityMode.VERIFY,
+        selection_item_ids=("7:11",),
+        processed_bytes=13,
+        bytes_total_high_water=17,
+        recording=RecordingStatus.DEGRADED,
+        refresh_generation=1,
+    )
+    body = json.loads(encode_integrity_request(request))
+    body[field] = value
+
+    with pytest.raises((TypeError, ValueError)):
+        decode_integrity_request(
+            json.dumps(body, separators=(",", ":")).encode()
+        )
+
+
+def test_integrity_v2_codec_requires_exact_authority_shape() -> None:
+    request = IntegrityWorkflowRequest(
+        request_id="integrity-v2-shape",
+        binding=LocationBinding(
+            VOLUME_ID,
+            "managed",
+            "M:\\",
+            ("M:\\",),
+            False,
+            7,
+        ),
+        mode=IntegrityMode.VERIFY,
+        selection_item_ids=("7:11",),
+        processed_bytes=13,
+        bytes_total_high_water=17,
+        recording=RecordingStatus.DEGRADED,
+        refresh_generation=1,
+    )
+    encoded = encode_integrity_request(request)
+
+    for missing in ("bytes_total_high_water", "recording"):
+        body = json.loads(encoded)
+        del body[missing]
+        with pytest.raises(ValueError, match="missing or unknown"):
+            decode_integrity_request(
+                json.dumps(body, separators=(",", ":")).encode()
+            )
+
+    body = json.loads(encoded)
+    body["unknown"] = 1
+    with pytest.raises(ValueError, match="missing or unknown"):
+        decode_integrity_request(
+            json.dumps(body, separators=(",", ":")).encode()
+        )
+
+    body = json.loads(encoded)
+    body["version"] = 1
+    with pytest.raises(ValueError, match="unsupported"):
+        decode_integrity_request(
+            json.dumps(body, separators=(",", ":")).encode()
+        )
+
+    body = json.loads(encoded)
+    body["bytes_total_high_water"] = 12
+    with pytest.raises(ValueError, match="cannot trail processed"):
+        decode_integrity_request(
+            json.dumps(body, separators=(",", ":")).encode()
+        )
+
+    body = json.loads(
+        encode_integrity_request(
+            IntegrityWorkflowRequest(
+                request_id="integrity-v2-no-selection",
+                binding=request.binding,
+                mode=IntegrityMode.VERIFY,
+            )
+        )
+    )
+    body["bytes_total_high_water"] = 1
+    with pytest.raises(ValueError, match="saved admitted selection"):
+        decode_integrity_request(
+            json.dumps(body, separators=(",", ":")).encode()
         )
 
 

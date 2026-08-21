@@ -21,6 +21,15 @@ sequence numbers can therefore contain gaps without implying lost audit data.
 The live `Terminal` is also absent: terminal truth is the finalized
 `history_runs` row, written before that live terminal is released.
 
+The finalized row copies the workflow result's byte pair without changing its
+meaning. `bytes_done` is attempted-work high-water, not durable successful
+content, and `bytes_total` is the matching final work budget. It can therefore
+include a prefix written to an owned temporary file and removed before a failed
+copy publishes anything. Compound sync keeps each phase's work separate and
+uses execute as the top-level byte domain. History records what NamiSync
+attempted and reported; reliable item receipts and the independent filesystem
+ledger, not this aggregate byte pair, own settlement and publication truth.
+
 ## Schema V5 And Reset Boundary
 
 The current exact marker is

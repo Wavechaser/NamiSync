@@ -90,6 +90,56 @@ class RunRecording(Protocol):
     ) -> None: ...
 
 
+class _ContainedRecordingContext:
+    def __init__(
+        self,
+        context: AbstractContextManager[RunRecording],
+        boundary: "_RecordingBoundary",
+    ) -> None:
+        self._context = context
+        self._boundary = boundary
+
+    def __enter__(self) -> RunRecording:
+        try:
+            return self._context.__enter__()
+        except (PauseRequested, Canceled):
+            raise
+        except Exception as error:
+            self._boundary.enter_error = error
+            raise
+
+    def __exit__(self, exc_type, exc, traceback) -> bool | None:
+        try:
+            return self._context.__exit__(exc_type, exc, traceback)
+        except Exception as error:
+            self._boundary.exit_error = error
+            return False
+
+
+class _RecordingBoundary:
+    def __init__(
+        self,
+        factory: Callable[
+            [ExecutionSet], AbstractContextManager[RunRecording]
+        ],
+    ) -> None:
+        self._factory = factory
+        self.enter_error: Exception | None = None
+        self.exit_error: Exception | None = None
+
+    def open(
+        self, execution_set: ExecutionSet
+    ) -> AbstractContextManager[RunRecording]:
+        try:
+            context = self._factory(execution_set)
+        except (PauseRequested, Canceled):
+            raise
+        except Exception as error:
+            self.enter_error = error
+            raise
+        return _ContainedRecordingContext(context, self)
+
+
 Scanner = Callable[[Root, IgnoreSet, RunContext], ScanResult]
 Planner = Callable[[ScanResult, ScanResult, MappingSnapshot, SyncOptions, Scope], Plan]
 Observer = Callable[[ExecutionSet, ObservationFileSystem], ObservedWorld]
@@ -180,6 +230,120 @@ def run_execution(
 ) -> OperationResult:
     """Execute and optionally verify under one logical sync-run recording."""
 
+    current: list[ExecutionContinuation] = [
+        ExecuteContinuation(continuation)
+        if isinstance(continuation, ExecutionSet)
+        else continuation
+    ]
+    downstream_sink = continuation_sink or (lambda value: None)
+
+    def capture(value: ExecutionContinuation) -> None:
+        current[0] = value
+        downstream_sink(value)
+
+    recording_factory = getattr(deps, "open_recording", None)
+    if recording_factory is None:
+        return _run_execution(
+            continuation,
+            ctx,
+            deps,
+            continuation_sink=capture,
+            resumed=resumed,
+        )
+    boundary = _RecordingBoundary(recording_factory)
+
+    def preserve_exit_failure(error: BaseException) -> None:
+        if boundary.exit_error is None:
+            return
+        active = current[0]
+        try:
+            if isinstance(active, VerifyContinuation):
+                if active.recording is RecordingStatus.OK:
+                    active = replace(active, recording=RecordingStatus.DEGRADED)
+                    capture(active)
+            else:
+                active.execution_set.recording = RecordingStatus.DEGRADED
+                capture(active)
+        except Exception as continuation_error:
+            error.add_note(
+                "recording degradation continuation capture also failed: "
+                f"{type(continuation_error).__name__}: "
+                f"{logical_error_text(continuation_error)}"
+            )
+        error.add_note(
+            "recording context exit also failed: "
+            f"{type(boundary.exit_error).__name__}: "
+            f"{logical_error_text(boundary.exit_error)}"
+        )
+
+    try:
+        result = _run_execution(
+            continuation,
+            ctx,
+            deps,
+            continuation_sink=capture,
+            resumed=resumed,
+            open_recording=boundary.open,
+        )
+    except PauseRequested as error:
+        preserve_exit_failure(error)
+        raise
+    except Canceled:
+        return _recording_entry_canceled_result(
+            current[0],
+            ctx,
+            deps,
+        )
+    except BaseException as error:
+        preserve_exit_failure(error)
+        if boundary.enter_error is None or error is not boundary.enter_error:
+            raise
+        current = (
+            ExecuteContinuation(continuation)
+            if isinstance(continuation, ExecutionSet)
+            else continuation
+        )
+        return _recording_open_failure_result(
+            current,
+            ctx,
+            deps,
+            FailureDetail(type(error).__name__, logical_error_text(error)),
+        )
+    if boundary.exit_error is None:
+        return result
+    execution_set = (
+        continuation
+        if isinstance(continuation, ExecutionSet)
+        else continuation.execution_set
+    )
+    if not any(phase.phase == "verify" for phase in result.phases):
+        execution_set.recording = RecordingStatus.DEGRADED
+    return replace(
+        result,
+        recording=RecordingStatus.DEGRADED,
+        error=(
+            result.error
+            if result.error is not None
+            else FailureDetail(
+                type(boundary.exit_error).__name__,
+                logical_error_text(boundary.exit_error),
+            )
+        ),
+    )
+
+
+def _run_execution(
+    continuation: ExecutionContinuation | ExecutionSet,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+    resumed: bool = False,
+    open_recording: (
+        Callable[[ExecutionSet], AbstractContextManager[RunRecording]] | None
+    ) = None,
+) -> OperationResult:
+
     current: ExecutionContinuation = (
         ExecuteContinuation(continuation)
         if isinstance(continuation, ExecutionSet)
@@ -229,7 +393,12 @@ def run_execution(
                 ),
                 (),
             )
-        raise
+        return _settle_fresh_execute_boundary(
+            current,
+            ctx,
+            (),
+            error=FailureDetail(type(error).__name__, logical_error_text(error)),
+        )
     if commitment_error is not None:
         try:
             deps.save_execution_details(
@@ -237,6 +406,21 @@ def run_execution(
                     str(xset.run_id),
                     commitment_error=commitment_error,
                 )
+            )
+        except PauseRequested:
+            raise
+        except Canceled:
+            if isinstance(current, VerifyContinuation) or resumed:
+                return settle_canceled_execution(
+                    current,
+                    Disposition.RAN,
+                    deps,
+                )
+            return _settle_fresh_execute_boundary(
+                current,
+                ctx,
+                exclusion_items,
+                status=SessionState.CANCELED,
             )
         except Exception as error:
             if isinstance(current, VerifyContinuation):
@@ -257,7 +441,14 @@ def run_execution(
                     ),
                     exclusion_items,
                 )
-            raise
+            return _settle_fresh_execute_boundary(
+                current,
+                ctx,
+                exclusion_items,
+                error=FailureDetail(
+                    type(error).__name__, logical_error_text(error)
+                ),
+            )
         if isinstance(current, VerifyContinuation):
             return _settle_verify_incomplete(
                 current,
@@ -289,6 +480,21 @@ def run_execution(
         verdict = deps.preflight(xset, world)
         refusals = refusal_views(verdict)
         deps.save_execution_details(ExecutionDetails(str(xset.run_id), refusals))
+    except PauseRequested:
+        raise
+    except Canceled:
+        if isinstance(current, VerifyContinuation) or resumed:
+            return settle_canceled_execution(
+                current,
+                Disposition.RAN,
+                deps,
+            )
+        return _settle_fresh_execute_boundary(
+            current,
+            ctx,
+            exclusion_items,
+            status=SessionState.CANCELED,
+        )
     except Exception as error:
         if isinstance(current, VerifyContinuation):
             return _settle_verify_incomplete(
@@ -308,7 +514,12 @@ def run_execution(
                 ),
                 exclusion_items,
             )
-        raise
+        return _settle_fresh_execute_boundary(
+            current,
+            ctx,
+            exclusion_items,
+            error=FailureDetail(type(error).__name__, logical_error_text(error)),
+        )
     if not verdict.ok:
         if isinstance(current, VerifyContinuation):
             detail = "; ".join(
@@ -341,11 +552,12 @@ def run_execution(
     emitted_execution_items: list[ItemOutcome] = []
 
     def observe_execution(body: object) -> None:
+        ctx.emit(body)
         if isinstance(body, ItemOutcome):
             emitted_execution_items.append(body)
-        ctx.emit(body)
 
-    with deps.open_recording(xset) as recording:
+    recording_factory = open_recording or deps.open_recording
+    with recording_factory(xset) as recording:
         finished = False
         finished_recording = xset.recording
 
@@ -453,8 +665,6 @@ def run_execution(
                     SessionState.FAILED,
                     xset.recording,
                 )
-                if not verify_after_execute:
-                    raise
                 _emit_items(ctx, exclusion_items)
                 execution_items = _merge_operation_results(
                     xset.plan,
@@ -474,7 +684,7 @@ def run_execution(
                     recording=recording_status,
                     disposition=Disposition.RAN,
                     items=execution_items,
-                    phases=(phase,),
+                    phases=(phase,) if verify_after_execute else (),
                     bytes_done=phase.bytes_done,
                     bytes_total=phase.bytes_total or phase.bytes_done,
                     error=FailureDetail(
@@ -484,12 +694,18 @@ def run_execution(
 
         observed_recording = [current.recording]
         verification_items: list[IntegrityOutcome] = []
+        observed_verification_ids = set(current.candidates.completed_bytes)
+        verification_candidate_ids = {
+            candidate.item_id for candidate in current.candidates.candidates
+        }
 
         def observe_verification(body: object) -> None:
             ctx.emit(body)
             if not isinstance(body, IntegrityOutcome):
                 return
             verification_items.append(body)
+            if body.item_id in verification_candidate_ids:
+                observed_verification_ids.add(body.item_id)
             if (
                 body.recording is RecordingStatus.DEGRADED
                 and observed_recording[0] is RecordingStatus.OK
@@ -534,6 +750,7 @@ def run_execution(
                 sink(current)
             verify_phase = _verify_phase(
                 current,
+                items_done_floor=len(observed_verification_ids),
                 incomplete=bool(current.missing_evidence_ids),
                 error=_missing_evidence_error(current.missing_evidence_ids),
             )
@@ -573,6 +790,7 @@ def run_execution(
             current = replace(current, recording=current_recording)
             verify_phase = _verify_phase(
                 current,
+                items_done_floor=len(observed_verification_ids),
                 canceled=True,
                 error="verification canceled",
             )
@@ -602,6 +820,7 @@ def run_execution(
             current = replace(current, recording=current_recording)
             verify_phase = _verify_phase(
                 current,
+                items_done_floor=len(observed_verification_ids),
                 incomplete=True,
                 error=(
                     f"{type(error).__name__}: "
@@ -665,12 +884,31 @@ def settle_canceled_execution(
             continuation.recording,
         )
 
-    with deps.open_recording(xset) as recording:
-        recording_status = _finish_recording(
-            recording,
+    boundary = _RecordingBoundary(deps.open_recording)
+    recording_error: Exception | None = None
+    try:
+        with boundary.open(xset) as recording:
+            recording_status = _finish_recording(
+                recording,
+                filesystem_status,
+                recording_status,
+            )
+    except Exception as error:
+        recording_error = error
+        recording_status = RecordingStatus.DEGRADED
+        _finish_recording_without_open(
+            deps,
+            xset,
             filesystem_status,
             recording_status,
         )
+    if boundary.exit_error is not None:
+        recording_error = boundary.exit_error
+        recording_status = RecordingStatus.DEGRADED
+    if recording_error is not None and isinstance(
+        continuation, ExecuteContinuation
+    ):
+        xset.recording = RecordingStatus.DEGRADED
     execute_phase = (
         phase
         if isinstance(continuation, ExecuteContinuation)
@@ -687,6 +925,14 @@ def settle_canceled_execution(
             execute_phase.bytes_total
             if execute_phase.bytes_total is not None
             else execute_phase.bytes_done
+        ),
+        error=(
+            None
+            if recording_error is None
+            else FailureDetail(
+                type(recording_error).__name__,
+                logical_error_text(recording_error),
+            )
         ),
     )
 
@@ -863,6 +1109,7 @@ def _execute_continuation_phase(
 def _verify_phase(
     continuation: VerifyContinuation,
     *,
+    items_done_floor: int = 0,
     incomplete: bool = False,
     canceled: bool = False,
     error: str | None = None,
@@ -873,11 +1120,20 @@ def _verify_phase(
     planned_bytes = sum(
         candidate.expected_stat.size for candidate in candidates.candidates
     ) + _missing_evidence_bytes(continuation)
-    completed_bytes = sum(candidates.completed_bytes.values())
+    completed = candidates.completed_bytes
+    completed_bytes = sum(completed.values())
     retry_bytes = max(0, candidates.processed_bytes - completed_bytes)
+    expected_by_id = {
+        candidate.item_id: candidate.expected_stat.size
+        for candidate in candidates.candidates
+    }
+    completed_overrun = sum(
+        max(0, bytes_read - expected_by_id[item_id])
+        for item_id, bytes_read in completed.items()
+    )
     bytes_total = max(
         candidates.processed_bytes,
-        planned_bytes + retry_bytes,
+        planned_bytes + retry_bytes + completed_overrun,
     )
     status = (
         PhaseStatus.CANCELED
@@ -889,7 +1145,7 @@ def _verify_phase(
     return PhaseResult(
         phase=VerifyContinuation.phase,
         status=status,
-        items_done=candidates.completed_count,
+        items_done=max(candidates.completed_count, items_done_floor),
         items_total=(
             len(candidates.candidates)
             + len(continuation.missing_evidence_ids)
@@ -914,6 +1170,211 @@ def _missing_evidence_error(item_ids: tuple[str, ...]) -> str | None:
         return None
     return "missing published evidence for successful operations: " + ", ".join(
         item_ids
+    )
+
+
+def _settle_fresh_execute_boundary(
+    continuation: ExecuteContinuation,
+    ctx: RunContext,
+    exclusion_items: tuple[ItemOutcome, ...],
+    *,
+    status: SessionState = SessionState.FAILED,
+    error: FailureDetail | None = None,
+) -> OperationResult:
+    """Project pre-executor truth without consulting a lossy snapshot."""
+
+    if status not in {SessionState.FAILED, SessionState.CANCELED}:
+        raise ValueError("fresh execute boundary must fail or cancel")
+    if status is SessionState.FAILED and error is None:
+        raise ValueError("fresh execute failure requires an error")
+    emitted_items = exclusion_items
+    try:
+        _emit_items(ctx, exclusion_items)
+    except Exception as emit_error:
+        emitted_items = ()
+        if error is None:
+            error = FailureDetail(
+                type(emit_error).__name__,
+                logical_error_text(emit_error),
+            )
+        else:
+            error = FailureDetail(
+                error.type_name,
+                f"{error.message}; outcome emission also failed: "
+                f"{type(emit_error).__name__}: {logical_error_text(emit_error)}",
+            )
+    phase = _execute_continuation_phase(
+        continuation.execution_set,
+        (
+            PhaseStatus.CANCELED
+            if status is SessionState.CANCELED
+            else PhaseStatus.FAILED
+        ),
+        None if error is None else f"{error.type_name}: {error.message}",
+    )
+    return OperationResult(
+        status=status,
+        recording=continuation.execution_set.recording,
+        disposition=Disposition.UNRUN,
+        canceled=status is SessionState.CANCELED,
+        items=emitted_items,
+        bytes_done=phase.bytes_done,
+        bytes_total=(
+            phase.bytes_total
+            if phase.bytes_total is not None
+            else phase.bytes_done
+        ),
+        error=error,
+    )
+
+
+def _recording_open_failure_result(
+    continuation: ExecutionContinuation,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    error: FailureDetail,
+) -> OperationResult:
+    """Project an unavailable run recording from authoritative continuation."""
+
+    if isinstance(continuation, VerifyContinuation):
+        _finish_recording_without_open(
+            deps,
+            continuation.execution_set,
+            continuation.filesystem_status,
+            RecordingStatus.DEGRADED,
+        )
+        phase = _verify_phase(
+            continuation,
+            incomplete=True,
+            error=f"{error.type_name}: {error.message}",
+        )
+        return OperationResult(
+            status=continuation.filesystem_status,
+            recording=RecordingStatus.DEGRADED,
+            disposition=Disposition.RAN,
+            phases=(continuation.execute_phase, phase),
+            bytes_done=continuation.execute_phase.bytes_done,
+            bytes_total=(
+                continuation.execute_phase.bytes_total
+                if continuation.execute_phase.bytes_total is not None
+                else continuation.execute_phase.bytes_done
+            ),
+            error=error,
+        )
+
+    xset = continuation.execution_set
+    xset.recording = RecordingStatus.DEGRADED
+    _finish_recording_without_open(
+        deps,
+        xset,
+        SessionState.FAILED,
+        RecordingStatus.DEGRADED,
+    )
+    try:
+        decision = derive_execution_selection(
+            xset.plan,
+            user_deselected=xset.user_deselected,
+        )
+        exclusion_items = _exclusion_items(xset.plan, decision)
+        _emit_items(ctx, exclusion_items)
+    except Exception as emit_error:
+        error_context = (
+            f"{type(emit_error).__name__}: {logical_error_text(emit_error)}"
+        )
+        phase_error = (
+            f"{error.type_name}: {error.message}; "
+            f"outcome emission also failed: {error_context}"
+        )
+        exclusion_items = ()
+    else:
+        phase_error = f"{error.type_name}: {error.message}"
+    phase = _execute_continuation_phase(
+        xset,
+        PhaseStatus.FAILED,
+        phase_error,
+    )
+    return OperationResult(
+        status=SessionState.FAILED,
+        recording=RecordingStatus.DEGRADED,
+        disposition=Disposition.RAN,
+        items=exclusion_items,
+        phases=(phase,) if continuation.verify_after_execute else (),
+        bytes_done=phase.bytes_done,
+        bytes_total=(
+            phase.bytes_total
+            if phase.bytes_total is not None
+            else phase.bytes_done
+        ),
+        error=error,
+    )
+
+
+def _recording_entry_canceled_result(
+    continuation: ExecutionContinuation,
+    ctx: RunContext,
+    deps: SyncDependencies,
+) -> OperationResult:
+    """Settle entry-time cancellation without reopening the recording owner."""
+
+    xset = continuation.execution_set
+    emitted_items: list[ItemOutcome] = []
+    emission_error: FailureDetail | None = None
+    if isinstance(continuation, ExecuteContinuation):
+        try:
+            decision = derive_execution_selection(
+                xset.plan,
+                user_deselected=xset.user_deselected,
+            )
+            for item in _exclusion_items(xset.plan, decision):
+                ctx.emit(item)
+                emitted_items.append(item)
+        except Exception as error:
+            emission_error = FailureDetail(
+                type(error).__name__,
+                logical_error_text(error),
+            )
+        phase = _execute_continuation_phase(
+            xset,
+            PhaseStatus.CANCELED,
+            "execution canceled while entering run recording",
+        )
+        phases = (phase,) if continuation.verify_after_execute else ()
+        filesystem_status = SessionState.CANCELED
+        recording_status = xset.recording
+        execute_phase = phase
+    else:
+        phase = _verify_phase(
+            continuation,
+            canceled=True,
+            error="verification canceled while entering run recording",
+        )
+        phases = (continuation.execute_phase, phase)
+        filesystem_status = continuation.filesystem_status
+        recording_status = _combined_recording(
+            xset.recording,
+            continuation.recording,
+        )
+        execute_phase = continuation.execute_phase
+    _finish_recording_without_open(
+        deps,
+        xset,
+        filesystem_status,
+        recording_status,
+    )
+    return OperationResult(
+        status=filesystem_status,
+        recording=recording_status,
+        disposition=Disposition.RAN,
+        canceled=True,
+        items=tuple(emitted_items),
+        phases=phases,
+        bytes_done=execute_phase.bytes_done,
+        bytes_total=(
+            execute_phase.bytes_total
+            if execute_phase.bytes_total is not None
+            else execute_phase.bytes_done
+        ),
+        error=emission_error,
     )
 
 
@@ -946,7 +1407,7 @@ def _settle_execute_resume_failure(
         recording=recording_status,
         disposition=Disposition.RAN,
         items=exclusion_items,
-        phases=(phase,),
+        phases=(phase,) if continuation.verify_after_execute else (),
         bytes_done=phase.bytes_done,
         bytes_total=(
             phase.bytes_total
@@ -1017,6 +1478,21 @@ def _finish_existing_recording(
         return recording_status
     with deps.open_recording(xset) as recording:
         return _finish_recording(recording, status, recording_status)
+
+
+def _finish_recording_without_open(
+    deps: SyncDependencies,
+    xset: ExecutionSet,
+    status: SessionState,
+    recording_status: RecordingStatus,
+) -> None:
+    finisher = getattr(deps, "finish_existing_recording", None)
+    if finisher is None:
+        return
+    try:
+        finisher(xset, status, recording_status)
+    except Exception:
+        return
 
 
 def _finish_recording(

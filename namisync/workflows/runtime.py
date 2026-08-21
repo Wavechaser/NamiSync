@@ -106,6 +106,7 @@ from .inventory import (
     encode_inventory_request,
     run_integrity,
     run_inventory,
+    settle_canceled_integrity,
 )
 from .database_pair import (
     DatabasePairContract,
@@ -519,6 +520,39 @@ class LocalWorkflowRuntime:
     def open_rebaseline(self, payload: bytes) -> _IntegrityInvocation:
         return self._open_integrity(payload, IntegrityMode.REBASELINE)
 
+    def settle_canceled_baseline(
+        self,
+        payload: bytes,
+        disposition: Disposition,
+    ) -> OperationResult:
+        return self._settle_canceled_integrity(
+            payload,
+            disposition,
+            IntegrityMode.BASELINE,
+        )
+
+    def settle_canceled_verify(
+        self,
+        payload: bytes,
+        disposition: Disposition,
+    ) -> OperationResult:
+        return self._settle_canceled_integrity(
+            payload,
+            disposition,
+            IntegrityMode.VERIFY,
+        )
+
+    def settle_canceled_rebaseline(
+        self,
+        payload: bytes,
+        disposition: Disposition,
+    ) -> OperationResult:
+        return self._settle_canceled_integrity(
+            payload,
+            disposition,
+            IntegrityMode.REBASELINE,
+        )
+
     def audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
         if record.kind == EXECUTION_KIND:
             request = decode_execution_request(record.payload)
@@ -903,6 +937,20 @@ class LocalWorkflowRuntime:
             )
         return _IntegrityInvocation(request, self._integrity_deps)
 
+    def _settle_canceled_integrity(
+        self,
+        payload: bytes,
+        disposition: Disposition,
+        mode: IntegrityMode,
+    ) -> OperationResult:
+        self._require_open()
+        request = decode_integrity_request(payload)
+        if request.mode is not mode:
+            raise ValueError(
+                f"{mode.value} cancellation payload contains {request.mode.value}"
+            )
+        return settle_canceled_integrity(request, disposition)
+
     def _validate_prepared_location(self, binding: LocationBinding) -> None:
         self._validate_database_roots((_binding_root(binding),))
 
@@ -1186,6 +1234,7 @@ class _IntegrityInvocation:
         self._request = request
         self._deps = deps
         self._selection: IntegritySelection | None = None
+        self._recording = request.recording
 
     def run(self, context) -> object:
         return run_integrity(
@@ -1193,16 +1242,19 @@ class _IntegrityInvocation:
             context,
             self._deps,
             selection_sink=self._capture_selection,
+            recording_sink=self._capture_recording,
         )
 
     def snapshot(self) -> bytes:
         completed_bytes = self._request.completed_bytes
         processed_bytes = self._request.processed_bytes
+        bytes_total_high_water = self._request.bytes_total_high_water
         if self._selection is not None:
             completed_bytes = tuple(
                 sorted(self._selection.completed_bytes.items())
             )
             processed_bytes = self._selection.processed_bytes
+            bytes_total_high_water = self._selection.bytes_total_high_water
         return encode_integrity_request(
             replace(
                 self._request,
@@ -1215,12 +1267,18 @@ class _IntegrityInvocation:
                 ),
                 completed_bytes=completed_bytes,
                 processed_bytes=processed_bytes,
+                bytes_total_high_water=bytes_total_high_water,
+                recording=self._recording,
                 refresh_generation=self._request.refresh_generation + 1,
             )
         )
 
     def _capture_selection(self, selection: IntegritySelection) -> None:
         self._selection = selection
+
+    def _capture_recording(self, recording: RecordingStatus) -> None:
+        if recording is RecordingStatus.DEGRADED:
+            self._recording = RecordingStatus.DEGRADED
 
 
 class _LedgerRunRecording:

@@ -273,6 +273,7 @@ class IntegritySelection:
     items: tuple[IntegritySelectionItem, ...]
     _completed_bytes: dict[str, int] = field(default_factory=dict, repr=False)
     _processed_bytes: int = field(default=0, repr=False)
+    _bytes_total_high_water: int = field(default=0, repr=False)
 
     def __post_init__(self) -> None:
         item_ids = [item.item_id for item in self.items]
@@ -287,10 +288,22 @@ class IntegritySelection:
         known_ids = set(item_ids)
         if not set(self._completed_bytes).issubset(known_ids):
             raise ValueError("continuation contains an unknown item id")
+        if any(
+            type(value) is not int for value in self._completed_bytes.values()
+        ):
+            raise TypeError("completed byte counts must be integers")
         if any(value < 0 for value in self._completed_bytes.values()):
             raise ValueError("completed byte counts cannot be negative")
+        if type(self._processed_bytes) is not int:
+            raise TypeError("processed bytes must be an integer")
         if self._processed_bytes < sum(self._completed_bytes.values()):
             raise ValueError("processed bytes cannot trail completed bytes")
+        if type(self._bytes_total_high_water) is not int:
+            raise TypeError("integrity byte-total high-water must be an integer")
+        if self._bytes_total_high_water < self._processed_bytes:
+            raise ValueError(
+                "integrity byte-total high-water cannot trail processed bytes"
+            )
 
     @property
     def pending(self) -> tuple[IntegritySelectionItem, ...]:
@@ -307,17 +320,38 @@ class IntegritySelection:
         return self._processed_bytes
 
     @property
+    def bytes_total_high_water(self) -> int:
+        return self._bytes_total_high_water
+
+    @property
     def completed_bytes(self) -> Mapping[str, int]:
         return dict(self._completed_bytes)
 
     def note_bytes_processed(self, size: int) -> None:
+        if type(size) is not int:
+            raise TypeError("processed byte increment must be an integer")
         if size < 0:
             raise ValueError("processed byte increment cannot be negative")
         self._processed_bytes += size
+        self.advance_bytes_total_high_water(self._processed_bytes)
+
+    def advance_bytes_total_high_water(self, value: int) -> None:
+        if type(value) is not int:
+            raise TypeError("integrity byte-total high-water must be an integer")
+        if value < self._processed_bytes:
+            raise ValueError(
+                "integrity byte-total high-water cannot trail processed bytes"
+            )
+        self._bytes_total_high_water = max(
+            self._bytes_total_high_water,
+            value,
+        )
 
     def mark_completed(self, item_id: str, bytes_read: int) -> None:
         if item_id in self._completed_bytes:
             raise ValueError(f"integrity item already completed: {item_id}")
+        if type(bytes_read) is not int:
+            raise TypeError("completed byte count must be an integer")
         if bytes_read < 0:
             raise ValueError("completed byte count cannot be negative")
         if not any(item.item_id == item_id for item in self.items):

@@ -142,9 +142,12 @@ persists the workflow-owned continuation, releases custody, and emits no
 terminal.
 
 `Canceled` and `PauseRequested` remain payload-free. The runner consumes them
-and aggregates already emitted RELIABLE item outcomes into the session result;
-ordinary unexpected `Exception` values are likewise consumed after typed detail
-is attached to the one terminal/log path. `KeyboardInterrupt`, `SystemExit`,
+and aggregates RELIABLE item outcomes only after the downstream emitter returns
+successfully; a rejected outcome never becomes terminal-result authority.
+Only successfully emitted Progress can seed the runner's generic cancel/failure
+fallback. Ordinary unexpected `Exception` values are likewise consumed after
+typed detail is attached to the one terminal/log path. `KeyboardInterrupt`,
+`SystemExit`,
 and other `BaseException` subclasses deliberately escape without being
 normalized into a workflow result. Operation modules emit outcomes as work settles rather than holding a
 private result list until return. Before `Canceled` leaves an item-processing
@@ -195,7 +198,9 @@ The current event codec emits core event-envelope v4 and round-trips
 decode support for persisted reliable history without rewriting its hash
 chain. Unknown schema/body versions and v3 Progress are rejected: history
 never admitted lossy Progress, so there is no persisted legacy Progress shape
-to recover.
+to recover. Reliable `PhaseChanged.phase` is an exact nonempty string, matching
+the phase authority required by Progress consumers rather than allowing an
+empty phase token below the browser boundary.
 
 ### Progress v4 shape
 
@@ -259,8 +264,11 @@ database, UI state, shell, and page schema versions do not change. An
 unversioned browser-facing event is not a supported compatibility boundary.
 
 Every reliable result item carries an explicit `item_type` and `phase`;
-`run_session` accumulates only the nominal `ResultItem` base in emission order,
-including prior items retained across pause/resume. Structural
+`run_session` accumulates only the nominal `ResultItem` base after successful
+downstream emission, in that emission order, including prior items retained
+across pause/resume. A reliable item's degraded recording axis is a one-way
+floor for the aggregate terminal recording result; a later workflow return or
+paused-cancel callback cannot relabel it `OK`. Structural
 `hasattr(item_id/path)` guessing is forbidden.
 
 ## Path And Identity Rules
@@ -370,11 +378,19 @@ history persistence are independent `recording` and `audit`
 `RecordingStatus.OK|DEGRADED` axes; no axis rewrites another. Typed
 `Disposition.RAN|UNRUN` distinguishes a canceled discarded queue entry and a
 refusal from sessions that actually began domain work without parsing strings
-or inferring from an empty result-item list. `OperationResult.items` accepts
-only nominal `ResultItem` instances and preserves the one heterogeneous event
-order; operation and integrity consumers use explicit tags rather than parallel
-domain lists. Compound results add one `PhaseResult` per entered phase with
-phase-local counters that are never summed. Cancellation is a separate fact:
+or inferring from an empty result-item list. `OperationResult.bytes_done` is
+the terminal attempted-work high-water for the workflow's primary byte domain,
+not a durable-content counter; its matching total is that domain's final work
+budget. `PhaseResult` applies the same meaning within one entered phase. A
+failed pre-publication copy may therefore report bytes that existed only in an
+owned temporary file before rollback. Durable publication remains owned by
+reliable successful outcomes, executor publication evidence, and ledger state.
+`OperationResult.items` accepts only nominal `ResultItem` instances and
+preserves the one heterogeneous event order; operation and integrity consumers
+use explicit tags rather than parallel domain lists. Compound results add one
+`PhaseResult` per entered phase with phase-local counters that are never
+summed; the top-level sync byte pair projects execute rather than execute plus
+verify. Cancellation is a separate fact:
 verify cancellation may retain filesystem `COMPLETED` or `FAILED`, while
 `result_terminal_state()` is the sole projection to dispatcher lifecycle
 `CANCELED`. These combinations require `Disposition.RAN`, matching execute

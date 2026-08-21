@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Event
 
@@ -17,7 +17,7 @@ from namisync.core.evidence import (
     Provenance,
     RecordingStatus,
 )
-from namisync.core.events import StateChanged
+from namisync.core.events import PhaseChanged, Progress, StateChanged, Terminal
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
@@ -75,7 +75,12 @@ from _inventory_fixtures import (
 )
 
 
-def _outcome(item, mode: IntegrityMode) -> IntegrityOutcome:
+def _outcome(
+    item,
+    mode: IntegrityMode,
+    *,
+    recording: RecordingStatus = RecordingStatus.OK,
+) -> IntegrityOutcome:
     return IntegrityOutcome(
         item_id=item.item_id,
         row_id=item.row_id,
@@ -83,6 +88,7 @@ def _outcome(item, mode: IntegrityMode) -> IntegrityOutcome:
         path=item.display_path,
         phase=mode.value,
         result=IntegrityResult.VERIFIED,
+        recording=recording,
     )
 
 
@@ -238,15 +244,19 @@ def test_runtime_registers_inventory_and_all_integrity_modes_with_one_factory(
             registrations[EXECUTION_KIND].settle_canceled
             == runtime.settle_canceled_execution
         )
-        assert all(
-            registrations[kind].settle_canceled is None
-            for kind in (
-                "sync-plan",
-                INVENTORY_KIND,
-                BASELINE_KIND,
-                VERIFY_KIND,
-                REBASELINE_KIND,
-            )
+        assert registrations["sync-plan"].settle_canceled is None
+        assert registrations[INVENTORY_KIND].settle_canceled is None
+        assert (
+            registrations[BASELINE_KIND].settle_canceled
+            == runtime.settle_canceled_baseline
+        )
+        assert (
+            registrations[VERIFY_KIND].settle_canceled
+            == runtime.settle_canceled_verify
+        )
+        assert (
+            registrations[REBASELINE_KIND].settle_canceled
+            == runtime.settle_canceled_rebaseline
         )
         dispatcher = Dispatcher(
             registrations,
@@ -598,6 +608,7 @@ def test_resumed_baseline_keeps_frozen_order_after_evidence_changes(
             selection_item_ids=frozen,
             completed_bytes=((frozen[0], 7),),
             processed_bytes=7,
+            bytes_total_high_water=14,
             refresh_generation=1,
         )
 
@@ -799,6 +810,396 @@ def test_runtime_exposes_stale_and_missing_visibility_inventory_facade(
         runtime.close()
 
 
+@pytest.mark.parametrize(
+    "mode, kind",
+    [
+        (IntegrityMode.BASELINE, BASELINE_KIND),
+        (IntegrityMode.VERIFY, VERIFY_KIND),
+        (IntegrityMode.REBASELINE, REBASELINE_KIND),
+    ],
+)
+def test_paused_integrity_cancel_uses_exact_continuation_without_reopening(
+    tmp_path: Path,
+    mode: IntegrityMode,
+    kind: str,
+) -> None:
+    started = Event()
+    release = Event()
+    calls = 0
+
+    def runner(selection, context, recorder):
+        nonlocal calls
+        del recorder
+        calls += 1
+        item = selection.pending[0]
+        size = 0 if item.expected_stat is None else item.expected_stat.size
+        selection.note_bytes_processed(size)
+        bytes_total = max(
+            selection.processed_bytes,
+            sum(
+                0
+                if selected.expected_stat is None
+                else selected.expected_stat.size
+                for selected in selection.items
+            ),
+        )
+        selection.advance_bytes_total_high_water(bytes_total)
+        context.run.emit(
+            Progress(
+                phase=mode.value,
+                items_done=selection.completed_count,
+                items_total=len(selection.items),
+                bytes_done=selection.processed_bytes,
+                bytes_total=selection.bytes_total_high_water,
+                current_path=item.display_path,
+            )
+        )
+        outcome = _outcome(
+            item,
+            mode,
+            recording=RecordingStatus.DEGRADED,
+        )
+        context.run.emit(outcome)
+        selection.mark_completed(item.item_id, size)
+        started.set()
+        assert release.wait(2)
+        context.run.checkpoint()
+        raise AssertionError("pause checkpoint must stop the runner")
+
+    runtime, location_id, scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {mode: runner},
+    )
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    stream = None
+    try:
+        session_id = dispatcher.submit(
+            kind,
+            IntegrityRequest(
+                f"pause-cancel-{mode.value}",
+                mode,
+                location_id=location_id,
+                selected_paths=("a.txt", "b.txt"),
+            ),
+        )
+        stream = dispatcher.subscribe(session_id)
+        assert started.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release.set()
+        paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
+        continuation = decode_integrity_request(paused.payload)
+        assert continuation.mode is mode
+        assert continuation.refresh_generation == 1
+        assert continuation.selection_item_ids
+        assert len(continuation.completed_bytes) == 1
+        assert continuation.processed_bytes == 7
+        assert continuation.bytes_total_high_water == (
+            7 * len(continuation.selection_item_ids)
+        )
+        assert continuation.recording is RecordingStatus.DEGRADED
+        scanner_calls_at_pause = len(scanner.calls)
+
+        assert dispatcher.cancel(session_id).accepted
+        canceled = _wait_for(dispatcher, session_id, SessionState.CANCELED)
+
+        assert canceled.result is not None
+        assert canceled.result.canceled is True
+        assert (
+            canceled.result.bytes_done,
+            canceled.result.bytes_total,
+        ) == (
+            continuation.processed_bytes,
+            continuation.bytes_total_high_water,
+        )
+        assert canceled.result.recording is RecordingStatus.DEGRADED
+        assert [(item.path, item.phase) for item in canceled.result.items] == [
+            (
+                "b.txt" if mode is IntegrityMode.BASELINE else "a.txt",
+                mode.value,
+            )
+        ]
+        assert calls == 1
+        assert len(scanner.calls) == scanner_calls_at_pause
+
+        bodies: list[object] = []
+        while True:
+            body = stream.next(2).body
+            bodies.append(body)
+            if isinstance(body, Terminal):
+                break
+        mode_change = next(
+            index
+            for index, body in enumerate(bodies)
+            if body == PhaseChanged(mode.value)
+        )
+        progress_indexes = [
+            index
+            for index, body in enumerate(bodies)
+            if isinstance(body, Progress)
+        ]
+        assert progress_indexes
+        assert mode_change < progress_indexes[0]
+        assert all(
+            body.phase == mode.value
+            for body in bodies
+            if isinstance(body, Progress)
+        )
+        assert all(
+            body.phase == mode.value
+            for body in bodies
+            if isinstance(body, IntegrityOutcome)
+        )
+    finally:
+        release.set()
+        if stream is not None:
+            stream.close()
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_pause_during_integrity_context_creation_retains_admitted_total(
+    tmp_path: Path,
+) -> None:
+    context_started = Event()
+    release_context = Event()
+    runner_calls = 0
+
+    def runner(*_args) -> IntegrityRunResult:
+        nonlocal runner_calls
+        runner_calls += 1
+        raise AssertionError("runner started after paused context creation")
+
+    runtime, location_id, scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {IntegrityMode.VERIFY: runner},
+    )
+
+    def pause_in_context(context: RunContext):
+        context_started.set()
+        assert release_context.wait(2)
+        context.checkpoint()
+        raise AssertionError("pause checkpoint did not stop context creation")
+
+    runtime._integrity_deps = replace(
+        runtime._integrity_deps,
+        verifier_context=pause_in_context,
+    )
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        session_id = dispatcher.submit(
+            VERIFY_KIND,
+            IntegrityRequest(
+                "pause-context-admission",
+                IntegrityMode.VERIFY,
+                location_id=location_id,
+                selected_paths=("a.txt", "b.txt"),
+            ),
+        )
+        assert context_started.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release_context.set()
+        paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
+        continuation = decode_integrity_request(paused.payload)
+
+        assert len(continuation.selection_item_ids) == 2
+        assert continuation.completed_bytes == ()
+        assert continuation.processed_bytes == 0
+        assert continuation.bytes_total_high_water == 14
+        scanner_calls_at_pause = len(scanner.calls)
+
+        assert dispatcher.cancel(session_id).accepted
+        canceled = _wait_for(dispatcher, session_id, SessionState.CANCELED)
+
+        assert canceled.result is not None
+        assert canceled.result.canceled is True
+        assert (canceled.result.bytes_done, canceled.result.bytes_total) == (
+            0,
+            14,
+        )
+        assert runner_calls == 0
+        assert len(scanner.calls) == scanner_calls_at_pause
+    finally:
+        release_context.set()
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_paused_integrity_snapshot_persists_recorder_close_degradation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started = Event()
+    release = Event()
+
+    def runner(selection, context, recorder):
+        del recorder
+        selection.note_bytes_processed(3)
+        selection.advance_bytes_total_high_water(
+            max(
+                selection.processed_bytes,
+                sum(
+                    0
+                    if item.expected_stat is None
+                    else item.expected_stat.size
+                    for item in selection.items
+                ),
+            )
+        )
+        started.set()
+        assert release.wait(2)
+        context.run.checkpoint()
+        raise AssertionError("pause checkpoint must stop the runner")
+
+    runtime, location_id, _scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {IntegrityMode.VERIFY: runner},
+    )
+    original_close = inventory_workflow.LedgerRecorder.close
+
+    def failing_close(recorder) -> None:
+        original_close(recorder)
+        raise RuntimeError("pause close failed")
+
+    monkeypatch.setattr(
+        inventory_workflow.LedgerRecorder,
+        "close",
+        failing_close,
+    )
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        session_id = dispatcher.submit(
+            VERIFY_KIND,
+            IntegrityRequest(
+                "pause-close-degraded",
+                IntegrityMode.VERIFY,
+                location_id=location_id,
+            ),
+        )
+        assert started.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release.set()
+        paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
+        continuation = decode_integrity_request(paused.payload)
+
+        assert continuation.processed_bytes == 3
+        assert continuation.bytes_total_high_water == 14
+        assert continuation.recording is RecordingStatus.DEGRADED
+
+        assert dispatcher.cancel(session_id).accepted
+        canceled = _wait_for(dispatcher, session_id, SessionState.CANCELED)
+        assert canceled.result is not None
+        assert canceled.result.recording is RecordingStatus.DEGRADED
+        assert (canceled.result.bytes_done, canceled.result.bytes_total) == (
+            3,
+            14,
+        )
+    finally:
+        release.set()
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+def test_preselection_pause_persists_recorder_close_degradation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    started = Event()
+    release = Event()
+
+    class PauseBeforeSelectionScanner(_Scanner):
+        def __call__(
+            self,
+            root,
+            ignores,
+            context,
+            scope,
+            *,
+            trusted_anchor=None,
+        ):
+            started.set()
+            assert release.wait(2)
+            context.checkpoint()
+            raise AssertionError("pause checkpoint must stop the refresh")
+
+    scanner = PauseBeforeSelectionScanner(
+        mount,
+        (_file("a.txt", 1),),
+    )
+    runtime, location_id = _runtime(
+        tmp_path,
+        _Resolver(mount),
+        scanner,
+        {
+            IntegrityMode.VERIFY: lambda *_args: pytest.fail(
+                "verifier must not start before refresh selection"
+            )
+        },
+    )
+    original_close = inventory_workflow.LedgerRecorder.close
+
+    def failing_close(recorder) -> None:
+        original_close(recorder)
+        raise RuntimeError("preselection pause close failed")
+
+    monkeypatch.setattr(
+        inventory_workflow.LedgerRecorder,
+        "close",
+        failing_close,
+    )
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        session_id = dispatcher.submit(
+            VERIFY_KIND,
+            IntegrityRequest(
+                "preselection-pause-close",
+                IntegrityMode.VERIFY,
+                location_id=location_id,
+            ),
+        )
+        assert started.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release.set()
+        paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
+        continuation = decode_integrity_request(paused.payload)
+
+        assert continuation.selection_item_ids == ()
+        assert continuation.processed_bytes == 0
+        assert continuation.bytes_total_high_water == 0
+        assert continuation.recording is RecordingStatus.DEGRADED
+
+        assert dispatcher.cancel(session_id).accepted
+        canceled = _wait_for(dispatcher, session_id, SessionState.CANCELED)
+        assert canceled.result is not None
+        assert canceled.result.recording is RecordingStatus.DEGRADED
+        assert (canceled.result.bytes_done, canceled.result.bytes_total) == (0, 0)
+    finally:
+        release.set()
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
 def test_paused_verify_resumes_without_repeating_or_losing_items(
     tmp_path: Path,
 ) -> None:
@@ -821,7 +1222,44 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
         for item in selection.pending:
             size = 0 if item.expected_stat is None else item.expected_stat.size
             selection.note_bytes_processed(size)
-            outcome = _outcome(item, IntegrityMode.VERIFY)
+            selection.advance_bytes_total_high_water(
+                max(
+                    selection.processed_bytes,
+                    sum(
+                        0
+                        if selected.expected_stat is None
+                        else selected.expected_stat.size
+                        for selected in selection.items
+                    ),
+                )
+            )
+            context.run.emit(
+                Progress(
+                    phase=IntegrityMode.VERIFY.value,
+                    items_done=selection.completed_count,
+                    items_total=len(selection.items),
+                    bytes_done=selection.processed_bytes,
+                    bytes_total=max(
+                        selection.processed_bytes,
+                        sum(
+                            0
+                            if selected.expected_stat is None
+                            else selected.expected_stat.size
+                            for selected in selection.items
+                        ),
+                    ),
+                    current_path=item.display_path,
+                )
+            )
+            outcome = _outcome(
+                item,
+                IntegrityMode.VERIFY,
+                recording=(
+                    RecordingStatus.DEGRADED
+                    if calls == 1
+                    else RecordingStatus.OK
+                ),
+            )
             context.run.emit(outcome)
             selection.mark_completed(item.item_id, size)
             outcomes.append(outcome)
@@ -863,6 +1301,8 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
         assert len(continuation.selection_item_ids) == 2
         assert len(continuation.completed_bytes) == 1
         assert continuation.processed_bytes == 7
+        assert continuation.bytes_total_high_water == 14
+        assert continuation.recording is RecordingStatus.DEGRADED
         while True:
             envelope = paused_stream.next(2)
             if envelope.body == StateChanged(SessionState.PAUSED):
@@ -879,9 +1319,33 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
         assert dispatcher.resume(session_id).accepted
         completed = _wait_for(dispatcher, session_id, SessionState.COMPLETED)
         assert completed.result is not None
+        assert completed.result.recording is RecordingStatus.DEGRADED
         assert [
             (item.path, item.phase) for item in completed.result.items
         ] == [("a.txt", "verify"), ("b.txt", "verify")]
+        resumed_bodies: list[object] = []
+        while True:
+            body = paused_stream.next(2).body
+            resumed_bodies.append(body)
+            if isinstance(body, Terminal):
+                break
+        resumed_phase = next(
+            index
+            for index, body in enumerate(resumed_bodies)
+            if body == PhaseChanged(IntegrityMode.VERIFY.value)
+        )
+        resumed_progress = [
+            index
+            for index, body in enumerate(resumed_bodies)
+            if isinstance(body, Progress)
+        ]
+        assert resumed_progress
+        assert resumed_phase < resumed_progress[0]
+        assert all(
+            body.phase == IntegrityMode.VERIFY.value
+            for body in resumed_bodies
+            if isinstance(body, (Progress, IntegrityOutcome))
+        )
         assert calls == 2
         assert len(scanner.calls) == 2
         assert [row.rel_path for row in runtime.list_inventory(location_id)] == [

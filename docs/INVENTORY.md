@@ -81,13 +81,13 @@ selected-path and intentional full Verify All scope remain unchanged.
 
 Inventory continuation payloads are strict version 2 because they carry
 `subtree_roots` separately from exact `selected_paths`. Integrity continuations
-remain version 1 because folder actions freeze indexed descendants into the
-existing exact-subject shape before admission. Their shared decoder validates
-the exact field set and JSON scalar types, rejects duplicate object keys, and
-checks kind and expected version independently. Inventory and integrity details
-retain the scanner's typed warnings; an incomplete refresh therefore preserves
-the warning code, relative path, and detail rather than reporting only
-`complete=False`.
+independently advance to strict version 2 so a pause retains its physical-read
+total high-water and aggregate recording status beside the exact frozen
+subjects. Their shared decoder validates the exact field set and JSON scalar
+types, rejects duplicate object keys, and checks kind and expected version
+independently. Inventory and integrity details retain the scanner's typed
+warnings; an incomplete refresh therefore preserves the warning code, relative
+path, and detail rather than reporting only `complete=False`.
 
 Every incomplete full or stale-scope integrity refresh refuses before hashing.
 An exact integrity pre-scan may continue only when all incompleteness is
@@ -239,7 +239,7 @@ summary and policy; missing acknowledgement is not pruning.
 - Nested and hostile-name subtree fixtures prove canonical keys and literal
   missing ranges; incomplete, absent, unavailable, and now-file roots preserve
   their distinct reconciliation outcomes.
-- Inventory v2 and integrity v1 payloads round-trip and reject wrong versions
+- Inventory v2 and integrity v2 payloads round-trip and reject wrong versions
   and wrong workflow kinds independently.
 - Incomplete inventory details retain typed scan warnings, and unreadable
   frozen integrity subjects do not suppress readable siblings.

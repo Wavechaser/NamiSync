@@ -232,13 +232,26 @@ item/attempt identity, present item counters are nondecreasing and the item
 total is fixed. A phase change or explicit `Gap` ends those temporal comparison
 domains.
 
+Terminal counter projection preserves those work semantics. A
+`PhaseResult.bytes_done` value is that phase's final attempted-work high-water,
+and `OperationResult.bytes_done` is the final high-water for the workflow's
+primary byte-work domain. A compound sync keeps execute and verify counters in
+their separate phase results and uses execute as its top-level byte domain; it
+never sums the two. Bytes written into an owned temporary file and later
+removed after a failed or canceled attempt still count as attempted work.
+Neither terminal nor retained-history byte counters prove publication,
+successful content, or ledger durability. Reliable item outcomes, executor
+publication evidence, and the filesystem ledger retain those authorities.
+
 #### Authority, replay, and compatibility
 
 Consumers use this precedence rather than reconstructing truth from whichever
 event arrived last:
 
 1. Reliable item outcomes own item settlement and outcome classification.
-2. Reliable `PhaseChanged` owns phase continuity when it is available.
+2. Reliable `PhaseChanged` owns phase continuity when it is available. Its
+   phase is always a nonempty string, so an empty token can never become phase
+   authority.
 3. Progress owns only its phase-scoped work snapshot and active presentation
    state; it never creates a terminal item outcome.
 4. `Terminal` and the workflow result own final run truth.

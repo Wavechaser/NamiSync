@@ -291,12 +291,10 @@ def test_xv_1_published_evidence_cardinality_and_atomic_emission_for_all_byte_ki
             return
         emitted.append(body)
         op_id = OpId(body.item_id)
-        assert xset.status[op_id] is body.outcome
+        assert op_id not in xset.status
+        assert op_id not in xset.published_evidence
         if op_id in byte_ids:
             assert body.outcome is Outcome.SUCCEEDED
-            assert op_id in xset.published_evidence
-        else:
-            assert op_id not in xset.published_evidence
 
     result = execute(
         xset,
@@ -308,6 +306,7 @@ def test_xv_1_published_evidence_cardinality_and_atomic_emission_for_all_byte_ki
 
     assert result.status is SessionState.COMPLETED
     assert {OpId(item.item_id) for item in emitted} == set(xset.selection)
+    assert set(xset.status) == set(xset.selection)
     assert set(xset.published_evidence) == byte_ids
     assert all(
         evidence.copy_recorded
@@ -315,6 +314,131 @@ def test_xv_1_published_evidence_cardinality_and_atomic_emission_for_all_byte_ki
         is Provenance.COPY_ATTESTED
         for evidence in xset.published_evidence.values()
     )
+
+
+def test_failed_reliable_outcome_emit_does_not_settle_continuation_or_progress(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    content = b"same"
+    (source / "noop.bin").write_bytes(content)
+    (target / "noop.bin").write_bytes(content)
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "noop.bin")
+    target_stat = fs.stat(target, "noop.bin")
+    assert source_stat is not None
+    assert target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.NOOP,
+        source_rel_path="noop.bin",
+        target_rel_path="noop.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=target_stat,
+        reason=OperationReason.METADATA_MATCH,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    progress: list[Progress] = []
+    outcome_attempts = 0
+    original = OSError("reliable outcome sink failed")
+
+    def emit(body: object) -> None:
+        nonlocal outcome_attempts
+        if isinstance(body, ItemOutcome):
+            outcome_attempts += 1
+            if outcome_attempts == 1:
+                raise original
+            raise OSError("reliable outcome sink still failed")
+        if isinstance(body, Progress):
+            progress.append(body)
+
+    with pytest.raises(OSError) as raised:
+        execute(
+            xset,
+            RunContext(emit, lambda: None),
+            FakeRecorder(),
+            _policies(),
+            fs,
+        )
+
+    assert raised.value is original
+    assert outcome_attempts >= 1
+    assert xset.status == {}
+    assert xset.published_evidence == {}
+    assert progress
+    final = progress[-1]
+    assert (final.items_done, final.items_total) == (0, 1)
+    assert (
+        final.current_path,
+        final.item_id,
+        final.item_type,
+        final.item_attempt_id,
+        final.item_bytes_done,
+        final.item_bytes_total,
+    ) == (None, None, None, None, None, None)
+
+
+def test_run_session_excludes_executor_outcomes_rejected_by_sink(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    content = b"same"
+    (source / "noop.bin").write_bytes(content)
+    (target / "noop.bin").write_bytes(content)
+    fs = NativeFileSystem()
+    source_stat = fs.stat(source, "noop.bin")
+    target_stat = fs.stat(target, "noop.bin")
+    assert source_stat is not None
+    assert target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.NOOP,
+        source_rel_path="noop.bin",
+        target_rel_path="noop.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=target_stat,
+        reason=OperationReason.METADATA_MATCH,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    accepted: list[object] = []
+    outcome_attempts = 0
+    original = OSError("reliable outcome sink failed")
+
+    def emit(body: object) -> None:
+        nonlocal outcome_attempts
+        if isinstance(body, ItemOutcome):
+            outcome_attempts += 1
+            raise original
+        accepted.append(body)
+
+    session_outcome = run_session(
+        lambda ctx: execute(
+            xset,
+            ctx,
+            FakeRecorder(),
+            _policies(),
+            fs,
+        ),
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda _state, _result: None,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert outcome_attempts >= 1
+    assert xset.status == {}
+    assert session_outcome.result is not None
+    assert session_outcome.result.status is SessionState.FAILED
+    assert session_outcome.result.items == ()
+    terminal = next(body for body in accepted if isinstance(body, Terminal))
+    assert terminal.result.items == ()
+    final_progress = next(
+        body for body in reversed(accepted) if isinstance(body, Progress)
+    )
+    assert (final_progress.items_done, final_progress.items_total) == (0, 1)
 
 
 class SizingCopyBackend:

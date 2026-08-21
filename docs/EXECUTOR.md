@@ -155,10 +155,13 @@ and-swap guarantee.
     returns that same tuple. A recorder failure preserves the filesystem
     outcome, leaves the published evidence rowless, and degrades
     `RecordingStatus` instead of relabeling the copy as failed.
-13. Store exactly one `PublishedCopyEvidence` and the succeeded operation status
-    in `ExecutionSet` before emitting the reliable `ItemOutcome`. Only
-    COPY/UPDATE/MOVE_UPDATE produce this evidence; failed, no-op, metadata-only,
-    and unreached operations never do.
+13. Emit exactly one reliable `ItemOutcome`, then store its operation status and
+    any `PublishedCopyEvidence` in `ExecutionSet`. Continuation state therefore
+    cannot claim a settled item whose reliable outcome failed to publish. Only
+    COPY/UPDATE/MOVE_UPDATE produce published evidence; failed, no-op,
+    metadata-only, and unreached operations never do. If reliable delivery
+    itself fails after an effect, the exception backstop cleans and retires the
+    process-local effect without manufacturing continuation settlement.
 
 Temps use `<name>.synctmp-<run-id>-<op-id>` with validated fixed-format ids.
 Once per successfully preflighted execution, recovery enumerates only direct

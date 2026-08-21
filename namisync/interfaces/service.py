@@ -1785,16 +1785,19 @@ def _workflow_registry(
             runtime.prepare_baseline,
             runtime.open_baseline,
             supports_pause=True,
+            settle_canceled=runtime.settle_canceled_baseline,
         ),
         VERIFY_KIND: registration(
             runtime.prepare_verify,
             runtime.open_verify,
             supports_pause=True,
+            settle_canceled=runtime.settle_canceled_verify,
         ),
         REBASELINE_KIND: registration(
             runtime.prepare_rebaseline,
             runtime.open_rebaseline,
             supports_pause=True,
+            settle_canceled=runtime.settle_canceled_rebaseline,
         ),
     }
 

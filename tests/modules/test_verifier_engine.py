@@ -1579,6 +1579,69 @@ def test_growing_subject_suppresses_item_fraction_and_expands_physical_total(
     ) == (None, None, None, None, None)
 
 
+def test_resumed_overshoot_does_not_reapply_growth_to_retained_total(
+    tmp_path: Path,
+) -> None:
+    before = _stat(size=2)
+    after = _stat(size=4)
+    item = _item(
+        tmp_path,
+        expected_stat=before,
+        baseline_evidence=_attestation(b"ab", before),
+    )
+    selection = IntegritySelection(
+        (item,),
+        _processed_bytes=1,
+        _bytes_total_high_water=100,
+    )
+    events: list[object] = []
+
+    verify(
+        selection,
+        replace(_context(events), progress_interval_seconds=0),
+        _Recorder(),
+        _FakeReader(
+            {
+                item.display_path: _StreamSpec(
+                    before,
+                    (b"a", b"b", b"c", b"d"),
+                    after,
+                )
+            }
+        ),
+    )
+
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert progress
+    assert all(event.bytes_total == 100 for event in progress)
+    assert progress[-1].bytes_done == 5
+    assert selection.bytes_total_high_water == 100
+
+
+def test_integrity_selection_byte_total_high_water_is_monotonic() -> None:
+    selection = IntegritySelection(())
+
+    selection.advance_bytes_total_high_water(9)
+    selection.advance_bytes_total_high_water(4)
+    selection.note_bytes_processed(3)
+
+    assert selection.bytes_total_high_water == 9
+    with pytest.raises(ValueError, match="cannot trail processed"):
+        selection.advance_bytes_total_high_water(2)
+    with pytest.raises(TypeError, match="must be an integer"):
+        selection.advance_bytes_total_high_water(True)  # type: ignore[arg-type]
+    with pytest.raises(AttributeError):
+        selection.bytes_total_high_water = 0  # type: ignore[misc]
+    with pytest.raises(ValueError, match="cannot trail processed"):
+        IntegritySelection(
+            (),
+            _processed_bytes=2,
+            _bytes_total_high_water=1,
+        )
+    with pytest.raises(TypeError, match="must be an integer"):
+        IntegritySelection((), _bytes_total_high_water=True)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(
     (
         "disposition",
@@ -2010,6 +2073,384 @@ def test_pause_during_hash_restarts_pending_item_without_outcome_or_progress_reg
     assert [event.item_bytes_done for event in resumed_determinate] == [0, 1, 2, 3]
     assert selection.processed_bytes == 4
     assert len(recorder.commands) == 1
+
+
+@pytest.mark.parametrize("post_copy", (False, True), ids=("standalone", "post-copy"))
+def test_reader_resolution_failure_keeps_resumed_progress_authoritative(
+    tmp_path: Path,
+    post_copy: bool,
+) -> None:
+    events: list[object] = []
+    if post_copy:
+        subject = _post_copy_candidate(tmp_path)
+        selection = PostCopySelection((subject,), _processed_bytes=1)
+        invoke = lambda: verify_post_copy(
+            selection,
+            _context(events),
+            _Recorder(),
+        )
+    else:
+        subject = _item(tmp_path)
+        selection = IntegritySelection(
+            (subject,),
+            _processed_bytes=1,
+            _bytes_total_high_water=1,
+        )
+        invoke = lambda: verify(
+            selection,
+            _context(events),
+            _Recorder(),
+        )
+
+    with pytest.raises(
+        ValueError, match="default verification reader requires root authority"
+    ):
+        invoke()
+
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert len(progress) == 2
+    assert all(
+        (event.items_done, event.items_total, event.bytes_done, event.bytes_total)
+        == (0, 1, 1, 4)
+        for event in progress
+    )
+    assert all(
+        event.item_id is None and event.current_path is None
+        for event in progress
+    )
+
+
+@pytest.mark.parametrize("post_copy", (False, True), ids=("standalone", "post-copy"))
+def test_unexpected_failure_forces_live_inactive_progress(
+    tmp_path: Path,
+    post_copy: bool,
+) -> None:
+    events: list[object] = []
+    calls = 0
+    original = RuntimeError("reader pipeline bug")
+
+    def checkpoint() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 3:  # item entry, first chunk, then fail before chunk two
+            raise original
+
+    context = _context(events, checkpoint, monotonic=lambda: 0.0)
+    if post_copy:
+        subject = _post_copy_candidate(tmp_path)
+        selection = PostCopySelection((subject,))
+        invoke = lambda: verify_post_copy(
+            selection,
+            context,
+            _Recorder(),
+            _FakeReader(
+                {
+                    subject.display_path: _StreamSpec(
+                        subject.expected_stat, (b"a", b"b", b"c")
+                    )
+                }
+            ),
+        )
+        expected_type = "operation"
+    else:
+        subject = _item(tmp_path)
+        selection = IntegritySelection((subject,))
+        invoke = lambda: verify(
+            selection,
+            context,
+            _Recorder(),
+            _FakeReader(
+                {
+                    subject.display_path: _StreamSpec(
+                        subject.expected_stat, (b"a", b"b", b"c")  # type: ignore[arg-type]
+                    )
+                }
+            ),
+        )
+        expected_type = "integrity"
+
+    with pytest.raises(RuntimeError) as raised:
+        invoke()
+
+    assert raised.value is original
+    assert _integrity_events(events) == []
+    assert selection.completed_count == 0
+    assert selection.processed_bytes == 1
+    active = [
+        event
+        for event in events
+        if isinstance(event, Progress) and event.item_type == expected_type
+    ]
+    assert active == []  # all ordinary transitions stayed inside the throttle window
+    final = events[-1]
+    assert isinstance(final, Progress)
+    assert final.phase == IntegrityMode.VERIFY.value
+    assert (final.items_done, final.items_total) == (0, 1)
+    assert (final.bytes_done, final.bytes_total) == (1, 3)
+    assert (
+        final.current_path,
+        final.item_id,
+        final.item_type,
+        final.item_attempt_id,
+        final.item_bytes_done,
+        final.item_bytes_total,
+    ) == (None, None, None, None, None, None)
+
+
+@pytest.mark.parametrize("post_copy", (False, True), ids=("standalone", "post-copy"))
+def test_unexpected_failure_keeps_terminal_progress_sink_failure_secondary(
+    tmp_path: Path,
+    post_copy: bool,
+) -> None:
+    events: list[object] = []
+    calls = 0
+    failure_started = False
+    original = RuntimeError("primary verifier failure")
+
+    def checkpoint() -> None:
+        nonlocal calls, failure_started
+        calls += 1
+        if calls == 3:
+            failure_started = True
+            raise original
+
+    def emit(body: object) -> None:
+        events.append(body)
+        if failure_started and isinstance(body, Progress):
+            raise OSError("injected terminal progress sink failure")
+
+    context = replace(
+        _context(events, checkpoint, monotonic=lambda: 0.0),
+        run=RunContext(emit, checkpoint),
+    )
+    if post_copy:
+        subject = _post_copy_candidate(tmp_path)
+        selection = PostCopySelection((subject,))
+        invoke = lambda: verify_post_copy(
+            selection,
+            context,
+            _Recorder(),
+            _FakeReader(
+                {
+                    subject.display_path: _StreamSpec(
+                        subject.expected_stat, (b"a", b"b", b"c")
+                    )
+                }
+            ),
+        )
+    else:
+        subject = _item(tmp_path)
+        selection = IntegritySelection((subject,))
+        invoke = lambda: verify(
+            selection,
+            context,
+            _Recorder(),
+            _FakeReader(
+                {
+                    subject.display_path: _StreamSpec(
+                        subject.expected_stat, (b"a", b"b", b"c")  # type: ignore[arg-type]
+                    )
+                }
+            ),
+        )
+
+    with pytest.raises(RuntimeError) as raised:
+        invoke()
+
+    assert raised.value is original
+    assert any(
+        "verifier terminal progress emission also failed" in note
+        and "injected terminal progress sink failure" in note
+        for note in getattr(original, "__notes__", ())
+    )
+    final = events[-1]
+    assert isinstance(final, Progress)
+    assert (final.bytes_done, final.bytes_total) == (1, 3)
+    assert (
+        final.current_path,
+        final.item_id,
+        final.item_type,
+        final.item_attempt_id,
+        final.item_bytes_done,
+        final.item_bytes_total,
+    ) == (None, None, None, None, None, None)
+
+
+@pytest.mark.parametrize("post_copy", (False, True), ids=("standalone", "post-copy"))
+def test_reliable_outcome_count_survives_continuation_update_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    post_copy: bool,
+) -> None:
+    events: list[object] = []
+    original = RuntimeError("continuation update bug")
+    if post_copy:
+        subject = _post_copy_candidate(tmp_path)
+        selection = PostCopySelection((subject,))
+        invoke = lambda: verify_post_copy(
+            selection,
+            replace(_context(events), progress_interval_seconds=0),
+            _Recorder(),
+            _FakeReader(
+                {
+                    subject.display_path: _StreamSpec(
+                        subject.expected_stat, (b"abc",)
+                    )
+                }
+            ),
+        )
+    else:
+        subject = _item(tmp_path, expected_state=InventoryState.MISSING)
+        selection = IntegritySelection((subject,))
+        invoke = lambda: verify(
+            selection,
+            replace(_context(events), progress_interval_seconds=0),
+            _Recorder(),
+            _FakeReader({}),
+        )
+
+    def fail_continuation_update(*_args) -> None:
+        raise original
+
+    monkeypatch.setattr(selection, "mark_completed", fail_continuation_update)
+
+    with pytest.raises(RuntimeError) as raised:
+        invoke()
+
+    assert raised.value is original
+    outcomes = _integrity_events(events)
+    assert len(outcomes) == 1
+    assert selection.completed_count == 0
+    final = events[-1]
+    assert isinstance(final, Progress)
+    assert events.index(outcomes[0]) < len(events) - 1
+    assert (final.items_done, final.items_total) == (1, 1)
+    assert (
+        final.current_path,
+        final.item_id,
+        final.item_type,
+        final.item_attempt_id,
+        final.item_bytes_done,
+        final.item_bytes_total,
+    ) == (None, None, None, None, None, None)
+
+
+def test_failed_reliable_outcome_emit_does_not_advance_items_done(
+    tmp_path: Path,
+) -> None:
+    item = _item(tmp_path, expected_state=InventoryState.MISSING)
+    selection = IntegritySelection((item,))
+    events: list[object] = []
+    original = OSError("reliable outcome sink failure")
+
+    def emit(body: object) -> None:
+        events.append(body)
+        if isinstance(body, IntegrityOutcome):
+            raise original
+
+    context = replace(
+        _context(events),
+        run=RunContext(emit, lambda: None),
+        progress_interval_seconds=0,
+    )
+
+    with pytest.raises(OSError) as raised:
+        verify(selection, context, _Recorder(), _FakeReader({}))
+
+    assert raised.value is original
+    assert selection.completed_count == 0
+    final = events[-1]
+    assert isinstance(final, Progress)
+    assert (final.items_done, final.items_total) == (0, 1)
+    assert final.item_id is None
+    assert final.current_path is None
+
+
+@pytest.mark.parametrize("post_copy", (False, True), ids=("standalone", "post-copy"))
+@pytest.mark.parametrize("secondary_failure", (False, True), ids=("progress-ok", "progress-fails"))
+def test_canceled_outcome_sink_failure_uses_inactive_failure_boundary(
+    tmp_path: Path,
+    post_copy: bool,
+    secondary_failure: bool,
+) -> None:
+    events: list[object] = []
+    calls = 0
+    settlement_failed = False
+    settlement_error = OSError("canceled outcome sink failure")
+
+    def checkpoint() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise Canceled
+
+    def emit(body: object) -> None:
+        nonlocal settlement_failed
+        events.append(body)
+        if isinstance(body, IntegrityOutcome):
+            settlement_failed = True
+            raise settlement_error
+        if secondary_failure and settlement_failed and isinstance(body, Progress):
+            raise RuntimeError("secondary inactive Progress sink failure")
+
+    context = replace(
+        _context(events, checkpoint, monotonic=lambda: 0.0),
+        run=RunContext(emit, checkpoint),
+    )
+    if post_copy:
+        subject = _post_copy_candidate(tmp_path)
+        selection = PostCopySelection((subject,))
+        invoke = lambda: verify_post_copy(
+            selection,
+            context,
+            _Recorder(),
+            _FakeReader(
+                {
+                    subject.display_path: _StreamSpec(
+                        subject.expected_stat, (b"a", b"b", b"c")
+                    )
+                }
+            ),
+        )
+    else:
+        subject = _item(tmp_path)
+        selection = IntegritySelection((subject,))
+        invoke = lambda: verify(
+            selection,
+            context,
+            _Recorder(),
+            _FakeReader(
+                {
+                    subject.display_path: _StreamSpec(
+                        subject.expected_stat, (b"a", b"b", b"c")  # type: ignore[arg-type]
+                    )
+                }
+            ),
+        )
+
+    with pytest.raises(OSError) as raised:
+        invoke()
+
+    assert raised.value is settlement_error
+    notes = getattr(settlement_error, "__notes__", ())
+    assert any(
+        "verifier terminal progress emission also failed" in note
+        and "secondary inactive Progress sink failure" in note
+        for note in notes
+    ) is secondary_failure
+    assert selection.completed_count == 0
+    final = events[-1]
+    assert isinstance(final, Progress)
+    assert (final.items_done, final.items_total) == (0, 1)
+    assert (final.bytes_done, final.bytes_total) == (1, 3)
+    assert (
+        final.current_path,
+        final.item_id,
+        final.item_type,
+        final.item_attempt_id,
+        final.item_bytes_done,
+        final.item_bytes_total,
+    ) == (None, None, None, None, None, None)
 
 
 def test_pause_during_hash_forces_latest_active_snapshot_under_throttle(

@@ -1127,6 +1127,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-22). Continuation authority-axis loss. Paused
+  standalone integrity custody retained processed bytes and item completion but
+  discarded the verifier's expanded physical-read budget and aggregate
+  recording degradation, so paused cancellation or an early resumed failure
+  could report a contradictory tight total and recover `DEGRADED` to `OK`.
+  Cause: the exact v1 continuation serialized only item-local work state. Fixed
+  with strict integrity continuation v2, a monotonic selection-owned byte-total
+  high-water, one-way aggregate recording, reporter propagation across resume
+  and overshoot, and exact paused-cancel/setup-failure regressions. Reliable
+  outcomes and recorded evidence remain the durable-truth authority.
 - MINOR - FIXED (2026-08-21). Progress namespace misclassification. Post-copy
   verification labeled an originating executor operation id as `integrity`, so
   the field intended to disambiguate opaque row ids pointed consumers at the

@@ -58,6 +58,12 @@ class StateChanged:
 class PhaseChanged:
     phase: str
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.phase, str):
+            raise TypeError("phase must be a string")
+        if not self.phase:
+            raise ValueError("phase must be non-empty")
+
 
 @dataclass(frozen=True, slots=True)
 class Progress:

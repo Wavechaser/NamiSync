@@ -145,7 +145,6 @@ def verify_post_copy(
 ) -> IntegrityRunResult:
     """Read back transient published targets without requiring ledger rows."""
 
-    actual_reader = _reader_for_context(ctx, reader)
     emitted: list[IntegrityOutcome] = []
     reporter = _ProgressReporter(
         selection,
@@ -159,6 +158,7 @@ def verify_post_copy(
     )
 
     try:
+        actual_reader = _reader_for_context(ctx, reader)
         for candidate in selection.pending:
             ctx.run.checkpoint()
             reporter.item_started(candidate.item_id, candidate.display_path)
@@ -172,28 +172,35 @@ def verify_post_copy(
         reporter.pause_completed()
         raise
     except Canceled:
-        for candidate in selection.pending:
-            processed = _ProcessedItem(
-                _post_copy_outcome(
-                    candidate,
-                    IntegrityResult.CANCELED,
-                    IntegrityReason.CANCELED,
-                    recording=(
-                        RecordingStatus.OK
-                        if candidate.recorded_identity is not None
-                        else RecordingStatus.DEGRADED
-                    ),
+        try:
+            for candidate in selection.pending:
+                processed = _ProcessedItem(
+                    _post_copy_outcome(
+                        candidate,
+                        IntegrityResult.CANCELED,
+                        IntegrityReason.CANCELED,
+                        recording=(
+                            RecordingStatus.OK
+                            if candidate.recorded_identity is not None
+                            else RecordingStatus.DEGRADED
+                        ),
+                    )
                 )
-            )
-            _emit_and_complete_post_copy(
-                selection,
-                ctx,
-                reporter,
-                processed,
-                emitted,
-                emit_progress=False,
-            )
-        reporter.cancellation_completed()
+                _emit_and_complete_post_copy(
+                    selection,
+                    ctx,
+                    reporter,
+                    processed,
+                    emitted,
+                    emit_progress=False,
+                )
+            reporter.cancellation_completed()
+        except Exception as error:
+            reporter.failure_completed(error)
+            raise
+        raise
+    except Exception as error:
+        reporter.failure_completed(error)
         raise
 
     reporter.run_completed()
@@ -252,9 +259,24 @@ class _ProgressReporter:
         self._ctx = ctx
         self._items_total = items_total
         self._last_emitted_at: float | None = None
-        self._bytes_total = selection.processed_bytes + sum(pending_sizes)
+        self._live_bytes_total = selection.processed_bytes + sum(pending_sizes)
+        if isinstance(selection, IntegritySelection):
+            selection.advance_bytes_total_high_water(self._live_bytes_total)
+            self._bytes_total = selection.bytes_total_high_water
+        else:
+            self._bytes_total = self._live_bytes_total
         self._phase = phase
         self._item_type = item_type
+        self._selected_item_ids = frozenset(
+            candidate.item_id
+            for candidate in (
+                selection.items
+                if isinstance(selection, IntegritySelection)
+                else selection.candidates
+            )
+        )
+        self._outcome_item_ids = set(selection.completed_bytes)
+        self._items_done = len(self._outcome_item_ids)
         self._item_id: str | None = None
         self._item_attempt_id: str | None = None
         self._current_path: str | None = None
@@ -294,14 +316,31 @@ class _ProgressReporter:
         current_overrun = max(
             0, self._item_bytes_done - self._item_bytes_total
         )
-        self._bytes_total += current_overrun - previous_overrun
+        self._live_bytes_total += current_overrun - previous_overrun
+        if isinstance(self._selection, IntegritySelection):
+            self._selection.advance_bytes_total_high_water(
+                self._live_bytes_total
+            )
+            self._bytes_total = self._selection.bytes_total_high_water
+        else:
+            self._bytes_total = self._live_bytes_total
         self.emit(force=False)
 
     def item_completed(self, item_id: str) -> None:
         if self._item_id != item_id:
             raise RuntimeError("integrity settlement does not match the active item")
+        if item_id not in self._outcome_item_ids:
+            raise RuntimeError("integrity settlement lacks a reliable item outcome")
         self._clear_item()
         self.emit(force=False)
+
+    def item_outcome_emitted(self, item_id: str) -> None:
+        if item_id not in self._selected_item_ids:
+            raise RuntimeError("integrity outcome does not name a selected item")
+        if item_id in self._outcome_item_ids:
+            raise RuntimeError("integrity item outcome was emitted more than once")
+        self._outcome_item_ids.add(item_id)
+        self._items_done += 1
 
     def run_completed(self) -> None:
         if self._item_id is not None:
@@ -315,6 +354,17 @@ class _ProgressReporter:
 
     def pause_completed(self) -> None:
         self.emit(force=True)
+
+    def failure_completed(self, error: Exception) -> None:
+        self._clear_item()
+        self._current_path = None
+        try:
+            self.emit(force=True)
+        except Exception as progress_error:
+            error.add_note(
+                "verifier terminal progress emission also failed: "
+                f"{logical_error_text(progress_error)}"
+            )
 
     def _clear_item(self) -> None:
         self._item_id = None
@@ -339,7 +389,7 @@ class _ProgressReporter:
         self._ctx.run.emit(
             Progress(
                 phase=self._phase,
-                items_done=self._selection.completed_count,
+                items_done=self._items_done,
                 items_total=self._items_total,
                 bytes_done=self._selection.processed_bytes,
                 bytes_total=self._bytes_total,
@@ -361,7 +411,6 @@ def _run(
     reader: VerificationReader | None,
     mode: IntegrityMode,
 ) -> IntegrityRunResult:
-    actual_reader = _reader_for_context(ctx, reader)
     emitted: list[IntegrityOutcome] = []
     reporter = _ProgressReporter(
         selection,
@@ -378,6 +427,7 @@ def _run(
     )
 
     try:
+        actual_reader = _reader_for_context(ctx, reader)
         for item in selection.pending:
             ctx.run.checkpoint()
             reporter.item_started(item.item_id, item.display_path)
@@ -393,19 +443,31 @@ def _run(
     except Canceled:
         # The runner aggregates reliable events and cannot inspect module state.
         # Complete every still-pending row before the payload-free unwind leaves.
-        for item in selection.pending:
-            processed = _ProcessedItem(
-                _outcome(
-                    item,
-                    mode,
-                    IntegrityResult.CANCELED,
-                    IntegrityReason.CANCELED,
+        try:
+            for item in selection.pending:
+                processed = _ProcessedItem(
+                    _outcome(
+                        item,
+                        mode,
+                        IntegrityResult.CANCELED,
+                        IntegrityReason.CANCELED,
+                    )
                 )
-            )
-            _emit_and_complete(
-                selection, ctx, reporter, processed, emitted, emit_progress=False
-            )
-        reporter.cancellation_completed()
+                _emit_and_complete(
+                    selection,
+                    ctx,
+                    reporter,
+                    processed,
+                    emitted,
+                    emit_progress=False,
+                )
+            reporter.cancellation_completed()
+        except Exception as error:
+            reporter.failure_completed(error)
+            raise
+        raise
+    except Exception as error:
+        reporter.failure_completed(error)
         raise
 
     reporter.run_completed()
@@ -429,6 +491,7 @@ def _emit_and_complete(
     # Outcome first, continuation second: after a pause, completed status can
     # never exist without the reliable result that justifies skipping the row.
     ctx.run.emit(processed.outcome)
+    reporter.item_outcome_emitted(processed.outcome.item_id)
     selection.mark_completed(processed.outcome.item_id, processed.bytes_read)
     emitted.append(processed.outcome)
     if emit_progress:
@@ -447,6 +510,7 @@ def _emit_and_complete_post_copy(
     # Preserve the same reliable-event-before-continuation ordering as
     # standalone integrity selections.
     ctx.run.emit(processed.outcome)
+    reporter.item_outcome_emitted(processed.outcome.item_id)
     selection.mark_completed(processed.outcome.item_id, processed.bytes_read)
     emitted.append(processed.outcome)
     if emit_progress:

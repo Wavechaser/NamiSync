@@ -1259,10 +1259,7 @@ def _backstop_operation(
             "executor exception backstop also failed: "
             f"{logical_error_text(settlement_error)}"
         )
-        if (
-            operation.op_id in xset.status
-            and state.effects.has_active_entry(operation.op_id)
-        ):
+        if state.effects.has_active_entry(operation.op_id):
             cleanup_error = _cleanup_inflight(state, fs, operation.op_id)
             if cleanup_error is not None:
                 escaped.add_note(
@@ -3018,11 +3015,11 @@ def _settle(
         reason=None if settled.reason is None else settled.reason.value,
         detail=settled.detail,
     )
+    ctx.emit(event)
     if settled.published_evidence is not None:
         xset.published_evidence[operation.op_id] = settled.published_evidence
     xset.status[operation.op_id] = settled.outcome
     state.outcomes[operation.op_id] = event
-    ctx.emit(event)
     progress.settled(operation, settled.outcome)
     state.effects.settle(operation.op_id)
     state.effects.retire(operation.op_id)

@@ -34,6 +34,7 @@ from namisync.core.planning import (
 )
 from namisync.db.connections import connect_ledger_reader
 from namisync.core.session import (
+    Canceled,
     Disposition,
     OperationResult,
     PhaseResult,
@@ -586,6 +587,214 @@ def test_fresh_preflight_refusal_still_reports_known_exclusions() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "error, expected_status, expected_canceled",
+    [
+        (RuntimeError("preflight failed"), SessionState.FAILED, False),
+        (Canceled("preflight canceled"), SessionState.CANCELED, True),
+    ],
+)
+def test_fresh_preflight_boundary_uses_reviewed_execution_counters(
+    error: Exception,
+    expected_status: SessionState,
+    expected_canceled: bool,
+) -> None:
+    plan = _plan_with(
+        (
+            _operation(
+                1,
+                OperationKind.COPY,
+                "normal.txt",
+                source="normal.txt",
+                content_bytes=17,
+            ),
+        )
+    )
+    selection = frozenset(operation.op_id for operation in plan.operations)
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("9" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    executor_called = False
+
+    def observer(*_args):
+        raise error
+
+    def executor(*_args):
+        nonlocal executor_called
+        executor_called = True
+        raise AssertionError("executor entered after preflight boundary")
+
+    result = run_execution(
+        xset,
+        RunContext(lambda _value: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=lambda _value: None,
+            observer=observer,
+            observation_fs=object(),
+            preflight=lambda *_args: pytest.fail("preflight ran after observation"),
+            executor=executor,
+        ),
+    )
+
+    assert not executor_called
+    assert result.status is expected_status
+    assert result.canceled is expected_canceled
+    assert result.disposition is Disposition.UNRUN
+    assert result.phases == ()
+    assert (result.bytes_done, result.bytes_total) == (0, 17)
+    if expected_status is SessionState.FAILED:
+        assert result.error is not None
+        assert result.error.type_name == "RuntimeError"
+
+
+@pytest.mark.parametrize("boundary", ["commitment-details", "preflight-details"])
+def test_fresh_detail_save_failure_uses_reviewed_execution_counters(
+    boundary: str,
+) -> None:
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        "normal.txt",
+        source="normal.txt",
+        content_bytes=17,
+    )
+    plan = _plan_with((operation,))
+    selection = frozenset({operation.op_id})
+    commitment = (
+        None
+        if boundary == "commitment-details"
+        else Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        )
+    )
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("a" * 32),
+        commitment=commitment,
+    )
+    executor_called = False
+    world = SimpleNamespace(paths={})
+
+    def save_execution_details(_value: object) -> None:
+        raise RuntimeError(f"{boundary} write failed")
+
+    def observer(*_args):
+        assert boundary == "preflight-details"
+        return world
+
+    def executor(*_args):
+        nonlocal executor_called
+        executor_called = True
+        raise AssertionError("executor entered after detail-save failure")
+
+    result = run_execution(
+        xset,
+        RunContext(lambda _value: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=save_execution_details,
+            observer=observer,
+            observation_fs=object(),
+            preflight=lambda execution_set, observed: Verdict(True, (), observed),
+            executor=executor,
+        ),
+    )
+
+    assert not executor_called
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.UNRUN
+    assert result.phases == ()
+    assert (result.bytes_done, result.bytes_total) == (0, 17)
+    assert result.error is not None
+    assert result.error.type_name == "RuntimeError"
+    assert result.error.message == f"{boundary} write failed"
+
+
+def test_undelivered_execution_outcome_does_not_enter_workflow_result() -> None:
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        "normal.txt",
+        source="normal.txt",
+        content_bytes=17,
+    )
+    plan = _plan_with((operation,))
+    selection = frozenset({operation.op_id})
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("b" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    world = SimpleNamespace(paths={}, target_parent_paths=frozenset({""}))
+
+    class Recording:
+        recorder = object()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        def finish(self, status, recording) -> None:
+            return None
+
+    class FileSystem:
+        def remove_orphaned_temps(self, target, parents, current_run_id) -> None:
+            return None
+
+    def executor(execution_set, ctx, recorder, policies, fs):
+        del execution_set, recorder, policies, fs
+        item = ItemOutcome(
+            str(operation.op_id),
+            operation.kind.value,
+            operation.target_rel_path,
+            Outcome.SUCCEEDED,
+        )
+        ctx.emit(item)
+        raise AssertionError("unreachable after rejected reliable outcome")
+
+    def emit(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            raise RuntimeError("reliable outcome sink failed")
+
+    result = run_execution(
+        xset,
+        RunContext(emit, lambda: None),
+        SimpleNamespace(
+            save_execution_details=lambda _value: None,
+            observer=lambda *_args: world,
+            observation_fs=object(),
+            preflight=lambda execution_set, observed: Verdict(True, (), observed),
+            open_recording=lambda execution_set: Recording(),
+            executor=executor,
+            executor_policies=object(),
+            executor_fs=FileSystem(),
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.items == ()
+    assert xset.status == {}
+    assert result.error is not None
+    assert result.error.type_name == "RuntimeError"
+    assert result.error.message == "reliable outcome sink failed"
+
+
 def test_temp_recovery_failure_stops_before_executor_and_records_failure() -> None:
     plan = _plan_with(
         (_operation(1, OperationKind.COPY, "normal.txt", source="normal.txt"),)
@@ -640,11 +849,23 @@ def test_temp_recovery_failure_stops_before_executor_and_records_failure() -> No
         executor_fs=FileSystem(),
     )
 
-    with pytest.raises(PermissionError, match="orphan is locked"):
-        run_execution(xset, RunContext(lambda value: None, lambda: None), deps)
+    result = run_execution(
+        xset,
+        RunContext(lambda value: None, lambda: None),
+        deps,
+    )
 
     assert not executor_called
     assert finished == [SessionState.FAILED]
+    assert result.status is SessionState.FAILED
+    assert result.phases == ()
+    assert result.bytes_done == 0
+    assert result.bytes_total == sum(
+        operation.content_bytes for operation in plan.operations
+    )
+    assert result.error is not None
+    assert result.error.type_name == "PermissionError"
+    assert result.error.message == "orphan is locked"
 
 
 def test_execution_refuses_uncommitted_set_before_preflight() -> None:

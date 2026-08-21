@@ -168,6 +168,7 @@ class ResultItem:
     item_id: str
     item_type: str
     phase: str
+    recording: RecordingStatus = RecordingStatus.OK
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,11 +363,11 @@ def run_session(
         nonlocal latest_progress
         if isinstance(body, Terminal):
             raise ValueError("workflow code cannot emit Terminal")
+        emit(body)
         if isinstance(body, ResultItem):
             items.append(body)
         elif isinstance(body, Progress):
             latest_progress = body
-        emit(body)
 
     context = RunContext(emit=observed_emit, checkpoint=checkpoint)
     try:
@@ -407,6 +408,9 @@ def run_session(
             bytes_total=bytes_total,
             error=FailureDetail(type(error).__name__, str(error)),
         )
+
+    if any(item.recording is RecordingStatus.DEGRADED for item in items):
+        result = replace(result, recording=RecordingStatus.DEGRADED)
 
     settle(result_terminal_state(result), result)
     try:

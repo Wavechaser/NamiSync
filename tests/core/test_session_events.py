@@ -80,6 +80,13 @@ def test_terminal_members_are_frozen() -> None:
     }
 
 
+def test_phase_changed_requires_nonempty_string_authority() -> None:
+    with pytest.raises(TypeError, match="string"):
+        PhaseChanged(1)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="non-empty"):
+        PhaseChanged("")
+
+
 def test_content_evidence_requires_xxh3_128_bytes_and_aware_utc() -> None:
     at = datetime(2026, 7, 18, tzinfo=timezone.utc)
     evidence = ContentEvidence(
@@ -270,6 +277,125 @@ def test_runner_emits_exactly_one_terminal(path: str) -> None:
     if path == "failure":
         assert terminals[0].result.error is not None
         assert terminals[0].result.error.type_name == "RuntimeError"
+
+
+def test_runner_accumulates_result_item_only_after_emitter_accepts_it() -> None:
+    rejected = ItemOutcome(
+        "rejected", "dummy", "file", Outcome.SUCCEEDED
+    )
+    accepted: list[object] = []
+
+    def emit(body: object) -> None:
+        if body is rejected:
+            raise RuntimeError("outcome rejected")
+        accepted.append(body)
+
+    def work(context):
+        context.emit(rejected)
+        return OperationResult(SessionState.COMPLETED)
+
+    outcome = run_session(
+        work,
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.items == ()
+    assert rejected not in accepted
+    terminal = next(body for body in accepted if isinstance(body, Terminal))
+    assert terminal.result.items == ()
+
+
+def test_runner_reliable_item_degradation_is_terminal_recording_authority() -> None:
+    degraded = IntegrityOutcome(
+        item_id="degraded",
+        row_id="1",
+        location_id="1",
+        path="file.bin",
+        result=IntegrityResult.VERIFIED,
+        recording=RecordingStatus.DEGRADED,
+    )
+    emitted: list[object] = []
+
+    outcome = run_session(
+        lambda _context: OperationResult(SessionState.CANCELED, canceled=True),
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+        item_accumulator=[degraded],
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.recording is RecordingStatus.DEGRADED
+    assert outcome.result.items == (degraded,)
+    terminal = next(body for body in emitted if isinstance(body, Terminal))
+    assert terminal.result.recording is RecordingStatus.DEGRADED
+
+
+def test_runner_uses_only_emitter_accepted_progress_as_fallback() -> None:
+    accepted_progress = Progress(
+        "execute",
+        0,
+        1,
+        5,
+        20,
+        "file",
+        item_id="operation",
+        item_type="operation",
+        item_attempt_id="a" * 32,
+        item_bytes_done=3,
+        item_bytes_total=10,
+    )
+    rejected = Progress(
+        "execute",
+        0,
+        1,
+        17,
+        20,
+        "file",
+        item_id="operation",
+        item_type="operation",
+        item_attempt_id="a" * 32,
+        item_bytes_done=3,
+        item_bytes_total=10,
+    )
+    accepted: list[object] = []
+
+    def emit(body: object) -> None:
+        if body is rejected:
+            raise RuntimeError("progress rejected")
+        accepted.append(body)
+
+    def work(context):
+        context.emit(accepted_progress)
+        context.emit(rejected)
+        return OperationResult(SessionState.COMPLETED)
+
+    outcome = run_session(
+        work,
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.bytes_done == 5
+    assert outcome.result.bytes_total == 20
+    assert accepted_progress in accepted
+    assert rejected not in accepted
+    terminal = next(body for body in accepted if isinstance(body, Terminal))
+    assert terminal.result.bytes_done == 5
+    assert terminal.result.bytes_total == 20
 
 
 def test_runner_pause_has_no_terminal_and_settles_paused() -> None:

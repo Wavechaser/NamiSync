@@ -46,8 +46,9 @@ verify_post_copy(selection, ctx, recorder, reader=None) -> IntegrityRunResult
 
 Selections contain immutable inventory row id, location/root, canonical path
 key, display path, expected current state/stat, retained `Attestation` (if any),
-scope token, and reappearance state. `IntegritySelection` adds only the mutable
-completed-item and processed-byte continuation needed for pause/resume. Workflow
+scope token, and reappearance state. `IntegritySelection` adds the mutable
+completed-item state, processed-byte high-water, and nondecreasing admitted
+physical-read budget needed for pause/resume. Workflow
 must inventory or scoped-refresh before constructing selections; verifier never
 silently inventories, changes mappings, or scans unselected paths.
 
@@ -216,6 +217,30 @@ custody without terminal, and resume freshly refreshes/guards only the remaining
 selection. Rebaseline therefore uses the same continuation rather than a
 separate short-operation exception.
 
+Once the standalone workflow has frozen that selection, running cancellation
+and unexpected failure build terminal byte truth from the live selection's
+physical-read high-water and admitted item sizes, never from whichever lossy
+Progress happened to reach the session runner. `PauseRequested` remains a
+control signal and is not normalized into a terminal result. Cancellation of a
+paused baseline/verify/rebaseline session instead uses the exact stored v2
+continuation without reopening an invocation, rescanning, or hashing. Version 2
+persists `processed_bytes`, the nondecreasing physical-read
+`bytes_total_high_water`, and the one-way aggregate `recording` status. Paused
+cancellation and failures before selection reconstruction therefore retain the
+attempted-work budget and degradation already earned before pause. These byte
+counters describe attempted physical read work, not durable publication;
+reliable outcomes and recorded evidence remain the authority for item and
+durability truth. Version 1 is refused rather than migrated because this
+payload remains process-local paused custody and is never persisted as a
+restart-stable workflow artifact.
+
+A degraded reliable outcome or recorder-close failure advances aggregate
+recording to `DEGRADED` before a paused snapshot is serialized, and later resume
+cannot recover it to `OK`. During one live invocation, ledger owner close
+failure cannot replace an in-flight pause, cancellation, or verifier exception;
+it degrades recording where a terminal result exists, and a lone close failure
+becomes a selection-derived failure with authoritative bytes.
+
 The shared version-4 field meanings, transition authority, and recovery rules
 are owned centrally by `ARCHITECTURE.md` §2.3. The following paragraphs record
 only the verifier's implementation of that protocol.
@@ -245,7 +270,11 @@ normally throttled inactive transition that clears all item fields while
 retaining the last display path. Item start, determinate-stream start, and item
 completion use the same ordinary throttle path. A successful verifier phase
 force-emits only its initial and final inactive boundary snapshots, independent
-of selected-item count.
+of selected-item count. The reporter counts an item immediately after its
+reliable outcome emission succeeds, before mutable continuation bookkeeping;
+therefore a later continuation failure cannot make `items_done` contradict an
+outcome already released to consumers, while a failed outcome emission does
+not advance the count.
 
 Pause does not invent a settlement state: after the read unwinds it force-emits
 the latest active attempt when a stream is in flight, so the 100 ms throttle
@@ -258,11 +287,23 @@ likewise adds one forced control snapshot, active only when an attempt is in
 flight; neither path emits the successful-phase final boundary. Ordinary
 lifecycle and chunk updates remain time-throttled and lossy-coalescible.
 
+An unexpected verifier exception, including reader construction or an
+in-flight byte-pipeline failure, clears item, attempt, item-byte, and path state
+and force-emits one inactive snapshot from the live outcome count and physical
+read high-water before the original exception escapes. If that secondary
+Progress emission also fails, its diagnostic is attached to the original
+exception; it never replaces the primary failure. Reporter construction and
+its phase-entry snapshot precede reader resolution, so a resumed continuation
+does not fall back to zero merely because reader setup fails.
+
 On cancellation, the verifier's unwind finalizer emits `canceled` for the
 in-flight file and every unreached selected file before re-raising `Canceled` to
 the runner. On pause, that finalizer emits nothing for them. This makes runner
 aggregation lossless without exposing verifier internals or duplicating results
-after resume.
+after resume. If canceled-outcome emission or its continuation bookkeeping
+fails, the settlement error replaces the control unwind, passes through the
+same forced inactive failure boundary, and remains primary if that Progress
+sink also fails.
 
 ## Expectations Of Other Modules
 
@@ -403,4 +444,8 @@ imports inside the verifier.
   unreached selected row.
 - Cancellation after any item count emits exactly one result for every selected
   row, including in-flight and unreached canceled rows, before runner unwind.
+- Unexpected failures in standalone and post-copy verification force a live
+  inactive Progress boundary; a failing Progress sink remains secondary to the
+  original exception, and emitted-outcome counts remain coherent even if
+  continuation bookkeeping then fails.
 - Import-linter proves verifier imports core but no sibling module.

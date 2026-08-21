@@ -3666,7 +3666,7 @@ def test_checkpoint_exception_finalizes_pending_mkdir_before_propagating(
     assert (target / "later.bin").read_bytes() == b"later"
 
 
-def test_item_event_exception_retires_already_statused_effect(
+def test_item_event_exception_retires_effect_without_false_settlement(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3700,7 +3700,7 @@ def test_item_event_exception_retires_already_statused_effect(
             fs,
         )
 
-    assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
+    assert xset.status == {}
     assert _recorder_names(recorder) == ["moved"]
     assert recorder.flushes == 2
     assert len(retired) == 1

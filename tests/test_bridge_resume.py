@@ -245,13 +245,15 @@ def test_fresh_execution_releases_runtime_custody_before_recording(
         )
         assert str(xset.run_id) not in runtime._execution_started
         if failure == "exception":
-            with pytest.raises(
-                RuntimeError,
-                match="preflight observation failed",
-            ):
-                invocation.run(
-                    RunContext(lambda _event: None, lambda: None)
-                )
+            result = invocation.run(
+                RunContext(lambda _event: None, lambda: None)
+            )
+            assert result.status is SessionState.FAILED
+            assert result.disposition is Disposition.UNRUN
+            assert result.phases == ()
+            assert result.error is not None
+            assert result.error.type_name == "RuntimeError"
+            assert result.error.message == "preflight observation failed"
         else:
             result = invocation.run(
                 RunContext(lambda _event: None, lambda: None)
@@ -302,19 +304,18 @@ def test_canceled_execution_settlement_releases_custody_on_recording_failure(
         open_recording=open_recording,
     )
     try:
+        result = runtime.settle_canceled_execution(
+            encode_execution_request(request),
+            Disposition.RAN,
+        )
+        assert result.canceled
+        assert result.recording is RecordingStatus.DEGRADED
         if failure == "open":
-            with pytest.raises(RuntimeError, match="open failed"):
-                runtime.settle_canceled_execution(
-                    encode_execution_request(request),
-                    Disposition.RAN,
-                )
+            assert result.error is not None
+            assert result.error.type_name == "RuntimeError"
+            assert result.error.message == "open failed"
         else:
-            result = runtime.settle_canceled_execution(
-                encode_execution_request(request),
-                Disposition.RAN,
-            )
-            assert result.canceled
-            assert result.recording is RecordingStatus.DEGRADED
+            assert result.error is None
 
         assert run_token not in runtime._execution_started
     finally:
