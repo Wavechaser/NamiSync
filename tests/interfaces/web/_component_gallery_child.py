@@ -273,7 +273,7 @@ class _Recorder:
         self._initial: str | None = None
         self._post_ready_failure: dict[str, str] | None = None
         self._data: dict[str, Any] = {
-            "schema_version": 3,
+            "schema_version": 4,
             "mode": mode,
             "startup_errors": [],
         }
@@ -822,7 +822,7 @@ def _valid_semantic_rows(
             )
             and (
                 row["form"] != "fill"
-                or math.isclose(row["height"], 16.0, abs_tol=0.5)
+                or math.isclose(row["height"], 18.0, abs_tol=0.5)
             )
             and _css_pixel_width(row["border_width"]) == 0
             and row["aliases_consumed"] is True
@@ -1190,8 +1190,46 @@ def _valid_file_list_evidence(
         "master_deselects_all",
         "master_label",
         "resize_handle_count",
+        "resize_handle_columns",
+        "resize_handle_roles",
+        "resize_handle_labels",
+        "notes_resizer_absent",
+        "initial_layout_frozen",
+        "initial_column_widths",
+        "initial_column_lefts",
+        "initial_right",
+        "frozen_column_widths",
+        "frozen_column_lefts",
+        "frozen_right",
+        "frozen_layout_active",
+        "pointer_column_widths",
+        "pointer_column_lefts",
+        "pointer_right",
         "column_resize_changes_width",
+        "requested_pointer_delta",
         "column_resize_delta",
+        "column_notes_delta",
+        "keyboard_column_widths",
+        "keyboard_column_lefts",
+        "keyboard_right",
+        "keyboard_resize_delta",
+        "keyboard_notes_delta",
+        "viewport_resize_amount",
+        "viewport_narrow_widths",
+        "viewport_narrow_right",
+        "viewport_narrow_right_span",
+        "viewport_narrow_list_width",
+        "viewport_restored_widths",
+        "viewport_restored_right",
+        "notes_minimum_widths",
+        "name_minimum_widths",
+        "name_minimum",
+        "notes_minimum",
+        "floor_minimum",
+        "effective_minimum",
+        "constrained_column_widths",
+        "constrained_grid_width",
+        "constrained_right_span",
         "header_foreground",
         "header_background",
         "header_texts",
@@ -1267,11 +1305,85 @@ def _valid_file_list_evidence(
         or value["master_deselects_all"] is not True
         or type(value["master_label"]) is not str
         or not value["master_label"].startswith("Select all ")
-        or value["resize_handle_count"] != 6
+        or value["resize_handle_count"] != 5
+        or value["resize_handle_columns"]
+        != ["selection", "name", "size", "primary", "secondary"]
+        or value["resize_handle_roles"] != ["separator"] * 5
+        or type(value["resize_handle_labels"]) is not list
+        or len(value["resize_handle_labels"]) != 5
+        or not all(
+            type(label) is str and label.startswith("Resize ")
+            for label in value["resize_handle_labels"]
+        )
+        or value["notes_resizer_absent"] is not True
+        or value["initial_layout_frozen"] is not False
+        or value["frozen_layout_active"] is not True
         or value["column_resize_changes_width"] is not True
-        or type(value["column_resize_delta"]) not in {int, float}
-        or not math.isfinite(value["column_resize_delta"])
-        or not 39 < value["column_resize_delta"] < 41
+        or any(
+            type(value[name]) not in {int, float}
+            or not math.isfinite(value[name])
+            for name in (
+                "initial_right",
+                "frozen_right",
+                "pointer_right",
+                "column_resize_delta",
+                "requested_pointer_delta",
+                "column_notes_delta",
+                "keyboard_right",
+                "keyboard_resize_delta",
+                "keyboard_notes_delta",
+                "viewport_resize_amount",
+                "viewport_narrow_right",
+                "viewport_narrow_right_span",
+                "viewport_narrow_list_width",
+                "viewport_restored_right",
+                "name_minimum",
+                "notes_minimum",
+                "floor_minimum",
+                "effective_minimum",
+                "constrained_grid_width",
+                "constrained_right_span",
+            )
+        )
+        or value["viewport_resize_amount"] <= 0
+        or any(
+            type(value[name]) is not list
+            or len(value[name]) != 6
+            or not all(
+                type(item) in {int, float} and math.isfinite(item)
+                for item in value[name]
+            )
+            for name in (
+                "initial_column_widths",
+                "initial_column_lefts",
+                "frozen_column_widths",
+                "frozen_column_lefts",
+                "pointer_column_widths",
+                "pointer_column_lefts",
+                "keyboard_column_widths",
+                "keyboard_column_lefts",
+                "viewport_narrow_widths",
+                "viewport_restored_widths",
+                "notes_minimum_widths",
+                "name_minimum_widths",
+                "constrained_column_widths",
+            )
+        )
+        or any(
+            item <= 0
+            for name in (
+                "initial_column_widths",
+                "frozen_column_widths",
+                "pointer_column_widths",
+                "keyboard_column_widths",
+                "viewport_narrow_widths",
+                "viewport_restored_widths",
+                "notes_minimum_widths",
+                "name_minimum_widths",
+                "constrained_column_widths",
+            )
+            for item in value[name]
+        )
         or type(value["header_foreground"]) is not str
         or not value["header_foreground"]
         or type(value["header_background"]) is not str
@@ -1382,7 +1494,7 @@ def _valid_file_list_evidence(
             != (row["primary_form"] != "fill")
             or (
                 row["primary_form"] == "fill"
-                and not math.isclose(row["primary_height"], 16.0, abs_tol=0.5)
+                and not math.isclose(row["primary_height"], 18.0, abs_tol=0.5)
             )
             or type(row["cell_backgrounds"]) is not list
             or len(row["cell_backgrounds"]) != 6

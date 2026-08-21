@@ -1,56 +1,53 @@
 # Session Handoff
 
-Status (2026-08-21): the themed semantic-label refinement is implemented and
-verified in the packaged presentation foundation. Production task and file-list
-surfaces remain dormant and empty until Slice 5 supplies validated projections.
+Status (2026-08-21): semantic badge contrast and the tests-only file-list
+column controller are implemented and verified. Production task and file-list
+surfaces remain dormant until Slice 5 supplies validated projections.
 
 ## Delivered
 
-- Changed hued semantic fills from main-color surfaces with neutral text to
-  theme-aware family pairs: Light uses `light` surfaces with `main` text; Dark
-  uses `dark` surfaces with `main` text. Neutral Canceled uses the selected
-  neutral surface with secondary-neutral text. Forced colors retain
-  `Highlight`/`HighlightText`.
-- Reduced filled badges and file-state labels from 20 to 16 logical px. Their
-  12 px line box plus 1 px logical bottom padding raises the label optically
-  while preserving the borderless pill form.
-- Kept Light relocating text on purple-main and changed Dark relocating text to
-  purple-light. Operation filters remain main-bound.
-- Lifted the ordinary Dark button rest fill from `#2d2d2d` to `#383838`; Light
-  remains `#fbfbfb`, and the existing hover, pressed, and subtle boundary roles
-  are unchanged.
-- Added test-only plan rows for Copying (`executing`) and Completed, plus
-  integrity rows for Verifying and Completed. The dormant renderers copy narrow
-  optional lifecycle keys supplied by already-projected row views; they do not
-  infer lifecycle, hue, urgency, or form.
+- Set filled semantic labels to 18 logical px with optically raised 12 px text.
+  Light red/yellow fills use family-light surfaces with family-dark labels;
+  Dark uses family-dark surfaces with family-main labels. All ordinary-theme
+  filled pairs now meet the 4.5:1 normal-text floor. Dark purple status text
+  remains purple-light and Light remains purple-main.
+- Retained ordinary button fills at `#fbfbfb` Light and `#383838` Dark.
+- Replaced the gallery's independent track resizing with one reserved-width
+  controller. The untouched table keeps the authored proportional layout. On
+  first interaction it measures all six headers once, freezes Selection, Size,
+  Operation/Presence, Checksum, and Notes in pixels, and leaves File/path as
+  the sole `minmax(12rem, 1fr)` track without moving the initial result.
+- Kept five internal dividers and removed the outside Notes divider. Pointer
+  and keyboard resizing use the same delta calculation; the preceding column
+  trades width against Notes, which retains a 14 rem minimum. Selection remains
+  a real accessible separator.
+- After customization, only File/path absorbs viewport changes. The table
+  overflows once File/path reaches 12 rem, using the greater of 48 rem or the
+  sum of preserved widths as its effective minimum. Stored tracks are never
+  silently rewritten by window narrowing. The behavior remains gallery-only:
+  no persistence, bridge state, or Slice 5 column contract was added.
 
 ## Review
 
-- The exact requested Light badge pairs are intentionally low-contrast:
-  red-main on red-light is about 1.76:1 and yellow-main on yellow-light is about
-  1.42:1. Tests record those authored exceptions rather than claiming WCAG
-  conformance; Dark red/yellow pairs remain at least 4.5:1, visible labels and
-  non-color cues retain meaning, and forced colors remain authoritative.
-- The canceled progress fill remains neutral foreground gray rather than using
-  the Canceled badge surface. Active Delete filters likewise retain a red-main
-  surface with contrast-safe neutral text rather than inheriting the semantic
-  Delete badge pair.
-- Production dormancy remains intact: neither file-list specialization is
-  imported by the shipped shell, and no bridge, workflow, or domain projection
-  behavior landed.
+- Headed evidence covers stationary first-freeze geometry, pointer and keyboard
+  transfers, inverse Notes changes, fixed intervening tracks, anchored right
+  edges, 12/14 rem clamps, File/path-only viewport response, and preserved-width
+  overflow. The exact tests-only evidence envelope advanced to schema 4.
+- Badge evidence independently checks the authored Light/Dark foreground and
+  background roles, exact 18 px form, and 4.5:1 contrast. Forced colors remain
+  `Highlight`/`HighlightText`.
+- Production dormancy is unchanged: neither file-list renderer is imported by
+  the shipped shell, and the controller exists only in the gallery fixture.
 
 ## Verification
 
 - Focused non-headed web neighborhood:
-  `63 passed, 7 skipped, 4 deselected in 3.53s`.
+  `63 passed, 7 skipped, 4 deselected in 2.95s`.
 - Installed-wheel component gallery (Light, Dark, forced colors, reduced
-  motion): `4 passed, 15 deselected in 31.26s`.
-- `git diff --check` passes. Per the user's scope, no department or full suite
-  was run.
+  motion): `4 passed, 15 deselected in 30.42s`.
+- Department and full suites were not run per the requested focused scope.
 
 ## Next Checkpoint
 
-- Fix the remaining table-column behaviors against the existing six-column,
-  48 rem overflow, drag-resize, folder, and master-selection contracts.
-- Reconsider dark text on Light badge surfaces after visual review if the
-  authored main-on-light pairs prove too weak in use.
+- Address the remaining table-column cosmetic/interaction points on top of the
+  gallery-only controller without turning it into Slice 5 state.

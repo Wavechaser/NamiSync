@@ -673,7 +673,20 @@ async function reportFailure(error) {
     header.className = "nami-file-list__header";
     header.setAttribute("role", "row");
     const columnNames = ["selection", "name", "size", "primary", "secondary", "notes"];
-    const columnMinimums = [32, 128, 64, 96, 80, 160];
+    const rootFontSize = parseFloat(
+      getComputedStyle(document.documentElement).fontSize,
+    );
+    if (!Number.isFinite(rootFontSize) || rootFontSize <= 0) {
+      throw new TypeError("gallery root font size is unavailable");
+    }
+    const columnMinimums = [
+      rootFontSize * 2,
+      rootFontSize * 12,
+      rootFontSize * 5,
+      rootFontSize * 8,
+      rootFontSize * 7,
+      rootFontSize * 14,
+    ];
     let masterCheckbox = null;
     for (const [index, text] of headers.entries()) {
       const cell = document.createElement("div");
@@ -689,18 +702,21 @@ async function reportFailure(error) {
       } else {
         renderText(cell, text);
       }
-      const resizer = document.createElement("div");
-      resizer.className = "nami-file-list__column-resizer";
-      resizer.dataset.column = columnNames[index];
-      resizer.dataset.minimum = String(columnMinimums[index]);
-      resizer.setAttribute("role", "separator");
-      resizer.setAttribute("aria-orientation", "vertical");
-      resizer.setAttribute(
-        "aria-label",
-        `Resize ${text || "selection"} column`,
-      );
-      resizer.tabIndex = 0;
-      cell.append(resizer);
+      if (index < headers.length - 1) {
+        const resizer = document.createElement("div");
+        resizer.className = "nami-file-list__column-resizer";
+        resizer.dataset.column = columnNames[index];
+        resizer.dataset.columnIndex = String(index);
+        resizer.dataset.minimum = String(columnMinimums[index]);
+        resizer.setAttribute("role", "separator");
+        resizer.setAttribute("aria-orientation", "vertical");
+        resizer.setAttribute(
+          "aria-label",
+          `Resize ${text || "selection"} column`,
+        );
+        resizer.tabIndex = 0;
+        cell.append(resizer);
+      }
       header.append(cell);
     }
     const body = document.createElement("div");
@@ -807,34 +823,106 @@ async function reportFailure(error) {
     grid.append(header, body);
     list.append(grid);
     planSection.append(heading, list);
-    for (const resizer of header.querySelectorAll(
+    const headerCells = [...header.children];
+    const resizers = [...header.querySelectorAll(
       ".nami-file-list__column-resizer",
-    )) {
-      const property = `--nami-file-column-${resizer.dataset.column}`;
-      const minimum = Number(resizer.dataset.minimum);
-      const cell = resizer.parentElement;
-      if (!(cell instanceof HTMLElement) || !Number.isFinite(minimum)) {
+    )];
+    const resizeState = {
+      frozen: false,
+      widths: null,
+      effectiveMinimum: rootFontSize * 48,
+    };
+    const applyFrozenLayout = () => {
+      if (!resizeState.frozen || !Array.isArray(resizeState.widths)) {
+        return;
+      }
+      const widths = resizeState.widths;
+      resizeState.effectiveMinimum = Math.max(
+        rootFontSize * 48,
+        widths[0] + columnMinimums[1] + widths[2] + widths[3]
+          + widths[4] + widths[5],
+      );
+      grid.style.cssText = [
+        `--nami-file-column-selection: ${widths[0].toFixed(3)}px`,
+        "--nami-file-column-name: minmax(12rem, 1fr)",
+        `--nami-file-column-size: ${widths[2].toFixed(3)}px`,
+        `--nami-file-column-primary: ${widths[3].toFixed(3)}px`,
+        `--nami-file-column-secondary: ${widths[4].toFixed(3)}px`,
+        `--nami-file-column-notes: ${widths[5].toFixed(3)}px`,
+        `min-inline-size: ${resizeState.effectiveMinimum.toFixed(3)}px`,
+      ].join("; ");
+      grid.dataset.columnsFrozen = "true";
+    };
+    const refreshResizerValues = () => {
+      const notesWidth = resizeState.frozen
+        ? resizeState.widths[5]
+        : headerCells[5].getBoundingClientRect().width;
+      for (const resizer of resizers) {
+        const index = Number(resizer.dataset.columnIndex);
+        const current = headerCells[index].getBoundingClientRect().width;
+        const maximum = current + Math.max(
+          0,
+          notesWidth - columnMinimums[5],
+        );
+        resizer.setAttribute(
+          "aria-valuemin",
+          String(Math.round(columnMinimums[index])),
+        );
+        resizer.setAttribute("aria-valuemax", String(Math.round(maximum)));
+        resizer.setAttribute("aria-valuenow", String(Math.round(current)));
+      }
+    };
+    const ensureFrozen = () => {
+      if (resizeState.frozen) {
+        return;
+      }
+      resizeState.widths = headerCells.map(
+        (cell) => cell.getBoundingClientRect().width,
+      );
+      resizeState.frozen = true;
+      applyFrozenLayout();
+      refreshResizerValues();
+    };
+    const resizeFromSnapshot = (
+      index,
+      requestedDelta,
+      startWidths,
+      startNameWidth,
+    ) => {
+      const minimumDelta = index === 1
+        ? columnMinimums[1] - startNameWidth
+        : columnMinimums[index] - startWidths[index];
+      const maximumDelta = startWidths[5] - columnMinimums[5];
+      const delta = Math.max(
+        minimumDelta,
+        Math.min(maximumDelta, requestedDelta),
+      );
+      const nextWidths = [...startWidths];
+      if (index !== 1) {
+        nextWidths[index] = startWidths[index] + delta;
+      }
+      nextWidths[5] = startWidths[5] - delta;
+      resizeState.widths = nextWidths;
+      applyFrozenLayout();
+      refreshResizerValues();
+      return delta;
+    };
+    for (const resizer of resizers) {
+      const index = Number(resizer.dataset.columnIndex);
+      if (!Number.isInteger(index) || index < 0 || index > 4) {
         throw new TypeError("gallery column resizer is invalid");
       }
-      const setWidth = (width) => {
-        const next = Math.max(minimum, Math.min(640, width));
-        grid.style.setProperty(property, `${next}px`);
-        resizer.setAttribute("aria-valuemin", String(minimum));
-        resizer.setAttribute("aria-valuemax", "640");
-        resizer.setAttribute("aria-valuenow", String(Math.round(next)));
-      };
-      resizer.setAttribute("aria-valuemin", String(minimum));
-      resizer.setAttribute("aria-valuemax", "640");
-      resizer.setAttribute(
-        "aria-valuenow",
-        String(Math.round(cell.getBoundingClientRect().width)),
-      );
       resizer.addEventListener("pointerdown", (event) => {
         event.preventDefault();
+        ensureFrozen();
         const startX = event.clientX;
-        const startWidth = cell.getBoundingClientRect().width;
-        const move = (moveEvent) => setWidth(
-          startWidth + moveEvent.clientX - startX,
+        const startWidths = [...resizeState.widths];
+        const startNameWidth = headerCells[1].getBoundingClientRect().width;
+        const move = (moveEvent) => resizeFromSnapshot(
+          index,
+          moveEvent.clientX - startX,
+          startWidths,
+          startNameWidth,
         );
         const finish = () => {
           window.removeEventListener("pointermove", move);
@@ -848,11 +936,24 @@ async function reportFailure(error) {
           return;
         }
         event.preventDefault();
+        ensureFrozen();
         const direction = event.key === "ArrowRight" ? 1 : -1;
-        setWidth(cell.getBoundingClientRect().width + direction * 8);
+        resizeFromSnapshot(
+          index,
+          direction * 8,
+          [...resizeState.widths],
+          headerCells[1].getBoundingClientRect().width,
+        );
       });
     }
-    return { list, grid, header, body, masterCheckbox };
+    return {
+      list,
+      grid,
+      header,
+      body,
+      masterCheckbox,
+      refreshResizerValues,
+    };
   }
 
   const planSpecimen = createFileList(
@@ -872,6 +973,8 @@ async function reportFailure(error) {
     "integrity",
   );
   app.append(planSection);
+  planSpecimen.refreshResizerValues();
+  integritySpecimen.refreshResizerValues();
   galleryStage = "control_matrix";
   const controlsSection = document.createElement("section");
   controlsSection.className = "nami-card";
@@ -1110,7 +1213,16 @@ async function reportFailure(error) {
   }
 
   function collectFileListEvidence(specimen, definitions) {
-    const { list, grid, header, body, masterCheckbox } = specimen;
+    const {
+      list,
+      grid,
+      header,
+      body,
+      masterCheckbox,
+    } = specimen;
+    const rootFontSize = parseFloat(
+      getComputedStyle(document.documentElement).fontSize,
+    );
     const fillsWorkArea = Math.abs(
       list.getBoundingClientRect().width - planSectionContentWidth,
     ) < 0.5;
@@ -1188,29 +1300,96 @@ async function reportFailure(error) {
     masterCheckbox.checked = false;
     masterCheckbox.indeterminate = true;
     masterCheckbox.ariaChecked = "mixed";
+    const selectionResizer = header.querySelector(
+      '.nami-file-list__column-resizer[data-column="selection"]',
+    );
     const nameResizer = header.querySelector(
       '.nami-file-list__column-resizer[data-column="name"]',
     );
-    const firstNameCell = body.querySelector(".nami-file-row__name");
     if (
-      !(nameResizer instanceof HTMLElement)
-      || !(firstNameCell instanceof HTMLElement)
+      !(selectionResizer instanceof HTMLElement)
+      || !(nameResizer instanceof HTMLElement)
     ) {
       throw new TypeError("gallery column resize specimen is unavailable");
     }
-    const widthBeforeResize = firstNameCell.getBoundingClientRect().width;
+    const geometry = () => {
+      const cells = [...header.children];
+      const bounds = cells.map((cell) => cell.getBoundingClientRect());
+      const listBounds = list.getBoundingClientRect();
+      return {
+        widths: bounds.map((bound) => Number(bound.width.toFixed(3))),
+        lefts: bounds.map((bound) => Number(bound.left.toFixed(3))),
+        right: Number(bounds[bounds.length - 1].right.toFixed(3)),
+        rightSpan: Number(
+          (bounds[bounds.length - 1].right - listBounds.left).toFixed(3),
+        ),
+        gridWidth: Number(grid.getBoundingClientRect().width.toFixed(3)),
+        listWidth: Number(listBounds.width.toFixed(3)),
+      };
+    };
+    const initialLayoutFrozen = grid.dataset.columnsFrozen === "true";
+    planSection.style.setProperty("inline-size", "70rem");
+    const initialGeometry = geometry();
     nameResizer.dispatchEvent(new PointerEvent("pointerdown", {
       bubbles: true,
       clientX: 200,
     }));
-    window.dispatchEvent(new PointerEvent("pointermove", { clientX: 240 }));
-    window.dispatchEvent(new PointerEvent("pointerup", { clientX: 240 }));
-    const resizeDelta = firstNameCell.getBoundingClientRect().width
-      - widthBeforeResize;
-    const columnResizeChangesWidth = resizeDelta > 39 && resizeDelta < 41;
-    grid.style.removeProperty("--nami-file-column-name");
+    const frozenGeometry = geometry();
+    const requestedPointerDelta = -Math.min(
+      8,
+      Math.max(0, frozenGeometry.widths[1] - rootFontSize * 12),
+    );
+    window.dispatchEvent(new PointerEvent("pointermove", {
+      clientX: 200 + requestedPointerDelta,
+    }));
+    window.dispatchEvent(new PointerEvent("pointerup", {
+      clientX: 200 + requestedPointerDelta,
+    }));
+    const pointerGeometry = geometry();
+    const resizeDelta = pointerGeometry.widths[1] - frozenGeometry.widths[1];
+    const notesResizeDelta = pointerGeometry.widths[5]
+      - frozenGeometry.widths[5];
+    const columnResizeChangesWidth = Math.abs(resizeDelta) > 0.5;
+
+    selectionResizer.dispatchEvent(new KeyboardEvent("keydown", {
+      bubbles: true,
+      key: "ArrowRight",
+    }));
+    const keyboardGeometry = geometry();
+    const keyboardResizeDelta = keyboardGeometry.widths[0]
+      - pointerGeometry.widths[0];
+    const keyboardNotesDelta = keyboardGeometry.widths[5]
+      - pointerGeometry.widths[5];
+
+    const availableNameWidth = keyboardGeometry.widths[1] - rootFontSize * 12;
+    const viewportResizeAmount = Math.min(32, Math.max(0, availableNameWidth / 2));
+    list.style.setProperty(
+      "inline-size",
+      `${keyboardGeometry.listWidth - viewportResizeAmount}px`,
+    );
+    const viewportNarrowGeometry = geometry();
+    list.style.removeProperty("inline-size");
+    const viewportRestoredGeometry = geometry();
+
+    nameResizer.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true,
+      clientX: 200,
+    }));
+    window.dispatchEvent(new PointerEvent("pointermove", { clientX: 10200 }));
+    window.dispatchEvent(new PointerEvent("pointerup", { clientX: 10200 }));
+    const notesMinimumGeometry = geometry();
+
+    nameResizer.dispatchEvent(new PointerEvent("pointerdown", {
+      bubbles: true,
+      clientX: 200,
+    }));
+    window.dispatchEvent(new PointerEvent("pointermove", { clientX: -9800 }));
+    window.dispatchEvent(new PointerEvent("pointerup", { clientX: -9800 }));
+    const nameMinimumGeometry = geometry();
+    const effectiveMinimum = parseFloat(grid.style.minInlineSize);
 
     list.style.setProperty("inline-size", "36rem");
+    const constrainedGeometry = geometry();
     const renderedRows = [...body.children];
     const rows = renderedRows.map((row, index) => {
       if (!(row instanceof HTMLElement)) {
@@ -1323,6 +1502,9 @@ async function reportFailure(error) {
       0,
     );
     const headerStyle = getComputedStyle(header);
+    const resizerElements = [...header.querySelectorAll(
+      ".nami-file-list__column-resizer",
+    )];
     const evidence = {
       table_role: list.getAttribute("role"),
       header_role: header.getAttribute("role"),
@@ -1337,11 +1519,56 @@ async function reportFailure(error) {
       master_selects_all: masterSelectsAll,
       master_deselects_all: masterDeselectsAll,
       master_label: masterCheckbox.getAttribute("aria-label"),
-      resize_handle_count: header.querySelectorAll(
-        ".nami-file-list__column-resizer",
-      ).length,
+      resize_handle_count: resizerElements.length,
+      resize_handle_columns: resizerElements.map(
+        (resizer) => resizer.dataset.column,
+      ),
+      resize_handle_roles: resizerElements.map(
+        (resizer) => resizer.getAttribute("role"),
+      ),
+      resize_handle_labels: resizerElements.map(
+        (resizer) => resizer.getAttribute("aria-label"),
+      ),
+      notes_resizer_absent: header.querySelector(
+        '.nami-file-list__column-resizer[data-column="notes"]',
+      ) === null,
+      initial_layout_frozen: initialLayoutFrozen,
+      initial_column_widths: initialGeometry.widths,
+      initial_column_lefts: initialGeometry.lefts,
+      initial_right: initialGeometry.right,
+      frozen_column_widths: frozenGeometry.widths,
+      frozen_column_lefts: frozenGeometry.lefts,
+      frozen_right: frozenGeometry.right,
+      frozen_layout_active: grid.dataset.columnsFrozen === "true",
+      pointer_column_widths: pointerGeometry.widths,
+      pointer_column_lefts: pointerGeometry.lefts,
+      pointer_right: pointerGeometry.right,
       column_resize_changes_width: columnResizeChangesWidth,
+      requested_pointer_delta: requestedPointerDelta,
       column_resize_delta: Number(resizeDelta.toFixed(3)),
+      column_notes_delta: Number(notesResizeDelta.toFixed(3)),
+      keyboard_column_widths: keyboardGeometry.widths,
+      keyboard_column_lefts: keyboardGeometry.lefts,
+      keyboard_right: keyboardGeometry.right,
+      keyboard_resize_delta: Number(keyboardResizeDelta.toFixed(3)),
+      keyboard_notes_delta: Number(keyboardNotesDelta.toFixed(3)),
+      viewport_resize_amount: Number(viewportResizeAmount.toFixed(3)),
+      viewport_narrow_widths: viewportNarrowGeometry.widths,
+      viewport_narrow_right: viewportNarrowGeometry.right,
+      viewport_narrow_right_span: viewportNarrowGeometry.rightSpan,
+      viewport_narrow_list_width: viewportNarrowGeometry.listWidth,
+      viewport_restored_widths: viewportRestoredGeometry.widths,
+      viewport_restored_right: viewportRestoredGeometry.right,
+      notes_minimum_widths: notesMinimumGeometry.widths,
+      name_minimum_widths: nameMinimumGeometry.widths,
+      name_minimum: rootFontSize * 12,
+      notes_minimum: rootFontSize * 14,
+      floor_minimum: rootFontSize * 48,
+      effective_minimum: effectiveMinimum,
+      constrained_column_widths: constrainedGeometry.widths,
+      constrained_grid_width: constrainedGeometry.gridWidth,
+      constrained_right_span: constrainedGeometry.right
+        - list.getBoundingClientRect().left,
       header_foreground: headerStyle.color,
       header_background: headerStyle.backgroundColor,
       header_texts: headerCells.map((cell) => cell.textContent),
@@ -1362,6 +1589,7 @@ async function reportFailure(error) {
       rows,
     };
     list.style.removeProperty("inline-size");
+    planSection.style.removeProperty("inline-size");
     return evidence;
   }
 

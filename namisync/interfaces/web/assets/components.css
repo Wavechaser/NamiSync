@@ -869,7 +869,7 @@ body {
 
 :is(.nami-badge, .nami-status-pill)[data-form="fill"] {
   background: var(--nami-state-background);
-  block-size: 16px;
+  block-size: 18px;
   box-sizing: border-box;
   color: var(--nami-state-foreground);
   line-height: var(--font-size-caption);

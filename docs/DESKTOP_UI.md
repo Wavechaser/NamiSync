@@ -243,10 +243,11 @@ their channel-specific label, accessible state, surrounding context, and form
 keep the meanings distinct.
 
 In these tables, **text** means colored text without a semantic background.
-**Fill** means a borderless pill-shaped badge with a 16 logical px height and
+**Fill** means a borderless pill-shaped badge with an 18 logical px height and
 optically raised label alignment. Light uses the family's `light` swatch as the
-surface and Dark uses its `dark` swatch; the label remains the exact `main`
-swatch. Neutral fill uses the corresponding selected-neutral surface and
+surface and Dark uses its `dark` swatch. Dark labels use the exact `main`
+swatch; Light red and yellow labels use their exact `dark` swatches so the
+filled attention forms remain contrast-safe. Neutral fill uses the corresponding selected-neutral surface and
 secondary neutral text. Text, icon/shape, and accessible state continue to name
 the meaning. Forced colors replace authored foregrounds and fills with Windows
 system colors.
@@ -352,7 +353,8 @@ wheel and records exact installed `tokens.css`/`components.css` bytes; its own
 page remains tests-only. That clean-wheel statement applies to the pytest
 acceptance composition, not the editable `tools/gui.ps1` preview. Computed text
 pairs must reach 4.5:1 for normal text and 3:1 for large text except for the
-explicit main-first text and Light badge pairs recorded above. State indicators,
+explicit main-first text cases recorded above. Every ordinary-theme filled
+badge pair reaches the 4.5:1 normal-text floor. State indicators,
 checkbox/toggle boundaries, and the textbox underline meet the 3:1 non-text
 floor. Ordinary button and textbox elevation strokes are deliberately subtle
 construction lines; the dual keyboard-focus stroke remains the accessible
@@ -382,7 +384,7 @@ neutral label policy as other selected filters.
 Active chip hover/press cues preserve the opaque color pair and use a small
 geometric change rather than reducing opacity; plain pressed chips likewise
 retain their active label color rather than carrying a latent state inversion.
-Channel-scoped labels use colored text or the borderless 16 logical px filled
+Channel-scoped labels use colored text or the borderless 18 logical px filled
 form required by the tables above; their words and non-color cues remain
 visible in either form. Progress uses a neutral gray track with system accent
 for active/resumed work, frozen yellow for paused work, and frozen neutral gray
@@ -455,19 +457,37 @@ Operation / status, Checksum, Notes. The integrity order is Selection,
 Filename, Size, Presence, Checksum, Notes: integrity classification is carried
 inside the projected presence/status label because a checksum comparison is
 irrelevant when the expected file is absent. Selection has no visible header text and retains
-the accessible name `Selection`. Each header exposes a focusable vertical
-separator that changes its grid track by pointer drag or Left/Right arrow; the
-gallery retains the resulting width only in its current DOM and deliberately
-adds no persistence or bridge state. Folder rows expose a borderless disclosure
+the accessible name `Selection`. The gallery exposes five focusable vertical
+separators after Selection, File/path, Size, Operation/Presence, and Checksum;
+Notes has no outside-edge separator. On the first pointer or Left/Right
+interaction, the test-only controller reads all six rendered header widths in
+one pass, freezes Selection, Size, Operation/Presence, Checksum, and Notes as
+pixel tracks, and changes File/path to the sole `minmax(12rem, 1fr)` track in
+one style write. That transition preserves the current visual result before
+applying the requested delta. Each separator controls the preceding column. A
+fixed-column delta is transferred inversely to Notes; the File/path separator
+changes Notes and lets the residual flexible track absorb the result. Notes
+never falls below 14 rem, the resized track never falls below its authored
+minimum, intervening fixed tracks retain their widths, and the table's right
+edge remains anchored. Pointer drag and Left/Right keyboard input use the same
+calculation. The gallery retains those widths only in its current DOM and adds
+no persistence, bridge state, or production column-layout contract. Folder rows expose a borderless disclosure
 button and mixed checkboxes; projected child rows carry only their basename,
 indent under the folder, and never repeat the full visual path. Plan and
-integrity cells use the channel-specific semantic text or 16 logical px filled
+integrity cells use the channel-specific semantic text or 18 logical px filled
 form defined above, while JavaScript consumes only the exact already-projected
 key. Zebra backgrounds belong only to
 direct rendered rows, including folders; cells and columns are transparent and
 the row group has no filler height, so striping ends at the final row. The
-aligned grid has a 48 rem content floor and scrolls horizontally when
-constrained. Forced colors replace
+untouched grid has a 48 rem content floor. After manual resizing, ordinary
+window-width changes affect File/path alone; it grows and contracts down to
+12 rem while every stored pixel track remains unchanged. The effective table
+minimum is the greater of 48 rem and the sum of the stored fixed tracks, the
+12 rem File/path minimum, and stored Notes. Once that minimum is reached the
+preserved grid overflows horizontally, so a customized 58 rem layout remains
+58 rem wide in a 48 rem viewport and resumes flexing only when more space
+returns. The right edge aligns with the visible container when the tracks fit
+and with the scrollable table edge when they do not. Forced colors replace
 colored state text with the system neutral foreground.
 
 The component gallery owns the only current callers and fixtures. Its static
@@ -483,8 +503,10 @@ product hierarchy or recursive selection policy. Each gallery header also owns
 a test-only master checkbox whose checked/mixed state is derived from every
 selectable specimen row and whose change selects or deselects them all; this
 settles the interaction without claiming Slice 5's server-owned selection
-policy. The same driver exercises a
-40 px header drag and proves the rendered row track changes. The specimens
+policy. The same driver proves stationary first-freeze geometry, inverse Notes
+reserve, pointer and keyboard parity, fixed intervening tracks, 12/14 rem
+clamps, File/path-only viewport response, the computed effective minimum, and
+preserved-width horizontal overflow. The specimens
 fill the shell's wide `work` area; a transient constrained measurement proves
 horizontal overflow without leaving
 the visible gallery narrow. The clean-wheel gallery passes projected row views

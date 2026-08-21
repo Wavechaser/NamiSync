@@ -417,8 +417,9 @@ unrealized unless an entry says otherwise.
   red-main text while active Delete uses the shared contrast-safe neutral label.
   Channel-scoped
   intent/lifecycle/integrity labels use either semantic text or a borderless
-  16 logical px filled form. Hued fills use light-family surfaces with main text
-  in Light and dark-family surfaces with main text in Dark. Progress keeps its
+  18 logical px filled form. Hued fills use light-family surfaces in Light and
+  dark-family surfaces in Dark; red/yellow Light badges use their dark-family
+  text while Dark badges use main text. Progress keeps its
   gray track and uses accent when
   active/resumed, frozen yellow when paused, and frozen neutral gray when plain
   canceled; forced colors use a `Canvas` track and `Highlight` fill. Ordinary
@@ -465,8 +466,12 @@ unrealized unless an entry says otherwise.
   Verifying/Completed. They carry no form field and infer no domain result,
   hue, or urgency in JavaScript. Forced colors retain system authority. The
   gallery headers also support pointer-drag and arrow-key column resizing
-  without persistence and a master checkbox that derives and changes all
-  selectable specimen rows.
+  without persistence. The first interaction freezes five pixel tracks while
+  File/path remains the sole 12 rem-minimum flexible track; each of the five
+  internal dividers transfers space against a 14 rem-minimum Notes reserve.
+  Viewport changes affect File/path alone, and the grid overflows at the greater
+  of its 48 rem floor or the stored-width minimum. A master checkbox derives
+  and changes all selectable specimen rows.
 - **Authored Semantic Palette**. The active foundation preserves exactly 15
   authored red/green/blue/yellow/purple `main`, `dark`, and `light` inputs in
   `tokens.css` only. Yellow main becomes `#FFAA22` and purple main becomes
@@ -478,8 +483,8 @@ unrealized unless an entry says otherwise.
   product-author design decision and coordinated contract/token/evidence update.
   Gallery-tested channel-specific aliases, not palette names, feed controls
   and later surfaces. Light/dark pairs are measured; the explicit main-text
-  exceptions are disclosed rather than claimed contrast-conformant. Light
-  red/yellow badge pairs are likewise recorded authored exceptions. Forced
+  exceptions are disclosed rather than claimed contrast-conformant. Filled
+  badge pairs remain contrast-conformant in both ordinary themes. Forced
   colors use Windows
   system colors, and every meaning retains text and non-color cues.
 - **Semantic Color Channels**. The implemented visual contract separates plan
@@ -489,8 +494,9 @@ unrealized unless an entry says otherwise.
   reversibility; lifecycle distinguishes ordinary progress from attention and
   failure; integrity keeps healthy inventory as text while reappearance,
   unsupported entries, missing files, mismatches, and read errors use filled
-  attention badges. Filled forms are 16 logical px pills with theme-aware
-  family-secondary fills and exact main-color labels. Paused progress is frozen
+  attention badges. Filled forms are 18 logical px pills with theme-aware
+  family-secondary fills, dark red/yellow labels in Light, and main-color
+  labels in Dark. Paused progress is frozen
   yellow, plain canceled
   progress is frozen neutral gray, and resume returns accent. A future stopped
   count/percentage for paused or canceled work is a recorded decision point,

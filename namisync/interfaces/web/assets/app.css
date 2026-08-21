@@ -330,7 +330,7 @@ body {
   [data-integrity="error"]
 ) .nami-file-state-label {
   background: var(--nami-state-background);
-  block-size: 16px;
+  block-size: 18px;
   line-height: var(--font-size-caption);
   padding-block-end: 1px;
   padding-inline: var(--space-3);

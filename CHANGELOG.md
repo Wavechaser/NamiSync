@@ -122,7 +122,7 @@ later workflow surfaces and beta packaging remain future phases.
   yellow-light `#FFDD44` and purple-light `#BB88EE` names. Operation consumers
   remain main-bound.
 - Defined separate intent, task-lifecycle, and integrity color channels. Hue
-  identifies class while text versus a 16 logical px filled badge identifies
+  identifies class while text versus an 18 logical px filled badge identifies
   attention; visible labels, structural cues, and accessible state remain
   authoritative rather than color or form alone.
 - Recorded paused progress as frozen yellow, plain canceled progress as frozen
@@ -132,8 +132,9 @@ later workflow surfaces and beta packaging remain future phases.
   while leaving textbox underlines and dual focus strokes unchanged.
 - Installed the 15 primitives in `tokens.css` only and added channel-scoped
   intent, lifecycle, and integrity aliases/components. Main-color text handles
-  ordinary states; urgent states use borderless 16 logical px family-secondary
-  labels with main-colored text.
+  ordinary states; urgent states use borderless 18 logical px family-secondary
+  labels. Light red/yellow fills use their dark-family text and Dark fills use
+  main-colored text, so every filled pair meets the normal-text contrast floor.
   Operation filters follow the same intent classes, and active Delete now uses
   the shared contrast-safe neutral label.
 - Kept the plan and integrity row inputs narrow: their renderers wrap supplied
@@ -143,11 +144,10 @@ later workflow surfaces and beta packaging remain future phases.
   integrity, and paused/canceled progress case. Forced colors keep the progress
   track on `Canvas` and the fill on `Highlight`. Production task and file-list
   surfaces remain dormant and receive no bridge or projection contract.
-- Tuned filled semantic labels to 16 logical px with optically raised text.
-  Light uses family-light surfaces with main-colored labels; Dark uses
+- Tuned filled semantic labels to 18 logical px with optically raised text.
+  Light uses family-light surfaces with dark red/yellow labels; Dark uses
   family-dark surfaces with main labels, and Dark relocating text uses
-  purple-light. The gallery records the intentional low-contrast Light badge
-  pairs rather than claiming conformance.
+  purple-light. The gallery now requires every filled pair to reach 4.5:1.
 - Lifted ordinary Dark buttons from `#2d2d2d` to `#383838` while retaining the
   existing hover, pressed, and subtle stroke roles. Added projected Copying and
   Completed sync rows plus Verifying and Completed integrity rows to the
@@ -167,12 +167,16 @@ later workflow surfaces and beta packaging remain future phases.
   Rows are 24 px with 12 px text, checkboxes are 16 px, and projected folders expose disclosure
   buttons, mixed selection, and indented basename-only children. The test-only
   driver collapses/restores actual computed rows and reconciles each folder's
-  checkbox from its two direct children. Focusable header separators resize
-  each grid track by pointer drag or arrow key without persistence. Zebra
+  checkbox from its two direct children. Five focusable internal separators
+  resize by pointer drag or arrow key without persistence. The first interaction
+  freezes five measured pixel tracks while File/path remains the sole
+  `minmax(12rem, 1fr)` track; Notes is the 14 rem-minimum inverse reserve. Zebra
   backgrounds belong only to rendered row elements—including folders—and stop
   at the last row; cells stay transparent and constrained widths scroll the
-  complete aligned grid horizontally from a 48 rem content floor. The gallery specimen fills the wide work
-  area. Plan operation and integrity-state aliases use authored family main
+  complete aligned grid horizontally from the greater of its 48 rem floor or
+  the manually preserved-width minimum. Window resizing affects File/path
+  alone until its minimum, and no outside-edge Notes divider is exposed. The
+  gallery specimen fills the wide work area. Plan operation and integrity-state aliases use authored family main
   colors in both ordinary themes—including red-main negative states—while
   forced colors retain system authority.
 - Drove the installed production renderer from a test-only static gallery
@@ -185,8 +189,9 @@ later workflow surfaces and beta packaging remain future phases.
   checkbox labels/states and exact compact geometry, six columns, computed
   collapse/restore, child-to-parent selection reconciliation, a measured 40 px
   column drag, basename hierarchy, main status mappings, display-ready checksums,
-  finite row-only striping, transparent cells, wide work-area fill, and
-  narrow-container overflow.
+  finite row-only striping, transparent cells, stationary first-freeze geometry,
+  inverse Notes transfers, minimum clamps, right-edge anchoring, File/path-only
+  viewport flex, effective-minimum growth, and narrow-container overflow.
 - Added a test-owned header master checkbox to both file-list specimens. It
   derives checked/mixed state from every selectable row and exercises select
   all/deselect all without defining Slice 5 selection authority.

@@ -169,9 +169,9 @@
   --intent-removing-foreground: var(--palette-red-main);
   --intent-neutral-foreground: var(--color-neutral-foreground-secondary);
   --intent-permanent-background: var(--palette-red-light);
-  --intent-permanent-foreground: var(--palette-red-main);
+  --intent-permanent-foreground: var(--palette-red-dark);
   --intent-exception-background: var(--palette-yellow-light);
-  --intent-exception-foreground: var(--palette-yellow-main);
+  --intent-exception-foreground: var(--palette-yellow-dark);
 
   --lifecycle-neutral-foreground: var(--color-neutral-foreground-secondary);
   --lifecycle-active-foreground: var(--color-accent-fill);
@@ -180,17 +180,17 @@
   --lifecycle-canceled-background: var(--color-neutral-surface-selected);
   --lifecycle-canceled-foreground: var(--color-neutral-foreground-secondary);
   --lifecycle-attention-background: var(--palette-yellow-light);
-  --lifecycle-attention-fill-foreground: var(--palette-yellow-main);
+  --lifecycle-attention-fill-foreground: var(--palette-yellow-dark);
   --lifecycle-failure-background: var(--palette-red-light);
-  --lifecycle-failure-foreground: var(--palette-red-main);
+  --lifecycle-failure-foreground: var(--palette-red-dark);
 
   --integrity-positive-foreground: var(--palette-green-main);
   --integrity-neutral-foreground: var(--color-neutral-foreground-secondary);
   --integrity-attention-foreground: var(--palette-yellow-main);
   --integrity-attention-background: var(--palette-yellow-light);
-  --integrity-attention-fill-foreground: var(--palette-yellow-main);
+  --integrity-attention-fill-foreground: var(--palette-yellow-dark);
   --integrity-failure-background: var(--palette-red-light);
-  --integrity-failure-foreground: var(--palette-red-main);
+  --integrity-failure-foreground: var(--palette-red-dark);
 
   --progress-active-fill: var(--color-accent-fill);
   --progress-paused-fill: var(--palette-yellow-main);
@@ -257,11 +257,17 @@
   --color-main-fill-foreground: var(--color-neutral-surface);
   --intent-relocating-foreground: var(--palette-purple-light);
   --intent-permanent-background: var(--palette-red-dark);
+  --intent-permanent-foreground: var(--palette-red-main);
   --intent-exception-background: var(--palette-yellow-dark);
+  --intent-exception-foreground: var(--palette-yellow-main);
   --lifecycle-attention-background: var(--palette-yellow-dark);
+  --lifecycle-attention-fill-foreground: var(--palette-yellow-main);
   --lifecycle-failure-background: var(--palette-red-dark);
+  --lifecycle-failure-foreground: var(--palette-red-main);
   --integrity-attention-background: var(--palette-yellow-dark);
+  --integrity-attention-fill-foreground: var(--palette-yellow-main);
   --integrity-failure-background: var(--palette-red-dark);
+  --integrity-failure-foreground: var(--palette-red-main);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -320,11 +326,17 @@
     --color-main-fill-foreground: var(--color-neutral-surface);
     --intent-relocating-foreground: var(--palette-purple-light);
     --intent-permanent-background: var(--palette-red-dark);
+    --intent-permanent-foreground: var(--palette-red-main);
     --intent-exception-background: var(--palette-yellow-dark);
+    --intent-exception-foreground: var(--palette-yellow-main);
     --lifecycle-attention-background: var(--palette-yellow-dark);
+    --lifecycle-attention-fill-foreground: var(--palette-yellow-main);
     --lifecycle-failure-background: var(--palette-red-dark);
+    --lifecycle-failure-foreground: var(--palette-red-main);
     --integrity-attention-background: var(--palette-yellow-dark);
+    --integrity-attention-fill-foreground: var(--palette-yellow-main);
     --integrity-failure-background: var(--palette-red-dark);
+    --integrity-failure-foreground: var(--palette-red-main);
   }
 }
 

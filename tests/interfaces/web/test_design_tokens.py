@@ -659,21 +659,15 @@ def test_sh_g_11_channel_mappings_use_theme_secondary_badges() -> None:
         "--intent-replacing-foreground": "var(--palette-yellow-main)",
         "--intent-removing-foreground": "var(--palette-red-main)",
         "--intent-neutral-foreground": "var(--color-neutral-foreground-secondary)",
-        "--intent-permanent-foreground": "var(--palette-red-main)",
-        "--intent-exception-foreground": "var(--palette-yellow-main)",
         "--lifecycle-neutral-foreground": "var(--color-neutral-foreground-secondary)",
         "--lifecycle-active-foreground": "var(--color-accent-fill)",
         "--lifecycle-completed-foreground": "var(--palette-green-main)",
         "--lifecycle-attention-foreground": "var(--palette-yellow-main)",
         "--lifecycle-canceled-background": "var(--color-neutral-surface-selected)",
         "--lifecycle-canceled-foreground": "var(--color-neutral-foreground-secondary)",
-        "--lifecycle-attention-fill-foreground": "var(--palette-yellow-main)",
-        "--lifecycle-failure-foreground": "var(--palette-red-main)",
         "--integrity-positive-foreground": "var(--palette-green-main)",
         "--integrity-neutral-foreground": "var(--color-neutral-foreground-secondary)",
         "--integrity-attention-foreground": "var(--palette-yellow-main)",
-        "--integrity-attention-fill-foreground": "var(--palette-yellow-main)",
-        "--integrity-failure-foreground": "var(--palette-red-main)",
         "--progress-active-fill": "var(--color-accent-fill)",
         "--progress-paused-fill": "var(--palette-yellow-main)",
         "--progress-canceled-fill": "var(--color-neutral-foreground-secondary)",
@@ -685,20 +679,32 @@ def test_sh_g_11_channel_mappings_use_theme_secondary_badges() -> None:
     light_badges = {
         "--intent-relocating-foreground": "var(--palette-purple-main)",
         "--intent-permanent-background": "var(--palette-red-light)",
+        "--intent-permanent-foreground": "var(--palette-red-dark)",
         "--intent-exception-background": "var(--palette-yellow-light)",
+        "--intent-exception-foreground": "var(--palette-yellow-dark)",
         "--lifecycle-attention-background": "var(--palette-yellow-light)",
+        "--lifecycle-attention-fill-foreground": "var(--palette-yellow-dark)",
         "--lifecycle-failure-background": "var(--palette-red-light)",
+        "--lifecycle-failure-foreground": "var(--palette-red-dark)",
         "--integrity-attention-background": "var(--palette-yellow-light)",
+        "--integrity-attention-fill-foreground": "var(--palette-yellow-dark)",
         "--integrity-failure-background": "var(--palette-red-light)",
+        "--integrity-failure-foreground": "var(--palette-red-dark)",
     }
     dark_badges = {
         "--intent-relocating-foreground": "var(--palette-purple-light)",
         "--intent-permanent-background": "var(--palette-red-dark)",
+        "--intent-permanent-foreground": "var(--palette-red-main)",
         "--intent-exception-background": "var(--palette-yellow-dark)",
+        "--intent-exception-foreground": "var(--palette-yellow-main)",
         "--lifecycle-attention-background": "var(--palette-yellow-dark)",
+        "--lifecycle-attention-fill-foreground": "var(--palette-yellow-main)",
         "--lifecycle-failure-background": "var(--palette-red-dark)",
+        "--lifecycle-failure-foreground": "var(--palette-red-main)",
         "--integrity-attention-background": "var(--palette-yellow-dark)",
+        "--integrity-attention-fill-foreground": "var(--palette-yellow-main)",
         "--integrity-failure-background": "var(--palette-red-dark)",
+        "--integrity-failure-foreground": "var(--palette-red-main)",
     }
     assert light_badges.items() <= light.items()
     assert dark_badges.items() <= dark.items()
@@ -732,10 +738,7 @@ def test_sh_g_11_channel_mappings_use_theme_secondary_badges() -> None:
             _contrast(_resolve(foreground, theme), _resolve(background, theme))
             for foreground, background in fill_pairs
         ]
-        if theme is light:
-            assert all(1.0 < ratio < 4.5 for ratio in ratios)
-        else:
-            assert all(ratio >= 4.5 for ratio in ratios)
+        assert all(ratio >= 4.5 for ratio in ratios)
         assert _contrast(
             _resolve("--lifecycle-canceled-foreground", theme),
             _resolve("--lifecycle-canceled-background", theme),
@@ -1138,7 +1141,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         ':is(.nami-badge, .nami-status-pill)[data-form="fill"] ',
     )
     assert "background: var(--nami-state-background);" in filled_label
-    assert "block-size: 16px;" in filled_label
+    assert "block-size: 18px;" in filled_label
     assert "line-height: var(--font-size-caption);" in filled_label
     assert "padding-block-end: 1px;" in filled_label
     assert "padding-inline: var(--space-3);" in filled_label
@@ -1165,7 +1168,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         file_fill_selector.removesuffix("{"),
     )
     assert "background: var(--nami-state-background);" in file_fills
-    assert "block-size: 16px;" in file_fills
+    assert "block-size: 18px;" in file_fills
     assert "line-height: var(--font-size-caption);" in file_fills
     assert "padding-block-end: 1px;" in file_fills
     assert "padding-inline: var(--space-3);" in file_fills

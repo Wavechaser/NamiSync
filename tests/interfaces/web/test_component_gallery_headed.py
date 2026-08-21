@@ -125,6 +125,16 @@ _BADGE_BACKGROUND_RGB = {
         "yellow": "rgb(85, 51, 0)",
     },
 }
+_BADGE_FOREGROUND_RGB = {
+    "light": {
+        "red": "rgb(85, 17, 17)",
+        "yellow": "rgb(85, 51, 0)",
+    },
+    "dark": {
+        "red": _MAIN_HUE_RGB["red"],
+        "yellow": _MAIN_HUE_RGB["yellow"],
+    },
+}
 _MAIN_TEXT_CONTRAST_EXCEPTIONS = {
     ("light", "blue"),
     ("light", "green"),
@@ -631,7 +641,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "shape_opacity": "1",
             "shape_width": 16.0,
             "shape_height": 16.0,
-            "height": 16.0,
+            "height": 18.0,
             "foreground": foreground,
             "background": background,
             "indicator": foreground,
@@ -768,7 +778,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "background": "rgb(255, 255, 255)",
                 "primary_foreground": primary_foreground,
                 "primary_background": primary_background,
-                "primary_height": 16.0,
+                "primary_height": 18.0,
                 "primary_alias_foreground": primary_foreground,
                 "primary_alias_background": primary_background,
                 "secondary_color": "rgb(0, 0, 0)",
@@ -848,7 +858,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "background": "rgb(255, 255, 255)",
                 "primary_foreground": primary_foreground,
                 "primary_background": primary_background,
-                "primary_height": 16.0,
+                "primary_height": 18.0,
                 "primary_alias_foreground": primary_foreground,
                 "primary_alias_background": primary_background,
                 "secondary_color": "rgb(0, 0, 0)",
@@ -877,9 +887,59 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "master_selects_all": True,
             "master_deselects_all": True,
             "master_label": "Select all projected rows",
-            "resize_handle_count": 6,
+            "resize_handle_count": 5,
+            "resize_handle_columns": [
+                "selection",
+                "name",
+                "size",
+                "primary",
+                "secondary",
+            ],
+            "resize_handle_roles": ["separator"] * 5,
+            "resize_handle_labels": [
+                "Resize selection column",
+                "Resize Filename column",
+                "Resize Size column",
+                "Resize status column",
+                "Resize Checksum column",
+            ],
+            "notes_resizer_absent": True,
+            "initial_layout_frozen": False,
+            "initial_column_widths": [32.0, 304.0, 80.0, 120.0, 96.0, 240.0],
+            "initial_column_lefts": [0.0, 32.0, 336.0, 416.0, 536.0, 632.0],
+            "initial_right": 872.0,
+            "frozen_column_widths": [32.0, 304.0, 80.0, 120.0, 96.0, 240.0],
+            "frozen_column_lefts": [0.0, 32.0, 336.0, 416.0, 536.0, 632.0],
+            "frozen_right": 872.0,
+            "frozen_layout_active": True,
+            "pointer_column_widths": [32.0, 296.0, 80.0, 120.0, 96.0, 248.0],
+            "pointer_column_lefts": [0.0, 32.0, 328.0, 408.0, 528.0, 624.0],
+            "pointer_right": 872.0,
             "column_resize_changes_width": True,
-            "column_resize_delta": 40.0,
+            "requested_pointer_delta": -8.0,
+            "column_resize_delta": -8.0,
+            "column_notes_delta": 8.0,
+            "keyboard_column_widths": [40.0, 296.0, 80.0, 120.0, 96.0, 240.0],
+            "keyboard_column_lefts": [0.0, 40.0, 336.0, 416.0, 536.0, 632.0],
+            "keyboard_right": 872.0,
+            "keyboard_resize_delta": 8.0,
+            "keyboard_notes_delta": -8.0,
+            "viewport_resize_amount": 32.0,
+            "viewport_narrow_widths": [40.0, 264.0, 80.0, 120.0, 96.0, 240.0],
+            "viewport_narrow_right": 840.0,
+            "viewport_narrow_right_span": 840.0,
+            "viewport_narrow_list_width": 840.0,
+            "viewport_restored_widths": [40.0, 296.0, 80.0, 120.0, 96.0, 240.0],
+            "viewport_restored_right": 872.0,
+            "notes_minimum_widths": [40.0, 312.0, 80.0, 120.0, 96.0, 224.0],
+            "name_minimum_widths": [40.0, 192.0, 80.0, 120.0, 96.0, 344.0],
+            "name_minimum": 192.0,
+            "notes_minimum": 224.0,
+            "floor_minimum": 768.0,
+            "effective_minimum": 872.0,
+            "constrained_column_widths": [40.0, 192.0, 80.0, 120.0, 96.0, 344.0],
+            "constrained_grid_width": 872.0,
+            "constrained_right_span": 872.0,
             "header_foreground": "rgb(0, 0, 0)",
             "header_background": "rgb(255, 255, 255)",
             "header_texts": headers,
@@ -1134,7 +1194,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     ) == {"accepted": True}
     recorded = EvidenceReader(report_paths).read_ready()
     assert recorded is not None
-    assert recorded["schema_version"] == 3
+    assert recorded["schema_version"] == 4
     assert recorded["report"] == report
 
     incomplete_root = tmp_path / "incomplete"
@@ -1248,6 +1308,14 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'resizer.addEventListener("pointerdown"' in script
     assert 'window.addEventListener("pointermove", move);' in script
     assert 'resizer.addEventListener("keydown"' in script
+    assert "if (index < headers.length - 1)" in script
+    assert '"--nami-file-column-name: minmax(12rem, 1fr)"' in script
+    assert "grid.style.cssText = [" in script
+    assert "resizeState.widths = headerCells.map(" in script
+    assert "nextWidths[5] = startWidths[5] - delta;" in script
+    assert script.count("ensureFrozen();") == 2
+    assert 'data-column="notes"' in script
+    assert "640" not in script
     assert 'masterCheckbox.addEventListener("change"' in script
     assert 'surface.dataset.galleryHdrIsolate = isolate;' in script
     assert 'surface.style.boxShadow = "var(--elevation-8)";' in script
@@ -1645,9 +1713,6 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         assert controls_by_key["filter_copy_active"]["rest"]["background"] == (
             semantic_intents["copy"]["foreground"]
         )
-        assert controls_by_key["filter_delete_active"]["rest"]["background"] == (
-            semantic_intents["delete"]["foreground"]
-        )
         assert controls_by_key["filter_delete_active"]["rest"]["foreground"] != (
             semantic_intents["delete"]["foreground"]
         )
@@ -1995,7 +2060,7 @@ def _run_gallery_mode(
     result = dict(initial)
     result["exit_code"] = final["exit_code"]
     assert result["exit_code"] == 0
-    assert result["schema_version"] == 3
+    assert result["schema_version"] == 4
     assert result["startup_errors"] == []
     assert result["runtime"]["versions"] == {
         "namisync": VERSION,
@@ -2151,7 +2216,7 @@ def _assert_semantic_channels(report: dict[str, object]) -> None:
                 row["border_width"], row["border_style"]
             )
             if form == "fill":
-                assert row["height"] == pytest.approx(16.0, abs=0.5)
+                assert row["height"] == pytest.approx(18.0, abs=0.5)
                 assert _opaque_color(row["background"])
                 _assert_filled_semantic_colors(
                     theme=theme,
@@ -2272,12 +2337,8 @@ def _assert_filled_semantic_colors(
         return
     if hue in _BADGE_BACKGROUND_RGB[theme]:
         assert background == _BADGE_BACKGROUND_RGB[theme][hue]
-        assert foreground == _MAIN_HUE_RGB[hue]
-        ratio = _contrast(foreground, background)
-        if theme == "light":
-            assert 1.0 < ratio < 4.5
-        else:
-            assert ratio >= 4.5
+        assert foreground == _BADGE_FOREGROUND_RGB[theme][hue]
+        assert _contrast(foreground, background) >= 4.5
         return
     assert hue == "neutral"
     assert _contrast(foreground, background) >= 4.5
@@ -2403,7 +2464,7 @@ def _assert_plan_list_evidence(
                     row["primary_foreground"], row["background"]
                 ) >= 4.5
         if form == "fill":
-            assert row["primary_height"] == pytest.approx(16.0, abs=0.5)
+            assert row["primary_height"] == pytest.approx(18.0, abs=0.5)
 
 
 def _assert_integrity_list_evidence(
@@ -2494,7 +2555,7 @@ def _assert_integrity_list_evidence(
         assert row["secondary_color"] == row["secondary_alias_color"]
         assert _contrast(row["secondary_color"], row["background"]) >= 4.5
         if form == "fill":
-            assert row["primary_height"] == pytest.approx(16.0, abs=0.5)
+            assert row["primary_height"] == pytest.approx(18.0, abs=0.5)
 
 
 def _assert_file_list_evidence(
@@ -2518,9 +2579,159 @@ def _assert_file_list_evidence(
     assert evidence["master_selects_all"] is True
     assert evidence["master_deselects_all"] is True
     assert evidence["master_label"].startswith("Select all ")
-    assert evidence["resize_handle_count"] == 6
+    assert evidence["resize_handle_count"] == 5
+    assert evidence["resize_handle_columns"] == [
+        "selection",
+        "name",
+        "size",
+        "primary",
+        "secondary",
+    ]
+    assert evidence["resize_handle_roles"] == ["separator"] * 5
+    assert all(
+        label.startswith("Resize ")
+        for label in evidence["resize_handle_labels"]
+    )
+    assert evidence["notes_resizer_absent"] is True
+    assert evidence["initial_layout_frozen"] is False
+    assert evidence["frozen_layout_active"] is True
+    initial_widths = evidence["initial_column_widths"]
+    initial_lefts = evidence["initial_column_lefts"]
+    frozen_widths = evidence["frozen_column_widths"]
+    frozen_lefts = evidence["frozen_column_lefts"]
+    assert frozen_widths == pytest.approx(initial_widths, abs=0.5)
+    assert frozen_lefts == pytest.approx(initial_lefts, abs=0.5)
+    assert evidence["frozen_right"] == pytest.approx(
+        evidence["initial_right"],
+        abs=0.5,
+    )
+
+    pointer_widths = evidence["pointer_column_widths"]
+    pointer_lefts = evidence["pointer_column_lefts"]
+    pointer_delta = evidence["column_resize_delta"]
+    assert -8.5 <= evidence["requested_pointer_delta"] < -0.5
     assert evidence["column_resize_changes_width"] is True
-    assert evidence["column_resize_delta"] == pytest.approx(40.0, abs=1.0)
+    assert -8.5 <= pointer_delta < -0.5
+    assert pointer_widths[1] - frozen_widths[1] == pytest.approx(
+        pointer_delta,
+        abs=0.5,
+    )
+    assert evidence["column_notes_delta"] == pytest.approx(
+        -pointer_delta,
+        abs=0.5,
+    )
+    assert pointer_widths[5] - frozen_widths[5] == pytest.approx(
+        -pointer_delta,
+        abs=0.5,
+    )
+    for index in (0, 2, 3, 4):
+        assert pointer_widths[index] == pytest.approx(
+            frozen_widths[index],
+            abs=0.5,
+        )
+    assert pointer_lefts[:2] == pytest.approx(frozen_lefts[:2], abs=0.5)
+    for index in (2, 3, 4, 5):
+        assert pointer_lefts[index] - frozen_lefts[index] == pytest.approx(
+            pointer_delta,
+            abs=0.5,
+        )
+    assert evidence["pointer_right"] == pytest.approx(
+        evidence["frozen_right"],
+        abs=0.5,
+    )
+
+    keyboard_widths = evidence["keyboard_column_widths"]
+    keyboard_lefts = evidence["keyboard_column_lefts"]
+    keyboard_delta = evidence["keyboard_resize_delta"]
+    assert 0.5 < keyboard_delta <= 8.5
+    assert keyboard_widths[0] - pointer_widths[0] == pytest.approx(
+        keyboard_delta,
+        abs=0.5,
+    )
+    assert evidence["keyboard_notes_delta"] == pytest.approx(
+        -keyboard_delta,
+        abs=0.5,
+    )
+    assert keyboard_widths[5] - pointer_widths[5] == pytest.approx(
+        -keyboard_delta,
+        abs=0.5,
+    )
+    for index in (1, 2, 3, 4):
+        assert keyboard_widths[index] == pytest.approx(
+            pointer_widths[index],
+            abs=0.5,
+        )
+    assert keyboard_lefts[0] == pytest.approx(pointer_lefts[0], abs=0.5)
+    for index in (1, 2, 3, 4, 5):
+        assert keyboard_lefts[index] - pointer_lefts[index] == pytest.approx(
+            keyboard_delta,
+            abs=0.5,
+        )
+    assert evidence["keyboard_right"] == pytest.approx(
+        evidence["pointer_right"],
+        abs=0.5,
+    )
+
+    viewport_widths = evidence["viewport_narrow_widths"]
+    restored_widths = evidence["viewport_restored_widths"]
+    viewport_delta = evidence["viewport_resize_amount"]
+    assert viewport_delta > 0
+    assert viewport_widths[1] - keyboard_widths[1] == pytest.approx(
+        -viewport_delta,
+        abs=0.75,
+    )
+    for index in (0, 2, 3, 4, 5):
+        assert viewport_widths[index] == pytest.approx(
+            keyboard_widths[index],
+            abs=0.5,
+        )
+    assert evidence["viewport_narrow_right_span"] == pytest.approx(
+        evidence["viewport_narrow_list_width"],
+        abs=0.75,
+    )
+    assert restored_widths == pytest.approx(keyboard_widths, abs=0.5)
+    assert evidence["viewport_restored_right"] == pytest.approx(
+        evidence["keyboard_right"],
+        abs=0.5,
+    )
+
+    notes_minimum_widths = evidence["notes_minimum_widths"]
+    name_minimum_widths = evidence["name_minimum_widths"]
+    assert notes_minimum_widths[5] == pytest.approx(
+        evidence["notes_minimum"],
+        abs=0.5,
+    )
+    assert name_minimum_widths[1] == pytest.approx(
+        evidence["name_minimum"],
+        abs=0.5,
+    )
+    for index in (0, 2, 3, 4):
+        assert name_minimum_widths[index] == pytest.approx(
+            keyboard_widths[index],
+            abs=0.5,
+        )
+    expected_minimum = max(
+        evidence["floor_minimum"],
+        name_minimum_widths[0]
+        + evidence["name_minimum"]
+        + sum(name_minimum_widths[2:]),
+    )
+    assert evidence["effective_minimum"] == pytest.approx(
+        expected_minimum,
+        abs=0.75,
+    )
+    assert evidence["constrained_column_widths"] == pytest.approx(
+        name_minimum_widths,
+        abs=0.5,
+    )
+    assert evidence["constrained_grid_width"] == pytest.approx(
+        evidence["effective_minimum"],
+        abs=0.75,
+    )
+    assert evidence["constrained_right_span"] == pytest.approx(
+        evidence["scroll_width"],
+        abs=1.0,
+    )
     assert _contrast(
         evidence["header_foreground"], evidence["header_background"]
     ) >= 4.5
@@ -2639,7 +2850,7 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         assert not _painted_border(row["border_width"], row["border_style"])
         assert not _opaque_color(row["background"]) == (row["form"] == "text")
         if row["form"] == "fill":
-            assert row["height"] == pytest.approx(16.0, abs=0.5)
+            assert row["height"] == pytest.approx(18.0, abs=0.5)
     tri_state = report["control_contract"]["tri_state"]
     assert tri_state["aria_checked"] == "mixed"
     assert tri_state["indeterminate"] is True

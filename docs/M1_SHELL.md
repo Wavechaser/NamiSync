@@ -968,7 +968,8 @@ carry the `headed` marker; all are collected by the release command.
   Yellow main is `#FFAA22`, purple main is `#8844CC`, and their former main
   values are the new yellow light `#FFDD44` and purple light `#BB88EE`;
   operation consumers remain bound to main. Hued semantic badges explicitly
-  use light/dark family surfaces with main labels, while Dark relocating text
+  use light/dark family surfaces with contrast-safe labels: Light red/yellow
+  fills use their dark tones, Dark fills use main labels, while Dark relocating text
   uses purple-light. Channel-specific aliases keep plan
   intent, task lifecycle, and integrity distinct. Hue identifies class, form
   expresses attention, and text plus non-color cues preserve meaning.
@@ -988,9 +989,9 @@ carry the `headed` marker; all are collected by the release command.
   JavaScript domain inference. Narrow optional lifecycle keys render the
   test-only Copying/Completed and Verifying/Completed row specimens without
   deriving those states in JavaScript.
-  Text forms have no semantic background; filled forms are borderless 16
-  logical px pills with family-light/main pairs in Light and family-dark/main
-  pairs in Dark. Paused
+  Text forms have no semantic background; filled forms are borderless 18
+  logical px pills with family-light/dark-label pairs in Light and
+  family-dark/main-label pairs in Dark. Paused
   progress freezes yellow, plain canceled progress freezes neutral gray, and
   resume restores accent. The stopped-count/percentage enhancement remains
   latent and adds no present payload field. Unchecked checkbox evidence uses a
@@ -999,8 +1000,8 @@ carry the `headed` marker; all are collected by the release command.
 
   Computed light/dark checks require at least 4.5:1 for normal text and 3:1 for
   large text, non-text indicators, and focus/control boundaries except for the
-  explicit main-color text and Light badge cases recorded in `DESKTOP_UI.md`;
-  those cases retain
+  explicit main-color text cases recorded in `DESKTOP_UI.md`; all filled badge
+  pairs meet the ordinary normal-text contrast floor. Those text cases retain
   the full visible state word, record the measured ratio rather than claiming
   conformance, and become system colors in forced colors. Forced-colors evidence
   proves those aliases use system colors instead of the authored palette. A

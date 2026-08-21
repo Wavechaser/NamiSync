@@ -695,7 +695,7 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         "error",
     ):
         assert f'[data-integrity="{integrity_state}"]' in layout
-    assert "block-size: 16px;" in layout
+    assert "block-size: 18px;" in layout
     assert re.search(
         r"(?ms)^\.nami-file-list__body\s*\{[^}]*min-(?:block-)?size",
         layout,
