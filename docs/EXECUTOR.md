@@ -337,8 +337,11 @@ preserves one original worker/callback/control exception instead of leaking a
 queue-shutdown artifact. Executor catches `Canceled` only long enough to inspect
 any process-local durable retry continuation before cleanup and emit reliable
 outcomes for the in-flight and unreached selection, then re-raises for runner
-aggregation and the one canceled terminal. A prepared-but-unpublished operation
-remains `CANCELED`; an unfinished operation whose target already published is
+aggregation and the one canceled terminal. After those outcomes it forces one
+inactive progress snapshot, so time throttling cannot leave a settled operation
+presented as still running at the terminal boundary. A
+prepared-but-unpublished operation remains `CANCELED`; an unfinished operation
+whose target already published is
 `FAILED` with `canceled-after-publish`, structured on-disk-state detail,
 degraded recording, and no success-only published evidence. The classifier
 prefers the continuation's synchronous publish flag and cached post-repair stat.
@@ -548,6 +551,9 @@ over already-staged data. Custom injected policies own their own sleep budget.
 Persistent failure records `sharing-violation` after the configured bound and
 independent work continues. Unexpected executor exceptions are contained by the
 session wrapper, release custody, and never suppress already-earned outcomes.
+Their settlement backstop likewise clears and force-emits terminal progress;
+an event-sink failure that prevents that emission is attached to the original
+exception rather than replacing it.
 
 ## Progress
 
@@ -558,6 +564,9 @@ carry null item-byte counters. At the exact copy-backend entry, a byte operation
 starts at `0 / content_bytes`; chunk callbacks advance its attempt-local counter
 up to that reviewed total. Reliable settlement clears the item identity and
 item-byte counters without changing the existing `current_path` behavior.
+Normal completion, cancellation, and an escaping-exception backstop each force
+one final inactive snapshot after reliable settlement, independently of the
+ordinary time throttle.
 
 A retry resets attempt-local bytes only if `_prepare_copy` actually re-enters
 the byte pipeline. Retained publication, metadata, durability, attestation, and

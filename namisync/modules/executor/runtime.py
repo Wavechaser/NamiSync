@@ -633,6 +633,11 @@ class _ProgressTracker:
         self._item_active = False
         self.emit(force=False)
 
+    def terminal_completed(self) -> None:
+        self._file_bytes = None
+        self._item_active = False
+        self.emit(force=True)
+
     def emit(self, *, force: bool) -> None:
         now = self._policies.monotonic()
         if (
@@ -980,7 +985,7 @@ def execute(
         in {Outcome.FAILED, Outcome.CANCELED, Outcome.DEFERRED}
         for outcome in xset.status.values()
     )
-    progress.emit(force=True)
+    progress.terminal_completed()
     return OperationResult(
         status=SessionState.FAILED if failed else SessionState.COMPLETED,
         recording=state.recording,
@@ -1047,6 +1052,7 @@ def _handle_canceled(
                 operation,
                 _Settled(Outcome.CANCELED, ExecutionReason.CANCELED, detail),
             )
+    progress.terminal_completed()
     try:
         recorder.flush()
     except Exception:
@@ -1167,6 +1173,13 @@ def _unexpected_exception_backstop(
         escaped.add_note(
             "executor directory metadata restoration also failed: "
             f"{logical_error_text(restoration_error)}"
+        )
+    try:
+        progress.terminal_completed()
+    except Exception as progress_error:
+        escaped.add_note(
+            "executor terminal progress emission also failed: "
+            f"{logical_error_text(progress_error)}"
         )
     try:
         recorder.flush()

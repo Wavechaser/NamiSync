@@ -42,7 +42,7 @@ from namisync.core.planning import (
     Plan,
     PlanOperation,
 )
-from namisync.core.session import RunContext, SessionState
+from namisync.core.session import Canceled, RunContext, SessionState, run_session
 from namisync.modules.executor import (
     BoundedFailurePolicy,
     ExecutorPolicies,
@@ -3320,6 +3320,59 @@ class ScriptedProgressCopyBackend:
         return CopyDigest(xxh3_128(payload).digest(), len(payload))
 
 
+class FrozenTeardownProgressClock:
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def __call__(self) -> float:
+        return self.value
+
+
+class PartialProgressCopyBackend:
+    def __init__(
+        self,
+        clock: FrozenTeardownProgressClock,
+        *,
+        failure: Exception | None = None,
+    ) -> None:
+        self._clock = clock
+        self._failure = failure
+        self.cancel_requested = False
+
+    def copy(
+        self,
+        source,
+        target,
+        *,
+        chunk_size: int,
+        checkpoint,
+        on_chunk,
+    ) -> CopyDigest:
+        del chunk_size
+        checkpoint()
+        chunk = source.read(16)
+        assert len(chunk) == 16
+        assert target.write(chunk) == 16
+        self._clock.value = 0.2
+        on_chunk(16)
+        if self._failure is not None:
+            raise self._failure
+        self.cancel_requested = True
+        checkpoint()
+        raise AssertionError("cancellation checkpoint returned")
+
+
+class EscapingFailurePolicy:
+    def on_item_failed(
+        self,
+        operation: PlanOperation,
+        error: Exception,
+        attempt: int,
+    ) -> None:
+        del operation, error, attempt
+        raise RuntimeError("injected failure-policy escape")
+
+
 class ProgressCleanupFailureFileSystem(NativeFileSystem):
     def __init__(self) -> None:
         self.temp_created = False
@@ -3372,6 +3425,199 @@ def _reviewed_progress_copy(
         source_expected=source_stat,
         target_expected=None,
         intended=source_stat,
+    )
+
+
+def _assert_partial_progress_cleared_before_terminal(
+    timeline: list[object],
+    operation: PlanOperation,
+    *,
+    payload_size: int,
+    expected_outcome: Outcome,
+) -> None:
+    outcome_index = next(
+        index
+        for index, event in enumerate(timeline)
+        if isinstance(event, ItemOutcome)
+        and event.item_id == str(operation.op_id)
+    )
+    terminal_index = next(
+        index
+        for index, event in enumerate(timeline)
+        if isinstance(event, Terminal)
+    )
+    latest_progress_index = max(
+        index
+        for index, event in enumerate(timeline)
+        if isinstance(event, Progress)
+    )
+    active_before_outcome = [
+        event
+        for event in timeline[:outcome_index]
+        if isinstance(event, Progress)
+        and event.item_id == str(operation.op_id)
+    ]
+    latest_progress = timeline[latest_progress_index]
+
+    assert _item_outcome(timeline).outcome is expected_outcome
+    assert (
+        active_before_outcome[-1].item_bytes_done,
+        active_before_outcome[-1].item_bytes_total,
+    ) == (16, payload_size)
+    assert outcome_index < latest_progress_index < terminal_index
+    assert isinstance(latest_progress, Progress)
+    assert (
+        latest_progress.item_id,
+        latest_progress.item_type,
+        latest_progress.item_bytes_done,
+        latest_progress.item_bytes_total,
+    ) == (None, None, None, None)
+    assert latest_progress.current_path == operation.target_rel_path
+    _assert_operation_progress_clears_after_outcome(timeline, operation)
+
+
+def test_partial_copy_cancellation_clears_progress_before_terminal(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"x" * 64
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, payload)
+    clock = FrozenTeardownProgressClock()
+    backend = PartialProgressCopyBackend(clock)
+    timeline: list[object] = []
+
+    def checkpoint() -> None:
+        if backend.cancel_requested:
+            raise Canceled()
+
+    session_outcome = run_session(
+        lambda ctx: execute(
+            _xset(_plan(source, target, (operation,))),
+            ctx,
+            FakeRecorder(),
+            _policies(
+                copy_backend=backend,
+                monotonic=clock,
+                progress_interval_seconds=0.1,
+            ),
+            fs,
+        ),
+        emit=timeline.append,
+        checkpoint=checkpoint,
+        settle=lambda _state, _result: None,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert session_outcome.result is not None
+    assert session_outcome.result.status is SessionState.CANCELED
+    _assert_partial_progress_cleared_before_terminal(
+        timeline,
+        operation,
+        payload_size=len(payload),
+        expected_outcome=Outcome.CANCELED,
+    )
+
+
+def test_escaping_failure_policy_clears_progress_before_failed_terminal(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"x" * 64
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, payload)
+    clock = FrozenTeardownProgressClock()
+    backend = PartialProgressCopyBackend(
+        clock,
+        failure=OSError("injected stream failure"),
+    )
+    timeline: list[object] = []
+
+    session_outcome = run_session(
+        lambda ctx: execute(
+            _xset(_plan(source, target, (operation,))),
+            ctx,
+            FakeRecorder(),
+            _policies(
+                copy_backend=backend,
+                failure=EscapingFailurePolicy(),
+                monotonic=clock,
+                progress_interval_seconds=0.1,
+            ),
+            fs,
+        ),
+        emit=timeline.append,
+        checkpoint=lambda: None,
+        settle=lambda _state, _result: None,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert session_outcome.result is not None
+    assert session_outcome.result.status is SessionState.FAILED
+    assert session_outcome.result.error is not None
+    assert session_outcome.result.error.type_name == "RuntimeError"
+    _assert_partial_progress_cleared_before_terminal(
+        timeline,
+        operation,
+        payload_size=len(payload),
+        expected_outcome=Outcome.FAILED,
+    )
+
+
+def test_terminal_progress_sink_failure_remains_secondary_to_policy_escape(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, b"x" * 64)
+    clock = FrozenTeardownProgressClock()
+    backend = PartialProgressCopyBackend(
+        clock,
+        failure=OSError("injected stream failure"),
+    )
+    timeline: list[object] = []
+    outcome_seen = False
+    sink_failures = 0
+
+    def emit(body: object) -> None:
+        nonlocal outcome_seen, sink_failures
+        timeline.append(body)
+        if isinstance(body, ItemOutcome):
+            outcome_seen = True
+        elif (
+            outcome_seen
+            and isinstance(body, Progress)
+            and body.item_id is None
+        ):
+            sink_failures += 1
+            raise OSError("injected terminal progress sink failure")
+
+    with pytest.raises(
+        RuntimeError,
+        match="injected failure-policy escape",
+    ) as raised:
+        execute(
+            _xset(_plan(source, target, (operation,))),
+            RunContext(emit, lambda: None),
+            FakeRecorder(),
+            _policies(
+                copy_backend=backend,
+                failure=EscapingFailurePolicy(),
+                monotonic=clock,
+                progress_interval_seconds=0.1,
+            ),
+            fs,
+        )
+
+    notes = getattr(raised.value, "__notes__", ())
+    assert sink_failures == 1
+    assert _item_outcome(timeline).outcome is Outcome.FAILED
+    assert any(
+        "executor terminal progress emission also failed" in note
+        and "injected terminal progress sink failure" in note
+        for note in notes
     )
 
 
