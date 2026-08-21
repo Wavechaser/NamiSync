@@ -221,6 +221,24 @@ pause during an in-flight file restarts that file on resume, so already-read
 bytes are counted again while the item still emits exactly one terminal result;
 the reporter expands its total as needed to keep progress monotonic and bounded.
 
+Each pending row or post-copy candidate first emits its stable item id with
+`item_type=integrity` and null byte counters. Only after the opened handle has
+passed volume, expected-stat, and baseline-subject guards does the reporter
+start a determinate stream at `0 / opened_size`. Chunk callbacks advance an
+attempt-local counter; if a changing subject yields more bytes than its opened
+size, the item total expands before the next snapshot, and the aggregate total
+expands whenever physical work would otherwise exceed it. A reliable
+`IntegrityOutcome` precedes completion bookkeeping and a
+forced inactive snapshot that clears all item fields while retaining the last
+display path.
+
+Pause does not emit a false inactive settlement. Resume creates a new read
+attempt whose item counter starts at zero while the aggregate physical-read
+counter retains prior work and never regresses. Cancellation emits every
+required canceled outcome before one forced inactive snapshot. Item start,
+stream start, and completion are fixed lifecycle emissions; ordinary chunk
+updates remain time-throttled and lossy-coalescible.
+
 On cancellation, the verifier's unwind finalizer emits `canceled` for the
 in-flight file and every unreached selected file before re-raising `Canceled` to
 the runner. On pause, that finalizer emits nothing for them. This makes runner
@@ -336,8 +354,10 @@ imports inside the verifier.
   verify cannot mark plan noops executed/verified.
 - Cache-honest integration tests prove the declared Windows read strategy or
   produce a disclosed unsupported/deferred outcome.
-- Progress emission is throttled under fast-disk simulation and remains
-  monotonic; a chunk flood cannot drive full-widget updates per MiB.
+- Progress emission is throttled under fast-disk simulation and aggregate
+  physical-read work remains monotonic; fixed item/stream/settlement snapshots
+  expose attempt-local identity and bytes without turning a chunk flood into
+  full-widget updates per MiB.
 - Verification remains single-stream with no worker-count setting. Any future
   parallel verifier design requires workload evidence and must preserve one
   outcome/write per row plus per-volume safety.

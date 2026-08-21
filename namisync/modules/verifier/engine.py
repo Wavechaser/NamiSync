@@ -158,6 +158,7 @@ def verify_post_copy(
     try:
         for candidate in selection.pending:
             ctx.run.checkpoint()
+            reporter.item_started(candidate.item_id, candidate.display_path)
             processed = _process_post_copy_candidate(
                 candidate, ctx, recorder, actual_reader, reporter
             )
@@ -188,7 +189,7 @@ def verify_post_copy(
                 emitted,
                 emit_progress=False,
             )
-        reporter.emit(current_path=None, force=True)
+        reporter.cancellation_completed()
         raise
 
     recording = (
@@ -245,20 +246,62 @@ class _ProgressReporter:
         self._items_total = items_total
         self._last_emitted_at: float | None = None
         self._bytes_total = selection.processed_bytes + sum(pending_sizes)
-        self.emit(current_path=None, force=True)
+        self._item_id: str | None = None
+        self._current_path: str | None = None
+        self._item_bytes_done: int | None = None
+        self._item_bytes_total: int | None = None
+        self.emit(force=True)
 
-    def bytes_processed(self, size: int, current_path: str) -> None:
+    def item_started(self, item_id: str, current_path: str) -> None:
+        if self._item_id is not None:
+            raise RuntimeError("integrity progress item is already active")
+        self._item_id = item_id
+        self._current_path = current_path
+        self.emit(force=True)
+
+    def stream_started(self, size: int) -> None:
+        if self._item_id is None:
+            raise RuntimeError("integrity byte stream has no active item")
+        if self._item_bytes_done is not None:
+            raise RuntimeError("integrity byte stream is already active")
+        self._item_bytes_done = 0
+        self._item_bytes_total = size
+        self.emit(force=True)
+
+    def bytes_processed(self, size: int) -> None:
+        if (
+            self._item_id is None
+            or self._item_bytes_done is None
+            or self._item_bytes_total is None
+        ):
+            raise RuntimeError("integrity bytes arrived outside an active stream")
         self._selection.note_bytes_processed(size)
+        self._item_bytes_done += size
+        if self._item_bytes_done > self._item_bytes_total:
+            self._item_bytes_total = self._item_bytes_done
         if self._selection.processed_bytes > self._bytes_total:
             # A subject that grows during the read will later classify as drift,
             # but its lossy progress snapshots must remain constructible first.
             self._bytes_total = self._selection.processed_bytes
-        self.emit(current_path=current_path, force=False)
+        self.emit(force=False)
 
-    def item_completed(self, current_path: str) -> None:
-        self.emit(current_path=current_path, force=True)
+    def item_completed(self, item_id: str) -> None:
+        if self._item_id != item_id:
+            raise RuntimeError("integrity settlement does not match the active item")
+        self._clear_item()
+        self.emit(force=True)
 
-    def emit(self, current_path: str | None, force: bool) -> None:
+    def cancellation_completed(self) -> None:
+        self._clear_item()
+        self._current_path = None
+        self.emit(force=True)
+
+    def _clear_item(self) -> None:
+        self._item_id = None
+        self._item_bytes_done = None
+        self._item_bytes_total = None
+
+    def emit(self, *, force: bool) -> None:
         now = self._ctx.monotonic()
         if not force and self._last_emitted_at is not None:
             if now - self._last_emitted_at < self._ctx.progress_interval_seconds:
@@ -269,7 +312,11 @@ class _ProgressReporter:
                 items_total=self._items_total,
                 bytes_done=self._selection.processed_bytes,
                 bytes_total=self._bytes_total,
-                current_path=current_path,
+                current_path=self._current_path,
+                item_id=self._item_id,
+                item_type=None if self._item_id is None else "integrity",
+                item_bytes_done=self._item_bytes_done,
+                item_bytes_total=self._item_bytes_total,
             )
         )
         self._last_emitted_at = now
@@ -299,6 +346,7 @@ def _run(
     try:
         for item in selection.pending:
             ctx.run.checkpoint()
+            reporter.item_started(item.item_id, item.display_path)
             processed = _process_item(
                 item, mode, ctx, recorder, actual_reader, reporter
             )
@@ -322,7 +370,7 @@ def _run(
             _emit_and_complete(
                 selection, ctx, reporter, processed, emitted, emit_progress=False
             )
-        reporter.emit(current_path=None, force=True)
+        reporter.cancellation_completed()
         raise
 
     recording = (
@@ -348,7 +396,7 @@ def _emit_and_complete(
     selection.mark_completed(processed.outcome.item_id, processed.bytes_read)
     emitted.append(processed.outcome)
     if emit_progress:
-        reporter.item_completed(processed.outcome.path)
+        reporter.item_completed(processed.outcome.item_id)
 
 
 def _emit_and_complete_post_copy(
@@ -366,7 +414,7 @@ def _emit_and_complete_post_copy(
     selection.mark_completed(processed.outcome.item_id, processed.bytes_read)
     emitted.append(processed.outcome)
     if emit_progress:
-        reporter.item_completed(processed.outcome.path)
+        reporter.item_completed(processed.outcome.item_id)
 
 
 def _process_post_copy_candidate(
@@ -417,9 +465,8 @@ def _process_post_copy_candidate(
         mode=IntegrityMode.VERIFY,
         ctx=ctx,
         reader=reader,
-        on_bytes=lambda size: reporter.bytes_processed(
-            size, candidate.display_path
-        ),
+        on_stream_start=reporter.stream_started,
+        on_bytes=reporter.bytes_processed,
         success_provenance=Provenance.READBACK_ATTESTED,
     )
     identity = candidate.recorded_identity
@@ -593,9 +640,8 @@ def _process_item(
         mode=mode,
         ctx=ctx,
         reader=reader,
-        on_bytes=lambda size: reporter.bytes_processed(
-            size, item.display_path
-        ),
+        on_stream_start=reporter.stream_started,
+        on_bytes=reporter.bytes_processed,
         success_provenance=Provenance.VERIFY_ATTESTED,
     )
     if classification.attestation is None:
@@ -693,6 +739,7 @@ def _classify_subject(
     mode: IntegrityMode,
     ctx: VerifierContext,
     reader: VerificationReader,
+    on_stream_start: Callable[[int], None],
     on_bytes: Callable[[int], None],
     success_provenance: Provenance = Provenance.VERIFY_ATTESTED,
 ) -> _SubjectClassification:
@@ -721,6 +768,7 @@ def _classify_subject(
                 )
 
             digest = new_content_hasher(ctx.hasher_factory)
+            on_stream_start(before.size)
             bytes_read = 0
             for chunk in stream.iter_chunks(ctx.chunk_size):
                 ctx.run.checkpoint()

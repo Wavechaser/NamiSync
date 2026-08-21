@@ -228,6 +228,23 @@ def test_verify_classifies_stat_drift_before_digest_mismatch(
     assert len(recorder.invalidation_commands) == (
         0 if expected_result is IntegrityResult.VERIFIED else 1
     )
+    active_progress = [
+        event
+        for event in events
+        if isinstance(event, Progress) and event.item_id == item.item_id
+    ]
+    assert active_progress
+    if live_stat != item.expected_stat:
+        assert all(
+            event.item_bytes_done is None and event.item_bytes_total is None
+            for event in active_progress
+        )
+    else:
+        assert any(
+            event.item_bytes_done is not None
+            and event.item_bytes_total == item.expected_stat.size
+            for event in active_progress
+        )
 
 
 def _reviewed_context(
@@ -515,8 +532,9 @@ def test_verifier_root_and_path_admission_precede_state_shortcuts(
         item = replace(item, display_path=r"..\escape.bin")
     reader = _FakeReader({})
     recorder = _Recorder()
+    events: list[object] = []
     context = replace(
-        _context([]),
+        _context(events),
         root_authority=RootAuthority(str(reviewed_root)),
     )
     monkeypatch.setattr(
@@ -533,6 +551,18 @@ def test_verifier_root_and_path_admission_precede_state_shortcuts(
     assert reader.opened == []
     assert recorder.commands == []
     assert recorder.invalidation_commands == []
+    active_progress = [
+        event
+        for event in events
+        if isinstance(event, Progress) and event.item_id == item.item_id
+    ]
+    assert active_progress
+    assert all(
+        event.item_type == "integrity"
+        and event.item_bytes_done is None
+        and event.item_bytes_total is None
+        for event in active_progress
+    )
 
 
 @pytest.mark.parametrize(
@@ -552,8 +582,9 @@ def test_post_copy_root_and_path_admission_precede_side_effects(
         object.__setattr__(candidate, "display_path", r"..\escape.bin")
     reader = _FakeReader({})
     recorder = _Recorder()
+    events: list[object] = []
     context = replace(
-        _context([]),
+        _context(events),
         root_authority=RootAuthority(str(tmp_path / "reviewed")),
     )
     monkeypatch.setattr(
@@ -574,6 +605,18 @@ def test_post_copy_root_and_path_admission_precede_side_effects(
     assert reader.opened == []
     assert recorder.commands == []
     assert recorder.invalidation_commands == []
+    active_progress = [
+        event
+        for event in events
+        if isinstance(event, Progress) and event.item_id == candidate.item_id
+    ]
+    assert active_progress
+    assert all(
+        event.item_type == "integrity"
+        and event.item_bytes_done is None
+        and event.item_bytes_total is None
+        for event in active_progress
+    )
 
 
 def test_default_and_authority_bound_readers_require_root_authority(
@@ -857,10 +900,11 @@ def test_outcomes_carry_the_active_integrity_phase(
     baseline_evidence: Attestation | None | object,
 ) -> None:
     item = _item(tmp_path, baseline_evidence=baseline_evidence)
+    events: list[object] = []
 
     result = runner(
         IntegritySelection((item,)),
-        _context([]),
+        _context(events),
         _Recorder(),
         _FakeReader(
             {item.display_path: _StreamSpec(item.expected_stat, (b"abc",))}  # type: ignore[arg-type]
@@ -868,6 +912,67 @@ def test_outcomes_carry_the_active_integrity_phase(
     )
 
     assert result.outcomes[0].phase == mode.value
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert [
+        (
+            event.item_id,
+            event.item_type,
+            event.item_bytes_done,
+            event.item_bytes_total,
+        )
+        for event in progress
+    ] == [
+        (None, None, None, None),
+        (item.item_id, "integrity", None, None),
+        (item.item_id, "integrity", 0, item.expected_stat.size),  # type: ignore[union-attr]
+        (None, None, None, None),
+    ]
+    assert progress[0].current_path is None
+    assert all(event.current_path == item.display_path for event in progress[1:])
+    outcome_index = events.index(result.outcomes[0])
+    assert events[outcome_index + 1] is progress[-1]
+
+
+def test_post_copy_progress_uses_integrity_identity_and_clears_after_outcome(
+    tmp_path: Path,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path, recorded=False)
+    events: list[object] = []
+
+    result = verify_post_copy(
+        PostCopySelection((candidate,)),
+        _context(events),
+        _Recorder(),
+        _FakeReader(
+            {
+                candidate.display_path: _StreamSpec(
+                    candidate.expected_stat, (b"abc",)
+                )
+            }
+        ),
+    )
+
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert [
+        (
+            event.item_id,
+            event.item_type,
+            event.item_bytes_done,
+            event.item_bytes_total,
+        )
+        for event in progress
+    ] == [
+        (None, None, None, None),
+        (candidate.item_id, "integrity", None, None),
+        (candidate.item_id, "integrity", 0, candidate.expected_stat.size),
+        (None, None, None, None),
+    ]
+    assert progress[0].current_path is None
+    assert all(
+        event.current_path == candidate.display_path for event in progress[1:]
+    )
+    outcome_index = events.index(result.outcomes[0])
+    assert events[outcome_index + 1] is progress[-1]
 
 
 def test_private_classifier_needs_no_ledger_identity_or_recorder(
@@ -875,6 +980,7 @@ def test_private_classifier_needs_no_ledger_identity_or_recorder(
 ) -> None:
     expected = _stat(size=8)
     path = "detached.bin"
+    stream_totals: list[int] = []
     progress: list[int] = []
 
     def forbidden_command(*_args, **_kwargs):
@@ -893,6 +999,7 @@ def test_private_classifier_needs_no_ledger_identity_or_recorder(
         reader=_FakeReader(
             {path: _StreamSpec(expected, (b"detached",), expected)}
         ),
+        on_stream_start=stream_totals.append,
         on_bytes=progress.append,
     )
 
@@ -905,6 +1012,7 @@ def test_private_classifier_needs_no_ledger_identity_or_recorder(
         classification.attestation.content.digest
         == xxh3_128(b"detached").digest()
     )
+    assert stream_totals == [8]
     assert progress == [8]
 
 
@@ -1303,6 +1411,80 @@ def test_read_drift_records_verification_invalidation(tmp_path: Path) -> None:
     )
 
 
+def test_empty_subject_reports_a_bounded_zero_byte_stream(tmp_path: Path) -> None:
+    stat = _stat(size=0)
+    item = _item(
+        tmp_path,
+        expected_stat=stat,
+        baseline_evidence=_attestation(b"", stat),
+    )
+    events: list[object] = []
+
+    result = verify(
+        IntegritySelection((item,)),
+        _context(events),
+        _Recorder(),
+        _FakeReader({item.display_path: _StreamSpec(stat, ())}),
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.VERIFIED
+    determinate = [
+        event
+        for event in events
+        if isinstance(event, Progress)
+        and event.item_id == item.item_id
+        and event.item_bytes_done is not None
+    ]
+    assert [
+        (event.item_bytes_done, event.item_bytes_total) for event in determinate
+    ] == [(0, 0)]
+
+
+def test_growing_subject_expands_item_and_aggregate_progress_before_drift(
+    tmp_path: Path,
+) -> None:
+    before = _stat(size=2)
+    after = _stat(size=3)
+    item = _item(
+        tmp_path,
+        expected_stat=before,
+        baseline_evidence=_attestation(b"ab", before),
+    )
+    events: list[object] = []
+
+    result = verify(
+        IntegritySelection((item,)),
+        replace(_context(events), progress_interval_seconds=0),
+        _Recorder(),
+        _FakeReader(
+            {
+                item.display_path: _StreamSpec(
+                    before, (b"a", b"b", b"c"), after
+                )
+            }
+        ),
+    )
+
+    assert result.outcomes[0].result is IntegrityResult.MODIFIED
+    assert result.outcomes[0].reason is IntegrityReason.READ_DRIFT
+    determinate = [
+        event
+        for event in events
+        if isinstance(event, Progress)
+        and event.item_id == item.item_id
+        and event.item_bytes_done is not None
+    ]
+    assert [
+        (event.item_bytes_done, event.item_bytes_total) for event in determinate
+    ] == [(0, 2), (1, 2), (2, 2), (3, 3)]
+    assert [(event.bytes_done, event.bytes_total) for event in determinate] == [
+        (0, 2),
+        (1, 2),
+        (2, 2),
+        (3, 3),
+    ]
+
+
 @pytest.mark.parametrize(
     (
         "disposition",
@@ -1554,7 +1736,9 @@ def test_cancellation_during_hash_marks_in_flight_item_canceled(tmp_path: Path) 
     with pytest.raises(Canceled):
         verify(
             selection,
-            _context(events, checkpoint),
+            replace(
+                _context(events, checkpoint), progress_interval_seconds=0
+            ),
             recorder,
             _FakeReader(
                 {
@@ -1570,6 +1754,72 @@ def test_cancellation_during_hash_marks_in_flight_item_canceled(tmp_path: Path) 
     assert selection.completed_count == 1
     assert selection.processed_bytes == 1
     assert recorder.commands == []
+    outcome_index = events.index(outcomes[0])
+    active_before_outcome = [
+        event
+        for event in events[:outcome_index]
+        if isinstance(event, Progress) and event.item_id == item.item_id
+    ]
+    assert (
+        active_before_outcome[-1].item_bytes_done,
+        active_before_outcome[-1].item_bytes_total,
+    ) == (1, 3)
+    assert outcome_index < len(events) - 1
+    final_progress = events[-1]
+    assert isinstance(final_progress, Progress)
+    assert (
+        final_progress.item_id,
+        final_progress.item_type,
+        final_progress.item_bytes_done,
+        final_progress.item_bytes_total,
+    ) == (None, None, None, None)
+    assert final_progress.current_path is None
+    assert (final_progress.bytes_done, final_progress.bytes_total) == (1, 3)
+
+
+def test_post_copy_cancellation_clears_progress_after_reliable_outcome(
+    tmp_path: Path,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path, recorded=False)
+    selection = PostCopySelection((candidate,))
+    events: list[object] = []
+    calls = 0
+
+    def checkpoint() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise Canceled
+
+    with pytest.raises(Canceled):
+        verify_post_copy(
+            selection,
+            replace(
+                _context(events, checkpoint), progress_interval_seconds=0
+            ),
+            _Recorder(),
+            _FakeReader(
+                {
+                    candidate.display_path: _StreamSpec(
+                        candidate.expected_stat, (b"a", b"b", b"c")
+                    )
+                }
+            ),
+        )
+
+    outcomes = _integrity_events(events)
+    assert [outcome.result for outcome in outcomes] == [IntegrityResult.CANCELED]
+    final_progress = events[-1]
+    assert events.index(outcomes[0]) < len(events) - 1
+    assert isinstance(final_progress, Progress)
+    assert (
+        final_progress.item_id,
+        final_progress.item_type,
+        final_progress.item_bytes_done,
+        final_progress.item_bytes_total,
+    ) == (None, None, None, None)
+    assert final_progress.current_path is None
+    assert (final_progress.bytes_done, final_progress.bytes_total) == (1, 3)
 
 
 def test_pause_during_hash_restarts_pending_item_without_outcome_or_progress_regression(
@@ -1596,19 +1846,55 @@ def test_pause_during_hash_restarts_pending_item_without_outcome_or_progress_reg
     )
 
     with pytest.raises(PauseRequested):
-        verify(selection, _context(events, checkpoint), recorder, reader)
+        verify(
+            selection,
+            replace(
+                _context(events, checkpoint), progress_interval_seconds=0
+            ),
+            recorder,
+            reader,
+        )
 
     assert _integrity_events(events) == []
     assert selection.completed_count == 0
     assert selection.processed_bytes == 1
     assert recorder.commands == []
+    paused_progress = [event for event in events if isinstance(event, Progress)]
+    assert (
+        paused_progress[-1].item_id,
+        paused_progress[-1].item_type,
+        paused_progress[-1].item_bytes_done,
+        paused_progress[-1].item_bytes_total,
+    ) == (item.item_id, "integrity", 1, 3)
 
-    result = verify(selection, _context(events), recorder, reader)
+    resume_start = len(events)
+    result = verify(
+        selection,
+        replace(_context(events), progress_interval_seconds=0),
+        recorder,
+        reader,
+    )
 
     assert result.outcomes[0].result is IntegrityResult.VERIFIED
     assert len(_integrity_events(events)) == 1
-    progress = [event.bytes_done for event in events if isinstance(event, Progress)]
-    assert progress == sorted(progress)
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert [event.bytes_done for event in progress] == sorted(
+        event.bytes_done for event in progress
+    )
+    resumed_determinate = [
+        event
+        for event in events[resume_start:]
+        if isinstance(event, Progress)
+        and event.item_id == item.item_id
+        and event.item_bytes_done is not None
+    ]
+    assert (
+        resumed_determinate[0].item_bytes_done,
+        resumed_determinate[0].item_bytes_total,
+        resumed_determinate[0].bytes_done,
+        resumed_determinate[0].bytes_total,
+    ) == (0, 3, 1, 4)
+    assert [event.item_bytes_done for event in resumed_determinate] == [0, 1, 2, 3]
     assert selection.processed_bytes == 4
     assert len(recorder.commands) == 1
 
@@ -1798,11 +2084,17 @@ def test_fast_chunk_flood_is_throttled_and_progress_is_monotonic(tmp_path: Path)
     )
 
     progress = [event for event in events if isinstance(event, Progress)]
-    assert len(progress) == 2
+    assert len(progress) == 4
     assert [event.bytes_done for event in progress] == sorted(
         event.bytes_done for event in progress
     )
     assert progress[-1].bytes_done == len(data)
+    active_determinate = [
+        event
+        for event in progress
+        if event.item_id == item.item_id and event.item_bytes_done is not None
+    ]
+    assert [event.item_bytes_done for event in active_determinate] == [0]
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")
