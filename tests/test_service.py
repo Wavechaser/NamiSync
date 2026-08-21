@@ -15,6 +15,7 @@ import pytest
 import namisync.interfaces.cli as cli_module
 import namisync.interfaces.service as service_module
 from namisync.core.events import (
+    LEGACY_CORE_EVENT_SCHEMA_VERSION,
     Envelope,
     Gap,
     ItemOutcome,
@@ -49,7 +50,11 @@ from namisync.interfaces.service import (
     SessionObserver,
     SessionRecordView,
 )
-from namisync.workflows import InventoryRequest, LocalWorkflowRuntime
+from namisync.workflows import (
+    HistoryEventView,
+    InventoryRequest,
+    LocalWorkflowRuntime,
+)
 from namisync.workflows.runtime import HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
 from namisync.workflows.inventory import (
     IntegrityRequest,
@@ -312,6 +317,49 @@ def test_history_service_repairs_a_gap_through_one_fixed_durable_watermark(
     assert summary.current_state == "completed"
     assert summary.filesystem_status == "completed"
     assert summary.headline == "success"
+
+
+def test_history_event_views_preserve_each_supported_persisted_version(
+    tmp_path: Path,
+) -> None:
+    history = tmp_path / "history.db"
+    ledger = tmp_path / "ledger.db"
+    record = _record("mixed-version-session")
+    with HistoryStore(history, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext("mixed-version-run", "host"),
+        )
+        observer.on_event(
+            Envelope(
+                record.session_id,
+                1,
+                NOW,
+                LEGACY_CORE_EVENT_SCHEMA_VERSION,
+                PhaseChanged("legacy-inventory"),
+            )
+        )
+        observer.on_event(
+            Envelope(
+                record.session_id,
+                2,
+                NOW,
+                CORE_EVENT_SCHEMA_VERSION,
+                PhaseChanged("current-inventory"),
+            )
+        )
+        observer.close()
+
+    with NamiSyncService(ledger, history) as service:
+        page = service.get_history_events("mixed-version-run")
+
+    assert all(type(event) is HistoryEventView for event in page.events)
+    assert all(not isinstance(event, SessionEventView) for event in page.events)
+    assert [event.schema_version for event in page.events] == [3, 4]
+    assert [event.body for event in page.events] == [
+        {"phase": "legacy-inventory"},
+        {"phase": "current-inventory"},
+    ]
 
 
 def test_history_service_ends_a_fresh_traversal_ahead_of_durability(

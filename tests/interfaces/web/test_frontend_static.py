@@ -1149,17 +1149,22 @@ def test_br_g_36_browser_separates_bridge_and_core_event_versions() -> None:
         / "assets"
         / "bridge.js"
     ).read_text(encoding="utf-8")
-    validator = source.split("function validateSessionEvent(event, sessionId) {", 1)[
-        1
-    ].split("function validateSessionRecord(record, sessionId) {", 1)[0]
+    validator = source.split(
+        "function validateLiveSessionEvent(event, sessionId) {", 1
+    )[1].split("function validateSessionRecord(record, sessionId) {", 1)[0]
 
     assert "const BRIDGE_SCHEMA_VERSION = 1;" in source
-    assert "const CORE_EVENT_SCHEMA_VERSION = 4;" in source
+    assert "const LIVE_CORE_EVENT_SCHEMA_VERSION = 4;" in source
     assert "const SCHEMA_VERSION" not in source
+    assert source.count("LIVE_CORE_EVENT_SCHEMA_VERSION") == 2
     assert "schema_version: BRIDGE_SCHEMA_VERSION" in source
     assert "response.schema_version !== BRIDGE_SCHEMA_VERSION" in source
     assert validator.count('"schema_version"') == 1
-    assert "event.schema_version !== CORE_EVENT_SCHEMA_VERSION" in validator
+    assert (
+        "event.schema_version !== LIVE_CORE_EVENT_SCHEMA_VERSION" in validator
+    )
+    assert source.count("validateLiveSessionEvent(") == 2
+    assert "return validateLiveSessionEvent(update.event, sessionId);" in source
 
 
 def test_ready_transition_cannot_overwrite_a_native_close_status(

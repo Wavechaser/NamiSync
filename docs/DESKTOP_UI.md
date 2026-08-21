@@ -37,8 +37,10 @@ and control surfaces remain; `M1_SHELL.md` owns their implementation order and
 beta-package closure.
 
 Current executor/verifier item progress now crosses the production bridge
-under the expanded exact browser shape. Stable row projection and visual
-consumption remain Slice 5 work.
+under the expanded exact browser shape. The browser reduces that protocol into
+phase, latest-snapshot, and active-item presentation state, including Gap and
+reliable-outcome precedence. Stable row projection and visual consumption
+remain Slice 5 work.
 
 `M1_BRIDGE.md` is the sole normative authority for bridge envelopes, commands,
 errors, retry/revision identity, sequence and terminal lifecycle, and BR-G
@@ -988,7 +990,9 @@ Attempt counters may restart only under a newly minted attempt id when an
 actual retry or resumed copy/read stream begins. If work exceeds the admitted
 item total, item and attempt identity stay active but the determinate byte pair
 becomes absent, while aggregate progress retains the producing module's
-monotonic semantics. The dormant row renderers do not yet consume these fields.
+monotonic semantics. The bridge drain consumes these fields through its pure
+protocol reducer and exposes a frozen derived state to update consumers; the
+dormant row renderers do not yet consume that state.
 Executor pipeline diagnostics are opt-in developer data, not the rolling
 transfer rate or ETA promised to users.
 Filter/search state never changes the underlying plan or inventory selection;

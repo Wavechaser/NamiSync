@@ -255,13 +255,31 @@ reliable outcome remains an `IntegrityOutcome`. The central meanings,
 transition table, authority order, and Gap/replay rules live in
 `ARCHITECTURE.md` §2.3 rather than being redefined by module documents.
 
+Decoder strictness is intentionally owned by the version and boundary rather
+than treated as one implicit global policy:
+
+| Boundary | Accepted core versions | Shape and scalar policy |
+| --- | --- | --- |
+| Progress body in the Python core codec | v4 only | Exact eleven-key shape, exact non-Boolean scalars, JavaScript-safe counters, and all `Progress` cross-field invariants. History admission still excludes this lossy body. |
+| Other bodies in the Python core codec | v3 and v4 | Additive outer/body mappings and documented legacy defaults remain readable. Declared scalars are non-coercive and typed domain constructors enforce their semantics; envelope sequence and `Gap` are JavaScript-safe, while terminal counters remain arbitrary-precision Python integers. |
+| Live browser `SessionEventView` | exactly current v4 | Exact view and body shapes with JavaScript-safe contract integers throughout. A future core version is refused until that live validator is updated. |
+| Durable `HistoryEventView` | the row's supported v3 or v4 | Decode under the row's persisted core version, then expose the canonical typed projection. A rejected receipt has `body=None`. A history consumer must version-dispatch this shape and must never route it through the live-session validator. |
+
+Opaque JSON values inside an operation outcome's `detail` mapping are data,
+not protocol counters; their finite-number validation is separate from the
+integer rules above. This matrix preserves authenticated v3 history without
+weakening the exact current live boundary or pretending the three regimes are
+interchangeable.
+
 Core event versioning is independent of every containing or adjacent schema.
 The exact browser-facing `SessionEventView` has `session_id`, `sequence`, `at`,
 `schema_version`, `body_type`, and `body`; its nested `schema_version` carries
-the originating envelope's core event version unchanged. The desktop bridge
-command/response schema stays v1 and workflow continuation stays v5. History
-database, UI state, shell, and page schema versions do not change. An
-unversioned browser-facing event is not a supported compatibility boundary.
+the originating envelope's core event version unchanged. JavaScript names the
+current live-only boundary `LIVE_CORE_EVENT_SCHEMA_VERSION`; the name is not a
+history-version constraint. The desktop bridge command/response schema stays
+v1 and workflow continuation stays v5. History database, UI state, shell, and
+page schema versions do not change. An unversioned browser-facing event is not
+a supported compatibility boundary.
 
 Every reliable result item carries an explicit `item_type` and `phase`;
 `run_session` accumulates only the nominal `ResultItem` base after successful

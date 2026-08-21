@@ -814,11 +814,17 @@ Progress because `HistoryObserver` never admitted lossy Progress.
 `SessionEventView` carries the originating `Envelope.schema_version` through
 the bridge explicitly. Its exact fields are `session_id`, `sequence`, `at`,
 `schema_version`, `body_type`, and `body`, and JavaScript requires the nested
-version to be core event v4 before validating the exact body. The containing
-desktop bridge command/response envelope remains v1, strict workflow payload
-remains v5, and history database, UI-state, shell, and page schema versions do
-not change. Thus v4 remains visible at the exact-shape compatibility boundary
-instead of disappearing inside an otherwise unversioned browser event.
+version to be core event v4 before validating the exact body. The JavaScript
+constant is named `LIVE_CORE_EVENT_SCHEMA_VERSION` because this equality is a
+live-drain compatibility guard, not a rule for durable history. A
+`HistoryEventView` instead carries its row's supported persisted core version,
+which may be v3 or v4; future history rendering must version-dispatch those
+canonical rows and must never pass them to `validateLiveSessionEvent`. The
+containing desktop bridge command/response envelope remains v1, strict
+workflow payload remains v5, and history database, UI-state, shell, and page
+schema versions do not change. Thus v4 remains visible at the exact-shape
+compatibility boundary instead of disappearing inside an otherwise
+unversioned browser event.
 
 The landed protocol adds no event kind, dispatcher delivery policy, history
 admission, CLI item rendering, or database field. Slice 5 rendering remains a
@@ -1675,6 +1681,36 @@ tail, and does not loop. A later or different `Gap` becomes a new recovery
 point. Accepting a terminal record stops the task's drain loop even when it
 follows that matching leading gap; terminal truth never erases the visible
 loss.
+
+Validation also preflights the applicable batch through a pure, immutable
+Progress reducer before moving the cursor or invoking a callback. Its derived
+view is supplied as the optional second `acceptUpdate(update, progressState)`
+argument, so existing one-argument consumers remain compatible. Retained state
+and the exposed view own only `phase`, `phaseAuthority` (`phase_changed`,
+`progress`, or `unknown`), the latest accepted Progress body, and the derived
+active item. `PhaseChanged` starts a fresh temporal domain only when its phase
+changes; repeating the same reliable phase promotes authority without
+discarding aggregate, item, or attempt comparisons. Once either authority has
+established a phase, uninterrupted Progress must agree with it. Aggregate
+item/work counters cannot regress. Known selected-item admission is fixed,
+executor byte admission is fixed once known, and verifier byte admission may
+grow; an unknown aggregate total may become known once. One attempt's
+determinate counters cannot regress,
+change total, or reappear after becoming indeterminate. Attempt comparison is
+bounded to the current active item, and a reset token must differ from that
+item's current attempt token.
+
+Reliable matching outcomes clear derived activity even if the later inactive
+Progress snapshot was coalesced away. In the compound verify phase, an
+`IntegrityOutcome` with the matching plan-operation id clears the active
+`operation` identity without reinterpreting the outcome's reliable namespace.
+An authoritative inactive Progress may also clear activity at a reporter's
+exception boundary. `Gap` clears phase-dependent Progress state and temporal
+comparisons; a later self-described v4 Progress may restore displayable phase
+authority without reconstructing missed outcomes. `Terminal` and the terminal
+session record clear Progress and remain final truth. A pause state does not
+clear activity, and `current_path` never creates or joins identity. Callback
+views are frozen copies, so presentation code cannot mutate retained authority.
 
 The adapter queue is exactly 64 updates. A new `Progress` replaces an older
 queued progress or is discarded when reliable data owns every slot. Reliable

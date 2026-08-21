@@ -71,7 +71,13 @@ precedence. A missing or unusable executable fails this gate rather than
 silently reducing the ordinary suite to source-text inspection. The probe
 executes the packaged validator and proves whole-batch rejection: malformed
 Progress cannot partially deliver co-batched reliable updates or advance the
-accepted cursor, and a clean replay delivers those reliable updates.
+accepted cursor, and a clean replay delivers those reliable updates. It also
+executes the Progress reducer across reliable phase authority, numeric holes,
+Gap recovery without retained `PhaseChanged`, retry attempts, overshoot,
+aggregate and attempt regression refusal, reliable outcome/Terminal
+precedence, compound post-copy identity, immutable callback projections, and
+bridge reincarnation cursor recovery. These are behavior checks against the
+packaged JavaScript, not source-text witnesses.
 
 ```powershell
 $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'

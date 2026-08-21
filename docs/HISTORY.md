@@ -225,6 +225,18 @@ and decode no more than the requested limit. The service projects these rows as
 `HistoryEventView`; it does not synthesize a live `SessionEventView` for a
 hash-only rejection receipt.
 
+Each `HistoryEventView.schema_version` is the persisted core event version of
+that row, not the current live-drain version. Recorded and duplicate rows may
+therefore legitimately mix supported v3 and v4 envelopes in one page. Readback
+authenticates the receipt and payload, dispatches the Python core decoder by
+the row version, and exposes a canonical typed body; a rejected receipt instead
+has `body=None`. A future browser history validator must perform the same
+per-row supported-version dispatch. It must not call the live
+`validateLiveSessionEvent`, which intentionally accepts exactly the current v4
+`SessionEventView` contract and would incorrectly reject authenticated v3
+history. The decoder/version/body strictness matrix is normative in
+`CORE.md`; history does not invent a fourth tolerance regime.
+
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including
 requests traversing an older caller-supplied watermark. A missing, trailing, or
