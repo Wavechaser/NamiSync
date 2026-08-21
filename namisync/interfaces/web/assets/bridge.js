@@ -1327,22 +1327,45 @@ function validateSessionRecord(record, sessionId) {
 }
 
 function validateProgress(value) {
-  return (
-    isExactObject(value, [
-      "items_done",
-      "items_total",
-      "bytes_done",
-      "bytes_total",
-      "current_path",
-    ]) &&
-    isNonnegativeInteger(value.items_done) &&
-    isNullableNonnegativeInteger(value.items_total) &&
-    isNonnegativeInteger(value.bytes_done) &&
-    isNullableNonnegativeInteger(value.bytes_total) &&
-    (value.items_total === null || value.items_done <= value.items_total) &&
-    (value.bytes_total === null || value.bytes_done <= value.bytes_total) &&
-    isNullableText(value.current_path)
-  );
+  if (
+    !(
+      isExactObject(value, [
+        "items_done",
+        "items_total",
+        "bytes_done",
+        "bytes_total",
+        "current_path",
+        "item_id",
+        "item_type",
+        "item_bytes_done",
+        "item_bytes_total",
+      ]) &&
+      isNonnegativeInteger(value.items_done) &&
+      isNullableNonnegativeInteger(value.items_total) &&
+      isNonnegativeInteger(value.bytes_done) &&
+      isNullableNonnegativeInteger(value.bytes_total) &&
+      (value.items_total === null || value.items_done <= value.items_total) &&
+      (value.bytes_total === null || value.bytes_done <= value.bytes_total) &&
+      isNullableText(value.current_path)
+    )
+  ) {
+    return false;
+  }
+  const identityAbsent = value.item_id === null && value.item_type === null;
+  const identityPresent =
+    isValidNonemptyText(value.item_id) &&
+    (value.item_type === "operation" || value.item_type === "integrity");
+  if (!identityAbsent && !identityPresent) {
+    return false;
+  }
+  const itemBytesAbsent =
+    value.item_bytes_done === null && value.item_bytes_total === null;
+  const itemBytesPresent =
+    identityPresent &&
+    isNonnegativeInteger(value.item_bytes_done) &&
+    isNonnegativeInteger(value.item_bytes_total) &&
+    value.item_bytes_done <= value.item_bytes_total;
+  return itemBytesAbsent || itemBytesPresent;
 }
 
 function validateOperationItem(value) {

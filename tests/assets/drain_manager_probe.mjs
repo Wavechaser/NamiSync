@@ -295,6 +295,10 @@ success(one0, [
     bytes_done: 0,
     bytes_total: null,
     current_path: null,
+    item_id: null,
+    item_type: null,
+    item_bytes_done: null,
+    item_bytes_total: null,
   }),
 ]);
 const one1 = await nextRequest(1);
@@ -446,6 +450,129 @@ const three5 = await nextRequest(requests.length);
 assert.equal(three5.request.payload.replay_from, 1);
 assert.equal(acceptedThree.length, 0);
 stopThree();
+
+// Progress is an exact current-source shape. Malformed item identity or byte
+// telemetry invalidates the whole batch and recovers from the unchanged
+// cursor. A valid populated zero-byte stream remains determinate.
+const progressMatrixSession = "ab".repeat(16);
+const progressMatrixTask = `task-${"cd".repeat(16)}`;
+const acceptedProgressMatrix = [];
+const refusedProgressMatrix = [];
+let progressMatrixRequestIndex = requests.length;
+const stopProgressMatrix = bridge.startTaskDrain(
+  progressMatrixTask,
+  progressMatrixSession,
+  (update) => acceptedProgressMatrix.push(update),
+  (error) => refusedProgressMatrix.push(error),
+);
+const validProgressBody = Object.freeze({
+  items_done: 0,
+  items_total: 1,
+  bytes_done: 0,
+  bytes_total: 1,
+  current_path: "matrix.bin",
+  item_id: "matrix-operation",
+  item_type: "operation",
+  item_bytes_done: 0,
+  item_bytes_total: 1,
+});
+const invalidProgressBodies = [
+  [
+    "legacy five-key body",
+    {
+      items_done: 0,
+      items_total: 1,
+      bytes_done: 0,
+      bytes_total: 1,
+      current_path: "matrix.bin",
+    },
+  ],
+  ["extra key", { ...validProgressBody, extra: null }],
+  ["item id without type", { ...validProgressBody, item_type: null }],
+  ["item type without id", { ...validProgressBody, item_id: null }],
+  ["empty item id", { ...validProgressBody, item_id: "" }],
+  ["non-text item id", { ...validProgressBody, item_id: 7 }],
+  ["unknown item type", { ...validProgressBody, item_type: "scan" }],
+  [
+    "item bytes done without total",
+    { ...validProgressBody, item_bytes_total: null },
+  ],
+  [
+    "item bytes total without done",
+    { ...validProgressBody, item_bytes_done: null },
+  ],
+  [
+    "item bytes without identity",
+    { ...validProgressBody, item_id: null, item_type: null },
+  ],
+  [
+    "boolean item bytes done",
+    { ...validProgressBody, item_bytes_done: true },
+  ],
+  [
+    "boolean item bytes total",
+    { ...validProgressBody, item_bytes_total: true },
+  ],
+  [
+    "fractional item bytes done",
+    { ...validProgressBody, item_bytes_done: 0.5 },
+  ],
+  [
+    "fractional item bytes total",
+    { ...validProgressBody, item_bytes_total: 1.5 },
+  ],
+  [
+    "unsafe item byte counters",
+    {
+      ...validProgressBody,
+      item_bytes_done: Number.MAX_SAFE_INTEGER + 1,
+      item_bytes_total: Number.MAX_SAFE_INTEGER + 1,
+    },
+  ],
+  [
+    "negative item bytes done",
+    { ...validProgressBody, item_bytes_done: -1 },
+  ],
+  [
+    "negative item bytes total",
+    { ...validProgressBody, item_bytes_total: -1 },
+  ],
+  [
+    "item bytes done exceeds total",
+    { ...validProgressBody, item_bytes_done: 2 },
+  ],
+];
+
+for (const [label, body] of invalidProgressBodies) {
+  const malformed = await nextRequest(progressMatrixRequestIndex);
+  progressMatrixRequestIndex += 1;
+  assert.equal(malformed.request.payload.replay_from, null, label);
+  success(malformed, [event(progressMatrixSession, 1, "Progress", body)]);
+
+  const recovery = await nextRequest(progressMatrixRequestIndex);
+  progressMatrixRequestIndex += 1;
+  assert.equal(recovery.request.payload.replay_from, 1, label);
+  assert.equal(acceptedProgressMatrix.length, 0, label);
+  assert.equal(refusedProgressMatrix.length, 0, label);
+  success(recovery, []);
+  await turns();
+}
+
+const validZeroProgress = {
+  ...validProgressBody,
+  bytes_total: 0,
+  item_bytes_total: 0,
+};
+const progressMatrixValid = await nextRequest(progressMatrixRequestIndex);
+assert.equal(progressMatrixValid.request.payload.replay_from, null);
+success(progressMatrixValid, [
+  event(progressMatrixSession, 1, "Progress", validZeroProgress),
+]);
+await turns();
+assert.equal(refusedProgressMatrix.length, 0);
+assert.equal(acceptedProgressMatrix.length, 1);
+assert.deepEqual(acceptedProgressMatrix[0].event.body, validZeroProgress);
+stopProgressMatrix();
 
 // Bridge reincarnation resets the one drain-busy convergence allowance. A busy
 // reply from the freshly abandoned call therefore cannot prematurely stop the
@@ -896,6 +1023,7 @@ stopRelease();
 stopTerminalCallback();
 stopExhaustedRelease();
 stopPersistent();
+stopProgressMatrix();
 await turns();
 assert.equal(testWindow.listenerCount("pywebviewready"), 1);
 assert.equal(timers.size, 0);

@@ -1101,6 +1101,38 @@ def test_br_g_33_browser_event_vocabulary_matches_python_owners() -> None:
         assert set(actual) == set(values)
 
 
+def test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+    validator = source.split("function validateProgress(value) {", 1)[1].split(
+        "function validateOperationItem(value) {", 1
+    )[0]
+
+    for field_name in (
+        "items_done",
+        "items_total",
+        "bytes_done",
+        "bytes_total",
+        "current_path",
+        "item_id",
+        "item_type",
+        "item_bytes_done",
+        "item_bytes_total",
+    ):
+        assert validator.count(f'"{field_name}"') >= 1
+    assert 'value.item_type === "operation"' in validator
+    assert 'value.item_type === "integrity"' in validator
+    assert "isValidNonemptyText(value.item_id)" in validator
+    assert "identityPresent &&" in validator
+    assert "value.item_bytes_done <= value.item_bytes_total" in validator
+
+
 def test_ready_transition_cannot_overwrite_a_native_close_status(
     built_wheel: BuiltWheel,
 ) -> None:

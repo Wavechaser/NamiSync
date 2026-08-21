@@ -657,7 +657,19 @@ def test_runner_audit_failure_degrades_only_audit_axis() -> None:
 
 def test_runner_cancel_with_unknown_progress_total_keeps_truthful_counts() -> None:
     def work(context):
-        context.emit(Progress(1, None, 17, None, "file"))
+        context.emit(
+            Progress(
+                1,
+                None,
+                17,
+                None,
+                "file",
+                item_id="operation",
+                item_type="operation",
+                item_bytes_done=3,
+                item_bytes_total=99,
+            )
+        )
         raise Canceled()
 
     outcome = run_session(
@@ -733,6 +745,211 @@ def test_m1_event_bodies_round_trip(body: object) -> None:
         body=body,
     )
     assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
+
+
+def test_progress_v3_serializes_expanded_item_telemetry() -> None:
+    body = Progress(
+        1,
+        2,
+        7,
+        20,
+        "folder\\file.bin",
+        item_id="a" * 32,
+        item_type="operation",
+        item_bytes_done=7,
+        item_bytes_total=10,
+    )
+    envelope = Envelope(
+        session_id=SessionId("a" * 32),
+        seq=1,
+        at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+        schema_version=SCHEMA_VERSION,
+        body=body,
+    )
+
+    serialized = envelope_to_dict(envelope)
+
+    assert serialized["schema_version"] == 3
+    assert serialized["body"] == {
+        "items_done": 1,
+        "items_total": 2,
+        "bytes_done": 7,
+        "bytes_total": 20,
+        "current_path": "folder\\file.bin",
+        "item_id": "a" * 32,
+        "item_type": "operation",
+        "item_bytes_done": 7,
+        "item_bytes_total": 10,
+    }
+    assert envelope_from_dict(serialized) == envelope
+
+
+def test_progress_v3_decodes_a_legacy_body_without_item_telemetry() -> None:
+    envelope = Envelope(
+        session_id=SessionId("a" * 32),
+        seq=1,
+        at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+        schema_version=SCHEMA_VERSION,
+        body=Progress(1, 2, 7, 20, "folder\\file.bin"),
+    )
+    serialized = envelope_to_dict(envelope)
+    raw_body = serialized["body"]
+    assert isinstance(raw_body, dict)
+    for field_name in (
+        "item_id",
+        "item_type",
+        "item_bytes_done",
+        "item_bytes_total",
+    ):
+        raw_body.pop(field_name)
+
+    decoded = envelope_from_dict(serialized)
+
+    assert decoded == envelope
+    assert isinstance(decoded.body, Progress)
+    assert decoded.body.item_id is None
+    assert decoded.body.item_type is None
+    assert decoded.body.item_bytes_done is None
+    assert decoded.body.item_bytes_total is None
+
+
+def test_progress_accepts_zero_length_active_item_stream() -> None:
+    body = Progress(
+        0,
+        1,
+        0,
+        0,
+        "empty.bin",
+        item_id="empty",
+        item_type="operation",
+        item_bytes_done=0,
+        item_bytes_total=0,
+    )
+
+    assert body.item_bytes_done == 0
+    assert body.item_bytes_total == 0
+
+
+@pytest.mark.parametrize(
+    "changes, error_type",
+    [
+        ({"item_id": "item"}, ValueError),
+        ({"item_type": "operation"}, ValueError),
+        ({"item_id": "", "item_type": "operation"}, ValueError),
+        ({"item_id": "item", "item_type": "unknown"}, ValueError),
+        (
+            {
+                "item_id": "item",
+                "item_type": "operation",
+                "item_bytes_done": 1,
+            },
+            ValueError,
+        ),
+        (
+            {
+                "item_id": "item",
+                "item_type": "operation",
+                "item_bytes_total": 1,
+            },
+            ValueError,
+        ),
+        ({"item_bytes_done": 0, "item_bytes_total": 1}, ValueError),
+        (
+            {
+                "item_id": "item",
+                "item_type": "operation",
+                "item_bytes_done": True,
+                "item_bytes_total": 1,
+            },
+            TypeError,
+        ),
+        (
+            {
+                "item_id": "item",
+                "item_type": "operation",
+                "item_bytes_done": 0.5,
+                "item_bytes_total": 1,
+            },
+            TypeError,
+        ),
+        (
+            {
+                "item_id": "item",
+                "item_type": "integrity",
+                "item_bytes_done": -1,
+                "item_bytes_total": 1,
+            },
+            ValueError,
+        ),
+        (
+            {
+                "item_id": "item",
+                "item_type": "integrity",
+                "item_bytes_done": 2,
+                "item_bytes_total": 1,
+            },
+            ValueError,
+        ),
+    ],
+)
+def test_progress_rejects_invalid_item_telemetry(
+    changes: dict[str, object],
+    error_type: type[Exception],
+) -> None:
+    values: dict[str, object] = {
+        "items_done": 0,
+        "items_total": 1,
+        "bytes_done": 0,
+        "bytes_total": 1,
+        "current_path": None,
+    }
+    values.update(changes)
+
+    with pytest.raises(error_type):
+        Progress(**values)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"item_id": "item"},
+        {"item_type": "operation"},
+        {
+            "item_id": "item",
+            "item_type": "operation",
+            "item_bytes_done": 0,
+        },
+        {
+            "item_id": "item",
+            "item_type": "operation",
+            "item_bytes_total": 1,
+        },
+        {"item_bytes_done": 0, "item_bytes_total": 1},
+        {
+            "item_id": "item",
+            "item_type": "integrity",
+            "item_bytes_done": 0.5,
+            "item_bytes_total": 1,
+        },
+    ],
+)
+def test_progress_v3_decoder_rejects_invalid_item_telemetry(
+    changes: dict[str, object],
+) -> None:
+    envelope = Envelope(
+        session_id=SessionId("a" * 32),
+        seq=1,
+        at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+        schema_version=SCHEMA_VERSION,
+        body=Progress(0, 1, 0, 1, None),
+    )
+    serialized = envelope_to_dict(envelope)
+    raw_body = serialized["body"]
+    assert isinstance(raw_body, dict)
+    raw_body.update(changes)
+
+    with pytest.raises((TypeError, ValueError)):
+        envelope_from_dict(serialized)
 
 
 @pytest.mark.parametrize(

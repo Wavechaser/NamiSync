@@ -188,7 +188,11 @@ so no corrective second terminal or circular acknowledgement exists.
 
 The version-3 envelope codec round-trips `StateChanged`, `PhaseChanged`,
 `Progress`, nominal `ItemOutcome` and `IntegrityOutcome` values, `Gap`, and
-`Terminal`, and rejects unknown schema/body versions. Its scalar decoder is
+`Terminal`, and rejects unknown schema/body versions. `Progress` carries its
+existing aggregate counters/path plus optional paired item identity/type and
+optional paired per-attempt byte counters; the new decoder accepts a legacy v3
+body lacking those optional fields, while current serialization writes their
+exact keys. Its scalar decoder is
 non-coercive: schema/sequence/counter fields require exact integers, booleans
 cannot impersonate numbers, and string fields remain strings. Every reliable
 result item carries an explicit `item_type` and `phase`; `run_session`

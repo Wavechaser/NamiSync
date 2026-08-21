@@ -235,6 +235,10 @@ def _deliver_initial_events(sink: object, session_id: str) -> None:
                 "bytes_done": 7,
                 "bytes_total": 7,
                 "current_path": "numeric-hole-海.txt",
+                "item_id": None,
+                "item_type": None,
+                "item_bytes_done": None,
+                "item_bytes_total": None,
             },
         )
     )

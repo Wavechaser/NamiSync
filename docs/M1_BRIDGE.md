@@ -759,15 +759,27 @@ path — forbidden, ambiguous under escaping, and wrong.
 
 **Resolution:** `Progress` gains optional `item_id` and `item_type`,
 mirroring the nominal `ResultItem` vocabulary DR-M1-10 established rather
-than inventing a parallel one. Both emission sites already hold the value:
-the executor's reporter knows its current operation, and the verifier's knows
-its current subject row.
+than inventing a parallel one. It also gains optional `item_bytes_done` and
+`item_bytes_total` for the active byte-stream attempt. Both reporters already
+hold the identity and stream counters: the executor knows its current
+operation and copy stream, and the verifier knows its current subject and read
+stream.
 
 The fields are optional **as a pair**: legacy producers omit both; an
 identified progress event supplies a nonempty `item_id` plus `item_type` equal
 to `operation` or `integrity`. `Progress.__post_init__` rejects a one-sided
 pair or an unknown type, so the bridge never guesses which node-id namespace
 an opaque id belongs to.
+
+The byte fields are likewise optional as a pair. They require item identity,
+use exact nonnegative integers, and reject `done > total`. Identity may exist
+without byte counters while an item is active but has not entered a meaningful
+stream; non-byte operations remain indeterminate. Item counters describe the
+current stream attempt and may restart from zero, while aggregate executor
+bytes retain their monotonic high-water semantics. A settled item is named by
+its reliable outcome, not by later lossy progress: later snapshots clear the
+item identity and item-byte fields. `current_path` retains its prior
+display-only behavior.
 
 **This is a versioned wire change and must be treated as one.** An earlier
 draft argued that because `HistoryObserver.on_event` refuses `Progress` and
@@ -781,19 +793,19 @@ the serialized body regardless of where it travels.
 which requires three things rather than none. The new fields carry defaults so
 existing producers remain valid without modification. `envelope_from_dict`
 tolerates a body lacking them and yields the defaults: unlike the existing
-required Progress fields, the two new fields are decoded with
-`raw.get("item_id")` and `raw.get("item_type")`, not strict subscripts. And
+required Progress fields, the decoder reads all four optional item fields
+with `raw.get(...)`, not strict subscripts. And
 explicit compatibility tests assert both directions — a pre-change payload
 deserializes, and a post-change envelope serializes with the fields present —
 because an additive claim is only true if something proves it. A third test
-rejects a one-sided identity pair.
+rejects invalid identity/counter pairs and coercive item counters.
 
 Absent those tests the change requires a version bump instead. What is not
 acceptable is changing the body while asserting the version is unaffected
 because nothing writes it to disk.
 
-The remaining footprint is genuinely small: a dataclass field pair, two
-emission sites that already hold the value, and the serializer pair.
+The remaining footprint is bounded: four dataclass fields, two reporters that
+already own the relevant stream, and the exact serializer/browser consumers.
 
 The bridge enriches `item_id` into an ancestor node-id chain. **Never join on
 `current_path`**, which remains display-only telemetry.
@@ -2603,10 +2615,11 @@ headings are organizational, not lane ownership.
   *Not satisfied by* a move-only happy path, a synthetic operation standing in
   for a folder, or a renderer that relabels inferred groups as renames.
 - **BR-G-36 — Progress compatibility and follow mode use identity, never
-  display paths.** A pre-change Progress body lacking the two identity fields
-  decodes through `.get(...)`; a new body serializes both; one-sided and
-  unknown-type pairs are rejected; and both production reporters emit the
-  correct nominal pair without changing the current envelope version. An
+  display paths.** A pre-change Progress body lacking the four optional item
+  fields decodes through `.get(...)`; a new body serializes all four;
+  one-sided identity/counter pairs, coercive counters, and unknown types are
+  rejected; and both production reporters emit the correct nominal pair plus
+  determinate stream counters without changing the current envelope version. An
   off-window item resolves through its server-supplied
   ancestor chain to the deepest visible ancestor-or-self and exact visible
   index under collapse, filter, and search; the window and anchor-only paths

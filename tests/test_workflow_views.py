@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 
 from namisync.core.evidence import Outcome, RecordingStatus
-from namisync.core.events import ItemOutcome
+from namisync.core.events import SCHEMA_VERSION, Envelope, ItemOutcome, Progress
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
@@ -15,9 +17,10 @@ from namisync.core.session import (
     OperationResult,
     PhaseResult,
     PhaseStatus,
+    SessionId,
     SessionState,
 )
-from namisync.workflows.views import operation_result_view
+from namisync.workflows.views import operation_result_view, session_event_view
 
 
 def _operation(outcome: Outcome, *, kind: str = "copy") -> ItemOutcome:
@@ -42,6 +45,41 @@ def _integrity(
         ),
         phase=phase,
     )
+
+
+def test_session_event_view_preserves_expanded_progress_body() -> None:
+    progress = Progress(
+        1,
+        2,
+        7,
+        20,
+        "folder\\file.bin",
+        item_id="operation-1",
+        item_type="operation",
+        item_bytes_done=7,
+        item_bytes_total=10,
+    )
+    envelope = Envelope(
+        SessionId("a" * 32),
+        3,
+        datetime(2026, 8, 21, tzinfo=timezone.utc),
+        SCHEMA_VERSION,
+        progress,
+    )
+
+    view = session_event_view(envelope)
+
+    assert view.body == {
+        "items_done": 1,
+        "items_total": 2,
+        "bytes_done": 7,
+        "bytes_total": 20,
+        "current_path": "folder\\file.bin",
+        "item_id": "operation-1",
+        "item_type": "operation",
+        "item_bytes_done": 7,
+        "item_bytes_total": 10,
+    }
 
 
 def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:

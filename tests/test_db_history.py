@@ -13,6 +13,7 @@ from namisync.core.events import (
     Gap,
     ItemOutcome,
     PhaseChanged,
+    Progress,
     SCHEMA_VERSION,
     StateChanged,
     envelope_to_dict,
@@ -246,6 +247,29 @@ def test_history_finalization_round_trips_summary_items_events_and_phases(
     assert items.items[0].item == item
     assert [event.event_seq for event in events.events] == [1, 2]
     assert events.events[1].envelope.body == item
+
+
+def test_history_refuses_populated_lossy_progress(tmp_path: Path) -> None:
+    record = _record()
+    progress = Progress(
+        0,
+        1,
+        4,
+        8,
+        "a.bin",
+        item_id="op-1",
+        item_type="operation",
+        item_bytes_done=4,
+        item_bytes_total=8,
+    )
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-1", "host-1"))
+
+        with pytest.raises(
+            HistoryIntegrityError,
+            match="history receives reliable preterminal events only",
+        ):
+            observer.on_event(_envelope(record, 1, progress))
 
 
 def test_count_bound_flushes_complete_windows_and_exposes_incomplete_summary(

@@ -185,13 +185,37 @@ def test_br_g_33_progress_coalescing_makes_legal_numeric_holes() -> None:
     hub = make_hub(subscriber_capacity=4)
     stream = hub.subscribe(from_seq=1)
     hub.emit(StateChanged(SessionState.RUNNING))
-    hub.emit(Progress(1, 2, 1, 2, None))
-    hub.emit(Progress(2, 2, 2, 2, None))
+    hub.emit(
+        Progress(
+            1,
+            2,
+            1,
+            2,
+            "first.bin",
+            item_id="1" * 32,
+            item_type="operation",
+            item_bytes_done=1,
+            item_bytes_total=2,
+        )
+    )
+    newest = Progress(
+        2,
+        2,
+        2,
+        2,
+        "second.bin",
+        item_id="2" * 32,
+        item_type="operation",
+        item_bytes_done=2,
+        item_bytes_total=2,
+    )
+    hub.emit(newest)
     hub.emit(PhaseChanged("after-progress"))
 
     observed = [stream.next(0.1) for _ in range(3)]
 
     assert [envelope.seq for envelope in observed] == [1, 3, 4]
+    assert observed[1].body is newest
     assert not any(isinstance(envelope.body, Gap) for envelope in observed)
     assert not stream.ejected
     assert hub.close(0.5)

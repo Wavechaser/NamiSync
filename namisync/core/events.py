@@ -43,6 +43,10 @@ class Progress:
     bytes_done: int
     bytes_total: int | None
     current_path: str | None
+    item_id: str | None = None
+    item_type: str | None = None
+    item_bytes_done: int | None = None
+    item_bytes_total: int | None = None
 
     def __post_init__(self) -> None:
         values = (self.items_done, self.bytes_done)
@@ -55,6 +59,32 @@ class Progress:
             raise ValueError("items_done cannot exceed items_total")
         if self.bytes_total is not None and self.bytes_done > self.bytes_total:
             raise ValueError("bytes_done cannot exceed bytes_total")
+        if (self.item_id is None) != (self.item_type is None):
+            raise ValueError("progress item identity must be present as a pair")
+        if self.item_id is not None:
+            if not isinstance(self.item_id, str) or not self.item_id:
+                raise ValueError("progress item_id must be a non-empty string")
+            if (
+                not isinstance(self.item_type, str)
+                or self.item_type not in {"operation", "integrity"}
+            ):
+                raise ValueError("progress item_type is unsupported")
+        if (self.item_bytes_done is None) != (self.item_bytes_total is None):
+            raise ValueError("progress item byte counters must be present as a pair")
+        if self.item_bytes_done is not None:
+            if self.item_id is None:
+                raise ValueError("progress item byte counters require item identity")
+            if (
+                type(self.item_bytes_done) is not int
+                or type(self.item_bytes_total) is not int
+            ):
+                raise TypeError("progress item byte counters must be exact integers")
+            if self.item_bytes_done < 0 or self.item_bytes_total < 0:
+                raise ValueError("progress item byte counters cannot be negative")
+            if self.item_bytes_done > self.item_bytes_total:
+                raise ValueError(
+                    "item_bytes_done cannot exceed item_bytes_total"
+                )
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +176,10 @@ def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
             "bytes_done": body.bytes_done,
             "bytes_total": body.bytes_total,
             "current_path": body.current_path,
+            "item_id": body.item_id,
+            "item_type": body.item_type,
+            "item_bytes_done": body.item_bytes_done,
+            "item_bytes_total": body.item_bytes_total,
         }
     elif isinstance(body, ResultItem):
         body_data = result_item_to_dict(body)
@@ -209,6 +243,18 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
             ),
             current_path=_optional_str(
                 raw["current_path"], "progress current_path"
+            ),
+            item_id=_optional_str(
+                raw.get("item_id"), "progress item_id"
+            ),
+            item_type=_optional_str(
+                raw.get("item_type"), "progress item_type"
+            ),
+            item_bytes_done=_optional_int(
+                raw.get("item_bytes_done"), "progress item_bytes_done"
+            ),
+            item_bytes_total=_optional_int(
+                raw.get("item_bytes_total"), "progress item_bytes_total"
             ),
         )
     elif body_type in {"ItemOutcome", "IntegrityOutcome"}:

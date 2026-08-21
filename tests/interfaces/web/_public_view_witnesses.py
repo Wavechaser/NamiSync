@@ -290,8 +290,14 @@ SESSION_EVENT = SessionEventView(
     MappingProxyType(
         {
             "items_done": 1,
+            "items_total": 2,
+            "bytes_done": 3,
+            "bytes_total": 4,
             "current_path": HOSTILE_TEXT,
-            "labels": ("first", "第二"),
+            "item_id": HOSTILE_TEXT,
+            "item_type": "integrity",
+            "item_bytes_done": 3,
+            "item_bytes_total": 4,
         }
     ),
 )
@@ -302,8 +308,14 @@ SESSION_EVENT_JSON = {
     "body_type": "Progress",
     "body": {
         "items_done": 1,
+        "items_total": 2,
+        "bytes_done": 3,
+        "bytes_total": 4,
         "current_path": HOSTILE_TEXT,
-        "labels": ["first", "第二"],
+        "item_id": HOSTILE_TEXT,
+        "item_type": "integrity",
+        "item_bytes_done": 3,
+        "item_bytes_total": 4,
     },
 }
 NONTERMINAL_RECORD = SessionRecordView(
