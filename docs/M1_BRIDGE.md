@@ -752,8 +752,9 @@ the old location points to it, and the two highlight together.
 
 ### DR-BR-14 — Progress carries item identity, never a display path
 
-Follow mode anchors on the current operation, but `Progress` carries only
-`items_done`, `items_total`, `bytes_done`, `bytes_total`, and `current_path`.
+Follow mode anchors on the current operation, but before this extraction
+`Progress` carried only `items_done`, `items_total`, `bytes_done`,
+`bytes_total`, and `current_path`.
 Mapping a running operation to a node would require joining on a display
 path — forbidden, ambiguous under escaping, and wrong.
 
@@ -804,11 +805,13 @@ Absent those tests the change requires a version bump instead. What is not
 acceptable is changing the body while asserting the version is unaffected
 because nothing writes it to disk.
 
-The remaining footprint is bounded: four dataclass fields, two reporters that
-already own the relevant stream, and the exact serializer/browser consumers.
+The landed extraction footprint is bounded: four dataclass fields, two
+reporters that already own the relevant stream, and the exact
+serializer/browser consumers.
 
-The bridge enriches `item_id` into an ancestor node-id chain. **Never join on
-`current_path`**, which remains display-only telemetry.
+The future Slice 5 validated projection enriches `item_id` into an ancestor
+node-id chain. **Never join on `current_path`**, which remains display-only
+telemetry.
 
 ### DR-BR-15 — Flattened windows over a stateless visible sequence
 

@@ -1,53 +1,61 @@
 # Session Handoff
 
-Status (2026-08-21): semantic badge contrast and the tests-only file-list
-column controller are implemented and verified. Production task and file-list
-surfaces remain dormant until Slice 5 supplies validated projections.
+Status (2026-08-21): truthful executor and verifier per-item progress reaches
+the production browser validator. Slice 5 still owns stable row projection,
+identity mapping, follow behavior, and visual consumption.
 
 ## Delivered
 
-- Set filled semantic labels to 18 logical px with optically raised 12 px text.
-  Light red/yellow fills use family-light surfaces with family-dark labels;
-  Dark uses family-dark surfaces with family-main labels. All ordinary-theme
-  filled pairs now meet the 4.5:1 normal-text floor. Dark purple status text
-  remains purple-light and Light remains purple-main.
-- Retained ordinary button fills at `#fbfbfb` Light and `#383838` Dark.
-- Replaced the gallery's independent track resizing with one reserved-width
-  controller. The untouched table keeps the authored proportional layout. On
-  first interaction it measures all six headers once, freezes Selection, Size,
-  Operation/Presence, Checksum, and Notes in pixels, and leaves File/path as
-  the sole `minmax(12rem, 1fr)` track without moving the initial result.
-- Kept five internal dividers and removed the outside Notes divider. Pointer
-  and keyboard resizing use the same delta calculation; the preceding column
-  trades width against Notes, which retains a 14 rem minimum. Selection remains
-  a real accessible separator.
-- After customization, only File/path absorbs viewport changes. The table
-  overflows once File/path reaches 12 rem, using the greater of 48 rem or the
-  sum of preserved widths as its effective minimum. Stored tracks are never
-  silently rewritten by window narrowing. The behavior remains gallery-only:
-  no persistence, bridge state, or Slice 5 column contract was added.
+- Extended core `Progress` within schema v3 with optional paired item
+  identity/type and paired attempt-local byte counters. Current serialization
+  always emits the expanded exact body; the Python decoder accepts legacy v3
+  bodies with those four fields absent.
+- Updated the exact browser validator and hard-coded transport/public-view
+  witnesses. Dispatcher coalescing and workflow pass-through preserve the
+  expanded body without new event, command, persistence, or history behavior.
+- Made executor item bytes start and reset only at actual copy-pipeline entry.
+  Publication, metadata, durability, attestation, and recording continuations
+  retain the completed attempt counter. Aggregate bytes hold their high-water
+  through retries and terminal failure instead of regressing.
+- Added verifier item lifecycle reporting after the run checkpoint. Identity is
+  visible before classification; determinate bytes begin only after the opened
+  subject passes volume/stat/baseline guards. Resume restarts attempt-local
+  bytes while aggregate physical-read work stays monotonic.
 
 ## Review
 
-- Headed evidence covers stationary first-freeze geometry, pointer and keyboard
-  transfers, inverse Notes changes, fixed intervening tracks, anchored right
-  edges, 12/14 rem clamps, File/path-only viewport response, and preserved-width
-  overflow. The exact tests-only evidence envelope advanced to schema 4.
-- Badge evidence independently checks the authored Light/Dark foreground and
-  background roles, exact 18 px form, and 4.5:1 contrast. Forced colors remain
-  `Highlight`/`HighlightText`.
-- Production dormancy is unchanged: neither file-list renderer is imported by
-  the shipped shell, and the controller exists only in the gallery fixture.
+- Each of the core/bridge, executor, and verifier checkpoints received a
+  separate adversarial review before commit. Review-found gaps in executable
+  browser counterexamples, retained-continuation reset detection, and
+  `current_path` lifecycle assertions were fixed before acceptance.
+- Lower layers remain discrete: no dispatcher policy, workflow coordination,
+  history admission, CLI rendering, bridge command, database schema, or
+  executor/verifier facade changed.
+- The executor settlement oracle retained baseline parity across 30 scenarios
+  and three identical runs. Frozen custody/calibration artifacts were not
+  modified.
 
 ## Verification
 
-- Focused non-headed web neighborhood:
-  `63 passed, 7 skipped, 4 deselected in 2.95s`.
-- Installed-wheel component gallery (Light, Dark, forced colors, reduced
-  motion): `4 passed, 15 deselected in 30.42s`.
-- Department and full suites were not run per the requested focused scope.
+- Browser validator matrix through bundled Node: exit 0.
+- Core/workflow/dispatcher/interface/database neighborhood: 1,789 passed,
+  13 skipped, 896 deselected.
+- Executor runtime: 98 passed; executor/workflow departments: 571 passed.
+- Executor settlement oracle: 30 scenarios x 3 runs.
+- Verifier engine: 74 passed; verifier/workflow departments: 318 passed.
+- Ordinary repository: 2,668 passed, 16 skipped, 28 deselected.
+- Real WebView2 headed interface gate: 28 passed, 2,684 deselected.
+- Import-linter: 11 contracts kept, 0 broken.
+
+## Commits
+
+- `48b0fbb feat(core): extend progress item telemetry`
+- `c0df4e0 feat(executor): emit retry-aware item progress`
+- `4d6341e feat(verifier): emit attempt-local item progress`
 
 ## Next Checkpoint
 
-- Address the remaining table-column cosmetic/interaction points on top of the
-  gallery-only controller without turning it into Slice 5 state.
+- Add stable operation/integrity row IDs to the validated Slice 5 projection,
+  map nominal progress identity to those rows, and render determinate versus
+  indeterminate active states without joining on `current_path`.
+- Icons, tooltips, and checksum-click copying remain intentionally shelved.

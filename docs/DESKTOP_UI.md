@@ -36,6 +36,10 @@ clean-wheel headed evidence. User-facing plan, inventory, history,
 and control surfaces remain; `M1_SHELL.md` owns their implementation order and
 beta-package closure.
 
+Current executor/verifier item progress now crosses the production bridge
+under the expanded exact browser shape. Stable row projection and visual
+consumption remain Slice 5 work.
+
 `M1_BRIDGE.md` is the sole normative authority for bridge envelopes, commands,
 errors, retry/revision identity, sequence and terminal lifecycle, and BR-G
 acceptance gates. This document owns the user-facing and visual contract; it
@@ -961,12 +965,17 @@ resume surface.
 
 ## Presentation and responsiveness
 
-Progress is replaceable telemetry. The UI updates current path, copied bytes,
-item counts, and phase without assuming a throughput estimator exists. Executor
-pipeline diagnostics are opt-in developer data, not the rolling transfer rate
-or ETA promised to users. Filter/search state never changes the underlying
-plan or inventory selection; changing a location or plan option invalidates
-only the state that semantically depends on it.
+Progress is replaceable telemetry. The browser receives optional nominal
+active-item identity and paired attempt-local byte counters alongside aggregate
+bytes, item counts, phase, and the display path. Only nominal identity may
+locate a row; `current_path` remains informational. Attempt counters may restart
+when an actual retry or resumed copy/read stream begins, while aggregate
+progress retains the producing module's monotonic semantics. The dormant row
+renderers do not yet consume these fields. Executor pipeline diagnostics are
+opt-in developer data, not the rolling transfer rate or ETA promised to users.
+Filter/search state never changes the underlying plan or inventory selection;
+changing a location or plan option invalidates only the state that semantically
+depends on it.
 
 The first real plan/inventory search owner uses a fixed 150 ms trailing
 debounce. Every search, filter, or collapse intent invalidates earlier response

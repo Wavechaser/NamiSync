@@ -115,6 +115,23 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
+#### Extract truthful per-item progress (2026-08-21)
+
+- Extended `Progress` within schema v3 with paired nominal item identity/type
+  and paired attempt-local byte counters. Legacy v3 bodies decode with absent
+  item fields, while current serialization and the browser's exact validator
+  own the expanded shape.
+- Started and reset executor item bytes only at actual byte-pipeline entry,
+  retained aggregate high-water through retry and terminal failure, and avoided
+  resets for publication, metadata, durability, attestation, and recording
+  continuations. Verifier progress now begins after guarded stream admission,
+  reports attempt-local bytes, and preserves monotonic physical-read aggregate
+  work across resume.
+- Kept dispatcher loss/coalescing, workflow pass-through, history refusal, CLI
+  aggregate rendering, bridge commands, and persistence unchanged. Added
+  contract, exact-consumer, retry/resume, settlement, and lower-layer
+  regressions; Slice 5 row projection and rendering remain open.
+
 #### Ratify desktop color semantics (2026-08-21)
 
 - Ratified a 15-token authored palette: yellow main is `#FFAA22`, purple main

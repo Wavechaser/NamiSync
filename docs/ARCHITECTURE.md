@@ -148,6 +148,9 @@ class DeliveryClass(StrEnum):
 ```
 
 - `Progress` is lossy and replaceable by a newer snapshot.
+- When present, nominal item identity—not `current_path`—is the row join key.
+  Item-byte counters describe one active stream attempt and may restart;
+  aggregate counters retain their module-owned monotonic semantics.
 - lifecycle changes, item outcomes, explicit gaps, and terminal results are
   reliable.
 - slow ordinary subscribers are bounded and ejected visibly with `Gap` rather
