@@ -752,6 +752,12 @@ the old location points to it, and the two highlight together.
 
 ### DR-BR-14 — Progress carries item identity, never a display path
 
+The following decision records the active version-3 bridge contract and its
+delivery history. The accepted version-4 Progress protocol and independent
+core-event version boundary are owned by `ARCHITECTURE.md` §2.3; the v3 wire
+disposition below will be retired when that atomic producer/consumer change
+lands.
+
 Follow mode anchors on the current operation, but before this extraction
 `Progress` carried only `items_done`, `items_total`, `bytes_done`,
 `bytes_total`, and `current_path`.

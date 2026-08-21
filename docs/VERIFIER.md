@@ -216,6 +216,11 @@ custody without terminal, and resume freshly refreshes/guards only the remaining
 selection. Rebaseline therefore uses the same continuation rather than a
 separate short-operation exception.
 
+The following paragraphs describe the active version-3 verifier behavior. The
+accepted version-4 field meanings, transition authority, and recovery rules are
+owned centrally by `ARCHITECTURE.md` §2.3 and will supersede overlapping local
+wording when the atomic v4 delivery lands.
+
 `bytes_done` measures physical read work, not unique logical file coverage. A
 pause during an in-flight file restarts that file on resume, so already-read
 bytes are counted again while the item still emits exactly one terminal result;

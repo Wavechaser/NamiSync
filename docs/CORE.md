@@ -188,35 +188,83 @@ The runner then constructs and releases the one immutable `Terminal` to
 ordinary subscribers. History never needs to consume or parse that Terminal,
 so no corrective second terminal or circular acknowledgement exists.
 
-The version-3 envelope codec round-trips `StateChanged`, `PhaseChanged`,
-`Progress`, nominal `ItemOutcome` and `IntegrityOutcome` values, `Gap`, and
-`Terminal`, and rejects unknown schema/body versions. `Progress` carries its
-existing aggregate counters/path plus optional paired item identity/type and
-optional paired per-attempt byte counters. Current serialization and the
-browser validator require the exact nine-key Progress body. The Python decoder
-uses `.get(...)` for the four additive fields, so direct codec callers may
-decode a pre-change five-key body, but that is a defensive additive-decode
-allowance rather than a supported production wire shape: history refuses
-Progress, no Progress body is persisted, and the browser rejects the five-key
-shape.
+The active version-3 envelope codec round-trips `StateChanged`,
+`PhaseChanged`, `Progress`, nominal `ItemOutcome` and `IntegrityOutcome`
+values, `Gap`, and `Terminal`, and rejects unknown schema/body versions.
+Current serialization and the browser validator require the exact nine-key
+Progress body: the five aggregate/path fields plus optional paired item
+identity/type and optional paired per-attempt byte counters. The Python
+decoder's `.get(...)` handling for those four additive fields is a defensive
+decode allowance, not a supported production five-key wire shape: history
+refuses Progress, no Progress body is persisted, and the browser requires all
+nine keys.
 
-Keeping envelope schema v3 is safe for this current-source, co-packaged swap
-because Progress is lossy and unpersisted, every production producer and
-consumer ships together, and the bridge is not an external or mixed-version
-rolling-upgrade contract. It does not establish a general rule that body
-changes may retain their schema version. `item_type` names the row-lookup
-namespace of the opaque id, not the phase or module producing the event:
-post-copy verifier progress keyed by an executor operation id therefore uses
-`operation`, even though its reliable outcome remains an `IntegrityOutcome`.
-If a stream exceeds its admitted item total, later snapshots retain active
-identity but omit both item-byte fields; executor aggregates remain bounded by
-reviewed content while verifier aggregates expand to count physical read work.
-Its scalar decoder is non-coercive: schema/sequence/counter fields require
-exact integers, booleans cannot impersonate numbers, and string fields remain
-strings. Every reliable result item carries an explicit `item_type` and
-`phase`; `run_session`
-accumulates only the nominal `ResultItem` base in emission order, including
-prior items retained across pause/resume. Structural
+### Accepted Progress v4 shape
+
+The ratified next contract is core event-envelope v4; it is not implemented
+until its producers, codec, workflow view, and exact browser consumer land
+atomically. Version 4 makes every Progress body an exact eleven-key object:
+
+```text
+phase
+items_done
+items_total
+bytes_done
+bytes_total
+current_path
+item_id
+item_type
+item_attempt_id
+item_bytes_done
+item_bytes_total
+```
+
+`phase` is a nonempty string. `items_done` and `bytes_done` are exact
+non-boolean, nonnegative integers. Each total is either an exact non-boolean,
+nonnegative integer or `None`; every done value is bounded by its known total.
+`current_path` is a string or `None`. Item id and type are both present or both
+`None`; the id is a nonempty string and the type is exactly `operation` or
+`integrity`. An active item requires `items_done < items_total` when the item
+total is known.
+
+`item_attempt_id` is either `None` or exactly 32 lowercase hexadecimal
+characters. It requires paired item identity. Item-byte counters require an
+attempt id, are both present or both absent, use exact non-boolean nonnegative
+integers, and are mutually bounded when present. `item_bytes_done` cannot
+exceed aggregate `bytes_done`, and `item_bytes_total` cannot exceed known
+aggregate `bytes_total`. An attempt id with an absent byte pair is the only
+active indeterminate-byte shape; an item without an attempt has no item-byte
+counters. Extra or missing keys are rejected.
+
+Attempt ids are minted at actual byte-pipeline entry and identify only that
+attempt. Retry or reconstructed resume mints a new token exactly when it will
+rerun the byte pipeline; retained post-byte work does not invent a replacement
+attempt. Overshoot retains item and attempt identity while making the byte pair
+absent. Settlement clears item, attempt, and item-byte fields. The tokens are
+opaque and deliberately are not persisted generation counters.
+
+The scalar decoder remains non-coercive: schema, sequence, and counter fields
+require exact integers, booleans cannot impersonate numbers, and string fields
+remain strings. `item_type` names the row-lookup namespace of the opaque id,
+not the phase or module producing the event; post-copy verifier progress keyed
+by an executor operation id therefore uses `operation`, even though its
+reliable outcome remains an `IntegrityOutcome`. The central meanings,
+transition table, authority order, and Gap/replay rules live in
+`ARCHITECTURE.md` §2.3 rather than being redefined by module documents.
+
+Core event versioning is independent of every containing or adjacent schema.
+The v4 event-envelope version is carried unchanged through the exact
+browser-facing `SessionEventView`; the desktop bridge command/response schema
+stays v1 and workflow continuation stays v5. History database, UI state, shell,
+and page schema versions do not change. After v4 lands, new EventHub output is
+v4. The codec explicitly retains v3 decoding for persisted reliable history
+without rewriting its hash chain, while refusing v3 Progress because Progress
+was never admitted to history. An unversioned browser-facing event is not a
+supported compatibility boundary.
+
+Every reliable result item carries an explicit `item_type` and `phase`;
+`run_session` accumulates only the nominal `ResultItem` base in emission order,
+including prior items retained across pause/resume. Structural
 `hasattr(item_id/path)` guessing is forbidden.
 
 ## Path And Identity Rules

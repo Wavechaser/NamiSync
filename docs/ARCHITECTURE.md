@@ -148,16 +148,6 @@ class DeliveryClass(StrEnum):
 ```
 
 - `Progress` is lossy and replaceable by a newer snapshot.
-- When present, nominal item identity—not `current_path`—is the row join key.
-  `item_type` identifies that opaque id's lookup namespace rather than the
-  producing phase or outcome kind, so post-copy progress keyed by an operation
-  id remains `operation`. Item-byte counters describe one active stream attempt
-  and may restart; if observed work exceeds the admitted item total, identity
-  stays active but the byte pair becomes absent rather than inventing a new
-  admission. Aggregate counters retain their module-owned monotonic semantics:
-  executor progress is bounded by reviewed content and carries its high-water
-  across pause/resume in the same task, while verifier progress expands to
-  count physical work.
 - lifecycle changes, item outcomes, explicit gaps, and terminal results are
   reliable.
 - slow ordinary subscribers are bounded and ejected visibly with `Gap` rather
@@ -170,6 +160,119 @@ class DeliveryClass(StrEnum):
 
 The event plane is observation, not control. A module emits facts; it does not
 wait for an event consumer to decide what happens next.
+
+#### Accepted Progress v4 protocol
+
+The following contract is ratified for core event-envelope v4 and is not yet
+implemented. Until the atomic v4 producer/consumer change lands, the active
+wire shape remains the version-3 contract described in `CORE.md`.
+
+Under this protocol, a forced Progress emission bypasses source throttling but
+remains lossy and coalescible. It is always derived from authoritative live
+reporter state, never copied from an earlier lossy emission.
+
+Progress is a phase-scoped observation of admitted work, not a settlement
+ledger:
+
+- `items_total` is the selected-item admission for that phase. `None` means the
+  admission is not truthfully known; zero means a known empty admission.
+- `items_done` is the number of distinct selected items for which a reliable
+  terminal item outcome has been emitted, regardless of success, failure,
+  deferral, blocking, skipping, or cancellation. Duplicate observation cannot
+  increment it.
+- `bytes_done` is the monotonic high-water of work observed in the phase, not
+  necessarily durable published or recorded bytes. It carries across retries
+  and pause/resume of the same task and may stall while a new attempt catches
+  the high-water; it never regresses.
+- `bytes_total` is a work budget. Executor progress keeps the reviewed selected
+  content budget fixed. Verifier progress reports a physical-read budget that
+  may grow monotonically when truthful work exceeds its prior admission.
+- `item_id` and `item_type` together identify the active selected item and its
+  opaque lookup namespace. `item_type` does not identify the producing module,
+  phase, or outcome kind.
+- `item_attempt_id` identifies one entry into an item's byte pipeline. It is an
+  opaque bounded token, not an ordering counter or continuation-generation
+  number. Item-byte counters describe only that attempt and may reset only
+  under a new token.
+- `current_path` is optional presentation context. It never identifies
+  activity, joins a plan row, or substitutes for nominal item identity.
+- `phase` is required self-description. Monotonic comparisons and totals are
+  scoped to that phase rather than carried across phase changes.
+
+For nullable scalars, `None` always means the fact is unavailable or
+inapplicable; it never means zero. Item-byte counters are both present or both
+absent. Active identity without an attempt represents non-byte or pre-stream
+work. An attempt id without counters represents an active indeterminate byte
+attempt, including truthful overshoot after its admitted item total is no
+longer usable. Zero-byte streaming work still receives an attempt id and a
+known `0/0` counter pair.
+
+The normative reporter transitions are below. They describe authoritative
+reporter state; because Progress is lossy, a transition guarantees delivery
+only where the table explicitly requires a forced emission.
+
+| Boundary | Required snapshot semantics |
+| --- | --- |
+| Phase entry | Start a new monotonic domain and force a snapshot from the phase's live admission and continuation state. |
+| Item activation | Publish nominal item identity; do not manufacture an attempt or byte counters before byte-pipeline entry. |
+| Stream entry | Mint a fresh opaque attempt id and expose the attempt-local byte pair, including `0/0` when the known total is zero. |
+| Stream progress | Advance attempt-local work monotonically and advance aggregate work only beyond its prior high-water. |
+| Retry | Keep aggregate work at its high-water; mint a new attempt id exactly when the byte pipeline will run again, permitting only that new attempt's counters to restart. |
+| Resume | Restore authoritative aggregate/item settlement state; a reconstructed byte-pipeline entry mints a new attempt id, while retained post-byte work does not invent a replacement attempt. |
+| Overshoot | Preserve active item and attempt identity, make the item-byte pair absent, and apply the module's aggregate-budget rule. The pair cannot reappear for that attempt. |
+| Reliable item outcome | Count that selected identity once in `items_done` and clear its active item, attempt, and item-byte reporter state. The resulting ordinary Progress remains subject to throttling; the next emitted snapshot must reflect the clear. |
+| Pause | Emit no false settlement or Terminal; force the complete live snapshot and retain truthful active identity/attempt state. |
+| Cancel | Emit reliable terminal outcomes according to cancellation policy, then force a live inactive snapshot with `current_path=None`. |
+| Unexpected failure | Preserve the original failure, settle/classify items according to module policy, and force a live inactive snapshot with `current_path=None` without letting Progress-sink failure replace the cause. |
+| Normal completion | Force a live inactive snapshot whose item count reflects every reliable terminal outcome emitted for the admission. |
+
+Within one uninterrupted phase, `items_done` and `bytes_done` are
+nondecreasing, `items_total` is fixed when known, executor `bytes_total` is
+fixed when known, and verifier `bytes_total` is nondecreasing. Within one
+item/attempt identity, present item counters are nondecreasing and the item
+total is fixed. A phase change or explicit `Gap` ends those temporal comparison
+domains.
+
+#### Authority, replay, and compatibility
+
+Consumers use this precedence rather than reconstructing truth from whichever
+event arrived last:
+
+1. Reliable item outcomes own item settlement and outcome classification.
+2. Reliable `PhaseChanged` owns phase continuity when it is available.
+3. Progress owns only its phase-scoped work snapshot and active presentation
+   state; it never creates a terminal item outcome.
+4. `Terminal` and the workflow result own final run truth.
+
+On `Gap`, a consumer discards pre-gap Progress, active-item derivation, and
+phase-dependent temporal comparisons. A later v4 Progress may restore
+displayable progress through its embedded phase even when its `PhaseChanged`
+was lost, but it does not reconstruct missed reliable outcomes or history. If
+sequence continuity is known, Progress whose phase disagrees with the latest
+reliable `PhaseChanged` is a protocol error. Terminal truth always supersedes
+retained Progress.
+
+Version numbers are boundary-specific, not one global product number. This
+change advances only the core event envelope to v4. The desktop bridge command
+and response envelope remains v1, workflow continuation remains v5, and the
+history database, UI state, shell, and page schemas do not change. The exact
+browser-facing `SessionEventView` must carry the nested core event version so
+v4 remains visible at the compatibility boundary. Once this contract lands,
+current-version producers emit v4; the codec may retain explicit v3 decoding
+for persisted reliable history, but v3 Progress is unsupported because
+Progress is neither reliable nor persisted.
+
+Protocol evidence is intentionally layered:
+
+1. Core and JavaScript validation prove snapshot structure and cross-field
+   coherence.
+2. Reporter transition tests prove executor and verifier state machines.
+3. Workflow/session tests prove phase coordination, continuation, and terminal
+   authority.
+4. The settlement oracle proves integrated executor policy across its complete
+   settlement matrix and stable normalized traces.
+5. Browser tests prove delivery, replay, Gap recovery, atomic batch rejection,
+   and consumer precedence.
 
 ### 2.4 Review, commitment, and execution
 

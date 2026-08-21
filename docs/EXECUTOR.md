@@ -564,6 +564,11 @@ exception rather than replacing it.
 
 ## Progress
 
+This section describes the active version-3 executor behavior. The accepted
+version-4 field meanings, transition authority, and live forced-snapshot rule
+are owned centrally by `ARCHITECTURE.md` §2.3 and will supersede the legacy
+preservation clauses below when the atomic v4 delivery lands.
+
 `Progress` snapshots carry aggregate content bytes/items, the display-only
 current path, and `operation` item identity while an operation is active.
 Non-byte operations and byte operations that have not entered the copy stream
