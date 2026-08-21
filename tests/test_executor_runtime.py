@@ -3260,7 +3260,10 @@ def _active_operation_progress(
 
 
 def _assert_operation_progress_clears_after_outcome(
-    events: list[object], operation: PlanOperation
+    events: list[object],
+    operation: PlanOperation,
+    *,
+    clear_current_path: bool = False,
 ) -> None:
     outcome_index = next(
         index
@@ -3284,7 +3287,9 @@ def _assert_operation_progress_clears_after_outcome(
         == (None, None, None, None)
         for event in following
     )
-    assert following[0].current_path == operation.target_rel_path
+    assert following[0].current_path == (
+        None if clear_current_path else operation.target_rel_path
+    )
 
 
 class ScriptedProgressCopyBackend:
@@ -3426,6 +3431,30 @@ class PauseThenCompleteProgressCopyBackend:
         return CopyDigest(xxh3_128(payload).digest(), len(payload))
 
 
+class FirstThrottleWindowPauseCopyBackend:
+    def __init__(self) -> None:
+        self.pause_requested = False
+
+    def copy(
+        self,
+        source,
+        target,
+        *,
+        chunk_size: int,
+        checkpoint,
+        on_chunk,
+    ) -> CopyDigest:
+        del chunk_size
+        checkpoint()
+        chunk = source.read(48)
+        assert len(chunk) == 48
+        assert target.write(chunk) == 48
+        on_chunk(48)
+        self.pause_requested = True
+        checkpoint()
+        raise AssertionError("pause checkpoint returned")
+
+
 class EscapingFailurePolicy:
     def on_item_failed(
         self,
@@ -3542,15 +3571,12 @@ def _assert_partial_progress_cleared_before_terminal(
         latest_progress.bytes_done,
         latest_progress.bytes_total,
         latest_progress.current_path,
-    ) == (
-        active_before_outcome[-1].items_done,
-        active_before_outcome[-1].items_total,
-        active_before_outcome[-1].bytes_done,
-        active_before_outcome[-1].bytes_total,
-        active_before_outcome[-1].current_path,
+    ) == (1, 1, 16, payload_size, None)
+    _assert_operation_progress_clears_after_outcome(
+        timeline,
+        operation,
+        clear_current_path=True,
     )
-    assert latest_progress.current_path == operation.target_rel_path
-    _assert_operation_progress_clears_after_outcome(timeline, operation)
 
 
 def test_partial_copy_cancellation_clears_progress_before_terminal(
@@ -3636,18 +3662,127 @@ def test_cancellation_before_first_item_does_not_publish_an_unseen_path(
         progress[-1].bytes_done,
         progress[-1].bytes_total,
         progress[-1].current_path,
-    ) == (
-        progress[0].items_done,
-        progress[0].items_total,
-        progress[0].bytes_done,
-        progress[0].bytes_total,
-        progress[0].current_path,
-    )
+    ) == (1, 1, 0, len(b"payload"), None)
     assert (
         progress[-1].item_id,
         progress[-1].item_type,
         progress[-1].item_bytes_done,
         progress[-1].item_bytes_total,
+    ) == (None, None, None, None)
+
+
+def test_fast_multi_item_cancellation_reports_all_reliable_settlements(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operations: list[PlanOperation] = []
+    for number in range(1, 31):
+        name = f"file-{number:02}.bin"
+        (source / name).write_bytes(bytes((number,)) * 8)
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                number,
+                OperationKind.COPY,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+
+    xset = _xset(_plan(source, target, tuple(operations)))
+    timeline: list[object] = []
+
+    def checkpoint() -> None:
+        if xset.status.get(operations[0].op_id) is Outcome.SUCCEEDED:
+            raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(timeline.append, checkpoint),
+            FakeRecorder(),
+            _policies(
+                monotonic=lambda: 0.0,
+                progress_interval_seconds=0.1,
+            ),
+            fs,
+        )
+
+    outcomes = [event for event in timeline if isinstance(event, ItemOutcome)]
+    progress = [event for event in timeline if isinstance(event, Progress)]
+    assert len(outcomes) == 30
+    assert [event.outcome for event in outcomes].count(Outcome.SUCCEEDED) == 1
+    assert [event.outcome for event in outcomes].count(Outcome.CANCELED) == 29
+    assert (
+        progress[-1].items_done,
+        progress[-1].items_total,
+        progress[-1].bytes_done,
+        progress[-1].bytes_total,
+        progress[-1].current_path,
+        progress[-1].item_id,
+        progress[-1].item_type,
+        progress[-1].item_bytes_done,
+        progress[-1].item_bytes_total,
+    ) == (30, 30, 8, 240, None, None, None, None, None)
+    assert timeline.index(outcomes[-1]) < len(timeline) - 1
+    assert xset.bytes_done_high_water == 8
+
+
+def test_all_ordinary_failures_count_as_completed_items(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operations: list[PlanOperation] = []
+    for number in range(1, 7):
+        name = f"missing-{number}.bin"
+        source_path = source / name
+        source_path.write_bytes(b"planned")
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                number,
+                OperationKind.COPY,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+        source_path.unlink()
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, tuple(operations))),
+        fs=fs,
+        policies=_policies(
+            monotonic=lambda: 0.0,
+            progress_interval_seconds=0.1,
+        ),
+    )
+
+    outcomes = [event for event in events if isinstance(event, ItemOutcome)]
+    final_progress = next(
+        event for event in reversed(events) if isinstance(event, Progress)
+    )
+    assert result.status is SessionState.FAILED
+    assert len(outcomes) == 6
+    assert all(event.outcome is Outcome.FAILED for event in outcomes)
+    assert (
+        final_progress.items_done,
+        final_progress.items_total,
+        final_progress.bytes_done,
+        final_progress.bytes_total,
+    ) == (6, 6, 0, 42)
+    assert (
+        final_progress.item_id,
+        final_progress.item_type,
+        final_progress.item_bytes_done,
+        final_progress.item_bytes_total,
     ) == (None, None, None, None)
 
 
@@ -3797,13 +3932,7 @@ def test_partial_copy_pause_forces_latest_snapshot_and_resume_stays_monotonic(
         paused_progress[-1].bytes_done,
         paused_progress[-1].bytes_total,
         paused_progress[-1].current_path,
-    ) == (
-        paused_progress[-2].items_done,
-        paused_progress[-2].items_total,
-        paused_progress[-2].bytes_done,
-        paused_progress[-2].bytes_total,
-        paused_progress[-2].current_path,
-    )
+    ) == (0, 1, 24, len(payload), operation.target_rel_path)
     assert xset.bytes_done_high_water == 24
 
     resume_start = len(timeline)
@@ -3841,6 +3970,62 @@ def test_partial_copy_pause_forces_latest_snapshot_and_resume_stays_monotonic(
     assert xset.bytes_done_high_water == len(payload)
     assert (target / "file.bin").read_bytes() == payload
     _assert_operation_progress_clears_after_outcome(timeline, operation)
+
+
+def test_pause_inside_first_throttle_window_forces_coherent_live_snapshot(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"x" * 64
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, payload)
+    xset = _xset(_plan(source, target, (operation,)))
+    clock = FrozenTeardownProgressClock()
+    backend = FirstThrottleWindowPauseCopyBackend()
+    timeline: list[object] = []
+
+    def checkpoint() -> None:
+        if backend.pause_requested:
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        execute(
+            xset,
+            RunContext(timeline.append, checkpoint),
+            FakeRecorder(),
+            _policies(
+                copy_backend=backend,
+                monotonic=clock,
+                progress_interval_seconds=0.1,
+            ),
+            fs,
+        )
+
+    progress = [event for event in timeline if isinstance(event, Progress)]
+    assert len(progress) == 2
+    assert (
+        progress[-1].items_done,
+        progress[-1].items_total,
+        progress[-1].bytes_done,
+        progress[-1].bytes_total,
+        progress[-1].current_path,
+        progress[-1].item_id,
+        progress[-1].item_type,
+        progress[-1].item_bytes_done,
+        progress[-1].item_bytes_total,
+    ) == (
+        0,
+        1,
+        48,
+        len(payload),
+        operation.target_rel_path,
+        str(operation.op_id),
+        "operation",
+        48,
+        len(payload),
+    )
+    assert xset.status == {}
+    assert xset.bytes_done_high_water == 48
 
 
 def test_pause_directory_finalization_retains_active_child_progress(
@@ -3901,7 +4086,6 @@ def test_pause_directory_finalization_retains_active_child_progress(
         for event in reversed(timeline)
         if isinstance(event, Progress)
     )
-    progress = [event for event in timeline if isinstance(event, Progress)]
     assert xset.status == {mkdir.op_id: Outcome.SUCCEEDED}
     assert [(outcome.item_id, outcome.outcome) for outcome in outcomes] == [
         (str(mkdir.op_id), Outcome.SUCCEEDED)
@@ -3918,13 +4102,7 @@ def test_pause_directory_finalization_retains_active_child_progress(
         final_progress.bytes_done,
         final_progress.bytes_total,
         final_progress.current_path,
-    ) == (
-        progress[-2].items_done,
-        progress[-2].items_total,
-        progress[-2].bytes_done,
-        progress[-2].bytes_total,
-        progress[-2].current_path,
-    )
+    ) == (1, 2, 24, len(payload), child.target_rel_path)
     assert xset.bytes_done_high_water == 24
     assert timeline.index(outcomes[0]) < len(timeline) - 1
 

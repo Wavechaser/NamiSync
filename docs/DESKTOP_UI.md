@@ -975,11 +975,12 @@ bytes, item counts, phase, and the display path. Only nominal identity may
 locate a row; `item_type` selects the opaque id's operation/integrity lookup
 namespace and `current_path` remains informational, may outlive an intermediate
 or terminal settlement, and never implies an active item when nominal identity
-is absent. Executor cancellation/exception freezes the last emitted aggregate
-counters/path while clearing nominal item state. Executor pause freezes those
-same legacy fields but refreshes nominal item/attempt state and retains a live
-aggregate high-water for resume; verifier pause publishes its live reporter
-state. Attempt counters may restart when an actual retry or resumed copy/read
+is absent. Executor cancellation/exception publishes live aggregate item and
+byte state after reliable unwind settlement while clearing nominal item state
+and `current_path`. Executor pause publishes one coherent live snapshot that
+retains the active item, attempt, and path; its live aggregate high-water also
+continues through resume. Verifier pause publishes its live reporter state.
+Attempt counters may restart when an actual retry or resumed copy/read
 stream begins. If work exceeds the admitted item total, identity stays active
 but the determinate byte pair becomes absent, while aggregate progress retains
 the producing module's monotonic semantics. The dormant row renderers do not

@@ -793,13 +793,14 @@ remain bounded by reviewed content and retain their monotonic high-water;
 verifier aggregates instead expand to count all physical read work. A settled
 item is named by its reliable outcome, not by later lossy progress: later
 snapshots clear the item identity and item-byte fields. `current_path` remains
-display-only and may remain as the legacy path after settlement. Executor
-pause refreshes the nominal item/attempt fields while preserving the complete
-last successfully emitted legacy totals/path; its live aggregate high-water is
-continuation state for resume. Executor cancel/exception unwind snapshots
-preserve those same legacy fields while clearing nominal item state. Verifier
-pause instead force-emits its live reporter state. Clients must never
-reinterpret a retained display path as active identity.
+display-only and may remain after ordinary intermediate settlement. Executor
+pause force-emits one coherent authoritative-live snapshot: current aggregate
+items/bytes and the retained path/item/attempt all describe the same pause
+boundary, and the aggregate high-water is continuation state for resume.
+Executor cancel/exception force-emits live aggregate items and byte high-water
+after reliable unwind settlement while clearing nominal item state and
+`current_path`. Verifier pause likewise force-emits its live reporter state.
+Clients must never reinterpret a retained display path as active identity.
 
 **Wire disposition:** retain envelope schema v3 for this one co-packaged
 current-source swap. Progress is lossy and unpersisted, all production

@@ -109,9 +109,9 @@ defect, and move implementation-level test choreography out of the log.
   below the value already shown and regress the aggregate bar; throttling could
   also leave the paused attempt counters stale. Cause: `ExecutionSet` had no
   aggregate telemetry continuation or forced pause boundary. Fixed with an
-  exact reviewed-content-bounded high-water, strict workflow payload v5, and a
-  hybrid pause emission that refreshes nominal item/attempt state while
-  preserving the last emitted legacy totals/path. Resume stalls at retained
+  exact reviewed-content-bounded high-water, strict workflow payload v5, and an
+  authoritative live pause emission that coherently refreshes aggregate items,
+  bytes, path, and nominal item/attempt state. Resume stalls at retained
   high-water until new work catches up.
 - MODERATE - FIXED (2026-08-21). Throttled terminal-progress settlement.
   Cancellation or an escaping executor failure could reliably settle every
@@ -119,10 +119,10 @@ defect, and move implementation-level test choreography out of the log.
   partially complete in-flight item, so terminal presentation retained a
   phantom active row. Cause: those unwinds relied on interval-throttled item
   settlement and lacked the forced final boundary used by normal completion.
-  Fixed with a forced unwind emission that clears nominal item fields while
-  repeating the last successfully emitted legacy totals/path, so teardown
-  neither leaves active identity nor exposes throttle-hidden progress. An
-  emitter failure remains secondary to the original executor exception.
+  Fixed with a forced authoritative-live unwind emission after reliable
+  settlement: aggregate items and byte high-water remain current, while nominal
+  item fields and `current_path` clear. An emitter failure remains secondary to
+  the original executor exception.
 - SEVERE - FIXED (2026-08-11). Exception-safety settlement gap. A
   failure policy or retry sleep could raise after MOVE or another mutation had
   committed, and a later checkpoint could raise with a completed MKDIR still

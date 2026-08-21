@@ -589,7 +589,6 @@ class _ProgressTracker:
         self._current: PlanOperation | None = None
         self._item_active = False
         self._last_emitted_at = float("-inf")
-        self._last_emitted: Progress | None = None
 
     def start(self, operation: PlanOperation) -> None:
         self._current = operation
@@ -648,7 +647,7 @@ class _ProgressTracker:
         self.emit(force=False)
 
     def pause_completed(self) -> None:
-        self.emit(force=True, preserve_emitted_legacy=True)
+        self.emit(force=True)
 
     def terminal_completed(self) -> None:
         self._file_bytes = None
@@ -656,11 +655,12 @@ class _ProgressTracker:
         self.emit(force=True)
 
     def unwind_completed(self) -> None:
+        self._current = None
         self._file_bytes = None
         self._item_active = False
-        self.emit(force=True, preserve_emitted_legacy=True)
+        self.emit(force=True)
 
-    def emit(self, *, force: bool, preserve_emitted_legacy: bool = False) -> None:
+    def emit(self, *, force: bool) -> None:
         now = self._policies.monotonic()
         if (
             not force
@@ -671,18 +671,6 @@ class _ProgressTracker:
         self._last_emitted_at = now
         current = self._current
         active = current if self._item_active else None
-        if preserve_emitted_legacy and self._last_emitted is not None:
-            items_done = self._last_emitted.items_done
-            items_total = self._last_emitted.items_total
-            bytes_done = self._last_emitted.bytes_done
-            bytes_total = self._last_emitted.bytes_total
-            current_path = self._last_emitted.current_path
-        else:
-            items_done = self.items_done
-            items_total = self.items_total
-            bytes_done = min(self.bytes_done, self.bytes_total)
-            bytes_total = self.bytes_total
-            current_path = None if current is None else current.target_rel_path
         item_bytes_done: int | None = None
         item_bytes_total: int | None = None
         if (
@@ -693,18 +681,17 @@ class _ProgressTracker:
             item_bytes_done = self._file_bytes
             item_bytes_total = active.content_bytes
         snapshot = Progress(
-            items_done=items_done,
-            items_total=items_total,
-            bytes_done=bytes_done,
-            bytes_total=bytes_total,
-            current_path=current_path,
+            items_done=self.items_done,
+            items_total=self.items_total,
+            bytes_done=min(self.bytes_done, self.bytes_total),
+            bytes_total=self.bytes_total,
+            current_path=None if current is None else current.target_rel_path,
             item_id=None if active is None else active.op_id,
             item_type=None if active is None else "operation",
             item_bytes_done=item_bytes_done,
             item_bytes_total=item_bytes_total,
         )
         self._ctx.emit(snapshot)
-        self._last_emitted = snapshot
 
 
 def execute(
