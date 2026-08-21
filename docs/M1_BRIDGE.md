@@ -2859,9 +2859,59 @@ headings are organizational, not lane ownership.
   The v1 calibration, ceiling, and holdout remain immutable historical
   authority. A protocol/body representation change reruns the current-source
   one-child Tier-1 guard against that ceiling; it does not rewrite, extend, or
-  promote the old empirical artifacts. The version-4 Progress fixture change
-  is pending that clean-commit live guard and installed-wheel event rerun before
-  final delivery acceptance.
+  promote the old empirical artifacts.
+
+  **Version-4 measurement disposition (2026-08-22).** The clean installed-wheel
+  event run at commit `edab4561202d77392c6eebb968ebcce70f65ce29`
+  produced `namisync-bridge-event-benchmark-v4-edab456.json` with SHA-256
+  `02158562712624e5e546899c400add211587dbd2334084812f7804e18237a5bd`.
+  Across the named four-task, 60-logical-second fixture it emitted 6,000
+  `Progress` and 600 reliable item events at aggregate rates of 100.0657
+  Progress/s and 10.00657 reliable events/s over a 59.9606-second emission
+  window. The browser delivered 1,499 sampled Progress values at 41 ms p95 /
+  44 ms maximum and 620 sampled
+  reliable-plus-terminal values at 3 ms p95 / 16 ms maximum, with monotonic
+  Progress, no `Gap`, and all four terminal records. The installed runtime was
+  CPython 3.13.14, SQLite 3.50.4, Bottle 0.13.4, pywebview 6.2.1,
+  pythonnet 3.1.0, and WebView2 151.0.4129.93 on the reference profile above.
+  The 36,864,000-byte incremental peak-private value remains a whole-runtime
+  diagnostic. Although the artifact reports `passed=true` and
+  `event_passed=true`, it also correctly reports
+  `sh_g_8_acceptance=incomplete-without-custody`; it is current-version event
+  regression and diagnostic evidence, not current-source Tier-2 timing
+  acceptance or whole-runtime acceptance.
+
+  The final current-source custody run at commit
+  `93cabfb617a6f550d2ab7b2233b5657897db49e4` produced
+  `namisync-bridge-transport-custody-v4-93cabfb.json` with SHA-256
+  `91437ca8a89cda4fc70d6a25d82527170c466ceaaafd70b37c89c8e77b2c2baf`.
+  Its three fresh children were exact: ordinary custody was 1,378,867 bytes /
+  4,901 objects and exact maximum-no-`Gap` custody was 1,536,994 bytes / 5,499
+  objects. Those are respectively 2,177 and 2,048 bytes above frozen
+  calibration-a, and 587,213 and 429,086 bytes below the unchanged 1,966,080
+  ceiling. From 6,000 emitted `Progress` snapshots, ordinary custody delivered
+  240 coalesced snapshots and all 600 outcomes, with
+  replay/subscriber/adapter queue peaks of 128/0/4; the maximum fixture emitted
+  516 outcomes at the exact 128/64/64 queue shape. Neither
+  fixture produced a `Gap`. The separate protected one-child live guard also
+  passed.
+
+  The three-child artifact binds source
+  `2ed92265436080142f97dc013a56177ff1cb039eb2b51b7117a0901b5e9b2e76`,
+  dependency
+  `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`,
+  evidence
+  `f40fbc942cc4e15fe8eb7026b5d8e8b070932a8cac4d920214f6fc64c247046c`,
+  runtime
+  `0bf4efc58cfa44f611facc64c104acd51375b5ed4b58367a5d48355ccf1b1311`,
+  runtime qualifier
+  `a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e`,
+  corpus `a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec`,
+  and instrument
+  `629b50228b6f0604b0ff601e0af56d2c17676480a1a9716facc64b87434e10a9`.
+  This deterministic current-source result and the one-child check are Tier-1
+  drift evidence only. They neither recalibrate the frozen v1 authority nor
+  create a new v4 acceptance claim.
 
   **Status.** The historical v1 representation's event correctness and
   transport custody are closed by the frozen calibration/ceiling and
@@ -3077,7 +3127,7 @@ plan and inventory so Slices 5 and 6 can proceed in parallel.
 | 0 | Host | pywebview reality spike | nothing | BR-G-30 |
 | 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
 | 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
-| 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33, BR-G-41 transport/lifecycle foundations, the closed BR-G-42 event/transport-custody portion, plus XV-18 |
+| 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33, BR-G-41 transport/lifecycle foundations, the historically closed v1 BR-G-42 event/transport-custody portion plus its current v4 Tier-1 drift guard, and XV-18 |
 | GUI 1 (completed/realigned) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, SH-G-13 foundations and SH-G-14 closed; visual contract in `DESKTOP_UI.md` |
 | 4 (completed/realigned) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-32 generic-tree-sink portion, BR-G-34, SH-G-7 closed |
 | Cosmetic thaw/refreeze | Interface/web | Typed UI-state lifecycle, two-row cosmetic channel, persistent theme override, native/page agreement, and headed gallery repair | 4 | BR-G-46 |

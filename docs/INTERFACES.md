@@ -19,11 +19,13 @@ event-only pass separate from whole-runtime diagnostics. The frozen realistic
 custody corpora and production-path runner have also landed. SH-G-8's realigned
 event/custody evidence now includes a committed normative calibration-a
 artifact, a frozen 1,966,080-byte ceiling, and an accepted independent
-holdout-b dataset. SH-G-8 and BR-G-42 event/transport custody are closed; other
-BR-G-42 rows, including current-source event timing and later feature surfaces,
-remain open on their owning slices.
-One current-source calibration-a child now runs as a separate ordinary-suite
-drift guard and requires both live custody shapes to remain within the frozen
+holdout-b dataset. That frozen v1 representation closes the historical
+SH-G-8/BR-G-42 event-and-transport-custody claim. The current v4 representation
+has separate diagnostic event evidence and Tier-1 custody drift evidence; it
+does not inherit or alter the v1 acceptance. Other BR-G-42 rows, including
+current-source event timing and later feature surfaces, remain open on their
+owning slices. One current-source child runs as a separate ordinary-suite drift
+guard and requires both live custody shapes to remain within the frozen
 1,966,080-byte ceiling without modifying the accepted validator or artifacts.
 BR-G-45 terminal-artifact
 retention and shell-owned SH-G-15 whole-runtime containment remain independently
@@ -539,9 +541,9 @@ except for the ordinary non-skippable drain-manager Progress validator/replay
 gate, which resolves `NAMISYNC_TEST_NODE` before `PATH` and owns atomic batch
 rejection plus clean replay. The remaining named browser-behavior witnesses
 run through the installed production bridge and renderer in real WebView2.
-SH-G-8 and BR-G-42 event/transport custody are now closed by the complete
-evidence below. The ordinary deterministic fixture now proves four observations
-precede tick zero, the exact 60-logical-second
+The frozen v1 SH-G-8/BR-G-42 event-and-transport-custody claim is closed by the
+historical evidence below. Independently, the current ordinary deterministic
+fixture proves four observations precede tick zero, the exact 60-logical-second
 6,000-`Progress`/600-reliable-item shape is lossless and ordered, progress is
 monotonic after coalescing by its byte-work high-water, all four terminal
 records arrive, and subscriber and adapter queues stay at or below 64. The
@@ -587,7 +589,8 @@ no-`Gap` snapshot. The committed
 ordinary and 1,513,014 exact-maximum bytes, respectively 614,286 and 453,066
 bytes below the ceiling. Its three fresh runs match the frozen authorities and
 pass the no-`Gap`, ordering, 128/64/64, cleanup, and terminal predicates. This
-closes SH-G-8 and BR-G-42 event/transport custody only. Terminal result graphs
+closes the frozen v1 SH-G-8/BR-G-42 event-and-transport-custody claim only.
+Terminal result graphs
 belong to BR-G-45, not that
 custody total. A valid 2026-08-13 run passed its exact event, latency,
 no-`Gap`, and clean-shutdown checks and measured a 67,375,104-byte whole-Job
@@ -603,7 +606,23 @@ authorities, with both ordinary and exact-maximum union measurements below the
 ceiling. A separate current-source live guard runs one child, validates its
 complete artifact, authenticates the frozen contract, and compares both live
 custody shapes directly with that ceiling. It is regression evidence, not a
-new acceptance run. No containment command/result is claimed yet.
+new acceptance run.
+
+The required v4 representation reruns completed on 2026-08-22. The clean
+installed-wheel event artifact from `edab4561202d77392c6eebb968ebcce70f65ce29`
+passed its event-envelope checks with no `Gap`, monotonic Progress, all four
+terminal records, 41 ms p95 / 44 ms maximum sampled Progress delivery, and
+3 ms p95 / 16 ms maximum sampled reliable-plus-terminal delivery. Its explicit
+`sh_g_8_acceptance=incomplete-without-custody` result and undefined
+whole-runtime acceptance remain controlling: this was diagnostic/regression
+evidence, not current-source Tier-2 timing acceptance. The final
+`93cabfb617a6f550d2ab7b2233b5657897db49e4` current-source custody artifact had
+three exact fresh children at 1,378,867 ordinary and 1,536,994 maximum-no-`Gap`
+bytes, respectively 587,213 and 429,086 bytes below the frozen ceiling; the
+protected one-child guard passed as well. That is Tier-1 drift evidence only,
+not a v4 calibration or acceptance run. `M1_BRIDGE.md` owns the exact fixture,
+artifact hashes, source/runtime/dependency receipts, queue shapes, and
+measurement disposition. No containment command/result is claimed yet.
 
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the
