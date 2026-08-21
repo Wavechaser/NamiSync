@@ -339,7 +339,10 @@ any process-local durable retry continuation before cleanup and emit reliable
 outcomes for the in-flight and unreached selection, then re-raises for runner
 aggregation and the one canceled terminal. After those outcomes it forces one
 inactive progress snapshot, so time throttling cannot leave a settled operation
-presented as still running at the terminal boundary. A
+presented as still running at the terminal boundary. The snapshot clears only
+the four nominal item fields and repeats the last successfully emitted legacy
+aggregate counters/path, so teardown does not reveal throttle-hidden settlement
+movement. A
 prepared-but-unpublished operation remains `CANCELED`; an unfinished operation
 whose target already published is
 `FAILED` with `canceled-after-publish`, structured on-disk-state detail,
@@ -364,9 +367,10 @@ same-kind/same-size backup substitution. MOVE_UPDATE distinguishes new+old from
 new+trash; neither is rolled back. Ordinary pause abandons/reclaims an in-flight
 temp through exact-name recovery, preserves completed `ExecutionSet` statuses
 and aggregate byte high-water, forces pause-drain recording plus one fresh
-active-item progress snapshot, and re-raises without terminal; dispatcher then
-releases custody. Deferred directory finalization may settle another operation
-during this unwind but cannot replace the paused item's progress identity.
+active-item progress snapshot over the last successfully emitted legacy
+totals/path, and re-raises without terminal; dispatcher then releases custody.
+Deferred directory finalization may settle another operation during this unwind
+but cannot replace the paused item's progress identity.
 Resume queues at the back, freshly re-observes/preflights in workflow, and
 continues only unreached work.
 Direct `PauseRequested` and process-fatal `BaseException` unwinds attempt exact
@@ -569,10 +573,15 @@ up to that reviewed total. If a backend reports more stream bytes than the
 reviewed total, the operation identity stays active but both item-byte counters
 become null; the executor neither fabricates a larger admission nor lets the
 aggregate exceed reviewed content. Reliable settlement clears the item identity
-and item-byte counters without changing the existing `current_path` behavior.
-Normal completion, cancellation, and an escaping-exception backstop each force
-one final inactive snapshot after reliable settlement, independently of the
-ordinary time throttle.
+and item-byte counters; ordinary intermediate settlement may retain
+`current_path` as display-only telemetry.
+Normal completion force-emits the live legacy totals/path and inactive item
+fields after reliable settlement, independently of the ordinary time throttle.
+Cancellation and an escaping-exception backstop instead force an unwind
+snapshot that repeats the entire last successfully emitted five-field legacy
+view (`items_done`, `items_total`, `bytes_done`, `bytes_total`, and
+`current_path`) while clearing the four nominal item fields. This preserves the
+pre-existing terminal progress value without leaving an item in flight.
 
 A retry resets attempt-local bytes only if `_prepare_copy` actually re-enters
 the byte pipeline. Retained publication, metadata, durability, attestation, and
@@ -581,10 +590,15 @@ attempt reported bytes, the reset snapshot is forced past the normal time
 throttle. Aggregate executor bytes never regress: they hold their high-water
 mark until the new attempt catches up, persist through the strict workflow
 continuation, and seed the resumed reporter before any new stream begins. A
-terminally failed or canceled item reports that high-water mark rather than
-rewinding it. Pause force-emits the latest active attempt without clearing it;
-resumed byte-pipeline entry starts a new attempt at zero. Moves, trash, mkdir,
-delete, and no-op contribute items but zero transfer bytes. Emission remains
+terminally failed item reports that high-water mark rather than rewinding it.
+A canceled or escaping-failure unwind repeats the last emitted legacy
+aggregate instead of exposing a newer teardown value, while any newer live
+high-water remains retained in `ExecutionSet`. Pause force-emits the latest
+nominal item identity and attempt bytes without clearing them, but repeats the
+last successfully emitted legacy aggregate counters/path; the live aggregate
+high-water is retained in the execution continuation for resume. Resumed
+byte-pipeline entry starts a new attempt at zero. Moves, trash, mkdir, delete,
+and no-op contribute items but zero transfer bytes. Emission remains
 throttled/coalesced outside the copy chunk size so fast disks cannot flood UI
 queues.
 

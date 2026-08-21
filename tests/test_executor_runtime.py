@@ -3536,6 +3536,19 @@ def _assert_partial_progress_cleared_before_terminal(
         latest_progress.item_bytes_done,
         latest_progress.item_bytes_total,
     ) == (None, None, None, None)
+    assert (
+        latest_progress.items_done,
+        latest_progress.items_total,
+        latest_progress.bytes_done,
+        latest_progress.bytes_total,
+        latest_progress.current_path,
+    ) == (
+        active_before_outcome[-1].items_done,
+        active_before_outcome[-1].items_total,
+        active_before_outcome[-1].bytes_done,
+        active_before_outcome[-1].bytes_total,
+        active_before_outcome[-1].current_path,
+    )
     assert latest_progress.current_path == operation.target_rel_path
     _assert_operation_progress_clears_after_outcome(timeline, operation)
 
@@ -3582,6 +3595,60 @@ def test_partial_copy_cancellation_clears_progress_before_terminal(
         payload_size=len(payload),
         expected_outcome=Outcome.CANCELED,
     )
+
+
+def test_cancellation_before_first_item_does_not_publish_an_unseen_path(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, b"payload")
+    xset = _xset(_plan(source, target, (operation,)))
+    timeline: list[object] = []
+
+    def cancel_before_first_item() -> None:
+        raise Canceled()
+
+    with pytest.raises(Canceled):
+        execute(
+            xset,
+            RunContext(timeline.append, cancel_before_first_item),
+            FakeRecorder(),
+            _policies(
+                monotonic=lambda: 0.0,
+                progress_interval_seconds=0.1,
+            ),
+            fs,
+        )
+
+    progress = [event for event in timeline if isinstance(event, Progress)]
+    outcome_index = timeline.index(_item_outcome(timeline))
+    final_progress_index = next(
+        index
+        for index, event in reversed(tuple(enumerate(timeline)))
+        if event is progress[-1]
+    )
+    assert xset.status == {operation.op_id: Outcome.CANCELED}
+    assert outcome_index < final_progress_index
+    assert (
+        progress[-1].items_done,
+        progress[-1].items_total,
+        progress[-1].bytes_done,
+        progress[-1].bytes_total,
+        progress[-1].current_path,
+    ) == (
+        progress[0].items_done,
+        progress[0].items_total,
+        progress[0].bytes_done,
+        progress[0].bytes_total,
+        progress[0].current_path,
+    )
+    assert (
+        progress[-1].item_id,
+        progress[-1].item_type,
+        progress[-1].item_bytes_done,
+        progress[-1].item_bytes_total,
+    ) == (None, None, None, None)
 
 
 def test_escaping_failure_policy_clears_progress_before_failed_terminal(
@@ -3723,9 +3790,20 @@ def test_partial_copy_pause_forces_latest_snapshot_and_resume_stays_monotonic(
         paused_progress[-1].item_type,
         paused_progress[-1].item_bytes_done,
         paused_progress[-1].item_bytes_total,
+    ) == (str(operation.op_id), "operation", 24, len(payload))
+    assert (
+        paused_progress[-1].items_done,
+        paused_progress[-1].items_total,
         paused_progress[-1].bytes_done,
-    ) == (str(operation.op_id), "operation", 24, len(payload), 24)
-    assert paused_progress[-1].current_path == operation.target_rel_path
+        paused_progress[-1].bytes_total,
+        paused_progress[-1].current_path,
+    ) == (
+        paused_progress[-2].items_done,
+        paused_progress[-2].items_total,
+        paused_progress[-2].bytes_done,
+        paused_progress[-2].bytes_total,
+        paused_progress[-2].current_path,
+    )
     assert xset.bytes_done_high_water == 24
 
     resume_start = len(timeline)
@@ -3823,19 +3901,31 @@ def test_pause_directory_finalization_retains_active_child_progress(
         for event in reversed(timeline)
         if isinstance(event, Progress)
     )
+    progress = [event for event in timeline if isinstance(event, Progress)]
     assert xset.status == {mkdir.op_id: Outcome.SUCCEEDED}
     assert [(outcome.item_id, outcome.outcome) for outcome in outcomes] == [
         (str(mkdir.op_id), Outcome.SUCCEEDED)
     ]
     assert (
-        final_progress.items_done,
         final_progress.item_id,
         final_progress.item_type,
         final_progress.item_bytes_done,
         final_progress.item_bytes_total,
-    ) == (1, str(child.op_id), "operation", 24, len(payload))
-    assert final_progress.current_path == child.target_rel_path
-    assert final_progress.bytes_done == 24
+    ) == (str(child.op_id), "operation", 24, len(payload))
+    assert (
+        final_progress.items_done,
+        final_progress.items_total,
+        final_progress.bytes_done,
+        final_progress.bytes_total,
+        final_progress.current_path,
+    ) == (
+        progress[-2].items_done,
+        progress[-2].items_total,
+        progress[-2].bytes_done,
+        progress[-2].bytes_total,
+        progress[-2].current_path,
+    )
+    assert xset.bytes_done_high_water == 24
     assert timeline.index(outcomes[0]) < len(timeline) - 1
 
 
