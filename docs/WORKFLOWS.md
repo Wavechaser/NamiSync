@@ -198,15 +198,16 @@ from inventory rows. The execution continuation retains each successfully
 published operation's post-publish attestation plus its complete recorded
 identity, or no identity when recording degraded, then turns those values into
 transient verifier candidates. This survives an in-process pause because the
-evidence is encoded beside execution status; neither the continuation nor
-process-local plans survive closing/restarting the M1 application. Later
-standalone integrity sessions use durable ledger evidence.
+evidence and aggregate byte high-water are encoded beside execution status;
+neither the continuation nor process-local plans survive closing/restarting
+the M1 application. Later standalone integrity sessions use durable ledger
+evidence.
 
 The implemented compound transition rules are explicit:
 
 ```text
 execute
-  pause  -> snapshot operation status + published evidence
+  pause  -> snapshot operation status + published evidence + aggregate byte high-water
   cancel -> typed terminal canceled; preserve recording truth; start no readback
   settle -> when requested, enter verify for candidates or missing-evidence failures
 

@@ -118,19 +118,38 @@ later workflow surfaces and beta packaging remain future phases.
 #### Extract truthful per-item progress (2026-08-21)
 
 - Extended `Progress` within schema v3 with paired nominal item identity/type
-  and paired attempt-local byte counters. Legacy v3 bodies decode with absent
-  item fields, while current serialization and the browser's exact validator
-  own the expanded shape.
+  and paired attempt-local byte counters. Current serialization and the browser
+  own the exact nine-key shape; Python's pre-change five-key decode remains a
+  defensive direct-codec allowance, not a supported production wire path.
 - Started and reset executor item bytes only at actual byte-pipeline entry,
-  retained aggregate high-water through retry and terminal failure, and avoided
-  resets for publication, metadata, durability, attestation, and recording
-  continuations. Verifier progress now begins after guarded stream admission,
-  reports attempt-local bytes, and preserves monotonic physical-read aggregate
-  work across resume.
+  avoided resets for publication, metadata, durability, attestation, and
+  recording continuations, and retained aggregate high-water through retry,
+  terminal failure, and strict payload-v5 pause/resume continuations. Executor
+  pause refreshes nominal item/attempt state over the frozen last-emitted
+  legacy totals/path while retaining live high-water for resume. Normal,
+  canceled, and escaping-failure executor terminal boundaries clear nominal
+  item state; cancel/exception unwinds likewise freeze the last legacy view
+  rather than revealing throttle-hidden settlement jumps.
+- Made `item_type` identify the opaque row-id namespace: executor and linked
+  post-copy ids use `operation`, while standalone verifier rows use
+  `integrity`. Stream overshoot now retains active identity but removes the
+  determinate item-byte pair; executor aggregate work stays reviewed-content
+  bounded while verifier aggregate work expands monotonically for physical
+  rereads.
+- Returned verifier item/stream/settlement transitions to the ordinary throttle
+  path. Successful phases have exactly two forced source snapshots regardless
+  of item count, while pause and cancellation add one forced control boundary;
+  frozen-clock regressions own that source-enforced invariant.
+- Promoted the packaged drain-manager Progress validator/replay probe to an
+  ordinary non-skippable JavaScript gate, resolving Node through
+  `NAMISYNC_TEST_NODE` before `PATH`. It proves a malformed Progress atomically
+  rejects co-batched reliable siblings without cursor movement and that clean
+  replay delivers them once.
 - Kept dispatcher loss/coalescing, workflow pass-through, history refusal, CLI
   aggregate rendering, bridge commands, and persistence unchanged. Added
-  contract, exact-consumer, retry/resume, settlement, and lower-layer
-  regressions; Slice 5 row projection and rendering remain open.
+  contract, exact-consumer, retry/resume, pause/cancel/exception settlement,
+  overshoot, identity, emission-volume, and lower-layer regressions; Slice 5
+  row projection and rendering remain open.
 
 #### Ratify desktop color semantics (2026-08-21)
 

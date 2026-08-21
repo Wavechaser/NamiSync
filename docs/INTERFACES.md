@@ -534,11 +534,14 @@ queues, and only `assets/bridge.js` references `window.pywebview`.
 
 The explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed. Numeric holes
-alone are not recovery signals. Browserless/Node probes remain supplemental;
-the named browser-behavior witnesses now run through the installed production
-bridge and renderer in real WebView2. SH-G-8 and BR-G-42 event/transport
-custody are now closed by the complete evidence below. The ordinary deterministic fixture now
-proves four observations precede tick zero, the exact 60-logical-second
+alone are not recovery signals. Browserless/Node probes remain supplemental
+except for the ordinary non-skippable drain-manager Progress validator/replay
+gate, which resolves `NAMISYNC_TEST_NODE` before `PATH` and owns atomic batch
+rejection plus clean replay. The remaining named browser-behavior witnesses
+run through the installed production bridge and renderer in real WebView2.
+SH-G-8 and BR-G-42 event/transport custody are now closed by the complete
+evidence below. The ordinary deterministic fixture now proves four observations
+precede tick zero, the exact 60-logical-second
 6,000-`Progress`/600-reliable-item shape is lossless and ordered, progress is
 monotonic after coalescing, all four terminal records arrive, and subscriber and
 adapter queues stay at or below 64. The separate 260-reliable overflow

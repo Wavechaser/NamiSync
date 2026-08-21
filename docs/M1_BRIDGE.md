@@ -786,8 +786,14 @@ item-byte counters rather than growing the admission. Aggregate executor bytes
 remain bounded by reviewed content and retain their monotonic high-water;
 verifier aggregates instead expand to count all physical read work. A settled
 item is named by its reliable outcome, not by later lossy progress: later
-snapshots clear the item identity and item-byte fields. `current_path` retains
-its prior display-only behavior.
+snapshots clear the item identity and item-byte fields. `current_path` remains
+display-only and may remain as the legacy path after settlement. Executor
+pause refreshes the nominal item/attempt fields while preserving the complete
+last successfully emitted legacy totals/path; its live aggregate high-water is
+continuation state for resume. Executor cancel/exception unwind snapshots
+preserve those same legacy fields while clearing nominal item state. Verifier
+pause instead force-emits its live reporter state. Clients must never
+reinterpret a retained display path as active identity.
 
 **Wire disposition:** retain envelope schema v3 for this one co-packaged
 current-source swap. Progress is lossy and unpersisted, all production
@@ -806,9 +812,12 @@ consumer rejects the five-key body. Tests therefore own both boundaries: the
 direct codec allowance and the browser's exact current shape, including
 invalid identity/counter pairs and non-coercive item counters.
 
-The landed extraction footprint is bounded: four dataclass fields, two
-reporters that already own the relevant stream, and the exact
-serializer/browser consumers.
+The landed extraction and continuation-hardening footprint remains bounded:
+four `Progress` fields, two reporters that already own the relevant streams,
+one validated `ExecutionSet` aggregate high-water carried by strict workflow
+payload v5, the workflow phase-total projection that consumes that high-water,
+and the exact serializer/browser consumers. It adds no event kind, dispatcher
+policy, history admission, CLI item rendering, or database field.
 
 The future Slice 5 validated projection enriches `item_id` into an ancestor
 node-id chain. **Never join on `current_path`**, which remains display-only
@@ -2281,10 +2290,11 @@ headings are organizational, not lane ownership.
 
 **Lane C — selection semantics**
 
-- **BR-G-10 — Provenance survives the payload.** Payload v4 round-trips
-  `user_deselected` through a real pause and resume; direct choices settle
-  `SKIPPED` and dependency fallout settles `DEFERRED` **after** the round trip,
-  not only before it; v3 is rejected. *Not satisfied by* asserting the field
+- **BR-G-10 — Provenance survives the payload.** Current payload v5 round-trips
+  `user_deselected` and validated `bytes_done_high_water` through a real pause
+  and resume; direct choices settle `SKIPPED` and dependency fallout settles
+  `DEFERRED` **after** the round trip, not only before it; versions 1-4 are
+  rejected. *Not satisfied by* asserting a field
   encodes and decodes, which a payload that is never consulted also satisfies.
   Additionally: a continuation whose `selection` differs by one operation from
   `derive_execution_selection(plan, user_deselected=…)` is refused before

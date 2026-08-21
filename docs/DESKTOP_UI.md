@@ -972,11 +972,19 @@ resume surface.
 Progress is replaceable telemetry. The browser receives optional nominal
 active-item identity and paired attempt-local byte counters alongside aggregate
 bytes, item counts, phase, and the display path. Only nominal identity may
-locate a row; `current_path` remains informational. Attempt counters may restart
-when an actual retry or resumed copy/read stream begins, while aggregate
-progress retains the producing module's monotonic semantics. The dormant row
-renderers do not yet consume these fields. Executor pipeline diagnostics are
-opt-in developer data, not the rolling transfer rate or ETA promised to users.
+locate a row; `item_type` selects the opaque id's operation/integrity lookup
+namespace and `current_path` remains informational, may outlive an intermediate
+or terminal settlement, and never implies an active item when nominal identity
+is absent. Executor cancellation/exception freezes the last emitted aggregate
+counters/path while clearing nominal item state. Executor pause freezes those
+same legacy fields but refreshes nominal item/attempt state and retains a live
+aggregate high-water for resume; verifier pause publishes its live reporter
+state. Attempt counters may restart when an actual retry or resumed copy/read
+stream begins. If work exceeds the admitted item total, identity stays active
+but the determinate byte pair becomes absent, while aggregate progress retains
+the producing module's monotonic semantics. The dormant row renderers do not
+yet consume these fields. Executor pipeline diagnostics are opt-in developer
+data, not the rolling transfer rate or ETA promised to users.
 Filter/search state never changes the underlying plan or inventory selection;
 changing a location or plan option invalidates only the state that semantically
 depends on it.

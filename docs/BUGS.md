@@ -103,6 +103,26 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-21). Continuation progress-state loss. Pausing
+  after a partial copy retained operation status and mutation evidence but not
+  the aggregate byte high-water, so a resumed task could rebuild its reporter
+  below the value already shown and regress the aggregate bar; throttling could
+  also leave the paused attempt counters stale. Cause: `ExecutionSet` had no
+  aggregate telemetry continuation or forced pause boundary. Fixed with an
+  exact reviewed-content-bounded high-water, strict workflow payload v5, and a
+  hybrid pause emission that refreshes nominal item/attempt state while
+  preserving the last emitted legacy totals/path. Resume stalls at retained
+  high-water until new work catches up.
+- MODERATE - FIXED (2026-08-21). Throttled terminal-progress settlement.
+  Cancellation or an escaping executor failure could reliably settle every
+  operation yet leave the session's last lossy `Progress` snapshot naming a
+  partially complete in-flight item, so terminal presentation retained a
+  phantom active row. Cause: those unwinds relied on interval-throttled item
+  settlement and lacked the forced final boundary used by normal completion.
+  Fixed with a forced unwind emission that clears nominal item fields while
+  repeating the last successfully emitted legacy totals/path, so teardown
+  neither leaves active identity nor exposes throttle-hidden progress. An
+  emitter failure remains secondary to the original executor exception.
 - SEVERE - FIXED (2026-08-11). Exception-safety settlement gap. A
   failure policy or retry sleep could raise after MOVE or another mutation had
   committed, and a later checkpoint could raise with a completed MKDIR still
@@ -591,6 +611,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MINOR - FIXED (2026-08-21). Executable consumer-evidence omission. The
+  ordinary suite checked the expanded Progress validator through source-text
+  tokens while its actual JavaScript behavior lived in an optional Node probe,
+  so dead or unconditional validation could pass when Node was unavailable.
+  Fixed by making the packaged drain-manager probe non-skippable, resolving an
+  explicit `NAMISYNC_TEST_NODE` before `PATH`, and executing malformed-batch
+  rejection plus clean reliable replay. Other Node probes remain supplemental;
+  installed WebView2 still owns their named browser-behavior acceptance.
 - MODERATE - FIXED (2026-08-19). Partial-attachment rollback gap. If `loaded`
   event registration failed and removal of the already-installed `before_load`
   handler also raised, appearance configuration escaped without aborting its
@@ -1099,6 +1127,21 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-21). Progress namespace misclassification. Post-copy
+  verification labeled an originating executor operation id as `integrity`, so
+  the field intended to disambiguate opaque row ids pointed consumers at the
+  wrong namespace. Cause: the reporter hard-coded its producing module/outcome
+  family instead of the identity's lookup owner. Fixed by supplying
+  `operation` for linked post-copy candidates and `integrity` for standalone
+  rows while retaining `IntegrityOutcome` as the reliable settlement type.
+- MODERATE - FIXED (2026-08-21). Unthrottled lifecycle telemetry amplification.
+  Item start, stream start, and settlement each forced a Progress event, making
+  fast verification emit three fixed snapshots per item while equivalent
+  execution could remain within its time throttle. Cause: lifecycle
+  transitions were treated as mandatory source deliveries even though Progress
+  is lossy state telemetry. Fixed by sending those transitions through the
+  ordinary throttle, retaining only forced initial/final successful boundaries
+  and one forced pause or cancel boundary, with frozen-clock item-count guards.
 - MINOR - FIXED (2026-08-11). Concrete-type dispatch coupling. Engine sent
   only the exact `WindowsUnbufferedReader` class through its reviewed-authority
   open, so a subclass or timing decorator instead received the ordinary
