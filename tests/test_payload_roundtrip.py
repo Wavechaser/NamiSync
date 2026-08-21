@@ -462,7 +462,7 @@ def _rich_execution_request() -> ExecutionRequest:
             )
         },
         recording=RecordingStatus.DEGRADED,
-        _bytes_done_high_water=17,
+        bytes_done_high_water=17,
     )
     return ExecutionRequest(
         ExecuteContinuation(xset, verify_after_execute=True),
@@ -507,7 +507,7 @@ def _rich_verify_request() -> ExecutionRequest:
             ),
         },
         recording=RecordingStatus.DEGRADED,
-        _bytes_done_high_water=61,
+        bytes_done_high_water=61,
     )
     candidates = PostCopySelection(
         candidates=(
@@ -628,6 +628,36 @@ def test_execution_set_byte_high_water_is_bounded_and_strictly_monotonic() -> No
     assert xset.bytes_done_high_water == 23
 
 
+def test_execution_set_exposes_public_byte_high_water_state() -> None:
+    execution_fields = {item.name: item for item in fields(ExecutionSet)}
+
+    high_water = execution_fields["bytes_done_high_water"]
+    assert high_water.init
+    assert high_water.compare
+    assert not high_water.repr
+
+    selected_bound = execution_fields["_selected_bytes_bound"]
+    assert not selected_bound.init
+    assert not selected_bound.compare
+    assert not selected_bound.repr
+
+
+def test_execution_set_replace_and_equality_use_only_public_high_water() -> None:
+    original = _rich_execution_request().execution_set
+
+    unchanged = replace(original)
+    advanced = replace(original, bytes_done_high_water=18)
+
+    assert unchanged.bytes_done_high_water == 17
+    assert unchanged == original
+    assert advanced != original
+
+    # The selected-byte bound is a derived validation cache, not continuation
+    # identity. Its compare metadata prevents it from changing equality.
+    unchanged._selected_bytes_bound += 1
+    assert unchanged == original
+
+
 @pytest.mark.parametrize(
     ("high_water", "error", "match"),
     [
@@ -644,7 +674,7 @@ def test_execution_set_rejects_invalid_initial_byte_high_water(
     xset = _rich_execution_request().execution_set
 
     with pytest.raises(error, match=match):
-        replace(xset, _bytes_done_high_water=high_water)
+        replace(xset, bytes_done_high_water=high_water)
 
 
 def test_execution_payload_round_trips_canonical_user_deselection() -> None:
@@ -686,6 +716,28 @@ def test_execution_payload_requires_exact_byte_high_water_field(
 
     with pytest.raises(ValueError, match="missing|unexpected"):
         decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_execution_payload_v5_keeps_the_public_high_water_wire_shape() -> None:
+    encoded = encode_execution_request(_rich_execution_request())
+    value = json.loads(encoded)
+
+    assert value["schema_version"] == 5
+    assert set(value["execution_set"]) == {
+        "plan",
+        "selection",
+        "user_deselected",
+        "run_id",
+        "status",
+        "commitment",
+        "published_evidence",
+        "recording",
+        "bytes_done_high_water",
+    }
+    assert value["execution_set"]["bytes_done_high_water"] == 17
+    assert (
+        encode_execution_request(decode_execution_request(encoded)) == encoded
+    )
 
 
 @pytest.mark.parametrize("high_water", [True, 1.5, -1, 10**9])

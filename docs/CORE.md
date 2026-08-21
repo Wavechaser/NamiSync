@@ -93,6 +93,12 @@ semantics.
 Executor continuation and collaborator contracts are implemented in
 `core/execution.py`: the mutable `ExecutionSet`, fixed-format `RunId`, typed
 failure decisions/reasons, copy digest, and filesystem/copy/recorder protocols.
+`ExecutionSet.bytes_done_high_water` is public continuation state: callers may
+restore it through the dataclass constructor, `replace()` preserves it, and it
+participates in equality because it changes later progress behavior. The
+selected-content bound remains a derived, non-comparing validation cache. The
+workflow continuation wire key remains `bytes_done_high_water` in exact schema
+v5; this API cleanup does not change that payload or its schema version.
 Every successful selected COPY/UPDATE/MOVE_UPDATE has exactly one
 `PublishedCopyEvidence`: its copy-stream attestation plus either a complete
 `RecordedCopyIdentity` returned by the same ledger transaction or no identity

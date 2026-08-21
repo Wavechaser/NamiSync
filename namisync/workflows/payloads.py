@@ -976,7 +976,7 @@ def _decode_execution_set(value: object) -> ExecutionSet:
         recording=RecordingStatus(
             _string(item["recording"], "execution_set.recording")
         ),
-        _bytes_done_high_water=_integer(
+        bytes_done_high_water=_integer(
             item["bytes_done_high_water"],
             "execution_set.bytes_done_high_water",
         ),
