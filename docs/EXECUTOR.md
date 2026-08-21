@@ -551,11 +551,24 @@ session wrapper, release custody, and never suppress already-earned outcomes.
 
 ## Progress
 
-`Progress` snapshots carry content bytes done/total, items done/total, and the
-current path; `PhaseChanged` carries the phase separately. Moves, trash, mkdir,
-delete, and no-op contribute items but zero transfer bytes. Failed work is not
-credited as completed content. Emission is throttled/coalesced outside the copy
-chunk size so fast disks cannot flood UI queues.
+`Progress` snapshots carry aggregate content bytes/items, the display-only
+current path, and `operation` item identity while an operation is active.
+Non-byte operations and byte operations that have not entered the copy stream
+carry null item-byte counters. At the exact copy-backend entry, a byte operation
+starts at `0 / content_bytes`; chunk callbacks advance its attempt-local counter
+up to that reviewed total. Reliable settlement clears the item identity and
+item-byte counters without changing the existing `current_path` behavior.
+
+A retry resets attempt-local bytes only if `_prepare_copy` actually re-enters
+the byte pipeline. Retained publication, metadata, durability, attestation, and
+recording continuations bypass that entry and do not reset. If an abandoned
+attempt reported bytes, the reset snapshot is forced past the normal time
+throttle. Aggregate executor bytes never regress: they hold their high-water
+mark until the new attempt catches up, and a terminally failed item reports
+that high-water mark rather than rewinding it. Moves, trash, mkdir, delete, and
+no-op contribute items but zero transfer bytes. Emission remains
+throttled/coalesced outside the copy chunk size so fast disks cannot flood UI
+queues.
 
 ## Copy Pipeline Diagnostics
 

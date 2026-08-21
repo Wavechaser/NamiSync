@@ -70,6 +70,7 @@ from _executor_fixtures import (
     _profile,
     _recorder_names,
     _nonbyte_mutation_operation,
+    _reviewed_byte_operation,
     _require_directory_reparse,
     _roots,
     _run,
@@ -3240,6 +3241,392 @@ def test_update_external_swap_after_backup_is_rejected_without_overwrite(
     assert (target / "file.bin").read_bytes() == b"external-swap"
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"planned-old"
     assert recorder.calls == []
+
+
+def _active_operation_progress(
+    events: list[object], operation: PlanOperation
+) -> list[Progress]:
+    return [
+        event
+        for event in events
+        if isinstance(event, Progress) and event.item_id == str(operation.op_id)
+    ]
+
+
+def _assert_operation_progress_clears_after_outcome(
+    events: list[object], operation: PlanOperation
+) -> None:
+    outcome_index = next(
+        index
+        for index, event in enumerate(events)
+        if isinstance(event, ItemOutcome)
+        and event.item_id == str(operation.op_id)
+    )
+    following = [
+        event
+        for event in events[outcome_index + 1 :]
+        if isinstance(event, Progress)
+    ]
+    assert following
+    assert all(
+        (
+            event.item_id,
+            event.item_type,
+            event.item_bytes_done,
+            event.item_bytes_total,
+        )
+        == (None, None, None, None)
+        for event in following
+    )
+    assert following[0].current_path == operation.target_rel_path
+
+
+class ScriptedProgressCopyBackend:
+    def __init__(
+        self,
+        attempts: tuple[tuple[int, ...], ...],
+        *,
+        failing_attempts: frozenset[int],
+    ) -> None:
+        self._attempts = attempts
+        self._failing_attempts = failing_attempts
+        self.calls = 0
+
+    def copy(
+        self,
+        source,
+        target,
+        *,
+        chunk_size: int,
+        checkpoint,
+        on_chunk,
+    ) -> CopyDigest:
+        del chunk_size
+        checkpoint()
+        self.calls += 1
+        attempt = self.calls
+        chunks = self._attempts[attempt - 1]
+        payload = source.read()
+        offset = 0
+        for size in chunks:
+            chunk = payload[offset : offset + size]
+            assert len(chunk) == size
+            assert target.write(chunk) == size
+            on_chunk(size)
+            offset += size
+        if attempt in self._failing_attempts:
+            raise _sharing_violation(f"injected stream failure {attempt}")
+        assert offset == len(payload)
+        return CopyDigest(xxh3_128(payload).digest(), len(payload))
+
+
+class ProgressCleanupFailureFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.temp_created = False
+        self.cleanup_attempts = 0
+
+    def create_temp(self, path: Path, *, allocation_size: int | None):
+        stream = super().create_temp(path, allocation_size=allocation_size)
+        self.temp_created = True
+        return stream
+
+    def remove_owned_temp(self, path: Path) -> None:
+        if self.temp_created and path.exists():
+            self.cleanup_attempts += 1
+            raise PermissionError("injected retry cleanup failure")
+        super().remove_owned_temp(path)
+
+
+class PublishedMetadataProgressRetryFileSystem(NativeFileSystem):
+    def __init__(self) -> None:
+        self.published_target: Path | None = None
+        self.published_metadata_attempts = 0
+        self.source_opens = 0
+
+    def open_source(self, path: Path):
+        self.source_opens += 1
+        return super().open_source(path)
+
+    def ensure_published_metadata(self, path: Path, *args, **kwargs) -> FileStat:
+        if path == self.published_target:
+            self.published_metadata_attempts += 1
+            if self.published_metadata_attempts == 1:
+                raise _sharing_violation("injected post-publication retry")
+        return super().ensure_published_metadata(path, *args, **kwargs)
+
+
+def _reviewed_progress_copy(
+    source: Path,
+    target: Path,
+    fs: NativeFileSystem,
+    payload: bytes,
+) -> PlanOperation:
+    (source / "file.bin").write_bytes(payload)
+    source_stat = fs.stat(source, "file.bin")
+    assert source_stat is not None
+    return _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="file.bin",
+        target_rel_path="file.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+
+
+@pytest.mark.parametrize(
+    "kind",
+    (OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE),
+)
+def test_byte_operation_progress_has_stable_identity_and_stream_lifecycle(
+    tmp_path: Path, kind: OperationKind,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation, _ = _reviewed_byte_operation(kind, source, target, fs)
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(max_chunk_size=4),
+    )
+
+    active = _active_operation_progress(events, operation)
+    assert result.status is SessionState.COMPLETED
+    assert active
+    assert all(event.item_type == "operation" for event in active)
+    assert (active[0].item_bytes_done, active[0].item_bytes_total) == (
+        None,
+        None,
+    )
+    streamed = [
+        event for event in active if event.item_bytes_done is not None
+    ]
+    assert (
+        streamed[0].item_bytes_done,
+        streamed[0].item_bytes_total,
+    ) == (0, operation.content_bytes)
+    assert (
+        streamed[-1].item_bytes_done,
+        streamed[-1].item_bytes_total,
+    ) == (operation.content_bytes, operation.content_bytes)
+    assert [event.item_bytes_done for event in streamed] == sorted(
+        event.item_bytes_done for event in streamed
+    )
+    _assert_operation_progress_clears_after_outcome(events, operation)
+
+
+def test_nonbyte_operation_progress_has_indeterminate_stable_identity(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    (source / "same.bin").write_bytes(b"same")
+    (target / "same.bin").write_bytes(b"same")
+    source_stat = fs.stat(source, "same.bin")
+    target_stat = fs.stat(target, "same.bin")
+    assert source_stat is not None and target_stat is not None
+    operation = _operation(
+        1,
+        OperationKind.NOOP,
+        source_rel_path="same.bin",
+        target_rel_path="same.bin",
+        source_expected=source_stat,
+        target_expected=target_stat,
+        intended=target_stat,
+        reason=OperationReason.METADATA_MATCH,
+    )
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (operation,))), fs=fs
+    )
+
+    active = _active_operation_progress(events, operation)
+    assert result.status is SessionState.COMPLETED
+    assert active
+    assert all(event.item_type == "operation" for event in active)
+    assert all(
+        (event.item_bytes_done, event.item_bytes_total) == (None, None)
+        for event in active
+    )
+    _assert_operation_progress_clears_after_outcome(events, operation)
+
+
+def test_true_pipeline_retry_forces_reset_without_aggregate_regression(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"abcdefghijkl"
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, payload)
+    backend = ScriptedProgressCopyBackend(
+        ((8,), (4, 4, 4)),
+        failing_attempts=frozenset({1}),
+    )
+    timeline: list[object] = []
+
+    result = execute(
+        _xset(_plan(source, target, (operation,))),
+        RunContext(timeline.append, lambda: None),
+        FakeRecorder(),
+        _policies(
+            copy_backend=backend,
+            monotonic=lambda: 0.0,
+            progress_interval_seconds=10.0,
+            sleep=lambda _delay: timeline.append("retry-sleep"),
+        ),
+        fs,
+    )
+
+    active = _active_operation_progress(timeline, operation)
+    retry_index = timeline.index("retry-sleep")
+    reset_index = timeline.index(active[0])
+    progress = [event for event in timeline if isinstance(event, Progress)]
+    assert result.status is SessionState.COMPLETED
+    assert backend.calls == 2
+    assert len(active) == 1
+    assert reset_index > retry_index
+    assert (
+        active[0].item_bytes_done,
+        active[0].item_bytes_total,
+        active[0].bytes_done,
+    ) == (0, len(payload), 8)
+    assert [event.bytes_done for event in progress] == [0, 8, 12]
+    assert (target / "file.bin").read_bytes() == payload
+    _assert_operation_progress_clears_after_outcome(timeline, operation)
+
+
+def test_terminal_retried_stream_retains_aggregate_high_water(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"abcdefghijkl"
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, payload)
+    backend = ScriptedProgressCopyBackend(
+        ((8,), (4,)),
+        failing_attempts=frozenset({1, 2}),
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(
+            copy_backend=backend,
+            failure=BoundedFailurePolicy(retries=1, initial_delay=0),
+        ),
+    )
+
+    active = _active_operation_progress(events, operation)
+    assert result.status is SessionState.FAILED
+    assert backend.calls == 2
+    assert [event.item_bytes_done for event in active] == [None, 0, 8, 0, 4]
+    assert [event.bytes_done for event in active] == [0, 0, 8, 8, 8]
+    assert result.bytes_done == 8
+    assert result.bytes_total == len(payload)
+    assert recorder.calls == []
+    assert not (target / "file.bin").exists()
+    assert not list(target.glob("*.synctmp-*"))
+    _assert_operation_progress_clears_after_outcome(events, operation)
+
+
+def test_failed_retry_cleanup_does_not_reset_item_progress(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"abcdefghijkl"
+    fs = ProgressCleanupFailureFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, payload)
+    backend = ScriptedProgressCopyBackend(
+        ((8,),),
+        failing_attempts=frozenset({1}),
+    )
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(
+            copy_backend=backend,
+            failure=BoundedFailurePolicy(retries=1, initial_delay=0),
+        ),
+    )
+
+    active = _active_operation_progress(events, operation)
+    outcome = _item_outcome(events)
+    assert result.status is SessionState.FAILED
+    assert outcome.reason == "cleanup-failed"
+    assert backend.calls == 1
+    assert fs.cleanup_attempts == 1
+    assert [event.item_bytes_done for event in active] == [None, 0, 8]
+    assert [event.bytes_done for event in active] == [0, 0, 8]
+    assert result.bytes_done == 8
+    _assert_operation_progress_clears_after_outcome(events, operation)
+
+
+@pytest.mark.parametrize(
+    "kind",
+    (OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE),
+)
+def test_retained_byte_continuation_does_not_reset_item_progress(
+    tmp_path: Path,
+    kind: OperationKind,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = PublishedMetadataProgressRetryFileSystem()
+    operation, published_target = _reviewed_byte_operation(
+        kind, source, target, fs
+    )
+    fs.published_target = published_target
+    timeline: list[object] = []
+    file_bytes_at_settlement: list[int | None] = []
+    original_settled = executor_runtime._ProgressTracker.settled
+
+    def observe_settlement(
+        tracker: executor_runtime._ProgressTracker,
+        settled_operation: PlanOperation,
+        outcome: Outcome,
+    ) -> None:
+        file_bytes_at_settlement.append(tracker._file_bytes)
+        original_settled(tracker, settled_operation, outcome)
+
+    monkeypatch.setattr(
+        executor_runtime._ProgressTracker,
+        "settled",
+        observe_settlement,
+    )
+
+    result = execute(
+        _xset(_plan(source, target, (operation,))),
+        RunContext(timeline.append, lambda: None),
+        FakeRecorder(),
+        _policies(sleep=lambda _delay: timeline.append("retry-sleep")),
+        fs,
+    )
+
+    active = _active_operation_progress(timeline, operation)
+    retry_index = timeline.index("retry-sleep")
+    full_index = next(
+        index
+        for index, event in enumerate(timeline)
+        if isinstance(event, Progress)
+        and event.item_id == str(operation.op_id)
+        and event.item_bytes_done == operation.content_bytes
+    )
+    assert result.status is SessionState.COMPLETED
+    assert fs.source_opens == 1
+    assert fs.published_metadata_attempts == 2
+    assert file_bytes_at_settlement == [operation.content_bytes]
+    assert full_index < retry_index
+    assert sum(event.item_bytes_done == 0 for event in active) == 1
+    assert not any(
+        isinstance(event, Progress)
+        and event.item_id == str(operation.op_id)
+        and event.item_bytes_done == 0
+        for event in timeline[retry_index + 1 :]
+    )
+    _assert_operation_progress_clears_after_outcome(timeline, operation)
 
 
 def test_progress_rate_is_throttled_while_item_outcomes_remain_reliable(

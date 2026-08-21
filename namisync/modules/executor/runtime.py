@@ -580,16 +580,35 @@ class _ProgressTracker:
             in {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
         )
         self.bytes_done = min(self._committed_bytes, self.bytes_total)
-        self._file_bytes = 0
+        self._file_bytes: int | None = None
         self._current: PlanOperation | None = None
+        self._item_active = False
         self._last_emitted_at = float("-inf")
 
     def start(self, operation: PlanOperation) -> None:
         self._current = operation
-        self._file_bytes = 0
+        self._file_bytes = None
+        self._item_active = True
         self.emit(force=False)
 
+    def begin_byte_stream(self, operation: PlanOperation) -> None:
+        if (
+            not self._item_active
+            or self._current is None
+            or self._current.op_id != operation.op_id
+        ):
+            raise RuntimeError("byte stream does not match the active operation")
+        had_attempt_progress = self._file_bytes is not None and self._file_bytes > 0
+        self._file_bytes = 0
+        self.emit(force=had_attempt_progress)
+
     def copied(self, size: int) -> None:
+        if (
+            not self._item_active
+            or self._current is None
+            or self._file_bytes is None
+        ):
+            raise RuntimeError("copy progress arrived outside an active byte stream")
         self._file_bytes += size
         candidate = min(
             self.bytes_total,
@@ -610,6 +629,8 @@ class _ProgressTracker:
             )
             self.bytes_done = max(self.bytes_done, self._committed_bytes)
         self._current = operation
+        self._file_bytes = None
+        self._item_active = False
         self.emit(force=False)
 
     def emit(self, *, force: bool) -> None:
@@ -621,6 +642,13 @@ class _ProgressTracker:
         ):
             return
         self._last_emitted_at = now
+        current = self._current
+        active = current if self._item_active else None
+        item_bytes_done: int | None = None
+        item_bytes_total: int | None = None
+        if active is not None and self._file_bytes is not None:
+            item_bytes_done = min(self._file_bytes, active.content_bytes)
+            item_bytes_total = active.content_bytes
         self._ctx.emit(
             Progress(
                 items_done=self.items_done,
@@ -628,8 +656,12 @@ class _ProgressTracker:
                 bytes_done=min(self.bytes_done, self.bytes_total),
                 bytes_total=self.bytes_total,
                 current_path=(
-                    None if self._current is None else self._current.target_rel_path
+                    None if current is None else current.target_rel_path
                 ),
+                item_id=None if active is None else active.op_id,
+                item_type=None if active is None else "operation",
+                item_bytes_done=item_bytes_done,
+                item_bytes_total=item_bytes_total,
             )
         )
 
@@ -1337,6 +1369,7 @@ def _prepare_copy(
             with fs.create_temp(
                 temp, allocation_size=_allocation_size(reviewed_size)
             ) as writer:
+                progress.begin_byte_stream(operation)
                 digest = policies.copy_backend.copy(
                     reader,
                     writer,
