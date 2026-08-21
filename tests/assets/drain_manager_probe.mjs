@@ -1189,7 +1189,21 @@ success(gapProgressRecovery, [
   event(gapProgressSession, 5, "Progress", {
     ...validProgressBody,
     phase: "baseline",
+    bytes_done: 3,
+    bytes_total: 3,
     current_path: "recovered.bin",
+    item_id: null,
+    item_type: null,
+    item_attempt_id: null,
+    item_bytes_done: null,
+    item_bytes_total: null,
+  }),
+  event(gapProgressSession, 6, "Progress", {
+    ...validProgressBody,
+    phase: "verify",
+    bytes_done: 2,
+    bytes_total: 4,
+    current_path: "newer-phase.bin",
     item_id: null,
     item_type: null,
     item_attempt_id: null,
@@ -1198,12 +1212,60 @@ success(gapProgressRecovery, [
   }),
 ]);
 const gapProgress2 = await nextRequest(requests.length);
+const recoveredBaselineState = acceptedGapProgress.at(-2).progressState;
+assert.equal(recoveredBaselineState.phase, "baseline");
+assert.equal(recoveredBaselineState.phaseAuthority, "progress");
+assert.equal(recoveredBaselineState.progress.current_path, "recovered.bin");
 const recoveredProgressState = acceptedGapProgress.at(-1).progressState;
-assert.equal(recoveredProgressState.phase, "baseline");
+assert.equal(acceptedGapProgress.at(-1).update.event.body.phase, "verify");
+assert.equal(recoveredProgressState.phase, "verify");
 assert.equal(recoveredProgressState.phaseAuthority, "progress");
-assert.equal(recoveredProgressState.progress.current_path, "recovered.bin");
+assert.equal(recoveredProgressState.progress.bytes_done, 2);
+assert.equal(recoveredProgressState.progress.bytes_total, 4);
+assert.equal(recoveredProgressState.progress.current_path, "newer-phase.bin");
 assert.equal(recoveredProgressState.activeItem, null);
-success(gapProgress2, [terminalRecord(gapProgressSession)]);
+const acceptedBeforeGapRegression = acceptedGapProgress.length;
+success(gapProgress2, [
+  event(gapProgressSession, 7, "StateChanged", { state: "paused" }),
+  event(gapProgressSession, 8, "Progress", {
+    ...validProgressBody,
+    phase: "verify",
+    bytes_done: 1,
+    bytes_total: 4,
+    item_id: null,
+    item_type: null,
+    item_attempt_id: null,
+    item_bytes_done: null,
+    item_bytes_total: null,
+  }),
+]);
+const gapProgressRegressionRecovery = await nextRequest(requests.length);
+assert.equal(gapProgressRegressionRecovery.request.payload.replay_from, 7);
+assert.equal(acceptedGapProgress.length, acceptedBeforeGapRegression);
+success(gapProgressRegressionRecovery, [
+  event(gapProgressSession, 7, "StateChanged", { state: "paused" }),
+  event(gapProgressSession, 8, "Progress", {
+    ...validProgressBody,
+    phase: "verify",
+    bytes_done: 3,
+    bytes_total: 4,
+    item_id: null,
+    item_type: null,
+    item_attempt_id: null,
+    item_bytes_done: null,
+    item_bytes_total: null,
+  }),
+]);
+const gapProgress3 = await nextRequest(requests.length);
+assert.equal(gapProgress3.request.payload.replay_from, null);
+assert.deepEqual(
+  acceptedGapProgress
+    .slice(acceptedBeforeGapRegression)
+    .map(({ update }) => update.event.sequence),
+  [7, 8],
+);
+assert.equal(acceptedGapProgress.at(-1).progressState.progress.bytes_done, 3);
+success(gapProgress3, [terminalRecord(gapProgressSession)]);
 await turns();
 assert.equal(acceptedGapProgress.at(-1).update.update_type, "record");
 assert.equal(acceptedGapProgress.at(-1).progressState.phase, null);

@@ -73,7 +73,8 @@ executes the packaged validator and proves whole-batch rejection: malformed
 Progress cannot partially deliver co-batched reliable updates or advance the
 accepted cursor, and a clean replay delivers those reliable updates. It also
 executes the Progress reducer across reliable phase authority, numeric holes,
-Gap recovery without retained `PhaseChanged`, retry attempts, overshoot,
+Gap recovery without retained `PhaseChanged` (including a newer self-described
+phase in the retained tail), retry attempts, overshoot,
 aggregate and attempt regression refusal, reliable outcome/Terminal
 precedence, compound post-copy identity, immutable callback projections, and
 bridge reincarnation cursor recovery. These are behavior checks against the

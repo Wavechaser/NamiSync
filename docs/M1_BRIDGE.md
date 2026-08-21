@@ -1690,9 +1690,13 @@ and the exposed view own only `phase`, `phaseAuthority` (`phase_changed`,
 `progress`, or `unknown`), the latest accepted Progress body, and the derived
 active item. `PhaseChanged` starts a fresh temporal domain only when its phase
 changes; repeating the same reliable phase promotes authority without
-discarding aggregate, item, or attempt comparisons. Once either authority has
-established a phase, uninterrupted Progress must agree with it. Aggregate
-item/work counters cannot regress. Known selected-item admission is fixed,
+discarding aggregate, item, or attempt comparisons. Progress must agree with
+reliable `phase_changed` authority. After `Gap`, progress-only authority remains
+lossy: a later self-described snapshot with a different phase replaces it and
+starts a fresh temporal domain because the intervening reliable phase change
+may be outside the retained replay tail. Same-phase Progress still retains all
+comparisons. Aggregate item/work counters cannot regress. Known selected-item
+admission is fixed,
 executor byte admission is fixed once known, and verifier byte admission may
 grow; an unknown aggregate total may become known once. One attempt's
 determinate counters cannot regress,

@@ -1281,21 +1281,25 @@ function sameAttemptAdvances(previous, current) {
 }
 
 function reduceProgressSnapshot(state, progress) {
+  let domainState = state;
   if (
     state.phase !== null &&
     progress.phase !== state.phase
   ) {
-    return null;
+    if (state.phaseAuthority === "phase_changed") {
+      return null;
+    }
+    domainState = emptyProgressReducerState();
   }
   if (
-    state.progress !== null &&
-    !progressAggregateAdvances(state.progress, progress)
+    domainState.progress !== null &&
+    !progressAggregateAdvances(domainState.progress, progress)
   ) {
     return null;
   }
   const nextActive = progressActiveItem(progress);
   if (nextActive !== null) {
-    const previousActive = state.activeItem;
+    const previousActive = domainState.activeItem;
     if (
       previousActive !== null &&
       !sameActiveIdentity(previousActive, nextActive)
@@ -1316,10 +1320,10 @@ function reduceProgressSnapshot(state, progress) {
         return null;
       }
     } else if (
-      state.progress !== null &&
-      state.progress.item_id !== null &&
-      state.progress.item_id === nextActive.item_id &&
-      state.progress.item_type === nextActive.item_type
+      domainState.progress !== null &&
+      domainState.progress.item_id !== null &&
+      domainState.progress.item_id === nextActive.item_id &&
+      domainState.progress.item_type === nextActive.item_type
     ) {
       return null;
     }
@@ -1328,7 +1332,7 @@ function reduceProgressSnapshot(state, progress) {
   return freezeJsonValue({
     phase: progress.phase,
     phaseAuthority:
-      state.phaseAuthority === "phase_changed"
+      domainState.phaseAuthority === "phase_changed"
         ? "phase_changed"
         : "progress",
     progress: cloneJsonValue(progress),
