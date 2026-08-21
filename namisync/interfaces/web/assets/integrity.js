@@ -18,13 +18,23 @@ const INTEGRITY_KEYS = Object.freeze(new Set([
   "mismatched",
   "error",
 ]));
+const ROW_LIFECYCLE_KEYS = Object.freeze(new Set([
+  "verifying",
+  "completed",
+]));
 
 function validRowView(rowView) {
   return rowView !== null &&
     typeof rowView === "object" &&
     !Array.isArray(rowView) &&
     STRING_FIELDS.every((name) => typeof rowView[name] === "string") &&
-    INTEGRITY_KEYS.has(rowView.presenceStatus);
+    (
+      rowView.lifecycleKey === undefined
+        ? INTEGRITY_KEYS.has(rowView.presenceStatus)
+        : typeof rowView.lifecycleKey === "string" &&
+          ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey) &&
+          rowView.presenceStatus === ""
+    );
 }
 
 function createCell(ownerDocument, className, column, text) {
@@ -36,9 +46,20 @@ function createCell(ownerDocument, className, column, text) {
   return cell;
 }
 
-function createIntegrityCell(ownerDocument, className, column, integrity, text) {
+function createIntegrityCell(
+  ownerDocument,
+  className,
+  column,
+  integrity,
+  lifecycle,
+  text,
+) {
   const cell = createCell(ownerDocument, className, column, "");
-  cell.dataset.integrity = integrity;
+  if (lifecycle !== undefined) {
+    cell.dataset.lifecycle = lifecycle;
+  } else {
+    cell.dataset.integrity = integrity;
+  }
   const label = ownerDocument.createElement("span");
   label.className = "nami-file-state-label";
   renderText(label, text);
@@ -59,6 +80,7 @@ export function renderIntegrityRow(element, rowView) {
     "nami-integrity-row__presence",
     "primary",
     rowView.presenceStatus,
+    rowView.lifecycleKey,
     rowView.presenceText,
   );
   const checksum = createCell(

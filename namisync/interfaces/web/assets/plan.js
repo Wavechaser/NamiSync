@@ -24,6 +24,10 @@ const INTENT_KEYS = Object.freeze(new Set([
   "unsupported",
   "blocked",
 ]));
+const ROW_LIFECYCLE_KEYS = Object.freeze(new Set([
+  "executing",
+  "completed",
+]));
 
 function validRowView(rowView) {
   return rowView !== null &&
@@ -38,7 +42,13 @@ function validRowView(rowView) {
     typeof rowView.folder === "boolean" &&
     typeof rowView.expanded === "boolean" &&
     STRING_FIELDS.every((name) => typeof rowView[name] === "string") &&
-    (rowView.intentKey === "" || INTENT_KEYS.has(rowView.intentKey));
+    (
+      rowView.lifecycleKey === undefined
+        ? rowView.intentKey === "" || INTENT_KEYS.has(rowView.intentKey)
+        : typeof rowView.lifecycleKey === "string" &&
+          ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey) &&
+          rowView.intentKey === ""
+    );
 }
 
 function createCell(ownerDocument, className, column) {
@@ -59,7 +69,9 @@ export function renderPlanRow(element, rowView) {
 
   const ownerDocument = element.ownerDocument;
   const intent = createCell(ownerDocument, "nami-plan-row__intent", "primary");
-  if (rowView.intentKey !== "") {
+  if (rowView.lifecycleKey !== undefined) {
+    intent.dataset.lifecycle = rowView.lifecycleKey;
+  } else if (rowView.intentKey !== "") {
     intent.dataset.intent = rowView.intentKey;
   }
   const intentLabel = ownerDocument.createElement("span");

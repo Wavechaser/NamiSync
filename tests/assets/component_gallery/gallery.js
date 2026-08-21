@@ -114,6 +114,8 @@ async function reportFailure(error) {
     { key: "mkdir", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select photos folder", depth: 0, folder: true, expanded: true, nameText: "photos", sizeText: "14.8 MB", intentText: "Create folder", intentKey: "mkdir", checksumText: "—", notesText: "Partially selected folder." }) },
     { key: "copy", parentKey: "mkdir", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1000.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1000.jpeg", sizeText: "8.1 MB", intentText: "Copy", intentKey: "copy", checksumText: "12ab34cd", notesText: "New child file." }) },
     { key: "update", parentKey: "mkdir", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1001.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1001.jpeg", sizeText: "6.7 MB", intentText: "Update", intentKey: "update", checksumText: "90ef12ab", notesText: "Changed child file." }) },
+    { key: "copying", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select active-copy.bin", depth: 0, folder: false, expanded: false, nameText: "active-copy.bin", sizeText: "24 MB", intentText: "Copying", intentKey: "", lifecycleKey: "executing", checksumText: "—", notesText: "Projected execution is in progress." }) },
+    { key: "completed", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select completed-copy.bin", depth: 0, folder: false, expanded: false, nameText: "completed-copy.bin", sizeText: "12 MB", intentText: "Completed", intentKey: "", lifecycleKey: "completed", checksumText: "5a2f8c10", notesText: "Projected execution completed." }) },
     { key: "move", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select report.pdf", depth: 0, folder: false, expanded: false, nameText: "report.pdf", sizeText: "842 KB", intentText: "Move", intentKey: "move", checksumText: "3456cdef", notesText: "Relocate without replacing bytes." }) },
     { key: "move_update", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select notes.md", depth: 0, folder: false, expanded: false, nameText: "notes.md", sizeText: "4.6 KB", intentText: "Move + update", intentKey: "move_update", checksumText: "7890abcd", notesText: "Relocate and replace content." }) },
     { key: "recase", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select Logo.PNG", depth: 0, folder: false, expanded: false, nameText: "Logo.PNG", sizeText: "32 KB", intentText: "Recase", intentKey: "recase", checksumText: "bcde1234", notesText: "Change only the path casing." }) },
@@ -128,6 +130,8 @@ async function reportFailure(error) {
     { key: "folder", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select documents folder", depth: 0, folder: true, expanded: true, nameText: "documents", sizeText: "2.5 MB", presenceText: "Unverified", presenceStatus: "unverified", checksumText: "—", notesText: "Partially selected folder rollup." }) },
     { key: "verified", parentKey: "folder", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select documents report.pdf", depth: 1, folder: false, expanded: false, nameText: "report.pdf", sizeText: "2.1 MB", presenceText: "Verified", presenceStatus: "verified", checksumText: "5a2f8c10", notesText: "Evidence matches the recorded file." }) },
     { key: "baselined", parentKey: "folder", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select documents draft.docx", depth: 1, folder: false, expanded: false, nameText: "draft.docx", sizeText: "412 KB", presenceText: "Baselined", presenceStatus: "baselined", checksumText: "90ef12ab", notesText: "Evidence was recorded for the first time." }) },
+    { key: "verifying", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select verifying.iso", depth: 0, folder: false, expanded: false, nameText: "verifying.iso", sizeText: "1.4 GB", presenceText: "Verifying", presenceStatus: "", lifecycleKey: "verifying", checksumText: "—", notesText: "Projected integrity verification is in progress." }) },
+    { key: "completed", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select completed.iso", depth: 0, folder: false, expanded: false, nameText: "completed.iso", sizeText: "824 MB", presenceText: "Completed", presenceStatus: "", lifecycleKey: "completed", checksumText: "2468bdf1", notesText: "Projected integrity verification completed." }) },
     { key: "unverified", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select todo.txt", depth: 0, folder: false, expanded: false, nameText: "todo.txt", sizeText: "2.8 KB", presenceText: "Unverified", presenceStatus: "unverified", checksumText: "—", notesText: "No verification evidence exists yet." }) },
     { key: "modified", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select catalog.db", depth: 0, folder: false, expanded: false, nameText: "catalog.db", sizeText: "4.2 MB", presenceText: "Modified", presenceStatus: "modified", checksumText: "2468bdf1", notesText: "Recorded metadata is stale." }) },
     { key: "reappeared", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select restored.log", depth: 0, folder: false, expanded: false, nameText: "restored.log", sizeText: "18 KB", presenceText: "Reappeared", presenceStatus: "reappeared", checksumText: "1357ace0", notesText: "Already projected as reappeared; underlying evidence is not inferred here." }) },
@@ -1083,9 +1087,13 @@ async function reportFailure(error) {
     - parseFloat(planSectionStyle.paddingRight);
   const galleryUsesWorkArea = planSectionStyle.gridArea === "work";
   function toneAndKey(cell) {
-    const semantic = cell.matches("[data-intent], [data-integrity]")
+    const semantic = cell.matches(
+      "[data-intent], [data-integrity], [data-lifecycle]",
+    )
       ? cell
-      : cell.querySelector("[data-intent], [data-integrity]");
+      : cell.querySelector(
+        "[data-intent], [data-integrity], [data-lifecycle]",
+      );
     if (!(semantic instanceof HTMLElement)) {
       return ["", ""];
     }
@@ -1094,6 +1102,9 @@ async function reportFailure(error) {
     }
     if (semantic.dataset.integrity !== undefined) {
       return ["integrity", semantic.dataset.integrity];
+    }
+    if (semantic.dataset.lifecycle !== undefined) {
+      return ["lifecycle", semantic.dataset.lifecycle];
     }
     return ["", ""];
   }

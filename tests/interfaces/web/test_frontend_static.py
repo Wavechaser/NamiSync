@@ -596,6 +596,12 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         "unsupported",
         "blocked",
     )
+    assert _javascript_frozen_set(plan, "ROW_LIFECYCLE_KEYS") == (
+        "executing",
+        "completed",
+    )
+    assert "ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey)" in plan
+    assert "intent.dataset.lifecycle = rowView.lifecycleKey;" in plan
     assert 'intent.dataset.intent = rowView.intentKey;' in plan
     assert "intentTone" not in plan
     assert "intentForm" not in plan
@@ -626,7 +632,13 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         "mismatched",
         "error",
     )
+    assert _javascript_frozen_set(integrity, "ROW_LIFECYCLE_KEYS") == (
+        "verifying",
+        "completed",
+    )
+    assert "ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey)" in integrity
     assert "INTEGRITY_KEYS.has(rowView.presenceStatus)" in integrity
+    assert "cell.dataset.lifecycle = lifecycle;" in integrity
     assert "cell.dataset.integrity = integrity;" in integrity
     assert "presenceTone" not in integrity
     assert "presenceForm" not in integrity
@@ -683,7 +695,7 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         "error",
     ):
         assert f'[data-integrity="{integrity_state}"]' in layout
-    assert "block-size: 20px;" in layout
+    assert "block-size: 16px;" in layout
     assert re.search(
         r"(?ms)^\.nami-file-list__body\s*\{[^}]*min-(?:block-)?size",
         layout,

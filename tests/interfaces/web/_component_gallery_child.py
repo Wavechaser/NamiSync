@@ -126,6 +126,8 @@ _PLAN_ROW_CASE_KEYS = frozenset(
     {
         "plain",
         "copy",
+        "copying",
+        "completed",
         "update",
         "move",
         "move_update",
@@ -140,10 +142,12 @@ _PLAN_ROW_CASE_KEYS = frozenset(
     }
 )
 _INTEGRITY_ROW_CASE_KEYS = frozenset(
-    {"folder", *_INTEGRITY_CASES}
+    {"folder", "verifying", "completed", *_INTEGRITY_CASES}
 )
 _PLAN_ROW_PRIMARY = {
     "plain": ("", "", ""),
+    "copying": ("lifecycle", "executing", "text"),
+    "completed": ("lifecycle", "completed", "text"),
     **{
         key: ("intent", key, form)
         for key, (_hue, form) in _INTENT_CASES.items()
@@ -151,6 +155,8 @@ _PLAN_ROW_PRIMARY = {
 }
 _INTEGRITY_ROW_PRIMARY = {
     "folder": ("integrity", "unverified", "text"),
+    "verifying": ("lifecycle", "verifying", "text"),
+    "completed": ("lifecycle", "completed", "text"),
     **{
         key: ("integrity", key, form)
         for key, (_hue, form) in _INTEGRITY_CASES.items()
@@ -816,7 +822,7 @@ def _valid_semantic_rows(
             )
             and (
                 row["form"] != "fill"
-                or math.isclose(row["height"], 20.0, abs_tol=0.5)
+                or math.isclose(row["height"], 16.0, abs_tol=0.5)
             )
             and _css_pixel_width(row["border_width"]) == 0
             and row["aliases_consumed"] is True
@@ -1341,8 +1347,8 @@ def _valid_file_list_evidence(
                     "secondary_alias_color",
                 )
             )
-            or primary_tone not in {"", "intent", "integrity"}
-            or secondary_tone not in {"", "intent", "integrity"}
+            or primary_tone not in {"", "intent", "lifecycle", "integrity"}
+            or secondary_tone not in {"", "intent", "lifecycle", "integrity"}
             or type(primary_key) is not str
             or type(secondary_key) is not str
             or (primary_tone == "") != (primary_key == "")
@@ -1351,6 +1357,14 @@ def _valid_file_list_evidence(
             or (primary_tone == "") != (row["primary_form"] == "")
             or (primary_tone == "intent" and primary_key not in _INTENT_CASES)
             or (secondary_tone == "intent" and secondary_key not in _INTENT_CASES)
+            or (
+                primary_tone == "lifecycle"
+                and primary_key not in _LIFECYCLE_CASES
+            )
+            or (
+                secondary_tone == "lifecycle"
+                and secondary_key not in _LIFECYCLE_CASES
+            )
             or (
                 primary_tone == "integrity"
                 and primary_key not in _INTEGRITY_CASES
@@ -1368,7 +1382,7 @@ def _valid_file_list_evidence(
             != (row["primary_form"] != "fill")
             or (
                 row["primary_form"] == "fill"
-                and not math.isclose(row["primary_height"], 20.0, abs_tol=0.5)
+                and not math.isclose(row["primary_height"], 16.0, abs_tol=0.5)
             )
             or type(row["cell_backgrounds"]) is not list
             or len(row["cell_backgrounds"]) != 6

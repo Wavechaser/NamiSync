@@ -244,7 +244,7 @@ AUTHORED_CONTROL_VALUES = {
         "--color-textbox-underline": "rgba(0,0,0,0.45)",
     },
     "dark": {
-        "--color-control-fill": "#2d2d2d",
+        "--color-control-fill": "#383838",
         "--color-control-fill-hover": "#323232",
         "--color-control-fill-pressed": "#272727",
         "--color-control-border": "#353535",
@@ -352,7 +352,9 @@ SEMANTIC_TOKENS = {
     "--intent-removing-foreground",
     "--intent-neutral-foreground",
     "--intent-permanent-background",
+    "--intent-permanent-foreground",
     "--intent-exception-background",
+    "--intent-exception-foreground",
     "--lifecycle-neutral-foreground",
     "--lifecycle-active-foreground",
     "--lifecycle-completed-foreground",
@@ -360,12 +362,16 @@ SEMANTIC_TOKENS = {
     "--lifecycle-canceled-background",
     "--lifecycle-canceled-foreground",
     "--lifecycle-attention-background",
+    "--lifecycle-attention-fill-foreground",
     "--lifecycle-failure-background",
+    "--lifecycle-failure-foreground",
     "--integrity-positive-foreground",
     "--integrity-neutral-foreground",
     "--integrity-attention-foreground",
     "--integrity-attention-background",
+    "--integrity-attention-fill-foreground",
     "--integrity-failure-background",
+    "--integrity-failure-foreground",
     "--progress-active-fill",
     "--progress-paused-fill",
     "--progress-canceled-fill",
@@ -468,7 +474,7 @@ def _has_raw_color(source: str) -> bool:
     )
 
 
-def test_sh_g_11_tokens_preserve_exact_palette_and_unconsumed_lights() -> None:
+def test_sh_g_11_tokens_route_authored_lights_only_to_new_semantic_roles() -> None:
     source = TOKENS.read_text(encoding="utf-8")
     palette = {
         name: value.strip()
@@ -478,8 +484,8 @@ def test_sh_g_11_tokens_preserve_exact_palette_and_unconsumed_lights() -> None:
 
     assert palette == AUTHORED_PALETTE
     assert len(palette) == 15
-    assert "var(--palette-yellow-light)" not in source
-    assert "var(--palette-purple-light)" not in source
+    assert source.count("var(--palette-yellow-light)") == 3
+    assert source.count("var(--palette-purple-light)") == 2
     assert "color-mix(" not in source
     assert not re.search(r"\b(?:hsl|hsla|hwb|lab|lch|oklab|oklch)\(", source)
 
@@ -637,7 +643,7 @@ def test_sh_g_11_channel_semantic_aliases_are_complete_and_disjoint() -> None:
     }
 
 
-def test_sh_g_11_channel_mappings_use_main_hues_and_safe_fill_labels() -> None:
+def test_sh_g_11_channel_mappings_use_theme_secondary_badges() -> None:
     source = TOKENS.read_text(encoding="utf-8")
     light = _variables(_block(source, ":root "))
     dark = light | _variables(_block(source, ':root[data-theme="dark"]'))
@@ -648,34 +654,55 @@ def test_sh_g_11_channel_mappings_use_main_hues_and_safe_fill_labels() -> None:
         )
     )
 
-    exact_aliases = {
+    shared_aliases = {
         "--intent-additive-foreground": "var(--palette-blue-main)",
-        "--intent-relocating-foreground": "var(--palette-purple-main)",
         "--intent-replacing-foreground": "var(--palette-yellow-main)",
         "--intent-removing-foreground": "var(--palette-red-main)",
         "--intent-neutral-foreground": "var(--color-neutral-foreground-secondary)",
-        "--intent-permanent-background": "var(--palette-red-main)",
-        "--intent-exception-background": "var(--palette-yellow-main)",
+        "--intent-permanent-foreground": "var(--palette-red-main)",
+        "--intent-exception-foreground": "var(--palette-yellow-main)",
         "--lifecycle-neutral-foreground": "var(--color-neutral-foreground-secondary)",
         "--lifecycle-active-foreground": "var(--color-accent-fill)",
         "--lifecycle-completed-foreground": "var(--palette-green-main)",
         "--lifecycle-attention-foreground": "var(--palette-yellow-main)",
-        "--lifecycle-canceled-background": "var(--color-neutral-foreground-secondary)",
-        "--lifecycle-canceled-foreground": "var(--color-neutral-surface)",
-        "--lifecycle-attention-background": "var(--palette-yellow-main)",
-        "--lifecycle-failure-background": "var(--palette-red-main)",
+        "--lifecycle-canceled-background": "var(--color-neutral-surface-selected)",
+        "--lifecycle-canceled-foreground": "var(--color-neutral-foreground-secondary)",
+        "--lifecycle-attention-fill-foreground": "var(--palette-yellow-main)",
+        "--lifecycle-failure-foreground": "var(--palette-red-main)",
         "--integrity-positive-foreground": "var(--palette-green-main)",
         "--integrity-neutral-foreground": "var(--color-neutral-foreground-secondary)",
         "--integrity-attention-foreground": "var(--palette-yellow-main)",
-        "--integrity-attention-background": "var(--palette-yellow-main)",
-        "--integrity-failure-background": "var(--palette-red-main)",
+        "--integrity-attention-fill-foreground": "var(--palette-yellow-main)",
+        "--integrity-failure-foreground": "var(--palette-red-main)",
         "--progress-active-fill": "var(--color-accent-fill)",
         "--progress-paused-fill": "var(--palette-yellow-main)",
         "--progress-canceled-fill": "var(--color-neutral-foreground-secondary)",
         "--progress-track-background": "var(--color-neutral-surface-pressed)",
     }
     for theme in (light, dark, automatic_dark):
-        assert exact_aliases.items() <= theme.items()
+        assert shared_aliases.items() <= theme.items()
+
+    light_badges = {
+        "--intent-relocating-foreground": "var(--palette-purple-main)",
+        "--intent-permanent-background": "var(--palette-red-light)",
+        "--intent-exception-background": "var(--palette-yellow-light)",
+        "--lifecycle-attention-background": "var(--palette-yellow-light)",
+        "--lifecycle-failure-background": "var(--palette-red-light)",
+        "--integrity-attention-background": "var(--palette-yellow-light)",
+        "--integrity-failure-background": "var(--palette-red-light)",
+    }
+    dark_badges = {
+        "--intent-relocating-foreground": "var(--palette-purple-light)",
+        "--intent-permanent-background": "var(--palette-red-dark)",
+        "--intent-exception-background": "var(--palette-yellow-dark)",
+        "--lifecycle-attention-background": "var(--palette-yellow-dark)",
+        "--lifecycle-failure-background": "var(--palette-red-dark)",
+        "--integrity-attention-background": "var(--palette-yellow-dark)",
+        "--integrity-failure-background": "var(--palette-red-dark)",
+    }
+    assert light_badges.items() <= light.items()
+    assert dark_badges.items() <= dark.items()
+    assert dark_badges.items() <= automatic_dark.items()
 
     assert light["--color-main-fill-foreground"] == (
         "var(--color-neutral-foreground)"
@@ -686,17 +713,29 @@ def test_sh_g_11_channel_mappings_use_main_hues_and_safe_fill_labels() -> None:
     assert automatic_dark["--color-main-fill-foreground"] == (
         "var(--color-neutral-surface)"
     )
-    for theme in (light, dark, automatic_dark):
-        fill_foreground = _resolve("--color-main-fill-foreground", theme)
-        for background in (
-            "--intent-permanent-background",
-            "--intent-exception-background",
+    fill_pairs = (
+        ("--intent-permanent-foreground", "--intent-permanent-background"),
+        ("--intent-exception-foreground", "--intent-exception-background"),
+        (
+            "--lifecycle-attention-fill-foreground",
             "--lifecycle-attention-background",
-            "--lifecycle-failure-background",
+        ),
+        ("--lifecycle-failure-foreground", "--lifecycle-failure-background"),
+        (
+            "--integrity-attention-fill-foreground",
             "--integrity-attention-background",
-            "--integrity-failure-background",
-        ):
-            assert _contrast(fill_foreground, _resolve(background, theme)) >= 4.5
+        ),
+        ("--integrity-failure-foreground", "--integrity-failure-background"),
+    )
+    for theme in (light, dark, automatic_dark):
+        ratios = [
+            _contrast(_resolve(foreground, theme), _resolve(background, theme))
+            for foreground, background in fill_pairs
+        ]
+        if theme is light:
+            assert all(1.0 < ratio < 4.5 for ratio in ratios)
+        else:
+            assert all(ratio >= 4.5 for ratio in ratios)
         assert _contrast(
             _resolve("--lifecycle-canceled-foreground", theme),
             _resolve("--lifecycle-canceled-background", theme),
@@ -761,7 +800,9 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
         "--intent-removing-foreground": "CanvasText",
         "--intent-neutral-foreground": "CanvasText",
         "--intent-permanent-background": "Highlight",
+        "--intent-permanent-foreground": "HighlightText",
         "--intent-exception-background": "Highlight",
+        "--intent-exception-foreground": "HighlightText",
         "--lifecycle-neutral-foreground": "CanvasText",
         "--lifecycle-active-foreground": "CanvasText",
         "--lifecycle-completed-foreground": "CanvasText",
@@ -769,12 +810,16 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
         "--lifecycle-canceled-background": "Highlight",
         "--lifecycle-canceled-foreground": "HighlightText",
         "--lifecycle-attention-background": "Highlight",
+        "--lifecycle-attention-fill-foreground": "HighlightText",
         "--lifecycle-failure-background": "Highlight",
+        "--lifecycle-failure-foreground": "HighlightText",
         "--integrity-positive-foreground": "CanvasText",
         "--integrity-neutral-foreground": "CanvasText",
         "--integrity-attention-foreground": "CanvasText",
         "--integrity-attention-background": "Highlight",
+        "--integrity-attention-fill-foreground": "HighlightText",
         "--integrity-failure-background": "Highlight",
+        "--integrity-failure-foreground": "HighlightText",
         "--progress-active-fill": "Highlight",
         "--progress-paused-fill": "Highlight",
         "--progress-canceled-fill": "Highlight",
@@ -857,12 +902,12 @@ def test_sh_g_11_channel_selectors_keep_hue_and_form_semantics_scoped() -> None:
     }
     assert _variables(_block(source, '[data-intent="delete"] ')) == {
         "--nami-state-background": "var(--intent-permanent-background)",
-        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+        "--nami-state-foreground": "var(--intent-permanent-foreground)",
     }
     intent_exception = _variables(_block(source, "[data-intent]:is(\n"))
     assert intent_exception == {
         "--nami-state-background": "var(--intent-exception-background)",
-        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+        "--nami-state-foreground": "var(--intent-exception-foreground)",
     }
 
     lifecycle_active = _variables(_block(source, "[data-lifecycle]:is(\n"))
@@ -895,7 +940,9 @@ def test_sh_g_11_channel_selectors_keep_hue_and_form_semantics_scoped() -> None:
     )
     assert attention_fill == {
         "--nami-state-background": "var(--lifecycle-attention-background)",
-        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+        "--nami-state-foreground": (
+            "var(--lifecycle-attention-fill-foreground)"
+        ),
     }
     failure_at = source.index('[data-lifecycle="errored"]')
     failure = _variables(
@@ -903,7 +950,7 @@ def test_sh_g_11_channel_selectors_keep_hue_and_form_semantics_scoped() -> None:
     )
     assert failure == {
         "--nami-state-background": "var(--lifecycle-failure-background)",
-        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+        "--nami-state-foreground": "var(--lifecycle-failure-foreground)",
     }
 
     integrity_positive = _variables(_block(source, "[data-integrity]:is(\n"))
@@ -919,7 +966,9 @@ def test_sh_g_11_channel_selectors_keep_hue_and_form_semantics_scoped() -> None:
     )
     assert integrity_attention == {
         "--nami-state-background": "var(--integrity-attention-background)",
-        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+        "--nami-state-foreground": (
+            "var(--integrity-attention-fill-foreground)"
+        ),
     }
     integrity_failure_at = source.index('[data-integrity="missing"]')
     integrity_failure = _variables(
@@ -927,7 +976,7 @@ def test_sh_g_11_channel_selectors_keep_hue_and_form_semantics_scoped() -> None:
     )
     assert integrity_failure == {
         "--nami-state-background": "var(--integrity-failure-background)",
-        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+        "--nami-state-foreground": "var(--integrity-failure-foreground)",
     }
 
 
@@ -1089,7 +1138,9 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         ':is(.nami-badge, .nami-status-pill)[data-form="fill"] ',
     )
     assert "background: var(--nami-state-background);" in filled_label
-    assert "block-size: 20px;" in filled_label
+    assert "block-size: 16px;" in filled_label
+    assert "line-height: var(--font-size-caption);" in filled_label
+    assert "padding-block-end: 1px;" in filled_label
     assert "padding-inline: var(--space-3);" in filled_label
     file_label = _block(layout, ".nami-file-state-label ")
     assert "background: var(--color-semantic-transparent);" in file_label
@@ -1114,7 +1165,9 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         file_fill_selector.removesuffix("{"),
     )
     assert "background: var(--nami-state-background);" in file_fills
-    assert "block-size: 20px;" in file_fills
+    assert "block-size: 16px;" in file_fills
+    assert "line-height: var(--font-size-caption);" in file_fills
+    assert "padding-block-end: 1px;" in file_fills
     assert "padding-inline: var(--space-3);" in file_fills
     assert ".nami-state-cue" in source
     task_rail = re.search(r"(?ms)^\.nami-task-rail\s*\{([^}]*)\}", layout)

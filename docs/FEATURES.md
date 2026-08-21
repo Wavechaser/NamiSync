@@ -416,8 +416,10 @@ unrealized unless an entry says otherwise.
   with contrast-selected grayscale text when active; inactive Delete uses exact
   red-main text while active Delete uses the shared contrast-safe neutral label.
   Channel-scoped
-  intent/lifecycle/integrity labels use either main-color text or a borderless
-  20 logical px filled form. Progress keeps its gray track and uses accent when
+  intent/lifecycle/integrity labels use either semantic text or a borderless
+  16 logical px filled form. Hued fills use light-family surfaces with main text
+  in Light and dark-family surfaces with main text in Dark. Progress keeps its
+  gray track and uses accent when
   active/resumed, frozen yellow when paused, and frozen neutral gray when plain
   canceled; forced colors use a `Canvas` track and `Highlight` fill. Ordinary
   keyboard focus uses opposing inner/outer Fluent strokes
@@ -458,7 +460,9 @@ unrealized unless an entry says otherwise.
   folder hierarchies with two basename-only children, all operations, all three
   intent exceptions, and every integrity state. Both renderers wrap supplied
   status text in the channel-scoped semantic-label component and accept exact
-  already-projected keys. They carry no form field and infer no domain result,
+  already-projected keys. Test-only execution rows additionally exercise
+  Copying/Completed lifecycle projection, while integrity rows exercise
+  Verifying/Completed. They carry no form field and infer no domain result,
   hue, or urgency in JavaScript. Forced colors retain system authority. The
   gallery headers also support pointer-drag and arrow-key column resizing
   without persistence and a master checkbox that derives and changes all
@@ -467,13 +471,16 @@ unrealized unless an entry says otherwise.
   authored red/green/blue/yellow/purple `main`, `dark`, and `light` inputs in
   `tokens.css` only. Yellow main becomes `#FFAA22` and purple main becomes
   `#8844CC`; their former main values become yellow light `#FFDD44` and purple
-  light `#BB88EE`. Existing consumers remain main-bound.
+  light `#BB88EE`. Operation consumers remain main-bound; semantic badges use
+  the family light/dark tones as supporting surfaces, and Dark relocating text
+  uses purple-light while Light retains purple-main.
   Further hardcoded or derived color values remain possible after an explicit
   product-author design decision and coordinated contract/token/evidence update.
   Gallery-tested channel-specific aliases, not palette names, feed controls
   and later surfaces. Light/dark pairs are measured; the explicit main-text
-  exceptions are disclosed rather than claimed contrast-conformant, while
-  filled forms retain contrast-safe neutral labels. Forced colors use Windows
+  exceptions are disclosed rather than claimed contrast-conformant. Light
+  red/yellow badge pairs are likewise recorded authored exceptions. Forced
+  colors use Windows
   system colors, and every meaning retains text and non-color cues.
 - **Semantic Color Channels**. The implemented visual contract separates plan
   intent, task lifecycle, and integrity. Hue identifies a class; form expresses
@@ -482,8 +489,9 @@ unrealized unless an entry says otherwise.
   reversibility; lifecycle distinguishes ordinary progress from attention and
   failure; integrity keeps healthy inventory as text while reappearance,
   unsupported entries, missing files, mismatches, and read errors use filled
-  attention badges. Filled forms are 20 logical px pills with exact main-color
-  fills and neutral labels. Paused progress is frozen yellow, plain canceled
+  attention badges. Filled forms are 16 logical px pills with theme-aware
+  family-secondary fills and exact main-color labels. Paused progress is frozen
+  yellow, plain canceled
   progress is frozen neutral gray, and resume returns accent. A future stopped
   count/percentage for paused or canceled work is a recorded decision point,
   not a current payload or renderer feature. Channel-specific aliases,

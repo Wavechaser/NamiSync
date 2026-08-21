@@ -194,8 +194,10 @@ red/green/blue/yellow/purple palette primitives:
 ```
 
 The former yellow and purple main values retain their exact hex values as the
-new `yellow-light` and `purple-light` primitives. Existing consumers remain
-bound to `main`; adding the light names does not reroute any role.
+new `yellow-light` and `purple-light` primitives. Operation-family consumers
+remain bound to `main`. The semantic-label contract below explicitly uses
+light/dark family tones as supporting badge surfaces, and Dark relocating text
+uses purple-light as a documented readability exception.
 
 Palette use is main-first. When an authored family communicates identity or
 state, its `main` swatch is the default color in both ordinary themes. The
@@ -209,14 +211,16 @@ authoritative. If product design explicitly keeps a main foreground below the
 normal-text contrast target, that exception must retain visible non-color text,
 be measured rather than claimed accessible, and be recorded here. Light-theme
 main text in the blue, green, yellow, and red families can fall below the
-normal-text target on pale zebra rows; the darker new purple main instead falls
-below that target as plan-intent text on Dark surfaces. These are explicit
-text-form exceptions, not accessible-color claims. The inactive Delete filter
+normal-text target on pale zebra rows. Dark relocating text therefore uses
+purple-light while Light retains purple-main. These are explicit text-form
+exceptions, not accessible-color claims. The inactive Delete filter
 is the same kind of explicit red-main foreground exception on its neutral
-resting fill. Filled forms and selected filter pills retain contrast-safe
-neutral labels. Their words carry meaning independently of color, forced colors
-replace them with `CanvasText`, and the implementation checkpoint must record
-the exact installed pairs and measured ratios.
+resting fill. Selected filter pills retain contrast-safe neutral labels. Filled
+semantic forms deliberately pair main-colored text with a supporting family
+surface; the Light red/yellow pairs are authored visual exceptions below the
+normal-text target for this review pass. Their words carry meaning independently
+of color, forced colors replace them with Windows system colors, and the gallery
+evidence records the exact installed pairs and measured ratios.
 
 ### Semantic color channels
 
@@ -239,11 +243,13 @@ their channel-specific label, accessible state, surrounding context, and form
 keep the meanings distinct.
 
 In these tables, **text** means colored text without a semantic background.
-**Fill** means a borderless pill-shaped badge with a 20 logical px height, the
-family's exact `main` swatch as its background, and a contrast-safe themed
-neutral label rather than a hue-derived label color. Text, icon/shape, and
-accessible state continue to name the meaning. Forced colors replace authored
-foregrounds and fills with Windows system colors.
+**Fill** means a borderless pill-shaped badge with a 16 logical px height and
+optically raised label alignment. Light uses the family's `light` swatch as the
+surface and Dark uses its `dark` swatch; the label remains the exact `main`
+swatch. Neutral fill uses the corresponding selected-neutral surface and
+secondary neutral text. Text, icon/shape, and accessible state continue to name
+the meaning. Forced colors replace authored foregrounds and fills with Windows
+system colors.
 
 #### Channel 1 — intent
 
@@ -345,7 +351,8 @@ without color. The gallery resolves production HTML/CSS from a clean installed
 wheel and records exact installed `tokens.css`/`components.css` bytes; its own
 page remains tests-only. That clean-wheel statement applies to the pytest
 acceptance composition, not the editable `tools/gui.ps1` preview. Computed text
-pairs must reach 4.5:1 for normal text and 3:1 for large text. State indicators,
+pairs must reach 4.5:1 for normal text and 3:1 for large text except for the
+explicit main-first text and Light badge pairs recorded above. State indicators,
 checkbox/toggle boundaries, and the textbox underline meet the 3:1 non-text
 floor. Ordinary button and textbox elevation strokes are deliberately subtle
 construction lines; the dual keyboard-focus stroke remains the accessible
@@ -353,7 +360,8 @@ control boundary.
 
 The tuned component contract has two command-button tiers. Ordinary buttons
 use the WinUI control composites: `#fbfbfb` fill with a subtle `#e5e5e5`
-boundary in Light and `#2d2d2d` fill with `#353535` in Dark. A Windows-accent
+boundary in Light and the slightly lifted `#383838` fill with `#353535` in
+Dark. A Windows-accent
 primary modifier marks consequential actions such as Execute and Verify.
 Light selects Windows `AccentDark1` as its base; Dark selects `AccentLight2`.
 Hover and press retain that base at 90% and 80% opacity respectively, so Mica
@@ -374,7 +382,7 @@ neutral label policy as other selected filters.
 Active chip hover/press cues preserve the opaque color pair and use a small
 geometric change rather than reducing opacity; plain pressed chips likewise
 retain their active label color rather than carrying a latent state inversion.
-Channel-scoped labels use colored text or the borderless 20 logical px filled
+Channel-scoped labels use colored text or the borderless 16 logical px filled
 form required by the tables above; their words and non-color cues remain
 visible in either form. Progress uses a neutral gray track with system accent
 for active/resumed work, frozen yellow for paused work, and frozen neutral gray
@@ -423,12 +431,16 @@ modules. `file_row.js` owns the shared row skeleton; `plan.js` exports only
 views, not bridge envelopes or compatibility contracts. Callers supply native
 checkbox state, mixed state and accessible labels; depth, folder and expanded
 state; display-ready basename and size text; list-specific status text; and
-notes. `renderPlanRow` accepts only the empty tone/key pair, exact operation
+notes. `renderPlanRow` accepts an empty `intentKey` for a plain row, exact operation
 keys `copy`, `mkdir`, `move`, `recase`, `update`, `move_update`, `trash`,
 `delete`, and `noop`, or exact exception keys `error`, `unsupported`, and
-`blocked`. `renderIntegrityRow` accepts only `verified`, `baselined`,
+`blocked`. A projected execution row may instead supply exact lifecycle key
+`executing` or `completed`; its caller supplies the visible label such as
+“Copying” or “Completed.” `renderIntegrityRow` accepts only `verified`,
+`baselined`,
 `unverified`, `modified`, `reappeared`, `unsupported`, `canceled`, `missing`,
-`mismatched`, and `error`. Each renderer wraps the supplied label in the
+`mismatched`, and `error`, or exact projected lifecycle key `verifying` or
+`completed`. Each renderer wraps the supplied label in the
 channel-scoped semantic-label component. The already-projected key selects its
 fixed component role; there is no form field and JavaScript does not derive a
 domain result, hue, or urgency. The renderers also do not aggregate sizes,
@@ -449,7 +461,7 @@ gallery retains the resulting width only in its current DOM and deliberately
 adds no persistence or bridge state. Folder rows expose a borderless disclosure
 button and mixed checkboxes; projected child rows carry only their basename,
 indent under the folder, and never repeat the full visual path. Plan and
-integrity cells use the channel-specific main-color text or 20 logical px filled
+integrity cells use the channel-specific semantic text or 16 logical px filled
 form defined above, while JavaScript consumes only the exact already-projected
 key. Zebra backgrounds belong only to
 direct rendered rows, including folders; cells and columns are transparent and
@@ -462,8 +474,9 @@ The component gallery owns the only current callers and fixtures. Its static
 sync array covers one plain row, every operation once, all three exception
 states, and a
 partially selected expanded `photos` folder with two indented basename-only
-children. A second static array covers every integrity state and another
-partially selected folder with two children. Test-owned
+children, plus explicit Copying and Completed lifecycle rows. A second static
+array covers every integrity state, Verifying and Completed lifecycle rows,
+and another partially selected folder with two children. Test-owned
 listeners exercise computed collapse/restore and direct-child checkbox
 reconciliation—including mixed to fully selected and back—without inventing
 product hierarchy or recursive selection policy. Each gallery header also owns

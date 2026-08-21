@@ -967,7 +967,9 @@ carry the `headed` marker; all are collected by the release command.
   15 authored `--palette-*-main|dark|light` primitives from `DESKTOP_UI.md`.
   Yellow main is `#FFAA22`, purple main is `#8844CC`, and their former main
   values are the new yellow light `#FFDD44` and purple light `#BB88EE`;
-  existing consumers remain bound to main. Channel-specific aliases keep plan
+  operation consumers remain bound to main. Hued semantic badges explicitly
+  use light/dark family surfaces with main labels, while Dark relocating text
+  uses purple-light. Channel-specific aliases keep plan
   intent, task lifecycle, and integrity distinct. Hue identifies class, form
   expresses attention, and text plus non-color cues preserve meaning.
 
@@ -983,10 +985,12 @@ carry the `headed` marker; all are collected by the release command.
   including reappearance precedence over ordinary unverified/modified display.
   The plan and integrity renderers wrap supplied labels, accept only the exact
   already-projected keys for those two channels, and carry no form field or
-  JavaScript domain inference. Lifecycle remains a separate component-gallery
-  concern rather than a file-row payload.
-  Text forms have no semantic background; filled forms are borderless 20
-  logical px pills with exact main-color fills and neutral labels. Paused
+  JavaScript domain inference. Narrow optional lifecycle keys render the
+  test-only Copying/Completed and Verifying/Completed row specimens without
+  deriving those states in JavaScript.
+  Text forms have no semantic background; filled forms are borderless 16
+  logical px pills with family-light/main pairs in Light and family-dark/main
+  pairs in Dark. Paused
   progress freezes yellow, plain canceled progress freezes neutral gray, and
   resume restores accent. The stopped-count/percentage enhancement remains
   latent and adds no present payload field. Unchecked checkbox evidence uses a
@@ -995,17 +999,18 @@ carry the `headed` marker; all are collected by the release command.
 
   Computed light/dark checks require at least 4.5:1 for normal text and 3:1 for
   large text, non-text indicators, and focus/control boundaries except for the
-  explicit main-color text cases recorded in `DESKTOP_UI.md`; those cases retain
+  explicit main-color text and Light badge cases recorded in `DESKTOP_UI.md`;
+  those cases retain
   the full visible state word, record the measured ratio rather than claiming
-  conformance, and become `CanvasText` in forced colors. Filled forms retain a
-  contrast-safe neutral label. Forced-colors evidence proves those aliases use
-  system colors instead of the authored palette. A static ownership scan proves raw color literals and
+  conformance, and become system colors in forced colors. Forced-colors evidence
+  proves those aliases use system colors instead of the authored palette. A
+  static ownership scan proves raw color literals and
   direct `--palette-*` consumption occur only in `tokens.css`: neither
   `components.css` nor any Slice 4-7 stylesheet/renderer may contain raw colors
   or consume a palette primitive directly. *Not satisfied by* a single-theme
   token set, treating a `light` primitive as an automatic light-theme foreground,
   color- or form-only status meaning, applying one generic status alias across
-  conflicting channels, rerouting existing consumers to the new light tones,
+  conflicting channels, rerouting operation consumers to contextual tones,
   allowing JavaScript to infer domain semantics, or
   a scan that allows inline color in `components.css` or a surface module.
   The neutral/type/spacing/radius/motion/elevation subset is transcribed from

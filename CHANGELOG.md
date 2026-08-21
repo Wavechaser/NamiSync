@@ -119,10 +119,10 @@ later workflow surfaces and beta packaging remain future phases.
 
 - Ratified a 15-token authored palette: yellow main is `#FFAA22`, purple main
   is `#8844CC`, and their predecessor values remain available under the new
-  yellow-light `#FFDD44` and purple-light `#BB88EE` names. Existing consumers
+  yellow-light `#FFDD44` and purple-light `#BB88EE` names. Operation consumers
   remain main-bound.
 - Defined separate intent, task-lifecycle, and integrity color channels. Hue
-  identifies class while text versus a 20 logical px filled badge identifies
+  identifies class while text versus a 16 logical px filled badge identifies
   attention; visible labels, structural cues, and accessible state remain
   authoritative rather than color or form alone.
 - Recorded paused progress as frozen yellow, plain canceled progress as frozen
@@ -132,7 +132,8 @@ later workflow surfaces and beta packaging remain future phases.
   while leaving textbox underlines and dual focus strokes unchanged.
 - Installed the 15 primitives in `tokens.css` only and added channel-scoped
   intent, lifecycle, and integrity aliases/components. Main-color text handles
-  ordinary states; urgent states use borderless 20 logical px filled labels.
+  ordinary states; urgent states use borderless 16 logical px family-secondary
+  labels with main-colored text.
   Operation filters follow the same intent classes, and active Delete now uses
   the shared contrast-safe neutral label.
 - Kept the plan and integrity row inputs narrow: their renderers wrap supplied
@@ -142,6 +143,15 @@ later workflow surfaces and beta packaging remain future phases.
   integrity, and paused/canceled progress case. Forced colors keep the progress
   track on `Canvas` and the fill on `Highlight`. Production task and file-list
   surfaces remain dormant and receive no bridge or projection contract.
+- Tuned filled semantic labels to 16 logical px with optically raised text.
+  Light uses family-light surfaces with main-colored labels; Dark uses
+  family-dark surfaces with main labels, and Dark relocating text uses
+  purple-light. The gallery records the intentional low-contrast Light badge
+  pairs rather than claiming conformance.
+- Lifted ordinary Dark buttons from `#2d2d2d` to `#383838` while retaining the
+  existing hover, pressed, and subtle stroke roles. Added projected Copying and
+  Completed sync rows plus Verifying and Completed integrity rows to the
+  tests-only gallery through narrow optional lifecycle keys.
 
 #### Establish the dormant file-list row renderer (2026-08-20 – 2026-08-21)
 

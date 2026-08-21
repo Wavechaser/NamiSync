@@ -111,12 +111,25 @@ _MAIN_HUE_RGB = {
     "red": "rgb(238, 102, 102)",
     "purple": "rgb(136, 68, 204)",
 }
+_PURPLE_TEXT_RGB = {
+    "light": _MAIN_HUE_RGB["purple"],
+    "dark": "rgb(187, 136, 238)",
+}
+_BADGE_BACKGROUND_RGB = {
+    "light": {
+        "red": "rgb(255, 170, 204)",
+        "yellow": "rgb(255, 221, 68)",
+    },
+    "dark": {
+        "red": "rgb(85, 17, 17)",
+        "yellow": "rgb(85, 51, 0)",
+    },
+}
 _MAIN_TEXT_CONTRAST_EXCEPTIONS = {
     ("light", "blue"),
     ("light", "green"),
     ("light", "yellow"),
     ("light", "red"),
-    ("dark", "purple"),
 }
 _THEME_CANVAS_RGB = {
     "light": "rgb(245, 245, 245)",
@@ -125,6 +138,8 @@ _THEME_CANVAS_RGB = {
 _PLAN_ROW_CASE_KEYS = {
     "plain",
     "copy",
+    "copying",
+    "completed",
     "update",
     "move",
     "move_update",
@@ -139,6 +154,8 @@ _PLAN_ROW_CASE_KEYS = {
 }
 _INTEGRITY_ROW_CASE_KEYS = {
     "folder",
+    "verifying",
+    "completed",
     *_INTEGRITY_CASES,
 }
 _CONTROL_KEYS = {
@@ -229,7 +246,7 @@ _CONTROL_FILL_RGB = {
         "border": "rgb(229, 229, 229)",
     },
     "dark": {
-        "rest": "rgb(45, 45, 45)",
+        "rest": "rgb(56, 56, 56)",
         "hover": "rgb(50, 50, 50)",
         "pressed": "rgb(39, 39, 39)",
         "border": "rgb(53, 53, 53)",
@@ -614,7 +631,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "shape_opacity": "1",
             "shape_width": 16.0,
             "shape_height": 16.0,
-            "height": 20.0 if filled else 16.0,
+            "height": 16.0,
             "foreground": foreground,
             "background": background,
             "indicator": foreground,
@@ -688,6 +705,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         "mkdir",
         "copy",
         "update",
+        "copying",
+        "completed",
         "move",
         "move_update",
         "recase",
@@ -698,11 +717,18 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         "unsupported",
         "blocked",
     )
+    plan_primary = {
+        "plain": ("", "", ""),
+        "copying": ("lifecycle", "executing", "text"),
+        "completed": ("lifecycle", "completed", "text"),
+        **{
+            key: ("intent", key, form)
+            for key, (_hue, form) in _INTENT_CASES.items()
+        },
+    }
     plan_rows = []
     for index, case in enumerate(plan_cases):
-        tone = "" if case == "plain" else "intent"
-        intent_key = "" if case == "plain" else case
-        form = "" if case == "plain" else _INTENT_CASES[case][1]
+        tone, intent_key, form = plan_primary[case]
         filled = form == "fill"
         primary_foreground = (
             "rgb(255, 255, 255)" if filled else "rgb(0, 0, 0)"
@@ -742,7 +768,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "background": "rgb(255, 255, 255)",
                 "primary_foreground": primary_foreground,
                 "primary_background": primary_background,
-                "primary_height": 20.0 if filled else 16.0,
+                "primary_height": 16.0,
                 "primary_alias_foreground": primary_foreground,
                 "primary_alias_background": primary_background,
                 "secondary_color": "rgb(0, 0, 0)",
@@ -760,6 +786,8 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         "folder",
         "verified",
         "baselined",
+        "verifying",
+        "completed",
         "unverified",
         "modified",
         "reappeared",
@@ -769,10 +797,18 @@ def test_component_gallery_report_parser_is_exact_and_nested(
         "mismatched",
         "error",
     )
+    integrity_primary = {
+        "folder": ("integrity", "unverified", "text"),
+        "verifying": ("lifecycle", "verifying", "text"),
+        "completed": ("lifecycle", "completed", "text"),
+        **{
+            key: ("integrity", key, form)
+            for key, (_hue, form) in _INTEGRITY_CASES.items()
+        },
+    }
     integrity_rows = []
     for case in integrity_cases:
-        integrity_key = "unverified" if case == "folder" else case
-        form = _INTEGRITY_CASES[integrity_key][1]
+        tone, integrity_key, form = integrity_primary[case]
         filled = form == "fill"
         primary_foreground = (
             "rgb(255, 255, 255)" if filled else "rgb(0, 0, 0)"
@@ -798,7 +834,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "name": f"{case}.example",
                 "size": "1 KB",
                 "primary": case,
-                "primary_tone": "integrity",
+                "primary_tone": tone,
                 "primary_key": integrity_key,
                 "primary_form": form,
                 "secondary": (
@@ -812,7 +848,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "background": "rgb(255, 255, 255)",
                 "primary_foreground": primary_foreground,
                 "primary_background": primary_background,
-                "primary_height": 20.0 if filled else 16.0,
+                "primary_height": 16.0,
                 "primary_alias_foreground": primary_foreground,
                 "primary_alias_background": primary_background,
                 "secondary_color": "rgb(0, 0, 0)",
@@ -1610,11 +1646,15 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
             semantic_intents["copy"]["foreground"]
         )
         assert controls_by_key["filter_delete_active"]["rest"]["background"] == (
-            semantic_intents["delete"]["background"]
-        )
-        assert controls_by_key["filter_delete_active"]["rest"]["foreground"] == (
             semantic_intents["delete"]["foreground"]
         )
+        assert controls_by_key["filter_delete_active"]["rest"]["foreground"] != (
+            semantic_intents["delete"]["foreground"]
+        )
+        assert _contrast(
+            controls_by_key["filter_delete_active"]["rest"]["foreground"],
+            controls_by_key["filter_delete_active"]["rest"]["background"],
+        ) >= 4.5
         assert controls_by_key["filter_delete"]["rest"]["foreground"] == (
             semantic_intents["trash"]["foreground"]
         )
@@ -2111,16 +2151,16 @@ def _assert_semantic_channels(report: dict[str, object]) -> None:
                 row["border_width"], row["border_style"]
             )
             if form == "fill":
-                assert row["height"] == pytest.approx(20.0, abs=0.5)
+                assert row["height"] == pytest.approx(16.0, abs=0.5)
                 assert _opaque_color(row["background"])
-                assert _contrast(row["foreground"], row["background"]) >= 4.5
-                if forced:
-                    assert row["background"] == system_colors["Highlight"]
-                    assert row["foreground"] == system_colors["HighlightText"]
-                elif hue in _MAIN_HUE_RGB:
-                    assert row["background"] == _MAIN_HUE_RGB[hue]
-                else:
-                    assert hue == "neutral"
+                _assert_filled_semantic_colors(
+                    theme=theme,
+                    hue=hue,
+                    foreground=row["foreground"],
+                    background=row["background"],
+                    forced=forced,
+                    system_colors=system_colors,
+                )
                 continue
 
             assert not _opaque_color(row["background"])
@@ -2135,7 +2175,7 @@ def _assert_semantic_channels(report: dict[str, object]) -> None:
                     row["foreground"], _THEME_CANVAS_RGB[theme]
                 ) >= 4.5
             elif hue in _MAIN_HUE_RGB:
-                assert row["foreground"] == _MAIN_HUE_RGB[hue]
+                assert row["foreground"] == _expected_hue_text(theme, hue)
                 _assert_main_text_contrast(
                     theme,
                     hue,
@@ -2175,7 +2215,7 @@ def _assert_lifecycle_progress(report: dict[str, object]) -> None:
             assert row["fill_background"] == _MAIN_HUE_RGB["yellow"]
         else:
             assert hue == "neutral"
-            assert row["fill_background"] == lifecycles["canceled"]["background"]
+            assert row["fill_background"] == lifecycles["canceled"]["foreground"]
         if reduced:
             assert row["animation_name"] == "none"
         else:
@@ -2211,6 +2251,38 @@ def _assert_main_text_contrast(
         assert ratio >= 4.5
 
 
+def _expected_hue_text(theme: str, hue: str) -> str:
+    if hue == "purple":
+        return _PURPLE_TEXT_RGB[theme]
+    return _MAIN_HUE_RGB[hue]
+
+
+def _assert_filled_semantic_colors(
+    *,
+    theme: str,
+    hue: str,
+    foreground: str,
+    background: str,
+    forced: bool,
+    system_colors: dict[str, str],
+) -> None:
+    if forced:
+        assert background == system_colors["Highlight"]
+        assert foreground == system_colors["HighlightText"]
+        return
+    if hue in _BADGE_BACKGROUND_RGB[theme]:
+        assert background == _BADGE_BACKGROUND_RGB[theme][hue]
+        assert foreground == _MAIN_HUE_RGB[hue]
+        ratio = _contrast(foreground, background)
+        if theme == "light":
+            assert 1.0 < ratio < 4.5
+        else:
+            assert ratio >= 4.5
+        return
+    assert hue == "neutral"
+    assert _contrast(foreground, background) >= 4.5
+
+
 def _assert_plan_list_evidence(
     evidence: dict[str, object],
     *,
@@ -2223,6 +2295,8 @@ def _assert_plan_list_evidence(
         "mkdir",
         "copy",
         "update",
+        "copying",
+        "completed",
         "move",
         "move_update",
         "recase",
@@ -2259,6 +2333,8 @@ def _assert_plan_list_evidence(
         for case, row in by_case.items()
     } == {
         "plain": ("", "", ""),
+        "copying": ("lifecycle", "executing", "text"),
+        "completed": ("lifecycle", "completed", "text"),
         **{
             key: ("intent", key, form)
             for key, (_hue, form) in _INTENT_CASES.items()
@@ -2294,20 +2370,28 @@ def _assert_plan_list_evidence(
                 row["primary_foreground"], row["background"]
             ) >= 4.5
             continue
-        hue, form = _INTENT_CASES[row["primary_key"]]
+        hue, form = (
+            _LIFECYCLE_CASES[row["primary_key"]]
+            if row["primary_tone"] == "lifecycle"
+            else _INTENT_CASES[row["primary_key"]]
+        )
         assert row["primary_form"] == form
-        if forced and form == "fill":
-            assert row["primary_background"] == system_colors["Highlight"]
-            assert row["primary_foreground"] == system_colors["HighlightText"]
-        elif forced:
+        if forced and form != "fill":
             assert not _opaque_color(row["primary_background"])
             assert row["primary_foreground"] == system_colors["CanvasText"]
         elif form == "fill":
-            assert row["primary_background"] == _MAIN_HUE_RGB[hue]
+            _assert_filled_semantic_colors(
+                theme=theme,
+                hue=hue,
+                foreground=row["primary_foreground"],
+                background=row["primary_background"],
+                forced=forced,
+                system_colors=system_colors,
+            )
         else:
             assert not _opaque_color(row["primary_background"])
             if hue in _MAIN_HUE_RGB:
-                assert row["primary_foreground"] == _MAIN_HUE_RGB[hue]
+                assert row["primary_foreground"] == _expected_hue_text(theme, hue)
                 _assert_main_text_contrast(
                     theme,
                     hue,
@@ -2319,10 +2403,7 @@ def _assert_plan_list_evidence(
                     row["primary_foreground"], row["background"]
                 ) >= 4.5
         if form == "fill":
-            assert row["primary_height"] == pytest.approx(20.0, abs=0.5)
-            assert _contrast(
-                row["primary_foreground"], row["primary_background"]
-            ) >= 4.5
+            assert row["primary_height"] == pytest.approx(16.0, abs=0.5)
 
 
 def _assert_integrity_list_evidence(
@@ -2336,6 +2417,8 @@ def _assert_integrity_list_evidence(
         "folder",
         "verified",
         "baselined",
+        "verifying",
+        "completed",
         "unverified",
         "modified",
         "reappeared",
@@ -2366,28 +2449,38 @@ def _assert_integrity_list_evidence(
         by_case["reappeared"]["primary_form"],
     ) == ("integrity", "reappeared", "fill")
     for row in rows:
-        key = "unverified" if row["case"] == "folder" else row["case"]
-        hue, form = _INTEGRITY_CASES[key]
-        assert (row["primary_tone"], row["primary_key"]) == (
-            "integrity",
-            key,
+        if row["case"] == "folder":
+            tone, key = "integrity", "unverified"
+        elif row["case"] in {"verifying", "completed"}:
+            tone, key = "lifecycle", row["case"]
+        else:
+            tone, key = "integrity", row["case"]
+        hue, form = (
+            _LIFECYCLE_CASES[key]
+            if tone == "lifecycle"
+            else _INTEGRITY_CASES[key]
         )
+        assert (row["primary_tone"], row["primary_key"]) == (tone, key)
         assert row["primary_form"] == form
         assert row["secondary_tone"] == ""
         assert row["secondary_key"] == ""
         assert row["secondary"] == "—" or len(row["secondary"]) == 8
-        if forced and form == "fill":
-            assert row["primary_background"] == system_colors["Highlight"]
-            assert row["primary_foreground"] == system_colors["HighlightText"]
-        elif forced:
+        if forced and form != "fill":
             assert not _opaque_color(row["primary_background"])
             assert row["primary_foreground"] == system_colors["CanvasText"]
         elif form == "fill":
-            assert row["primary_background"] == _MAIN_HUE_RGB[hue]
+            _assert_filled_semantic_colors(
+                theme=theme,
+                hue=hue,
+                foreground=row["primary_foreground"],
+                background=row["primary_background"],
+                forced=forced,
+                system_colors=system_colors,
+            )
         else:
             assert not _opaque_color(row["primary_background"])
             if hue in _MAIN_HUE_RGB:
-                assert row["primary_foreground"] == _MAIN_HUE_RGB[hue]
+                assert row["primary_foreground"] == _expected_hue_text(theme, hue)
                 _assert_main_text_contrast(
                     theme,
                     hue,
@@ -2401,10 +2494,7 @@ def _assert_integrity_list_evidence(
         assert row["secondary_color"] == row["secondary_alias_color"]
         assert _contrast(row["secondary_color"], row["background"]) >= 4.5
         if form == "fill":
-            assert row["primary_height"] == pytest.approx(20.0, abs=0.5)
-            assert _contrast(
-                row["primary_foreground"], row["primary_background"]
-            ) >= 4.5
+            assert row["primary_height"] == pytest.approx(16.0, abs=0.5)
 
 
 def _assert_file_list_evidence(
@@ -2549,7 +2639,7 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         assert not _painted_border(row["border_width"], row["border_style"])
         assert not _opaque_color(row["background"]) == (row["form"] == "text")
         if row["form"] == "fill":
-            assert row["height"] == pytest.approx(20.0, abs=0.5)
+            assert row["height"] == pytest.approx(16.0, abs=0.5)
     tri_state = report["control_contract"]["tri_state"]
     assert tri_state["aria_checked"] == "mixed"
     assert tri_state["indeterminate"] is True

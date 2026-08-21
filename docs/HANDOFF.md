@@ -1,60 +1,56 @@
 # Session Handoff
 
-Status (2026-08-21): the desktop color contract is implemented and verified in
-the packaged presentation foundation. Production task and file-list surfaces
-remain dormant and empty until Slice 5 supplies validated projections.
+Status (2026-08-21): the themed semantic-label refinement is implemented and
+verified in the packaged presentation foundation. Production task and file-list
+surfaces remain dormant and empty until Slice 5 supplies validated projections.
 
 ## Delivered
 
-- Installed the exact 15-token palette in `tokens.css`: yellow main is
-  `#FFAA22`, purple main is `#8844CC`, and the former main values are the new
-  unconsumed yellow-light `#FFDD44` and purple-light `#BB88EE` tokens.
-- Replaced the generic status/operation paint contract with scoped intent,
-  lifecycle, and integrity aliases. Ordinary states are main-color text;
-  attention states are borderless 20 logical px main-color pills with
-  contrast-safe neutral labels and visible non-color wording/cues.
-- Kept the dormant plan and integrity row renderers narrow. They accept exact
-  already-projected keys, wrap the supplied label in production HTML, and add
-  no form field, planner inference, domain object, bridge command, or session
-  payload.
-- Expanded the test-only gallery to all 12 intent cases, all 19 lifecycle
-  cases, and all 10 integrity states, including directly projected
-  reappearance, folder nesting/mixed selection, and text-versus-fill evidence.
-- Added lifecycle progress specimens and paint: running/resumed use system
-  accent, paused freezes yellow, and plain canceled freezes neutral gray.
-  Forced colors retain a `Canvas` track and `Highlight` fill.
-- Reduced only the unchecked-checkbox boundary to 1 logical px. Textbox
-  underlines and dual keyboard-focus strokes retain their existing dimensions.
+- Changed hued semantic fills from main-color surfaces with neutral text to
+  theme-aware family pairs: Light uses `light` surfaces with `main` text; Dark
+  uses `dark` surfaces with `main` text. Neutral Canceled uses the selected
+  neutral surface with secondary-neutral text. Forced colors retain
+  `Highlight`/`HighlightText`.
+- Reduced filled badges and file-state labels from 20 to 16 logical px. Their
+  12 px line box plus 1 px logical bottom padding raises the label optically
+  while preserving the borderless pill form.
+- Kept Light relocating text on purple-main and changed Dark relocating text to
+  purple-light. Operation filters remain main-bound.
+- Lifted the ordinary Dark button rest fill from `#2d2d2d` to `#383838`; Light
+  remains `#fbfbfb`, and the existing hover, pressed, and subtle boundary roles
+  are unchanged.
+- Added test-only plan rows for Copying (`executing`) and Completed, plus
+  integrity rows for Verifying and Completed. The dormant renderers copy narrow
+  optional lifecycle keys supplied by already-projected row views; they do not
+  infer lifecycle, hue, urgency, or form.
 
 ## Review
 
-- Adversarial review kept channel names mechanical (`data-intent`,
-  `data-lifecycle`, `data-integrity`) so shared hue families do not recreate a
-  generic cross-channel status meaning.
-- The headed gate caught and fixed a forced-colors defect where both the
-  progress track and fill resolved to `Highlight`; the final track is `Canvas`
-  and remains visibly distinct.
-- Light-theme blue/green/yellow/red text and Dark purple text remain the
-  explicitly documented main-first contrast exceptions. Every filled pair
-  exceeds 4.5:1, forced colors replace authored hues, and text/cues retain the
-  state independently of color.
+- The exact requested Light badge pairs are intentionally low-contrast:
+  red-main on red-light is about 1.76:1 and yellow-main on yellow-light is about
+  1.42:1. Tests record those authored exceptions rather than claiming WCAG
+  conformance; Dark red/yellow pairs remain at least 4.5:1, visible labels and
+  non-color cues retain meaning, and forced colors remain authoritative.
+- The canceled progress fill remains neutral foreground gray rather than using
+  the Canceled badge surface. Active Delete filters likewise retain a red-main
+  surface with contrast-safe neutral text rather than inheriting the semantic
+  Delete badge pair.
 - Production dormancy remains intact: neither file-list specialization is
-  imported by the shipped shell, and no workflow or transport behavior landed.
+  imported by the shipped shell, and no bridge, workflow, or domain projection
+  behavior landed.
 
 ## Verification
 
 - Focused non-headed web neighborhood:
-  `63 passed, 7 skipped, 4 deselected in 3.30s`.
+  `63 passed, 7 skipped, 4 deselected in 3.53s`.
 - Installed-wheel component gallery (Light, Dark, forced colors, reduced
-  motion): `4 passed, 15 deselected in 30.46s`.
-- `git diff --check` passed. Per the user's scope, no department or full suite
+  motion): `4 passed, 15 deselected in 31.26s`.
+- `git diff --check` passes. Per the user's scope, no department or full suite
   was run.
 
 ## Next Checkpoint
 
-- Continue the remaining cosmetic tuning against the ratified channel contract,
-  or begin Slice 5's validated Python projection → bridge → existing row
-  renderer path. Do not add JavaScript domain inference or a provisional form
-  payload.
-- Revisit the intentionally latent paused/canceled stopped-count or percentage
-  only when a real lifecycle projection can own it.
+- Fix the remaining table-column behaviors against the existing six-column,
+  48 rem overflow, drag-resize, folder, and master-selection contracts.
+- Reconsider dark text on Light badge surfaces after visual review if the
+  authored main-on-light pairs prove too weak in use.
