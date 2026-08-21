@@ -2,9 +2,10 @@
 
 Status: M0 scan/plan/preflight, session/event/evidence, execution, integrity,
 and recording contracts are implemented. M1 Stages 2-4 add the fixed XXH3-128
-content contract, nominal heterogeneous result vocabulary, schema-v3 event
-codec, published-copy/post-copy evidence, compound phase results, and the
-continuation state consumed by standalone and linked integrity workflows.
+content contract, nominal heterogeneous result vocabulary,
+published-copy/post-copy evidence, compound phase results, and the continuation
+state consumed by standalone and linked integrity workflows. Current hardening
+advances the core event codec to v4.
 Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
 shared workflow tree substrate without changing their semantics, and makes
 recursive inventory scope an explicit core contract.
@@ -188,22 +189,17 @@ The runner then constructs and releases the one immutable `Terminal` to
 ordinary subscribers. History never needs to consume or parse that Terminal,
 so no corrective second terminal or circular acknowledgement exists.
 
-The active version-3 envelope codec round-trips `StateChanged`,
-`PhaseChanged`, `Progress`, nominal `ItemOutcome` and `IntegrityOutcome`
-values, `Gap`, and `Terminal`, and rejects unknown schema/body versions.
-Current serialization and the browser validator require the exact nine-key
-Progress body: the five aggregate/path fields plus optional paired item
-identity/type and optional paired per-attempt byte counters. The Python
-decoder's `.get(...)` handling for those four additive fields is a defensive
-decode allowance, not a supported production five-key wire shape: history
-refuses Progress, no Progress body is persisted, and the browser requires all
-nine keys.
+The current event codec emits core event-envelope v4 and round-trips
+`StateChanged`, `PhaseChanged`, `Progress`, nominal `ItemOutcome` and
+`IntegrityOutcome` values, `Gap`, and `Terminal`. It also retains explicit v3
+decode support for persisted reliable history without rewriting its hash
+chain. Unknown schema/body versions and v3 Progress are rejected: history
+never admitted lossy Progress, so there is no persisted legacy Progress shape
+to recover.
 
-### Accepted Progress v4 shape
+### Progress v4 shape
 
-The ratified next contract is core event-envelope v4; it is not implemented
-until its producers, codec, workflow view, and exact browser consumer land
-atomically. Version 4 makes every Progress body an exact eleven-key object:
+Version 4 makes every Progress body an exact eleven-key object:
 
 ```text
 phase
@@ -222,6 +218,8 @@ item_bytes_total
 `phase` is a nonempty string. `items_done` and `bytes_done` are exact
 non-boolean, nonnegative integers. Each total is either an exact non-boolean,
 nonnegative integer or `None`; every done value is bounded by its known total.
+Every Progress integer is also bounded by JavaScript's maximum safe integer so
+core cannot emit a snapshot that the exact browser boundary must refuse.
 `current_path` is a string or `None`. Item id and type are both present or both
 `None`; the id is a nonempty string and the type is exactly `operation` or
 `integrity`. An active item requires `items_done < items_total` when the item
@@ -253,14 +251,12 @@ transition table, authority order, and Gap/replay rules live in
 `ARCHITECTURE.md` §2.3 rather than being redefined by module documents.
 
 Core event versioning is independent of every containing or adjacent schema.
-The v4 event-envelope version is carried unchanged through the exact
-browser-facing `SessionEventView`; the desktop bridge command/response schema
-stays v1 and workflow continuation stays v5. History database, UI state, shell,
-and page schema versions do not change. After v4 lands, new EventHub output is
-v4. The codec explicitly retains v3 decoding for persisted reliable history
-without rewriting its hash chain, while refusing v3 Progress because Progress
-was never admitted to history. An unversioned browser-facing event is not a
-supported compatibility boundary.
+The exact browser-facing `SessionEventView` has `session_id`, `sequence`, `at`,
+`schema_version`, `body_type`, and `body`; its nested `schema_version` carries
+the originating envelope's core event version unchanged. The desktop bridge
+command/response schema stays v1 and workflow continuation stays v5. History
+database, UI state, shell, and page schema versions do not change. An
+unversioned browser-facing event is not a supported compatibility boundary.
 
 Every reliable result item carries an explicit `item_type` and `phase`;
 `run_session` accumulates only the nominal `ResultItem` base in emission order,

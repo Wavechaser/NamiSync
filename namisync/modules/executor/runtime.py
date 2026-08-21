@@ -9,6 +9,7 @@ from enum import Enum, StrEnum
 import os
 from pathlib import Path, PureWindowsPath
 import time
+from uuid import uuid4
 
 from namisync.core.evidence import (
     Attestation,
@@ -586,6 +587,7 @@ class _ProgressTracker:
         )
         xset.note_bytes_done(self.bytes_done)
         self._file_bytes: int | None = None
+        self._item_attempt_id: str | None = None
         self._current: PlanOperation | None = None
         self._item_active = False
         self._last_emitted_at = float("-inf")
@@ -593,6 +595,7 @@ class _ProgressTracker:
     def start(self, operation: PlanOperation) -> None:
         self._current = operation
         self._file_bytes = None
+        self._item_attempt_id = None
         self._item_active = True
         self.emit(force=False)
 
@@ -605,6 +608,7 @@ class _ProgressTracker:
             raise RuntimeError("byte stream does not match the active operation")
         had_attempt_progress = self._file_bytes is not None and self._file_bytes > 0
         self._file_bytes = 0
+        self._item_attempt_id = uuid4().hex
         self.emit(force=had_attempt_progress)
 
     def copied(self, size: int) -> None:
@@ -643,6 +647,7 @@ class _ProgressTracker:
         if not self._item_active or settles_active:
             self._current = operation
             self._file_bytes = None
+            self._item_attempt_id = None
             self._item_active = False
         self.emit(force=False)
 
@@ -651,12 +656,14 @@ class _ProgressTracker:
 
     def terminal_completed(self) -> None:
         self._file_bytes = None
+        self._item_attempt_id = None
         self._item_active = False
         self.emit(force=True)
 
     def unwind_completed(self) -> None:
         self._current = None
         self._file_bytes = None
+        self._item_attempt_id = None
         self._item_active = False
         self.emit(force=True)
 
@@ -681,6 +688,7 @@ class _ProgressTracker:
             item_bytes_done = self._file_bytes
             item_bytes_total = active.content_bytes
         snapshot = Progress(
+            phase="execute",
             items_done=self.items_done,
             items_total=self.items_total,
             bytes_done=min(self.bytes_done, self.bytes_total),
@@ -688,6 +696,9 @@ class _ProgressTracker:
             current_path=None if current is None else current.target_rel_path,
             item_id=None if active is None else active.op_id,
             item_type=None if active is None else "operation",
+            item_attempt_id=(
+                None if active is None else self._item_attempt_id
+            ),
             item_bytes_done=item_bytes_done,
             item_bytes_total=item_bytes_total,
         )

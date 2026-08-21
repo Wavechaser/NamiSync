@@ -12,7 +12,7 @@ from time import monotonic, sleep
 
 import pytest
 
-from namisync.core.events import ItemOutcome, Progress
+from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, ItemOutcome, Progress
 from namisync.core.evidence import Outcome
 from namisync.core.session import OperationResult, SessionState
 from namisync.dispatcher import (
@@ -77,7 +77,14 @@ class _ManualClock:
 
 
 def _event(sequence: int, body_type: str = "StateChanged") -> SessionEventView:
-    return SessionEventView(SESSION, sequence, "2026-01-01T00:00:00Z", body_type, {})
+    return SessionEventView(
+        SESSION,
+        sequence,
+        "2026-01-01T00:00:00Z",
+        CORE_EVENT_SCHEMA_VERSION,
+        body_type,
+        {},
+    )
 
 
 def _record(*, terminal: bool = True) -> SessionRecordView:
@@ -267,6 +274,7 @@ class _IntegratedInvocation:
         for index in range(state.progress_count):
             context.emit(
                 Progress(
+                    "execute",
                     items_done=index + 1,
                     items_total=state.progress_count,
                     bytes_done=index + 1,
@@ -321,6 +329,7 @@ class _EnvelopeInvocation:
                 completed = tick * 25 + offset + 1
                 context.emit(
                     Progress(
+                        "execute",
                         items_done=completed,
                         items_total=1_500,
                         bytes_done=completed,
@@ -1233,6 +1242,7 @@ def test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered() -> None:
                     session_id,
                     2,
                     "2026-01-01T00:00:00Z",
+                    CORE_EVENT_SCHEMA_VERSION,
                     "Gap",
                     {"first_missed_seq": 2},
                 )
@@ -1242,6 +1252,7 @@ def test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered() -> None:
                     session_id,
                     4,
                     "2026-01-01T00:00:00Z",
+                    CORE_EVENT_SCHEMA_VERSION,
                     "StateChanged",
                     {},
                 )

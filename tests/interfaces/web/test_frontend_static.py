@@ -1115,6 +1115,7 @@ def test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape() -> N
     )[0]
 
     for field_name in (
+        "phase",
         "items_done",
         "items_total",
         "bytes_done",
@@ -1122,15 +1123,43 @@ def test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape() -> N
         "current_path",
         "item_id",
         "item_type",
+        "item_attempt_id",
         "item_bytes_done",
         "item_bytes_total",
     ):
         assert validator.count(f'"{field_name}"') >= 1
     assert 'value.item_type === "operation"' in validator
     assert 'value.item_type === "integrity"' in validator
+    assert "isValidNonemptyText(value.phase)" in validator
     assert "isValidNonemptyText(value.item_id)" in validator
     assert "identityPresent &&" in validator
+    assert "ID_PATTERN.test(value.item_attempt_id)" in validator
+    assert "value.items_done >= value.items_total" in validator
     assert "value.item_bytes_done <= value.item_bytes_total" in validator
+    assert "value.item_bytes_done <= value.bytes_done" in validator
+    assert "value.item_bytes_total <= value.bytes_total" in validator
+
+
+def test_br_g_36_browser_separates_bridge_and_core_event_versions() -> None:
+    source = (
+        PROJECT_ROOT
+        / "namisync"
+        / "interfaces"
+        / "web"
+        / "assets"
+        / "bridge.js"
+    ).read_text(encoding="utf-8")
+    validator = source.split("function validateSessionEvent(event, sessionId) {", 1)[
+        1
+    ].split("function validateSessionRecord(record, sessionId) {", 1)[0]
+
+    assert "const BRIDGE_SCHEMA_VERSION = 1;" in source
+    assert "const CORE_EVENT_SCHEMA_VERSION = 4;" in source
+    assert "const SCHEMA_VERSION" not in source
+    assert "schema_version: BRIDGE_SCHEMA_VERSION" in source
+    assert "response.schema_version !== BRIDGE_SCHEMA_VERSION" in source
+    assert validator.count('"schema_version"') == 1
+    assert "event.schema_version !== CORE_EVENT_SCHEMA_VERSION" in validator
 
 
 def test_ready_transition_cannot_overwrite_a_native_close_status(

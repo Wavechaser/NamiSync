@@ -1,4 +1,5 @@
-const SCHEMA_VERSION = 1;
+const BRIDGE_SCHEMA_VERSION = 1;
+const CORE_EVENT_SCHEMA_VERSION = 4;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
 const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
 const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
@@ -593,7 +594,7 @@ function createDispatchAttempt(
     rejectCancellation: null,
   };
   const request = JSON.stringify({
-    schema_version: SCHEMA_VERSION,
+    schema_version: BRIDGE_SCHEMA_VERSION,
     request_id: requestId,
     command,
     payload,
@@ -701,7 +702,7 @@ function validateResponse(response, requestId, validateResult) {
     throw new BridgeTransportError();
   }
   if (
-    response.schema_version !== SCHEMA_VERSION ||
+    response.schema_version !== BRIDGE_SCHEMA_VERSION ||
     typeof response.ok !== "boolean"
   ) {
     throw new BridgeTransportError();
@@ -1258,11 +1259,19 @@ function validateTaskUpdate(update, sessionId) {
 
 function validateSessionEvent(event, sessionId) {
   if (
-    !isExactObject(event, ["session_id", "sequence", "at", "body_type", "body"]) ||
+    !isExactObject(event, [
+      "session_id",
+      "sequence",
+      "at",
+      "schema_version",
+      "body_type",
+      "body",
+    ]) ||
     event.session_id !== sessionId ||
     !Number.isSafeInteger(event.sequence) ||
     event.sequence < 1 ||
     !isUtcTimestamp(event.at) ||
+    event.schema_version !== CORE_EVENT_SCHEMA_VERSION ||
     !isPlainJsonObject(event.body)
   ) {
     return false;
@@ -1330,6 +1339,7 @@ function validateProgress(value) {
   if (
     !(
       isExactObject(value, [
+        "phase",
         "items_done",
         "items_total",
         "bytes_done",
@@ -1337,9 +1347,11 @@ function validateProgress(value) {
         "current_path",
         "item_id",
         "item_type",
+        "item_attempt_id",
         "item_bytes_done",
         "item_bytes_total",
       ]) &&
+      isValidNonemptyText(value.phase) &&
       isNonnegativeInteger(value.items_done) &&
       isNullableNonnegativeInteger(value.items_total) &&
       isNonnegativeInteger(value.bytes_done) &&
@@ -1358,14 +1370,35 @@ function validateProgress(value) {
   if (!identityAbsent && !identityPresent) {
     return false;
   }
+  if (
+    identityPresent &&
+    value.items_total !== null &&
+    value.items_done >= value.items_total
+  ) {
+    return false;
+  }
+  const attemptAbsent = value.item_attempt_id === null;
+  const attemptPresent =
+    identityPresent &&
+    typeof value.item_attempt_id === "string" &&
+    ID_PATTERN.test(value.item_attempt_id);
+  if (!attemptAbsent && !attemptPresent) {
+    return false;
+  }
   const itemBytesAbsent =
     value.item_bytes_done === null && value.item_bytes_total === null;
   const itemBytesPresent =
-    identityPresent &&
+    attemptPresent &&
     isNonnegativeInteger(value.item_bytes_done) &&
     isNonnegativeInteger(value.item_bytes_total) &&
-    value.item_bytes_done <= value.item_bytes_total;
-  return itemBytesAbsent || itemBytesPresent;
+    value.item_bytes_done <= value.item_bytes_total &&
+    value.item_bytes_done <= value.bytes_done &&
+    (value.bytes_total === null ||
+      value.item_bytes_total <= value.bytes_total);
+  return (
+    (attemptAbsent && itemBytesAbsent) ||
+    (attemptPresent && (itemBytesAbsent || itemBytesPresent))
+  );
 }
 
 function validateOperationItem(value) {

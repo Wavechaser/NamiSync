@@ -13,7 +13,7 @@ from typing import Callable
 
 from namisync.core.evidence import RecordingStatus
 from namisync.core.events import (
-    SCHEMA_VERSION,
+    CORE_EVENT_SCHEMA_VERSION,
     DeliveryClass,
     Envelope,
     Gap,
@@ -544,7 +544,7 @@ class EventHub:
             session_id=self._session_id,
             seq=self._seq,
             at=self._clock.now(),
-            schema_version=SCHEMA_VERSION,
+            schema_version=CORE_EVENT_SCHEMA_VERSION,
             body=body,
         )
         if isinstance(body, StateChanged):
@@ -610,7 +610,7 @@ class EventHub:
                         session_id=self._session_id,
                         seq=requested,
                         at=self._clock.now(),
-                        schema_version=SCHEMA_VERSION,
+                        schema_version=CORE_EVENT_SCHEMA_VERSION,
                         body=Gap(first_missed_seq=requested),
                     )
                 )

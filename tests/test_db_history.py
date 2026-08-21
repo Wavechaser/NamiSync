@@ -9,12 +9,13 @@ import pytest
 
 import namisync.db.history as history_module
 from namisync.core.events import (
+    CORE_EVENT_SCHEMA_VERSION,
+    LEGACY_CORE_EVENT_SCHEMA_VERSION,
     Envelope,
     Gap,
     ItemOutcome,
     PhaseChanged,
     Progress,
-    SCHEMA_VERSION,
     StateChanged,
     envelope_to_dict,
 )
@@ -70,7 +71,13 @@ def _record(session_id: str = "session-1", *, kind: str = "sync") -> SessionReco
 
 
 def _envelope(record: SessionRecord, seq: int, body: object) -> Envelope:
-    return Envelope(record.session_id, seq, NOW, SCHEMA_VERSION, body)
+    return Envelope(
+        record.session_id,
+        seq,
+        NOW,
+        CORE_EVENT_SCHEMA_VERSION,
+        body,
+    )
 
 
 def _item(seq: int, outcome: Outcome = Outcome.SUCCEEDED) -> ItemOutcome:
@@ -252,6 +259,7 @@ def test_history_finalization_round_trips_summary_items_events_and_phases(
 def test_history_refuses_populated_lossy_progress(tmp_path: Path) -> None:
     record = _record()
     progress = Progress(
+        "execute",
         0,
         1,
         4,
@@ -259,6 +267,7 @@ def test_history_refuses_populated_lossy_progress(tmp_path: Path) -> None:
         "a.bin",
         item_id="op-1",
         item_type="operation",
+        item_attempt_id="a" * 32,
         item_bytes_done=4,
         item_bytes_total=8,
     )
@@ -1117,7 +1126,7 @@ def test_first_commit_clamps_clock_rollback_to_the_observed_start(
         record.session_id,
         1,
         started_at,
-        SCHEMA_VERSION,
+        CORE_EVENT_SCHEMA_VERSION,
         StateChanged(SessionState.RUNNING),
     )
     with HistoryStore(
@@ -1159,7 +1168,7 @@ def test_later_event_timestamp_bounds_commit_and_terminal_time_during_rollback(
                 record.session_id,
                 1,
                 NOW + timedelta(seconds=1),
-                SCHEMA_VERSION,
+                CORE_EVENT_SCHEMA_VERSION,
                 StateChanged(SessionState.RUNNING),
             )
         )
@@ -1167,7 +1176,13 @@ def test_later_event_timestamp_bounds_commit_and_terminal_time_during_rollback(
 
         event_at = NOW + timedelta(seconds=10)
         observer.on_event(
-            Envelope(record.session_id, 2, event_at, SCHEMA_VERSION, body)
+            Envelope(
+                record.session_id,
+                2,
+                event_at,
+                CORE_EVENT_SCHEMA_VERSION,
+                body,
+            )
         )
         clock.value = NOW + timedelta(seconds=3)
         observer.finalize(OperationResult(SessionState.COMPLETED))
@@ -1393,6 +1408,27 @@ def test_event_pages_round_trip_nonitem_reliable_events_and_sequence_gaps(
     assert before_history.next_after_seq == 0
     assert before_history.through_seq == 0
     assert not before_history.has_more
+
+
+def test_history_round_trips_a_persisted_v3_reliable_envelope(
+    tmp_path: Path,
+) -> None:
+    record = _record()
+    envelope = Envelope(
+        record.session_id,
+        1,
+        NOW,
+        LEGACY_CORE_EVENT_SCHEMA_VERSION,
+        PhaseChanged("execute"),
+    )
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-v3", "host-1"))
+        observer.on_event(envelope)
+        observer.flush()
+        with HistoryRepository(store.path) as repository:
+            page = repository.get_event_page("run-v3")
+
+    assert [event.envelope for event in page.events] == [envelope]
 
 
 def test_event_readback_detects_payload_tampering(tmp_path: Path) -> None:
@@ -2018,7 +2054,7 @@ def test_event_readback_validates_duplicate_link_against_canonical_item(
         receipt_hash = history_module._receipt_hash(
             event_seq=3,
             event_at=history_module.encode_utc(NOW),
-            schema_version=SCHEMA_VERSION,
+            schema_version=CORE_EVENT_SCHEMA_VERSION,
             body_type="ItemOutcome",
             disposition=history_module.HistoryEventDisposition.DUPLICATE,
             payload_hash=bytes(row["payload_hash"]),

@@ -209,12 +209,14 @@ def _event(
     body_type: str,
     body: Mapping[str, object],
 ):
+    from namisync.core.events import CORE_EVENT_SCHEMA_VERSION
     from namisync.workflows.views import SessionEventView
 
     return SessionEventView(
         session_id,
         sequence,
         "2026-08-13T00:00:00+00:00",
+        CORE_EVENT_SCHEMA_VERSION,
         body_type,
         dict(body),
     )
@@ -230,6 +232,7 @@ def _deliver_initial_events(sink: object, session_id: str) -> None:
             3,
             "Progress",
             {
+                "phase": "execute",
                 "items_done": 1,
                 "items_total": 1,
                 "bytes_done": 7,
@@ -237,6 +240,7 @@ def _deliver_initial_events(sink: object, session_id: str) -> None:
                 "current_path": "numeric-hole-海.txt",
                 "item_id": None,
                 "item_type": None,
+                "item_attempt_id": None,
                 "item_bytes_done": None,
                 "item_bytes_total": None,
             },

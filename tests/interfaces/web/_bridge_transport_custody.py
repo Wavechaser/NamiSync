@@ -174,6 +174,7 @@ class _CustodyInvocation:
                 ordinal = self._state.task_index * 1_500 + local_progress
                 context.emit(
                     Progress(
+                        "execute",
                         items_done=local_progress + 1,
                         items_total=1_500,
                         bytes_done=local_progress + 1,

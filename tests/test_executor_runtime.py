@@ -3281,10 +3281,11 @@ def _assert_operation_progress_clears_after_outcome(
         (
             event.item_id,
             event.item_type,
+            event.item_attempt_id,
             event.item_bytes_done,
             event.item_bytes_total,
         )
-        == (None, None, None, None)
+        == (None, None, None, None, None)
         for event in following
     )
     assert following[0].current_path == (
@@ -3920,6 +3921,13 @@ def test_partial_copy_pause_forces_latest_snapshot_and_resume_stays_monotonic(
         event for event in timeline if isinstance(event, Progress)
     ]
     assert not any(isinstance(event, ItemOutcome) for event in timeline)
+    paused_attempt_id = paused_progress[-1].item_attempt_id
+    assert paused_attempt_id is not None
+    assert {
+        event.item_attempt_id
+        for event in paused_progress
+        if event.item_attempt_id is not None
+    } == {paused_attempt_id}
     assert (
         paused_progress[-1].item_id,
         paused_progress[-1].item_type,
@@ -3959,6 +3967,7 @@ def test_partial_copy_pause_forces_latest_snapshot_and_resume_stays_monotonic(
     progress = [event for event in timeline if isinstance(event, Progress)]
     assert result.status is SessionState.COMPLETED
     assert backend.calls == 2
+    assert resumed_determinate[0].item_attempt_id != paused_attempt_id
     assert (
         resumed_determinate[0].item_bytes_done,
         resumed_determinate[0].item_bytes_total,
@@ -4127,6 +4136,7 @@ def test_byte_operation_progress_has_stable_identity_and_stream_lifecycle(
     active = _active_operation_progress(events, operation)
     assert result.status is SessionState.COMPLETED
     assert active
+    assert all(event.phase == "execute" for event in active)
     assert all(event.item_type == "operation" for event in active)
     assert (active[0].item_bytes_done, active[0].item_bytes_total) == (
         None,
@@ -4135,6 +4145,8 @@ def test_byte_operation_progress_has_stable_identity_and_stream_lifecycle(
     streamed = [
         event for event in active if event.item_bytes_done is not None
     ]
+    assert len({event.item_attempt_id for event in streamed}) == 1
+    assert streamed[0].item_attempt_id is not None
     assert (
         streamed[0].item_bytes_done,
         streamed[0].item_bytes_total,
@@ -4146,6 +4158,37 @@ def test_byte_operation_progress_has_stable_identity_and_stream_lifecycle(
     assert [event.item_bytes_done for event in streamed] == sorted(
         event.item_bytes_done for event in streamed
     )
+    _assert_operation_progress_clears_after_outcome(events, operation)
+
+
+def test_zero_byte_operation_mints_one_bounded_attempt(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, b"")
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(progress_interval_seconds=0),
+    )
+
+    active = _active_operation_progress(events, operation)
+    determinate = [
+        event for event in active if event.item_bytes_done is not None
+    ]
+    assert result.status is SessionState.COMPLETED
+    assert [
+        (event.item_bytes_done, event.item_bytes_total)
+        for event in determinate
+    ] == [(0, 0)]
+    assert determinate[0].item_attempt_id is not None
+    assert {
+        event.item_attempt_id
+        for event in active
+        if event.item_attempt_id is not None
+    } == {determinate[0].item_attempt_id}
     _assert_operation_progress_clears_after_outcome(events, operation)
 
 
@@ -4178,6 +4221,9 @@ def test_overreported_stream_suppresses_item_fraction_without_aggregate_regressi
         (None, None),
     ]
     assert all(event.item_type == "operation" for event in active)
+    assert active[0].item_attempt_id is None
+    assert active[-1].item_attempt_id == active[1].item_attempt_id
+    assert active[-1].item_attempt_id is not None
     assert [event.bytes_done for event in active] == [
         0,
         0,
@@ -4218,6 +4264,7 @@ def test_nonbyte_operation_progress_has_indeterminate_stable_identity(
     assert result.status is SessionState.COMPLETED
     assert active
     assert all(event.item_type == "operation" for event in active)
+    assert all(event.item_attempt_id is None for event in active)
     assert all(
         (event.item_bytes_done, event.item_bytes_total) == (None, None)
         for event in active
@@ -4265,6 +4312,12 @@ def test_true_pipeline_retry_forces_reset_without_aggregate_regression(
         active[0].bytes_done,
     ) == (0, len(payload), 8)
     assert [event.bytes_done for event in progress] == [0, 8, 12]
+    streamed_attempts = {
+        event.item_attempt_id
+        for event in active
+        if event.item_attempt_id is not None
+    }
+    assert len(streamed_attempts) == 1
     assert (target / "file.bin").read_bytes() == payload
     _assert_operation_progress_clears_after_outcome(timeline, operation)
 
@@ -4294,6 +4347,13 @@ def test_terminal_retried_stream_retains_aggregate_high_water(
     assert result.status is SessionState.FAILED
     assert backend.calls == 2
     assert [event.item_bytes_done for event in active] == [None, 0, 8, 0, 4]
+    reset_attempts = [
+        event.item_attempt_id
+        for event in active
+        if event.item_bytes_done == 0
+    ]
+    assert len(reset_attempts) == 2
+    assert reset_attempts[0] != reset_attempts[1]
     assert [event.bytes_done for event in active] == [0, 0, 8, 8, 8]
     assert result.bytes_done == 8
     assert result.bytes_total == len(payload)
@@ -4353,6 +4413,7 @@ def test_retained_byte_continuation_does_not_reset_item_progress(
     fs.published_target = published_target
     timeline: list[object] = []
     file_bytes_at_settlement: list[int | None] = []
+    attempt_ids_at_settlement: list[str | None] = []
     original_settled = executor_runtime._ProgressTracker.settled
 
     def observe_settlement(
@@ -4361,6 +4422,7 @@ def test_retained_byte_continuation_does_not_reset_item_progress(
         outcome: Outcome,
     ) -> None:
         file_bytes_at_settlement.append(tracker._file_bytes)
+        attempt_ids_at_settlement.append(tracker._item_attempt_id)
         original_settled(tracker, settled_operation, outcome)
 
     monkeypatch.setattr(
@@ -4390,8 +4452,14 @@ def test_retained_byte_continuation_does_not_reset_item_progress(
     assert fs.source_opens == 1
     assert fs.published_metadata_attempts == 2
     assert file_bytes_at_settlement == [operation.content_bytes]
+    assert attempt_ids_at_settlement[0] is not None
     assert full_index < retry_index
     assert sum(event.item_bytes_done == 0 for event in active) == 1
+    assert {
+        event.item_attempt_id
+        for event in active
+        if event.item_attempt_id is not None
+    } == set(attempt_ids_at_settlement)
     assert not any(
         isinstance(event, Progress)
         and event.item_id == str(operation.op_id)

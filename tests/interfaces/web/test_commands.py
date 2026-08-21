@@ -1638,6 +1638,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
         SESSION_ID,
         9,
         "2026-08-12T10:00:00Z",
+        4,
         "StateChanged",
         {"state": "running"},
     )
@@ -1667,6 +1668,7 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
                     "session_id": SESSION_ID,
                     "sequence": 9,
                     "at": "2026-08-12T10:00:00Z",
+                    "schema_version": 4,
                     "body_type": "StateChanged",
                     "body": {"state": "running"},
                 },

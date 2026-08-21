@@ -161,11 +161,10 @@ class DeliveryClass(StrEnum):
 The event plane is observation, not control. A module emits facts; it does not
 wait for an event consumer to decide what happens next.
 
-#### Accepted Progress v4 protocol
+#### Progress v4 protocol
 
-The following contract is ratified for core event-envelope v4 and is not yet
-implemented. Until the atomic v4 producer/consumer change lands, the active
-wire shape remains the version-3 contract described in `CORE.md`.
+The active core event-envelope v4 contract below is the shared authority for
+Progress producers, adapters, and consumers.
 
 Under this protocol, a forced Progress emission bypasses source throttling but
 remains lossy and coalescible. It is always derived from authoritative live
@@ -252,15 +251,15 @@ sequence continuity is known, Progress whose phase disagrees with the latest
 reliable `PhaseChanged` is a protocol error. Terminal truth always supersedes
 retained Progress.
 
-Version numbers are boundary-specific, not one global product number. This
-change advances only the core event envelope to v4. The desktop bridge command
-and response envelope remains v1, workflow continuation remains v5, and the
-history database, UI state, shell, and page schemas do not change. The exact
-browser-facing `SessionEventView` must carry the nested core event version so
-v4 remains visible at the compatibility boundary. Once this contract lands,
-current-version producers emit v4; the codec may retain explicit v3 decoding
-for persisted reliable history, but v3 Progress is unsupported because
-Progress is neither reliable nor persisted.
+Version numbers are boundary-specific, not one global product number. The
+active protocol advances only the core event envelope to v4. The desktop bridge
+command and response envelope remains v1, workflow continuation remains v5,
+and the history database, UI state, shell, and page schemas do not change. The
+exact browser-facing `SessionEventView` carries the nested core event version
+so v4 remains visible at the compatibility boundary. Current-version producers
+emit v4; the codec retains explicit v3 decoding for persisted reliable history,
+but v3 Progress is unsupported because Progress is neither reliable nor
+persisted.
 
 Protocol evidence is intentionally layered:
 

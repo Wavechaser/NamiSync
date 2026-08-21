@@ -300,7 +300,12 @@ def test_bridge_event_benchmark_direct_admission_cleans_up_failures(
 
 
 def test_retained_state_sizer_separates_terminal_results_and_queue_roots() -> None:
-    from namisync.core.events import SCHEMA_VERSION, Envelope, ItemOutcome, Terminal
+    from namisync.core.events import (
+        CORE_EVENT_SCHEMA_VERSION,
+        Envelope,
+        ItemOutcome,
+        Terminal,
+    )
     from namisync.core.evidence import Outcome
     from namisync.core.session import OperationResult, SessionState
     from namisync.workflows.views import (
@@ -328,24 +333,34 @@ def test_retained_state_sizer_separates_terminal_results_and_queue_roots() -> No
             session_id=shared_text,
             seq=2,
             at=datetime.now(timezone.utc),
-            schema_version=SCHEMA_VERSION,
+            schema_version=CORE_EVENT_SCHEMA_VERSION,
             body=Terminal(result),
         )
         nonterminal = SessionEventView(
             shared_text,
             1,
             "2026-08-14T00:00:00+00:00",
+            CORE_EVENT_SCHEMA_VERSION,
             "Progress",
             {
-                "current_path": shared_text,
+                "phase": "execute",
                 "items_done": 1,
                 "items_total": 2,
+                "bytes_done": 1,
+                "bytes_total": 2,
+                "current_path": shared_text,
+                "item_id": shared_text,
+                "item_type": "operation",
+                "item_attempt_id": "a" * 32,
+                "item_bytes_done": 1,
+                "item_bytes_total": 2,
             },
         )
         terminal_event = SessionEventView(
             shared_text,
             2,
             "2026-08-14T00:00:01+00:00",
+            CORE_EVENT_SCHEMA_VERSION,
             "Terminal",
             {"result": {"items": [terminal_text]}},
         )

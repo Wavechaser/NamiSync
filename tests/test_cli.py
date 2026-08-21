@@ -13,7 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.interfaces.cli as cli_module
-from namisync.core.events import Envelope, ItemOutcome, SCHEMA_VERSION
+from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.integrity import (
     IntegrityOutcome,
@@ -725,7 +725,13 @@ def test_recent_history_lists_safe_subset_exception_counts(tmp_path: Path) -> No
             ),
         )
         observer.on_event(
-            Envelope(record.session_id, 1, NOW, SCHEMA_VERSION, blocked)
+            Envelope(
+                record.session_id,
+                1,
+                NOW,
+                CORE_EVENT_SCHEMA_VERSION,
+                blocked,
+            )
         )
         observer.finalize(
             OperationResult(SessionState.COMPLETED, items=(blocked,))

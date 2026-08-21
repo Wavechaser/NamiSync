@@ -72,7 +72,7 @@ def test_br_g_33_progress_flood_is_coalesced_and_never_ejects_slow_stream() -> N
     stream = hub.subscribe(from_seq=1)
     started = monotonic()
     for index in range(1000):
-        hub.emit(Progress(index, 1000, index, 1000, None))
+        hub.emit(Progress("execute", index, 1000, index, 1000, None))
     elapsed = monotonic() - started
     envelope = stream.next(0.1)
     assert isinstance(envelope.body, Progress)
@@ -158,7 +158,9 @@ def test_br_g_33_gap_covers_earliest_missing_reliable_sequence(
         body = (
             PhaseChanged(f"reliable-{index}")
             if kind == "R"
-            else Progress(index, len(pattern), index, len(pattern), None)
+            else Progress(
+                "execute", index, len(pattern), index, len(pattern), None
+            )
         )
         emitted.append((kind, hub.emit(body)))
     if stream is None:
@@ -187,6 +189,7 @@ def test_br_g_33_progress_coalescing_makes_legal_numeric_holes() -> None:
     hub.emit(StateChanged(SessionState.RUNNING))
     hub.emit(
         Progress(
+            "execute",
             1,
             2,
             1,
@@ -194,18 +197,21 @@ def test_br_g_33_progress_coalescing_makes_legal_numeric_holes() -> None:
             "first.bin",
             item_id="1" * 32,
             item_type="operation",
+            item_attempt_id="a" * 32,
             item_bytes_done=1,
             item_bytes_total=2,
         )
     )
     newest = Progress(
-        2,
+        "execute",
+        1,
         2,
         2,
         2,
         "second.bin",
         item_id="2" * 32,
         item_type="operation",
+        item_attempt_id="b" * 32,
         item_bytes_done=2,
         item_bytes_total=2,
     )
@@ -255,7 +261,7 @@ def test_audit_observer_receives_reliable_preterminal_events_and_finalizes() -> 
     observer = Observer()
     hub = make_hub(observer=observer)
     hub.emit(PhaseChanged("one"))
-    hub.emit(Progress(0, 1, 0, 1, None))
+    hub.emit(Progress("execute", 0, 1, 0, 1, None))
     result = OperationResult(SessionState.COMPLETED)
     assert hub.finalize_audit(result) is RecordingStatus.OK
     hub.emit(Terminal(result))

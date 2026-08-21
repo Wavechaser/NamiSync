@@ -286,9 +286,11 @@ SESSION_EVENT = SessionEventView(
     SESSION_ID,
     9,
     "2026-08-13T10:15:00Z",
+    4,
     "Progress",
     MappingProxyType(
         {
+            "phase": "verify",
             "items_done": 1,
             "items_total": 2,
             "bytes_done": 3,
@@ -296,6 +298,7 @@ SESSION_EVENT = SessionEventView(
             "current_path": HOSTILE_TEXT,
             "item_id": HOSTILE_TEXT,
             "item_type": "integrity",
+            "item_attempt_id": "a" * 32,
             "item_bytes_done": 3,
             "item_bytes_total": 4,
         }
@@ -305,8 +308,10 @@ SESSION_EVENT_JSON = {
     "session_id": SESSION_ID,
     "sequence": 9,
     "at": "2026-08-13T10:15:00Z",
+    "schema_version": 4,
     "body_type": "Progress",
     "body": {
+        "phase": "verify",
         "items_done": 1,
         "items_total": 2,
         "bytes_done": 3,
@@ -314,6 +319,7 @@ SESSION_EVENT_JSON = {
         "current_path": HOSTILE_TEXT,
         "item_id": HOSTILE_TEXT,
         "item_type": "integrity",
+        "item_attempt_id": "a" * 32,
         "item_bytes_done": 3,
         "item_bytes_total": 4,
     },

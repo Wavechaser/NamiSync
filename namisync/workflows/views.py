@@ -122,6 +122,7 @@ class SessionEventView:
     session_id: str
     sequence: int
     at: str
+    schema_version: int
     body_type: str
     body: Mapping[str, object]
 
@@ -344,6 +345,7 @@ def session_event_view(envelope: Envelope) -> SessionEventView:
         session_id=str(envelope.session_id),
         sequence=envelope.seq,
         at=envelope.at.isoformat(),
+        schema_version=envelope.schema_version,
         body_type=type(body).__name__,
         body=payload,
     )

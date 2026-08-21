@@ -455,6 +455,7 @@ def _baseline_run(
     tape = Tape()
     tape.emit(
         Progress(
+            "verify",
             items_done=len(item_ids),
             items_total=len(item_ids),
             bytes_done=3 * len(item_ids),
@@ -501,8 +502,8 @@ def test_prime_baselines_requires_one_distinct_attestation_per_file(
 @pytest.mark.parametrize(
     "progress",
     [
-        Progress(2, 3, 6, 6, None),
-        Progress(2, 2, 3, 3, None),
+        Progress("verify", 2, 3, 6, 6, None),
+        Progress("verify", 2, 2, 3, 3, None),
     ],
 )
 def test_prime_baselines_requires_exact_progress_coverage(

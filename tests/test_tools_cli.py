@@ -654,6 +654,7 @@ def _verifier_run(
     )
     tape.emit(
         Progress(
+            "execute",
             items_done=completed,
             items_total=len(results) if items_total is None else items_total,
             bytes_done=completed_bytes,

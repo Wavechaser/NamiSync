@@ -182,6 +182,7 @@ const event = (sessionId, sequence, bodyType = "StateChanged", body = { state: "
     session_id: sessionId,
     sequence,
     at,
+    schema_version: 4,
     body_type: bodyType,
     body,
   },
@@ -290,6 +291,7 @@ assert.equal(one0.request.payload.replay_from, null);
 success(one0, [
   event(session("1"), 1),
   event(session("1"), 3, "Progress", {
+    phase: "execute",
     items_done: 3,
     items_total: 3,
     bytes_done: 0,
@@ -297,6 +299,7 @@ success(one0, [
     current_path: null,
     item_id: null,
     item_type: null,
+    item_attempt_id: null,
     item_bytes_done: null,
     item_bytes_total: null,
   }),
@@ -451,6 +454,69 @@ assert.equal(three5.request.payload.replay_from, 1);
 assert.equal(acceptedThree.length, 0);
 stopThree();
 
+// Session events carry the nested core event version independently of the
+// bridge command/response version. Exact-shape failures leave the replay
+// cursor unchanged, while the current core version is accepted.
+const eventVersionSession = "98".repeat(16);
+const eventVersionTask = `task-${"76".repeat(16)}`;
+const acceptedEventVersions = [];
+const refusedEventVersions = [];
+let eventVersionRequestIndex = requests.length;
+const stopEventVersions = bridge.startTaskDrain(
+  eventVersionTask,
+  eventVersionSession,
+  (update) => acceptedEventVersions.push(update),
+  (error) => refusedEventVersions.push(error),
+);
+const validVersionedEvent = event(eventVersionSession, 1);
+const { schema_version: omittedEventVersion, ...eventWithoutVersion } =
+  validVersionedEvent.event;
+void omittedEventVersion;
+const invalidVersionedEvents = [
+  [
+    "missing nested event version",
+    { ...validVersionedEvent, event: eventWithoutVersion },
+  ],
+  [
+    "legacy nested event version",
+    {
+      ...validVersionedEvent,
+      event: { ...validVersionedEvent.event, schema_version: 3 },
+    },
+  ],
+  [
+    "extra nested event key",
+    {
+      ...validVersionedEvent,
+      event: { ...validVersionedEvent.event, extra: null },
+    },
+  ],
+];
+
+for (const [label, invalidEvent] of invalidVersionedEvents) {
+  const malformed = await nextRequest(eventVersionRequestIndex);
+  eventVersionRequestIndex += 1;
+  assert.equal(malformed.request.payload.replay_from, null, label);
+  success(malformed, [invalidEvent]);
+
+  const recovery = await nextRequest(eventVersionRequestIndex);
+  eventVersionRequestIndex += 1;
+  assert.equal(recovery.request.payload.replay_from, 1, label);
+  assert.equal(acceptedEventVersions.length, 0, label);
+  assert.equal(refusedEventVersions.length, 0, label);
+  success(recovery, []);
+  await turns();
+}
+
+const validEventVersionRequest = await nextRequest(eventVersionRequestIndex);
+assert.equal(validEventVersionRequest.request.payload.replay_from, null);
+success(validEventVersionRequest, [validVersionedEvent]);
+await turns();
+assert.equal(refusedEventVersions.length, 0);
+assert.equal(acceptedEventVersions.length, 1);
+assert.equal(acceptedEventVersions[0].event.schema_version, 4);
+stopEventVersions();
+
 // Progress is an exact current-source shape. Malformed item identity or byte
 // telemetry invalidates the whole batch and recovers from the unchanged
 // cursor. A valid populated zero-byte stream remains determinate.
@@ -466,33 +532,105 @@ const stopProgressMatrix = bridge.startTaskDrain(
   (error) => refusedProgressMatrix.push(error),
 );
 const validProgressBody = Object.freeze({
+  phase: "execute",
   items_done: 0,
   items_total: 1,
-  bytes_done: 0,
+  bytes_done: 1,
   bytes_total: 1,
   current_path: "matrix.bin",
   item_id: "matrix-operation",
   item_type: "operation",
-  item_bytes_done: 0,
+  item_attempt_id: "12".repeat(16),
+  item_bytes_done: 1,
   item_bytes_total: 1,
 });
 const invalidProgressBodies = [
   [
-    "legacy five-key body",
+    "legacy nine-key body",
     {
       items_done: 0,
       items_total: 1,
       bytes_done: 0,
       bytes_total: 1,
       current_path: "matrix.bin",
+      item_id: "matrix-operation",
+      item_type: "operation",
+      item_bytes_done: 0,
+      item_bytes_total: 1,
     },
   ],
   ["extra key", { ...validProgressBody, extra: null }],
+  ["empty phase", { ...validProgressBody, phase: "" }],
+  ["non-text phase", { ...validProgressBody, phase: 7 }],
+  ["boolean items done", { ...validProgressBody, items_done: true }],
+  ["fractional items done", { ...validProgressBody, items_done: 0.5 }],
+  ["negative items done", { ...validProgressBody, items_done: -1 }],
+  [
+    "unsafe items done",
+    { ...validProgressBody, items_done: Number.MAX_SAFE_INTEGER + 1 },
+  ],
+  ["boolean items total", { ...validProgressBody, items_total: true }],
+  ["fractional items total", { ...validProgressBody, items_total: 1.5 }],
+  ["negative items total", { ...validProgressBody, items_total: -1 }],
+  [
+    "unsafe items total",
+    { ...validProgressBody, items_total: Number.MAX_SAFE_INTEGER + 1 },
+  ],
+  ["boolean bytes done", { ...validProgressBody, bytes_done: true }],
+  ["fractional bytes done", { ...validProgressBody, bytes_done: 0.5 }],
+  ["negative bytes done", { ...validProgressBody, bytes_done: -1 }],
+  [
+    "unsafe bytes done",
+    { ...validProgressBody, bytes_done: Number.MAX_SAFE_INTEGER + 1 },
+  ],
+  ["boolean bytes total", { ...validProgressBody, bytes_total: true }],
+  ["fractional bytes total", { ...validProgressBody, bytes_total: 1.5 }],
+  ["negative bytes total", { ...validProgressBody, bytes_total: -1 }],
+  [
+    "unsafe bytes total",
+    { ...validProgressBody, bytes_total: Number.MAX_SAFE_INTEGER + 1 },
+  ],
+  ["items done exceeds total", { ...validProgressBody, items_done: 2 }],
+  ["bytes done exceeds total", { ...validProgressBody, bytes_done: 2 }],
+  ["non-text current path", { ...validProgressBody, current_path: 7 }],
   ["item id without type", { ...validProgressBody, item_type: null }],
   ["item type without id", { ...validProgressBody, item_id: null }],
   ["empty item id", { ...validProgressBody, item_id: "" }],
   ["non-text item id", { ...validProgressBody, item_id: 7 }],
   ["unknown item type", { ...validProgressBody, item_type: "scan" }],
+  [
+    "active item after admission settled",
+    {
+      ...validProgressBody,
+      items_done: 1,
+    },
+  ],
+  [
+    "attempt without identity",
+    {
+      ...validProgressBody,
+      item_id: null,
+      item_type: null,
+      item_bytes_done: null,
+      item_bytes_total: null,
+    },
+  ],
+  [
+    "bytes without attempt",
+    { ...validProgressBody, item_attempt_id: null },
+  ],
+  [
+    "short attempt id",
+    { ...validProgressBody, item_attempt_id: "12" },
+  ],
+  [
+    "uppercase attempt id",
+    { ...validProgressBody, item_attempt_id: "AB".repeat(16) },
+  ],
+  [
+    "non-text attempt id",
+    { ...validProgressBody, item_attempt_id: 7 },
+  ],
   [
     "item bytes done without total",
     { ...validProgressBody, item_bytes_total: null },
@@ -503,7 +641,12 @@ const invalidProgressBodies = [
   ],
   [
     "item bytes without identity",
-    { ...validProgressBody, item_id: null, item_type: null },
+    {
+      ...validProgressBody,
+      item_id: null,
+      item_type: null,
+      item_attempt_id: null,
+    },
   ],
   [
     "boolean item bytes done",
@@ -541,6 +684,22 @@ const invalidProgressBodies = [
     "item bytes done exceeds total",
     { ...validProgressBody, item_bytes_done: 2 },
   ],
+  [
+    "item bytes done exceeds aggregate",
+    {
+      ...validProgressBody,
+      bytes_done: 0,
+      item_bytes_done: 1,
+    },
+  ],
+  [
+    "item bytes total exceeds aggregate total",
+    {
+      ...validProgressBody,
+      bytes_total: 0,
+      item_bytes_total: 1,
+    },
+  ],
 ];
 
 for (const [label, body] of invalidProgressBodies) {
@@ -560,18 +719,41 @@ for (const [label, body] of invalidProgressBodies) {
 
 const validZeroProgress = {
   ...validProgressBody,
+  bytes_done: 0,
   bytes_total: 0,
+  item_bytes_done: 0,
   item_bytes_total: 0,
+};
+const validIndeterminateProgress = {
+  ...validProgressBody,
+  item_bytes_done: null,
+  item_bytes_total: null,
+};
+const validPrestreamProgress = {
+  ...validProgressBody,
+  item_attempt_id: null,
+  item_bytes_done: null,
+  item_bytes_total: null,
 };
 const progressMatrixValid = await nextRequest(progressMatrixRequestIndex);
 assert.equal(progressMatrixValid.request.payload.replay_from, null);
 success(progressMatrixValid, [
   event(progressMatrixSession, 1, "Progress", validZeroProgress),
+  event(progressMatrixSession, 2, "Progress", validIndeterminateProgress),
+  event(progressMatrixSession, 3, "Progress", validPrestreamProgress),
 ]);
 await turns();
 assert.equal(refusedProgressMatrix.length, 0);
-assert.equal(acceptedProgressMatrix.length, 1);
+assert.equal(acceptedProgressMatrix.length, 3);
 assert.deepEqual(acceptedProgressMatrix[0].event.body, validZeroProgress);
+assert.deepEqual(
+  acceptedProgressMatrix[1].event.body,
+  validIndeterminateProgress,
+);
+assert.deepEqual(
+  acceptedProgressMatrix[2].event.body,
+  validPrestreamProgress,
+);
 stopProgressMatrix();
 
 // One malformed lossy Progress invalidates reliable siblings in the same

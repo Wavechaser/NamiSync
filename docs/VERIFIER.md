@@ -216,10 +216,9 @@ custody without terminal, and resume freshly refreshes/guards only the remaining
 selection. Rebaseline therefore uses the same continuation rather than a
 separate short-operation exception.
 
-The following paragraphs describe the active version-3 verifier behavior. The
-accepted version-4 field meanings, transition authority, and recovery rules are
-owned centrally by `ARCHITECTURE.md` §2.3 and will supersede overlapping local
-wording when the atomic v4 delivery lands.
+The shared version-4 field meanings, transition authority, and recovery rules
+are owned centrally by `ARCHITECTURE.md` §2.3. The following paragraphs record
+only the verifier's implementation of that protocol.
 
 `bytes_done` measures physical read work, not unique logical file coverage. A
 pause during an in-flight file restarts that file on resume, so already-read
@@ -227,17 +226,20 @@ bytes are counted again while the item still emits exactly one terminal result;
 the aggregate total expands as needed to keep that physical-work progress
 monotonic and bounded.
 
-Each pending standalone row first emits its stable item id with
-`item_type=integrity`; a post-copy candidate keyed by its originating executor
-operation id uses `item_type=operation`. The type names the UI row-lookup
-namespace, not the verifier phase or the reliable outcome kind, so post-copy
-settlement remains an `IntegrityOutcome`. Identity begins with null byte
-counters. Only after the opened handle has passed volume, expected-stat, and
-baseline-subject guards does the reporter start a determinate stream at
-`0 / opened_size`. Chunk callbacks advance an attempt-local counter. If a
+Verifier Progress self-describes its active mode as `phase=verify`,
+`phase=baseline`, or `phase=rebaseline`. Each pending standalone row first
+emits its stable item id with `item_type=integrity`; a post-copy candidate keyed
+by its originating executor operation id uses `item_type=operation`. The type
+names the UI row-lookup namespace, not the verifier phase or the reliable
+outcome kind, so post-copy settlement remains an `IntegrityOutcome`. Identity
+begins with no attempt id or byte counters. Only after the opened handle has
+passed volume, expected-stat, and baseline-subject guards does the reporter
+mint a fresh opaque 32-lowercase-hex attempt id and start a determinate stream
+at `0 / opened_size`. Chunk callbacks advance that attempt-local counter. If a
 changing subject yields more bytes than that admitted size, later snapshots
-keep identity active but omit both item-byte counters rather than expanding the
-item admission; the aggregate total still expands to count all physical work.
+keep item and attempt identity active but omit both item-byte counters rather
+than expanding the item admission; the aggregate total still expands to count
+all physical work.
 A reliable `IntegrityOutcome` precedes completion bookkeeping and a
 normally throttled inactive transition that clears all item fields while
 retaining the last display path. Item start, determinate-stream start, and item
@@ -248,9 +250,9 @@ of selected-item count.
 Pause does not invent a settlement state: after the read unwinds it force-emits
 the latest active attempt when a stream is in flight, so the 100 ms throttle
 cannot leave a stale paused byte count; a pause at an inter-item checkpoint is
-truthfully inactive. Resume creates a new read attempt whose item counter starts
-at zero while the aggregate physical-read counter retains prior work and never
-regresses. Cancellation emits every
+truthfully inactive. Resume re-entry mints a new attempt id whose item counter
+starts at zero while the aggregate physical-read counter retains prior work and
+never regresses. Cancellation emits every
 required canceled outcome before one forced inactive control snapshot. Pause
 likewise adds one forced control snapshot, active only when an attempt is in
 flight; neither path emits the successful-phase final boundary. Ordinary

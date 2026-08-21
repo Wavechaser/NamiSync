@@ -968,6 +968,7 @@ def test_xv_5_execute_pause_preserves_exact_evidence_then_verifies_all() -> None
         execution_set.note_bytes_done(7)
         context.emit(
             Progress(
+                "execute",
                 items_done=1,
                 items_total=2,
                 bytes_done=7,
@@ -975,6 +976,7 @@ def test_xv_5_execute_pause_preserves_exact_evidence_then_verifies_all() -> None
                 current_path=second.target_rel_path,
                 item_id=str(second.op_id),
                 item_type="operation",
+                item_attempt_id="a" * 32,
                 item_bytes_done=2,
                 item_bytes_total=second.content_bytes,
             )
@@ -1270,6 +1272,7 @@ def test_running_execute_cancel_never_starts_verify() -> None:
         execution_set.note_bytes_done(3)
         context.emit(
             Progress(
+                "execute",
                 items_done=0,
                 items_total=1,
                 bytes_done=3,
@@ -1277,6 +1280,7 @@ def test_running_execute_cancel_never_starts_verify() -> None:
                 current_path=operation.target_rel_path,
                 item_id=str(operation.op_id),
                 item_type="operation",
+                item_attempt_id="b" * 32,
                 item_bytes_done=3,
                 item_bytes_total=operation.content_bytes,
             )

@@ -19,7 +19,7 @@ from namisync.core.events import (
     Gap,
     ItemOutcome,
     PhaseChanged,
-    SCHEMA_VERSION,
+    CORE_EVENT_SCHEMA_VERSION,
     Terminal,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
@@ -89,7 +89,7 @@ def _envelope(session_id: str, sequence: int, body: object) -> Envelope:
         SessionId(session_id),
         sequence,
         NOW,
-        SCHEMA_VERSION,
+        CORE_EVENT_SCHEMA_VERSION,
         body,
     )
 
@@ -269,7 +269,7 @@ def test_history_service_repairs_a_gap_through_one_fixed_durable_watermark(
                     record.session_id,
                     sequence,
                     NOW,
-                    SCHEMA_VERSION,
+                    CORE_EVENT_SCHEMA_VERSION,
                     PhaseChanged("inventory"),
                 )
             )
@@ -346,7 +346,7 @@ def test_history_service_ends_a_fresh_traversal_ahead_of_durability(
                 record.session_id,
                 1,
                 NOW,
-                SCHEMA_VERSION,
+                CORE_EVENT_SCHEMA_VERSION,
                 PhaseChanged("inventory"),
             )
         )
@@ -395,7 +395,7 @@ def test_history_service_exposes_receipts_and_degradation_counts(
                     record.session_id,
                     1,
                     NOW,
-                    SCHEMA_VERSION,
+                    CORE_EVENT_SCHEMA_VERSION,
                     oversized,
                 )
             )
@@ -412,7 +412,7 @@ def test_history_service_exposes_receipts_and_degradation_counts(
     assert summary.rejected_event_count == 1
     assert summary.audit_status == RecordingStatus.DEGRADED.value
     assert page.events[0].session_id == "receipt-session"
-    assert page.events[0].schema_version == SCHEMA_VERSION
+    assert page.events[0].schema_version == CORE_EVENT_SCHEMA_VERSION
     assert page.events[0].disposition == "rejected"
     assert page.events[0].body is None
     assert page.events[0].rejection_reason == "event-too-large"
@@ -451,7 +451,7 @@ def test_history_service_exposes_cleanly_flushed_nonterminal_run_as_incomplete(
                 record.session_id,
                 3,
                 NOW,
-                SCHEMA_VERSION,
+                CORE_EVENT_SCHEMA_VERSION,
                 PhaseChanged("inventory"),
             )
         )
@@ -570,7 +570,7 @@ def test_retained_summary_classification_matches_live_result(
                     record.session_id,
                     sequence,
                     NOW,
-                    SCHEMA_VERSION,
+                    CORE_EVENT_SCHEMA_VERSION,
                     item,
                 )
             )
@@ -591,6 +591,7 @@ def test_interface_views_are_recursive_json_primitives_without_duck_typing() -> 
             session_id="session",
             sequence=1,
             at=NOW.isoformat(),
+            schema_version=CORE_EVENT_SCHEMA_VERSION,
             body_type="PhaseChanged",
             body={"phase": "inventory"},
         ),

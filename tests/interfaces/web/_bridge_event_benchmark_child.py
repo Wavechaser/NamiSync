@@ -204,6 +204,7 @@ class _BenchmarkInvocation:
             completed = tick + 1
             context.emit(
                 Progress(
+                    "execute",
                     items_done=completed,
                     items_total=1_500,
                     bytes_done=completed,

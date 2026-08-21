@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -18,7 +19,29 @@ from namisync.core.integrity import (
 )
 from namisync.core.session import ResultItem
 
-SCHEMA_VERSION = 3
+CORE_EVENT_SCHEMA_VERSION = 4
+LEGACY_CORE_EVENT_SCHEMA_VERSION = 3
+SUPPORTED_CORE_EVENT_SCHEMA_VERSIONS = frozenset(
+    {LEGACY_CORE_EVENT_SCHEMA_VERSION, CORE_EVENT_SCHEMA_VERSION}
+)
+
+_JAVASCRIPT_MAX_SAFE_INTEGER = (1 << 53) - 1
+_PROGRESS_ATTEMPT_ID = re.compile(r"[0-9a-f]{32}\Z")
+_PROGRESS_BODY_FIELDS = frozenset(
+    {
+        "phase",
+        "items_done",
+        "items_total",
+        "bytes_done",
+        "bytes_total",
+        "current_path",
+        "item_id",
+        "item_type",
+        "item_attempt_id",
+        "item_bytes_done",
+        "item_bytes_total",
+    }
+)
 
 
 class DeliveryClass(StrEnum):
@@ -38,6 +61,7 @@ class PhaseChanged:
 
 @dataclass(frozen=True, slots=True)
 class Progress:
+    phase: str
     items_done: int
     items_total: int | None
     bytes_done: int
@@ -45,16 +69,27 @@ class Progress:
     current_path: str | None
     item_id: str | None = None
     item_type: str | None = None
+    item_attempt_id: str | None = None
     item_bytes_done: int | None = None
     item_bytes_total: int | None = None
 
     def __post_init__(self) -> None:
-        values = (self.items_done, self.bytes_done)
-        totals = (self.items_total, self.bytes_total)
-        if any(value < 0 for value in values):
-            raise ValueError("progress counters cannot be negative")
-        if any(value is not None and value < 0 for value in totals):
-            raise ValueError("progress totals cannot be negative")
+        if not isinstance(self.phase, str):
+            raise TypeError("progress phase must be a string")
+        if not self.phase:
+            raise ValueError("progress phase must be non-empty")
+        _require_nonnegative_safe_integer(self.items_done, "progress items_done")
+        _require_nonnegative_safe_integer(self.bytes_done, "progress bytes_done")
+        _require_optional_nonnegative_safe_integer(
+            self.items_total, "progress items_total"
+        )
+        _require_optional_nonnegative_safe_integer(
+            self.bytes_total, "progress bytes_total"
+        )
+        if self.current_path is not None and not isinstance(
+            self.current_path, str
+        ):
+            raise TypeError("progress current_path must be a string or None")
         if self.items_total is not None and self.items_done > self.items_total:
             raise ValueError("items_done cannot exceed items_total")
         if self.bytes_total is not None and self.bytes_done > self.bytes_total:
@@ -69,22 +104,40 @@ class Progress:
                 or self.item_type not in {"operation", "integrity"}
             ):
                 raise ValueError("progress item_type is unsupported")
+            if self.items_total is not None and self.items_done >= self.items_total:
+                raise ValueError(
+                    "active progress item requires an unsettled selected item"
+                )
+        if self.item_attempt_id is not None:
+            if self.item_id is None:
+                raise ValueError("progress item attempt requires item identity")
+            if (
+                not isinstance(self.item_attempt_id, str)
+                or _PROGRESS_ATTEMPT_ID.fullmatch(self.item_attempt_id) is None
+            ):
+                raise ValueError(
+                    "progress item_attempt_id must be 32 lowercase hexadecimal characters"
+                )
         if (self.item_bytes_done is None) != (self.item_bytes_total is None):
             raise ValueError("progress item byte counters must be present as a pair")
         if self.item_bytes_done is not None:
-            if self.item_id is None:
-                raise ValueError("progress item byte counters require item identity")
-            if (
-                type(self.item_bytes_done) is not int
-                or type(self.item_bytes_total) is not int
-            ):
-                raise TypeError("progress item byte counters must be exact integers")
-            if self.item_bytes_done < 0 or self.item_bytes_total < 0:
-                raise ValueError("progress item byte counters cannot be negative")
+            if self.item_attempt_id is None:
+                raise ValueError("progress item byte counters require an item attempt")
+            _require_nonnegative_safe_integer(
+                self.item_bytes_done, "progress item_bytes_done"
+            )
+            _require_nonnegative_safe_integer(
+                self.item_bytes_total, "progress item_bytes_total"
+            )
             if self.item_bytes_done > self.item_bytes_total:
-                raise ValueError(
-                    "item_bytes_done cannot exceed item_bytes_total"
-                )
+                raise ValueError("item_bytes_done cannot exceed item_bytes_total")
+            if self.item_bytes_done > self.bytes_done:
+                raise ValueError("item_bytes_done cannot exceed bytes_done")
+            if (
+                self.bytes_total is not None
+                and self.item_bytes_total > self.bytes_total
+            ):
+                raise ValueError("item_bytes_total cannot exceed bytes_total")
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +162,9 @@ class Gap:
     first_missed_seq: int
 
     def __post_init__(self) -> None:
+        _require_nonnegative_safe_integer(
+            self.first_missed_seq, "first_missed_seq"
+        )
         if self.first_missed_seq < 1:
             raise ValueError("first_missed_seq must be positive")
 
@@ -140,13 +196,19 @@ class Envelope:
     def __post_init__(self) -> None:
         if not isinstance(self.session_id, str) or not self.session_id:
             raise ValueError("session_id must be non-empty")
-        if type(self.seq) is not int or self.seq < 1:
+        _require_nonnegative_safe_integer(self.seq, "event sequence")
+        if self.seq < 1:
             raise ValueError("event sequence must be positive")
         if (
             type(self.schema_version) is not int
-            or self.schema_version != SCHEMA_VERSION
+            or self.schema_version not in SUPPORTED_CORE_EVENT_SCHEMA_VERSIONS
         ):
             raise ValueError(f"unsupported event schema version: {self.schema_version}")
+        if (
+            self.schema_version == LEGACY_CORE_EVENT_SCHEMA_VERSION
+            and isinstance(self.body, Progress)
+        ):
+            raise ValueError("Progress requires core event schema version 4")
         if not isinstance(self.at, datetime):
             raise TypeError("event timestamp must be a datetime")
         if self.at.tzinfo is None or self.at.utcoffset() is None:
@@ -171,6 +233,7 @@ def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
         body_data = {"phase": body.phase}
     elif isinstance(body, Progress):
         body_data = {
+            "phase": body.phase,
             "items_done": body.items_done,
             "items_total": body.items_total,
             "bytes_done": body.bytes_done,
@@ -178,6 +241,7 @@ def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
             "current_path": body.current_path,
             "item_id": body.item_id,
             "item_type": body.item_type,
+            "item_attempt_id": body.item_attempt_id,
             "item_bytes_done": body.item_bytes_done,
             "item_bytes_total": body.item_bytes_total,
         }
@@ -215,7 +279,7 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
     )
 
     version = _integer(data["schema_version"], "event schema version")
-    if version != SCHEMA_VERSION:
+    if version not in SUPPORTED_CORE_EVENT_SCHEMA_VERSIONS:
         raise ValueError(f"unsupported event schema version: {version}")
     body_type = _string(data["body_type"], "event body type")
     raw = data["body"]
@@ -228,7 +292,11 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
     elif body_type == "PhaseChanged":
         body = PhaseChanged(_string(raw["phase"], "phase event phase"))
     elif body_type == "Progress":
+        if version != CORE_EVENT_SCHEMA_VERSION:
+            raise ValueError("Progress requires core event schema version 4")
+        _require_exact_keys(raw, _PROGRESS_BODY_FIELDS, "progress body")
         body = Progress(
+            phase=_string(raw["phase"], "progress phase"),
             items_done=_integer(
                 raw["items_done"], "progress items_done"
             ),
@@ -245,16 +313,19 @@ def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
                 raw["current_path"], "progress current_path"
             ),
             item_id=_optional_str(
-                raw.get("item_id"), "progress item_id"
+                raw["item_id"], "progress item_id"
             ),
             item_type=_optional_str(
-                raw.get("item_type"), "progress item_type"
+                raw["item_type"], "progress item_type"
+            ),
+            item_attempt_id=_optional_str(
+                raw["item_attempt_id"], "progress item_attempt_id"
             ),
             item_bytes_done=_optional_int(
-                raw.get("item_bytes_done"), "progress item_bytes_done"
+                raw["item_bytes_done"], "progress item_bytes_done"
             ),
             item_bytes_total=_optional_int(
-                raw.get("item_bytes_total"), "progress item_bytes_total"
+                raw["item_bytes_total"], "progress item_bytes_total"
             ),
         )
     elif body_type in {"ItemOutcome", "IntegrityOutcome"}:
@@ -544,6 +615,34 @@ def _mapping_value(value: object, key: str) -> object:
     if not isinstance(value, Mapping):
         raise TypeError("terminal phase must be a mapping")
     return value[key]
+
+
+def _require_nonnegative_safe_integer(value: object, context: str) -> None:
+    if type(value) is not int:
+        raise TypeError(f"{context} must be an exact integer")
+    if value < 0:
+        raise ValueError(f"{context} cannot be negative")
+    if value > _JAVASCRIPT_MAX_SAFE_INTEGER:
+        raise ValueError(f"{context} must be a JavaScript-safe integer")
+
+
+def _require_optional_nonnegative_safe_integer(
+    value: object, context: str
+) -> None:
+    if value is not None:
+        _require_nonnegative_safe_integer(value, context)
+
+
+def _require_exact_keys(
+    value: Mapping[str, object], expected: frozenset[str], context: str
+) -> None:
+    actual = frozenset(value)
+    if actual != expected:
+        missing = sorted(expected - actual)
+        extra = sorted(actual - expected)
+        raise ValueError(
+            f"{context} has an invalid exact shape; missing={missing}, extra={extra}"
+        )
 
 
 from typing import TYPE_CHECKING

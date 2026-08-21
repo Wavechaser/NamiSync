@@ -12,6 +12,7 @@ from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Callable, Literal
+from uuid import uuid4
 
 from namisync.core.evidence import (
     Attestation,
@@ -153,6 +154,7 @@ def verify_post_copy(
         pending_sizes=tuple(
             candidate.expected_stat.size for candidate in selection.pending
         ),
+        phase=IntegrityMode.VERIFY.value,
         item_type="operation",
     )
 
@@ -243,6 +245,7 @@ class _ProgressReporter:
         *,
         items_total: int,
         pending_sizes: tuple[int, ...],
+        phase: str,
         item_type: Literal["integrity", "operation"],
     ) -> None:
         self._selection = selection
@@ -250,8 +253,10 @@ class _ProgressReporter:
         self._items_total = items_total
         self._last_emitted_at: float | None = None
         self._bytes_total = selection.processed_bytes + sum(pending_sizes)
+        self._phase = phase
         self._item_type = item_type
         self._item_id: str | None = None
+        self._item_attempt_id: str | None = None
         self._current_path: str | None = None
         self._item_bytes_done: int | None = None
         self._item_bytes_total: int | None = None
@@ -269,6 +274,7 @@ class _ProgressReporter:
             raise RuntimeError("integrity byte stream has no active item")
         if self._item_bytes_done is not None:
             raise RuntimeError("integrity byte stream is already active")
+        self._item_attempt_id = uuid4().hex
         self._item_bytes_done = 0
         self._item_bytes_total = size
         self.emit(force=False)
@@ -312,6 +318,7 @@ class _ProgressReporter:
 
     def _clear_item(self) -> None:
         self._item_id = None
+        self._item_attempt_id = None
         self._item_bytes_done = None
         self._item_bytes_total = None
 
@@ -331,6 +338,7 @@ class _ProgressReporter:
             item_bytes_total = None
         self._ctx.run.emit(
             Progress(
+                phase=self._phase,
                 items_done=self._selection.completed_count,
                 items_total=self._items_total,
                 bytes_done=self._selection.processed_bytes,
@@ -338,6 +346,7 @@ class _ProgressReporter:
                 current_path=self._current_path,
                 item_id=self._item_id,
                 item_type=None if self._item_id is None else self._item_type,
+                item_attempt_id=self._item_attempt_id,
                 item_bytes_done=item_bytes_done,
                 item_bytes_total=item_bytes_total,
             )
@@ -364,6 +373,7 @@ def _run(
             if item.expected_state is InventoryState.PRESENT
             and item.expected_stat is not None
         ),
+        phase=mode.value,
         item_type="integrity",
     )
 

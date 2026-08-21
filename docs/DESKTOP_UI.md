@@ -969,23 +969,28 @@ resume surface.
 
 ## Presentation and responsiveness
 
-Progress is replaceable telemetry. The browser receives optional nominal
-active-item identity and paired attempt-local byte counters alongside aggregate
-bytes, item counts, phase, and the display path. Only nominal identity may
-locate a row; `item_type` selects the opaque id's operation/integrity lookup
-namespace and `current_path` remains informational, may outlive an intermediate
-or terminal settlement, and never implies an active item when nominal identity
-is absent. Executor cancellation/exception publishes live aggregate item and
-byte state after reliable unwind settlement while clearing nominal item state
-and `current_path`. Executor pause publishes one coherent live snapshot that
-retains the active item, attempt, and path; its live aggregate high-water also
-continues through resume. Verifier pause publishes its live reporter state.
-Attempt counters may restart when an actual retry or resumed copy/read
-stream begins. If work exceeds the admitted item total, identity stays active
-but the determinate byte pair becomes absent, while aggregate progress retains
-the producing module's monotonic semantics. The dormant row renderers do not
-yet consume these fields. Executor pipeline diagnostics are opt-in developer
-data, not the rolling transfer rate or ETA promised to users.
+Progress is replaceable telemetry. The browser receives exact core event v4
+snapshots through a `SessionEventView` that exposes the nested event
+`schema_version`; the containing bridge command/response schema remains v1.
+Every snapshot self-describes its phase and may carry optional nominal
+active-item identity plus an opaque attempt id and paired attempt-local byte
+counters alongside aggregate bytes, item counts, and the display path. Only
+nominal identity may locate a row; `item_type` selects the opaque id's
+operation/integrity lookup namespace and `current_path` remains informational,
+may outlive an intermediate or terminal settlement, and never implies an
+active item when nominal identity is absent. Executor cancellation/exception
+publishes live aggregate item and byte state after reliable unwind settlement
+while clearing nominal item state and `current_path`. Executor pause publishes
+one coherent live snapshot that retains the active item, attempt, and path; its
+live aggregate high-water also continues through resume. Verifier pause
+publishes its live reporter state.
+Attempt counters may restart only under a newly minted attempt id when an
+actual retry or resumed copy/read stream begins. If work exceeds the admitted
+item total, item and attempt identity stay active but the determinate byte pair
+becomes absent, while aggregate progress retains the producing module's
+monotonic semantics. The dormant row renderers do not yet consume these fields.
+Executor pipeline diagnostics are opt-in developer data, not the rolling
+transfer rate or ETA promised to users.
 Filter/search state never changes the underlying plan or inventory selection;
 changing a location or plan option invalidates only the state that semantically
 depends on it.

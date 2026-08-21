@@ -752,11 +752,9 @@ the old location points to it, and the two highlight together.
 
 ### DR-BR-14 — Progress carries item identity, never a display path
 
-The following decision records the active version-3 bridge contract and its
-delivery history. The accepted version-4 Progress protocol and independent
-core-event version boundary are owned by `ARCHITECTURE.md` §2.3; the v3 wire
-disposition below will be retired when that atomic producer/consumer change
-lands.
+This decision records the active version-4 Progress bridge contract. The
+shared field meanings, reporter transitions, authority order, and Gap behavior
+are owned by `ARCHITECTURE.md` §2.3.
 
 Follow mode anchors on the current operation, but before this extraction
 `Progress` carried only `items_done`, `items_total`, `bytes_done`,
@@ -764,11 +762,12 @@ Follow mode anchors on the current operation, but before this extraction
 Mapping a running operation to a node would require joining on a display
 path — forbidden, ambiguous under escaping, and wrong.
 
-**Resolution:** `Progress` gains optional `item_id` and `item_type`,
-mirroring the nominal `ResultItem` vocabulary DR-M1-10 established rather
-than inventing a parallel one. It also gains optional `item_bytes_done` and
-`item_bytes_total` for the active byte-stream attempt. Both reporters already
-hold the identity and stream counters: the executor knows its current
+**Resolution:** The exact version-4 `Progress` body carries required `phase`,
+the aggregate/path fields, optional `item_id` and `item_type`, optional opaque
+`item_attempt_id`, and optional `item_bytes_done` and `item_bytes_total` for an
+active byte-stream attempt. This mirrors the nominal `ResultItem` vocabulary
+DR-M1-10 established rather than inventing a parallel identity. Both reporters
+already own the identity and stream boundaries: the executor knows its current
 operation and copy stream, and the verifier knows its current subject and read
 stream.
 
@@ -782,49 +781,47 @@ producer, phase, or reliable outcome class. Standalone verification ids use
 use `operation` even though their reliable settlement remains an
 `IntegrityOutcome`.
 
-The byte fields are likewise optional as a pair. They require item identity,
-use exact nonnegative integers, and reject `done > total`. Identity may exist
-without byte counters while an item is active but has not entered a meaningful
-stream; non-byte operations remain indeterminate. Item counters describe the
-current stream attempt and may restart from zero. If raw work exceeds the
-admitted item total, later snapshots preserve active identity but omit both
-item-byte counters rather than growing the admission. Aggregate executor bytes
-remain bounded by reviewed content and retain their monotonic high-water;
-verifier aggregates instead expand to count all physical read work. A settled
-item is named by its reliable outcome, not by later lossy progress: later
-snapshots clear the item identity and item-byte fields. `current_path` remains
-display-only and may remain after ordinary intermediate settlement. Executor
-pause force-emits one coherent authoritative-live snapshot: current aggregate
-items/bytes and the retained path/item/attempt all describe the same pause
-boundary, and the aggregate high-water is continuation state for resume.
-Executor cancel/exception force-emits live aggregate items and byte high-water
-after reliable unwind settlement while clearing nominal item state and
+An attempt id is either absent or exactly 32 lowercase hexadecimal characters.
+It requires item identity. The byte fields are likewise optional as a pair,
+require the attempt id, use exact non-Boolean JavaScript-safe nonnegative
+integers, and reject `done > total`. Identity may exist without an attempt
+before stream entry or for non-byte work. An attempt without byte counters is
+the active indeterminate shape. Each byte-pipeline entry mints a fresh opaque
+attempt id; retry or reconstructed resume may restart at zero only under that
+new id, while retained post-byte continuations do not mint another. If raw
+work exceeds the admitted item total, later snapshots preserve item and attempt
+identity but omit both counters. Aggregate executor bytes remain bounded by
+reviewed content and retain their monotonic high-water; verifier aggregates
+instead expand to count all physical read work.
+
+A settled item is named by its reliable outcome, not by later lossy progress:
+later snapshots clear item, attempt, and item-byte fields. `current_path`
+remains display-only and may remain after ordinary intermediate settlement.
+Executor pause force-emits one coherent authoritative-live snapshot; executor
+cancel/exception force-emits live aggregate items and byte high-water after
+reliable unwind settlement while clearing nominal item state and
 `current_path`. Verifier pause likewise force-emits its live reporter state.
 Clients must never reinterpret a retained display path as active identity.
 
-**Wire disposition:** retain envelope schema v3 for this one co-packaged
-current-source swap. Progress is lossy and unpersisted, all production
-producers and consumers ship in the same application package, and the bridge
-does not promise external consumers or mixed-version rolling upgrades. Those
-facts make an atomic current-source replacement safe; they do not make body
-shape irrelevant or create a general additive-version policy.
+**Wire disposition:** core event-envelope v4 is an independent nested version
+boundary. Serialization and the browser require the exact eleven-key Progress
+body; missing or extra fields, invalid cross-field relationships, coercive
+numbers, and unsafe integers are rejected. New EventHub output is v4. The core
+codec retains v3 decoding only for persisted reliable history and refuses v3
+Progress because `HistoryObserver` never admitted lossy Progress.
 
-Current serialization writes an exact nine-key Progress body, and the browser
-requires that exact shape. `envelope_from_dict` reads the four added fields
-with `raw.get(...)`, so a direct Python codec caller can decode the pre-change
-five-key body. That is a defensive additive-decode allowance only, not a
-supported production compatibility path: `HistoryObserver` refuses Progress,
-so no persisted Progress can reach that decoder, while the only live browser
-consumer rejects the five-key body. Tests therefore own both boundaries: the
-direct codec allowance and the browser's exact current shape, including
-invalid identity/counter pairs and non-coercive item counters.
+`SessionEventView` carries the originating `Envelope.schema_version` through
+the bridge explicitly. Its exact fields are `session_id`, `sequence`, `at`,
+`schema_version`, `body_type`, and `body`, and JavaScript requires the nested
+version to be core event v4 before validating the exact body. The containing
+desktop bridge command/response envelope remains v1, strict workflow payload
+remains v5, and history database, UI-state, shell, and page schema versions do
+not change. Thus v4 remains visible at the exact-shape compatibility boundary
+instead of disappearing inside an otherwise unversioned browser event.
 
-The landed extraction and continuation-hardening footprint remains bounded:
-four `Progress` fields, two reporters that already own the relevant streams,
-one validated `ExecutionSet` aggregate high-water carried by strict workflow
-payload v5, the workflow phase-total projection that consumes that high-water,
-and the exact serializer/browser consumers. It adds no event kind, dispatcher
-policy, history admission, CLI item rendering, or database field.
+The landed protocol adds no event kind, dispatcher delivery policy, history
+admission, CLI item rendering, or database field. Slice 5 rendering remains a
+separate consumer of the versioned identity and attempt state.
 
 The future Slice 5 validated projection enriches `item_id` into an ancestor
 node-id chain. **Never join on `current_path`**, which remains display-only
@@ -1639,8 +1636,12 @@ exactly the echoed task/session/drain ids plus `updates`, an array of zero to 64
 members. Each member is exactly
 `{"update_type":"event","event":<SessionEventView>}` or
 `{"update_type":"record","record":<SessionRecordView>}`. The server wait is
-25 seconds and the browser deadline is 30 seconds. A terminal record returned
-by `start_plan` carries the workflow's exact `kind` value, `"sync-plan"`; the
+25 seconds and the browser deadline is 30 seconds. `SessionEventView` is
+exactly `session_id`, `sequence`, `at`, `schema_version`, `body_type`, and
+`body`; its `schema_version` is the nested core event version `4`, independent
+of the containing bridge command/response schema `1`. A terminal record
+returned by `start_plan` carries the workflow's exact `kind` value,
+`"sync-plan"`; the
 browser validates that production identity rather than an adapter-only alias.
 Empty timeout success arms
 the next ordinary drain. Transport/protocol uncertainty uses a fresh drain id
@@ -2642,17 +2643,20 @@ headings are organizational, not lane ownership.
   *Not satisfied by* a move-only happy path, a synthetic operation standing in
   for a folder, or a renderer that relabels inferred groups as renames.
 - **BR-G-36 — Progress compatibility and follow mode use identity, never
-  display paths.** The direct Python codec's additive allowance decodes a
-  pre-change five-key Progress body through `.get(...)`, but current
-  serialization writes and the browser requires the exact nine-key body.
-  One-sided identity/counter pairs, coercive counters, unknown types, and the
-  five-key browser shape are rejected; the executable production-validator
-  gate proves that one malformed Progress atomically rejects its co-batched
-  reliable siblings without advancing the cursor, then a clean replay delivers
-  those reliable updates. Both production reporters emit the row-namespace
-  pair (`operation` for executor and linked post-copy ids, `integrity` for
-  standalone rows), and an admitted-stream overshoot preserves identity while
-  clearing the byte pair without changing the current envelope version. An
+  display paths.** Current serialization and the browser require an exact
+  eleven-key Progress v4 body inside an exact `SessionEventView` carrying the
+  nested core `schema_version=4`. V3 reliable history remains decodable, but v3
+  Progress, an unversioned session event, missing/extra fields, invalid
+  phase/item/attempt relationships, coercive or unsafe counters, and unknown
+  item types are rejected. The executable production-validator gate proves
+  that one malformed Progress atomically rejects its co-batched reliable
+  siblings without advancing the cursor, then a clean replay delivers those
+  reliable updates. Both production reporters emit the row-namespace pair
+  (`operation` for executor and linked post-copy ids, `integrity` for
+  standalone rows), phase self-description, and an opaque attempt id at byte
+  pipeline entry. Retry/resume resets require a new attempt id; an
+  admitted-stream overshoot preserves item and attempt identity while clearing
+  the byte pair. An
   off-window item resolves through its server-supplied
   ancestor chain to the deepest visible ancestor-or-self and exact visible
   index under collapse, filter, and search; the window and anchor-only paths

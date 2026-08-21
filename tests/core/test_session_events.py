@@ -20,7 +20,8 @@ from namisync.core.evidence import (
     update_content_hasher,
 )
 from namisync.core.events import (
-    SCHEMA_VERSION,
+    CORE_EVENT_SCHEMA_VERSION,
+    LEGACY_CORE_EVENT_SCHEMA_VERSION,
     Envelope,
     Gap,
     ItemOutcome,
@@ -452,7 +453,7 @@ def test_verify_cancellation_round_trips_terminal_event_and_session_record(
         session_id=SessionId("d" * 32),
         seq=3,
         at=datetime(2026, 7, 25, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=Terminal(result),
     )
 
@@ -659,6 +660,7 @@ def test_runner_cancel_with_unknown_progress_total_keeps_truthful_counts() -> No
     def work(context):
         context.emit(
             Progress(
+                "execute",
                 1,
                 None,
                 17,
@@ -666,6 +668,7 @@ def test_runner_cancel_with_unknown_progress_total_keeps_truthful_counts() -> No
                 "file",
                 item_id="operation",
                 item_type="operation",
+                item_attempt_id="a" * 32,
                 item_bytes_done=3,
                 item_bytes_total=99,
             )
@@ -712,7 +715,7 @@ def _event_bodies() -> tuple[object, ...]:
     return (
         StateChanged(SessionState.RUNNING),
         PhaseChanged("phase"),
-        Progress(1, 2, 3, 4, "folder\\file"),
+        Progress("execute", 1, 2, 3, 4, "folder\\file"),
         item,
         IntegrityOutcome(
             item_id="integrity",
@@ -741,214 +744,283 @@ def test_m1_event_bodies_round_trip(body: object) -> None:
         session_id=SessionId("a" * 32),
         seq=1,
         at=datetime(2026, 7, 18, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=body,
     )
     assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
 
 
-def test_progress_v3_serializes_expanded_item_telemetry() -> None:
-    body = Progress(
-        1,
-        2,
-        7,
-        20,
-        "folder\\file.bin",
-        item_id="a" * 32,
-        item_type="operation",
-        item_bytes_done=7,
-        item_bytes_total=10,
-    )
-    envelope = Envelope(
-        session_id=SessionId("a" * 32),
-        seq=1,
-        at=datetime(2026, 8, 21, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
-        body=body,
-    )
-
-    serialized = envelope_to_dict(envelope)
-
-    assert serialized["schema_version"] == 3
-    assert serialized["body"] == {
-        "items_done": 1,
-        "items_total": 2,
+def _progress_values() -> dict[str, object]:
+    return {
+        "phase": "execute",
+        "items_done": 0,
+        "items_total": 1,
         "bytes_done": 7,
         "bytes_total": 20,
         "current_path": "folder\\file.bin",
-        "item_id": "a" * 32,
+        "item_id": "item",
         "item_type": "operation",
+        "item_attempt_id": "a" * 32,
         "item_bytes_done": 7,
         "item_bytes_total": 10,
     }
+
+
+def _progress(**changes: object) -> Progress:
+    values = _progress_values()
+    values.update(changes)
+    return Progress(**values)  # type: ignore[arg-type]
+
+
+def _progress_envelope(body: Progress | None = None) -> Envelope:
+    return Envelope(
+        session_id=SessionId("a" * 32),
+        seq=1,
+        at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
+        body=_progress() if body is None else body,
+    )
+
+
+def test_progress_v4_serializes_exact_self_describing_telemetry() -> None:
+    envelope = _progress_envelope()
+
+    serialized = envelope_to_dict(envelope)
+
+    assert serialized["schema_version"] == 4
+    assert serialized["body"] == _progress_values()
     assert envelope_from_dict(serialized) == envelope
 
 
-def test_progress_v3_direct_codec_additive_allowance_decodes_five_key_body() -> None:
+@pytest.mark.parametrize(
+    "body",
+    [body for body in _event_bodies() if not isinstance(body, Progress)],
+)
+def test_v3_reliable_event_envelopes_remain_decodable(body: object) -> None:
     envelope = Envelope(
         session_id=SessionId("a" * 32),
         seq=1,
         at=datetime(2026, 8, 21, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
-        body=Progress(1, 2, 7, 20, "folder\\file.bin"),
-    )
-    serialized = envelope_to_dict(envelope)
-    raw_body = serialized["body"]
-    assert isinstance(raw_body, dict)
-    for field_name in (
-        "item_id",
-        "item_type",
-        "item_bytes_done",
-        "item_bytes_total",
-    ):
-        raw_body.pop(field_name)
-
-    decoded = envelope_from_dict(serialized)
-
-    assert decoded == envelope
-    assert isinstance(decoded.body, Progress)
-    assert decoded.body.item_id is None
-    assert decoded.body.item_type is None
-    assert decoded.body.item_bytes_done is None
-    assert decoded.body.item_bytes_total is None
-
-
-def test_progress_accepts_zero_length_active_item_stream() -> None:
-    body = Progress(
-        0,
-        1,
-        0,
-        0,
-        "empty.bin",
-        item_id="empty",
-        item_type="operation",
-        item_bytes_done=0,
-        item_bytes_total=0,
+        schema_version=LEGACY_CORE_EVENT_SCHEMA_VERSION,
+        body=body,
     )
 
-    assert body.item_bytes_done == 0
-    assert body.item_bytes_total == 0
+    assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
 
 
-@pytest.mark.parametrize(
-    "changes, error_type",
-    [
-        ({"item_id": "item"}, ValueError),
-        ({"item_type": "operation"}, ValueError),
-        ({"item_id": "", "item_type": "operation"}, ValueError),
-        ({"item_id": "item", "item_type": "unknown"}, ValueError),
-        (
-            {
-                "item_id": "item",
-                "item_type": "operation",
-                "item_bytes_done": 1,
-            },
-            ValueError,
+def test_v3_terminal_codec_does_not_inherit_v4_progress_safe_integer_bound() -> None:
+    larger_than_javascript_safe = 1 << 53
+    result = OperationResult(
+        SessionState.COMPLETED,
+        phases=(
+            PhaseResult(
+                "execute",
+                PhaseStatus.COMPLETED,
+                1,
+                1,
+                larger_than_javascript_safe,
+                larger_than_javascript_safe,
+            ),
         ),
-        (
-            {
-                "item_id": "item",
-                "item_type": "operation",
-                "item_bytes_total": 1,
-            },
-            ValueError,
-        ),
-        ({"item_bytes_done": 0, "item_bytes_total": 1}, ValueError),
-        (
-            {
-                "item_id": "item",
-                "item_type": "operation",
-                "item_bytes_done": True,
-                "item_bytes_total": 1,
-            },
-            TypeError,
-        ),
-        (
-            {
-                "item_id": "item",
-                "item_type": "operation",
-                "item_bytes_done": 0.5,
-                "item_bytes_total": 1,
-            },
-            TypeError,
-        ),
-        (
-            {
-                "item_id": "item",
-                "item_type": "integrity",
-                "item_bytes_done": -1,
-                "item_bytes_total": 1,
-            },
-            ValueError,
-        ),
-        (
-            {
-                "item_id": "item",
-                "item_type": "integrity",
-                "item_bytes_done": 2,
-                "item_bytes_total": 1,
-            },
-            ValueError,
-        ),
-    ],
-)
-def test_progress_rejects_invalid_item_telemetry(
-    changes: dict[str, object],
-    error_type: type[Exception],
-) -> None:
-    values: dict[str, object] = {
+        bytes_done=larger_than_javascript_safe,
+        bytes_total=larger_than_javascript_safe,
+    )
+    envelope = Envelope(
+        session_id=SessionId("a" * 32),
+        seq=1,
+        at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+        schema_version=LEGACY_CORE_EVENT_SCHEMA_VERSION,
+        body=Terminal(result),
+    )
+
+    assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
+
+
+def test_v3_progress_is_explicitly_refused_by_envelope_and_decoder() -> None:
+    with pytest.raises(ValueError, match="Progress requires core event schema"):
+        Envelope(
+            session_id=SessionId("a" * 32),
+            seq=1,
+            at=datetime(2026, 8, 21, tzinfo=timezone.utc),
+            schema_version=LEGACY_CORE_EVENT_SCHEMA_VERSION,
+            body=_progress(),
+        )
+
+    serialized = envelope_to_dict(_progress_envelope())
+    serialized["schema_version"] = LEGACY_CORE_EVENT_SCHEMA_VERSION
+    serialized["body"] = {
         "items_done": 0,
         "items_total": 1,
         "bytes_done": 0,
         "bytes_total": 1,
         "current_path": None,
     }
-    values.update(changes)
-
-    with pytest.raises(error_type):
-        Progress(**values)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Progress requires core event schema"):
+        envelope_from_dict(serialized)
 
 
 @pytest.mark.parametrize(
     "changes",
     [
-        {"item_id": "item"},
-        {"item_type": "operation"},
         {
-            "item_id": "item",
-            "item_type": "operation",
+            "item_id": None,
+            "item_type": None,
+            "item_attempt_id": None,
+            "item_bytes_done": None,
+            "item_bytes_total": None,
+        },
+        {
+            "item_attempt_id": None,
+            "item_bytes_done": None,
+            "item_bytes_total": None,
+        },
+        {"item_bytes_done": None, "item_bytes_total": None},
+        {
+            "items_total": None,
+            "bytes_total": None,
+            "item_bytes_total": 10,
+        },
+        {
+            "bytes_done": 0,
+            "bytes_total": 0,
+            "current_path": "empty.bin",
             "item_bytes_done": 0,
-        },
-        {
-            "item_id": "item",
-            "item_type": "operation",
-            "item_bytes_total": 1,
-        },
-        {"item_bytes_done": 0, "item_bytes_total": 1},
-        {
-            "item_id": "item",
-            "item_type": "integrity",
-            "item_bytes_done": 0.5,
-            "item_bytes_total": 1,
+            "item_bytes_total": 0,
         },
     ],
 )
-def test_progress_v3_decoder_rejects_invalid_item_telemetry(
+def test_progress_accepts_all_normative_activity_shapes(
     changes: dict[str, object],
 ) -> None:
-    envelope = Envelope(
-        session_id=SessionId("a" * 32),
-        seq=1,
-        at=datetime(2026, 8, 21, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
-        body=Progress(0, 1, 0, 1, None),
+    body = _progress(**changes)
+
+    assert envelope_from_dict(envelope_to_dict(_progress_envelope(body))).body == body
+
+
+def test_progress_accepts_the_javascript_safe_integer_boundary() -> None:
+    maximum = (1 << 53) - 1
+    body = _progress(
+        items_done=maximum,
+        items_total=maximum,
+        bytes_done=maximum,
+        bytes_total=maximum,
+        item_id=None,
+        item_type=None,
+        item_attempt_id=None,
+        item_bytes_done=None,
+        item_bytes_total=None,
     )
-    serialized = envelope_to_dict(envelope)
+
+    assert body.items_done == maximum
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"phase": ""},
+        {"phase": 7},
+        {"items_done": True},
+        {"items_done": 0.5},
+        {"items_done": -1},
+        {"items_done": 2},
+        {"items_done": 1},
+        {"items_done": 1 << 53},
+        {"items_total": True},
+        {"items_total": -1},
+        {"items_total": 1 << 53},
+        {"bytes_done": True},
+        {"bytes_done": -1},
+        {"bytes_done": 21},
+        {"bytes_done": 1 << 53},
+        {"bytes_total": True},
+        {"bytes_total": -1},
+        {"bytes_total": 1 << 53},
+        {"current_path": 7},
+        {"item_id": None},
+        {"item_type": None},
+        {"item_id": ""},
+        {"item_type": "unknown"},
+        {
+            "item_id": None,
+            "item_type": None,
+            "item_attempt_id": "a" * 32,
+            "item_bytes_done": None,
+            "item_bytes_total": None,
+        },
+        {"item_attempt_id": None},
+        {"item_attempt_id": "a" * 31},
+        {"item_attempt_id": "A" * 32},
+        {"item_attempt_id": "g" * 32},
+        {"item_attempt_id": 7},
+        {"item_bytes_done": None},
+        {"item_bytes_total": None},
+        {"item_bytes_done": True},
+        {"item_bytes_done": 0.5},
+        {"item_bytes_done": -1},
+        {"item_bytes_done": 1 << 53},
+        {"item_bytes_done": 8, "bytes_done": 7},
+        {"item_bytes_done": 11},
+        {"item_bytes_total": True},
+        {"item_bytes_total": -1},
+        {"item_bytes_total": 1 << 53},
+        {"item_bytes_total": 21},
+    ],
+)
+def test_progress_rejects_invalid_scalars_and_cross_field_states(
+    changes: dict[str, object],
+) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        _progress(**changes)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"phase": ""},
+        {"phase": 7},
+        {"items_done": True},
+        {"items_done": 1 << 53},
+        {"items_done": 1},
+        {"bytes_done": 1 << 53},
+        {"current_path": 7},
+        {"item_id": None},
+        {"item_attempt_id": None},
+        {"item_attempt_id": "A" * 32},
+        {"item_bytes_done": None},
+        {"item_bytes_done": 8},
+        {"item_bytes_total": 21},
+    ],
+)
+def test_progress_v4_decoder_rejects_invalid_scalar_and_cross_field_states(
+    changes: dict[str, object],
+) -> None:
+    serialized = envelope_to_dict(_progress_envelope())
     raw_body = serialized["body"]
     assert isinstance(raw_body, dict)
     raw_body.update(changes)
 
     with pytest.raises((TypeError, ValueError)):
+        envelope_from_dict(serialized)
+
+
+@pytest.mark.parametrize("missing", sorted(_progress_values()))
+def test_progress_v4_decoder_rejects_every_missing_field(missing: str) -> None:
+    serialized = envelope_to_dict(_progress_envelope())
+    raw_body = serialized["body"]
+    assert isinstance(raw_body, dict)
+    raw_body.pop(missing)
+
+    with pytest.raises(ValueError, match="invalid exact shape"):
+        envelope_from_dict(serialized)
+
+
+def test_progress_v4_decoder_rejects_extra_fields() -> None:
+    serialized = envelope_to_dict(_progress_envelope())
+    raw_body = serialized["body"]
+    assert isinstance(raw_body, dict)
+    raw_body["future"] = None
+
+    with pytest.raises(ValueError, match="invalid exact shape"):
         envelope_from_dict(serialized)
 
 
@@ -973,7 +1045,7 @@ def test_integrity_event_codec_preserves_mode_phase(phase: str) -> None:
         session_id=SessionId("b" * 32),
         seq=1,
         at=datetime(2026, 7, 18, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=item,
     )
 
@@ -994,7 +1066,7 @@ def test_integrity_event_codec_preserves_absent_post_copy_ledger_identity() -> N
         session_id=SessionId("c" * 32),
         seq=1,
         at=datetime(2026, 7, 25, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=item,
     )
 
@@ -1011,7 +1083,7 @@ def test_event_deserialization_rejects_unknown_schema() -> None:
         session_id=SessionId("a" * 32),
         seq=1,
         at=datetime(2026, 7, 18, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=PhaseChanged("phase"),
     )
     serialized = envelope_to_dict(envelope)
@@ -1020,17 +1092,43 @@ def test_event_deserialization_rejects_unknown_schema() -> None:
         envelope_from_dict(serialized)
 
 
+def test_event_sequence_scalars_share_the_browser_safe_integer_domain() -> None:
+    unsafe = 1 << 53
+    with pytest.raises(ValueError, match="JavaScript-safe"):
+        Envelope(
+            session_id=SessionId("a" * 32),
+            seq=unsafe,
+            at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+            schema_version=CORE_EVENT_SCHEMA_VERSION,
+            body=PhaseChanged("phase"),
+        )
+    with pytest.raises(ValueError, match="JavaScript-safe"):
+        Gap(unsafe)
+
+    envelope = Envelope(
+        session_id=SessionId("a" * 32),
+        seq=1,
+        at=datetime(2026, 7, 18, tzinfo=timezone.utc),
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
+        body=PhaseChanged("phase"),
+    )
+    serialized = envelope_to_dict(envelope)
+    serialized["seq"] = unsafe
+    with pytest.raises(ValueError, match="JavaScript-safe"):
+        envelope_from_dict(serialized)
+
+
 def test_event_deserialization_rejects_coercive_scalar_types() -> None:
     envelope = Envelope(
         session_id=SessionId("a" * 32),
         seq=1,
         at=datetime(2026, 7, 18, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=PhaseChanged("phase"),
     )
 
     serialized = envelope_to_dict(envelope)
-    serialized["schema_version"] = float(SCHEMA_VERSION)
+    serialized["schema_version"] = float(CORE_EVENT_SCHEMA_VERSION)
     with pytest.raises(ValueError, match="schema version"):
         envelope_from_dict(serialized)
 
@@ -1050,7 +1148,7 @@ def test_event_deserialization_rejects_coercive_scalar_types() -> None:
         session_id=SessionId("b" * 32),
         seq=1,
         at=datetime(2026, 7, 18, tzinfo=timezone.utc),
-        schema_version=SCHEMA_VERSION,
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=Terminal(
             OperationResult(
                 SessionState.CANCELED,

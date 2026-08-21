@@ -920,6 +920,7 @@ def test_outcomes_carry_the_active_integrity_phase(
 
     assert result.outcomes[0].phase == mode.value
     progress = [event for event in events if isinstance(event, Progress)]
+    assert all(event.phase == mode.value for event in progress)
     assert [
         (
             event.item_id,
@@ -943,6 +944,15 @@ def test_outcomes_carry_the_active_integrity_phase(
     ]
     assert progress[0].current_path is None
     assert all(event.current_path == item.display_path for event in progress[1:])
+    streamed = [
+        event for event in progress if event.item_bytes_done is not None
+    ]
+    assert streamed[0].item_attempt_id is not None
+    assert {event.item_attempt_id for event in streamed} == {
+        streamed[0].item_attempt_id
+    }
+    assert progress[1].item_attempt_id is None
+    assert progress[-1].item_attempt_id is None
     outcome_index = events.index(result.outcomes[0])
     assert events[outcome_index + 1] is progress[-2]
     assert events[-1] is progress[-1]
@@ -970,6 +980,7 @@ def test_post_copy_progress_uses_operation_identity_and_clears_after_outcome(
     )
 
     progress = [event for event in events if isinstance(event, Progress)]
+    assert all(event.phase == IntegrityMode.VERIFY.value for event in progress)
     assert [
         (
             event.item_id,
@@ -992,6 +1003,10 @@ def test_post_copy_progress_uses_operation_identity_and_clears_after_outcome(
         (None, None, None, None),
     ]
     assert result.outcomes[0].item_type == "integrity"
+    assert progress[1].item_attempt_id is None
+    assert progress[2].item_attempt_id is not None
+    assert progress[2].item_attempt_id == progress[3].item_attempt_id
+    assert progress[-1].item_attempt_id is None
     assert progress[0].current_path is None
     assert all(
         event.current_path == candidate.display_path for event in progress[1:]
@@ -1472,6 +1487,7 @@ def test_empty_subject_reports_a_bounded_zero_byte_stream(tmp_path: Path) -> Non
     assert [
         (event.item_bytes_done, event.item_bytes_total) for event in determinate
     ] == [(0, 0)]
+    assert determinate[0].item_attempt_id is not None
 
 
 def test_growing_subject_suppresses_item_fraction_and_expands_physical_total(
@@ -1532,6 +1548,12 @@ def test_growing_subject_suppresses_item_fraction_and_expands_physical_total(
         (None, None),
     ]
     overshoot = growing_progress[-1]
+    streamed_attempt_id = growing_progress[1].item_attempt_id
+    assert streamed_attempt_id is not None
+    assert all(
+        event.item_attempt_id == streamed_attempt_id
+        for event in growing_progress[1:]
+    )
     assert (
         overshoot.item_type,
         overshoot.bytes_done,
@@ -1551,9 +1573,10 @@ def test_growing_subject_suppresses_item_fraction_and_expands_physical_total(
     assert (
         cleared.item_id,
         cleared.item_type,
+        cleared.item_attempt_id,
         cleared.item_bytes_done,
         cleared.item_bytes_total,
-    ) == (None, None, None, None)
+    ) == (None, None, None, None, None)
 
 
 @pytest.mark.parametrize(
@@ -1849,9 +1872,10 @@ def test_cancellation_during_hash_marks_in_flight_item_canceled(tmp_path: Path) 
     assert (
         final_progress.item_id,
         final_progress.item_type,
+        final_progress.item_attempt_id,
         final_progress.item_bytes_done,
         final_progress.item_bytes_total,
-    ) == (None, None, None, None)
+    ) == (None, None, None, None, None)
     assert final_progress.current_path is None
     assert (final_progress.bytes_done, final_progress.bytes_total) == (1, 3)
 
@@ -1894,9 +1918,10 @@ def test_post_copy_cancellation_clears_progress_after_reliable_outcome(
     assert (
         final_progress.item_id,
         final_progress.item_type,
+        final_progress.item_attempt_id,
         final_progress.item_bytes_done,
         final_progress.item_bytes_total,
-    ) == (None, None, None, None)
+    ) == (None, None, None, None, None)
     assert final_progress.current_path is None
     assert (final_progress.bytes_done, final_progress.bytes_total) == (1, 3)
 
@@ -1939,6 +1964,13 @@ def test_pause_during_hash_restarts_pending_item_without_outcome_or_progress_reg
     assert selection.processed_bytes == 1
     assert recorder.commands == []
     paused_progress = [event for event in events if isinstance(event, Progress)]
+    paused_attempt_id = paused_progress[-1].item_attempt_id
+    assert paused_attempt_id is not None
+    assert {
+        event.item_attempt_id
+        for event in paused_progress
+        if event.item_attempt_id is not None
+    } == {paused_attempt_id}
     assert (
         paused_progress[-1].item_id,
         paused_progress[-1].item_type,
@@ -1967,6 +1999,8 @@ def test_pause_during_hash_restarts_pending_item_without_outcome_or_progress_reg
         and event.item_id == item.item_id
         and event.item_bytes_done is not None
     ]
+    assert resumed_determinate[0].item_attempt_id != paused_attempt_id
+    assert len({event.item_attempt_id for event in resumed_determinate}) == 1
     assert (
         resumed_determinate[0].item_bytes_done,
         resumed_determinate[0].item_bytes_total,

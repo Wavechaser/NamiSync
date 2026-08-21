@@ -566,29 +566,29 @@ exception rather than replacing it.
 
 ## Progress
 
-This section describes the active version-3 executor behavior. The accepted
-version-4 field meanings, transition authority, and versioned phase/attempt
-shape are owned centrally by `ARCHITECTURE.md` §2.3 and will supersede the
-current wire shape when the atomic v4 delivery lands. Its authoritative-live
-forced-snapshot rule already applies below.
+The shared version-4 field meanings, transition authority, and recovery rules
+are owned centrally by `ARCHITECTURE.md` §2.3. This section records only the
+executor's implementation of that protocol.
 
-`Progress` snapshots carry aggregate content bytes/items, the display-only
-current path, and `operation` item identity while an operation is active.
+Executor `Progress` snapshots use `phase=execute` and carry aggregate content
+bytes/items, the display-only current path, and `operation` item identity while
+an operation is active.
 Non-byte operations and byte operations that have not entered the copy stream
-carry null item-byte counters. At the exact copy-backend entry, a byte operation
-starts at `0 / content_bytes`; chunk callbacks advance its attempt-local counter
-up to that reviewed total. If a backend reports more stream bytes than the
-reviewed total, the operation identity stays active but both item-byte counters
-become null; the executor neither fabricates a larger admission nor lets the
-aggregate exceed reviewed content. Reliable settlement clears the item identity
-and item-byte counters; ordinary intermediate settlement may retain
-`current_path` as display-only telemetry.
-Normal completion force-emits the live legacy totals/path and inactive item
+carry no attempt id or item-byte counters. At the exact copy-backend entry, a
+byte operation mints a fresh opaque 32-lowercase-hex attempt id and starts at
+`0 / content_bytes`; chunk callbacks advance that attempt-local counter up to
+the reviewed total. If a backend reports more stream bytes than the reviewed
+total, the operation and attempt identities stay active but both item-byte
+counters become null; the executor neither fabricates a larger admission nor
+lets the aggregate exceed reviewed content. Reliable settlement clears the
+item identity, attempt id, and item-byte counters; ordinary intermediate
+settlement may retain `current_path` as display-only telemetry.
+Normal completion force-emits the live totals/path and inactive item
 fields after reliable settlement, independently of the ordinary time throttle.
 Cancellation and an escaping-exception backstop likewise force a snapshot from
 authoritative live reporter state after reliable unwind settlement. It carries
 the live item totals and aggregate byte high-water while clearing
-`current_path` and the four nominal item fields, so the terminal snapshot
+`current_path` and the five nominal item/attempt fields, so the terminal snapshot
 neither fabricates unfinished activity nor contradicts work completed inside a
 throttle interval.
 
@@ -603,9 +603,12 @@ terminally failed item reports that high-water mark rather than rewinding it.
 A canceled or escaping-failure unwind exposes the live item-settlement count
 and aggregate byte high-water while clearing item activity and display path.
 Pause force-emits the complete live reporter state without clearing the active
-item, attempt bytes, or display path; its aggregate high-water is also retained
-in the execution continuation for resume. Resumed byte-pipeline entry starts a
-new attempt at zero. Moves, trash, mkdir, delete, and no-op contribute items but
+item, attempt id/bytes, or display path; its aggregate high-water is also
+retained in the execution continuation for resume. Resumed byte-pipeline entry
+mints a new attempt id and starts that attempt at zero. Retained publication,
+metadata, durability, attestation, and recording continuations do not mint a
+replacement attempt id because they do not re-enter the byte pipeline. Moves,
+trash, mkdir, delete, and no-op contribute items but
 zero transfer bytes. Emission remains throttled/coalesced outside forced
 control boundaries so fast disks cannot flood UI queues.
 

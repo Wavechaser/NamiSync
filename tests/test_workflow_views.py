@@ -5,7 +5,12 @@ from datetime import datetime, timezone
 import pytest
 
 from namisync.core.evidence import Outcome, RecordingStatus
-from namisync.core.events import SCHEMA_VERSION, Envelope, ItemOutcome, Progress
+from namisync.core.events import (
+    CORE_EVENT_SCHEMA_VERSION,
+    Envelope,
+    ItemOutcome,
+    Progress,
+)
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
@@ -49,6 +54,7 @@ def _integrity(
 
 def test_session_event_view_preserves_expanded_progress_body() -> None:
     progress = Progress(
+        "execute",
         1,
         2,
         7,
@@ -56,6 +62,7 @@ def test_session_event_view_preserves_expanded_progress_body() -> None:
         "folder\\file.bin",
         item_id="operation-1",
         item_type="operation",
+        item_attempt_id="a" * 32,
         item_bytes_done=7,
         item_bytes_total=10,
     )
@@ -63,13 +70,14 @@ def test_session_event_view_preserves_expanded_progress_body() -> None:
         SessionId("a" * 32),
         3,
         datetime(2026, 8, 21, tzinfo=timezone.utc),
-        SCHEMA_VERSION,
+        CORE_EVENT_SCHEMA_VERSION,
         progress,
     )
 
     view = session_event_view(envelope)
 
     assert view.body == {
+        "phase": "execute",
         "items_done": 1,
         "items_total": 2,
         "bytes_done": 7,
@@ -77,9 +85,11 @@ def test_session_event_view_preserves_expanded_progress_body() -> None:
         "current_path": "folder\\file.bin",
         "item_id": "operation-1",
         "item_type": "operation",
+        "item_attempt_id": "a" * 32,
         "item_bytes_done": 7,
         "item_bytes_total": 10,
     }
+    assert view.schema_version == CORE_EVENT_SCHEMA_VERSION
 
 
 def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:

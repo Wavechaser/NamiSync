@@ -710,6 +710,7 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
         session_id,
         7,
         "2026-08-12T11:00:00Z",
+        4,
         "StateChanged",
         {"state": "running"},
     )
@@ -775,10 +776,11 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
                 {
                     "update_type": "event",
                     "event": {
-                        "session_id": session_id,
-                        "sequence": 7,
-                        "at": "2026-08-12T11:00:00Z",
-                        "body_type": "StateChanged",
+                            "session_id": session_id,
+                            "sequence": 7,
+                            "at": "2026-08-12T11:00:00Z",
+                            "schema_version": 4,
+                            "body_type": "StateChanged",
                         "body": {"state": "running"},
                     },
                 },

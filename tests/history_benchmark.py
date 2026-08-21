@@ -30,7 +30,7 @@ from namisync.core.events import (  # noqa: E402
     Envelope,
     ItemOutcome,
     PhaseChanged,
-    SCHEMA_VERSION,
+    CORE_EVENT_SCHEMA_VERSION,
     StateChanged,
 )
 from namisync.core.evidence import Outcome, RecordingStatus  # noqa: E402
@@ -144,7 +144,7 @@ def _record_fixture(path: Path) -> dict[str, object]:
                     record.session_id,
                     1,
                     NOW,
-                    SCHEMA_VERSION,
+                    CORE_EVENT_SCHEMA_VERSION,
                     StateChanged(SessionState.RUNNING),
                 )
             )
@@ -153,7 +153,7 @@ def _record_fixture(path: Path) -> dict[str, object]:
                     record.session_id,
                     2,
                     NOW,
-                    SCHEMA_VERSION,
+                    CORE_EVENT_SCHEMA_VERSION,
                     PhaseChanged("execute"),
                 )
             )
@@ -164,7 +164,7 @@ def _record_fixture(path: Path) -> dict[str, object]:
                         record.session_id,
                         sequence,
                         NOW,
-                        SCHEMA_VERSION,
+                        CORE_EVENT_SCHEMA_VERSION,
                         ItemOutcome(
                             item_id=f"operation-{item_index:06d}",
                             kind="copy",
