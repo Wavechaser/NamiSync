@@ -64,6 +64,20 @@ Run it for phase integration, global fixtures or pytest configuration, the
 department manifest, broad shared contracts, uncertain blast radius, and before
 considering a non-headed phase complete.
 
+The production drain-manager Progress validator/replay probe is an ordinary,
+non-skippable JavaScript gate. Node.js must be available through
+`NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
+precedence. A missing or unusable executable fails this gate rather than
+silently reducing the ordinary suite to source-text inspection. The probe
+executes the packaged validator and proves whole-batch rejection: malformed
+Progress cannot partially deliver co-batched reliable updates or advance the
+accepted cursor, and a clean replay delivers those reliable updates.
+
+```powershell
+$env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'
+.\.venv\Scripts\python.exe -m pytest -q
+```
+
 ### 5. Complete and headed release
 
 Headed acceptance requires an interactive supported Windows desktop and the
@@ -158,9 +172,11 @@ module. No Python source under `tests/` may import a collected test module.
   configured `-m "not headed"` ordinary default. A filename containing
   `headed` does not determine marker behavior; some headed-harness modules also
   contain ordinary contract tests.
-- `supplemental_node` identifies optional deterministic JavaScript probes. They
-  may skip when Node.js is unavailable and do not replace native or headed
-  acceptance evidence.
+- `supplemental_node` identifies the remaining optional deterministic
+  JavaScript probes. They may skip when Node.js is unavailable and do not
+  replace native or headed acceptance evidence. They use the same
+  `NAMISYNC_TEST_NODE`-then-`PATH` resolution as the required ordinary drain
+  validator gate, but that gate is deliberately unmarked and cannot skip.
 - Other skips must name a concrete unavailable platform capability. Review
   skip reasons in verification output; a skipped required gate cannot sign off
   that gate.

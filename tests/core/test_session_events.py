@@ -784,7 +784,7 @@ def test_progress_v3_serializes_expanded_item_telemetry() -> None:
     assert envelope_from_dict(serialized) == envelope
 
 
-def test_progress_v3_decodes_a_legacy_body_without_item_telemetry() -> None:
+def test_progress_v3_direct_codec_additive_allowance_decodes_five_key_body() -> None:
     envelope = Envelope(
         session_id=SessionId("a" * 32),
         seq=1,

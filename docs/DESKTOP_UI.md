@@ -747,7 +747,11 @@ its serializer/escaper and the real-browser hostile-name round trip remain part
 of the security boundary. The exact pythonnet 3.1.0 pin is equally part of that
 boundary because native delegate subscription, WinForms thread affinity, and
 `CoreWebView2` access pass through it. Browserless/Node probes are supplemental;
-the installed real-WebView2 witnesses now own the named browser-behavior gates.
+the exception is the ordinary, non-skippable drain-manager Progress
+validator/replay gate, which resolves Node.js from `NAMISYNC_TEST_NODE` before
+`PATH` and proves atomic rejection before cursor or reliable-sibling delivery.
+The installed real-WebView2 witnesses own the remaining named
+browser-behavior gates.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not

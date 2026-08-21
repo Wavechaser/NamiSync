@@ -192,18 +192,29 @@ The version-3 envelope codec round-trips `StateChanged`, `PhaseChanged`,
 `Progress`, nominal `ItemOutcome` and `IntegrityOutcome` values, `Gap`, and
 `Terminal`, and rejects unknown schema/body versions. `Progress` carries its
 existing aggregate counters/path plus optional paired item identity/type and
-optional paired per-attempt byte counters; the new decoder accepts a legacy v3
-body lacking those optional fields, while current serialization writes their
-exact keys. `item_type` names the row-lookup namespace of the opaque id, not
-the phase or module producing the event: post-copy verifier progress keyed by
-an executor operation id therefore uses `operation`, even though its reliable
-outcome remains an `IntegrityOutcome`. If a stream exceeds its admitted item
-total, later snapshots retain active identity but omit both item-byte fields;
-executor aggregates remain bounded by reviewed content while verifier
-aggregates expand to count physical read work. Its scalar decoder is
-non-coercive: schema/sequence/counter fields require exact integers, booleans
-cannot impersonate numbers, and string fields remain strings. Every reliable
-result item carries an explicit `item_type` and `phase`; `run_session`
+optional paired per-attempt byte counters. Current serialization and the
+browser validator require the exact nine-key Progress body. The Python decoder
+uses `.get(...)` for the four additive fields, so direct codec callers may
+decode a pre-change five-key body, but that is a defensive additive-decode
+allowance rather than a supported production wire shape: history refuses
+Progress, no Progress body is persisted, and the browser rejects the five-key
+shape.
+
+Keeping envelope schema v3 is safe for this current-source, co-packaged swap
+because Progress is lossy and unpersisted, every production producer and
+consumer ships together, and the bridge is not an external or mixed-version
+rolling-upgrade contract. It does not establish a general rule that body
+changes may retain their schema version. `item_type` names the row-lookup
+namespace of the opaque id, not the phase or module producing the event:
+post-copy verifier progress keyed by an executor operation id therefore uses
+`operation`, even though its reliable outcome remains an `IntegrityOutcome`.
+If a stream exceeds its admitted item total, later snapshots retain active
+identity but omit both item-byte fields; executor aggregates remain bounded by
+reviewed content while verifier aggregates expand to count physical read work.
+Its scalar decoder is non-coercive: schema/sequence/counter fields require
+exact integers, booleans cannot impersonate numbers, and string fields remain
+strings. Every reliable result item carries an explicit `item_type` and
+`phase`; `run_session`
 accumulates only the nominal `ResultItem` base in emission order, including
 prior items retained across pause/resume. Structural
 `hasattr(item_id/path)` guessing is forbidden.

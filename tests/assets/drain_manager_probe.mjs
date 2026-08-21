@@ -574,6 +574,79 @@ assert.equal(acceptedProgressMatrix.length, 1);
 assert.deepEqual(acceptedProgressMatrix[0].event.body, validZeroProgress);
 stopProgressMatrix();
 
+// One malformed lossy Progress invalidates reliable siblings in the same
+// response before any callback or cursor movement. Replaying only the reliable
+// siblings delivers each once, and bridge recovery resumes after their tail.
+const progressBatchSession = "ef".repeat(16);
+const progressBatchTask = `task-${"01".repeat(16)}`;
+const acceptedProgressBatch = [];
+const refusedProgressBatch = [];
+const stopProgressBatch = bridge.startTaskDrain(
+  progressBatchTask,
+  progressBatchSession,
+  (update) => acceptedProgressBatch.push(update),
+  (error) => refusedProgressBatch.push(error),
+);
+const operationOutcomeBody = Object.freeze({
+  item_type: "operation",
+  phase: "execute",
+  item_id: "matrix-operation",
+  kind: "copy",
+  path: "matrix.bin",
+  result: "succeeded",
+  reason: null,
+  detail: {},
+});
+const malformedProgressBatch = await nextRequest(requests.length);
+assert.equal(malformedProgressBatch.request.payload.replay_from, null);
+success(malformedProgressBatch, [
+  event(progressBatchSession, 1, "ItemOutcome", operationOutcomeBody),
+  event(progressBatchSession, 2, "Progress", {
+    ...validProgressBody,
+    extra: null,
+  }),
+  event(progressBatchSession, 3, "StateChanged", { state: "running" }),
+  event(progressBatchSession, 4, "Terminal", { result: coreOperationResult }),
+]);
+
+const cleanProgressBatchReplay = await nextRequest(requests.length);
+assert.equal(cleanProgressBatchReplay.request.payload.replay_from, 1);
+assert.equal(acceptedProgressBatch.length, 0);
+assert.equal(refusedProgressBatch.length, 0);
+success(cleanProgressBatchReplay, [
+  event(progressBatchSession, 1, "ItemOutcome", operationOutcomeBody),
+  event(progressBatchSession, 3, "StateChanged", { state: "running" }),
+  event(progressBatchSession, 4, "Terminal", { result: coreOperationResult }),
+]);
+
+const progressBatchTail = await nextRequest(requests.length);
+assert.equal(progressBatchTail.request.payload.replay_from, null);
+assert.deepEqual(
+  acceptedProgressBatch.map((update) => update.event.body_type),
+  ["ItemOutcome", "StateChanged", "Terminal"],
+);
+assert.deepEqual(
+  acceptedProgressBatch.map((update) => update.event.sequence),
+  [1, 3, 4],
+);
+assert.equal(refusedProgressBatch.length, 0);
+
+reinjectBridge();
+const progressBatchCursorRecovery = await nextRequest(requests.length);
+assert.equal(progressBatchCursorRecovery.request.payload.replay_from, 5);
+success(progressBatchTail, []);
+success(progressBatchCursorRecovery, [terminalRecord(progressBatchSession)]);
+await turns();
+assert.deepEqual(
+  acceptedProgressBatch
+    .filter((update) => update.update_type === "event")
+    .map((update) => update.event.sequence),
+  [1, 3, 4],
+);
+assert.equal(acceptedProgressBatch.at(-1).update_type, "record");
+assert.equal(refusedProgressBatch.length, 0);
+stopProgressBatch();
+
 // Bridge reincarnation resets the one drain-busy convergence allowance. A busy
 // reply from the freshly abandoned call therefore cannot prematurely stop the
 // current generation.
@@ -1024,6 +1097,7 @@ stopTerminalCallback();
 stopExhaustedRelease();
 stopPersistent();
 stopProgressMatrix();
+stopProgressBatch();
 await turns();
 assert.equal(testWindow.listenerCount("pywebviewready"), 1);
 assert.equal(timers.size, 0);

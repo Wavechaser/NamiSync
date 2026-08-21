@@ -1,4 +1,4 @@
-"""Bridge transport evidence plus optional supplemental Node.js probes."""
+"""Bridge transport evidence plus required and supplemental Node.js probes."""
 
 from __future__ import annotations
 
@@ -616,23 +616,50 @@ def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
     )
 
 
-@pytest.mark.supplemental_node
-def test_supplemental_node_drain_generation_recovers_without_duplication() -> None:
+def test_br_g_36_node_discovery_prefers_explicit_test_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    configured = tmp_path / "configured-node.exe"
+    monkeypatch.setenv("NAMISYNC_TEST_NODE", str(configured))
+
+    assert _node_executable() == configured
+
+
+def test_br_g_36_node_drain_validates_progress_before_batch_delivery() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the supplemental drain probe")
+        pytest.fail(
+            "The BR-G-36 JavaScript drain gate requires Node.js; install node "
+            "on PATH or set NAMISYNC_TEST_NODE to the Node executable."
+        )
+    if not node.is_file():
+        pytest.fail(
+            "NAMISYNC_TEST_NODE or the node PATH entry does not identify a "
+            f"file: {node}"
+        )
     probe = Path(__file__).parents[2] / "assets" / "drain_manager_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
-    completed = subprocess.run(
-        [str(node), str(probe), str(bridge)],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=10,
-    )
+    try:
+        completed = subprocess.run(
+            [str(node), str(probe), str(bridge)],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        pytest.fail(
+            "The BR-G-36 JavaScript drain gate could not start Node.js at "
+            f"{node}: {exc}. Set NAMISYNC_TEST_NODE to a working executable."
+        )
 
-    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.returncode == 0, (
+        f"The BR-G-36 JavaScript drain gate failed under Node.js at {node}.\n"
+        + completed.stdout
+        + completed.stderr
+    )
 
 
 @pytest.mark.supplemental_node

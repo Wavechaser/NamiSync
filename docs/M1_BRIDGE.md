@@ -766,11 +766,11 @@ hold the identity and stream counters: the executor knows its current
 operation and copy stream, and the verifier knows its current subject and read
 stream.
 
-The fields are optional **as a pair**: legacy producers omit both; an
-identified progress event supplies a nonempty `item_id` plus `item_type` equal
-to `operation` or `integrity`. `Progress.__post_init__` rejects a one-sided
-pair or an unknown type, so the bridge never guesses which node-id namespace
-an opaque id belongs to. The type names that row-lookup namespace, not the
+The fields are optional **as a pair** in the Python contract: an identified
+progress event supplies a nonempty `item_id` plus `item_type` equal to
+`operation` or `integrity`. `Progress.__post_init__` rejects a one-sided pair
+or an unknown type, so the bridge never guesses which node-id namespace an
+opaque id belongs to. The type names that row-lookup namespace, not the
 producer, phase, or reliable outcome class. Standalone verification ids use
 `integrity`; post-copy candidates keyed by their originating executor `op_id`
 use `operation` even though their reliable settlement remains an
@@ -789,28 +789,22 @@ item is named by its reliable outcome, not by later lossy progress: later
 snapshots clear the item identity and item-byte fields. `current_path` retains
 its prior display-only behavior.
 
-**This is a versioned wire change and must be treated as one.** An earlier
-draft argued that because `HistoryObserver.on_event` refuses `Progress` and
-nothing persists it, no schema concern arose. That reasoning was wrong:
-persistence is not the criterion. `Envelope` carries an explicit
-`schema_version` that `__post_init__` and `envelope_from_dict` both reject on
-mismatch, and both serialization directions are tested. Adding fields changes
-the serialized body regardless of where it travels.
+**Wire disposition:** retain envelope schema v3 for this one co-packaged
+current-source swap. Progress is lossy and unpersisted, all production
+producers and consumers ship in the same application package, and the bridge
+does not promise external consumers or mixed-version rolling upgrades. Those
+facts make an atomic current-source replacement safe; they do not make body
+shape irrelevant or create a general additive-version policy.
 
-**Resolution:** land it as an **additive change within the current version**,
-which requires three things rather than none. The new fields carry defaults so
-existing producers remain valid without modification. `envelope_from_dict`
-tolerates a body lacking them and yields the defaults: unlike the existing
-required Progress fields, the decoder reads all four optional item fields
-with `raw.get(...)`, not strict subscripts. And
-explicit compatibility tests assert both directions — a pre-change payload
-deserializes, and a post-change envelope serializes with the fields present —
-because an additive claim is only true if something proves it. A third test
-rejects invalid identity/counter pairs and coercive item counters.
-
-Absent those tests the change requires a version bump instead. What is not
-acceptable is changing the body while asserting the version is unaffected
-because nothing writes it to disk.
+Current serialization writes an exact nine-key Progress body, and the browser
+requires that exact shape. `envelope_from_dict` reads the four added fields
+with `raw.get(...)`, so a direct Python codec caller can decode the pre-change
+five-key body. That is a defensive additive-decode allowance only, not a
+supported production compatibility path: `HistoryObserver` refuses Progress,
+so no persisted Progress can reach that decoder, while the only live browser
+consumer rejects the five-key body. Tests therefore own both boundaries: the
+direct codec allowance and the browser's exact current shape, including
+invalid identity/counter pairs and non-coercive item counters.
 
 The landed extraction footprint is bounded: four dataclass fields, two
 reporters that already own the relevant stream, and the exact
@@ -1648,15 +1642,21 @@ immediately. This includes the first progress-only response: under an active
 long poll it may consume the full 150 ms, while receipt and reliable state
 bypass that linger. The 25-second long-poll deadline remains the outer bound.
 
-The browser validates the whole response before applying it. On an ordinary or
-uncertainty-recovery response, the first `Gap` remains visible, stops application
-of later updates, and arms recovery from its `first_missed_seq`. A recovery
-response may begin with the matching `Gap` whose `first_missed_seq` equals that
-attempt's `replay_from`; this proves the prefix is no longer retained, so the
-browser preserves the gap, applies the available tail, and does not loop. A
-later or different `Gap` becomes a new recovery point. Accepting a terminal
-record stops the task's drain loop even when it follows that matching leading
-gap; terminal truth never erases the visible loss.
+The browser validates the whole response before applying it. Validation and
+application are atomic: if any member, including a Progress body, is malformed,
+no callback runs, the accepted-sequence cursor remains unchanged, and reliable
+siblings in that batch are not partially consumed. Uncertainty recovery can
+then cleanly replay the reliable siblings from both sides of the malformed
+event, which are applied exactly once. On an
+ordinary or uncertainty-recovery response, the first `Gap` remains visible,
+stops application of later updates, and arms recovery from its
+`first_missed_seq`. A recovery response may begin with the matching `Gap` whose
+`first_missed_seq` equals that attempt's `replay_from`; this proves the prefix
+is no longer retained, so the browser preserves the gap, applies the available
+tail, and does not loop. A later or different `Gap` becomes a new recovery
+point. Accepting a terminal record stops the task's drain loop even when it
+follows that matching leading gap; terminal truth never erases the visible
+loss.
 
 The adapter queue is exactly 64 updates. A new `Progress` replaces an older
 queued progress or is discarded when reliable data owns every slot. Reliable
@@ -2625,13 +2625,17 @@ headings are organizational, not lane ownership.
   *Not satisfied by* a move-only happy path, a synthetic operation standing in
   for a folder, or a renderer that relabels inferred groups as renames.
 - **BR-G-36 — Progress compatibility and follow mode use identity, never
-  display paths.** A pre-change Progress body lacking the four optional item
-  fields decodes through `.get(...)`; a new body serializes all four;
-  one-sided identity/counter pairs, coercive counters, and unknown types are
-  rejected; both production reporters emit the row-namespace pair (`operation`
-  for executor and linked post-copy ids, `integrity` for standalone rows), and
-  an admitted-stream overshoot preserves identity while clearing the byte pair
-  without changing the current envelope version. An
+  display paths.** The direct Python codec's additive allowance decodes a
+  pre-change five-key Progress body through `.get(...)`, but current
+  serialization writes and the browser requires the exact nine-key body.
+  One-sided identity/counter pairs, coercive counters, unknown types, and the
+  five-key browser shape are rejected; the executable production-validator
+  gate proves that one malformed Progress atomically rejects its co-batched
+  reliable siblings without advancing the cursor, then a clean replay delivers
+  those reliable updates. Both production reporters emit the row-namespace
+  pair (`operation` for executor and linked post-copy ids, `integrity` for
+  standalone rows), and an admitted-stream overshoot preserves identity while
+  clearing the byte pair without changing the current envelope version. An
   off-window item resolves through its server-supplied
   ancestor chain to the deepest visible ancestor-or-self and exact visible
   index under collapse, filter, and search; the window and anchor-only paths
