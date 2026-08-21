@@ -115,6 +115,25 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
+#### Ratify desktop color semantics (2026-08-21)
+
+- Ratified a 15-token authored palette: yellow main is `#FFAA22`, purple main
+  is `#8844CC`, and their predecessor values remain available under the new
+  yellow-light `#FFDD44` and purple-light `#BB88EE` names. Existing consumers
+  remain main-bound.
+- Defined separate intent, task-lifecycle, and integrity color channels. Hue
+  identifies class while text versus a 20 logical px filled badge identifies
+  attention; visible labels, structural cues, and accessible state remain
+  authoritative rather than color or form alone.
+- Recorded paused progress as frozen yellow, plain canceled progress as frozen
+  neutral gray, and resumed work as accent. A future stopped count or
+  percentage remains a latent presentation decision with no current payload.
+- Reduced the unchecked-checkbox target to a 1 logical px neutral boundary
+  while leaving textbox underlines and dual focus strokes unchanged.
+- This is a documentation-only checkpoint. Token aliases, components, gallery
+  fixtures, headed evidence, and the 1 px checkbox implementation remain the
+  next checkpoint; production task and file-list surfaces remain dormant.
+
 #### Establish the dormant file-list row renderer (2026-08-20 – 2026-08-21)
 
 - Added a shared packaged `file_row.js` skeleton plus presentation-only

@@ -172,8 +172,10 @@ web surface remains framework-free, but the official React and XAML
 implementations remain instructive for behavior, states, accessibility, and
 visual details; adapt their lessons rather than importing their frameworks.
 
-`tokens.css` is the only source file allowed to contain these exact 13 authored
-red/green/blue/yellow/purple palette primitives:
+The ratified authored palette contains these exact 15
+red/green/blue/yellow/purple primitives. The immediately following
+implementation checkpoint must make `tokens.css` the only source file that
+contains them:
 
 ```css
 --palette-red-main: #EE6666;
@@ -185,14 +187,17 @@ red/green/blue/yellow/purple palette primitives:
 --palette-blue-main: #33AAEE;
 --palette-blue-dark: #002255;
 --palette-blue-light: #99CCFF;
---palette-yellow-main: #FFDD44;
+--palette-yellow-main: #FFAA22;
 --palette-yellow-dark: #553300;
---palette-purple-main: #BB88EE;
+--palette-yellow-light: #FFDD44;
+--palette-purple-main: #8844CC;
 --palette-purple-dark: #331155;
+--palette-purple-light: #BB88EE;
 ```
 
-Yellow and purple deliberately have no authored `light` input in the current
-foundation.
+The former yellow and purple main values retain their exact hex values as the
+new `yellow-light` and `purple-light` primitives. Existing consumers remain
+bound to `main`; adding the light names does not reroute any role.
 
 Palette use is main-first. When an authored family communicates identity or
 state, its `main` swatch is the default color in both ordinary themes. The
@@ -204,12 +209,118 @@ exception in this visual contract and receive a same-change token and evidence
 update. Contrast remains a required default and Windows forced colors remain
 authoritative. If product design explicitly keeps a main foreground below the
 normal-text contrast target, that exception must retain visible non-color text,
-be measured rather than claimed accessible, and be recorded here. The sync
-operation and integrity-state list labels are that explicit exception on light
-zebra rows, and the inactive Delete filter is the same kind of explicit main-
-red foreground exception on its neutral resting fill. Their words carry
-meaning independently of color and forced colors replace them with
-`CanvasText`.
+be measured rather than claimed accessible, and be recorded here. Light-theme
+main text in the blue, green, yellow, and red families can fall below the
+normal-text target on pale zebra rows; the darker new purple main instead falls
+below that target as plan-intent text on Dark surfaces. These are explicit
+text-form exceptions, not accessible-color claims. The inactive Delete filter
+is the same kind of explicit red-main foreground exception on its neutral
+resting fill. Filled forms and selected filter pills retain contrast-safe
+neutral labels. Their words carry meaning independently of color, forced colors
+replace them with `CanvasText`, and the implementation checkpoint must record
+the exact installed pairs and measured ratios.
+
+### Semantic color channels
+
+Status (2026-08-21): this channel contract and the 15-token palette are
+ratified documentation. Token aliases, component forms, gallery fixtures, and
+their evidence still use the predecessor mapping until the next implementation
+checkpoint. Production task and file-list surfaces remain dormant, so this
+checkpoint changes no shipped workflow presentation.
+
+Intentions and information are never conveyed through color or form alone.
+Hue answers **what class** a signal belongs to; form answers **how much the
+user should care**. Ordinary states use colored text. A state needing immediate
+attention or action uses a more prominent form such as a filled badge, a
+flashing element where motion is appropriate, or another explicit structural
+cue. Urgency is never inferred from hue alone.
+
+One rendered signal belongs to exactly one semantic channel at a time. A
+component must not make one color simultaneously mean plan intent, task
+lifecycle, and integrity. When separate channels need the same color family,
+their channel-specific label, accessible state, surrounding context, and form
+keep the meanings distinct.
+
+In these tables, **text** means colored text without a semantic background.
+**Fill** means a borderless pill-shaped badge with a 20 logical px height, the
+family's exact `main` swatch as its background, and a contrast-safe themed
+neutral label rather than a hue-derived label color. Text, icon/shape, and
+accessible state continue to name the meaning. Forced colors replace authored
+foregrounds and fills with Windows system colors.
+
+#### Channel 1 — intent
+
+Intent says what the reviewed plan wants to do. Its classes follow
+reversibility because reversibility best predicts user regret.
+
+| Class | Members | Hue | Form |
+| --- | --- | --- | --- |
+| Additive | `copy`, `mkdir` | blue | text |
+| Relocating | `move`, `recase` | purple | text |
+| Replacing | `update`, `move_update` | yellow | text |
+| Removing — recoverable | `trash` | red | text |
+| Removing — permanent | `delete` | red | fill |
+| Nothing | `noop` | neutral | text |
+| Exception | `error`, `unsupported`, `blocked` | yellow | fill |
+
+An exception presentation overrides an operation-family presentation for the
+rendered status; it does not rewrite the reviewed operation or domain result.
+
+#### Channel 2 — lifecycle
+
+Lifecycle describes task cards and run status.
+
+| State or projected result condition | Hue | Form |
+| --- | --- | --- |
+| new / planned / queued | neutral | text |
+| executing / verifying | system accent | text |
+| completed | green | text |
+| completed, partial / degraded / incomplete | yellow | text |
+| `PAUSING` / `CANCELING` | system accent | text |
+| `PAUSED` / recoverable `INTERRUPTED` | yellow | text |
+| plain `CANCELED` | neutral | fill |
+| execution reason `CANCELED_AFTER_PUBLISH` / `CANCELED_AFTER_MUTATION` | yellow | fill |
+| `REFUSED` | yellow | fill |
+| errored / `FAILED` | red | fill |
+
+Yellow means that nothing is known broken, but the result needs user attention
+and was not part of the original plan. `PAUSING` and `CANCELING` retain the
+pre-stopping accent because the system is still complying with the request and
+working toward a safe boundary. Once settled, `PAUSED` becomes yellow. Plain
+`CANCELED` remains a low-urgency neutral result, but its filled form prevents it
+from resembling a task that never started. `CANCELED_AFTER_PUBLISH`,
+`CANCELED_AFTER_MUTATION`, and `REFUSED` use yellow fill because a filesystem
+change may need review or a precondition needs repair.
+
+The progress interpretation is explicit: a paused task freezes at its last
+value with a yellow fill; resume returns it to system accent. A plain canceled
+task freezes at its last value with a neutral-gray fill. The product may later
+add a stopped count or percentage such as “stopped after 412 of 1,908” or “42%
+completed” to paused/canceled presentation. That decision remains latent: this
+checkpoint defines no payload, projection, or renderer field for it.
+
+#### Channel 3 — integrity
+
+Integrity owns the single collapsed inventory presence/integrity column.
+Healthy inventory remains calm text while items requiring action use fill.
+
+| `IntegrityResult` or inventory condition | Meaning | Hue | Form |
+| --- | --- | --- | --- |
+| `VERIFIED` / retained verified evidence on rescan | hash or metadata equals the record, including matching identity where available | green | text |
+| `BASELINED` | evidence recorded for the first time | green | text |
+| `UNVERIFIED` | no evidence yet | neutral | text |
+| `MODIFIED` | evidence is stale because metadata drifted | yellow | text |
+| `REAPPEARED` | file returned and needs heightened verification attention | yellow | fill |
+| `UNSUPPORTED` | entry type cannot be verified | yellow | fill |
+| `CANCELED` | verification stopped | neutral | text |
+| `MISSING` | recorded file is not found on disk | red | fill |
+| `MISMATCHED` | hash is confirmed different | red | fill |
+| `ERROR` | read failed | red | fill |
+
+`REAPPEARED` is an inventory presentation condition, not an
+`IntegrityResult`. It overrides ordinary `UNVERIFIED` or `MODIFIED` display and
+forces yellow fill without changing the retained integrity truth. It does not
+erase a stronger confirmed mismatch or error.
 
 A future hardcoded or derived color value is possible only after an explicit
 product-author design decision and a same-change contract/token/evidence update; it is
@@ -218,7 +329,7 @@ semantic aliases for statuses and operation categories; neutral roles use a
 pinned Microsoft Fluent light/dark subset. Native appearance retains the
 observed Windows `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1`
 ramp values, while the page receives only semantic accent-fill roles. These
-externally owned design inputs are tested separately from the 13
+externally owned design inputs are tested separately from the 15
 NamiSync-authored primitives. The neutral and scale values are transcribed from
 pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
 `32b42a5bf79c1836047dfc7fae07b1320731bce4`; exact source hashes are retained
@@ -265,10 +376,13 @@ themes, while its active red-main surface keeps the contrast-safe red-dark text.
 Active chip hover/press cues preserve the opaque color pair and use a small
 geometric change rather than reducing opacity; plain pressed chips likewise
 retain their active label color rather than carrying a latent state inversion.
-Operation/file badges and status pills keep their established semantic fill,
-typography, icon, and cue but have no painted border. Progress uses a neutral
-gray track and the live sampled Windows accent fill in both ordinary themes,
-without hover/pressed inset strokes. The two-half Sync/Integrity component's state contract uses
+At this documentation checkpoint, generic operation/file badges and status
+pills retain their predecessor semantic fill, typography, icon, and cue but
+have no painted border. They are not evidence that the new channel-specific
+text/fill contract is implemented. Progress likewise retains a neutral gray
+track and the live sampled Windows accent fill in both ordinary themes until
+the next checkpoint adds the ratified paused/canceled behavior; it has no
+hover/pressed inset strokes. The two-half Sync/Integrity component's state contract uses
 `radiogroup`/`radio` semantics: exactly one half carries
 `aria-checked="true"`, and that selected half uses the live Windows accent
 roles. The owning later renderer still supplies interaction behavior. These
@@ -281,10 +395,11 @@ keeps the page-contrast ring distinct from inverse control fills. Mouse
 activation does not request that ring. Forced colors continue to use the
 system focus outline and its explicit offset.
 
-Unchecked checkboxes use the neutral Fluent `ControlStrongStrokeColorDefault`
-2 px boundary (`#72000000` Light / `#8BFFFFFF` Dark in WinUI ARGB notation,
-authored as CSS RGBA hex). Their selected fill and boundary become semantic
-accent states while retaining the 16 px outer geometry. Textboxes use a
+Unchecked checkboxes use a 1 logical px neutral Fluent
+`ControlStrongStrokeColorDefault` boundary (`#72000000` Light / `#8BFFFFFF`
+Dark in WinUI ARGB notation, authored as CSS RGBA hex). Their selected fill and
+boundary become semantic accent states while retaining the 16 px outer
+geometry. Textboxes use a
 separate subtle 2 px control
 boundary and a stronger neutral bottom stroke at rest; focus changes only that
 underline to the semantic accent fill. Mouse focus therefore does not gain a
@@ -326,18 +441,20 @@ separator that changes its grid track by pointer drag or Left/Right arrow; the
 gallery retains the resulting width only in its current DOM and deliberately
 adds no persistence or bridge state. Folder rows expose a borderless disclosure
 button and mixed checkboxes; projected child rows carry only their basename,
-indent under the folder, and never repeat the full visual path. Plan operation
-labels and integrity state labels consume authored family `main` swatches in
-both ordinary themes; plan Error/Unsupported and integrity negative states use
-red-main, while neutral/no-op stays neutral. Zebra backgrounds belong only to
+indent under the folder, and never repeat the full visual path. The semantic
+channel contract above supersedes the gallery's predecessor intent/integrity
+mapping. The next implementation checkpoint must realign the existing cells to
+the channel-specific text or 20 px filled form without teaching JavaScript to
+infer domain semantics. Zebra backgrounds belong only to
 direct rendered rows, including folders; cells and columns are transparent and
 the row group has no filler height, so striping ends at the final row. The
 aligned grid has a 48 rem content floor and scrolls horizontally when
 constrained. Forced colors replace
 colored state text with the system neutral foreground.
 
-The component gallery owns the only current callers and fixtures. The static
-sync array covers one plain row, every operation once, error/unsupported, and a
+The component gallery owns the only current callers and fixtures. Before the
+pending semantic realignment, its static sync array covers one plain row, every
+operation once, error/unsupported, and a
 partially selected expanded `photos` folder with two indented basename-only
 children. A second static array covers integrity presence/match/mismatch/error
 states and another partially selected folder with two children. Test-owned
@@ -357,6 +474,12 @@ markers and gallery code are absent from the wheel. No temporary command, fake
 `SyncPlan`, workflow, dispatcher, or session participates. Slice 5 therefore
 begins at validated Python projection → existing bridge → the local renderers,
 without a temporary data channel to preserve or remove.
+
+The next gallery checkpoint expands those static projected views to every
+intent and integrity case in the tables above and gives lifecycle its own task-
+card/status specimens. Lifecycle cases do not become file rows. The fixtures
+continue to pass display-ready presentation values directly to production
+renderers; they do not derive planner, dispatcher, or verifier meaning.
 
 The same break establishes only the icon infrastructure, not the later surface
 icon vocabulary. Four regular 20 px Microsoft Fluent System Icons are vendored

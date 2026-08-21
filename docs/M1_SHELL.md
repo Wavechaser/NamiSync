@@ -963,25 +963,46 @@ carry the `headed` marker; all are collected by the release command.
   shares the production namespace.
 - **SH-G-11 — Tokens own color; surfaces borrow it.** `tokens.css` defines the
   color/type/spacing/radius/elevation variables in light, dark, and
-  high-contrast. It contains exactly the 13 authored `--palette-*-main|dark|light`
-  primitives from `DESKTOP_UI.md`, with no invented yellow/purple `light` value, and
-  maps them through status- and operation-named semantic aliases. Headed gallery
-  evidence records computed light/dark pairs and visible non-color cues for
-  complete/success, failure/error, warning/degraded/incomplete, active, paused,
-  canceled, mismatch, blocked/deferred, neutral/no-op, and every M1 operation
-  type — exactly `copy`, `update`, `move`, `move_update`, `recase`, `mkdir`,
-  `trash`, `delete`, and `noop`; computed light/dark checks require at least
-  4.5:1 for normal text and 3:1 for large text, non-text indicators, and
-  focus/control boundaries. Forced-colors evidence proves those aliases use
-  system colors instead of the authored palette. A static ownership scan proves
-  raw color literals and
+  high-contrast. The ratified color-semantic checkpoint requires exactly the
+  15 authored `--palette-*-main|dark|light` primitives from `DESKTOP_UI.md`.
+  Yellow main is `#FFAA22`, purple main is `#8844CC`, and their former main
+  values are the new yellow light `#FFDD44` and purple light `#BB88EE`;
+  existing consumers remain bound to main. Channel-specific aliases keep plan
+  intent, task lifecycle, and integrity distinct. Hue identifies class, form
+  expresses attention, and text plus non-color cues preserve meaning.
+
+  Headed gallery evidence covers every ratified case in its owning form. Intent
+  covers `copy`, `mkdir`, `move`, `recase`, `update`, `move_update`, `trash`,
+  `delete`, `noop`, `error`, `unsupported`, and `blocked`. Lifecycle covers
+  neutral new/planned/queued; accent execution, verification, pausing, and
+  canceling; green completion; yellow partial/degraded/incomplete and paused or
+  recoverable interruption; neutral-filled plain cancellation; yellow-filled
+  refused and post-mutation cancellation; and red-filled failure.
+  Integrity covers `VERIFIED`, `BASELINED`, `UNVERIFIED`, `MODIFIED`,
+  `REAPPEARED`, `UNSUPPORTED`, `CANCELED`, `MISSING`, `MISMATCHED`, and `ERROR`,
+  including reappearance precedence over ordinary unverified/modified display.
+  Text forms have no semantic background; filled forms are borderless 20
+  logical px pills with exact main-color fills and neutral labels. Paused
+  progress freezes yellow, plain canceled progress freezes neutral gray, and
+  resume restores accent. The stopped-count/percentage enhancement remains
+  latent and adds no present payload field. Unchecked checkbox evidence uses a
+  1 logical px neutral boundary; textbox underlines and dual focus strokes keep
+  their existing dimensions.
+
+  Computed light/dark checks require at least 4.5:1 for normal text and 3:1 for
+  large text, non-text indicators, and focus/control boundaries except for the
+  explicit main-color text cases recorded in `DESKTOP_UI.md`; those cases retain
+  the full visible state word, record the measured ratio rather than claiming
+  conformance, and become `CanvasText` in forced colors. Filled forms retain a
+  contrast-safe neutral label. Forced-colors evidence proves those aliases use
+  system colors instead of the authored palette. A static ownership scan proves raw color literals and
   direct `--palette-*` consumption occur only in `tokens.css`: neither
   `components.css` nor any Slice 4-7 stylesheet/renderer may contain raw colors
   or consume a palette primitive directly. *Not satisfied by* a single-theme
   token set, treating a `light` primitive as an automatic light-theme foreground,
-  color-only status meaning, adding or deriving/disguising a yellow/purple light
-  swatch without the required product-author decision and same-change contract,
-  token, and evidence update, or
+  color- or form-only status meaning, applying one generic status alias across
+  conflicting channels, rerouting existing consumers to the new light tones,
+  allowing JavaScript to infer domain semantics, or
   a scan that allows inline color in `components.css` or a surface module.
   The neutral/type/spacing/radius/motion/elevation subset is transcribed from
   pinned `@fluentui/tokens@1.0.0-alpha.24` source at commit
@@ -992,7 +1013,8 @@ carry the `headed` marker; all are collected by the release command.
   `components.css` from a clean installed wheel and records their exact bytes;
   a source-tree stylesheet or copied/reimplemented component sheet is not
   release evidence. The gallery page itself remains tests-only and absent from
-  the wheel.
+  the wheel. The documentation checkpoint alone does not satisfy this revised
+  gate; token, component, gallery, and evidence realignment remains pending.
 - **SH-G-12 — Native materials apply or degrade, never break.** On a capable
   system the DWM Mica backdrop and immersive dark title bar are applied and the
   WebView2 background is transparent; Mica shows through the intended seams —

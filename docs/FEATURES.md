@@ -419,9 +419,9 @@ unrealized unless an entry says otherwise.
   borderless, while ordinary keyboard focus uses opposing inner/outer Fluent
   strokes and forced colors retain system outlines. The Sync/Integrity
   two-half state specimen uses radio-group semantics and highlights its checked
-  half with the accent roles. Unchecked checkboxes use a softer 2 px neutral
-  boundary; textboxes use a subtle 2 px boundary plus neutral/accent resting/focused
-  underline. Task-backed switching, keyboard behavior, and
+  half with the accent roles. Unchecked checkboxes target a softer 1 logical px
+  neutral boundary; textboxes use a subtle 2 px boundary plus neutral/accent
+  resting/focused underline. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
 - **Content Cards**. Background/content cards are static translucent material
   layers rather than controls: white 70% with a black 6% blended stroke in
@@ -452,19 +452,41 @@ unrealized unless an entry says otherwise.
   unrealized Slice 5 work: production imports neither specialization and still
   renders no rows. Test-only static fixtures settle plain and partially selected
   folder hierarchies with two basename-only children, all operations,
-  error/unsupported, and representative integrity states. Operation and
-  integrity-state text uses authored family main swatches in both ordinary
-  themes; forced colors retain system authority. The gallery headers also
-  support pointer-drag and arrow-key column resizing without persistence and a
-  master checkbox that derives and changes all selectable specimen rows.
-- **Authored Semantic Palette**. GUI Break 1 preserves the exact 13 authored
-  red/green/blue/yellow/purple `main`, `dark`, and available `light` inputs in
-  `tokens.css` only; yellow and purple intentionally have no `light` input.
+  error/unsupported, and representative integrity states. The ratified color
+  contract still awaits its implementation checkpoint: that work will expand
+  the static cases to every intent and integrity state and apply either colored
+  text or a 20 logical px filled badge without adding production data or
+  JavaScript domain inference. Forced colors retain system authority. The
+  gallery headers also support pointer-drag and arrow-key column resizing
+  without persistence and a master checkbox that derives and changes all
+  selectable specimen rows.
+- **Authored Semantic Palette**. The ratified target preserves exactly 15
+  authored red/green/blue/yellow/purple `main`, `dark`, and `light` inputs in
+  `tokens.css` only. Yellow main becomes `#FFAA22` and purple main becomes
+  `#8844CC`; their former main values become yellow light `#FFDD44` and purple
+  light `#BB88EE`. Existing consumers remain main-bound. Token and gallery
+  realignment remains the next implementation checkpoint.
   Further hardcoded or derived color values remain possible after an explicit
   product-author design decision and coordinated contract/token/evidence update.
   Gallery-tested status and operation aliases, not palette names, feed controls
-  and later surfaces. Light/dark pairings are contrast-tested, forced colors use
-  Windows system colors, and every meaning retains text and non-color cues.
+  and later surfaces. Light/dark pairs are measured; the explicit main-text
+  exceptions are disclosed rather than claimed contrast-conformant, while
+  filled forms retain contrast-safe neutral labels. Forced colors use Windows
+  system colors, and every meaning retains text and non-color cues.
+- **Semantic Color Channels**. The ratified visual contract separates plan
+  intent, task lifecycle, and integrity. Hue identifies a class; form expresses
+  attention, and neither replaces visible text, structural cues, or accessible
+  state. A rendered signal belongs to one channel at a time. Intent follows
+  reversibility; lifecycle distinguishes ordinary progress from attention and
+  failure; integrity keeps healthy inventory as text while reappearance,
+  unsupported entries, missing files, mismatches, and read errors use filled
+  attention badges. Filled forms are 20 logical px pills with exact main-color
+  fills and neutral labels. Paused progress is frozen yellow, plain canceled
+  progress is frozen neutral gray, and resume returns accent. A future stopped
+  count/percentage for paused or canceled work is a recorded decision point,
+  not a current payload or renderer feature. The channel-specific aliases,
+  component forms, complete gallery fixtures, and evidence are pending the next
+  implementation checkpoint; production task/list surfaces remain dormant.
 - **Closed Fluent Icon Foundation**. GUI Break 1 seeds a minimal frozen registry
   with four pinned local regular Microsoft Fluent SVG masks and their source,
   hash, and license record. Icons inherit `currentColor`; tokens own shared
