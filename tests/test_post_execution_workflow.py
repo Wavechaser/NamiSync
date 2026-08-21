@@ -10,7 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from namisync.core.events import ItemOutcome, PhaseChanged
+from namisync.core.events import ItemOutcome, PhaseChanged, Progress
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
@@ -965,6 +965,20 @@ def test_xv_5_execute_pause_preserves_exact_evidence_then_verifies_all() -> None
             first,
             evidence=expected_evidence,
         )
+        execution_set.note_bytes_done(7)
+        context.emit(
+            Progress(
+                items_done=1,
+                items_total=2,
+                bytes_done=7,
+                bytes_total=10,
+                current_path=second.target_rel_path,
+                item_id=str(second.op_id),
+                item_type="operation",
+                item_bytes_done=2,
+                item_bytes_total=second.content_bytes,
+            )
+        )
         raise PauseRequested()
 
     with pytest.raises(PauseRequested):
@@ -979,6 +993,7 @@ def test_xv_5_execute_pause_preserves_exact_evidence_then_verifies_all() -> None
         )
 
     assert first_recordings[0].finishes == []
+    assert continuation.execution_set.bytes_done_high_water == 7
     resumed_request = decode_execution_request(
         encode_execution_request(ExecutionRequest(continuation, NOW))
     )
@@ -986,6 +1001,7 @@ def test_xv_5_execute_pause_preserves_exact_evidence_then_verifies_all() -> None
     resumed_xset = resumed_request.execution_set
     assert resumed_xset.status == {first.op_id: Outcome.SUCCEEDED}
     assert resumed_xset.published_evidence[first.op_id] == expected_evidence
+    assert resumed_xset.bytes_done_high_water == 7
 
     resumed_recordings: list[_Recording] = []
     verified: list[str] = []
@@ -1109,6 +1125,7 @@ def test_resumed_execute_preflight_failure_finishes_as_ran_failure(
     xset = _execution_set(first, second)
     xset.status[first.op_id] = Outcome.SUCCEEDED
     xset.published_evidence[first.op_id] = _evidence(first)
+    xset.note_bytes_done(9)
     recordings: list[_Recording] = []
     deps = _deps(
         executor=lambda *args: pytest.fail("execution unexpectedly resumed"),
@@ -1144,7 +1161,7 @@ def test_resumed_execute_preflight_failure_finishes_as_ran_failure(
     assert result.phases[0].status is PhaseStatus.FAILED
     assert result.phases[0].items_done == 1
     assert result.phases[0].items_total == 2
-    assert result.phases[0].bytes_done == 5
+    assert result.phases[0].bytes_done == 9
     assert result.phases[0].bytes_total == 12
     assert result.error is not None
     assert result.error.type_name == (
@@ -1219,6 +1236,7 @@ def test_paused_verify_cancel_preserves_execute_truth_and_finish_failure_axis() 
 def test_paused_execute_cancel_finishes_without_starting_verify() -> None:
     operation = _operation(12, 5)
     xset = _execution_set(operation)
+    xset.note_bytes_done(3)
     recording = _Recording()
     result = settle_canceled_execution(
         ExecuteContinuation(xset, verify_after_execute=True),
@@ -1232,6 +1250,10 @@ def test_paused_execute_cancel_finishes_without_starting_verify() -> None:
     assert result.phases[0].phase == "execute"
     assert result.phases[0].status is PhaseStatus.CANCELED
     assert result.phases[0].items_done == 0
+    assert result.phases[0].bytes_done == 3
+    assert result.phases[0].bytes_total == 5
+    assert result.bytes_done == 3
+    assert result.bytes_total == 5
     assert recording.finishes == [
         (SessionState.CANCELED, RecordingStatus.OK)
     ]
@@ -1245,6 +1267,20 @@ def test_running_execute_cancel_never_starts_verify() -> None:
 
     def cancel_executor(execution_set, context, recorder, policies, fs):
         del recorder, policies, fs
+        execution_set.note_bytes_done(3)
+        context.emit(
+            Progress(
+                items_done=0,
+                items_total=1,
+                bytes_done=3,
+                bytes_total=5,
+                current_path=operation.target_rel_path,
+                item_id=str(operation.op_id),
+                item_type="operation",
+                item_bytes_done=3,
+                item_bytes_total=operation.content_bytes,
+            )
+        )
         _settle(
             execution_set,
             context,
@@ -1271,9 +1307,12 @@ def test_running_execute_cancel_never_starts_verify() -> None:
     assert not verifier_called
     assert result.status is SessionState.CANCELED
     assert result.canceled
+    assert xset.bytes_done_high_water == 3
     assert [phase.status for phase in result.phases] == [
         PhaseStatus.CANCELED
     ]
+    assert result.phases[0].bytes_done == 3
+    assert result.phases[0].bytes_total == 5
     assert recordings[0].finishes == [
         (SessionState.CANCELED, RecordingStatus.OK)
     ]

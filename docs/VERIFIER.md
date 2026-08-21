@@ -232,9 +232,11 @@ expands whenever physical work would otherwise exceed it. A reliable
 forced inactive snapshot that clears all item fields while retaining the last
 display path.
 
-Pause does not emit a false inactive settlement. Resume creates a new read
-attempt whose item counter starts at zero while the aggregate physical-read
-counter retains prior work and never regresses. Cancellation emits every
+Pause does not emit a false inactive settlement: after the read unwinds it
+force-emits the latest active attempt so the 100 ms throttle cannot leave a
+stale paused byte count. Resume creates a new read attempt whose item counter
+starts at zero while the aggregate physical-read counter retains prior work and
+never regresses. Cancellation emits every
 required canceled outcome before one forced inactive snapshot. Item start,
 stream start, and completion are fixed lifecycle emissions; ordinary chunk
 updates remain time-throttled and lossy-coalescible.

@@ -361,11 +361,14 @@ replacement, absence, and read failure are reported as `changed`, `absent`, or
 target-root-relative rather than machine-specific absolute paths. Before
 repaired evidence exists, an identity-weak profile cannot distinguish a
 same-kind/same-size backup substitution. MOVE_UPDATE distinguishes new+old from
-new+trash; neither is rolled back. Ordinary pause
-abandons/reclaims an in-flight temp through exact-name recovery, preserves
-completed `ExecutionSet` statuses, forces pause-drain recording, and re-raises
-without terminal; dispatcher then releases custody. Resume queues at the back,
-freshly re-observes/preflights in workflow, and continues only unreached work.
+new+trash; neither is rolled back. Ordinary pause abandons/reclaims an in-flight
+temp through exact-name recovery, preserves completed `ExecutionSet` statuses
+and aggregate byte high-water, forces pause-drain recording plus one fresh
+active-item progress snapshot, and re-raises without terminal; dispatcher then
+releases custody. Deferred directory finalization may settle another operation
+during this unwind but cannot replace the paused item's progress identity.
+Resume queues at the back, freshly re-observes/preflights in workflow, and
+continues only unreached work.
 Direct `PauseRequested` and process-fatal `BaseException` unwinds attempt exact
 owned-temp cleanup but preserve the original control or exception and emit no
 terminal item from executor. A cleanup failure on those paths may leave the
@@ -573,9 +576,12 @@ the byte pipeline. Retained publication, metadata, durability, attestation, and
 recording continuations bypass that entry and do not reset. If an abandoned
 attempt reported bytes, the reset snapshot is forced past the normal time
 throttle. Aggregate executor bytes never regress: they hold their high-water
-mark until the new attempt catches up, and a terminally failed item reports
-that high-water mark rather than rewinding it. Moves, trash, mkdir, delete, and
-no-op contribute items but zero transfer bytes. Emission remains
+mark until the new attempt catches up, persist through the strict workflow
+continuation, and seed the resumed reporter before any new stream begins. A
+terminally failed or canceled item reports that high-water mark rather than
+rewinding it. Pause force-emits the latest active attempt without clearing it;
+resumed byte-pipeline entry starts a new attempt at zero. Moves, trash, mkdir,
+delete, and no-op contribute items but zero transfer bytes. Emission remains
 throttled/coalesced outside the copy chunk size so fast disks cannot flood UI
 queues.
 

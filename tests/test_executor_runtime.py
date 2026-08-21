@@ -42,7 +42,13 @@ from namisync.core.planning import (
     Plan,
     PlanOperation,
 )
-from namisync.core.session import Canceled, RunContext, SessionState, run_session
+from namisync.core.session import (
+    Canceled,
+    PauseRequested,
+    RunContext,
+    SessionState,
+    run_session,
+)
 from namisync.modules.executor import (
     BoundedFailurePolicy,
     ExecutorPolicies,
@@ -3362,6 +3368,45 @@ class PartialProgressCopyBackend:
         raise AssertionError("cancellation checkpoint returned")
 
 
+class PauseThenCompleteProgressCopyBackend:
+    def __init__(self, clock: FrozenTeardownProgressClock) -> None:
+        self._clock = clock
+        self.calls = 0
+        self.pause_requested = False
+
+    def copy(
+        self,
+        source,
+        target,
+        *,
+        chunk_size: int,
+        checkpoint,
+        on_chunk,
+    ) -> CopyDigest:
+        del chunk_size
+        checkpoint()
+        self.calls += 1
+        payload = source.read()
+        if self.calls == 1:
+            offset = 0
+            for size in (8, 16):
+                chunk = payload[offset : offset + size]
+                assert len(chunk) == size
+                assert target.write(chunk) == size
+                offset += size
+                self._clock.value = 0.2
+                on_chunk(size)
+            self.pause_requested = True
+            checkpoint()
+            raise AssertionError("pause checkpoint returned")
+
+        for offset in range(0, len(payload), 8):
+            chunk = payload[offset : offset + 8]
+            assert target.write(chunk) == len(chunk)
+            on_chunk(len(chunk))
+        return CopyDigest(xxh3_128(payload).digest(), len(payload))
+
+
 class EscapingFailurePolicy:
     def on_item_failed(
         self,
@@ -3619,6 +3664,160 @@ def test_terminal_progress_sink_failure_remains_secondary_to_policy_escape(
         and "injected terminal progress sink failure" in note
         for note in notes
     )
+
+
+def test_partial_copy_pause_forces_latest_snapshot_and_resume_stays_monotonic(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"x" * 64
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, payload)
+    xset = _xset(_plan(source, target, (operation,)))
+    clock = FrozenTeardownProgressClock()
+    backend = PauseThenCompleteProgressCopyBackend(clock)
+    timeline: list[object] = []
+
+    def pause_checkpoint() -> None:
+        if backend.pause_requested:
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        execute(
+            xset,
+            RunContext(timeline.append, pause_checkpoint),
+            FakeRecorder(),
+            _policies(
+                copy_backend=backend,
+                monotonic=clock,
+                progress_interval_seconds=0.1,
+            ),
+            fs,
+        )
+
+    paused_progress = [
+        event for event in timeline if isinstance(event, Progress)
+    ]
+    assert not any(isinstance(event, ItemOutcome) for event in timeline)
+    assert (
+        paused_progress[-1].item_id,
+        paused_progress[-1].item_type,
+        paused_progress[-1].item_bytes_done,
+        paused_progress[-1].item_bytes_total,
+        paused_progress[-1].bytes_done,
+    ) == (str(operation.op_id), "operation", 24, len(payload), 24)
+    assert paused_progress[-1].current_path == operation.target_rel_path
+    assert xset.bytes_done_high_water == 24
+
+    resume_start = len(timeline)
+    backend.pause_requested = False
+    result = execute(
+        xset,
+        RunContext(timeline.append, lambda: None),
+        FakeRecorder(),
+        _policies(
+            copy_backend=backend,
+            monotonic=clock,
+            progress_interval_seconds=0,
+        ),
+        fs,
+    )
+
+    resumed_determinate = [
+        event
+        for event in timeline[resume_start:]
+        if isinstance(event, Progress)
+        and event.item_id == str(operation.op_id)
+        and event.item_bytes_done is not None
+    ]
+    progress = [event for event in timeline if isinstance(event, Progress)]
+    assert result.status is SessionState.COMPLETED
+    assert backend.calls == 2
+    assert (
+        resumed_determinate[0].item_bytes_done,
+        resumed_determinate[0].item_bytes_total,
+        resumed_determinate[0].bytes_done,
+    ) == (0, len(payload), 24)
+    assert [event.bytes_done for event in progress] == sorted(
+        event.bytes_done for event in progress
+    )
+    assert xset.bytes_done_high_water == len(payload)
+    assert (target / "file.bin").read_bytes() == payload
+    _assert_operation_progress_clears_after_outcome(timeline, operation)
+
+
+def test_pause_directory_finalization_retains_active_child_progress(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "folder").mkdir()
+    payload = b"x" * 64
+    (source / "folder" / "child.bin").write_bytes(payload)
+    fs = NativeFileSystem()
+    directory_stat = fs.stat(source, "folder")
+    child_stat = fs.stat(source, "folder\\child.bin")
+    assert directory_stat is not None and child_stat is not None
+    mkdir = _operation(
+        1,
+        OperationKind.MKDIR,
+        source_rel_path="folder",
+        target_rel_path="folder",
+        source_expected=directory_stat,
+        target_expected=None,
+        intended=directory_stat,
+    )
+    child = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="folder\\child.bin",
+        target_rel_path="folder\\child.bin",
+        source_expected=child_stat,
+        target_expected=None,
+        intended=child_stat,
+        dependencies=(mkdir.op_id,),
+    )
+    xset = _xset(_plan(source, target, (mkdir, child)))
+    clock = FrozenTeardownProgressClock()
+    backend = PauseThenCompleteProgressCopyBackend(clock)
+    timeline: list[object] = []
+
+    def checkpoint() -> None:
+        if backend.pause_requested:
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        execute(
+            xset,
+            RunContext(timeline.append, checkpoint),
+            FakeRecorder(),
+            _policies(
+                copy_backend=backend,
+                monotonic=clock,
+                progress_interval_seconds=0.1,
+            ),
+            fs,
+        )
+
+    outcomes = [event for event in timeline if isinstance(event, ItemOutcome)]
+    final_progress = next(
+        event
+        for event in reversed(timeline)
+        if isinstance(event, Progress)
+    )
+    assert xset.status == {mkdir.op_id: Outcome.SUCCEEDED}
+    assert [(outcome.item_id, outcome.outcome) for outcome in outcomes] == [
+        (str(mkdir.op_id), Outcome.SUCCEEDED)
+    ]
+    assert (
+        final_progress.items_done,
+        final_progress.item_id,
+        final_progress.item_type,
+        final_progress.item_bytes_done,
+        final_progress.item_bytes_total,
+    ) == (1, str(child.op_id), "operation", 24, len(payload))
+    assert final_progress.current_path == child.target_rel_path
+    assert final_progress.bytes_done == 24
+    assert timeline.index(outcomes[0]) < len(timeline) - 1
 
 
 @pytest.mark.parametrize(

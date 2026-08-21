@@ -586,6 +586,17 @@ def test_br_g_10_tampered_real_verify_resume_finishes_the_original_run(
                 xset.commitment,
                 selection_digest=selection_digest(tampered_selection),
             ),
+            _bytes_done_high_water=sum(
+                operation.content_bytes
+                for operation in xset.plan.operations
+                if operation.op_id in tampered_selection
+                and operation.kind
+                in {
+                    OperationKind.COPY,
+                    OperationKind.UPDATE,
+                    OperationKind.MOVE_UPDATE,
+                }
+            ),
         )
         tampered_candidates = PostCopySelection(
             tuple(

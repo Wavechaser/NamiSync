@@ -62,7 +62,7 @@ from .models import (
 )
 
 
-_SCHEMA_VERSION = 4
+_SCHEMA_VERSION = 5
 
 
 def _json_bytes(value: object) -> bytes:
@@ -922,6 +922,7 @@ def _execution_set(value: ExecutionSet) -> dict[str, object]:
             )
         },
         "recording": value.recording.value,
+        "bytes_done_high_water": value.bytes_done_high_water,
     }
 
 
@@ -938,6 +939,7 @@ def _decode_execution_set(value: object) -> ExecutionSet:
             "commitment",
             "published_evidence",
             "recording",
+            "bytes_done_high_water",
         },
         "execution_set",
     )
@@ -973,6 +975,10 @@ def _decode_execution_set(value: object) -> ExecutionSet:
         },
         recording=RecordingStatus(
             _string(item["recording"], "execution_set.recording")
+        ),
+        _bytes_done_high_water=_integer(
+            item["bytes_done_high_water"],
+            "execution_set.bytes_done_high_water",
         ),
     )
 

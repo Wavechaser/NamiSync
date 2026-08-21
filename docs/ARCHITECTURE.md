@@ -150,7 +150,9 @@ class DeliveryClass(StrEnum):
 - `Progress` is lossy and replaceable by a newer snapshot.
 - When present, nominal item identity—not `current_path`—is the row join key.
   Item-byte counters describe one active stream attempt and may restart;
-  aggregate counters retain their module-owned monotonic semantics.
+  aggregate counters retain their module-owned monotonic semantics. Executor
+  continuation state carries its aggregate high-water across pause/resume in
+  the same task rather than declaring an implicit progress-reset epoch.
 - lifecycle changes, item outcomes, explicit gaps, and terminal results are
   reliable.
 - slow ordinary subscribers are bounded and ejected visibly with `Gap` rather
@@ -307,7 +309,7 @@ that depend on absence or stable identity.
 | `Plan` | Deterministic immutable intent, operations, dependencies, semantic settings, capacity requirement, and fingerprint. |
 | `ExecutionSet.selection` | Dependency-closed executable subset, distinct from the full reviewed plan. |
 | `Commitment` | Binding from human approval to plan fingerprint and selection digest. |
-| `ExecutionSet` | Plan, authoritative selection, commitment, operation status, and continuation evidence. |
+| `ExecutionSet` | Plan, authoritative selection, commitment, operation status, continuation evidence, and validated aggregate byte high-water. |
 | `ObservedWorld` | Fresh, scoped filesystem facts used by pure preflight judgment. |
 | `Verdict` | Typed per-operation refusals plus the observation judged. |
 

@@ -559,6 +559,7 @@ class _ProgressTracker:
         ctx: RunContext,
         policies: ExecutorPolicies,
     ) -> None:
+        self._xset = xset
         self._ctx = ctx
         self._policies = policies
         self.items_total = len(xset.selection)
@@ -579,7 +580,11 @@ class _ProgressTracker:
             and operation.kind
             in {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
         )
-        self.bytes_done = min(self._committed_bytes, self.bytes_total)
+        self.bytes_done = max(
+            min(self._committed_bytes, self.bytes_total),
+            xset.bytes_done_high_water,
+        )
+        xset.note_bytes_done(self.bytes_done)
         self._file_bytes: int | None = None
         self._current: PlanOperation | None = None
         self._item_active = False
@@ -615,6 +620,7 @@ class _ProgressTracker:
             self._committed_bytes + min(self._file_bytes, self._current.content_bytes),
         )
         self.bytes_done = max(self.bytes_done, candidate)
+        self._xset.note_bytes_done(self.bytes_done)
         self.emit(force=False)
 
     def settled(self, operation: PlanOperation, outcome: Outcome) -> None:
@@ -628,10 +634,20 @@ class _ProgressTracker:
                 self.bytes_total, self._committed_bytes + operation.content_bytes
             )
             self.bytes_done = max(self.bytes_done, self._committed_bytes)
-        self._current = operation
-        self._file_bytes = None
-        self._item_active = False
+        self._xset.note_bytes_done(self.bytes_done)
+        settles_active = (
+            self._item_active
+            and self._current is not None
+            and self._current.op_id == operation.op_id
+        )
+        if not self._item_active or settles_active:
+            self._current = operation
+            self._file_bytes = None
+            self._item_active = False
         self.emit(force=False)
+
+    def pause_completed(self) -> None:
+        self.emit(force=True)
 
     def terminal_completed(self) -> None:
         self._file_bytes = None
@@ -1080,6 +1096,7 @@ def _handle_pause(
         recorder.flush()
     except Exception:
         state.recording = RecordingStatus.DEGRADED
+    progress.pause_completed()
 
 
 def _settle_before_collaborator_escape(

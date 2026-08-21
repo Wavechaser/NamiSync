@@ -1899,6 +1899,94 @@ def test_pause_during_hash_restarts_pending_item_without_outcome_or_progress_reg
     assert len(recorder.commands) == 1
 
 
+def test_pause_during_hash_forces_latest_active_snapshot_under_throttle(
+    tmp_path: Path,
+) -> None:
+    item = _item(tmp_path)
+    selection = IntegritySelection((item,))
+    events: list[object] = []
+    calls = 0
+
+    def checkpoint() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        verify(
+            selection,
+            _context(events, checkpoint, monotonic=lambda: 0.0),
+            _Recorder(),
+            _FakeReader(
+                {
+                    item.display_path: _StreamSpec(
+                        item.expected_stat, (b"a", b"b", b"c")  # type: ignore[arg-type]
+                    )
+                }
+            ),
+        )
+
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert _integrity_events(events) == []
+    assert selection.completed_count == 0
+    assert selection.processed_bytes == 1
+    assert not any(event.item_bytes_done == 1 for event in progress[:-1])
+    assert (
+        progress[-1].item_id,
+        progress[-1].item_bytes_done,
+        progress[-1].item_bytes_total,
+        progress[-1].bytes_done,
+        progress[-1].bytes_total,
+    ) == (item.item_id, 1, 3, 1, 3)
+    assert progress[-1].current_path == item.display_path
+    assert events[-1] is progress[-1]
+
+
+def test_post_copy_pause_forces_latest_active_snapshot_under_throttle(
+    tmp_path: Path,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path, recorded=False)
+    selection = PostCopySelection((candidate,))
+    events: list[object] = []
+    calls = 0
+
+    def checkpoint() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 3:
+            raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        verify_post_copy(
+            selection,
+            _context(events, checkpoint, monotonic=lambda: 0.0),
+            _Recorder(),
+            _FakeReader(
+                {
+                    candidate.display_path: _StreamSpec(
+                        candidate.expected_stat, (b"a", b"b", b"c")
+                    )
+                }
+            ),
+        )
+
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert _integrity_events(events) == []
+    assert selection.completed_count == 0
+    assert selection.processed_bytes == 1
+    assert not any(event.item_bytes_done == 1 for event in progress[:-1])
+    assert (
+        progress[-1].item_id,
+        progress[-1].item_bytes_done,
+        progress[-1].item_bytes_total,
+        progress[-1].bytes_done,
+        progress[-1].bytes_total,
+    ) == (candidate.item_id, 1, 3, 1, 3)
+    assert progress[-1].current_path == candidate.display_path
+    assert events[-1] is progress[-1]
+
+
 def test_runner_aggregates_typed_integrity_outcomes_on_cancel(tmp_path: Path) -> None:
     items = (_item(tmp_path, number=1), _item(tmp_path, number=2))
     selection = IntegritySelection(items)

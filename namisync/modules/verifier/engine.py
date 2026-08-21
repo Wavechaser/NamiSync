@@ -166,6 +166,7 @@ def verify_post_copy(
                 selection, ctx, reporter, processed, emitted
             )
     except PauseRequested:
+        reporter.pause_completed()
         raise
     except Canceled:
         for candidate in selection.pending:
@@ -296,6 +297,9 @@ class _ProgressReporter:
         self._current_path = None
         self.emit(force=True)
 
+    def pause_completed(self) -> None:
+        self.emit(force=True)
+
     def _clear_item(self) -> None:
         self._item_id = None
         self._item_bytes_done = None
@@ -354,6 +358,7 @@ def _run(
     except PauseRequested:
         # Pending and in-flight items stay pending.  Their reliable outcomes are
         # emitted only when a resumed pass actually settles them.
+        reporter.pause_completed()
         raise
     except Canceled:
         # The runner aggregates reliable events and cannot inspect module state.

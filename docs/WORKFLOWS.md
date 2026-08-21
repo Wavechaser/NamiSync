@@ -1,6 +1,6 @@
 # Workflows Module
 
-Status (2026-07-30): M0 reviewed sync/history plus M1 Stages 1-5.5 are
+Status (2026-08-21): M0 reviewed sync/history plus M1 Stages 1-5.5 are
 implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
@@ -9,8 +9,9 @@ verification, compound history/views, generic history reads, semantic-settings
 snapshot/patch translation, and the shared facade used by the location CLI
 commands. Stage 5.5's workflow-owned selection semantics are now implemented:
 direct user deselection remains distinct from safety exclusion, execution
-re-derives the authoritative set, and strict payload v4 preserves that
-provenance across continuations. Stage 5.5 facade integration is complete;
+re-derives the authoritative set, and strict payload v5 preserves that
+provenance plus executor aggregate progress high-water across continuations.
+Stage 5.5 facade integration is complete;
 Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
@@ -144,7 +145,10 @@ codec to strict version 3 because execute decoding now has phase-specific
 required fields. Stage 5.5 advances both plan and execution payloads to strict
 version 4 and requires canonical `user_deselected` on every execution set;
 version 1-3 payloads are refused instead of being guessed into the changed
-contract. Inventory request payloads advance to
+contract. Progress-continuation hardening advances the shared plan/execution
+codec to strict version 5, requires an exact bounded byte high-water on every
+execution set, and refuses versions 1-4 rather than resetting a resumed task's
+aggregate bar. Inventory request payloads advance to
 version 2 for recursive subtree scope while integrity requests stay at version
 1; their strict shared validator is therefore kind-aware rather than enforcing
 one version for both kinds.

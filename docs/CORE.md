@@ -132,8 +132,10 @@ nonterminal bodies. The dispatcher wraps the runner with custody acquisition
 and unconditional release; it does not add a second terminal path.
 
 Pause is a generic per-workflow-registration capability. Execution supports it
-from M0 through mutable `ExecutionSet.status`; verify and baseline add an
-item-status continuation in M1. Scan and plan refuse pause cleanly
+from M0 through mutable `ExecutionSet.status`; its continuation also retains a
+validated aggregate byte high-water so one resumed task cannot report progress
+regression. Verify and baseline add an item-status and physical-read
+continuation in M1. Scan and plan refuse pause cleanly
 and remain cancelable. A pause unwinds, forces recorder flush where applicable,
 persists the workflow-owned continuation, releases custody, and emits no
 terminal.

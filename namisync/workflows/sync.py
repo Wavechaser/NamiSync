@@ -842,12 +842,13 @@ def _execute_continuation_phase(
         if operation.op_id in xset.selection
         and operation.kind in _BYTE_PRODUCING_KINDS
     )
-    bytes_done = sum(
+    committed_bytes = sum(
         operation.content_bytes
         for operation in xset.plan.operations
         if xset.status.get(operation.op_id) is Outcome.SUCCEEDED
         and operation.kind in _BYTE_PRODUCING_KINDS
     )
+    bytes_done = max(committed_bytes, xset.bytes_done_high_water)
     return PhaseResult(
         phase=ExecuteContinuation.phase,
         status=status,

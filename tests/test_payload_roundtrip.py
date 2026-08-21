@@ -124,7 +124,7 @@ def test_worker_count_is_absent_from_contracts_and_payloads() -> None:
     assert b"worker_count" not in execution_payload
 
 
-@pytest.mark.parametrize("schema_version", [1, 2, 3])
+@pytest.mark.parametrize("schema_version", [1, 2, 3, 4])
 def test_old_workflow_payload_is_refused_after_contract_change(
     schema_version: int,
 ) -> None:
@@ -139,7 +139,7 @@ def test_old_workflow_payload_is_refused_after_contract_change(
         decode_plan_request(json.dumps(value).encode("utf-8"))
 
 
-def test_plan_and_execution_payloads_explicitly_use_schema_v4() -> None:
+def test_plan_and_execution_payloads_explicitly_use_schema_v5() -> None:
     plan_value = json.loads(
         encode_plan_request(
             PlanRequest("request", r"C:\source", r"D:\target")
@@ -149,10 +149,10 @@ def test_plan_and_execution_payloads_explicitly_use_schema_v4() -> None:
         encode_execution_request(_rich_execution_request())
     )
 
-    assert plan_value["schema_version"] == 4
-    assert execution_value["schema_version"] == 4
+    assert plan_value["schema_version"] == 5
+    assert execution_value["schema_version"] == 5
 
-    execution_value["schema_version"] = 3
+    execution_value["schema_version"] = 4
     with pytest.raises(ValueError, match="unsupported workflow payload schema"):
         decode_execution_request(
             json.dumps(execution_value).encode("utf-8")
@@ -176,7 +176,7 @@ def test_workflow_payload_rejects_non_json_numeric_constants(
     encoded = encode_plan_request(
         PlanRequest("request", r"C:\source", r"D:\target")
     )
-    marker = b'"schema_version":4'
+    marker = b'"schema_version":5'
     assert marker in encoded
     malformed = encoded.replace(
         marker,
@@ -462,6 +462,7 @@ def _rich_execution_request() -> ExecutionRequest:
             )
         },
         recording=RecordingStatus.DEGRADED,
+        _bytes_done_high_water=17,
     )
     return ExecutionRequest(
         ExecuteContinuation(xset, verify_after_execute=True),
@@ -506,6 +507,7 @@ def _rich_verify_request() -> ExecutionRequest:
             ),
         },
         recording=RecordingStatus.DEGRADED,
+        _bytes_done_high_water=61,
     )
     candidates = PostCopySelection(
         candidates=(
@@ -606,7 +608,43 @@ def test_execution_payload_is_a_lossless_round_trip() -> None:
         == original.execution_set.published_evidence
     )
     assert decoded.execution_set.recording is RecordingStatus.DEGRADED
+    assert decoded.execution_set.bytes_done_high_water == 17
     assert str(decoded.execution_set.run_id) == str(original.execution_set.run_id)
+
+
+def test_execution_set_byte_high_water_is_bounded_and_strictly_monotonic() -> None:
+    xset = _rich_execution_request().execution_set
+
+    xset.note_bytes_done(23)
+    xset.note_bytes_done(23)
+
+    assert xset.bytes_done_high_water == 23
+    with pytest.raises(ValueError, match="cannot regress"):
+        xset.note_bytes_done(22)
+    with pytest.raises(ValueError, match="exceeds selected content"):
+        xset.note_bytes_done(10**9)
+    with pytest.raises(TypeError, match="exact integer"):
+        xset.note_bytes_done(True)
+    assert xset.bytes_done_high_water == 23
+
+
+@pytest.mark.parametrize(
+    ("high_water", "error", "match"),
+    [
+        (True, TypeError, "exact integer"),
+        (-1, ValueError, "cannot be negative"),
+        (10**9, ValueError, "exceeds selected content"),
+    ],
+)
+def test_execution_set_rejects_invalid_initial_byte_high_water(
+    high_water: object,
+    error: type[Exception],
+    match: str,
+) -> None:
+    xset = _rich_execution_request().execution_set
+
+    with pytest.raises(error, match=match):
+        replace(xset, _bytes_done_high_water=high_water)
 
 
 def test_execution_payload_round_trips_canonical_user_deselection() -> None:
@@ -637,6 +675,31 @@ def test_execution_payload_round_trips_canonical_user_deselection() -> None:
 
 
 @pytest.mark.parametrize("shape", ["missing", "unknown"])
+def test_execution_payload_requires_exact_byte_high_water_field(
+    shape: str,
+) -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    if shape == "missing":
+        del value["execution_set"]["bytes_done_high_water"]
+    else:
+        value["execution_set"]["unexpected_byte_progress"] = 17
+
+    with pytest.raises(ValueError, match="missing|unexpected"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+@pytest.mark.parametrize("high_water", [True, 1.5, -1, 10**9])
+def test_execution_payload_rejects_invalid_byte_high_water(
+    high_water: object,
+) -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    value["execution_set"]["bytes_done_high_water"] = high_water
+
+    with pytest.raises((TypeError, ValueError), match="integer|negative|exceeds"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+@pytest.mark.parametrize("shape", ["missing", "unknown"])
 def test_execution_payload_requires_exact_user_deselection_field(
     shape: str,
 ) -> None:
@@ -663,6 +726,7 @@ def test_verify_continuation_is_a_lossless_round_trip() -> None:
         str(_op_id(2)): 11
     }
     assert decoded.continuation.candidates.processed_bytes == 11
+    assert decoded.execution_set.bytes_done_high_water == 61
     assert encode_execution_request(decoded) == encoded
 
 

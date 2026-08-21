@@ -112,6 +112,8 @@ class ExecutionSet:
     )
     recording: RecordingStatus = RecordingStatus.OK
     user_deselected: frozenset[OpId] = frozenset()
+    _bytes_done_high_water: int = field(default=0, repr=False)
+    _selected_bytes_bound: int = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         validated_run_id(str(self.run_id))
@@ -154,6 +156,17 @@ class ExecutionSet:
             OperationKind.UPDATE,
             OperationKind.MOVE_UPDATE,
         }
+        self._selected_bytes_bound = sum(
+            operation.content_bytes
+            for operation in operations.values()
+            if operation.op_id in self.selection and operation.kind in byte_kinds
+        )
+        if type(self._bytes_done_high_water) is not int:
+            raise TypeError("execution byte high-water must be an exact integer")
+        if self._bytes_done_high_water < 0:
+            raise ValueError("execution byte high-water cannot be negative")
+        if self._bytes_done_high_water > self._selected_bytes_bound:
+            raise ValueError("execution byte high-water exceeds selected content")
         recorded_location_id: str | None = None
         for op_id, evidence in self.published_evidence.items():
             if not isinstance(evidence, PublishedCopyEvidence):
@@ -195,6 +208,19 @@ class ExecutionSet:
                 raise ValueError(
                     "recorded copy identities do not share one target location"
                 )
+
+    @property
+    def bytes_done_high_water(self) -> int:
+        return self._bytes_done_high_water
+
+    def note_bytes_done(self, bytes_done: int) -> None:
+        if type(bytes_done) is not int:
+            raise TypeError("execution byte progress must be an exact integer")
+        if bytes_done < self._bytes_done_high_water:
+            raise ValueError("execution byte progress cannot regress")
+        if bytes_done > self._selected_bytes_bound:
+            raise ValueError("execution byte progress exceeds selected content")
+        self._bytes_done_high_water = bytes_done
 
     def remaining(self) -> tuple[PlanOperation, ...]:
         """Return selected operations without a final status, in plan order."""
