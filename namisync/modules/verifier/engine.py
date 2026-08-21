@@ -194,6 +194,7 @@ def verify_post_copy(
         reporter.cancellation_completed()
         raise
 
+    reporter.run_completed()
     recording = (
         RecordingStatus.DEGRADED
         if any(outcome.recording is RecordingStatus.DEGRADED for outcome in emitted)
@@ -261,7 +262,7 @@ class _ProgressReporter:
             raise RuntimeError("integrity progress item is already active")
         self._item_id = item_id
         self._current_path = current_path
-        self.emit(force=True)
+        self.emit(force=False)
 
     def stream_started(self, size: int) -> None:
         if self._item_id is None:
@@ -270,7 +271,7 @@ class _ProgressReporter:
             raise RuntimeError("integrity byte stream is already active")
         self._item_bytes_done = 0
         self._item_bytes_total = size
-        self.emit(force=True)
+        self.emit(force=False)
 
     def bytes_processed(self, size: int) -> None:
         if (
@@ -294,6 +295,11 @@ class _ProgressReporter:
         if self._item_id != item_id:
             raise RuntimeError("integrity settlement does not match the active item")
         self._clear_item()
+        self.emit(force=False)
+
+    def run_completed(self) -> None:
+        if self._item_id is not None:
+            raise RuntimeError("integrity run completed with an active item")
         self.emit(force=True)
 
     def cancellation_completed(self) -> None:
@@ -392,6 +398,7 @@ def _run(
         reporter.cancellation_completed()
         raise
 
+    reporter.run_completed()
     recording = (
         RecordingStatus.DEGRADED
         if any(outcome.recording is RecordingStatus.DEGRADED for outcome in emitted)

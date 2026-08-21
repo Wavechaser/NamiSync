@@ -234,17 +234,22 @@ changing subject yields more bytes than that admitted size, later snapshots
 keep identity active but omit both item-byte counters rather than expanding the
 item admission; the aggregate total still expands to count all physical work.
 A reliable `IntegrityOutcome` precedes completion bookkeeping and a
-forced inactive snapshot that clears all item fields while retaining the last
-display path.
+normally throttled inactive transition that clears all item fields while
+retaining the last display path. Item start, determinate-stream start, and item
+completion use the same ordinary throttle path. A successful verifier phase
+force-emits only its initial and final inactive boundary snapshots, independent
+of selected-item count.
 
-Pause does not emit a false inactive settlement: after the read unwinds it
-force-emits the latest active attempt so the 100 ms throttle cannot leave a
-stale paused byte count. Resume creates a new read attempt whose item counter
-starts at zero while the aggregate physical-read counter retains prior work and
-never regresses. Cancellation emits every
-required canceled outcome before one forced inactive snapshot. Item start,
-stream start, and completion are fixed lifecycle emissions; ordinary chunk
-updates remain time-throttled and lossy-coalescible.
+Pause does not invent a settlement state: after the read unwinds it force-emits
+the latest active attempt when a stream is in flight, so the 100 ms throttle
+cannot leave a stale paused byte count; a pause at an inter-item checkpoint is
+truthfully inactive. Resume creates a new read attempt whose item counter starts
+at zero while the aggregate physical-read counter retains prior work and never
+regresses. Cancellation emits every
+required canceled outcome before one forced inactive control snapshot. Pause
+likewise adds one forced control snapshot, active only when an attempt is in
+flight; neither path emits the successful-phase final boundary. Ordinary
+lifecycle and chunk updates remain time-throttled and lossy-coalescible.
 
 On cancellation, the verifier's unwind finalizer emits `canceled` for the
 in-flight file and every unreached selected file before re-raising `Canceled` to
@@ -362,9 +367,25 @@ imports inside the verifier.
 - Cache-honest integration tests prove the declared Windows read strategy or
   produce a disclosed unsupported/deferred outcome.
 - Progress emission is throttled under fast-disk simulation and aggregate
-  physical-read work remains monotonic; fixed item/stream/settlement snapshots
-  expose attempt-local identity and bytes without turning a chunk flood into
-  full-widget updates per MiB.
+  physical-read work remains monotonic. The frozen-clock source fixture set
+  covers 20 standalone streamed and 20 nonstreamed items
+  (`test_fast_items_have_constant_progress_boundaries`), 20 streamed post-copy
+  candidates (`test_fast_post_copy_items_have_constant_progress_boundaries`),
+  empty standalone and post-copy selections
+  (`test_empty_successful_selection_has_two_inactive_progress_boundaries`), and
+  one 100-byte item delivered as 100 one-byte chunks
+  (`test_fast_chunk_flood_has_two_fixed_progress_boundaries`). Every successful
+  profile passes exactly two forced `Progress` snapshots to the injected
+  emitter: the initial and final inactive phase boundaries.
+  Item/stream/settlement transitions use the ordinary throttle path; a pause or
+  cancellation adds exactly one forced control-boundary snapshot instead of a
+  successful final boundary. Downstream progress remains lossy and coalescible,
+  so this fixed source-emission cost is not a promise of two browser callbacks.
+  This is a deterministic source-enforced lifecycle invariant, not an empirical
+  latency SLO: item and chunk counts are scaling axes only for ordinary
+  throttle attempts, no measurement artifact is retained, and the set reruns
+  whenever reporter force sites, the 100 ms throttle, or phase-boundary handling
+  changes.
 - Verification remains single-stream with no worker-count setting. Any future
   parallel verifier design requires workload evidence and must preserve one
   outcome/write per row plus per-volume safety.
