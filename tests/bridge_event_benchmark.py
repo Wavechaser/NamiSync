@@ -1465,7 +1465,10 @@ def _valid_sample(sample: object) -> bool:
     return bool(
         (
             type(sample["event_id"]) is str
-            and re.fullmatch(r"task-[0-3]-item-[0-5][0-9]-[0-2]", sample["event_id"])
+            and re.fullmatch(
+                r"task-[0-3]-item-(?:0[0-9]{2}|1[0-4][0-9])",
+                sample["event_id"],
+            )
             and sample["event_result"] == "succeeded"
         )
         or (
@@ -1554,19 +1557,10 @@ def _successful_result_view(value: object) -> bool:
 
 
 def _expected_reliable_ids(task_index: int) -> list[str]:
-    pattern = (3, 3, 2, 2)
-    expected = []
-    for second in range(60):
-        count = pattern[(task_index + second) % 4]
-        ticks = sorted(
-            ((item_index + 1) * 25) // (count + 1)
-            for item_index in range(count)
-        )
-        expected.extend(
-            f"task-{task_index}-item-{second:02d}-{item_index}"
-            for item_index, _ in enumerate(ticks)
-        )
-    return expected
+    return [
+        f"task-{task_index}-item-{item_ordinal:03d}"
+        for item_ordinal in range(150)
+    ]
 
 
 def _expected_reliable_offsets(task_index: int) -> list[float]:
@@ -1575,7 +1569,7 @@ def _expected_reliable_offsets(task_index: int) -> list[float]:
     for second in range(60):
         count = pattern[(task_index + second) % 4]
         ticks = sorted(
-            ((item_index + 1) * 25) // (count + 1)
+            ((item_index + 1) * 25) // count - 1
             for item_index in range(count)
         )
         expected.extend(

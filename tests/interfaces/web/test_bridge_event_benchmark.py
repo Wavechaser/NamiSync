@@ -135,10 +135,12 @@ def test_bridge_event_benchmark_v4_attempt_schedule_is_coherent(
     task_index: int,
 ) -> None:
     child = _child_module()
+    benchmark = _benchmark_module()
     from namisync.core.events import Progress
 
     reliable_emissions = 0
     attempts: dict[str, list[object]] = {}
+    settlement_offsets = []
     for tick in range(1_500):
         attempt = child._attempt_sample(task_index, tick, reliable_emissions)
         snapshot = Progress(
@@ -156,6 +158,7 @@ def test_bridge_event_benchmark_v4_attempt_schedule_is_coherent(
         )
         attempts.setdefault(snapshot.item_id, []).append(snapshot)
         if attempt.settles:
+            settlement_offsets.append(tick * 0.04)
             reliable_emissions += 1
 
     assert reliable_emissions == 150
@@ -163,6 +166,8 @@ def test_bridge_event_benchmark_v4_attempt_schedule_is_coherent(
     assert tuple(attempts) == tuple(
         f"task-{task_index}-item-{ordinal:03d}" for ordinal in range(150)
     )
+    assert list(attempts) == benchmark._expected_reliable_ids(task_index)
+    assert settlement_offsets == benchmark._expected_reliable_offsets(task_index)
     assert len({events[0].item_attempt_id for events in attempts.values()}) == 150
     for events in attempts.values():
         assert {event.item_attempt_id for event in events} == {
@@ -739,7 +744,7 @@ def test_bridge_event_benchmark_worst_case_report_batches_fit_ingress() -> None:
         "bytes_done": 1_500,
         "bytes_total": 1_500,
         "items": [
-            [f"task-3-item-{item // 3:02d}-{item % 3}", "succeeded"]
+            [f"task-3-item-{item:03d}", "succeeded"]
             for item in range(150)
         ],
         "error": None,
@@ -995,6 +1000,7 @@ def _passing_evidence(benchmark):
             )
             sequence += 1
         reliable_ids = []
+        reliable_ordinal = 0
         pattern = (3, 3, 2, 2)
         for tick in range(1_500):
             progress_sequence = sequence
@@ -1017,15 +1023,13 @@ def _passing_evidence(benchmark):
             second, within_second = divmod(tick, 25)
             reliable_count = pattern[(task_index + second) % 4]
             reliable_ticks = sorted(
-                ((item_index + 1) * 25) // (reliable_count + 1)
+                ((item_index + 1) * 25) // reliable_count - 1
                 for item_index in range(reliable_count)
             )
             if within_second in reliable_ticks:
-                item_index = reliable_ticks.index(within_second)
-                event_id = (
-                    f"task-{task_index}-item-{second:02d}-{item_index}"
-                )
+                event_id = f"task-{task_index}-item-{reliable_ordinal:03d}"
                 reliable_ids.append(event_id)
+                reliable_ordinal += 1
                 samples.append(
                     {
                         "class": "reliable",
