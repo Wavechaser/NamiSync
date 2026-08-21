@@ -608,15 +608,18 @@ complete artifact, authenticates the frozen contract, and compares both live
 custody shapes directly with that ceiling. It is regression evidence, not a
 new acceptance run.
 
-The required v4 representation reruns completed on 2026-08-22. The clean
-installed-wheel event artifact from `edab4561202d77392c6eebb968ebcce70f65ce29`
+The required v4 representation reruns completed on 2026-08-22. The final clean
+installed-wheel event artifact from `7ea8e08666b9079dbb402711f1380c91ae90ef9e`
+has SHA-256
+`7bb456329fa950fa9c7447bb353590e7902d716233a99c035e58d9467168ab8f` and
 passed its event-envelope checks with no `Gap`, monotonic Progress, all four
-terminal records, 41 ms p95 / 44 ms maximum sampled Progress delivery, and
-3 ms p95 / 16 ms maximum sampled reliable-plus-terminal delivery. Its explicit
-`sh_g_8_acceptance=incomplete-without-custody` result and undefined
+terminal records, 40 ms p95 / 48 ms maximum sampled Progress delivery, and
+3.05 ms p95 / 15 ms maximum sampled reliable-plus-terminal delivery. Its
+explicit `sh_g_8_acceptance=incomplete-without-custody` result and undefined
 whole-runtime acceptance remain controlling: this was diagnostic/regression
-evidence, not current-source Tier-2 timing acceptance. The final
-`93cabfb617a6f550d2ab7b2233b5657897db49e4` current-source custody artifact had
+evidence, not current-source Tier-2 timing acceptance. The final clean
+current-source custody artifact from the same commit has SHA-256
+`a4ba30a99fb3ccc27a20a1fe436ccb8f19ce10e4d7be70572190629abc84ae9c` and
 three exact fresh children at 1,378,867 ordinary and 1,536,994 maximum-no-`Gap`
 bytes, respectively 587,213 and 429,086 bytes below the frozen ceiling; the
 protected one-child guard passed as well. That is Tier-1 drift evidence only,

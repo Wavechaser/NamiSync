@@ -22,7 +22,10 @@ path-local retained-state sizer. The frozen/disjoint realistic custody corpora
 and production-path runner have also landed. The committed calibration-a
 artifact supplies the normative transport measurement, and the separate
 contract freezes the 1,966,080-byte ceiling. Three fresh independent holdout-b
-runs pass, closing realigned SH-G-8 and BR-G-42 event/transport custody only.
+runs pass, closing realigned SH-G-8 and BR-G-42 event/transport custody for the
+frozen historical v1 representation only. The 2026-08-22 v4 event diagnostic
+and Tier-1 current-source custody drift runs passed without recalibrating or
+extending that acceptance; `M1_BRIDGE.md` owns their exact disposition.
 Other BR-G-42 rows remain on their owning slices. BR-G-45
 separately keeps terminal artifact/retention scale open, and
 shell-owned SH-G-15 keeps version-bound whole-runtime containment open. GUI
@@ -665,8 +668,9 @@ validator/replay probe is the sole ordinary non-skippable Node gate.
 Status: the existing implementation, realigned 150 ms progress-only linger,
 frozen custody corpora, production-path runner, and normative calibration-a
 artifact plus frozen 1,966,080-byte ceiling have landed. Independent holdout-b
-passes, so SH-G-8 and BR-G-42 event correctness/transport custody are closed;
-current-source latency acceptance remains on its separate BR-G-42 rows.
+passes, so the frozen historical v1 SH-G-8 and BR-G-42 event
+correctness/transport-custody claim is closed; current-version latency
+acceptance remains on its separate BR-G-42 rows.
 
 The exact event command, queue policy, recovery cursor, explicit-`Gap`
 semantics, terminal reconciliation, retry behavior, and terminal-session
@@ -911,8 +915,9 @@ carry the `headed` marker; all are collected by the release command.
   presence, testing the component gallery instead of the production shell, or
   measuring a copied/test-only tree implementation or independently authored
   positive renderer rows.
-- **SH-G-8 — CLOSED (2026-08-14): attach-before-start event delivery and
-  transport custody are bounded.** The ordinary four-task fixture covers 60
+- **SH-G-8 — CLOSED FOR THE FROZEN V1 REPRESENTATION (2026-08-14):
+  attach-before-start event delivery and transport custody are bounded.** The
+  ordinary four-task fixture covers 60
   logical seconds, 6,000 `Progress` emissions, 600 reliable items, and four
   terminal records. It proves attach before tick zero, ordered exactly-once
   reliable delivery, monotonic coalesced progress, terminal truth, no normal
@@ -936,7 +941,15 @@ carry the `headed` marker; all are collected by the release command.
   source regression guards both live shapes against the same ceiling without
   becoming new acceptance evidence.
 
-  This closes SH-G-8 and BR-G-42 event correctness/transport custody only.
+  On 2026-08-22 the v4 installed-wheel event diagnostic and the protected
+  one-child plus three-child current-source custody characterization also
+  passed. They are respectively diagnostic and Tier-1 drift evidence: neither
+  creates current-v4 Tier-2 timing acceptance nor recalibrates the v1
+  authority. `M1_BRIDGE.md` records their fixture, receipts, values, and exact
+  disposition.
+
+  This closes the frozen v1 SH-G-8 and BR-G-42 event
+  correctness/transport-custody claim only.
   Current-source latency acceptance remains open on its BR-G-42 row; terminal
   result retention belongs to BR-G-45, and complete headed-runtime containment
   belongs to SH-G-15. The earlier 67,375,104-byte whole-Job result is diagnostic
@@ -1248,8 +1261,10 @@ authority. The committed calibration-a artifact records the normative
 1,376,690-byte ordinary and 1,534,946-byte exact-maximum union measurements.
 The separate contract freezes the 1,966,080-byte ceiling, and independent
 holdout-b passes at 1,351,794 ordinary and 1,513,014 exact-maximum bytes.
-SH-G-8 and BR-G-42 event/transport custody are closed; other BR-G-42 rows
-remain on their owning slices. The valid
+The frozen historical v1 SH-G-8 and BR-G-42 event/transport-custody claim is
+closed; current-v4 measurement evidence consists only of its diagnostic event
+rerun and Tier-1 current-source custody drift characterization, as dispositioned in
+`M1_BRIDGE.md`. Other BR-G-42 rows remain on their owning slices. The valid
 2026-08-13 run passed its duration/rate/event/latency/shutdown predicates, but
 its whole-Job delta is neither corrected transport-custody evidence nor a
 version-bound SH-G-15 containment result. BR-G-45 and SH-G-15 remain separately

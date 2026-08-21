@@ -24,9 +24,12 @@ cleanup, and clean source/dependency/runtime/digest-authority witnesses. The
 committed calibration-a artifact records normative ordinary/exact-maximum
 transport measurements, the separate contract freezes the 1,966,080-byte
 ceiling, and three fresh holdout-b runs pass at 1,351,794 ordinary and 1,513,014
-exact-maximum bytes. This closes SH-G-8 and BR-G-42 event/transport custody
-only. A separate current-source one-child guard now requires both live custody
-shapes to remain within that frozen ceiling on ordinary suite runs;
+exact-maximum bytes. This closes the frozen historical v1 SH-G-8 and BR-G-42
+event/transport-custody claim only. Current v4 has separate diagnostic event
+evidence and Tier-1 custody drift evidence, not a new calibration or acceptance;
+`M1_BRIDGE.md` owns the exact disposition. A separate current-source one-child
+guard requires both live custody shapes to remain within that frozen ceiling on
+ordinary suite runs;
 BR-G-45 separately leaves full terminal-artifact retention open, and
 shell-owned SH-G-15 leaves version-bound whole-runtime containment open. The
 earlier whole-Job delta is diagnostic input only, not a result for any of those

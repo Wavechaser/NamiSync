@@ -115,40 +115,62 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
-#### Extract truthful per-item progress (2026-08-21)
+#### Extract truthful per-item progress (2026-08-21 – 2026-08-22)
 
-- Extended `Progress` within schema v3 with paired nominal item identity/type
-  and paired attempt-local byte counters. Current serialization and the browser
-  own the exact nine-key shape; Python's pre-change five-key decode remains a
-  defensive direct-codec allowance, not a supported production wire path.
-- Started and reset executor item bytes only at actual byte-pipeline entry,
-  avoided resets for publication, metadata, durability, attestation, and
-  recording continuations, and retained aggregate high-water through retry,
-  terminal failure, and strict payload-v5 pause/resume continuations. Executor
-  pause refreshes nominal item/attempt state over the frozen last-emitted
-  legacy totals/path while retaining live high-water for resume. Normal,
-  canceled, and escaping-failure executor terminal boundaries clear nominal
-  item state; cancel/exception unwinds likewise freeze the last legacy view
-  rather than revealing throttle-hidden settlement jumps.
-- Made `item_type` identify the opaque row-id namespace: executor and linked
-  post-copy ids use `operation`, while standalone verifier rows use
-  `integrity`. Stream overshoot now retains active identity but removes the
-  determinate item-byte pair; executor aggregate work stays reviewed-content
-  bounded while verifier aggregate work expands monotonically for physical
-  rereads.
-- Returned verifier item/stream/settlement transitions to the ordinary throttle
-  path. Successful phases have exactly two forced source snapshots regardless
-  of item count, while pause and cancellation add one forced control boundary;
-  frozen-clock regressions own that source-enforced invariant.
-- Promoted the packaged drain-manager Progress validator/replay probe to an
-  ordinary non-skippable JavaScript gate, resolving Node through
-  `NAMISYNC_TEST_NODE` before `PATH`. It proves a malformed Progress atomically
-  rejects co-batched reliable siblings without cursor movement and that clean
-  replay delivers them once.
-- Kept dispatcher loss/coalescing, workflow pass-through, history refusal, CLI
-  aggregate rendering, bridge commands, and persistence unchanged. Added
-  contract, exact-consumer, retry/resume, pause/cancel/exception settlement,
-  overshoot, identity, emission-volume, and lower-layer regressions; Slice 5
+- Ratified one central Progress protocol: selected-item admission and reliable
+  terminal-outcome counts, monotonic attempted-work byte high-water, display-only
+  paths, phase-scoped temporal rules, authoritative live forced boundaries,
+  reliable-outcome/result precedence, Gap recovery, and module-specific byte
+  budgets. Terminal and retained history byte counters now explicitly mean
+  attempted work, not proof of durable publication.
+- Bumped only the core event envelope to v4. Exact 11-key Progress snapshots
+  require nonempty phase self-description; nullable paired item fields name the
+  opaque row namespace, and nullable 32-lowercase-hex attempt state carries
+  paired attempt-local counters only for a determinate byte stream. Exact
+  `SessionEventView` exposes the nested core version; bridge envelopes remain
+  v1, execution continuations remain v5, database/page schemas remain unchanged,
+  and supported persisted reliable v3 history remains readable while v3
+  Progress is refused.
+- Replaced throttle-artifact preservation with coherent authoritative-live
+  control snapshots. Executor pause retains the active operation and latest
+  attempt while publishing live aggregate work; cancellation and exceptional
+  unwind reliably settle outcomes, publish live totals, and clear activity and
+  path. Aggregate items count every reliable terminal outcome category, and
+  accepted downstream emission—not a failed callback—advances session truth.
+- Made byte-attempt identity start only at real pipeline entry, remain stable
+  across chunks/pause/overshoot and retained post-publication continuations,
+  and renew on retry or reconstructed-resume re-entry. Executor aggregate work
+  stays fixed-review bounded and resume-monotonic through public
+  `ExecutionSet.bytes_done_high_water`; verifier physical-read budget may grow
+  by incremental overrun and its strict standalone continuation v2 retains
+  budget and recording degradation.
+- Aligned executor, standalone integrity, and linked post-copy reporters around
+  the same lifecycle without introducing a shared reporter abstraction.
+  `item_type` names the row lookup namespace (`operation` for linked post-copy,
+  `integrity` for standalone work); reliable linked results remain
+  `IntegrityOutcome`. Unexpected verifier failure now force-publishes inactive
+  live state without replacing the primary error, and workflow terminal
+  construction prefers continuation/result authority over lossy telemetry.
+- Closed the linked post-copy admission split: Progress and terminal results now
+  derive selected-item admission and the physical-read work budget from the full
+  continuation, including missing-evidence work. Direct, resumed, paused,
+  canceled, failed, and overrun paths retain one coherent phase budget while
+  reliable outcomes remain the item-settlement authority.
+- Added an O(1) browser Progress reducer with exact v4 validation, phase
+  agreement, Gap self-description recovery, attempt and aggregate monotonicity,
+  outcome/Terminal precedence, immutable callback projections, and atomic
+  whole-batch preflight/replay. The required packaged Node gate exercises these
+  semantics; one malformed snapshot cannot partially deliver reliable siblings
+  or advance the cursor.
+- Replaced the reviewed settlement-oracle baseline only after transition
+  semantics stabilized. Its normalized v4 phase/attempt projection, continuation
+  high-water, control boundaries, and all 70 policy rows pass the protected
+  30-scenario matrix for three identical runs.
+- Updated the installed-wheel event and current-source custody fixtures to
+  truthful v4 item/attempt transitions without mutating the frozen v1 custody
+  authorities. The clean event run was gap-free and the three-child Tier-1
+  custody characterization was stable below the historical ceiling; neither
+  result is promoted into a new v4 empirical acceptance claim. Slice 5 stable
   row projection and rendering remain open.
 
 #### Ratify desktop color semantics (2026-08-21)

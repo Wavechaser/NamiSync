@@ -611,6 +611,21 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-22). Post-Gap phase-authority lock. After a Gap,
+  the first self-described Progress established only lossy phase context, but
+  the reducer treated it like reliable `PhaseChanged` authority and rejected a
+  later valid phase when the intervening change was outside replay; atomic
+  preflight could also withhold reliable siblings. Fixed by locking phase only
+  under reliable authority, resetting progress-only temporal state on a newer
+  self-described phase, retaining same-phase regression checks, and proving
+  whole-batch refusal plus exact clean replay in the executable Node gate.
+- MODERATE - FIXED (2026-08-22). Live event-version erasure. The bridge's
+  `SessionEventView` discarded the core envelope version, leaving JavaScript to
+  infer an exact live Progress contract only from body keys and inviting future
+  history rows to reuse a current-live validator. Fixed by carrying the nested
+  core event version, requiring exact live v4 through a deliberately named
+  live-only validator, and keeping mixed persisted v3/v4 `HistoryEventView`
+  validation version-dispatched per row.
 - MINOR - FIXED (2026-08-21). Executable consumer-evidence omission. The
   ordinary suite checked the expanded Progress validator through source-text
   tokens while its actual JavaScript behavior lived in an optional Node probe,
@@ -1127,6 +1142,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-22). Verify-phase admission split. Linked
+  post-copy Progress admitted only readable candidates while its terminal
+  `PhaseResult` also counted selected items with missing evidence, allowing a
+  live `0/0` phase to end at `0/N`. Cause: reporter totals came from the
+  filtered candidate set rather than the full workflow continuation. Fixed by
+  carrying complete selected-item admission into the verifier, centralizing
+  its physical-read budget across direct and resumed execution, and covering
+  missing-only, mixed overrun, pause, cancel, and exceptional control paths.
 - MODERATE - FIXED (2026-08-22). Continuation authority-axis loss. Paused
   standalone integrity custody retained processed bytes and item completion but
   discarded the verifier's expanded physical-read budget and aggregate
@@ -1167,6 +1190,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-22). Lossy-progress authority conflation. Forced
+  control snapshots combined aggregates from an earlier throttled emission with
+  live item-attempt state, producing internally contradictory pause/cancel views;
+  field-local validation admitted them. Fixed by central field and transition
+  semantics, authoritative-live forced snapshots, cross-field v4 invariants,
+  self-described phase and opaque attempt identity, and separate
+  reporter-transition, settlement-oracle, and browser-reducer regression layers.
 - SEVERE - FIXED (2026-08-10). Logical-root authority omission. Verifier
   contexts carried reviewed mount and volume facts but not the exact logical
   root, so a malformed selection could admit one reviewed authority and open a

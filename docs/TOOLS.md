@@ -265,12 +265,16 @@ or unclassified state. A missing committed baseline is a hard `check` failure,
 not permission to proceed. Keep the oracle and corrected baseline through final
 refactor acceptance and at least the following settlement-hardening window.
 
-The retained baseline currently uses `format_version: 1`. Executor package
-splitting, effect-journal/reducer work, verifier splitting, and their immediate
-stabilization commits must not edit or regenerate it. Only a separately
-reviewed policy correction may produce a replacement, after its focused
-regression and independent oracle expectations land and the three-run gate is
-restarted.
+The retained baseline still uses tool `format_version: 1`; that number is not
+the core event schema. Its reviewed projection now projects and protects the
+integrated consequences of core event v4 phase and attempt lifecycle, live
+control-boundary aggregates/path, continuation byte high-water, and
+reliable-outcome item counts. Opaque attempt ids are normalized
+by first-seen lifecycle ordinal, and a retired token may not resurrect. Future
+executor/verifier restructuring must not edit or regenerate the baseline.
+Only a separately reviewed policy correction may produce another replacement,
+after its focused transition regression and independent oracle expectations
+land and the three-run gate is restarted.
 
 ## Workspace safety
 

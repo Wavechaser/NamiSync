@@ -2866,29 +2866,29 @@ headings are organizational, not lane ownership.
   promote the old empirical artifacts.
 
   **Version-4 measurement disposition (2026-08-22).** The clean installed-wheel
-  event run at commit `edab4561202d77392c6eebb968ebcce70f65ce29`
-  produced `namisync-bridge-event-benchmark-v4-edab456.json` with SHA-256
-  `02158562712624e5e546899c400add211587dbd2334084812f7804e18237a5bd`.
+  event run at commit `7ea8e08666b9079dbb402711f1380c91ae90ef9e`
+  produced `namisync-bridge-event-benchmark-v4-7ea8e08.json` with SHA-256
+  `7bb456329fa950fa9c7447bb353590e7902d716233a99c035e58d9467168ab8f`.
   Across the named four-task, 60-logical-second fixture it emitted 6,000
-  `Progress` and 600 reliable item events at aggregate rates of 100.0657
-  Progress/s and 10.00657 reliable events/s over a 59.9606-second emission
-  window. The browser delivered 1,499 sampled Progress values at 41 ms p95 /
-  44 ms maximum and 620 sampled
-  reliable-plus-terminal values at 3 ms p95 / 16 ms maximum, with monotonic
+  `Progress` and 600 reliable item events at aggregate rates of
+  100.06479228657697 Progress/s and 10.006479228657698 reliable events/s over a
+  59.96114979998674-second emission window. The browser delivered 1,497 sampled
+  Progress values at 40 ms p95 / 48 ms maximum and 620 sampled
+  reliable-plus-terminal values at 3.05 ms p95 / 15 ms maximum, with monotonic
   Progress, no `Gap`, and all four terminal records. The installed runtime was
   CPython 3.13.14, SQLite 3.50.4, Bottle 0.13.4, pywebview 6.2.1,
-  pythonnet 3.1.0, and WebView2 151.0.4129.93 on the reference profile above.
-  The 36,864,000-byte incremental peak-private value remains a whole-runtime
-  diagnostic. Although the artifact reports `passed=true` and
-  `event_passed=true`, it also correctly reports
-  `sh_g_8_acceptance=incomplete-without-custody`; it is current-version event
-  regression and diagnostic evidence, not current-source Tier-2 timing
+  pythonnet 3.1.0, and WebView2 151.0.4129.93; both machine and runtime matched
+  the declared reference profile. The 40,828,928-byte incremental peak-private
+  value remains a whole-runtime diagnostic. Although
+  the artifact reports `passed=true` and `event_passed=true`, it also correctly
+  reports `sh_g_8_acceptance=incomplete-without-custody`; it is current-version
+  event regression and diagnostic evidence, not current-source Tier-2 timing
   acceptance or whole-runtime acceptance.
 
   The final current-source custody run at commit
-  `93cabfb617a6f550d2ab7b2233b5657897db49e4` produced
-  `namisync-bridge-transport-custody-v4-93cabfb.json` with SHA-256
-  `91437ca8a89cda4fc70d6a25d82527170c466ceaaafd70b37c89c8e77b2c2baf`.
+  `7ea8e08666b9079dbb402711f1380c91ae90ef9e` produced
+  `namisync-bridge-transport-custody-v4-7ea8e08.json` with SHA-256
+  `a4ba30a99fb3ccc27a20a1fe436ccb8f19ce10e4d7be70572190629abc84ae9c`.
   Its three fresh children were exact: ordinary custody was 1,378,867 bytes /
   4,901 objects and exact maximum-no-`Gap` custody was 1,536,994 bytes / 5,499
   objects. Those are respectively 2,177 and 2,048 bytes above frozen
@@ -2896,23 +2896,27 @@ headings are organizational, not lane ownership.
   ceiling. From 6,000 emitted `Progress` snapshots, ordinary custody delivered
   240 coalesced snapshots and all 600 outcomes, with
   replay/subscriber/adapter queue peaks of 128/0/4; the maximum fixture emitted
-  516 outcomes at the exact 128/64/64 queue shape. Neither
-  fixture produced a `Gap`. The separate protected one-child live guard also
-  passed.
+  516 outcomes at the exact 128/64/64 queue shape. Neither fixture produced a
+  `Gap`. The separate protected one-child live guard also passed.
 
   The three-child artifact binds source
-  `2ed92265436080142f97dc013a56177ff1cb039eb2b51b7117a0901b5e9b2e76`,
+  `8a06469d79ce3e279892c779e312b2f0e0f16a8a911813d5396920ccc106c6cb`,
   dependency
   `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`,
   evidence
   `f40fbc942cc4e15fe8eb7026b5d8e8b070932a8cac4d920214f6fc64c247046c`,
+  instrument
+  `629b50228b6f0604b0ff601e0af56d2c17676480a1a9716facc64b87434e10a9`,
   runtime
-  `0bf4efc58cfa44f611facc64c104acd51375b5ed4b58367a5d48355ccf1b1311`,
+  `f94171a6eb2815dd97daec537fd0e226bad28137e66378bf272ec8cf6fa4cc28`,
   runtime qualifier
   `a520cababa83f3c878ca13e2a7f43053b68ed6ee40ccee04aed3834bab05e88e`,
-  corpus `a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec`,
-  and instrument
-  `629b50228b6f0604b0ff601e0af56d2c17676480a1a9716facc64b87434e10a9`.
+  and corpus
+  `a80d908babaff50872cb15bf4f9fa23eb2a054b982a25ac607223208a80787ec`.
+  Its exact child artifact SHA-256 values are
+  `115004ccb9cd76373b0aa5ca8e834ea51a55c0580e643f2682f522aadc7a2321`,
+  `b83d65b8ef2e07037a1f14b077179c7608810bfbad63e5c165c24fc6bdf71d9c`,
+  and `cca6f1e07383dcef82d721596e1fadf652b42271b9bfc523ac3d4efa7b7651b6`.
   This deterministic current-source result and the one-child check are Tier-1
   drift evidence only. They neither recalibrate the frozen v1 authority nor
   create a new v4 acceptance claim.

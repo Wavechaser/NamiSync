@@ -1,6 +1,6 @@
 # Workflows Module
 
-Status (2026-08-21): M0 reviewed sync/history plus M1 Stages 1-5.5 are
+Status (2026-08-22): M0 reviewed sync/history plus M1 Stages 1-5.5 are
 implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
