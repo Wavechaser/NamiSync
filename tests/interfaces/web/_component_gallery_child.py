@@ -75,38 +75,53 @@ _CONTROL_KEYS = (
     "context_menu",
     "segmented_control",
 )
-_STATUS_KEYS = frozenset(
-    {
-        "complete",
-        "success",
-        "failure",
-        "error",
-        "warning",
-        "degraded",
-        "incomplete",
-        "active",
-        "paused",
-        "canceled",
-        "mismatch",
-        "blocked",
-        "deferred",
-        "neutral",
-        "noop",
-    }
-)
-_OPERATION_KEYS = frozenset(
-    {
-        "copy",
-        "update",
-        "move",
-        "move_update",
-        "recase",
-        "mkdir",
-        "trash",
-        "delete",
-        "noop",
-    }
-)
+_LIFECYCLE_CASES = {
+    "new": ("neutral", "text"),
+    "planned": ("neutral", "text"),
+    "queued": ("neutral", "text"),
+    "executing": ("accent", "text"),
+    "verifying": ("accent", "text"),
+    "completed": ("green", "text"),
+    "partial": ("yellow", "text"),
+    "degraded": ("yellow", "text"),
+    "incomplete": ("yellow", "text"),
+    "pausing": ("accent", "text"),
+    "canceling": ("accent", "text"),
+    "paused": ("yellow", "text"),
+    "interrupted": ("yellow", "text"),
+    "canceled": ("neutral", "fill"),
+    "canceled_after_publish": ("yellow", "fill"),
+    "canceled_after_mutation": ("yellow", "fill"),
+    "refused": ("yellow", "fill"),
+    "failed": ("red", "fill"),
+    "errored": ("red", "fill"),
+}
+_INTENT_CASES = {
+    "copy": ("blue", "text"),
+    "mkdir": ("blue", "text"),
+    "move": ("purple", "text"),
+    "recase": ("purple", "text"),
+    "update": ("yellow", "text"),
+    "move_update": ("yellow", "text"),
+    "trash": ("red", "text"),
+    "delete": ("red", "fill"),
+    "noop": ("neutral", "text"),
+    "error": ("yellow", "fill"),
+    "unsupported": ("yellow", "fill"),
+    "blocked": ("yellow", "fill"),
+}
+_INTEGRITY_CASES = {
+    "verified": ("green", "text"),
+    "baselined": ("green", "text"),
+    "unverified": ("neutral", "text"),
+    "modified": ("yellow", "text"),
+    "reappeared": ("yellow", "fill"),
+    "unsupported": ("yellow", "fill"),
+    "canceled": ("neutral", "text"),
+    "missing": ("red", "fill"),
+    "mismatched": ("red", "fill"),
+    "error": ("red", "fill"),
+}
 _PLAN_ROW_CASE_KEYS = frozenset(
     {
         "plain",
@@ -121,11 +136,32 @@ _PLAN_ROW_CASE_KEYS = frozenset(
         "noop",
         "error",
         "unsupported",
+        "blocked",
     }
 )
 _INTEGRITY_ROW_CASE_KEYS = frozenset(
-    {"folder", "match", "source_only", "mismatch", "error"}
+    {"folder", *_INTEGRITY_CASES}
 )
+_PLAN_ROW_PRIMARY = {
+    "plain": ("", "", ""),
+    **{
+        key: ("intent", key, form)
+        for key, (_hue, form) in _INTENT_CASES.items()
+    },
+}
+_INTEGRITY_ROW_PRIMARY = {
+    "folder": ("integrity", "unverified", "text"),
+    **{
+        key: ("integrity", key, form)
+        for key, (_hue, form) in _INTEGRITY_CASES.items()
+    },
+}
+_LIFECYCLE_PROGRESS_CASES = {
+    "running": ("executing", "accent", False),
+    "resumed": ("executing", "accent", False),
+    "paused": ("paused", "yellow", True),
+    "canceled": ("canceled", "neutral", True),
+}
 _CONTROL_STATES = frozenset({"rest", "hover", "pressed", "disabled", "focused"})
 _EXPECTED_MEDIA = {
     "light": {"dark": False, "forced": False, "reduced": False},
@@ -218,9 +254,9 @@ _CONTROL_REPORT_CHUNK_COUNT = math.ceil(
     _CONTROL_REPORT_ROW_COUNT / _CONTROL_REPORT_CHUNK_ROWS
 )
 _REPORT_PART_NAMES = (
-    ("statuses", "operations")
+    ("lifecycles", "intents")
     + ("controls",) * _CONTROL_REPORT_CHUNK_COUNT
-    + ("control_contract", "motion", "icons")
+    + ("lifecycle_progress", "control_contract", "motion", "icons")
 )
 
 
@@ -231,7 +267,7 @@ class _Recorder:
         self._initial: str | None = None
         self._post_ready_failure: dict[str, str] | None = None
         self._data: dict[str, Any] = {
-            "schema_version": 2,
+            "schema_version": 3,
             "mode": mode,
             "startup_errors": [],
         }
@@ -475,7 +511,13 @@ def _test_report_spec(
                 or type(name) is not str
                 or name != _REPORT_PART_NAMES[sequence]
                 or (
-                    name in {"statuses", "operations", "controls"}
+                    name
+                    in {
+                        "lifecycles",
+                        "intents",
+                        "lifecycle_progress",
+                        "controls",
+                    }
                     and type(value) is not list
                 )
                 or (
@@ -554,9 +596,10 @@ def _test_report_spec(
             "mode": payload["mode"],
             "media": payload["media"],
             "cosmetic": payload["cosmetic"],
-            "statuses": values["statuses"],
-            "operations": values["operations"],
+            "lifecycles": values["lifecycles"],
+            "intents": values["intents"],
             "controls": controls,
+            "lifecycle_progress": values["lifecycle_progress"],
             "control_contract": values["control_contract"],
             "motion": values["motion"],
             "icons": values["icons"],
@@ -588,8 +631,9 @@ def _valid_complete_report(
     cosmetic = payload["cosmetic"]
     motion = payload["motion"]
     icons = payload["icons"]
-    statuses = payload["statuses"]
-    operations = payload["operations"]
+    lifecycles = payload["lifecycles"]
+    intents = payload["intents"]
+    lifecycle_progress = payload["lifecycle_progress"]
     controls = payload["controls"]
     control_contract = payload["control_contract"]
     return (
@@ -606,8 +650,9 @@ def _valid_complete_report(
             cosmetic,
             expected_theme=_EXPECTED_THEME[payload["mode"]],
         )
-        and _valid_semantic_rows(statuses, _STATUS_KEYS)
-        and _valid_semantic_rows(operations, _OPERATION_KEYS)
+        and _valid_semantic_rows(lifecycles, _LIFECYCLE_CASES)
+        and _valid_semantic_rows(intents, _INTENT_CASES)
+        and _valid_lifecycle_progress(lifecycle_progress, payload["mode"])
         and _valid_control_rows(controls)
         and _valid_control_contract(control_contract)
         and set(motion)
@@ -706,11 +751,14 @@ def _valid_cosmetic_snapshot(
 
 def _valid_semantic_rows(
     rows: object,
-    expected: frozenset[str],
+    expected: dict[str, tuple[str, str]],
 ) -> bool:
     keys = {
         "key",
         "text",
+        "hue",
+        "form",
+        "rendered_form",
         "icon",
         "shape",
         "cue",
@@ -722,6 +770,7 @@ def _valid_semantic_rows(
         "shape_opacity",
         "shape_width",
         "shape_height",
+        "height",
         "foreground",
         "background",
         "indicator",
@@ -742,6 +791,11 @@ def _valid_semantic_rows(
             type(row) is dict
             and set(row) == keys
             and type(row["key"]) is str
+            and row["key"] in expected
+            and (row["hue"], row["form"]) == expected[row["key"]]
+            and row["rendered_form"] == row["form"]
+            and _transparent_css_color(row["background"])
+            == (row["form"] == "text")
             and all(
                 type(row[name]) is str and bool(row[name])
                 for name in keys
@@ -751,20 +805,71 @@ def _valid_semantic_rows(
                     "large_text",
                     "shape_width",
                     "shape_height",
+                    "height",
                 }
             )
             and all(
                 type(row[name]) in {int, float}
                 and math.isfinite(row[name])
                 and row[name] >= 0
-                for name in ("shape_width", "shape_height")
+                for name in ("shape_width", "shape_height", "height")
             )
-            and type(row["aliases_consumed"]) is bool
+            and (
+                row["form"] != "fill"
+                or math.isclose(row["height"], 20.0, abs_tol=0.5)
+            )
+            and _css_pixel_width(row["border_width"]) == 0
+            and row["aliases_consumed"] is True
             and type(row["large_text"]) is bool
             for row in rows
         )
-        and {row["key"] for row in rows} == expected
+        and {row["key"] for row in rows} == set(expected)
     )
+
+
+def _valid_lifecycle_progress(value: object, mode: object) -> bool:
+    keys = {
+        "case",
+        "lifecycle",
+        "hue",
+        "expected_frozen",
+        "motion_frozen",
+        "track_background",
+        "fill_background",
+        "animation_name",
+        "animation_duration",
+        "animation_iteration_count",
+        "animation_play_state",
+    }
+    if type(value) is not list or len(value) != len(_LIFECYCLE_PROGRESS_CASES):
+        return False
+    for row in value:
+        if (
+            type(row) is not dict
+            or set(row) != keys
+            or type(row["case"]) is not str
+            or row["case"] not in _LIFECYCLE_PROGRESS_CASES
+        ):
+            return False
+        lifecycle, hue, frozen = _LIFECYCLE_PROGRESS_CASES[row["case"]]
+        expected_motion = frozen or mode == "reduced"
+        if (
+            row["lifecycle"] != lifecycle
+            or row["hue"] != hue
+            or row["expected_frozen"] is not frozen
+            or row["motion_frozen"] is not expected_motion
+            or any(
+                type(row[name]) is not str or not row[name]
+                for name in keys
+                - {
+                    "case",
+                    "expected_frozen",
+                    "motion_frozen",
+                }
+            )
+        ):
+            return False
+    return {row["case"] for row in value} == set(_LIFECYCLE_PROGRESS_CASES)
 
 
 def _valid_control_rows(rows: object) -> bool:
@@ -848,12 +953,10 @@ def _valid_control_boundary_widths(
         button is not None
         and button > 0
         and checkbox is not None
-        and (
-            checkbox >= button * 1.75
-            or math.isclose(checkbox, button, abs_tol=0.01)
-        )
+        and math.isclose(checkbox, button, abs_tol=0.01)
         and text_input is not None
-        and math.isclose(checkbox, text_input, abs_tol=0.01)
+        and text_input >= checkbox * 1.75
+        and text_input <= checkbox * 3.01
     )
 
 
@@ -867,6 +970,26 @@ def _css_pixel_width(value: object) -> float | None:
     if not math.isfinite(width) or width < 0:
         return None
     return width
+
+
+def _transparent_css_color(value: object) -> bool:
+    if type(value) is not str:
+        return False
+    normalized = "".join(value.lower().split())
+    if normalized == "transparent":
+        return True
+    if normalized.startswith("rgba(") and normalized.endswith(")"):
+        try:
+            return float(normalized[:-1].rsplit(",", 1)[1]) == 0
+        except (IndexError, ValueError):
+            return False
+    if "/" in normalized and normalized.endswith(")"):
+        alpha = normalized[:-1].rsplit("/", 1)[1]
+        try:
+            return float(alpha.removesuffix("%")) == 0
+        except ValueError:
+            return False
+    return False
 
 
 def _equal_positive_css_pixel_widths(left: object, right: object) -> bool:
@@ -1099,16 +1222,21 @@ def _valid_file_list_evidence(
         "primary",
         "primary_tone",
         "primary_key",
+        "primary_form",
         "secondary",
         "secondary_tone",
         "secondary_key",
         "notes",
         "background",
-        "primary_color",
-        "primary_alias_color",
+        "primary_foreground",
+        "primary_background",
+        "primary_height",
+        "primary_alias_foreground",
+        "primary_alias_background",
         "secondary_color",
         "secondary_alias_color",
         "cell_backgrounds",
+        "cells_transparent",
         "column_lefts",
         "name_padding_left",
         "row_height",
@@ -1205,28 +1333,54 @@ def _valid_file_list_evidence(
                     "secondary",
                     "notes",
                     "background",
-                    "primary_color",
-                    "primary_alias_color",
+                    "primary_foreground",
+                    "primary_background",
+                    "primary_alias_foreground",
+                    "primary_alias_background",
                     "secondary_color",
                     "secondary_alias_color",
                 )
             )
-            or primary_tone not in {"", "operation", "status"}
-            or secondary_tone not in {"", "operation", "status"}
+            or primary_tone not in {"", "intent", "integrity"}
+            or secondary_tone not in {"", "intent", "integrity"}
             or type(primary_key) is not str
             or type(secondary_key) is not str
             or (primary_tone == "") != (primary_key == "")
             or (secondary_tone == "") != (secondary_key == "")
-            or (primary_tone == "operation" and primary_key not in _OPERATION_KEYS)
-            or (secondary_tone == "operation" and secondary_key not in _OPERATION_KEYS)
-            or (primary_tone == "status" and primary_key not in _STATUS_KEYS)
-            or (secondary_tone == "status" and secondary_key not in _STATUS_KEYS)
+            or row["primary_form"] not in {"", "text", "fill"}
+            or (primary_tone == "") != (row["primary_form"] == "")
+            or (primary_tone == "intent" and primary_key not in _INTENT_CASES)
+            or (secondary_tone == "intent" and secondary_key not in _INTENT_CASES)
+            or (
+                primary_tone == "integrity"
+                and primary_key not in _INTEGRITY_CASES
+            )
+            or (
+                secondary_tone == "integrity"
+                and secondary_key not in _INTEGRITY_CASES
+            )
+            or type(row["primary_height"]) not in {int, float}
+            or not math.isfinite(row["primary_height"])
+            or row["primary_height"] <= 0
+            or row["primary_foreground"] != row["primary_alias_foreground"]
+            or row["primary_background"] != row["primary_alias_background"]
+            or _transparent_css_color(row["primary_background"])
+            != (row["primary_form"] != "fill")
+            or (
+                row["primary_form"] == "fill"
+                and not math.isclose(row["primary_height"], 20.0, abs_tol=0.5)
+            )
             or type(row["cell_backgrounds"]) is not list
             or len(row["cell_backgrounds"]) != 6
             or not all(
                 type(background) is str and bool(background)
                 for background in row["cell_backgrounds"]
             )
+            or not all(
+                _transparent_css_color(background)
+                for background in row["cell_backgrounds"]
+            )
+            or row["cells_transparent"] is not True
             or type(row["column_lefts"]) is not list
             or len(row["column_lefts"]) != 6
             or not all(
@@ -1263,7 +1417,13 @@ def _valid_plan_evidence(value: object) -> bool:
     ):
         return False
     return all(
-        row["secondary_tone"] == ""
+        (
+            row["primary_tone"],
+            row["primary_key"],
+            row["primary_form"],
+        )
+        == _PLAN_ROW_PRIMARY[row["case"]]
+        and row["secondary_tone"] == ""
         and (row["secondary"] == "—" or len(row["secondary"]) == 8)
         for row in value["rows"]
     )
@@ -1284,7 +1444,12 @@ def _valid_integrity_evidence(value: object) -> bool:
     ):
         return False
     return all(
-        row["primary_tone"] == "status"
+        (
+            row["primary_tone"],
+            row["primary_key"],
+            row["primary_form"],
+        )
+        == _INTEGRITY_ROW_PRIMARY[row["case"]]
         and row["secondary_tone"] == ""
         and (row["secondary"] == "—" or len(row["secondary"]) == 8)
         for row in value["rows"]

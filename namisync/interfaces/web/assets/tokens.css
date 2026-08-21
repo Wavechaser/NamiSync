@@ -1,7 +1,7 @@
 :root {
   color-scheme: light dark;
 
-  /* The thirteen authored GUI Break 1 palette inputs are exact. */
+  /* The fifteen authored GUI Break 1 palette inputs are exact. */
   --palette-red-main: #EE6666;
   --palette-red-dark: #551111;
   --palette-red-light: #FFAACC;
@@ -11,10 +11,12 @@
   --palette-blue-main: #33AAEE;
   --palette-blue-dark: #002255;
   --palette-blue-light: #99CCFF;
-  --palette-yellow-main: #FFDD44;
+  --palette-yellow-main: #FFAA22;
   --palette-yellow-dark: #553300;
-  --palette-purple-main: #BB88EE;
+  --palette-yellow-light: #FFDD44;
+  --palette-purple-main: #8844CC;
   --palette-purple-dark: #331155;
+  --palette-purple-light: #BB88EE;
 
   /* Font families are Windows-shell choices; the numeric ramp is Fluent. */
   --font-family-body: "Segoe UI Variable", "Segoe UI", sans-serif;
@@ -88,7 +90,7 @@
    * Canvas intentionally selects Background1Hover (light) / Background2
    * (dark) to match the native opaque fallback. Task-card overlays intentionally
    * select the LightAlpha subtle aliases so Mica remains visible. Windows accent
-   * fallbacks and NamiSync's 13-swatch palette are separate, product-owned inputs.
+   * fallbacks and NamiSync's 15-swatch palette are separate, product-owned inputs.
    * The package and source are MIT licensed.
    */
   --color-neutral-canvas: #f5f5f5;
@@ -98,6 +100,7 @@
   --color-neutral-surface-pressed: #e0e0e0;
   --color-neutral-surface-selected: #ebebeb;
   --color-neutral-subtle-background: transparent;
+  --color-semantic-transparent: transparent;
   --color-neutral-subtle-hover: rgba(255,255,255,0.7);
   --color-neutral-subtle-pressed: rgba(255,255,255,0.5);
   --color-selection-highlight: rgba(0,0,0,0.04);
@@ -139,143 +142,54 @@
   --color-accent-fill-foreground: #FFFFFF;
   --color-focus-ring: #000000;
   --color-focus-inner: #ffffff;
+  --color-main-fill-foreground: var(--color-neutral-foreground);
   --filter-delete-foreground: var(--palette-red-main);
   --filter-active-foreground: var(--color-neutral-foreground);
+  --filter-purple-active-foreground: var(--color-neutral-surface);
   --filter-copy-background: var(--palette-blue-main);
-  --filter-update-background: var(--palette-green-main);
+  --filter-update-background: var(--palette-yellow-main);
   --filter-move-background: var(--palette-purple-main);
-  --filter-move-update-background: var(--palette-purple-main);
-  --filter-recase-background: var(--palette-blue-main);
-  --filter-mkdir-background: var(--palette-green-main);
-  --filter-trash-background: var(--palette-yellow-main);
+  --filter-move-update-background: var(--palette-yellow-main);
+  --filter-recase-background: var(--palette-purple-main);
+  --filter-mkdir-background: var(--palette-blue-main);
+  --filter-trash-background: var(--palette-red-main);
   --filter-delete-background: var(--palette-red-main);
-  --filter-delete-active-foreground: var(--palette-red-dark);
+  --filter-delete-active-foreground: var(--color-main-fill-foreground);
   --filter-noop-background: var(--color-neutral-foreground-secondary);
   --filter-noop-foreground: var(--color-neutral-surface);
-  --progress-fill: var(--color-accent-fill);
-
   --elevation-2: 0 0 2px var(--color-shadow-ambient), 0 1px 2px var(--color-shadow-key);
   --elevation-4: 0 0 2px var(--color-shadow-ambient), 0 2px 4px var(--color-shadow-key);
   --elevation-8: 0 0 2px var(--color-shadow-ambient), 0 4px 8px var(--color-shadow-key);
   --elevation-16: 0 0 2px var(--color-shadow-ambient), 0 8px 16px var(--color-shadow-key);
 
-  /* Light-theme semantic pairings, chosen by contrast rather than swatch name. */
-  --semantic-positive-foreground: var(--palette-green-dark);
-  --semantic-positive-background: var(--palette-green-light);
-  --semantic-positive-indicator: var(--palette-green-dark);
-  --semantic-negative-foreground: var(--palette-red-dark);
-  --semantic-negative-background: var(--palette-red-light);
-  --semantic-negative-indicator: var(--palette-red-dark);
-  --semantic-warning-foreground: var(--palette-yellow-dark);
-  --semantic-warning-background: var(--palette-yellow-main);
-  --semantic-warning-indicator: var(--palette-yellow-dark);
-  --semantic-active-foreground: var(--palette-blue-dark);
-  --semantic-active-background: var(--palette-blue-light);
-  --semantic-active-indicator: var(--palette-blue-dark);
-  --semantic-paused-foreground: var(--palette-purple-dark);
-  --semantic-paused-background: var(--palette-purple-main);
-  --semantic-paused-indicator: var(--palette-purple-dark);
-  --semantic-mismatch-foreground: var(--palette-purple-dark);
-  --semantic-mismatch-background: var(--palette-purple-main);
-  --semantic-mismatch-indicator: var(--palette-purple-dark);
-  --semantic-blocked-foreground: var(--palette-red-dark);
-  --semantic-blocked-background: var(--palette-red-light);
-  --semantic-blocked-indicator: var(--palette-red-dark);
-  --semantic-neutral-foreground: var(--color-neutral-foreground);
-  --semantic-neutral-background: var(--color-neutral-surface-hover);
-  --semantic-neutral-indicator: var(--color-neutral-foreground-secondary);
+  /* A rendered signal selects exactly one of these semantic channels. */
+  --intent-additive-foreground: var(--palette-blue-main);
+  --intent-relocating-foreground: var(--palette-purple-main);
+  --intent-replacing-foreground: var(--palette-yellow-main);
+  --intent-removing-foreground: var(--palette-red-main);
+  --intent-neutral-foreground: var(--color-neutral-foreground-secondary);
+  --intent-permanent-background: var(--palette-red-main);
+  --intent-exception-background: var(--palette-yellow-main);
 
-  --status-complete-foreground: var(--semantic-positive-foreground);
-  --status-complete-background: var(--semantic-positive-background);
-  --status-complete-indicator: var(--semantic-positive-indicator);
-  --status-success-foreground: var(--semantic-positive-foreground);
-  --status-success-background: var(--semantic-positive-background);
-  --status-success-indicator: var(--semantic-positive-indicator);
-  --status-failure-foreground: var(--semantic-negative-foreground);
-  --status-failure-background: var(--semantic-negative-background);
-  --status-failure-indicator: var(--semantic-negative-indicator);
-  --status-error-foreground: var(--semantic-negative-foreground);
-  --status-error-background: var(--semantic-negative-background);
-  --status-error-indicator: var(--semantic-negative-indicator);
-  --status-warning-foreground: var(--semantic-warning-foreground);
-  --status-warning-background: var(--semantic-warning-background);
-  --status-warning-indicator: var(--semantic-warning-indicator);
-  --status-degraded-foreground: var(--semantic-warning-foreground);
-  --status-degraded-background: var(--semantic-warning-background);
-  --status-degraded-indicator: var(--semantic-warning-indicator);
-  --status-incomplete-foreground: var(--semantic-warning-foreground);
-  --status-incomplete-background: var(--semantic-warning-background);
-  --status-incomplete-indicator: var(--semantic-warning-indicator);
-  --status-active-foreground: var(--semantic-active-foreground);
-  --status-active-background: var(--semantic-active-background);
-  --status-active-indicator: var(--semantic-active-indicator);
-  --status-paused-foreground: var(--semantic-paused-foreground);
-  --status-paused-background: var(--semantic-paused-background);
-  --status-paused-indicator: var(--semantic-paused-indicator);
-  --status-canceled-foreground: var(--semantic-negative-foreground);
-  --status-canceled-background: var(--semantic-negative-background);
-  --status-canceled-indicator: var(--semantic-negative-indicator);
-  --status-mismatch-foreground: var(--semantic-mismatch-foreground);
-  --status-mismatch-background: var(--semantic-mismatch-background);
-  --status-mismatch-indicator: var(--semantic-mismatch-indicator);
-  --status-blocked-foreground: var(--semantic-blocked-foreground);
-  --status-blocked-background: var(--semantic-blocked-background);
-  --status-blocked-indicator: var(--semantic-blocked-indicator);
-  --status-deferred-foreground: var(--semantic-warning-foreground);
-  --status-deferred-background: var(--semantic-warning-background);
-  --status-deferred-indicator: var(--semantic-warning-indicator);
-  --status-neutral-foreground: var(--semantic-neutral-foreground);
-  --status-neutral-background: var(--semantic-neutral-background);
-  --status-neutral-indicator: var(--semantic-neutral-indicator);
-  --status-noop-foreground: var(--semantic-neutral-foreground);
-  --status-noop-background: var(--semantic-neutral-background);
-  --status-noop-indicator: var(--semantic-neutral-indicator);
+  --lifecycle-neutral-foreground: var(--color-neutral-foreground-secondary);
+  --lifecycle-active-foreground: var(--color-accent-fill);
+  --lifecycle-completed-foreground: var(--palette-green-main);
+  --lifecycle-attention-foreground: var(--palette-yellow-main);
+  --lifecycle-canceled-background: var(--color-neutral-foreground-secondary);
+  --lifecycle-canceled-foreground: var(--color-neutral-surface);
+  --lifecycle-attention-background: var(--palette-yellow-main);
+  --lifecycle-failure-background: var(--palette-red-main);
 
-  --operation-copy-foreground: var(--semantic-active-foreground);
-  --operation-copy-background: var(--semantic-active-background);
-  --operation-copy-indicator: var(--semantic-active-indicator);
-  --operation-update-foreground: var(--semantic-positive-foreground);
-  --operation-update-background: var(--semantic-positive-background);
-  --operation-update-indicator: var(--semantic-positive-indicator);
-  --operation-move-foreground: var(--semantic-paused-foreground);
-  --operation-move-background: var(--semantic-paused-background);
-  --operation-move-indicator: var(--semantic-paused-indicator);
-  --operation-move_update-foreground: var(--semantic-mismatch-foreground);
-  --operation-move_update-background: var(--semantic-mismatch-background);
-  --operation-move_update-indicator: var(--semantic-mismatch-indicator);
-  --operation-recase-foreground: var(--semantic-active-foreground);
-  --operation-recase-background: var(--semantic-active-background);
-  --operation-recase-indicator: var(--semantic-active-indicator);
-  --operation-mkdir-foreground: var(--semantic-positive-foreground);
-  --operation-mkdir-background: var(--semantic-positive-background);
-  --operation-mkdir-indicator: var(--semantic-positive-indicator);
-  --operation-trash-foreground: var(--semantic-warning-foreground);
-  --operation-trash-background: var(--semantic-warning-background);
-  --operation-trash-indicator: var(--semantic-warning-indicator);
-  --operation-delete-foreground: var(--semantic-negative-foreground);
-  --operation-delete-background: var(--semantic-negative-background);
-  --operation-delete-indicator: var(--semantic-negative-indicator);
-  --operation-noop-foreground: var(--semantic-neutral-foreground);
-  --operation-noop-background: var(--semantic-neutral-background);
-  --operation-noop-indicator: var(--semantic-neutral-indicator);
+  --integrity-positive-foreground: var(--palette-green-main);
+  --integrity-neutral-foreground: var(--color-neutral-foreground-secondary);
+  --integrity-attention-foreground: var(--palette-yellow-main);
+  --integrity-attention-background: var(--palette-yellow-main);
+  --integrity-failure-background: var(--palette-red-main);
 
-  --plan-intent-copy-foreground: var(--palette-blue-main);
-  --plan-intent-update-foreground: var(--palette-green-main);
-  --plan-intent-move-foreground: var(--palette-purple-main);
-  --plan-intent-move_update-foreground: var(--palette-purple-main);
-  --plan-intent-recase-foreground: var(--palette-blue-main);
-  --plan-intent-mkdir-foreground: var(--palette-green-main);
-  --plan-intent-trash-foreground: var(--palette-yellow-main);
-  --plan-intent-delete-foreground: var(--palette-red-main);
-  --plan-intent-error-foreground: var(--palette-red-main);
-  --plan-intent-blocked-foreground: var(--palette-red-main);
-  --file-status-positive-foreground: var(--palette-green-main);
-  --file-status-negative-foreground: var(--palette-red-main);
-  --file-status-warning-foreground: var(--palette-yellow-main);
-  --file-status-active-foreground: var(--palette-blue-main);
-  --file-status-paused-foreground: var(--palette-purple-main);
-  --file-status-mismatch-foreground: var(--palette-purple-main);
-  --file-status-neutral-foreground: var(--color-neutral-foreground-secondary);
+  --progress-active-fill: var(--color-accent-fill);
+  --progress-paused-fill: var(--palette-yellow-main);
+  --progress-canceled-fill: var(--color-neutral-foreground-secondary);
+  --progress-track-background: var(--color-neutral-surface-pressed);
 }
 
 :root[data-window-material="mica"] {
@@ -333,40 +247,8 @@
   --color-accent-fill-foreground: #000000;
   --filter-delete-foreground: var(--palette-red-main);
   --filter-active-foreground: var(--color-neutral-surface);
-  --semantic-positive-foreground: var(--palette-green-light);
-  --semantic-positive-background: var(--palette-green-dark);
-  --semantic-positive-indicator: var(--palette-green-light);
-  --semantic-negative-foreground: var(--palette-red-light);
-  --semantic-negative-background: var(--palette-red-dark);
-  --semantic-negative-indicator: var(--palette-red-light);
-  --semantic-warning-foreground: var(--palette-yellow-main);
-  --semantic-warning-background: var(--palette-yellow-dark);
-  --semantic-warning-indicator: var(--palette-yellow-main);
-  --semantic-active-foreground: var(--palette-blue-light);
-  --semantic-active-background: var(--palette-blue-dark);
-  --semantic-active-indicator: var(--palette-blue-light);
-  --semantic-paused-foreground: var(--palette-purple-main);
-  --semantic-paused-background: var(--palette-purple-dark);
-  --semantic-paused-indicator: var(--palette-purple-main);
-  --semantic-mismatch-foreground: var(--palette-purple-main);
-  --semantic-mismatch-background: var(--palette-purple-dark);
-  --semantic-mismatch-indicator: var(--palette-purple-main);
-  --semantic-blocked-foreground: var(--palette-red-light);
-  --semantic-blocked-background: var(--palette-red-dark);
-  --semantic-blocked-indicator: var(--palette-red-light);
-  --semantic-neutral-foreground: var(--color-neutral-foreground);
-  --semantic-neutral-background: var(--color-neutral-surface-hover);
-  --semantic-neutral-indicator: var(--color-neutral-foreground-secondary);
-  --plan-intent-copy-foreground: var(--palette-blue-main);
-  --plan-intent-update-foreground: var(--palette-green-main);
-  --plan-intent-move-foreground: var(--palette-purple-main);
-  --plan-intent-move_update-foreground: var(--palette-purple-main);
-  --plan-intent-recase-foreground: var(--palette-blue-main);
-  --plan-intent-mkdir-foreground: var(--palette-green-main);
-  --plan-intent-trash-foreground: var(--palette-yellow-main);
-  --plan-intent-delete-foreground: var(--palette-red-main);
-  --plan-intent-error-foreground: var(--palette-red-main);
-  --plan-intent-blocked-foreground: var(--palette-red-main);
+  --filter-purple-active-foreground: var(--color-neutral-foreground);
+  --color-main-fill-foreground: var(--color-neutral-surface);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -421,40 +303,8 @@
     --color-accent-fill-foreground: #000000;
     --filter-delete-foreground: var(--palette-red-main);
     --filter-active-foreground: var(--color-neutral-surface);
-    --semantic-positive-foreground: var(--palette-green-light);
-    --semantic-positive-background: var(--palette-green-dark);
-    --semantic-positive-indicator: var(--palette-green-light);
-    --semantic-negative-foreground: var(--palette-red-light);
-    --semantic-negative-background: var(--palette-red-dark);
-    --semantic-negative-indicator: var(--palette-red-light);
-    --semantic-warning-foreground: var(--palette-yellow-main);
-    --semantic-warning-background: var(--palette-yellow-dark);
-    --semantic-warning-indicator: var(--palette-yellow-main);
-    --semantic-active-foreground: var(--palette-blue-light);
-    --semantic-active-background: var(--palette-blue-dark);
-    --semantic-active-indicator: var(--palette-blue-light);
-    --semantic-paused-foreground: var(--palette-purple-main);
-    --semantic-paused-background: var(--palette-purple-dark);
-    --semantic-paused-indicator: var(--palette-purple-main);
-    --semantic-mismatch-foreground: var(--palette-purple-main);
-    --semantic-mismatch-background: var(--palette-purple-dark);
-    --semantic-mismatch-indicator: var(--palette-purple-main);
-    --semantic-blocked-foreground: var(--palette-red-light);
-    --semantic-blocked-background: var(--palette-red-dark);
-    --semantic-blocked-indicator: var(--palette-red-light);
-    --semantic-neutral-foreground: var(--color-neutral-foreground);
-    --semantic-neutral-background: var(--color-neutral-surface-hover);
-    --semantic-neutral-indicator: var(--color-neutral-foreground-secondary);
-    --plan-intent-copy-foreground: var(--palette-blue-main);
-    --plan-intent-update-foreground: var(--palette-green-main);
-    --plan-intent-move-foreground: var(--palette-purple-main);
-    --plan-intent-move_update-foreground: var(--palette-purple-main);
-    --plan-intent-recase-foreground: var(--palette-blue-main);
-    --plan-intent-mkdir-foreground: var(--palette-green-main);
-    --plan-intent-trash-foreground: var(--palette-yellow-main);
-    --plan-intent-delete-foreground: var(--palette-red-main);
-    --plan-intent-error-foreground: var(--palette-red-main);
-    --plan-intent-blocked-foreground: var(--palette-red-main);
+    --filter-purple-active-foreground: var(--color-neutral-foreground);
+    --color-main-fill-foreground: var(--color-neutral-surface);
   }
 }
 
@@ -524,48 +374,32 @@
     --filter-delete-active-foreground: HighlightText;
     --filter-noop-background: Highlight;
     --filter-noop-foreground: HighlightText;
-    --progress-fill: Highlight;
-    --semantic-positive-foreground: CanvasText;
-    --semantic-positive-background: Canvas;
-    --semantic-positive-indicator: Highlight;
-    --semantic-negative-foreground: CanvasText;
-    --semantic-negative-background: Canvas;
-    --semantic-negative-indicator: Highlight;
-    --semantic-warning-foreground: CanvasText;
-    --semantic-warning-background: Canvas;
-    --semantic-warning-indicator: Highlight;
-    --semantic-active-foreground: HighlightText;
-    --semantic-active-background: Highlight;
-    --semantic-active-indicator: HighlightText;
-    --semantic-paused-foreground: CanvasText;
-    --semantic-paused-background: Canvas;
-    --semantic-paused-indicator: Highlight;
-    --semantic-mismatch-foreground: CanvasText;
-    --semantic-mismatch-background: Canvas;
-    --semantic-mismatch-indicator: Highlight;
-    --semantic-blocked-foreground: CanvasText;
-    --semantic-blocked-background: Canvas;
-    --semantic-blocked-indicator: Highlight;
-    --semantic-neutral-foreground: CanvasText;
-    --semantic-neutral-background: Canvas;
-    --semantic-neutral-indicator: ButtonText;
-    --plan-intent-copy-foreground: CanvasText;
-    --plan-intent-update-foreground: CanvasText;
-    --plan-intent-move-foreground: CanvasText;
-    --plan-intent-move_update-foreground: CanvasText;
-    --plan-intent-recase-foreground: CanvasText;
-    --plan-intent-mkdir-foreground: CanvasText;
-    --plan-intent-trash-foreground: CanvasText;
-    --plan-intent-delete-foreground: CanvasText;
-    --plan-intent-error-foreground: CanvasText;
-    --plan-intent-blocked-foreground: CanvasText;
-    --file-status-positive-foreground: CanvasText;
-    --file-status-negative-foreground: CanvasText;
-    --file-status-warning-foreground: CanvasText;
-    --file-status-active-foreground: CanvasText;
-    --file-status-paused-foreground: CanvasText;
-    --file-status-mismatch-foreground: CanvasText;
-    --file-status-neutral-foreground: CanvasText;
+    --filter-purple-active-foreground: HighlightText;
+    --color-main-fill-foreground: HighlightText;
+    --intent-additive-foreground: CanvasText;
+    --intent-relocating-foreground: CanvasText;
+    --intent-replacing-foreground: CanvasText;
+    --intent-removing-foreground: CanvasText;
+    --intent-neutral-foreground: CanvasText;
+    --intent-permanent-background: Highlight;
+    --intent-exception-background: Highlight;
+    --lifecycle-neutral-foreground: CanvasText;
+    --lifecycle-active-foreground: CanvasText;
+    --lifecycle-completed-foreground: CanvasText;
+    --lifecycle-attention-foreground: CanvasText;
+    --lifecycle-canceled-background: Highlight;
+    --lifecycle-canceled-foreground: HighlightText;
+    --lifecycle-attention-background: Highlight;
+    --lifecycle-failure-background: Highlight;
+    --integrity-positive-foreground: CanvasText;
+    --integrity-neutral-foreground: CanvasText;
+    --integrity-attention-foreground: CanvasText;
+    --integrity-attention-background: Highlight;
+    --integrity-failure-background: Highlight;
+    --progress-active-fill: Highlight;
+    --progress-paused-fill: Highlight;
+    --progress-canceled-fill: Highlight;
+    --progress-track-background: Canvas;
   }
 }
 

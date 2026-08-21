@@ -30,10 +30,12 @@ AUTHORED_PALETTE = {
     "--palette-blue-main": "#33AAEE",
     "--palette-blue-dark": "#002255",
     "--palette-blue-light": "#99CCFF",
-    "--palette-yellow-main": "#FFDD44",
+    "--palette-yellow-main": "#FFAA22",
     "--palette-yellow-dark": "#553300",
-    "--palette-purple-main": "#BB88EE",
+    "--palette-yellow-light": "#FFDD44",
+    "--palette-purple-main": "#8844CC",
     "--palette-purple-dark": "#331155",
+    "--palette-purple-light": "#BB88EE",
 }
 FLUENT_SOURCE = {
     "package": "@fluentui/tokens@1.0.0-alpha.24",
@@ -295,35 +297,80 @@ AUTHORED_FLYOUT_VALUES = {
         "--color-control-elevation-border-flat": "rgba(0,0,0,0.20)",
     },
 }
-STATUSES = (
-    "complete",
-    "success",
-    "failure",
-    "error",
-    "warning",
-    "degraded",
-    "incomplete",
-    "active",
-    "paused",
-    "canceled",
-    "mismatch",
-    "blocked",
-    "deferred",
-    "neutral",
-    "noop",
-)
-OPERATIONS = (
+INTENTS = (
     "copy",
-    "update",
-    "move",
-    "move_update",
-    "recase",
     "mkdir",
+    "move",
+    "recase",
+    "update",
+    "move_update",
     "trash",
     "delete",
     "noop",
+    "error",
+    "unsupported",
+    "blocked",
 )
-ROLES = ("foreground", "background", "indicator")
+LIFECYCLES = (
+    "new",
+    "planned",
+    "queued",
+    "executing",
+    "verifying",
+    "pausing",
+    "canceling",
+    "completed",
+    "partial",
+    "degraded",
+    "incomplete",
+    "paused",
+    "interrupted",
+    "canceled",
+    "canceled_after_publish",
+    "canceled_after_mutation",
+    "refused",
+    "errored",
+    "failed",
+)
+INTEGRITY_STATES = (
+    "verified",
+    "baselined",
+    "unverified",
+    "modified",
+    "reappeared",
+    "unsupported",
+    "canceled",
+    "missing",
+    "mismatched",
+    "error",
+)
+SEMANTIC_TOKENS = {
+    "--color-main-fill-foreground",
+    "--intent-additive-foreground",
+    "--intent-relocating-foreground",
+    "--intent-replacing-foreground",
+    "--intent-removing-foreground",
+    "--intent-neutral-foreground",
+    "--intent-permanent-background",
+    "--intent-exception-background",
+    "--lifecycle-neutral-foreground",
+    "--lifecycle-active-foreground",
+    "--lifecycle-completed-foreground",
+    "--lifecycle-attention-foreground",
+    "--lifecycle-canceled-background",
+    "--lifecycle-canceled-foreground",
+    "--lifecycle-attention-background",
+    "--lifecycle-failure-background",
+    "--integrity-positive-foreground",
+    "--integrity-neutral-foreground",
+    "--integrity-attention-foreground",
+    "--integrity-attention-background",
+    "--integrity-failure-background",
+    "--progress-active-fill",
+    "--progress-paused-fill",
+    "--progress-canceled-fill",
+    "--progress-track-background",
+}
 HEX_LITERAL = re.compile(r"#[0-9A-Fa-f]{3,8}\b")
 RAW_COLOR = re.compile(
     r"#[0-9A-Fa-f]{3,8}\b|"
@@ -421,7 +468,7 @@ def _has_raw_color(source: str) -> bool:
     )
 
 
-def test_sh_g_11_tokens_preserve_exact_authored_palette_without_missing_lights() -> None:
+def test_sh_g_11_tokens_preserve_exact_palette_and_unconsumed_lights() -> None:
     source = TOKENS.read_text(encoding="utf-8")
     palette = {
         name: value.strip()
@@ -430,8 +477,9 @@ def test_sh_g_11_tokens_preserve_exact_authored_palette_without_missing_lights()
     }
 
     assert palette == AUTHORED_PALETTE
-    assert "--palette-yellow-light" not in source
-    assert "--palette-purple-light" not in source
+    assert len(palette) == 15
+    assert "var(--palette-yellow-light)" not in source
+    assert "var(--palette-purple-light)" not in source
     assert "color-mix(" not in source
     assert not re.search(r"\b(?:hsl|hsla|hwb|lab|lch|oklab|oklch)\(", source)
 
@@ -567,42 +615,92 @@ def test_sh_g_11_fluent_table_matches_pinned_source_transcription() -> None:
         )
 
 
-def test_sh_g_11_all_status_and_operation_aliases_are_complete() -> None:
+def test_sh_g_11_channel_semantic_aliases_are_complete_and_disjoint() -> None:
     values = _variables(TOKENS.read_text(encoding="utf-8"))
 
-    expected = {
-        *(f"--status-{status}-{role}" for status in STATUSES for role in ROLES),
-        *(
-            f"--operation-{operation}-{role}"
-            for operation in OPERATIONS
-            for role in ROLES
-        ),
+    assert SEMANTIC_TOKENS <= values.keys()
+    assert {
+        name
+        for name in values
+        if name.startswith(("--intent-", "--lifecycle-", "--integrity-"))
+    } == SEMANTIC_TOKENS - {
+        "--color-main-fill-foreground",
+        "--progress-active-fill",
+        "--progress-paused-fill",
+        "--progress-canceled-fill",
+        "--progress-track-background",
     }
-
-    assert expected <= values.keys()
     assert not {
         name
         for name in values
-        if name.startswith(("--status-", "--operation-"))
-        and name not in expected
+        if name.startswith(("--status-", "--operation-", "--file-status-"))
     }
 
 
-def test_sh_g_11_semantic_text_and_indicator_pairs_meet_contrast_floors() -> None:
+def test_sh_g_11_channel_mappings_use_main_hues_and_safe_fill_labels() -> None:
     source = TOKENS.read_text(encoding="utf-8")
     light = _variables(_block(source, ":root "))
     dark = light | _variables(_block(source, ':root[data-theme="dark"]'))
+    automatic_dark = light | _variables(
+        _block(
+            _block(source, "@media (prefers-color-scheme: dark)"),
+            ':root:not([data-theme="light"])',
+        )
+    )
 
-    for theme in (light, dark):
-        for prefix in (
-            *(f"status-{status}" for status in STATUSES),
-            *(f"operation-{operation}" for operation in OPERATIONS),
+    exact_aliases = {
+        "--intent-additive-foreground": "var(--palette-blue-main)",
+        "--intent-relocating-foreground": "var(--palette-purple-main)",
+        "--intent-replacing-foreground": "var(--palette-yellow-main)",
+        "--intent-removing-foreground": "var(--palette-red-main)",
+        "--intent-neutral-foreground": "var(--color-neutral-foreground-secondary)",
+        "--intent-permanent-background": "var(--palette-red-main)",
+        "--intent-exception-background": "var(--palette-yellow-main)",
+        "--lifecycle-neutral-foreground": "var(--color-neutral-foreground-secondary)",
+        "--lifecycle-active-foreground": "var(--color-accent-fill)",
+        "--lifecycle-completed-foreground": "var(--palette-green-main)",
+        "--lifecycle-attention-foreground": "var(--palette-yellow-main)",
+        "--lifecycle-canceled-background": "var(--color-neutral-foreground-secondary)",
+        "--lifecycle-canceled-foreground": "var(--color-neutral-surface)",
+        "--lifecycle-attention-background": "var(--palette-yellow-main)",
+        "--lifecycle-failure-background": "var(--palette-red-main)",
+        "--integrity-positive-foreground": "var(--palette-green-main)",
+        "--integrity-neutral-foreground": "var(--color-neutral-foreground-secondary)",
+        "--integrity-attention-foreground": "var(--palette-yellow-main)",
+        "--integrity-attention-background": "var(--palette-yellow-main)",
+        "--integrity-failure-background": "var(--palette-red-main)",
+        "--progress-active-fill": "var(--color-accent-fill)",
+        "--progress-paused-fill": "var(--palette-yellow-main)",
+        "--progress-canceled-fill": "var(--color-neutral-foreground-secondary)",
+        "--progress-track-background": "var(--color-neutral-surface-pressed)",
+    }
+    for theme in (light, dark, automatic_dark):
+        assert exact_aliases.items() <= theme.items()
+
+    assert light["--color-main-fill-foreground"] == (
+        "var(--color-neutral-foreground)"
+    )
+    assert dark["--color-main-fill-foreground"] == (
+        "var(--color-neutral-surface)"
+    )
+    assert automatic_dark["--color-main-fill-foreground"] == (
+        "var(--color-neutral-surface)"
+    )
+    for theme in (light, dark, automatic_dark):
+        fill_foreground = _resolve("--color-main-fill-foreground", theme)
+        for background in (
+            "--intent-permanent-background",
+            "--intent-exception-background",
+            "--lifecycle-attention-background",
+            "--lifecycle-failure-background",
+            "--integrity-attention-background",
+            "--integrity-failure-background",
         ):
-            foreground = _resolve(f"--{prefix}-foreground", theme)
-            background = _resolve(f"--{prefix}-background", theme)
-            indicator = _resolve(f"--{prefix}-indicator", theme)
-            assert _contrast(foreground, background) >= 4.5, prefix
-            assert _contrast(indicator, background) >= 3.0, prefix
+            assert _contrast(fill_foreground, _resolve(background, theme)) >= 4.5
+        assert _contrast(
+            _resolve("--lifecycle-canceled-foreground", theme),
+            _resolve("--lifecycle-canceled-background", theme),
+        ) >= 4.5
 
         focus = _resolve("--color-focus-ring", theme)
         assert _contrast(focus, _resolve("--color-neutral-canvas", theme)) >= 3.0
@@ -619,7 +717,7 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
         "Canvas",
         "CanvasText",
         "ButtonBorder",
-        "ButtonText",
+        "ButtonFace",
         "GrayText",
         "Highlight",
         "HighlightText",
@@ -638,6 +736,7 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
         "filter-copy-background",
         "filter-update-background",
         "filter-move-background",
+        "filter-purple-active-foreground",
         "filter-move-update-background",
         "filter-recase-background",
         "filter-mkdir-background",
@@ -646,21 +745,42 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
         "filter-delete-active-foreground",
         "filter-noop-background",
         "filter-noop-foreground",
-        "progress-fill",
+        "color-main-fill-foreground",
+        "progress-active-fill",
+        "progress-paused-fill",
+        "progress-canceled-fill",
+        "progress-track-background",
     ):
         assert f"--{name}:" in forced
-    for family in (
-        "positive",
-        "negative",
-        "warning",
-        "active",
-        "paused",
-        "mismatch",
-        "blocked",
-        "neutral",
-    ):
-        for role in ROLES:
-            assert f"--semantic-{family}-{role}:" in forced
+    forced_values = _variables(forced)
+    expected = {
+        "--color-main-fill-foreground": "HighlightText",
+        "--intent-additive-foreground": "CanvasText",
+        "--intent-relocating-foreground": "CanvasText",
+        "--intent-replacing-foreground": "CanvasText",
+        "--intent-removing-foreground": "CanvasText",
+        "--intent-neutral-foreground": "CanvasText",
+        "--intent-permanent-background": "Highlight",
+        "--intent-exception-background": "Highlight",
+        "--lifecycle-neutral-foreground": "CanvasText",
+        "--lifecycle-active-foreground": "CanvasText",
+        "--lifecycle-completed-foreground": "CanvasText",
+        "--lifecycle-attention-foreground": "CanvasText",
+        "--lifecycle-canceled-background": "Highlight",
+        "--lifecycle-canceled-foreground": "HighlightText",
+        "--lifecycle-attention-background": "Highlight",
+        "--lifecycle-failure-background": "Highlight",
+        "--integrity-positive-foreground": "CanvasText",
+        "--integrity-neutral-foreground": "CanvasText",
+        "--integrity-attention-foreground": "CanvasText",
+        "--integrity-attention-background": "Highlight",
+        "--integrity-failure-background": "Highlight",
+        "--progress-active-fill": "Highlight",
+        "--progress-paused-fill": "Highlight",
+        "--progress-canceled-fill": "Highlight",
+        "--progress-track-background": "Canvas",
+    }
+    assert {name: forced_values[name] for name in SEMANTIC_TOKENS} == expected
 
 
 def test_sh_g_11_only_tokens_owns_raw_colors_and_palette_consumption() -> None:
@@ -684,87 +804,6 @@ def test_sh_g_11_only_tokens_owns_raw_colors_and_palette_consumption() -> None:
     assert palette_consumers == {"tokens.css"}
 
 
-def test_plan_intent_aliases_prefer_main_colors_in_both_themes() -> None:
-    source = TOKENS.read_text(encoding="utf-8")
-    light = _variables(_block(source, ":root "))
-    explicit_dark = light | _variables(
-        _block(source, ':root[data-theme="dark"]')
-    )
-    automatic_dark_media = _block(
-        source,
-        "@media (prefers-color-scheme: dark)",
-    )
-    automatic_dark = light | _variables(
-        _block(automatic_dark_media, ':root:not([data-theme="light"])')
-    )
-    forced = _variables(_block(source, "@media (forced-colors: active)"))
-    families = {
-        "copy": "blue",
-        "update": "green",
-        "move": "purple",
-        "move_update": "purple",
-        "recase": "blue",
-        "mkdir": "green",
-        "trash": "yellow",
-        "delete": "red",
-    }
-
-    for operation, family in families.items():
-        plan_token = f"--plan-intent-{operation}-foreground"
-        expected_main = f"var(--palette-{family}-main)"
-        assert light[plan_token] == expected_main
-        assert explicit_dark[plan_token] == expected_main
-        assert automatic_dark[plan_token] == expected_main
-        assert forced[plan_token] == "CanvasText"
-        for dark in (explicit_dark, automatic_dark):
-            foreground = _resolve(plan_token, dark)
-            for surface in (
-                "--color-neutral-surface",
-                "--color-neutral-surface-subtle",
-            ):
-                assert _contrast(foreground, _resolve(surface, dark)) >= 4.5
-
-    for status in ("error", "blocked"):
-        plan_token = f"--plan-intent-{status}-foreground"
-        assert light[plan_token] == "var(--palette-red-main)"
-        for dark in (explicit_dark, automatic_dark):
-            assert dark[plan_token] == "var(--palette-red-main)"
-        assert forced[plan_token] == "CanvasText"
-
-    assert "--plan-intent-noop-foreground" not in light
-
-
-def test_file_status_aliases_prefer_main_colors_in_both_themes() -> None:
-    source = TOKENS.read_text(encoding="utf-8")
-    light = _variables(_block(source, ":root "))
-    explicit_dark = light | _variables(
-        _block(source, ':root[data-theme="dark"]')
-    )
-    automatic_dark = light | _variables(
-        _block(
-            _block(source, "@media (prefers-color-scheme: dark)"),
-            ':root:not([data-theme="light"])',
-        )
-    )
-    forced = _variables(_block(source, "@media (forced-colors: active)"))
-    families = {
-        "positive": "green",
-        "negative": "red",
-        "warning": "yellow",
-        "active": "blue",
-        "paused": "purple",
-        "mismatch": "purple",
-    }
-    for status, family in families.items():
-        token = f"--file-status-{status}-foreground"
-        expected = f"var(--palette-{family}-main)"
-        assert light[token] == expected
-        assert explicit_dark[token] == expected
-        assert automatic_dark[token] == expected
-        assert forced[token] == "CanvasText"
-    assert forced["--file-status-neutral-foreground"] == "CanvasText"
-
-
 def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> None:
     for mutation in (
         ".x { color: red; }",
@@ -786,6 +825,110 @@ def test_sh_g_11_raw_color_scanner_catches_literal_and_mixed_css_escapes() -> No
         "0 0 0 3px var(--color-focus-ring); }",
     ):
         assert not _has_raw_color(allowed), allowed
+
+
+def test_sh_g_11_channel_selectors_keep_hue_and_form_semantics_scoped() -> None:
+    source = COMPONENTS.read_text(encoding="utf-8")
+
+    additive = _block(
+        source,
+        '[data-intent]:is([data-intent="copy"], [data-intent="mkdir"]) ',
+    )
+    relocating = _block(
+        source,
+        '[data-intent]:is([data-intent="move"], [data-intent="recase"]) ',
+    )
+    replacing = _block(
+        source,
+        '[data-intent]:is([data-intent="update"], '
+        '[data-intent="move_update"]) ',
+    )
+    assert _variables(additive) == {
+        "--nami-state-foreground": "var(--intent-additive-foreground)"
+    }
+    assert _variables(relocating) == {
+        "--nami-state-foreground": "var(--intent-relocating-foreground)"
+    }
+    assert _variables(replacing) == {
+        "--nami-state-foreground": "var(--intent-replacing-foreground)"
+    }
+    assert _variables(_block(source, '[data-intent="trash"] ')) == {
+        "--nami-state-foreground": "var(--intent-removing-foreground)"
+    }
+    assert _variables(_block(source, '[data-intent="delete"] ')) == {
+        "--nami-state-background": "var(--intent-permanent-background)",
+        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+    }
+    intent_exception = _variables(_block(source, "[data-intent]:is(\n"))
+    assert intent_exception == {
+        "--nami-state-background": "var(--intent-exception-background)",
+        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+    }
+
+    lifecycle_active = _variables(_block(source, "[data-lifecycle]:is(\n"))
+    assert lifecycle_active == {
+        "--nami-state-foreground": "var(--lifecycle-active-foreground)"
+    }
+    assert _variables(_block(source, '[data-lifecycle="completed"] ')) == {
+        "--nami-state-foreground": "var(--lifecycle-completed-foreground)"
+    }
+    lifecycle_attention_at = source.index(
+        '[data-lifecycle="partial"]',
+        source.index('[data-lifecycle="completed"]'),
+    )
+    lifecycle_attention = _variables(
+        _block(source[lifecycle_attention_at:], '[data-lifecycle="partial"]')
+    )
+    assert lifecycle_attention == {
+        "--nami-state-foreground": "var(--lifecycle-attention-foreground)"
+    }
+    assert _variables(_block(source, '[data-lifecycle="canceled"] ')) == {
+        "--nami-state-background": "var(--lifecycle-canceled-background)",
+        "--nami-state-foreground": "var(--lifecycle-canceled-foreground)",
+    }
+    attention_fill_at = source.index('[data-lifecycle="canceled_after_publish"]')
+    attention_fill = _variables(
+        _block(
+            source[attention_fill_at:],
+            '[data-lifecycle="canceled_after_publish"]',
+        )
+    )
+    assert attention_fill == {
+        "--nami-state-background": "var(--lifecycle-attention-background)",
+        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+    }
+    failure_at = source.index('[data-lifecycle="errored"]')
+    failure = _variables(
+        _block(source[failure_at:], '[data-lifecycle="errored"]')
+    )
+    assert failure == {
+        "--nami-state-background": "var(--lifecycle-failure-background)",
+        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+    }
+
+    integrity_positive = _variables(_block(source, "[data-integrity]:is(\n"))
+    assert integrity_positive == {
+        "--nami-state-foreground": "var(--integrity-positive-foreground)"
+    }
+    assert _variables(_block(source, '[data-integrity="modified"] ')) == {
+        "--nami-state-foreground": "var(--integrity-attention-foreground)"
+    }
+    integrity_attention_at = source.index('[data-integrity="reappeared"]')
+    integrity_attention = _variables(
+        _block(source[integrity_attention_at:], '[data-integrity="reappeared"]')
+    )
+    assert integrity_attention == {
+        "--nami-state-background": "var(--integrity-attention-background)",
+        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+    }
+    integrity_failure_at = source.index('[data-integrity="missing"]')
+    integrity_failure = _variables(
+        _block(source[integrity_failure_at:], '[data-integrity="missing"]')
+    )
+    assert integrity_failure == {
+        "--nami-state-background": "var(--integrity-failure-background)",
+        "--nami-state-foreground": "var(--color-main-fill-foreground)",
+    }
 
 
 def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
@@ -918,19 +1061,61 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "0 0 0 3px var(--color-focus-ring);" in row_focus
     assert "outline: none;" in row_focus
 
-    for status in STATUSES:
-        assert f'[data-status="{status}"]' in source
-    for operation in OPERATIONS:
-        assert f'[data-operation="{operation}"]' in source
-    for family, keys in (("status", STATUSES), ("operation", OPERATIONS)):
+    for channel, keys in (
+        ("intent", INTENTS),
+        ("lifecycle", LIFECYCLES),
+        ("integrity", INTEGRITY_STATES),
+    ):
         for key in keys:
-            declarations = _variables(
-                _block(source, f'[data-{family}="{key}"]')
-            )
-            assert declarations == {
-                f"--nami-state-{role}": f"var(--{family}-{key}-{role})"
-                for role in ROLES
-            }
+            assert f'[data-{channel}="{key}"]' in source
+    assert "[data-status" not in source
+    for channel, foreground in (
+        ("intent", "--intent-neutral-foreground"),
+        ("lifecycle", "--lifecycle-neutral-foreground"),
+        ("integrity", "--integrity-neutral-foreground"),
+    ):
+        declarations = _variables(_block(source, f"[data-{channel}] "))
+        assert declarations == {
+            "--nami-state-foreground": f"var({foreground})",
+            "--nami-state-background": "var(--color-semantic-transparent)",
+            "--nami-state-indicator": "var(--nami-state-foreground)",
+        }
+    state_labels = _block(source, ".nami-badge,\n.nami-status-pill ")
+    assert "background: var(--color-semantic-transparent);" in state_labels
+    assert "border: 0;" in state_labels
+    assert "padding: 0;" in state_labels
+    filled_label = _block(
+        source,
+        ':is(.nami-badge, .nami-status-pill)[data-form="fill"] ',
+    )
+    assert "background: var(--nami-state-background);" in filled_label
+    assert "block-size: 20px;" in filled_label
+    assert "padding-inline: var(--space-3);" in filled_label
+    file_label = _block(layout, ".nami-file-state-label ")
+    assert "background: var(--color-semantic-transparent);" in file_label
+    assert "border-radius: var(--radius-circular);" in file_label
+    assert "color: var(--nami-state-foreground" in file_label
+    file_fill_selector = """.nami-plan-row__intent:is(
+  [data-intent="delete"],
+  [data-intent="error"],
+  [data-intent="unsupported"],
+  [data-intent="blocked"]
+) .nami-file-state-label,
+.nami-integrity-row__presence:is(
+  [data-integrity="reappeared"],
+  [data-integrity="unsupported"],
+  [data-integrity="missing"],
+  [data-integrity="mismatched"],
+  [data-integrity="error"]
+) .nami-file-state-label {"""
+    assert file_fill_selector in layout
+    file_fills = _block(
+        layout,
+        file_fill_selector.removesuffix("{"),
+    )
+    assert "background: var(--nami-state-background);" in file_fills
+    assert "block-size: 20px;" in file_fills
+    assert "padding-inline: var(--space-3);" in file_fills
     assert ".nami-state-cue" in source
     task_rail = re.search(r"(?ms)^\.nami-task-rail\s*\{([^}]*)\}", layout)
     assert task_rail is not None
@@ -1088,21 +1273,31 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "0 0 0 1px var(--color-focus-inner)," in selected_focus
     assert "0 0 0 3px var(--color-focus-ring);" in selected_focus
     assert "outline: none;" in selected_focus
-    cue_owners: set[tuple[str, str]] = set()
-    for rule in re.finditer(r"([^{}]+)\{([^{}]*)\}", source):
-        if re.search(r"(?:^|;)\s*content\s*:", rule.group(2)) is None:
-            continue
-        cue_owners.update(
-            (kind, key)
-            for kind, key in re.findall(
-                r'\[data-(status|operation)="([a-z_]+)"\]\s+'
-                r"\.nami-state-cue::before",
-                rule.group(1),
-            )
-        )
-    assert cue_owners == {
-        *(("status", status) for status in STATUSES),
-        *(("operation", operation) for operation in OPERATIONS),
+    cue_start = source.index('[data-intent="copy"] .nami-state-cue::before')
+    cue_source = source[cue_start : source.index(".nami-progress {", cue_start)]
+    for channel, keys in (
+        ("intent", INTENTS),
+        ("lifecycle", LIFECYCLES),
+        ("integrity", INTEGRITY_STATES),
+    ):
+        for key in keys:
+            assert f'[data-{channel}="{key}"]' in cue_source
+    assert set(re.findall(r'content:\s*("[^";]+")', cue_source)) >= {
+        '"C"',
+        '"U"',
+        '"M"',
+        '"M+"',
+        '"Aa"',
+        '"+"',
+        '"T"',
+        '"D"',
+        '"!"',
+        '"\\2013"',
+        '"\\25b6"',
+        '"\\2161"',
+        '"\\2713"',
+        '"\\00d7"',
+        '"\\2260"',
     }
 
     assert HEX_LITERAL.search(source) is None
@@ -1129,18 +1324,33 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     source = COMPONENTS.read_text(encoding="utf-8")
     light = _variables(_block(tokens, ":root "))
     dark = light | _variables(_block(tokens, ':root[data-theme="dark"]'))
+    automatic_dark = light | _variables(
+        _block(
+            _block(tokens, "@media (prefers-color-scheme: dark)"),
+            ':root:not([data-theme="light"])',
+        )
+    )
 
     filter_backgrounds = {
         "copy": "blue",
-        "update": "green",
+        "update": "yellow",
         "move": "purple",
-        "move-update": "purple",
-        "recase": "blue",
-        "mkdir": "green",
-        "trash": "yellow",
+        "move-update": "yellow",
+        "recase": "purple",
+        "mkdir": "blue",
+        "trash": "red",
         "delete": "red",
     }
-    for theme in (light, dark):
+    assert light["--filter-purple-active-foreground"] == (
+        "var(--color-neutral-surface)"
+    )
+    assert dark["--filter-purple-active-foreground"] == (
+        "var(--color-neutral-foreground)"
+    )
+    assert automatic_dark["--filter-purple-active-foreground"] == (
+        "var(--color-neutral-foreground)"
+    )
+    for theme in (light, dark, automatic_dark):
         inverse_background = _resolve(
             "--color-neutral-foreground-secondary",
             theme,
@@ -1156,16 +1366,28 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
             foreground = (
                 _resolve("--filter-delete-active-foreground", theme)
                 if operation == "delete"
-                else active_foreground
+                else (
+                    _resolve("--filter-purple-active-foreground", theme)
+                    if family == "purple"
+                    else active_foreground
+                )
             )
             assert _contrast(foreground, background) >= 4.5, operation
         assert _contrast(
             _resolve("--filter-noop-foreground", theme),
             _resolve("--filter-noop-background", theme),
         ) >= 4.5
-        assert _resolve("--progress-fill", theme) == _resolve(
-            "--color-accent-fill",
-            theme,
+        assert _resolve("--progress-active-fill", theme) == _resolve(
+            "--color-accent-fill", theme
+        )
+        assert _resolve("--progress-paused-fill", theme) == _resolve(
+            "--palette-yellow-main", theme
+        )
+        assert _resolve("--progress-canceled-fill", theme) == _resolve(
+            "--color-neutral-foreground-secondary", theme
+        )
+        assert _resolve("--progress-track-background", theme) == _resolve(
+            "--color-neutral-surface-pressed", theme
         )
         assert _contrast(
             _resolve("--color-neutral-foreground", theme),
@@ -1234,7 +1456,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     assert "box-shadow: inset 0 -2px 0 var(--color-accent-fill);" in input_focus
 
     checkbox = _block(source, ".nami-checkbox ")
-    assert "border: 2px solid var(--color-control-strong-stroke);" in checkbox
+    assert "border: 1px solid var(--color-control-strong-stroke);" in checkbox
     assert "color: var(--color-accent-fill-foreground);" in checkbox
     unchecked_checkbox_pressed = _block(source, ".nami-checkbox:active ")
     assert (
@@ -1310,6 +1532,17 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
             f"var(--filter-{operation}-background);"
             in operation_filter
         )
+    purple_selector = """.nami-chip:is(
+  [data-operation="move"],
+  [data-operation="recase"]
+) {"""
+    assert purple_selector in source
+    purple_filters = _block(source, purple_selector.removesuffix("{"))
+    assert (
+        "--nami-chip-active-foreground: "
+        "var(--filter-purple-active-foreground);"
+        in purple_filters
+    )
     delete_chip = _block(source, '.nami-chip[data-operation="delete"] ')
     assert "color: var(--filter-delete-foreground);" in delete_chip
     assert (
@@ -1329,16 +1562,49 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
 
     badges = _block(source, ".nami-badge,\n.nami-status-pill ")
     assert "border: 0;" in badges
-    progress_match = re.search(
-        r"(?ms)^\.nami-progress\s*\{\s*appearance:\s*none;(?P<body>.*?)^\}",
-        source,
+    progress_at = source.index(
+        ".nami-progress {",
+        source.index('[data-integrity="mismatched"]'),
     )
-    assert progress_match is not None
-    progress = progress_match.group("body")
-    assert "background: var(--color-neutral-surface-pressed);" in progress
+    progress = _block(source[progress_at:], ".nami-progress ")
+    assert "--nami-progress-fill: var(--progress-active-fill);" in progress
+    assert "background: var(--progress-track-background);" in progress
     assert "border: 0;" in progress
     progress_bar = _block(source, ".nami-progress__bar ")
-    assert "background: var(--progress-fill);" in progress_bar
+    assert "background: var(--nami-progress-fill);" in progress_bar
+    active_progress_selector = """.nami-progress:is(
+  [data-lifecycle="executing"],
+  [data-lifecycle="verifying"],
+  [data-lifecycle="pausing"],
+  [data-lifecycle="canceling"]
+) {"""
+    assert active_progress_selector in source
+    active_progress = _block(
+        source,
+        active_progress_selector.removesuffix("{"),
+    )
+    assert "--nami-progress-fill: var(--progress-active-fill);" in active_progress
+    paused_progress = _block(
+        source, '.nami-progress[data-lifecycle="paused"] '
+    )
+    canceled_progress = _block(
+        source, '.nami-progress[data-lifecycle="canceled"] '
+    )
+    assert "--nami-progress-fill: var(--progress-paused-fill);" in paused_progress
+    assert (
+        "--nami-progress-fill: var(--progress-canceled-fill);"
+        in canceled_progress
+    )
+    frozen_progress_selector = """.nami-progress--indeterminate:is(
+  [data-lifecycle="paused"],
+  [data-lifecycle="canceled"]
+) .nami-progress__bar {"""
+    assert frozen_progress_selector in source
+    frozen_progress = _block(
+        source,
+        frozen_progress_selector.removesuffix("{"),
+    )
+    assert "animation-play-state: paused;" in frozen_progress
     assert ".nami-progress:hover" not in source
     assert ".nami-progress:active" not in source
 

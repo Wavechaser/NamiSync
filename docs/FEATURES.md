@@ -414,12 +414,16 @@ unrealized unless an entry says otherwise.
   base-fill opacity for hover/press. Filter pills
   use inverse grayscale when inactive and exact operation-family main swatches
   with contrast-selected grayscale text when active; inactive Delete uses exact
-  red-main text while active Delete retains red-main/red-dark. Operation/file
-  badges, status pills, and the gray-track/live-accent progress component are
-  borderless, while ordinary keyboard focus uses opposing inner/outer Fluent
-  strokes and forced colors retain system outlines. The Sync/Integrity
+  red-main text while active Delete uses the shared contrast-safe neutral label.
+  Channel-scoped
+  intent/lifecycle/integrity labels use either main-color text or a borderless
+  20 logical px filled form. Progress keeps its gray track and uses accent when
+  active/resumed, frozen yellow when paused, and frozen neutral gray when plain
+  canceled; forced colors use a `Canvas` track and `Highlight` fill. Ordinary
+  keyboard focus uses opposing inner/outer Fluent strokes
+  and forced colors retain system outlines. The Sync/Integrity
   two-half state specimen uses radio-group semantics and highlights its checked
-  half with the accent roles. Unchecked checkboxes target a softer 1 logical px
+  half with the accent roles. Unchecked checkboxes use a softer 1 logical px
   neutral boundary; textboxes use a subtle 2 px boundary plus neutral/accent
   resting/focused underline. Task-backed switching, keyboard behavior, and
   actions remain part of the later unrealized work surfaces.
@@ -451,29 +455,27 @@ unrealized unless an entry says otherwise.
   projection, transport, selection/tree policy, execution, and progress remain
   unrealized Slice 5 work: production imports neither specialization and still
   renders no rows. Test-only static fixtures settle plain and partially selected
-  folder hierarchies with two basename-only children, all operations,
-  error/unsupported, and representative integrity states. The ratified color
-  contract still awaits its implementation checkpoint: that work will expand
-  the static cases to every intent and integrity state and apply either colored
-  text or a 20 logical px filled badge without adding production data or
-  JavaScript domain inference. Forced colors retain system authority. The
+  folder hierarchies with two basename-only children, all operations, all three
+  intent exceptions, and every integrity state. Both renderers wrap supplied
+  status text in the channel-scoped semantic-label component and accept exact
+  already-projected keys. They carry no form field and infer no domain result,
+  hue, or urgency in JavaScript. Forced colors retain system authority. The
   gallery headers also support pointer-drag and arrow-key column resizing
   without persistence and a master checkbox that derives and changes all
   selectable specimen rows.
-- **Authored Semantic Palette**. The ratified target preserves exactly 15
+- **Authored Semantic Palette**. The active foundation preserves exactly 15
   authored red/green/blue/yellow/purple `main`, `dark`, and `light` inputs in
   `tokens.css` only. Yellow main becomes `#FFAA22` and purple main becomes
   `#8844CC`; their former main values become yellow light `#FFDD44` and purple
-  light `#BB88EE`. Existing consumers remain main-bound. Token and gallery
-  realignment remains the next implementation checkpoint.
+  light `#BB88EE`. Existing consumers remain main-bound.
   Further hardcoded or derived color values remain possible after an explicit
   product-author design decision and coordinated contract/token/evidence update.
-  Gallery-tested status and operation aliases, not palette names, feed controls
+  Gallery-tested channel-specific aliases, not palette names, feed controls
   and later surfaces. Light/dark pairs are measured; the explicit main-text
   exceptions are disclosed rather than claimed contrast-conformant, while
   filled forms retain contrast-safe neutral labels. Forced colors use Windows
   system colors, and every meaning retains text and non-color cues.
-- **Semantic Color Channels**. The ratified visual contract separates plan
+- **Semantic Color Channels**. The implemented visual contract separates plan
   intent, task lifecycle, and integrity. Hue identifies a class; form expresses
   attention, and neither replaces visible text, structural cues, or accessible
   state. A rendered signal belongs to one channel at a time. Intent follows
@@ -484,9 +486,9 @@ unrealized unless an entry says otherwise.
   fills and neutral labels. Paused progress is frozen yellow, plain canceled
   progress is frozen neutral gray, and resume returns accent. A future stopped
   count/percentage for paused or canceled work is a recorded decision point,
-  not a current payload or renderer feature. The channel-specific aliases,
-  component forms, complete gallery fixtures, and evidence are pending the next
-  implementation checkpoint; production task/list surfaces remain dormant.
+  not a current payload or renderer feature. Channel-specific aliases,
+  component forms, complete static gallery fixtures, and their evidence are
+  active; production task/list surfaces remain dormant.
 - **Closed Fluent Icon Foundation**. GUI Break 1 seeds a minimal frozen registry
   with four pinned local regular Microsoft Fluent SVG masks and their source,
   hash, and license record. Icons inherit `currentColor`; tokens own shared

@@ -128,11 +128,20 @@ later workflow surfaces and beta packaging remain future phases.
 - Recorded paused progress as frozen yellow, plain canceled progress as frozen
   neutral gray, and resumed work as accent. A future stopped count or
   percentage remains a latent presentation decision with no current payload.
-- Reduced the unchecked-checkbox target to a 1 logical px neutral boundary
+- Reduced unchecked checkboxes to a 1 logical px neutral boundary
   while leaving textbox underlines and dual focus strokes unchanged.
-- This is a documentation-only checkpoint. Token aliases, components, gallery
-  fixtures, headed evidence, and the 1 px checkbox implementation remain the
-  next checkpoint; production task and file-list surfaces remain dormant.
+- Installed the 15 primitives in `tokens.css` only and added channel-scoped
+  intent, lifecycle, and integrity aliases/components. Main-color text handles
+  ordinary states; urgent states use borderless 20 logical px filled labels.
+  Operation filters follow the same intent classes, and active Delete now uses
+  the shared contrast-safe neutral label.
+- Kept the plan and integrity row inputs narrow: their renderers wrap supplied
+  labels and accept exact already-projected keys, with no form payload or
+  JavaScript domain inference.
+- Expanded test-only gallery fixtures and evidence to every intent, lifecycle,
+  integrity, and paused/canceled progress case. Forced colors keep the progress
+  track on `Canvas` and the fill on `Highlight`. Production task and file-list
+  surfaces remain dormant and receive no bridge or projection contract.
 
 #### Establish the dormant file-list row renderer (2026-08-20 – 2026-08-21)
 

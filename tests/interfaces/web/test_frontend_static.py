@@ -93,6 +93,18 @@ def _javascript_frozen_array(source: str, name: str) -> tuple[str, ...]:
     return tuple(value)
 
 
+def _javascript_frozen_set(source: str, name: str) -> tuple[str, ...]:
+    match = re.search(
+        rf"const {re.escape(name)} = Object\.freeze\(new Set\((\[[\s\S]*?\])\)\);",
+        source,
+    )
+    assert match is not None, name
+    value = json.loads(re.sub(r",\s*]", "]", match.group(1)))
+    assert isinstance(value, list)
+    assert all(isinstance(item, str) for item in value)
+    return tuple(value)
+
+
 class _DocumentAudit(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
@@ -507,9 +519,14 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
     assert "renderFilesystemText(label, rowView.nameText);" in file_row
     assert "renderText(size, rowView.sizeText);" in file_row
     assert "renderText(notes, rowView.notesText);" in file_row
-    assert "renderText(intent, rowView.intentText);" in plan
+    assert 'intentLabel.className = "nami-file-state-label";' in plan
+    assert "renderText(intentLabel, rowView.intentText);" in plan
+    assert "intent.append(intentLabel);" in plan
     assert "renderText(checksum, rowView.checksumText);" in plan
     assert "renderText(cell, text);" in integrity
+    assert 'label.className = "nami-file-state-label";' in integrity
+    assert "renderText(label, text);" in integrity
+    assert "cell.append(label);" in integrity
     assert re.search(r"\.textContent\s*=(?!=)", file_row) is None
     assert re.search(r"\.textContent\s*=(?!=)", integrity) is None
     assert re.search(r"\.textContent\s*=(?!=)", plan) is None
@@ -549,12 +566,42 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
             "dispatcher",
             "session",
             "dispatchInteractive",
+            "IntegrityResult",
+            "PlanOperation",
         )
     )
     assert ".slice(" not in dormant_renderers
     assert ".substring(" not in dormant_renderers
     assert ".split(" not in dormant_renderers
-    assert 'intent.dataset[rowView.intentTone] = rowView.intentKey;' in plan
+    assert _javascript_frozen_array(plan, "STRING_FIELDS") == (
+        "selectionLabel",
+        "nameText",
+        "sizeText",
+        "intentText",
+        "intentKey",
+        "checksumText",
+        "notesText",
+    )
+    assert _javascript_frozen_set(plan, "INTENT_KEYS") == (
+        "copy",
+        "mkdir",
+        "move",
+        "recase",
+        "update",
+        "move_update",
+        "trash",
+        "delete",
+        "noop",
+        "error",
+        "unsupported",
+        "blocked",
+    )
+    assert 'intent.dataset.intent = rowView.intentKey;' in plan
+    assert "intentTone" not in plan
+    assert "intentForm" not in plan
+    assert ".dataset.form" not in plan
+    assert 'intentLabel.className = "nami-file-state-label";' in plan
+    assert "intent.append(intentLabel);" in plan
     assert 'element.setAttribute("role", "row");' in file_row
     assert plan.count('cell.setAttribute("role", "cell");') == 1
     assert integrity.count('cell.setAttribute("role", "cell");') == 1
@@ -562,10 +609,30 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert 'checkbox.indeterminate = rowView.mixed;' in file_row
     assert 'renderFileRow(element, rowView, {' in plan
     assert 'renderFileRow(element, rowView, {' in integrity
-    assert all(
-        field in integrity
-        for field in ('"presenceText"', '"presenceStatus"', '"checksumText"')
+    assert _javascript_frozen_array(integrity, "STRING_FIELDS") == (
+        "presenceText",
+        "presenceStatus",
+        "checksumText",
     )
+    assert _javascript_frozen_set(integrity, "INTEGRITY_KEYS") == (
+        "verified",
+        "baselined",
+        "unverified",
+        "modified",
+        "reappeared",
+        "unsupported",
+        "canceled",
+        "missing",
+        "mismatched",
+        "error",
+    )
+    assert "INTEGRITY_KEYS.has(rowView.presenceStatus)" in integrity
+    assert "cell.dataset.integrity = integrity;" in integrity
+    assert "presenceTone" not in integrity
+    assert "presenceForm" not in integrity
+    assert ".dataset.form" not in integrity
+    assert 'label.className = "nami-file-state-label";' in integrity
+    assert "cell.append(label);" in integrity
     assert '"integrityText"' not in integrity
     assert '"integrityStatus"' not in integrity
     assert '"nami-integrity-row__presence"' in integrity
@@ -601,10 +668,22 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert file_rows is not None
     assert "font-size: var(--font-size-caption);" in file_rows.group("body")
     assert "line-height: var(--line-height-caption);" in file_rows.group("body")
-    assert layout.count("--nami-plan-preferred-foreground:") == 10
-    assert layout.count("var(--plan-intent-") == 10
+    assert "--nami-plan-preferred-foreground:" not in layout
+    assert "var(--plan-intent-" not in layout
     assert "--palette-" not in layout
-    assert '[data-operation="noop"]' in layout
+    assert "[data-status" not in layout
+    assert ".nami-file-state-label" in layout
+    for intent in ("delete", "error", "unsupported", "blocked"):
+        assert f'[data-intent="{intent}"]' in layout
+    for integrity_state in (
+        "reappeared",
+        "unsupported",
+        "missing",
+        "mismatched",
+        "error",
+    ):
+        assert f'[data-integrity="{integrity_state}"]' in layout
+    assert "block-size: 20px;" in layout
     assert re.search(
         r"(?ms)^\.nami-file-list__body\s*\{[^}]*min-(?:block-)?size",
         layout,

@@ -1,58 +1,60 @@
 # Session Handoff
 
-Status (2026-08-21): the desktop color contract has been ratified in
-documentation only. Production code, token aliases, component paint, gallery
-fixtures, and headed evidence still use the predecessor mapping. Production
-task and file-list surfaces remain dormant and empty.
+Status (2026-08-21): the desktop color contract is implemented and verified in
+the packaged presentation foundation. Production task and file-list surfaces
+remain dormant and empty until Slice 5 supplies validated projections.
 
 ## Delivered
 
-- Defined the exact 15-token authored palette. Yellow main becomes `#FFAA22`
-  and purple main becomes `#8844CC`; the former values remain as yellow light
-  `#FFDD44` and purple light `#BB88EE`. Existing consumers remain bound to
-  main.
-- Defined three non-overlapping semantic channels: plan intent, task lifecycle,
-  and integrity. Hue communicates class, while colored text versus a 20 logical
-  px filled badge communicates attention. Text, structural cues, and accessible
-  state remain mandatory.
-- Recorded the full intent, lifecycle, and integrity mappings, including
-  reappearance precedence over ordinary unverified/modified display and the
-  yellow-filled treatment of refused or post-mutation cancellation.
-- Resolved progress semantics as frozen yellow for paused, frozen neutral gray
-  for plain canceled, and system accent again after resume. A future stopped
-  count/percentage remains latent and has no current payload or renderer field.
-- Changed the unchecked-checkbox target from 2 px to 1 logical px. Textbox
-  underlines and the opposing dual keyboard-focus strokes stay unchanged.
+- Installed the exact 15-token palette in `tokens.css`: yellow main is
+  `#FFAA22`, purple main is `#8844CC`, and the former main values are the new
+  unconsumed yellow-light `#FFDD44` and purple-light `#BB88EE` tokens.
+- Replaced the generic status/operation paint contract with scoped intent,
+  lifecycle, and integrity aliases. Ordinary states are main-color text;
+  attention states are borderless 20 logical px main-color pills with
+  contrast-safe neutral labels and visible non-color wording/cues.
+- Kept the dormant plan and integrity row renderers narrow. They accept exact
+  already-projected keys, wrap the supplied label in production HTML, and add
+  no form field, planner inference, domain object, bridge command, or session
+  payload.
+- Expanded the test-only gallery to all 12 intent cases, all 19 lifecycle
+  cases, and all 10 integrity states, including directly projected
+  reappearance, folder nesting/mixed selection, and text-versus-fill evidence.
+- Added lifecycle progress specimens and paint: running/resumed use system
+  accent, paused freezes yellow, and plain canceled freezes neutral gray.
+  Forced colors retain a `Canvas` track and `Highlight` fill.
+- Reduced only the unchecked-checkbox boundary to 1 logical px. Textbox
+  underlines and dual keyboard-focus strokes retain their existing dimensions.
 
 ## Review
 
-- `DESKTOP_UI.md` owns the detailed visual contract; `FEATURES.md` summarizes
-  product behavior; `M1_SHELL.md` owns the revised installed-wheel evidence
-  gate. Architecture and defense documents already preserve presentation/domain
-  separation and non-color meaning, so the tables were not duplicated there.
-- The documentation explicitly marks the implementation as pending. It does
-  not claim that current tokens, components, fixtures, screenshots, or headed
-  evidence already satisfy the new mappings.
-- Channel-specific presentation is required because generic status aliases
-  cannot safely represent both lifecycle and integrity forms for meanings such
-  as canceled, error, blocked, or mismatch.
-- Production dormancy remains intact: this checkpoint introduces no bridge
-  command, projection contract, JavaScript domain inference, or workflow state.
+- Adversarial review kept channel names mechanical (`data-intent`,
+  `data-lifecycle`, `data-integrity`) so shared hue families do not recreate a
+  generic cross-channel status meaning.
+- The headed gate caught and fixed a forced-colors defect where both the
+  progress track and fill resolved to `Highlight`; the final track is `Canvas`
+  and remains visibly distinct.
+- Light-theme blue/green/yellow/red text and Dark purple text remain the
+  explicitly documented main-first contrast exceptions. Every filled pair
+  exceeds 4.5:1, forced colors replace authored hues, and text/cues retain the
+  state independently of color.
+- Production dormancy remains intact: neither file-list specialization is
+  imported by the shipped shell, and no workflow or transport behavior landed.
 
 ## Verification
 
-- Documentation-only checkpoint: `git diff --check`.
-- No pytest or headed test was required before the pending implementation
-  checkpoint.
+- Focused non-headed web neighborhood:
+  `63 passed, 7 skipped, 4 deselected in 3.30s`.
+- Installed-wheel component gallery (Light, Dark, forced colors, reduced
+  motion): `4 passed, 15 deselected in 30.46s`.
+- `git diff --check` passed. Per the user's scope, no department or full suite
+  was run.
 
 ## Next Checkpoint
 
-- Update `tokens.css` to the 15 exact primitives and channel-specific semantic
-  aliases without rerouting existing consumers to the new light tones.
-- Realign plan, integrity, lifecycle, progress, and 1 logical px unchecked-
-  checkbox paint; add 20 logical px filled status badges where the contract
-  requires them.
-- Expand only the test-owned projected fixtures to every intent and integrity
-  case and lifecycle task/status specimens, then update ordinary and headed
-  evidence. Production continues to import neither file-row specialization
-  until Slice 5 supplies validated Python projections and bridge paths.
+- Continue the remaining cosmetic tuning against the ratified channel contract,
+  or begin Slice 5's validated Python projection → bridge → existing row
+  renderer path. Do not add JavaScript domain inference or a provisional form
+  payload.
+- Revisit the intentionally latent paused/canceled stopped-count or percentage
+  only when a real lifecycle projection can own it.

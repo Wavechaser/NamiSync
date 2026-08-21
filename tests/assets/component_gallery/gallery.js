@@ -74,54 +74,74 @@ async function reportFailure(error) {
     "NAMISYNC_TEST_ONLY_PLAN_ROWS_45C8C53D55D34893";
   const TEST_ONLY_INTEGRITY_ROW_MARKER =
     "NAMISYNC_TEST_ONLY_INTEGRITY_ROWS_7A26DB6506CC49D8";
-  const STATUS_CASES = Object.freeze([
-    { key: "complete", text: "Complete", icon: "checkmark-circle", shape: "circle-check", cue: "Completed" },
-    { key: "success", text: "Success", icon: "checkmark-circle", shape: "circle-check", cue: "Succeeded" },
-    { key: "failure", text: "Failure", icon: "dismiss-circle", shape: "circle-x", cue: "Failed" },
-    { key: "error", text: "Error", icon: "dismiss-circle", shape: "circle-x", cue: "Error" },
-    { key: "warning", text: "Warning", icon: "warning", shape: "triangle", cue: "Needs attention" },
-    { key: "degraded", text: "Degraded", icon: "warning", shape: "triangle", cue: "Partially available" },
-    { key: "incomplete", text: "Incomplete", icon: "warning", shape: "triangle", cue: "Not finished" },
-    { key: "active", text: "Active", icon: "info", shape: "circle-info", cue: "In progress" },
-    { key: "paused", text: "Paused", icon: "warning", shape: "pause", cue: "Paused" },
-    { key: "canceled", text: "Canceled", icon: "dismiss-circle", shape: "circle-x", cue: "Canceled" },
-    { key: "mismatch", text: "Mismatch", icon: "dismiss-circle", shape: "split", cue: "Does not match" },
-    { key: "blocked", text: "Blocked", icon: "warning", shape: "barrier", cue: "Blocked" },
-    { key: "deferred", text: "Deferred", icon: "warning", shape: "clock", cue: "Deferred" },
-    { key: "neutral", text: "Neutral", icon: "info", shape: "circle-info", cue: "Informational" },
-    { key: "noop", text: "No-op", icon: "info", shape: "dash", cue: "No change" },
+  const LIFECYCLE_CASES = Object.freeze([
+    { key: "new", text: "New", hue: "neutral", form: "text", icon: "info", shape: "circle-info", cue: "Not started" },
+    { key: "planned", text: "Planned", hue: "neutral", form: "text", icon: "info", shape: "circle-info", cue: "Plan is ready" },
+    { key: "queued", text: "Queued", hue: "neutral", form: "text", icon: "info", shape: "clock", cue: "Waiting to start" },
+    { key: "executing", text: "Executing", hue: "accent", form: "text", icon: "info", shape: "arrow-right", cue: "Sync is running" },
+    { key: "verifying", text: "Verifying", hue: "accent", form: "text", icon: "info", shape: "circle-info", cue: "Verification is running" },
+    { key: "completed", text: "Completed", hue: "green", form: "text", icon: "checkmark-circle", shape: "circle-check", cue: "Finished successfully" },
+    { key: "partial", text: "Partial", hue: "yellow", form: "text", icon: "warning", shape: "triangle", cue: "Some work needs review" },
+    { key: "degraded", text: "Degraded", hue: "yellow", form: "text", icon: "warning", shape: "triangle", cue: "Completed with degraded items" },
+    { key: "incomplete", text: "Incomplete", hue: "yellow", form: "text", icon: "warning", shape: "triangle", cue: "Not all work finished" },
+    { key: "pausing", text: "Pausing", hue: "accent", form: "text", icon: "info", shape: "pause", cue: "Pause is in progress" },
+    { key: "canceling", text: "Canceling", hue: "accent", form: "text", icon: "info", shape: "circle-x", cue: "Cancellation is in progress" },
+    { key: "paused", text: "Paused", hue: "yellow", form: "text", icon: "warning", shape: "pause", cue: "Resume is available" },
+    { key: "interrupted", text: "Interrupted", hue: "yellow", form: "text", icon: "warning", shape: "triangle", cue: "Recoverable interruption" },
+    { key: "canceled", text: "Canceled", hue: "neutral", form: "fill", icon: "dismiss-circle", shape: "circle-x", cue: "Stopped without an attention condition" },
+    { key: "canceled_after_publish", text: "Canceled after publish", hue: "yellow", form: "fill", icon: "warning", shape: "triangle", cue: "Published filesystem results need review" },
+    { key: "canceled_after_mutation", text: "Canceled after mutation", hue: "yellow", form: "fill", icon: "warning", shape: "triangle", cue: "Filesystem mutations need review" },
+    { key: "refused", text: "Refused", hue: "yellow", form: "fill", icon: "warning", shape: "barrier", cue: "A precondition needs attention" },
+    { key: "failed", text: "Failed", hue: "red", form: "fill", icon: "dismiss-circle", shape: "circle-x", cue: "The run failed" },
+    { key: "errored", text: "Errored", hue: "red", form: "fill", icon: "dismiss-circle", shape: "circle-x", cue: "The run encountered an error" },
   ]);
-  const OPERATION_CASES = Object.freeze([
-    { key: "copy", text: "Copy", icon: "info", shape: "arrow-right", cue: "New file" },
-    { key: "update", text: "Update", icon: "info", shape: "refresh", cue: "Replace content" },
-    { key: "move", text: "Move", icon: "info", shape: "paired-arrows", cue: "Relocate" },
-    { key: "move_update", text: "Move + update", icon: "info", shape: "paired-refresh", cue: "Relocate and replace" },
-    { key: "recase", text: "Recase", icon: "info", shape: "letter-case", cue: "Change name case" },
-    { key: "mkdir", text: "Create folder", icon: "checkmark-circle", shape: "folder-plus", cue: "New folder" },
-    { key: "trash", text: "Move to trash", icon: "warning", shape: "trash", cue: "Recoverable removal" },
-    { key: "delete", text: "Delete", icon: "dismiss-circle", shape: "trash-x", cue: "Permanent removal" },
-    { key: "noop", text: "No change", icon: "info", shape: "dash", cue: "No operation" },
+  const INTENT_CASES = Object.freeze([
+    { key: "copy", text: "Copy", hue: "blue", form: "text", icon: "info", shape: "arrow-right", cue: "New file" },
+    { key: "mkdir", text: "Create folder", hue: "blue", form: "text", icon: "checkmark-circle", shape: "folder-plus", cue: "New folder" },
+    { key: "move", text: "Move", hue: "purple", form: "text", icon: "info", shape: "paired-arrows", cue: "Relocate" },
+    { key: "recase", text: "Recase", hue: "purple", form: "text", icon: "info", shape: "letter-case", cue: "Change name case" },
+    { key: "update", text: "Update", hue: "yellow", form: "text", icon: "info", shape: "refresh", cue: "Replace content" },
+    { key: "move_update", text: "Move + update", hue: "yellow", form: "text", icon: "info", shape: "paired-refresh", cue: "Relocate and replace" },
+    { key: "trash", text: "Move to trash", hue: "red", form: "text", icon: "warning", shape: "trash", cue: "Recoverable removal" },
+    { key: "delete", text: "Delete", hue: "red", form: "fill", icon: "dismiss-circle", shape: "trash-x", cue: "Permanent removal" },
+    { key: "noop", text: "No change", hue: "neutral", form: "text", icon: "info", shape: "dash", cue: "No operation" },
+    { key: "error", text: "Error", hue: "yellow", form: "fill", icon: "warning", shape: "triangle", cue: "Planning error" },
+    { key: "unsupported", text: "Unsupported", hue: "yellow", form: "fill", icon: "warning", shape: "barrier", cue: "Unsupported entry type" },
+    { key: "blocked", text: "Blocked", hue: "yellow", form: "fill", icon: "warning", shape: "barrier", cue: "Plan entry is blocked" },
   ]);
   const PLAN_ROW_CASES = Object.freeze([
-    { key: "plain", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select readme.txt", depth: 0, folder: false, expanded: false, nameText: "readme.txt", sizeText: "1.2 KB", intentText: "—", intentTone: "", intentKey: "", checksumText: "5a2f8c10", notesText: "Plain projected file row." }) },
-    { key: "mkdir", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select photos folder", depth: 0, folder: true, expanded: true, nameText: "photos", sizeText: "14.8 MB", intentText: "Create folder", intentTone: "operation", intentKey: "mkdir", checksumText: "—", notesText: "Partially selected folder." }) },
-    { key: "copy", parentKey: "mkdir", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1000.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1000.jpeg", sizeText: "8.1 MB", intentText: "Copy", intentTone: "operation", intentKey: "copy", checksumText: "12ab34cd", notesText: "New child file." }) },
-    { key: "update", parentKey: "mkdir", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1001.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1001.jpeg", sizeText: "6.7 MB", intentText: "Update", intentTone: "operation", intentKey: "update", checksumText: "90ef12ab", notesText: "Changed child file." }) },
-    { key: "move", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select report.pdf", depth: 0, folder: false, expanded: false, nameText: "report.pdf", sizeText: "842 KB", intentText: "Move", intentTone: "operation", intentKey: "move", checksumText: "3456cdef", notesText: "Relocate without replacing bytes." }) },
-    { key: "move_update", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select notes.md", depth: 0, folder: false, expanded: false, nameText: "notes.md", sizeText: "4.6 KB", intentText: "Move + update", intentTone: "operation", intentKey: "move_update", checksumText: "7890abcd", notesText: "Relocate and replace content." }) },
-    { key: "recase", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select Logo.PNG", depth: 0, folder: false, expanded: false, nameText: "Logo.PNG", sizeText: "32 KB", intentText: "Recase", intentTone: "operation", intentKey: "recase", checksumText: "bcde1234", notesText: "Change only the path casing." }) },
-    { key: "trash", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select export.zip", depth: 0, folder: false, expanded: false, nameText: "export.zip", sizeText: "2.4 MB", intentText: "Move to trash", intentTone: "operation", intentKey: "trash", checksumText: "def05678", notesText: "Recoverable removal specimen." }) },
-    { key: "delete", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select obsolete.tmp", depth: 0, folder: false, expanded: false, nameText: "obsolete.tmp", sizeText: "128 B", intentText: "Delete", intentTone: "operation", intentKey: "delete", checksumText: "1357ace0", notesText: "Permanent removal specimen." }) },
-    { key: "noop", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select unchanged.bin", depth: 0, folder: false, expanded: false, nameText: "unchanged.bin", sizeText: "16 MB", intentText: "No change", intentTone: "operation", intentKey: "noop", checksumText: "2468bdf1", notesText: "No operation is intended." }) },
-    { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", intentText: "Error", intentTone: "status", intentKey: "error", checksumText: "—", notesText: "The projected row reports a read error." }) },
-    { key: "unsupported", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for device-link", depth: 0, folder: false, expanded: false, nameText: "device-link", sizeText: "—", intentText: "Unsupported", intentTone: "status", intentKey: "blocked", checksumText: "—", notesText: "Unsupported entry type." }) },
+    { key: "plain", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select readme.txt", depth: 0, folder: false, expanded: false, nameText: "readme.txt", sizeText: "1.2 KB", intentText: "—", intentKey: "", checksumText: "5a2f8c10", notesText: "Plain projected file row." }) },
+    { key: "mkdir", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select photos folder", depth: 0, folder: true, expanded: true, nameText: "photos", sizeText: "14.8 MB", intentText: "Create folder", intentKey: "mkdir", checksumText: "—", notesText: "Partially selected folder." }) },
+    { key: "copy", parentKey: "mkdir", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1000.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1000.jpeg", sizeText: "8.1 MB", intentText: "Copy", intentKey: "copy", checksumText: "12ab34cd", notesText: "New child file." }) },
+    { key: "update", parentKey: "mkdir", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1001.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1001.jpeg", sizeText: "6.7 MB", intentText: "Update", intentKey: "update", checksumText: "90ef12ab", notesText: "Changed child file." }) },
+    { key: "move", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select report.pdf", depth: 0, folder: false, expanded: false, nameText: "report.pdf", sizeText: "842 KB", intentText: "Move", intentKey: "move", checksumText: "3456cdef", notesText: "Relocate without replacing bytes." }) },
+    { key: "move_update", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select notes.md", depth: 0, folder: false, expanded: false, nameText: "notes.md", sizeText: "4.6 KB", intentText: "Move + update", intentKey: "move_update", checksumText: "7890abcd", notesText: "Relocate and replace content." }) },
+    { key: "recase", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select Logo.PNG", depth: 0, folder: false, expanded: false, nameText: "Logo.PNG", sizeText: "32 KB", intentText: "Recase", intentKey: "recase", checksumText: "bcde1234", notesText: "Change only the path casing." }) },
+    { key: "trash", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select export.zip", depth: 0, folder: false, expanded: false, nameText: "export.zip", sizeText: "2.4 MB", intentText: "Move to trash", intentKey: "trash", checksumText: "def05678", notesText: "Recoverable removal specimen." }) },
+    { key: "delete", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select obsolete.tmp", depth: 0, folder: false, expanded: false, nameText: "obsolete.tmp", sizeText: "128 B", intentText: "Delete", intentKey: "delete", checksumText: "1357ace0", notesText: "Permanent removal specimen." }) },
+    { key: "noop", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select unchanged.bin", depth: 0, folder: false, expanded: false, nameText: "unchanged.bin", sizeText: "16 MB", intentText: "No change", intentKey: "noop", checksumText: "2468bdf1", notesText: "No operation is intended." }) },
+    { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", intentText: "Error", intentKey: "error", checksumText: "—", notesText: "The projected row reports a read error." }) },
+    { key: "unsupported", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for device-link", depth: 0, folder: false, expanded: false, nameText: "device-link", sizeText: "—", intentText: "Unsupported", intentKey: "unsupported", checksumText: "—", notesText: "Unsupported entry type." }) },
+    { key: "blocked", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for pending.dat", depth: 0, folder: false, expanded: false, nameText: "pending.dat", sizeText: "—", intentText: "Blocked", intentKey: "blocked", checksumText: "—", notesText: "A planning precondition blocked this entry." }) },
   ]);
   const INTEGRITY_ROW_CASES = Object.freeze([
-    { key: "folder", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select documents folder", depth: 0, folder: true, expanded: true, nameText: "documents", sizeText: "2.5 MB", presenceText: "Mixed", presenceStatus: "warning", checksumText: "—", notesText: "Partially selected folder." }) },
-    { key: "match", parentKey: "folder", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select documents report.pdf", depth: 1, folder: false, expanded: false, nameText: "report.pdf", sizeText: "2.1 MB", presenceText: "Both · match", presenceStatus: "complete", checksumText: "5a2f8c10", notesText: "Content matches." }) },
-    { key: "source_only", parentKey: "folder", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select documents draft.docx", depth: 1, folder: false, expanded: false, nameText: "draft.docx", sizeText: "412 KB", presenceText: "Source only", presenceStatus: "warning", checksumText: "—", notesText: "No target file." }) },
-    { key: "mismatch", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select archive.zip", depth: 0, folder: false, expanded: false, nameText: "archive.zip", sizeText: "18.4 MB", presenceText: "Both · mismatch", presenceStatus: "mismatch", checksumText: "90ef12ab", notesText: "Checksums differ." }) },
-    { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", presenceText: "Unknown", presenceStatus: "error", checksumText: "—", notesText: "Read failed." }) },
+    { key: "folder", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select documents folder", depth: 0, folder: true, expanded: true, nameText: "documents", sizeText: "2.5 MB", presenceText: "Unverified", presenceStatus: "unverified", checksumText: "—", notesText: "Partially selected folder rollup." }) },
+    { key: "verified", parentKey: "folder", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select documents report.pdf", depth: 1, folder: false, expanded: false, nameText: "report.pdf", sizeText: "2.1 MB", presenceText: "Verified", presenceStatus: "verified", checksumText: "5a2f8c10", notesText: "Evidence matches the recorded file." }) },
+    { key: "baselined", parentKey: "folder", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select documents draft.docx", depth: 1, folder: false, expanded: false, nameText: "draft.docx", sizeText: "412 KB", presenceText: "Baselined", presenceStatus: "baselined", checksumText: "90ef12ab", notesText: "Evidence was recorded for the first time." }) },
+    { key: "unverified", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select todo.txt", depth: 0, folder: false, expanded: false, nameText: "todo.txt", sizeText: "2.8 KB", presenceText: "Unverified", presenceStatus: "unverified", checksumText: "—", notesText: "No verification evidence exists yet." }) },
+    { key: "modified", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select catalog.db", depth: 0, folder: false, expanded: false, nameText: "catalog.db", sizeText: "4.2 MB", presenceText: "Modified", presenceStatus: "modified", checksumText: "2468bdf1", notesText: "Recorded metadata is stale." }) },
+    { key: "reappeared", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select restored.log", depth: 0, folder: false, expanded: false, nameText: "restored.log", sizeText: "18 KB", presenceText: "Reappeared", presenceStatus: "reappeared", checksumText: "1357ace0", notesText: "Already projected as reappeared; underlying evidence is not inferred here." }) },
+    { key: "unsupported", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for device-link", depth: 0, folder: false, expanded: false, nameText: "device-link", sizeText: "—", presenceText: "Unsupported", presenceStatus: "unsupported", checksumText: "—", notesText: "Entry type cannot be verified." }) },
+    { key: "canceled", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select canceled.iso", depth: 0, folder: false, expanded: false, nameText: "canceled.iso", sizeText: "1.4 GB", presenceText: "Canceled", presenceStatus: "canceled", checksumText: "—", notesText: "Verification stopped before evidence was produced." }) },
+    { key: "missing", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select missing.csv", depth: 0, folder: false, expanded: false, nameText: "missing.csv", sizeText: "—", presenceText: "Missing", presenceStatus: "missing", checksumText: "—", notesText: "The recorded file was not found." }) },
+    { key: "mismatched", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select archive.zip", depth: 0, folder: false, expanded: false, nameText: "archive.zip", sizeText: "18.4 MB", presenceText: "Mismatched", presenceStatus: "mismatched", checksumText: "90ef12ab", notesText: "The verified hash differs." }) },
+    { key: "error", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: true, selectionLabel: "Selection unavailable for locked.dat", depth: 0, folder: false, expanded: false, nameText: "locked.dat", sizeText: "—", presenceText: "Error", presenceStatus: "error", checksumText: "—", notesText: "Read failed." }) },
+  ]);
+  const LIFECYCLE_PROGRESS_CASES = Object.freeze([
+    { key: "running", lifecycle: "executing", hue: "accent", frozen: false },
+    { key: "resumed", lifecycle: "executing", hue: "accent", frozen: false },
+    { key: "paused", lifecycle: "paused", hue: "yellow", frozen: true },
+    { key: "canceled", lifecycle: "canceled", hue: "neutral", frozen: true },
   ]);
   const CONTROL_CASES = Object.freeze([
     { key: "button", className: "nami-button", tag: "button" },
@@ -313,19 +333,27 @@ async function reportFailure(error) {
   taskSlot.classList.remove("nami-card", "nami-task-rail__empty-slot");
   taskSlot.classList.add("nami-task-rail__specimens");
   taskSlot.replaceChildren();
-  for (const [label, state] of [
-    ["Current sync", "selected_current"],
-    ["Queued verification", "rest"],
-    ["Completed sync", "rest"],
+  for (const definition of [
+    { label: "Current sync", state: "selected_current", lifecycle: "executing", form: "text", status: "Executing" },
+    { label: "Paused verification", state: "rest", lifecycle: "paused", form: "text", status: "Paused" },
+    { label: "Canceled sync", state: "rest", lifecycle: "canceled", form: "fill", status: "Canceled" },
   ]) {
     const task = document.createElement("button");
     task.className = "nami-task-card";
     task.type = "button";
-    if (state === "selected_current") {
+    task.dataset.galleryTask = definition.lifecycle;
+    if (definition.state === "selected_current") {
       task.setAttribute("aria-selected", "true");
       task.setAttribute("aria-current", "true");
     }
-    renderText(task, label);
+    const label = document.createElement("span");
+    renderText(label, definition.label);
+    const state = document.createElement("span");
+    state.className = "nami-status-pill";
+    state.dataset.lifecycle = definition.lifecycle;
+    state.dataset.form = definition.form;
+    renderText(state, definition.status);
+    task.append(label, state);
     taskSlot.append(task);
   }
   app.append(galleryRail);
@@ -339,12 +367,15 @@ async function reportFailure(error) {
     return value;
   }
 
-  function resolvedAlias(prefix, key) {
+  function resolvedStateAliases(element) {
     const probe = document.createElement("span");
-    probe.style.color = `var(--${prefix}-${key}-foreground)`;
-    probe.style.backgroundColor = `var(--${prefix}-${key}-background)`;
-    probe.style.borderColor = `var(--${prefix}-${key}-indicator)`;
-    app.append(probe);
+    probe.style.color = "var(--nami-state-foreground)";
+    probe.style.backgroundColor = "var(--nami-state-background)";
+    probe.style.borderColor = "var(--nami-state-indicator)";
+    probe.style.forcedColorAdjust = "none";
+    probe.style.position = "fixed";
+    probe.style.visibility = "hidden";
+    element.append(probe);
     const style = getComputedStyle(probe);
     const value = {
       foreground: style.color,
@@ -355,9 +386,9 @@ async function reportFailure(error) {
     return value;
   }
 
-  function computedRow(element, definition, prefix, shape, text) {
+  function computedRow(element, definition, shape, text) {
     const style = getComputedStyle(element);
-    const aliases = resolvedAlias(prefix, definition.key);
+    const aliases = resolvedStateAliases(element);
     const fontSize = parseFloat(style.fontSize);
     const fontWeight = parseInt(style.fontWeight, 10) || 400;
     const shapeStyle = getComputedStyle(shape, "::before");
@@ -365,6 +396,9 @@ async function reportFailure(error) {
     return {
       key: definition.key,
       text: definition.text,
+      hue: definition.hue,
+      form: definition.form,
+      rendered_form: transparentColor(style.backgroundColor) ? "text" : "fill",
       icon: definition.icon,
       shape: definition.shape,
       cue: definition.cue,
@@ -376,6 +410,7 @@ async function reportFailure(error) {
       shape_opacity: shapeStyle.opacity,
       shape_width: shapeBounds.width,
       shape_height: shapeBounds.height,
+      height: element.getBoundingClientRect().height,
       foreground: style.color,
       background: style.backgroundColor,
       indicator: shapeStyle.color,
@@ -401,6 +436,7 @@ async function reportFailure(error) {
       const row = document.createElement("div");
       row.className = className;
       row.dataset[prefix] = definition.key;
+      row.dataset.form = definition.form;
       row.dataset.shape = definition.shape;
       const glyph = icon(definition.icon);
       const shape = document.createElement("span");
@@ -414,8 +450,52 @@ async function reportFailure(error) {
     }
     app.append(section);
     return specimens.map(({ row, definition, shape, text }) =>
-      computedRow(row, definition, prefix, shape, text),
+      computedRow(row, definition, shape, text),
     );
+  }
+
+  function transparentColor(value) {
+    const normalized = value.toLowerCase().replaceAll(" ", "");
+    return normalized === "transparent"
+      || /^rgba\([^)]*,0(?:\.0+)?\)$/u.test(normalized)
+      || /\/0(?:\.0+)?%?\)$/u.test(normalized);
+  }
+
+  function lifecycleProgressRows(definitions) {
+    const section = document.createElement("section");
+    section.dataset.gallerySection = "lifecycle_progress";
+    const specimens = [];
+    for (const definition of definitions) {
+      const specimen = document.createElement("div");
+      specimen.dataset.galleryLifecycleProgress = definition.key;
+      const label = document.createElement("span");
+      renderText(label, definition.key);
+      const progress = document.createElement("div");
+      progress.className = "nami-progress";
+      progress.dataset.lifecycle = definition.lifecycle;
+      progress.setAttribute("role", "progressbar");
+      progress.setAttribute("aria-label", `${definition.key} progress`);
+      progress.setAttribute("aria-valuemin", "0");
+      progress.setAttribute("aria-valuemax", "100");
+      progress.setAttribute("aria-valuenow", "55");
+      const bar = document.createElement("div");
+      bar.className = "nami-progress__bar";
+      bar.style.setProperty("--nami-progress-value", "55%");
+      progress.append(bar);
+      const motionProbe = document.createElement("div");
+      motionProbe.className = "nami-progress nami-progress--indeterminate";
+      motionProbe.dataset.lifecycle = definition.lifecycle;
+      motionProbe.style.position = "fixed";
+      motionProbe.style.visibility = "hidden";
+      const motionBar = document.createElement("div");
+      motionBar.className = "nami-progress__bar";
+      motionProbe.append(motionBar);
+      specimen.append(label, progress, motionProbe);
+      section.append(specimen);
+      specimens.push({ definition, progress, bar, motionBar });
+    }
+    app.append(section);
+    return specimens;
   }
 
   function controlElement(definition, state) {
@@ -445,7 +525,7 @@ async function reportFailure(error) {
     } else if (definition.key === "progress_determinate") {
       root = document.createElement("div");
       root.className = "nami-progress";
-      root.dataset.status = "active";
+      root.dataset.lifecycle = "executing";
       root.setAttribute("role", "progressbar");
       root.setAttribute("aria-valuemin", "0");
       root.setAttribute("aria-valuemax", "100");
@@ -458,7 +538,7 @@ async function reportFailure(error) {
     } else if (definition.key === "progress_indeterminate") {
       root = document.createElement("div");
       root.className = "nami-progress nami-progress--indeterminate";
-      root.dataset.status = "active";
+      root.dataset.lifecycle = "executing";
       root.setAttribute("role", "progressbar");
       const bar = document.createElement("div");
       bar.className = "nami-progress__bar";
@@ -562,8 +642,15 @@ async function reportFailure(error) {
   }
 
   galleryStage = "semantic_matrix";
-  const statuses = semanticRows(STATUS_CASES, "status", "nami-status-pill");
-  const operations = semanticRows(OPERATION_CASES, "operation", "nami-badge");
+  const lifecycles = semanticRows(
+    LIFECYCLE_CASES,
+    "lifecycle",
+    "nami-status-pill",
+  );
+  const intents = semanticRows(INTENT_CASES, "intent", "nami-badge");
+  const lifecycleProgressSpecimens = lifecycleProgressRows(
+    LIFECYCLE_PROGRESS_CASES,
+  );
   galleryStage = "plan_matrix";
   const planSection = document.createElement("section");
   planSection.className = "nami-card";
@@ -963,17 +1050,50 @@ async function reportFailure(error) {
     }
   }
 
+  const lifecycleProgress = lifecycleProgressSpecimens.map(({
+    definition,
+    progress,
+    bar,
+    motionBar,
+  }) => {
+    const progressStyle = getComputedStyle(progress);
+    const barStyle = getComputedStyle(bar);
+    const motionStyle = getComputedStyle(motionBar);
+    const motionFrozen = motionStyle.animationName === "none"
+      || motionStyle.animationPlayState === "paused"
+      || durationMilliseconds(motionStyle.animationDuration) === 0;
+    return {
+      case: definition.key,
+      lifecycle: definition.lifecycle,
+      hue: definition.hue,
+      expected_frozen: definition.frozen,
+      motion_frozen: motionFrozen,
+      track_background: progressStyle.backgroundColor,
+      fill_background: barStyle.backgroundColor,
+      animation_name: motionStyle.animationName,
+      animation_duration: motionStyle.animationDuration,
+      animation_iteration_count: motionStyle.animationIterationCount,
+      animation_play_state: motionStyle.animationPlayState,
+    };
+  });
+
   const planSectionStyle = getComputedStyle(planSection);
   const planSectionContentWidth = planSection.clientWidth
     - parseFloat(planSectionStyle.paddingLeft)
     - parseFloat(planSectionStyle.paddingRight);
   const galleryUsesWorkArea = planSectionStyle.gridArea === "work";
   function toneAndKey(cell) {
-    if (cell.dataset.operation !== undefined) {
-      return ["operation", cell.dataset.operation];
+    const semantic = cell.matches("[data-intent], [data-integrity]")
+      ? cell
+      : cell.querySelector("[data-intent], [data-integrity]");
+    if (!(semantic instanceof HTMLElement)) {
+      return ["", ""];
     }
-    if (cell.dataset.status !== undefined) {
-      return ["status", cell.dataset.status];
+    if (semantic.dataset.intent !== undefined) {
+      return ["intent", semantic.dataset.intent];
+    }
+    if (semantic.dataset.integrity !== undefined) {
+      return ["integrity", semantic.dataset.integrity];
     }
     return ["", ""];
   }
@@ -1092,6 +1212,7 @@ async function reportFailure(error) {
       const size = row.querySelector('.nami-file-row__size');
       const primary = row.querySelector('[data-file-column="primary"]');
       const secondary = row.querySelector('[data-file-column="secondary"]');
+      const primaryLabel = primary?.querySelector(".nami-file-state-label");
       const notes = row.querySelector('.nami-file-row__notes');
       if (
         definition === undefined
@@ -1100,6 +1221,7 @@ async function reportFailure(error) {
         || !(size instanceof HTMLElement)
         || !(primary instanceof HTMLElement)
         || !(secondary instanceof HTMLElement)
+        || !(primaryLabel instanceof HTMLElement)
         || !(notes instanceof HTMLElement)
         || cells.length !== 6
         || !cells.every((cell) => cell instanceof HTMLElement)
@@ -1108,7 +1230,11 @@ async function reportFailure(error) {
       }
       const [primaryTone, primaryKey] = toneAndKey(primary);
       const [secondaryTone, secondaryKey] = toneAndKey(secondary);
-      const primaryColor = getComputedStyle(primary).color;
+      const primaryStyle = getComputedStyle(primaryLabel);
+      const primaryColor = primaryStyle.color;
+      const primaryBackground = primaryStyle.backgroundColor;
+      const primaryBounds = primaryLabel.getBoundingClientRect();
+      const primaryAliases = resolvedStateAliases(primary);
       const secondaryColor = getComputedStyle(secondary).color;
       const disclosure = row.querySelector(".nami-file-row__disclosure");
       const checkboxBounds = checkbox.getBoundingClientRect();
@@ -1134,21 +1260,32 @@ async function reportFailure(error) {
         primary: primary.textContent,
         primary_tone: primaryTone,
         primary_key: primaryKey,
+        primary_form: primaryTone === ""
+          ? ""
+          : transparentColor(primaryBackground) ? "text" : "fill",
         secondary: secondary.textContent,
         secondary_tone: secondaryTone,
         secondary_key: secondaryKey,
         notes: notes.textContent,
         background: rowStyle.backgroundColor,
-        primary_color: primaryColor,
-        primary_alias_color: primaryTone === ""
+        primary_foreground: primaryColor,
+        primary_background: primaryBackground,
+        primary_height: primaryBounds.height,
+        primary_alias_foreground: primaryTone === ""
           ? primaryColor
-          : resolvedAlias(primaryTone, primaryKey).foreground,
+          : primaryAliases.foreground,
+        primary_alias_background: primaryTone === ""
+          ? primaryBackground
+          : primaryAliases.background,
         secondary_color: secondaryColor,
         secondary_alias_color: secondaryTone === ""
           ? secondaryColor
-          : resolvedAlias(secondaryTone, secondaryKey).foreground,
+          : resolvedStateAliases(secondary).foreground,
         cell_backgrounds: cells.map(
           (cell) => getComputedStyle(cell).backgroundColor,
+        ),
+        cells_transparent: cells.every(
+          (cell) => transparentColor(getComputedStyle(cell).backgroundColor),
         ),
         column_lefts: cells.map(
           (cell) => Number(cell.getBoundingClientRect().left.toFixed(3)),
@@ -1472,8 +1609,8 @@ async function reportFailure(error) {
 
   galleryStage = "report";
   const reportParts = [
-    { name: "statuses", value: statuses },
-    { name: "operations", value: operations },
+    { name: "lifecycles", value: lifecycles },
+    { name: "intents", value: intents },
   ];
   for (let offset = 0; offset < controls.length; offset += CONTROL_REPORT_CHUNK_ROWS) {
     reportParts.push({
@@ -1482,6 +1619,7 @@ async function reportFailure(error) {
     });
   }
   reportParts.push(
+    { name: "lifecycle_progress", value: lifecycleProgress },
     { name: "control_contract", value: controlContract },
     {
       name: "motion",

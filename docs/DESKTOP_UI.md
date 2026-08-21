@@ -172,10 +172,8 @@ web surface remains framework-free, but the official React and XAML
 implementations remain instructive for behavior, states, accessibility, and
 visual details; adapt their lessons rather than importing their frameworks.
 
-The ratified authored palette contains these exact 15
-red/green/blue/yellow/purple primitives. The immediately following
-implementation checkpoint must make `tokens.css` the only source file that
-contains them:
+`tokens.css` is the only source file allowed to contain these exact 15 authored
+red/green/blue/yellow/purple palette primitives:
 
 ```css
 --palette-red-main: #EE6666;
@@ -222,11 +220,10 @@ the exact installed pairs and measured ratios.
 
 ### Semantic color channels
 
-Status (2026-08-21): this channel contract and the 15-token palette are
-ratified documentation. Token aliases, component forms, gallery fixtures, and
-their evidence still use the predecessor mapping until the next implementation
-checkpoint. Production task and file-list surfaces remain dormant, so this
-checkpoint changes no shipped workflow presentation.
+Status (2026-08-21): the 15-token palette, channel-scoped aliases and
+components, static projected fixtures, and gallery evidence implement this
+contract. Production task and file-list surfaces remain dormant, so the
+delivered visual foundation still presents no live workflow data.
 
 Intentions and information are never conveyed through color or form alone.
 Hue answers **what class** a signal belongs to; form answers **how much the
@@ -324,8 +321,8 @@ erase a stronger confirmed mismatch or error.
 
 A future hardcoded or derived color value is possible only after an explicit
 product-author design decision and a same-change contract/token/evidence update; it is
-not silently synthesized by a renderer. `tokens.css` also owns meaning-named
-semantic aliases for statuses and operation categories; neutral roles use a
+not silently synthesized by a renderer. `tokens.css` also owns channel-scoped
+intent, lifecycle, and integrity aliases; neutral roles use a
 pinned Microsoft Fluent light/dark subset. Native appearance retains the
 observed Windows `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1`
 ramp values, while the page receives only semantic accent-fill roles. These
@@ -337,7 +334,7 @@ in test fixtures. Accessible stroke roles own visible boundaries only for
 components whose visual contract still uses a stroke; keyboard focus remains a
 separate visible ring even on borderless controls.
 `components.css`
-consumes only those aliases for badges, banners, status pills, progress
+consumes only those aliases for channel-scoped semantic labels, progress
 indicators, and related controls; Slice 4-7 renderers consume
 component/semantic contracts and contain
 neither raw color literals nor direct palette references. The component gallery
@@ -371,18 +368,20 @@ Filter
 pills are likewise borderless: inactive pills use an inverse grayscale surface
 and text pairing, while an active operation filter uses that operation family's
 exact main swatch with contrast-selected grayscale text. Delete is the
-deliberate exception: its inactive label is exact red-main in both ordinary
-themes, while its active red-main surface keeps the contrast-safe red-dark text.
+deliberate exception only at rest: its inactive label is exact red-main in both
+ordinary themes, while its active red-main surface uses the same contrast-safe
+neutral label policy as other selected filters.
 Active chip hover/press cues preserve the opaque color pair and use a small
 geometric change rather than reducing opacity; plain pressed chips likewise
 retain their active label color rather than carrying a latent state inversion.
-At this documentation checkpoint, generic operation/file badges and status
-pills retain their predecessor semantic fill, typography, icon, and cue but
-have no painted border. They are not evidence that the new channel-specific
-text/fill contract is implemented. Progress likewise retains a neutral gray
-track and the live sampled Windows accent fill in both ordinary themes until
-the next checkpoint adds the ratified paused/canceled behavior; it has no
-hover/pressed inset strokes. The two-half Sync/Integrity component's state contract uses
+Channel-scoped labels use colored text or the borderless 20 logical px filled
+form required by the tables above; their words and non-color cues remain
+visible in either form. Progress uses a neutral gray track with system accent
+for active/resumed work, frozen yellow for paused work, and frozen neutral gray
+for plain canceled work, without hover/pressed inset strokes. Forced colors
+use a `Canvas` track and `Highlight` fill so completed and unfilled portions
+remain distinct. The two-half
+Sync/Integrity component's state contract uses
 `radiogroup`/`radio` semantics: exactly one half carries
 `aria-checked="true"`, and that selected half uses the live Windows accent
 roles. The owning later renderer still supplies interaction behavior. These
@@ -424,11 +423,19 @@ modules. `file_row.js` owns the shared row skeleton; `plan.js` exports only
 views, not bridge envelopes or compatibility contracts. Callers supply native
 checkbox state, mixed state and accessible labels; depth, folder and expanded
 state; display-ready basename and size text; list-specific status text; and
-notes. The renderers do not interpret domain enums, aggregate sizes, truncate
-hashes, split paths, reconstruct hierarchy, or dispatch anything. All text
-still passes through `render.js`. Neither `app.js` nor `panels.js` imports these
-modules, so production remains the honest empty Slice 4 shell until Slice 5
-owns validated Python projections and bridge paths.
+notes. `renderPlanRow` accepts only the empty tone/key pair, exact operation
+keys `copy`, `mkdir`, `move`, `recase`, `update`, `move_update`, `trash`,
+`delete`, and `noop`, or exact exception keys `error`, `unsupported`, and
+`blocked`. `renderIntegrityRow` accepts only `verified`, `baselined`,
+`unverified`, `modified`, `reappeared`, `unsupported`, `canceled`, `missing`,
+`mismatched`, and `error`. Each renderer wraps the supplied label in the
+channel-scoped semantic-label component. The already-projected key selects its
+fixed component role; there is no form field and JavaScript does not derive a
+domain result, hue, or urgency. The renderers also do not aggregate sizes,
+truncate hashes, split paths, reconstruct hierarchy, or dispatch anything. All
+text still passes through `render.js`. Neither `app.js` nor `panels.js` imports
+these modules, so production remains the honest empty Slice 4 shell until
+Slice 5 owns validated Python projections and bridge paths.
 
 Both lists use the same compact six-column grid, 24 px rows, 12 px row text,
 and 16 px native checkboxes. The sync plan order is Selection, Filename, Size,
@@ -441,23 +448,22 @@ separator that changes its grid track by pointer drag or Left/Right arrow; the
 gallery retains the resulting width only in its current DOM and deliberately
 adds no persistence or bridge state. Folder rows expose a borderless disclosure
 button and mixed checkboxes; projected child rows carry only their basename,
-indent under the folder, and never repeat the full visual path. The semantic
-channel contract above supersedes the gallery's predecessor intent/integrity
-mapping. The next implementation checkpoint must realign the existing cells to
-the channel-specific text or 20 px filled form without teaching JavaScript to
-infer domain semantics. Zebra backgrounds belong only to
+indent under the folder, and never repeat the full visual path. Plan and
+integrity cells use the channel-specific main-color text or 20 logical px filled
+form defined above, while JavaScript consumes only the exact already-projected
+key. Zebra backgrounds belong only to
 direct rendered rows, including folders; cells and columns are transparent and
 the row group has no filler height, so striping ends at the final row. The
 aligned grid has a 48 rem content floor and scrolls horizontally when
 constrained. Forced colors replace
 colored state text with the system neutral foreground.
 
-The component gallery owns the only current callers and fixtures. Before the
-pending semantic realignment, its static sync array covers one plain row, every
-operation once, error/unsupported, and a
+The component gallery owns the only current callers and fixtures. Its static
+sync array covers one plain row, every operation once, all three exception
+states, and a
 partially selected expanded `photos` folder with two indented basename-only
-children. A second static array covers integrity presence/match/mismatch/error
-states and another partially selected folder with two children. Test-owned
+children. A second static array covers every integrity state and another
+partially selected folder with two children. Test-owned
 listeners exercise computed collapse/restore and direct-child checkbox
 reconciliation—including mixed to fully selected and back—without inventing
 product hierarchy or recursive selection policy. Each gallery header also owns
@@ -475,11 +481,11 @@ markers and gallery code are absent from the wheel. No temporary command, fake
 begins at validated Python projection → existing bridge → the local renderers,
 without a temporary data channel to preserve or remove.
 
-The next gallery checkpoint expands those static projected views to every
-intent and integrity case in the tables above and gives lifecycle its own task-
-card/status specimens. Lifecycle cases do not become file rows. The fixtures
-continue to pass display-ready presentation values directly to production
-renderers; they do not derive planner, dispatcher, or verifier meaning.
+The same gallery gives every lifecycle case its own task-card/status specimen
+and separately exercises active, resumed, paused, and canceled progress.
+Lifecycle cases do not become file rows. All fixtures pass exact display-ready
+presentation values directly to production components/renderers; they do not
+derive planner, dispatcher, or verifier meaning.
 
 The same break establishes only the icon infrastructure, not the later surface
 icon vocabulary. Four regular 20 px Microsoft Fluent System Icons are vendored

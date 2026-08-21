@@ -302,54 +302,36 @@ body {
   justify-content: flex-end;
 }
 
-.nami-plan-row__intent {
+.nami-file-state-label {
+  align-items: center;
+  background: var(--color-semantic-transparent);
+  border: 0;
+  border-radius: var(--radius-circular);
+  box-sizing: border-box;
   color: var(--nami-state-foreground);
+  display: inline-flex;
+  font-size: var(--font-size-caption);
   font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-caption);
+  max-inline-size: 100%;
 }
 
-.nami-plan-row__intent[data-operation="copy"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-copy-foreground);
-}
-
-.nami-plan-row__intent[data-operation="update"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-update-foreground);
-}
-
-.nami-plan-row__intent[data-operation="move"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-move-foreground);
-}
-
-.nami-plan-row__intent[data-operation="move_update"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-move_update-foreground);
-}
-
-.nami-plan-row__intent[data-operation="recase"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-recase-foreground);
-}
-
-.nami-plan-row__intent[data-operation="mkdir"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-mkdir-foreground);
-}
-
-.nami-plan-row__intent[data-operation="trash"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-trash-foreground);
-}
-
-.nami-plan-row__intent[data-operation="delete"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-delete-foreground);
-}
-
-.nami-plan-row__intent[data-status="error"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-error-foreground);
-}
-
-.nami-plan-row__intent[data-status="blocked"] {
-  --nami-plan-preferred-foreground: var(--plan-intent-blocked-foreground);
-}
-
-.nami-plan-row__intent[data-operation]:not([data-operation="noop"]),
-.nami-plan-row__intent:is([data-status="error"], [data-status="blocked"]) {
-  --nami-state-foreground: var(--nami-plan-preferred-foreground);
+.nami-plan-row__intent:is(
+  [data-intent="delete"],
+  [data-intent="error"],
+  [data-intent="unsupported"],
+  [data-intent="blocked"]
+) .nami-file-state-label,
+.nami-integrity-row__presence:is(
+  [data-integrity="reappeared"],
+  [data-integrity="unsupported"],
+  [data-integrity="missing"],
+  [data-integrity="mismatched"],
+  [data-integrity="error"]
+) .nami-file-state-label {
+  background: var(--nami-state-background);
+  block-size: 20px;
+  padding-inline: var(--space-3);
 }
 
 .nami-plan-row__checksum,
@@ -365,55 +347,6 @@ body {
   overflow-wrap: anywhere;
 }
 
-.nami-integrity-row__presence {
-  color: var(--nami-file-status-foreground);
-  font-weight: var(--font-weight-semibold);
-}
-
-.nami-integrity-row__presence:is(
-  [data-status="complete"],
-  [data-status="success"]
-) {
-  --nami-file-status-foreground: var(--file-status-positive-foreground);
-}
-
-.nami-integrity-row__presence:is(
-  [data-status="failure"],
-  [data-status="error"],
-  [data-status="canceled"],
-  [data-status="blocked"]
-) {
-  --nami-file-status-foreground: var(--file-status-negative-foreground);
-}
-
-.nami-integrity-row__presence:is(
-  [data-status="warning"],
-  [data-status="degraded"],
-  [data-status="incomplete"],
-  [data-status="deferred"]
-) {
-  --nami-file-status-foreground: var(--file-status-warning-foreground);
-}
-
-.nami-integrity-row__presence[data-status="active"] {
-  --nami-file-status-foreground: var(--file-status-active-foreground);
-}
-
-.nami-integrity-row__presence[data-status="paused"] {
-  --nami-file-status-foreground: var(--file-status-paused-foreground);
-}
-
-.nami-integrity-row__presence[data-status="mismatch"] {
-  --nami-file-status-foreground: var(--file-status-mismatch-foreground);
-}
-
-.nami-integrity-row__presence:is(
-  [data-status="neutral"],
-  [data-status="noop"]
-) {
-  --nami-file-status-foreground: var(--file-status-neutral-foreground);
-}
-
 @media (forced-colors: active) {
   .nami-file-list__header {
     background: var(--color-accent-fill);
@@ -424,5 +357,21 @@ body {
   .nami-plan-row__intent,
   .nami-integrity-row__presence {
     color: var(--color-neutral-foreground);
+  }
+
+  .nami-plan-row__intent:is(
+    [data-intent="delete"],
+    [data-intent="error"],
+    [data-intent="unsupported"],
+    [data-intent="blocked"]
+  ) .nami-file-state-label,
+  .nami-integrity-row__presence:is(
+    [data-integrity="reappeared"],
+    [data-integrity="unsupported"],
+    [data-integrity="missing"],
+    [data-integrity="mismatched"],
+    [data-integrity="error"]
+  ) .nami-file-state-label {
+    forced-color-adjust: none;
   }
 }

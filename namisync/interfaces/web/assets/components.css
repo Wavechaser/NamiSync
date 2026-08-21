@@ -345,7 +345,7 @@ body {
 .nami-checkbox {
   appearance: none;
   background: var(--color-neutral-surface);
-  border: 2px solid var(--color-control-strong-stroke);
+  border: 1px solid var(--color-control-strong-stroke);
   border-radius: var(--radius-small);
   color: var(--color-accent-fill-foreground);
   cursor: pointer;
@@ -847,15 +847,15 @@ body {
 .nami-status-pill,
 .nami-banner,
 .nami-progress {
-  --nami-state-foreground: var(--status-neutral-foreground);
-  --nami-state-background: var(--status-neutral-background);
-  --nami-state-indicator: var(--status-neutral-indicator);
+  --nami-state-foreground: var(--lifecycle-neutral-foreground);
+  --nami-state-background: var(--color-semantic-transparent);
+  --nami-state-indicator: var(--nami-state-foreground);
 }
 
 .nami-badge,
 .nami-status-pill {
   align-items: center;
-  background: var(--nami-state-background);
+  background: var(--color-semantic-transparent);
   border: 0;
   border-radius: var(--radius-circular);
   color: var(--nami-state-foreground);
@@ -864,7 +864,15 @@ body {
   font-weight: var(--font-weight-semibold);
   gap: var(--space-2);
   line-height: var(--line-height-caption);
-  padding: var(--space-1) var(--space-3);
+  padding: 0;
+}
+
+:is(.nami-badge, .nami-status-pill)[data-form="fill"] {
+  background: var(--nami-state-background);
+  block-size: 20px;
+  box-sizing: border-box;
+  color: var(--nami-state-foreground);
+  padding-inline: var(--space-3);
 }
 
 .nami-banner {
@@ -887,148 +895,125 @@ body {
   place-content: center;
 }
 
-[data-status="complete"] {
-  --nami-state-foreground: var(--status-complete-foreground);
-  --nami-state-background: var(--status-complete-background);
-  --nami-state-indicator: var(--status-complete-indicator);
+[data-intent] {
+  --nami-state-foreground: var(--intent-neutral-foreground);
+  --nami-state-background: var(--color-semantic-transparent);
+  --nami-state-indicator: var(--nami-state-foreground);
 }
 
-[data-status="success"] {
-  --nami-state-foreground: var(--status-success-foreground);
-  --nami-state-background: var(--status-success-background);
-  --nami-state-indicator: var(--status-success-indicator);
+[data-intent]:is([data-intent="copy"], [data-intent="mkdir"]) {
+  --nami-state-foreground: var(--intent-additive-foreground);
 }
 
-[data-status="failure"] {
-  --nami-state-foreground: var(--status-failure-foreground);
-  --nami-state-background: var(--status-failure-background);
-  --nami-state-indicator: var(--status-failure-indicator);
+[data-intent]:is([data-intent="move"], [data-intent="recase"]) {
+  --nami-state-foreground: var(--intent-relocating-foreground);
 }
 
-[data-status="error"] {
-  --nami-state-foreground: var(--status-error-foreground);
-  --nami-state-background: var(--status-error-background);
-  --nami-state-indicator: var(--status-error-indicator);
+[data-intent]:is([data-intent="update"], [data-intent="move_update"]) {
+  --nami-state-foreground: var(--intent-replacing-foreground);
 }
 
-[data-status="warning"] {
-  --nami-state-foreground: var(--status-warning-foreground);
-  --nami-state-background: var(--status-warning-background);
-  --nami-state-indicator: var(--status-warning-indicator);
+[data-intent="trash"] {
+  --nami-state-foreground: var(--intent-removing-foreground);
 }
 
-[data-status="degraded"] {
-  --nami-state-foreground: var(--status-degraded-foreground);
-  --nami-state-background: var(--status-degraded-background);
-  --nami-state-indicator: var(--status-degraded-indicator);
+[data-intent="delete"] {
+  --nami-state-background: var(--intent-permanent-background);
+  --nami-state-foreground: var(--color-main-fill-foreground);
 }
 
-[data-status="incomplete"] {
-  --nami-state-foreground: var(--status-incomplete-foreground);
-  --nami-state-background: var(--status-incomplete-background);
-  --nami-state-indicator: var(--status-incomplete-indicator);
+[data-intent]:is(
+  [data-intent="error"],
+  [data-intent="unsupported"],
+  [data-intent="blocked"]
+) {
+  --nami-state-background: var(--intent-exception-background);
+  --nami-state-foreground: var(--color-main-fill-foreground);
 }
 
-[data-status="active"] {
-  --nami-state-foreground: var(--status-active-foreground);
-  --nami-state-background: var(--status-active-background);
-  --nami-state-indicator: var(--status-active-indicator);
+[data-lifecycle] {
+  --nami-state-foreground: var(--lifecycle-neutral-foreground);
+  --nami-state-background: var(--color-semantic-transparent);
+  --nami-state-indicator: var(--nami-state-foreground);
 }
 
-[data-status="paused"] {
-  --nami-state-foreground: var(--status-paused-foreground);
-  --nami-state-background: var(--status-paused-background);
-  --nami-state-indicator: var(--status-paused-indicator);
+[data-lifecycle]:is(
+  [data-lifecycle="executing"],
+  [data-lifecycle="verifying"],
+  [data-lifecycle="pausing"],
+  [data-lifecycle="canceling"]
+) {
+  --nami-state-foreground: var(--lifecycle-active-foreground);
 }
 
-[data-status="canceled"] {
-  --nami-state-foreground: var(--status-canceled-foreground);
-  --nami-state-background: var(--status-canceled-background);
-  --nami-state-indicator: var(--status-canceled-indicator);
+[data-lifecycle="completed"] {
+  --nami-state-foreground: var(--lifecycle-completed-foreground);
 }
 
-[data-status="mismatch"] {
-  --nami-state-foreground: var(--status-mismatch-foreground);
-  --nami-state-background: var(--status-mismatch-background);
-  --nami-state-indicator: var(--status-mismatch-indicator);
+[data-lifecycle]:is(
+  [data-lifecycle="partial"],
+  [data-lifecycle="degraded"],
+  [data-lifecycle="incomplete"],
+  [data-lifecycle="paused"],
+  [data-lifecycle="interrupted"]
+) {
+  --nami-state-foreground: var(--lifecycle-attention-foreground);
 }
 
-[data-status="blocked"] {
-  --nami-state-foreground: var(--status-blocked-foreground);
-  --nami-state-background: var(--status-blocked-background);
-  --nami-state-indicator: var(--status-blocked-indicator);
+[data-lifecycle="canceled"] {
+  --nami-state-background: var(--lifecycle-canceled-background);
+  --nami-state-foreground: var(--lifecycle-canceled-foreground);
 }
 
-[data-status="deferred"] {
-  --nami-state-foreground: var(--status-deferred-foreground);
-  --nami-state-background: var(--status-deferred-background);
-  --nami-state-indicator: var(--status-deferred-indicator);
+[data-lifecycle]:is(
+  [data-lifecycle="canceled_after_publish"],
+  [data-lifecycle="canceled_after_mutation"],
+  [data-lifecycle="refused"]
+) {
+  --nami-state-background: var(--lifecycle-attention-background);
+  --nami-state-foreground: var(--color-main-fill-foreground);
 }
 
-[data-status="neutral"] {
-  --nami-state-foreground: var(--status-neutral-foreground);
-  --nami-state-background: var(--status-neutral-background);
-  --nami-state-indicator: var(--status-neutral-indicator);
+[data-lifecycle]:is(
+  [data-lifecycle="errored"],
+  [data-lifecycle="failed"]
+) {
+  --nami-state-background: var(--lifecycle-failure-background);
+  --nami-state-foreground: var(--color-main-fill-foreground);
 }
 
-[data-status="noop"] {
-  --nami-state-foreground: var(--status-noop-foreground);
-  --nami-state-background: var(--status-noop-background);
-  --nami-state-indicator: var(--status-noop-indicator);
+[data-integrity] {
+  --nami-state-foreground: var(--integrity-neutral-foreground);
+  --nami-state-background: var(--color-semantic-transparent);
+  --nami-state-indicator: var(--nami-state-foreground);
 }
 
-[data-operation="copy"] {
-  --nami-state-foreground: var(--operation-copy-foreground);
-  --nami-state-background: var(--operation-copy-background);
-  --nami-state-indicator: var(--operation-copy-indicator);
+[data-integrity]:is(
+  [data-integrity="verified"],
+  [data-integrity="baselined"]
+) {
+  --nami-state-foreground: var(--integrity-positive-foreground);
 }
 
-[data-operation="update"] {
-  --nami-state-foreground: var(--operation-update-foreground);
-  --nami-state-background: var(--operation-update-background);
-  --nami-state-indicator: var(--operation-update-indicator);
+[data-integrity="modified"] {
+  --nami-state-foreground: var(--integrity-attention-foreground);
 }
 
-[data-operation="move"] {
-  --nami-state-foreground: var(--operation-move-foreground);
-  --nami-state-background: var(--operation-move-background);
-  --nami-state-indicator: var(--operation-move-indicator);
+[data-integrity]:is(
+  [data-integrity="reappeared"],
+  [data-integrity="unsupported"]
+) {
+  --nami-state-background: var(--integrity-attention-background);
+  --nami-state-foreground: var(--color-main-fill-foreground);
 }
 
-[data-operation="move_update"] {
-  --nami-state-foreground: var(--operation-move_update-foreground);
-  --nami-state-background: var(--operation-move_update-background);
-  --nami-state-indicator: var(--operation-move_update-indicator);
-}
-
-[data-operation="recase"] {
-  --nami-state-foreground: var(--operation-recase-foreground);
-  --nami-state-background: var(--operation-recase-background);
-  --nami-state-indicator: var(--operation-recase-indicator);
-}
-
-[data-operation="mkdir"] {
-  --nami-state-foreground: var(--operation-mkdir-foreground);
-  --nami-state-background: var(--operation-mkdir-background);
-  --nami-state-indicator: var(--operation-mkdir-indicator);
-}
-
-[data-operation="trash"] {
-  --nami-state-foreground: var(--operation-trash-foreground);
-  --nami-state-background: var(--operation-trash-background);
-  --nami-state-indicator: var(--operation-trash-indicator);
-}
-
-[data-operation="delete"] {
-  --nami-state-foreground: var(--operation-delete-foreground);
-  --nami-state-background: var(--operation-delete-background);
-  --nami-state-indicator: var(--operation-delete-indicator);
-}
-
-[data-operation="noop"] {
-  --nami-state-foreground: var(--operation-noop-foreground);
-  --nami-state-background: var(--operation-noop-background);
-  --nami-state-indicator: var(--operation-noop-indicator);
+[data-integrity]:is(
+  [data-integrity="missing"],
+  [data-integrity="mismatched"],
+  [data-integrity="error"]
+) {
+  --nami-state-background: var(--integrity-failure-background);
+  --nami-state-foreground: var(--color-main-fill-foreground);
 }
 
 .nami-chip[data-operation] {
@@ -1049,6 +1034,13 @@ body {
 
 .nami-chip[data-operation="move_update"] {
   --nami-chip-active-background: var(--filter-move-update-background);
+}
+
+.nami-chip:is(
+  [data-operation="move"],
+  [data-operation="recase"]
+) {
+  --nami-chip-active-foreground: var(--filter-purple-active-foreground);
 }
 
 .nami-chip[data-operation="recase"] {
@@ -1099,87 +1091,114 @@ body {
   transform: scale(0.98);
 }
 
-[data-status="complete"] .nami-state-cue::before,
-[data-status="success"] .nami-state-cue::before {
-  content: "\2713";
-}
-
-[data-status="failure"] .nami-state-cue::before,
-[data-status="error"] .nami-state-cue::before,
-[data-status="canceled"] .nami-state-cue::before {
-  content: "\00d7";
-}
-
-[data-status="warning"] .nami-state-cue::before,
-[data-status="degraded"] .nami-state-cue::before,
-[data-status="incomplete"] .nami-state-cue::before {
-  content: "!";
-}
-
-[data-status="active"] .nami-state-cue::before {
-  content: "\25b6";
-}
-
-[data-status="paused"] .nami-state-cue::before {
-  content: "\2161";
-}
-
-[data-status="mismatch"] .nami-state-cue::before {
-  content: "\2260";
-}
-
-[data-status="blocked"] .nami-state-cue::before {
-  content: "\25a0";
-}
-
-[data-status="deferred"] .nami-state-cue::before {
-  content: "\2026";
-}
-
-[data-status="neutral"] .nami-state-cue::before,
-[data-status="noop"] .nami-state-cue::before {
-  content: "\2013";
-}
-
-[data-operation="copy"] .nami-state-cue::before {
+[data-intent="copy"] .nami-state-cue::before {
   content: "C";
 }
 
-[data-operation="update"] .nami-state-cue::before {
+[data-intent="update"] .nami-state-cue::before {
   content: "U";
 }
 
-[data-operation="move"] .nami-state-cue::before {
+[data-intent="move"] .nami-state-cue::before {
   content: "M";
 }
 
-[data-operation="move_update"] .nami-state-cue::before {
+[data-intent="move_update"] .nami-state-cue::before {
   content: "M+";
 }
 
-[data-operation="recase"] .nami-state-cue::before {
+[data-intent="recase"] .nami-state-cue::before {
   content: "Aa";
 }
 
-[data-operation="mkdir"] .nami-state-cue::before {
+[data-intent="mkdir"] .nami-state-cue::before {
   content: "+";
 }
 
-[data-operation="trash"] .nami-state-cue::before {
+[data-intent="trash"] .nami-state-cue::before {
   content: "T";
 }
 
-[data-operation="delete"] .nami-state-cue::before {
+[data-intent="delete"] .nami-state-cue::before {
   content: "D";
 }
 
-[data-operation="noop"] .nami-state-cue::before {
+[data-intent="noop"] .nami-state-cue::before,
+[data-lifecycle]:is(
+  [data-lifecycle="new"],
+  [data-lifecycle="planned"],
+  [data-lifecycle="queued"]
+) .nami-state-cue::before,
+[data-integrity]:is(
+  [data-integrity="unverified"],
+  [data-integrity="canceled"]
+) .nami-state-cue::before {
   content: "\2013";
 }
 
+[data-intent]:is(
+  [data-intent="error"],
+  [data-intent="unsupported"],
+  [data-intent="blocked"]
+) .nami-state-cue::before,
+[data-lifecycle]:is(
+  [data-lifecycle="partial"],
+  [data-lifecycle="degraded"],
+  [data-lifecycle="incomplete"],
+  [data-lifecycle="interrupted"],
+  [data-lifecycle="canceled_after_publish"],
+  [data-lifecycle="canceled_after_mutation"],
+  [data-lifecycle="refused"]
+) .nami-state-cue::before,
+[data-integrity]:is(
+  [data-integrity="modified"],
+  [data-integrity="reappeared"],
+  [data-integrity="unsupported"]
+) .nami-state-cue::before {
+  content: "!";
+}
+
+[data-lifecycle]:is(
+  [data-lifecycle="executing"],
+  [data-lifecycle="verifying"],
+  [data-lifecycle="pausing"],
+  [data-lifecycle="canceling"]
+) .nami-state-cue::before {
+  content: "\25b6";
+}
+
+[data-lifecycle="paused"] .nami-state-cue::before {
+  content: "\2161";
+}
+
+[data-lifecycle="completed"] .nami-state-cue::before,
+[data-integrity]:is(
+  [data-integrity="verified"],
+  [data-integrity="baselined"]
+) .nami-state-cue::before {
+  content: "\2713";
+}
+
+[data-lifecycle]:is(
+  [data-lifecycle="canceled"],
+  [data-lifecycle="errored"],
+  [data-lifecycle="failed"]
+) .nami-state-cue::before,
+[data-integrity]:is(
+  [data-integrity="missing"],
+  [data-integrity="error"]
+) .nami-state-cue::before {
+  content: "\00d7";
+}
+
+[data-integrity="mismatched"] .nami-state-cue::before {
+  content: "\2260";
+}
+
 .nami-progress {
+  --nami-progress-fill: var(--progress-active-fill);
   appearance: none;
-  background: var(--color-neutral-surface-pressed);
+  background: var(--progress-track-background);
   border: 0;
   border-radius: var(--radius-circular);
   block-size: var(--space-3);
@@ -1199,7 +1218,7 @@ body {
 }
 
 .nami-progress__bar {
-  background: var(--progress-fill);
+  background: var(--nami-progress-fill);
   block-size: 100%;
   inline-size: var(--nami-progress-value, 0%);
   transition: inline-size var(--motion-duration-normal) var(--motion-easing-decelerate);
@@ -1208,6 +1227,30 @@ body {
 .nami-progress--indeterminate .nami-progress__bar {
   animation: nami-progress-indeterminate var(--motion-duration-progress-cycle) var(--motion-easing-standard) infinite;
   inline-size: 25%;
+}
+
+.nami-progress:is(
+  [data-lifecycle="executing"],
+  [data-lifecycle="verifying"],
+  [data-lifecycle="pausing"],
+  [data-lifecycle="canceling"]
+) {
+  --nami-progress-fill: var(--progress-active-fill);
+}
+
+.nami-progress[data-lifecycle="paused"] {
+  --nami-progress-fill: var(--progress-paused-fill);
+}
+
+.nami-progress[data-lifecycle="canceled"] {
+  --nami-progress-fill: var(--progress-canceled-fill);
+}
+
+.nami-progress--indeterminate:is(
+  [data-lifecycle="paused"],
+  [data-lifecycle="canceled"]
+) .nami-progress__bar {
+  animation-play-state: paused;
 }
 
 @keyframes nami-progress-indeterminate {
@@ -1277,6 +1320,10 @@ body {
   }
 
   .nami-icon {
+    forced-color-adjust: none;
+  }
+
+  :is(.nami-badge, .nami-status-pill)[data-form="fill"] {
     forced-color-adjust: none;
   }
 
