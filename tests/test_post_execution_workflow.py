@@ -1422,7 +1422,20 @@ def test_real_runtime_copy_readback_uses_one_finished_run(
         tmp_path / "ledger.db",
         tmp_path / "history.db",
     )
-    context = RunContext(lambda body: None, lambda: None)
+    original_verifier_context = runtime._deps.verifier_context
+    runtime._deps = replace(
+        runtime._deps,
+        executor_policies=replace(
+            runtime._deps.executor_policies,
+            progress_interval_seconds=0,
+        ),
+        verifier_context=lambda context: replace(
+            original_verifier_context(context),
+            progress_interval_seconds=0,
+        ),
+    )
+    events: list[object] = []
+    context = RunContext(events.append, lambda: None)
     try:
         plan_request = PlanRequest(
             request_id="c" * 32,
@@ -1455,8 +1468,38 @@ def test_real_runtime_copy_readback_uses_one_finished_run(
         "operation",
         "integrity",
     ]
+    operation = result.items[0]
+    assert isinstance(operation, ItemOutcome)
+    execute_phase = next(
+        index
+        for index, event in enumerate(events)
+        if isinstance(event, PhaseChanged) and event.phase == "execute"
+    )
+    verify_phase = next(
+        index
+        for index, event in enumerate(events)
+        if isinstance(event, PhaseChanged) and event.phase == "verify"
+    )
+    execute_progress = [
+        event
+        for event in events[execute_phase + 1 : verify_phase]
+        if isinstance(event, Progress)
+        and event.item_id == operation.item_id
+    ]
+    verify_progress = [
+        event
+        for event in events[verify_phase + 1 :]
+        if isinstance(event, Progress)
+        and event.item_id == operation.item_id
+    ]
+    assert execute_progress and verify_progress
+    assert all(
+        event.item_type == "operation"
+        for event in (*execute_progress, *verify_progress)
+    )
     integrity = result.items[1]
     assert isinstance(integrity, IntegrityOutcome)
+    assert integrity.item_type == "integrity"
     assert integrity.result is IntegrityResult.VERIFIED
     assert (target / "file.bin").read_bytes() == content
 

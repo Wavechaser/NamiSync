@@ -667,8 +667,12 @@ class _ProgressTracker:
         active = current if self._item_active else None
         item_bytes_done: int | None = None
         item_bytes_total: int | None = None
-        if active is not None and self._file_bytes is not None:
-            item_bytes_done = min(self._file_bytes, active.content_bytes)
+        if (
+            active is not None
+            and self._file_bytes is not None
+            and self._file_bytes <= active.content_bytes
+        ):
+            item_bytes_done = self._file_bytes
             item_bytes_total = active.content_bytes
         self._ctx.emit(
             Progress(

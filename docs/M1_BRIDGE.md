@@ -770,17 +770,24 @@ The fields are optional **as a pair**: legacy producers omit both; an
 identified progress event supplies a nonempty `item_id` plus `item_type` equal
 to `operation` or `integrity`. `Progress.__post_init__` rejects a one-sided
 pair or an unknown type, so the bridge never guesses which node-id namespace
-an opaque id belongs to.
+an opaque id belongs to. The type names that row-lookup namespace, not the
+producer, phase, or reliable outcome class. Standalone verification ids use
+`integrity`; post-copy candidates keyed by their originating executor `op_id`
+use `operation` even though their reliable settlement remains an
+`IntegrityOutcome`.
 
 The byte fields are likewise optional as a pair. They require item identity,
 use exact nonnegative integers, and reject `done > total`. Identity may exist
 without byte counters while an item is active but has not entered a meaningful
 stream; non-byte operations remain indeterminate. Item counters describe the
-current stream attempt and may restart from zero, while aggregate executor
-bytes retain their monotonic high-water semantics. A settled item is named by
-its reliable outcome, not by later lossy progress: later snapshots clear the
-item identity and item-byte fields. `current_path` retains its prior
-display-only behavior.
+current stream attempt and may restart from zero. If raw work exceeds the
+admitted item total, later snapshots preserve active identity but omit both
+item-byte counters rather than growing the admission. Aggregate executor bytes
+remain bounded by reviewed content and retain their monotonic high-water;
+verifier aggregates instead expand to count all physical read work. A settled
+item is named by its reliable outcome, not by later lossy progress: later
+snapshots clear the item identity and item-byte fields. `current_path` retains
+its prior display-only behavior.
 
 **This is a versioned wire change and must be treated as one.** An earlier
 draft argued that because `HistoryObserver.on_event` refuses `Progress` and
@@ -2621,8 +2628,10 @@ headings are organizational, not lane ownership.
   display paths.** A pre-change Progress body lacking the four optional item
   fields decodes through `.get(...)`; a new body serializes all four;
   one-sided identity/counter pairs, coercive counters, and unknown types are
-  rejected; and both production reporters emit the correct nominal pair plus
-  determinate stream counters without changing the current envelope version. An
+  rejected; both production reporters emit the row-namespace pair (`operation`
+  for executor and linked post-copy ids, `integrity` for standalone rows), and
+  an admitted-stream overshoot preserves identity while clearing the byte pair
+  without changing the current envelope version. An
   off-window item resolves through its server-supplied
   ancestor chain to the deepest visible ancestor-or-self and exact visible
   index under collapse, filter, and search; the window and anchor-only paths

@@ -219,16 +219,21 @@ separate short-operation exception.
 `bytes_done` measures physical read work, not unique logical file coverage. A
 pause during an in-flight file restarts that file on resume, so already-read
 bytes are counted again while the item still emits exactly one terminal result;
-the reporter expands its total as needed to keep progress monotonic and bounded.
+the aggregate total expands as needed to keep that physical-work progress
+monotonic and bounded.
 
-Each pending row or post-copy candidate first emits its stable item id with
-`item_type=integrity` and null byte counters. Only after the opened handle has
-passed volume, expected-stat, and baseline-subject guards does the reporter
-start a determinate stream at `0 / opened_size`. Chunk callbacks advance an
-attempt-local counter; if a changing subject yields more bytes than its opened
-size, the item total expands before the next snapshot, and the aggregate total
-expands whenever physical work would otherwise exceed it. A reliable
-`IntegrityOutcome` precedes completion bookkeeping and a
+Each pending standalone row first emits its stable item id with
+`item_type=integrity`; a post-copy candidate keyed by its originating executor
+operation id uses `item_type=operation`. The type names the UI row-lookup
+namespace, not the verifier phase or the reliable outcome kind, so post-copy
+settlement remains an `IntegrityOutcome`. Identity begins with null byte
+counters. Only after the opened handle has passed volume, expected-stat, and
+baseline-subject guards does the reporter start a determinate stream at
+`0 / opened_size`. Chunk callbacks advance an attempt-local counter. If a
+changing subject yields more bytes than that admitted size, later snapshots
+keep identity active but omit both item-byte counters rather than expanding the
+item admission; the aggregate total still expands to count all physical work.
+A reliable `IntegrityOutcome` precedes completion bookkeeping and a
 forced inactive snapshot that clears all item fields while retaining the last
 display path.
 

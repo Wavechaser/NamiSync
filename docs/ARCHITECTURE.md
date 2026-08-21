@@ -149,10 +149,15 @@ class DeliveryClass(StrEnum):
 
 - `Progress` is lossy and replaceable by a newer snapshot.
 - When present, nominal item identity—not `current_path`—is the row join key.
-  Item-byte counters describe one active stream attempt and may restart;
-  aggregate counters retain their module-owned monotonic semantics. Executor
-  continuation state carries its aggregate high-water across pause/resume in
-  the same task rather than declaring an implicit progress-reset epoch.
+  `item_type` identifies that opaque id's lookup namespace rather than the
+  producing phase or outcome kind, so post-copy progress keyed by an operation
+  id remains `operation`. Item-byte counters describe one active stream attempt
+  and may restart; if observed work exceeds the admitted item total, identity
+  stays active but the byte pair becomes absent rather than inventing a new
+  admission. Aggregate counters retain their module-owned monotonic semantics:
+  executor progress is bounded by reviewed content and carries its high-water
+  across pause/resume in the same task, while verifier progress expands to
+  count physical work.
 - lifecycle changes, item outcomes, explicit gaps, and terminal results are
   reliable.
 - slow ordinary subscribers are bounded and ejected visibly with `Gap` rather

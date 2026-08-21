@@ -565,8 +565,11 @@ current path, and `operation` item identity while an operation is active.
 Non-byte operations and byte operations that have not entered the copy stream
 carry null item-byte counters. At the exact copy-backend entry, a byte operation
 starts at `0 / content_bytes`; chunk callbacks advance its attempt-local counter
-up to that reviewed total. Reliable settlement clears the item identity and
-item-byte counters without changing the existing `current_path` behavior.
+up to that reviewed total. If a backend reports more stream bytes than the
+reviewed total, the operation identity stays active but both item-byte counters
+become null; the executor neither fabricates a larger admission nor lets the
+aggregate exceed reviewed content. Reliable settlement clears the item identity
+and item-byte counters without changing the existing `current_path` behavior.
 Normal completion, cancellation, and an escaping-exception backstop each force
 one final inactive snapshot after reliable settlement, independently of the
 ordinary time throttle.
@@ -773,8 +776,9 @@ chunk bands remain private constants, not settings.
   read, join both workers, and release the full byte budget; pause persists
   completed status, emits no terminal, releases custody, and resume performs
   fresh preflight at the back of the queue.
-- Progress totals equal copy/update content bytes exactly and remain monotonic;
-  event rate stays under the configured bound.
+- Progress totals equal reviewed copy/update content bytes exactly and remain
+  monotonic; an over-reporting backend makes only the active item counter
+  indeterminate, and event rate stays under the configured bound.
 - Transient sharing violations retry within bound, including update replace and
   move-update old-to-trash failures after an earlier sub-step committed;
   persistent locks fail with actionable `sharing-violation` rather than false

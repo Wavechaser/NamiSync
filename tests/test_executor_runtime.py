@@ -3326,6 +3326,25 @@ class ScriptedProgressCopyBackend:
         return CopyDigest(xxh3_128(payload).digest(), len(payload))
 
 
+class OverreportingProgressCopyBackend:
+    def copy(
+        self,
+        source,
+        target,
+        *,
+        chunk_size: int,
+        checkpoint,
+        on_chunk,
+    ) -> CopyDigest:
+        del chunk_size
+        checkpoint()
+        payload = source.read()
+        assert target.write(payload) == len(payload)
+        on_chunk(len(payload))
+        on_chunk(len(payload))
+        return CopyDigest(xxh3_128(payload).digest(), len(payload))
+
+
 class FrozenTeardownProgressClock:
     def __init__(self) -> None:
         self.value = 0.0
@@ -3859,6 +3878,46 @@ def test_byte_operation_progress_has_stable_identity_and_stream_lifecycle(
     assert [event.item_bytes_done for event in streamed] == sorted(
         event.item_bytes_done for event in streamed
     )
+    _assert_operation_progress_clears_after_outcome(events, operation)
+
+
+def test_overreported_stream_suppresses_item_fraction_without_aggregate_regression(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    payload = b"eleven-byte"
+    assert len(payload) == 11
+    fs = NativeFileSystem()
+    operation = _reviewed_progress_copy(source, target, fs, payload)
+
+    result, events, _ = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        policies=_policies(
+            copy_backend=OverreportingProgressCopyBackend(),
+            progress_interval_seconds=0,
+        ),
+    )
+
+    active = _active_operation_progress(events, operation)
+    assert result.status is SessionState.COMPLETED
+    assert [
+        (event.item_bytes_done, event.item_bytes_total) for event in active
+    ] == [
+        (None, None),
+        (0, len(payload)),
+        (len(payload), len(payload)),
+        (None, None),
+    ]
+    assert all(event.item_type == "operation" for event in active)
+    assert [event.bytes_done for event in active] == [
+        0,
+        0,
+        len(payload),
+        len(payload),
+    ]
+    assert all(event.bytes_done <= event.bytes_total for event in active)
+    assert (target / "file.bin").read_bytes() == payload
     _assert_operation_progress_clears_after_outcome(events, operation)
 
 

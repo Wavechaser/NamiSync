@@ -11,7 +11,7 @@ import os
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal
 
 from namisync.core.evidence import (
     Attestation,
@@ -153,6 +153,7 @@ def verify_post_copy(
         pending_sizes=tuple(
             candidate.expected_stat.size for candidate in selection.pending
         ),
+        item_type="operation",
     )
 
     try:
@@ -241,12 +242,14 @@ class _ProgressReporter:
         *,
         items_total: int,
         pending_sizes: tuple[int, ...],
+        item_type: Literal["integrity", "operation"],
     ) -> None:
         self._selection = selection
         self._ctx = ctx
         self._items_total = items_total
         self._last_emitted_at: float | None = None
         self._bytes_total = selection.processed_bytes + sum(pending_sizes)
+        self._item_type = item_type
         self._item_id: str | None = None
         self._current_path: str | None = None
         self._item_bytes_done: int | None = None
@@ -277,13 +280,14 @@ class _ProgressReporter:
         ):
             raise RuntimeError("integrity bytes arrived outside an active stream")
         self._selection.note_bytes_processed(size)
+        previous_overrun = max(
+            0, self._item_bytes_done - self._item_bytes_total
+        )
         self._item_bytes_done += size
-        if self._item_bytes_done > self._item_bytes_total:
-            self._item_bytes_total = self._item_bytes_done
-        if self._selection.processed_bytes > self._bytes_total:
-            # A subject that grows during the read will later classify as drift,
-            # but its lossy progress snapshots must remain constructible first.
-            self._bytes_total = self._selection.processed_bytes
+        current_overrun = max(
+            0, self._item_bytes_done - self._item_bytes_total
+        )
+        self._bytes_total += current_overrun - previous_overrun
         self.emit(force=False)
 
     def item_completed(self, item_id: str) -> None:
@@ -310,6 +314,15 @@ class _ProgressReporter:
         if not force and self._last_emitted_at is not None:
             if now - self._last_emitted_at < self._ctx.progress_interval_seconds:
                 return
+        item_bytes_done = self._item_bytes_done
+        item_bytes_total = self._item_bytes_total
+        if (
+            item_bytes_done is not None
+            and item_bytes_total is not None
+            and item_bytes_done > item_bytes_total
+        ):
+            item_bytes_done = None
+            item_bytes_total = None
         self._ctx.run.emit(
             Progress(
                 items_done=self._selection.completed_count,
@@ -318,9 +331,9 @@ class _ProgressReporter:
                 bytes_total=self._bytes_total,
                 current_path=self._current_path,
                 item_id=self._item_id,
-                item_type=None if self._item_id is None else "integrity",
-                item_bytes_done=self._item_bytes_done,
-                item_bytes_total=self._item_bytes_total,
+                item_type=None if self._item_id is None else self._item_type,
+                item_bytes_done=item_bytes_done,
+                item_bytes_total=item_bytes_total,
             )
         )
         self._last_emitted_at = now
@@ -345,6 +358,7 @@ def _run(
             if item.expected_state is InventoryState.PRESENT
             and item.expected_stat is not None
         ),
+        item_type="integrity",
     )
 
     try:

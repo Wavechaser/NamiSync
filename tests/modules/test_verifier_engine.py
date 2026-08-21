@@ -586,6 +586,7 @@ def test_post_copy_root_and_path_admission_precede_side_effects(
     context = replace(
         _context(events),
         root_authority=RootAuthority(str(tmp_path / "reviewed")),
+        progress_interval_seconds=0,
     )
     monkeypatch.setattr(
         verifier_engine,
@@ -612,7 +613,7 @@ def test_post_copy_root_and_path_admission_precede_side_effects(
     ]
     assert active_progress
     assert all(
-        event.item_type == "integrity"
+        event.item_type == "operation"
         and event.item_bytes_done is None
         and event.item_bytes_total is None
         for event in active_progress
@@ -933,15 +934,17 @@ def test_outcomes_carry_the_active_integrity_phase(
     assert events[outcome_index + 1] is progress[-1]
 
 
-def test_post_copy_progress_uses_integrity_identity_and_clears_after_outcome(
+@pytest.mark.parametrize("recorded", (False, True))
+def test_post_copy_progress_uses_operation_identity_and_clears_after_outcome(
     tmp_path: Path,
+    recorded: bool,
 ) -> None:
-    candidate = _post_copy_candidate(tmp_path, recorded=False)
+    candidate = _post_copy_candidate(tmp_path, recorded=recorded)
     events: list[object] = []
 
     result = verify_post_copy(
         PostCopySelection((candidate,)),
-        _context(events),
+        replace(_context(events), progress_interval_seconds=0),
         _Recorder(),
         _FakeReader(
             {
@@ -963,10 +966,17 @@ def test_post_copy_progress_uses_integrity_identity_and_clears_after_outcome(
         for event in progress
     ] == [
         (None, None, None, None),
-        (candidate.item_id, "integrity", None, None),
-        (candidate.item_id, "integrity", 0, candidate.expected_stat.size),
+        (candidate.item_id, "operation", None, None),
+        (candidate.item_id, "operation", 0, candidate.expected_stat.size),
+        (
+            candidate.item_id,
+            "operation",
+            candidate.expected_stat.size,
+            candidate.expected_stat.size,
+        ),
         (None, None, None, None),
     ]
+    assert result.outcomes[0].item_type == "integrity"
     assert progress[0].current_path is None
     assert all(
         event.current_path == candidate.display_path for event in progress[1:]
@@ -1440,49 +1450,86 @@ def test_empty_subject_reports_a_bounded_zero_byte_stream(tmp_path: Path) -> Non
     ] == [(0, 0)]
 
 
-def test_growing_subject_expands_item_and_aggregate_progress_before_drift(
+def test_growing_subject_suppresses_item_fraction_and_expands_physical_total(
     tmp_path: Path,
 ) -> None:
     before = _stat(size=2)
-    after = _stat(size=3)
-    item = _item(
+    after = _stat(size=4)
+    growing = _item(
         tmp_path,
         expected_stat=before,
         baseline_evidence=_attestation(b"ab", before),
     )
+    pending_stat = _stat(size=5, identity=FileIdentity("A1B2C3D4", 8))
+    pending = _item(
+        tmp_path,
+        number=2,
+        expected_stat=pending_stat,
+        baseline_evidence=_attestation(b"12345", pending_stat),
+    )
     events: list[object] = []
 
     result = verify(
-        IntegritySelection((item,)),
+        IntegritySelection((growing, pending)),
         replace(_context(events), progress_interval_seconds=0),
         _Recorder(),
         _FakeReader(
             {
-                item.display_path: _StreamSpec(
-                    before, (b"a", b"b", b"c"), after
-                )
+                growing.display_path: _StreamSpec(
+                    before, (b"a", b"b", b"c", b"d"), after
+                ),
+                pending.display_path: _StreamSpec(
+                    pending_stat, (b"12345",)
+                ),
             }
         ),
     )
 
-    assert result.outcomes[0].result is IntegrityResult.MODIFIED
+    assert [outcome.result for outcome in result.outcomes] == [
+        IntegrityResult.MODIFIED,
+        IntegrityResult.VERIFIED,
+    ]
     assert result.outcomes[0].reason is IntegrityReason.READ_DRIFT
-    determinate = [
+    growing_progress = [
         event
         for event in events
         if isinstance(event, Progress)
-        and event.item_id == item.item_id
-        and event.item_bytes_done is not None
+        and event.item_id == growing.item_id
     ]
     assert [
-        (event.item_bytes_done, event.item_bytes_total) for event in determinate
-    ] == [(0, 2), (1, 2), (2, 2), (3, 3)]
-    assert [(event.bytes_done, event.bytes_total) for event in determinate] == [
+        (event.item_bytes_done, event.item_bytes_total)
+        for event in growing_progress
+    ] == [
+        (None, None),
         (0, 2),
         (1, 2),
         (2, 2),
-        (3, 3),
+        (None, None),
+        (None, None),
     ]
+    overshoot = growing_progress[-1]
+    assert (
+        overshoot.item_type,
+        overshoot.bytes_done,
+        overshoot.bytes_total,
+    ) == ("integrity", 4, 9)
+
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert [event.bytes_done for event in progress] == sorted(
+        event.bytes_done for event in progress
+    )
+    assert all(event.bytes_done <= event.bytes_total for event in progress)
+    assert (progress[-1].bytes_done, progress[-1].bytes_total) == (9, 9)
+
+    outcome_index = events.index(result.outcomes[0])
+    cleared = events[outcome_index + 1]
+    assert isinstance(cleared, Progress)
+    assert (
+        cleared.item_id,
+        cleared.item_type,
+        cleared.item_bytes_done,
+        cleared.item_bytes_total,
+    ) == (None, None, None, None)
 
 
 @pytest.mark.parametrize(

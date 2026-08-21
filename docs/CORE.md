@@ -194,7 +194,13 @@ The version-3 envelope codec round-trips `StateChanged`, `PhaseChanged`,
 existing aggregate counters/path plus optional paired item identity/type and
 optional paired per-attempt byte counters; the new decoder accepts a legacy v3
 body lacking those optional fields, while current serialization writes their
-exact keys. Its scalar decoder is
+exact keys. `item_type` names the row-lookup namespace of the opaque id, not
+the phase or module producing the event: post-copy verifier progress keyed by
+an executor operation id therefore uses `operation`, even though its reliable
+outcome remains an `IntegrityOutcome`. If a stream exceeds its admitted item
+total, later snapshots retain active identity but omit both item-byte fields;
+executor aggregates remain bounded by reviewed content while verifier
+aggregates expand to count physical read work. Its scalar decoder is
 non-coercive: schema/sequence/counter fields require exact integers, booleans
 cannot impersonate numbers, and string fields remain strings. Every reliable
 result item carries an explicit `item_type` and `phase`; `run_session`
