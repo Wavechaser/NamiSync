@@ -1940,7 +1940,7 @@ def test_cancellation_during_hash_marks_in_flight_item_canceled(tmp_path: Path) 
         final_progress.item_bytes_total,
     ) == (None, None, None, None, None)
     assert final_progress.current_path is None
-    assert (final_progress.bytes_done, final_progress.bytes_total) == (1, 3)
+    assert (final_progress.bytes_done, final_progress.bytes_total) == (1, 4)
 
 
 def test_post_copy_cancellation_clears_progress_after_reliable_outcome(
@@ -1986,7 +1986,7 @@ def test_post_copy_cancellation_clears_progress_after_reliable_outcome(
         final_progress.item_bytes_total,
     ) == (None, None, None, None, None)
     assert final_progress.current_path is None
-    assert (final_progress.bytes_done, final_progress.bytes_total) == (1, 3)
+    assert (final_progress.bytes_done, final_progress.bytes_total) == (1, 4)
 
 
 def test_pause_during_hash_restarts_pending_item_without_outcome_or_progress_regression(
@@ -2186,7 +2186,7 @@ def test_unexpected_failure_forces_live_inactive_progress(
     assert isinstance(final, Progress)
     assert final.phase == IntegrityMode.VERIFY.value
     assert (final.items_done, final.items_total) == (0, 1)
-    assert (final.bytes_done, final.bytes_total) == (1, 3)
+    assert (final.bytes_done, final.bytes_total) == (1, 4)
     assert (
         final.current_path,
         final.item_id,
@@ -2265,7 +2265,7 @@ def test_unexpected_failure_keeps_terminal_progress_sink_failure_secondary(
     )
     final = events[-1]
     assert isinstance(final, Progress)
-    assert (final.bytes_done, final.bytes_total) == (1, 3)
+    assert (final.bytes_done, final.bytes_total) == (1, 4)
     assert (
         final.current_path,
         final.item_id,
@@ -2442,7 +2442,7 @@ def test_canceled_outcome_sink_failure_uses_inactive_failure_boundary(
     final = events[-1]
     assert isinstance(final, Progress)
     assert (final.items_done, final.items_total) == (0, 1)
-    assert (final.bytes_done, final.bytes_total) == (1, 3)
+    assert (final.bytes_done, final.bytes_total) == (1, 4)
     assert (
         final.current_path,
         final.item_id,
@@ -2492,7 +2492,7 @@ def test_pause_during_hash_forces_latest_active_snapshot_under_throttle(
         progress[-1].item_bytes_total,
         progress[-1].bytes_done,
         progress[-1].bytes_total,
-    ) == (item.item_id, 1, 3, 1, 3)
+    ) == (item.item_id, 1, 3, 1, 4)
     assert progress[-1].current_path == item.display_path
     assert events[-1] is progress[-1]
 
@@ -2536,7 +2536,7 @@ def test_post_copy_pause_forces_latest_active_snapshot_under_throttle(
         progress[-1].item_bytes_total,
         progress[-1].bytes_done,
         progress[-1].bytes_total,
-    ) == (candidate.item_id, 1, 3, 1, 3)
+    ) == (candidate.item_id, 1, 3, 1, 4)
     assert progress[-1].current_path == candidate.display_path
     assert events[-1] is progress[-1]
 
@@ -2629,7 +2629,7 @@ def test_runner_can_finalize_cancellation_after_partial_byte_progress(
     assert outcome.result is not None
     assert outcome.result.status is SessionState.CANCELED
     assert outcome.result.bytes_done == 1
-    assert outcome.result.bytes_total == 3
+    assert outcome.result.bytes_total == 4
     assert len(outcome.result.items) == 1
 
 
@@ -2853,6 +2853,74 @@ def test_fast_chunk_flood_has_two_fixed_progress_boundaries(tmp_path: Path) -> N
     assert (progress[0].items_done, progress[-1].items_done) == (0, 1)
     assert events[0] is progress[0]
     assert events[-1] is progress[-1]
+
+
+@pytest.mark.parametrize(
+    ("items_total", "bytes_total", "message"),
+    (
+        (0, 3, "item admission cannot exclude"),
+        (1, 2, "byte budget cannot exclude"),
+    ),
+)
+def test_post_copy_progress_admission_cannot_exclude_candidates(
+    tmp_path: Path,
+    items_total: int,
+    bytes_total: int,
+    message: str,
+) -> None:
+    candidate = _post_copy_candidate(tmp_path)
+    context = replace(
+        _context([]),
+        post_copy_items_total=items_total,
+        post_copy_bytes_total=bytes_total,
+    )
+
+    with pytest.raises(ValueError, match=message):
+        verify_post_copy(PostCopySelection((candidate,)), context, _Recorder())
+
+
+def test_standalone_verifier_refuses_post_copy_progress_admission(
+    tmp_path: Path,
+) -> None:
+    context = replace(
+        _context([]),
+        post_copy_items_total=1,
+        post_copy_bytes_total=3,
+    )
+
+    with pytest.raises(ValueError, match="cannot be used for standalone"):
+        verify(IntegritySelection((_item(tmp_path),)), context, _Recorder())
+
+
+def test_direct_post_copy_resume_retains_completed_underread_budget(
+    tmp_path: Path,
+) -> None:
+    completed = _post_copy_candidate(tmp_path, number=1)
+    pending = _post_copy_candidate(tmp_path, number=2)
+    selection = PostCopySelection(
+        (completed, pending),
+        _completed_bytes={completed.item_id: 1},
+        _processed_bytes=1,
+    )
+    events: list[object] = []
+
+    verify_post_copy(
+        selection,
+        replace(_context(events), progress_interval_seconds=0),
+        _Recorder(),
+        _FakeReader(
+            {
+                pending.display_path: _StreamSpec(
+                    pending.expected_stat, (b"abc",)
+                )
+            }
+        ),
+    )
+
+    progress = [event for event in events if isinstance(event, Progress)]
+    assert progress[0].bytes_done == 1
+    assert progress[-1].bytes_done == 4
+    assert {event.bytes_total for event in progress} == {6}
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows extended-length paths")

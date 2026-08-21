@@ -110,6 +110,16 @@ identity is unrepresentable.
 `PostCopySelection`. Candidates copy verifier-facing values from published
 evidence without embedding the execution type or requiring a ledger row.
 Completion ids and processed bytes are validated continuation state.
+`PostCopySelection.physical_bytes_total()` is the shared candidate-budget
+projection used by both the direct verifier and workflow terminal phase; an
+explicit additional admitted-byte value accounts for workflow items that could
+not become readable candidates.
+`VerifierContext.post_copy_items_total` and `post_copy_bytes_total` are a
+paired, JavaScript-safe invocation seam for the workflow's full verify-phase
+admission. They let the reporter include selected operations whose missing
+publication evidence prevents construction of a readable candidate without
+putting workflow-only ids into `PostCopySelection` or changing its version-5
+continuation shape. Standalone verification refuses this post-copy-only seam.
 
 `core/recording.py` now owns the immutable host, volume, location, mapping, sync
 run, finish, and inventory commands used at the ledger boundary. Per-operation

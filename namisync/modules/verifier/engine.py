@@ -146,15 +146,26 @@ def verify_post_copy(
     """Read back transient published targets without requiring ledger rows."""
 
     emitted: list[IntegrityOutcome] = []
+    items_total = (
+        len(selection.candidates)
+        if ctx.post_copy_items_total is None
+        else ctx.post_copy_items_total
+    )
+    bytes_total = (
+        selection.physical_bytes_total()
+        if ctx.post_copy_bytes_total is None
+        else ctx.post_copy_bytes_total
+    )
     reporter = _ProgressReporter(
         selection,
         ctx,
-        items_total=len(selection.candidates),
+        items_total=items_total,
         pending_sizes=tuple(
             candidate.expected_stat.size for candidate in selection.pending
         ),
         phase=IntegrityMode.VERIFY.value,
         item_type="operation",
+        bytes_total=bytes_total,
     )
 
     try:
@@ -254,12 +265,20 @@ class _ProgressReporter:
         pending_sizes: tuple[int, ...],
         phase: str,
         item_type: Literal["integrity", "operation"],
+        bytes_total: int | None = None,
     ) -> None:
         self._selection = selection
         self._ctx = ctx
         self._items_total = items_total
         self._last_emitted_at: float | None = None
-        self._live_bytes_total = selection.processed_bytes + sum(pending_sizes)
+        candidate_bytes_total = selection.processed_bytes + sum(pending_sizes)
+        if bytes_total is not None and bytes_total < candidate_bytes_total:
+            raise ValueError(
+                "post-copy progress byte budget cannot exclude candidate work"
+            )
+        self._live_bytes_total = (
+            candidate_bytes_total if bytes_total is None else bytes_total
+        )
         if isinstance(selection, IntegritySelection):
             selection.advance_bytes_total_high_water(self._live_bytes_total)
             self._bytes_total = selection.bytes_total_high_water
@@ -275,6 +294,10 @@ class _ProgressReporter:
                 else selection.candidates
             )
         )
+        if self._items_total < len(self._selected_item_ids):
+            raise ValueError(
+                "progress item admission cannot exclude selected verifier items"
+            )
         self._outcome_item_ids = set(selection.completed_bytes)
         self._items_done = len(self._outcome_item_ids)
         self._item_id: str | None = None
@@ -282,6 +305,7 @@ class _ProgressReporter:
         self._current_path: str | None = None
         self._item_bytes_done: int | None = None
         self._item_bytes_total: int | None = None
+        self._item_settled_bytes: int | None = None
         self.emit(force=True)
 
     def item_started(self, item_id: str, current_path: str) -> None:
@@ -316,14 +340,7 @@ class _ProgressReporter:
         current_overrun = max(
             0, self._item_bytes_done - self._item_bytes_total
         )
-        self._live_bytes_total += current_overrun - previous_overrun
-        if isinstance(self._selection, IntegritySelection):
-            self._selection.advance_bytes_total_high_water(
-                self._live_bytes_total
-            )
-            self._bytes_total = self._selection.bytes_total_high_water
-        else:
-            self._bytes_total = self._live_bytes_total
+        self._advance_bytes_total(current_overrun - previous_overrun)
         self.emit(force=False)
 
     def item_completed(self, item_id: str) -> None:
@@ -331,8 +348,18 @@ class _ProgressReporter:
             raise RuntimeError("integrity settlement does not match the active item")
         if item_id not in self._outcome_item_ids:
             raise RuntimeError("integrity settlement lacks a reliable item outcome")
+        self._close_active_attempt_budget()
         self._clear_item()
         self.emit(force=False)
+
+    def item_settlement_recorded(self, item_id: str, bytes_read: int) -> None:
+        if self._item_id != item_id:
+            return
+        if type(bytes_read) is not int:
+            raise TypeError("settled verifier bytes must be an integer")
+        if bytes_read < 0:
+            raise ValueError("settled verifier bytes cannot be negative")
+        self._item_settled_bytes = bytes_read
 
     def item_outcome_emitted(self, item_id: str) -> None:
         if item_id not in self._selected_item_ids:
@@ -348,14 +375,17 @@ class _ProgressReporter:
         self.emit(force=True)
 
     def cancellation_completed(self) -> None:
+        self._close_active_attempt_budget()
         self._clear_item()
         self._current_path = None
         self.emit(force=True)
 
     def pause_completed(self) -> None:
+        self._close_active_attempt_budget()
         self.emit(force=True)
 
     def failure_completed(self, error: Exception) -> None:
+        self._close_active_attempt_budget()
         self._clear_item()
         self._current_path = None
         try:
@@ -366,11 +396,36 @@ class _ProgressReporter:
                 f"{logical_error_text(progress_error)}"
             )
 
+    def _close_active_attempt_budget(self) -> None:
+        if (
+            self._item_id is None
+            or self._item_bytes_done is None
+            or self._item_bytes_total is None
+        ):
+            return
+        admitted_work = min(self._item_bytes_done, self._item_bytes_total)
+        settled_work = min(
+            0 if self._item_settled_bytes is None else self._item_settled_bytes,
+            self._item_bytes_total,
+        )
+        self._advance_bytes_total(max(0, admitted_work - settled_work))
+
+    def _advance_bytes_total(self, amount: int) -> None:
+        self._live_bytes_total += amount
+        if isinstance(self._selection, IntegritySelection):
+            self._selection.advance_bytes_total_high_water(
+                self._live_bytes_total
+            )
+            self._bytes_total = self._selection.bytes_total_high_water
+        else:
+            self._bytes_total = self._live_bytes_total
+
     def _clear_item(self) -> None:
         self._item_id = None
         self._item_attempt_id = None
         self._item_bytes_done = None
         self._item_bytes_total = None
+        self._item_settled_bytes = None
 
     def emit(self, *, force: bool) -> None:
         now = self._ctx.monotonic()
@@ -411,6 +466,10 @@ def _run(
     reader: VerificationReader | None,
     mode: IntegrityMode,
 ) -> IntegrityRunResult:
+    if ctx.post_copy_items_total is not None:
+        raise ValueError(
+            "post-copy progress admission cannot be used for standalone verification"
+        )
     emitted: list[IntegrityOutcome] = []
     reporter = _ProgressReporter(
         selection,
@@ -493,6 +552,9 @@ def _emit_and_complete(
     ctx.run.emit(processed.outcome)
     reporter.item_outcome_emitted(processed.outcome.item_id)
     selection.mark_completed(processed.outcome.item_id, processed.bytes_read)
+    reporter.item_settlement_recorded(
+        processed.outcome.item_id, processed.bytes_read
+    )
     emitted.append(processed.outcome)
     if emit_progress:
         reporter.item_completed(processed.outcome.item_id)
@@ -512,6 +574,9 @@ def _emit_and_complete_post_copy(
     ctx.run.emit(processed.outcome)
     reporter.item_outcome_emitted(processed.outcome.item_id)
     selection.mark_completed(processed.outcome.item_id, processed.bytes_read)
+    reporter.item_settlement_recorded(
+        processed.outcome.item_id, processed.bytes_read
+    )
     emitted.append(processed.outcome)
     if emit_progress:
         reporter.item_completed(processed.outcome.item_id)

@@ -248,6 +248,10 @@ or resume cannot recover an `OK` aggregate from the failed recording owner.
 During linked verification, the phase summary counts
 successfully emitted reliable outcome identities as a floor, so a later
 continuation-bookkeeping failure cannot erase an already-published settlement.
+A newly degraded recording snapshot is the one prerequisite: workflow attempts
+that continuation update before releasing the reliable outcome, so a sink
+failure cannot leave the reporter uncertain whether downstream accepted the
+item. Candidate completion still advances only after reliable emission returns.
 
 Fresh preflight still runs on every resume. If an already-started execute
 continuation is refused or faults there, workflow reopens the same run only to
@@ -535,6 +539,16 @@ import from handling refusal differently than baseline/verify.
   derived from `PublishedCopyEvidence`, including copies whose ledger write
   degraded. The execution-to-verification boundary exposes refreshed phase
   state to the UI without releasing volume custody.
+- Under uninterrupted event continuity, every emitted `Progress.phase` agrees
+  with the latest reliable `PhaseChanged.phase`; execute, standalone integrity,
+  and linked post-copy workflow integration tests own that producer assertion.
+  After a `Gap`, the browser reducer—not workflow inference—owns acceptance of a
+  later self-described Progress domain.
+- Linked verification derives one items admission and physical-read budget from
+  the complete `VerifyContinuation` before invoking the reporter. Operations
+  with missing publication evidence remain in those Progress totals even though
+  only evidence-backed candidates can enter the byte reader; pause/resume and
+  the terminal verify phase reuse the same continuation authority.
 - Pause during either compound phase resumes from the explicit phase
   discriminator without losing published evidence, repeating completed
   outcomes, or claiming survival across an application restart.

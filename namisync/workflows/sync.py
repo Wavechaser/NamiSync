@@ -700,20 +700,27 @@ def _run_execution(
         }
 
         def observe_verification(body: object) -> None:
-            ctx.emit(body)
             if not isinstance(body, IntegrityOutcome):
+                ctx.emit(body)
                 return
-            verification_items.append(body)
-            if body.item_id in verification_candidate_ids:
-                observed_verification_ids.add(body.item_id)
+            # A degraded recording snapshot can fail.  Publish it before the
+            # reliable item so a raised sink error cannot leave the reporter
+            # unable to tell whether downstream accepted that item.
             if (
                 body.recording is RecordingStatus.DEGRADED
                 and observed_recording[0] is RecordingStatus.OK
             ):
                 observed_recording[0] = RecordingStatus.DEGRADED
                 sink(replace(current, recording=RecordingStatus.DEGRADED))
+            ctx.emit(body)
+            verification_items.append(body)
+            if body.item_id in verification_candidate_ids:
+                observed_verification_ids.add(body.item_id)
 
         try:
+            progress_items_total, progress_bytes_total = (
+                _verify_progress_totals(current)
+            )
             ctx.emit(PhaseChanged("verify"))
             verification_context = deps.verifier_context(
                 RunContext(observe_verification, ctx.checkpoint)
@@ -730,6 +737,8 @@ def _run_execution(
                     ),
                     expected_volume_id=xset.plan.target_volume_id,
                 ),
+                post_copy_items_total=progress_items_total,
+                post_copy_bytes_total=progress_bytes_total,
             )
             verification = deps.verifier(
                 current.candidates,
@@ -1117,24 +1126,7 @@ def _verify_phase(
     if incomplete and canceled:
         raise ValueError("verify phase cannot be incomplete and canceled")
     candidates = continuation.candidates
-    planned_bytes = sum(
-        candidate.expected_stat.size for candidate in candidates.candidates
-    ) + _missing_evidence_bytes(continuation)
-    completed = candidates.completed_bytes
-    completed_bytes = sum(completed.values())
-    retry_bytes = max(0, candidates.processed_bytes - completed_bytes)
-    expected_by_id = {
-        candidate.item_id: candidate.expected_stat.size
-        for candidate in candidates.candidates
-    }
-    completed_overrun = sum(
-        max(0, bytes_read - expected_by_id[item_id])
-        for item_id, bytes_read in completed.items()
-    )
-    bytes_total = max(
-        candidates.processed_bytes,
-        planned_bytes + retry_bytes + completed_overrun,
-    )
+    items_total, bytes_total = _verify_progress_totals(continuation)
     status = (
         PhaseStatus.CANCELED
         if canceled
@@ -1146,13 +1138,26 @@ def _verify_phase(
         phase=VerifyContinuation.phase,
         status=status,
         items_done=max(candidates.completed_count, items_done_floor),
-        items_total=(
-            len(candidates.candidates)
-            + len(continuation.missing_evidence_ids)
-        ),
+        items_total=items_total,
         bytes_done=candidates.processed_bytes,
         bytes_total=bytes_total,
         error=error,
+    )
+
+
+def _verify_progress_totals(
+    continuation: VerifyContinuation,
+) -> tuple[int, int]:
+    candidates = continuation.candidates
+    bytes_total = candidates.physical_bytes_total(
+        _missing_evidence_bytes(continuation)
+    )
+    return (
+        (
+            len(candidates.candidates)
+            + len(continuation.missing_evidence_ids)
+        ),
+        bytes_total,
     )
 
 

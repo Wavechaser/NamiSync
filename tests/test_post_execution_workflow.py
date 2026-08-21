@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -9,6 +10,7 @@ from time import monotonic, sleep
 from types import SimpleNamespace
 
 import pytest
+from xxhash import xxh3_128
 
 from namisync.core.events import ItemOutcome, PhaseChanged, Progress, Terminal
 from namisync.core.evidence import (
@@ -101,6 +103,11 @@ from namisync.workflows.runtime import (
     LocalWorkflowRuntime,
 )
 from namisync.workflows.views import operation_result_view
+from tests.modules._verifier_fixtures import (
+    _FakeReader,
+    _Recorder as _VerifierRecorder,
+    _StreamSpec,
+)
 
 
 NOW = datetime(2026, 7, 25, tzinfo=timezone.utc)
@@ -345,6 +352,27 @@ def _verify_all(selection, context, recorder) -> IntegrityRunResult:
     return IntegrityRunResult(tuple(outcomes), recording)
 
 
+def _post_copy_verifier_with(reader, verifier_recorder=None):
+    actual_recorder = (
+        _VerifierRecorder() if verifier_recorder is None else verifier_recorder
+    )
+
+    def verifier(selection, context, recorder):
+        del recorder
+        return verify_post_copy(
+            selection,
+            replace(
+                context,
+                hasher_factory=xxh3_128,
+                root_authority=None,
+            ),
+            actual_recorder,
+            reader,
+        )
+
+    return verifier
+
+
 def _wait_for_session(
     dispatcher: Dispatcher,
     session_id,
@@ -499,6 +527,7 @@ def test_xv_1_missing_published_evidence_is_named_verification_incomplete() -> N
     operation = _operation(2, 9)
     xset = _execution_set(operation)
     recordings: list[_Recording] = []
+    events: list[object] = []
 
     def executor(execution_set, context, recorder, policies, fs):
         del recorder, policies, fs
@@ -512,10 +541,10 @@ def test_xv_1_missing_published_evidence_is_named_verification_incomplete() -> N
 
     result = run_execution(
         ExecuteContinuation(xset, verify_after_execute=True),
-        RunContext(lambda body: None, lambda: None),
+        RunContext(events.append, lambda: None),
         _deps(
             executor=executor,
-            verifier=_verify_all,
+            verifier=verify_post_copy,
             recordings=recordings,
         ),
     )
@@ -527,9 +556,185 @@ def test_xv_1_missing_published_evidence_is_named_verification_incomplete() -> N
     assert result.error is not None
     assert result.error.type_name == "PublishedEvidenceInvariantError"
     assert str(operation.op_id) in result.error.message
+    verify_progress = [
+        event
+        for event in events
+        if isinstance(event, Progress) and event.phase == "verify"
+    ]
+    assert verify_progress
+    assert {
+        (event.items_total, event.bytes_total) for event in verify_progress
+    } == {(1, 9)}
+    assert verify_progress[-1].items_done == result.phases[1].items_done
+    assert verify_progress[-1].bytes_done == result.phases[1].bytes_done
     assert recordings[0].finishes == [
         (SessionState.COMPLETED, RecordingStatus.OK)
     ]
+
+
+def test_verify_progress_admits_candidates_and_missing_evidence_together() -> None:
+    candidate_operation = _operation(75, 5)
+    missing_operation = _operation(76, 6)
+    xset = _execution_set(candidate_operation, missing_operation)
+    recordings: list[_Recording] = []
+    events: list[object] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        candidate = _settle(
+            execution_set,
+            context,
+            candidate_operation,
+            evidence=_evidence(candidate_operation),
+        )
+        missing = _settle(execution_set, context, missing_operation)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(candidate, missing),
+            bytes_done=11,
+            bytes_total=11,
+        )
+
+    reader = _FakeReader(
+        {
+            candidate_operation.target_rel_path: _StreamSpec(
+                candidate_operation.intended,
+                (b"x" * (candidate_operation.content_bytes + 2),),
+            )
+        }
+    )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(events.append, lambda: None),
+        _deps(
+            executor=executor,
+            verifier=_post_copy_verifier_with(reader),
+            recordings=recordings,
+        ),
+    )
+
+    verify_progress = [
+        event
+        for event in events
+        if isinstance(event, Progress) and event.phase == "verify"
+    ]
+    assert verify_progress
+    assert verify_progress[-1].bytes_done == result.phases[1].bytes_done == 7
+    assert all(event.items_total == 2 for event in verify_progress)
+    assert [event.bytes_total for event in verify_progress] == sorted(
+        event.bytes_total for event in verify_progress
+    )
+    assert verify_progress[0].bytes_total == 11
+    assert verify_progress[-1].bytes_total == result.phases[1].bytes_total == 13
+    assert verify_progress[-1].items_done == result.phases[1].items_done == 1
+
+
+def test_verify_progress_retains_missing_evidence_budget_across_pause_resume() -> None:
+    candidate_operation = _operation(77, 5)
+    missing_operation = _operation(78, 6)
+    xset = _execution_set(candidate_operation, missing_operation)
+    captured: list[VerifyContinuation] = []
+    first_events: list[object] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        candidate = _settle(
+            execution_set,
+            context,
+            candidate_operation,
+            evidence=_evidence(candidate_operation),
+        )
+        missing = _settle(execution_set, context, missing_operation)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(candidate, missing),
+            bytes_done=11,
+            bytes_total=11,
+        )
+
+    class PausingStream:
+        strategy = ReadStrategy.WINDOWS_UNBUFFERED
+
+        def stat(self):
+            return candidate_operation.intended
+
+        def iter_chunks(self, chunk_size):
+            assert chunk_size > 0
+            yield b"x" * 2
+            raise PauseRequested()
+
+    class PausingReader:
+        @contextmanager
+        def open(self, root, relative_path):
+            del root
+            assert relative_path == candidate_operation.target_rel_path
+            yield PausingStream()
+
+    with pytest.raises(PauseRequested):
+        run_execution(
+            ExecuteContinuation(xset, verify_after_execute=True),
+            RunContext(first_events.append, lambda: None),
+            _deps(
+                executor=executor,
+                verifier=_post_copy_verifier_with(PausingReader()),
+                recordings=[],
+            ),
+            continuation_sink=captured.append,
+        )
+
+    paused = captured[-1]
+    assert paused.candidates.processed_bytes == 2
+    first_progress = [
+        event
+        for event in first_events
+        if isinstance(event, Progress) and event.phase == "verify"
+    ]
+    assert first_progress
+    assert all(event.items_total == 2 for event in first_progress)
+    assert all(event.bytes_total >= 11 for event in first_progress)
+    assert first_progress[-1].bytes_done == 2
+    assert first_progress[-1].bytes_total == 13
+
+    restored = decode_execution_request(
+        encode_execution_request(ExecutionRequest(paused, NOW))
+    ).continuation
+    assert isinstance(restored, VerifyContinuation)
+    resumed_events: list[object] = []
+    reader = _FakeReader(
+        {
+            candidate_operation.target_rel_path: _StreamSpec(
+                candidate_operation.intended,
+                (b"y" * candidate_operation.content_bytes,),
+            )
+        }
+    )
+
+    result = run_execution(
+        restored,
+        RunContext(resumed_events.append, lambda: None),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=_post_copy_verifier_with(reader),
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    resumed_progress = [
+        event
+        for event in resumed_events
+        if isinstance(event, Progress) and event.phase == "verify"
+    ]
+    assert resumed_progress
+    assert {
+        (event.items_total, event.bytes_total) for event in resumed_progress
+    } == {(2, 13)}
+    assert resumed_progress[0].bytes_done == 2
+    assert resumed_progress[-1].bytes_done == result.phases[1].bytes_done == 7
+    assert resumed_progress[-1].items_done == result.phases[1].items_done == 1
+    assert result.phases[1].items_total == 2
+    assert result.phases[1].bytes_total == 13
 
 
 def test_partial_execution_still_verifies_every_successful_publish() -> None:
@@ -756,6 +961,83 @@ def test_verify_phase_counts_reliable_outcome_before_continuation_failure() -> N
     assert result.phases[1].status is PhaseStatus.INCOMPLETE
     assert result.phases[1].items_done == 1
     assert result.phases[1].items_total == 1
+    assert result.error is not None
+    assert result.error.type_name == "RuntimeError"
+
+
+def test_degraded_outcome_snapshot_failure_keeps_progress_and_phase_aligned() -> None:
+    candidate_operation = _operation(79, 5)
+    missing_operation = _operation(80, 6)
+    xset = _execution_set(candidate_operation, missing_operation)
+    events: list[object] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        candidate = _settle(
+            execution_set,
+            context,
+            candidate_operation,
+            evidence=_evidence(candidate_operation),
+        )
+        missing = _settle(execution_set, context, missing_operation)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(candidate, missing),
+            bytes_done=11,
+            bytes_total=11,
+        )
+
+    def reject_degraded_snapshot(value) -> None:
+        if (
+            isinstance(value, VerifyContinuation)
+            and value.recording is RecordingStatus.DEGRADED
+        ):
+            raise RuntimeError("degraded continuation snapshot failed")
+
+    reader = _FakeReader(
+        {
+            candidate_operation.target_rel_path: _StreamSpec(
+                candidate_operation.intended,
+                (b"x" * candidate_operation.content_bytes,),
+            )
+        }
+    )
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(events.append, lambda: None),
+        _deps(
+            executor=executor,
+            verifier=_post_copy_verifier_with(
+                reader,
+                _VerifierRecorder(RecordDisposition.STALE),
+            ),
+            recordings=[],
+        ),
+        continuation_sink=reject_degraded_snapshot,
+    )
+
+    assert not any(isinstance(event, IntegrityOutcome) for event in events)
+    verify_progress = [
+        event
+        for event in events
+        if isinstance(event, Progress) and event.phase == "verify"
+    ]
+    final_progress = verify_progress[-1]
+    verify_phase = result.phases[1]
+    assert (
+        final_progress.items_done,
+        final_progress.items_total,
+        final_progress.bytes_done,
+        final_progress.bytes_total,
+    ) == (
+        verify_phase.items_done,
+        verify_phase.items_total,
+        verify_phase.bytes_done,
+        verify_phase.bytes_total,
+    ) == (0, 2, 5, 16)
+    assert final_progress.current_path is None
+    assert final_progress.item_id is None
+    assert verify_phase.status is PhaseStatus.INCOMPLETE
     assert result.error is not None
     assert result.error.type_name == "RuntimeError"
 

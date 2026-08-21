@@ -207,6 +207,15 @@ only gates conditional advancement. Rowless candidates still open/stat/hash and
 classify bytes; their integrity result stays truthful while recording remains
 degraded. The verifier never fabricates row or location ids.
 
+The workflow also supplies the complete post-copy phase admission separately
+from the readable candidate selection. A successful operation whose publication
+evidence is missing therefore remains visible in every verify `Progress`
+`items_total` and `bytes_total` even though no `PostCopyCandidate` can be built
+for it; the same admission feeds the incomplete terminal phase. This paired
+invocation context is not continuation state and does not alter payload version
+5: resume re-derives it from the exact `VerifyContinuation` before constructing
+the reporter.
+
 Manual verification is location-scoped and independent of any current plan or
 mapping. It must not require both source and target roots.
 
@@ -281,7 +290,11 @@ the latest active attempt when a stream is in flight, so the 100 ms throttle
 cannot leave a stale paused byte count; a pause at an inter-item checkpoint is
 truthfully inactive. Resume re-entry mints a new attempt id whose item counter
 starts at zero while the aggregate physical-read counter retains prior work and
-never regresses. Cancellation emits every
+never regresses. When a pause, cancellation, or exceptional unwind abandons a
+partially consumed attempt, the reporter expands its physical-read budget by
+the consumed admitted portion before the forced control snapshot; a resumed
+invocation therefore begins from the same continuation-derived budget rather
+than revealing a later jump. Cancellation emits every
 required canceled outcome before one forced inactive control snapshot. Pause
 likewise adds one forced control snapshot, active only when an attempt is in
 flight; neither path emits the successful-phase final boundary. Ordinary

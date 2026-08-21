@@ -23,6 +23,9 @@ from .root_authority import RootAuthority
 from .session import ResultItem, RunContext
 
 
+_JAVASCRIPT_MAX_SAFE_INTEGER = (1 << 53) - 1
+
+
 class InventoryState(StrEnum):
     """Inventory state captured by a freshly constructed selection."""
 
@@ -208,6 +211,29 @@ class PostCopySelection:
     @property
     def completed_bytes(self) -> Mapping[str, int]:
         return dict(self._completed_bytes)
+
+    def physical_bytes_total(self, additional_admitted_bytes: int = 0) -> int:
+        """Return the derived read-work budget for this continuation."""
+
+        if type(additional_admitted_bytes) is not int:
+            raise TypeError("additional admitted bytes must be an integer")
+        if additional_admitted_bytes < 0:
+            raise ValueError("additional admitted bytes cannot be negative")
+        expected_by_id = {
+            candidate.item_id: candidate.expected_stat.size
+            for candidate in self.candidates
+        }
+        planned_bytes = sum(expected_by_id.values()) + additional_admitted_bytes
+        completed_bytes = sum(self._completed_bytes.values())
+        retry_bytes = max(0, self._processed_bytes - completed_bytes)
+        completed_overrun = sum(
+            max(0, bytes_read - expected_by_id[item_id])
+            for item_id, bytes_read in self._completed_bytes.items()
+        )
+        return max(
+            self._processed_bytes,
+            planned_bytes + retry_bytes + completed_overrun,
+        )
 
     def note_bytes_processed(self, size: int) -> None:
         if size < 0:
@@ -566,6 +592,8 @@ class VerifierContext:
     chunk_size: int = 4 * 1024 * 1024
     progress_interval_seconds: float = 0.1
     root_authority: RootAuthority | None = None
+    post_copy_items_total: int | None = None
+    post_copy_bytes_total: int | None = None
 
     def __post_init__(self) -> None:
         if not callable(self.hasher_factory):
@@ -578,6 +606,22 @@ class VerifierContext:
             self.root_authority, RootAuthority
         ):
             raise TypeError("verification root authority has the wrong type")
+        if (self.post_copy_items_total is None) != (
+            self.post_copy_bytes_total is None
+        ):
+            raise ValueError("post-copy progress admission must be paired")
+        for name, value in (
+            ("post-copy item admission", self.post_copy_items_total),
+            ("post-copy byte budget", self.post_copy_bytes_total),
+        ):
+            if value is None:
+                continue
+            if type(value) is not int:
+                raise TypeError(f"{name} must be an integer")
+            if value < 0:
+                raise ValueError(f"{name} cannot be negative")
+            if value > _JAVASCRIPT_MAX_SAFE_INTEGER:
+                raise ValueError(f"{name} must be a JavaScript-safe integer")
 
 
 class UnsupportedVerification(OSError):
