@@ -164,6 +164,7 @@ def _invariant_report(
     item_kind: str | None = None,
     terminal: bool = True,
 ) -> dict[str, object]:
+    bytes_total = 1 if kind in {"copy", "update", "move-update"} else 0
     status = (
         [{"op": "op-1", "kind": kind, "outcome": outcome}]
         if terminal
@@ -188,6 +189,8 @@ def _invariant_report(
         "execution_set": {
             "selected": 1,
             "selection": [{"op": "op-1", "kind": kind}],
+            "bytes_done_high_water": 0,
+            "bytes_total": bytes_total,
             "status": status,
             "published_evidence": [
                 {"op": "op-1", "recorded": False}
@@ -196,9 +199,23 @@ def _invariant_report(
         },
         "items": items,
         "reliable_events": [
-            {"type": "item", "op": "op-1"}
-            for _ in items
+            {"type": "phase", "phase": "execute"},
+            *({"type": "item", "op": "op-1"} for _ in items),
         ],
+        "progress_final": {
+            "phase": "execute",
+            "items_done": len(items),
+            "items_total": 1,
+            "bytes_done": 0,
+            "bytes_total": bytes_total,
+            "current_path": None,
+            "item_id": None,
+            "item_type": None,
+            "item_attempt_id": None,
+            "item_bytes_done": None,
+            "item_bytes_total": None,
+            "attempt_lifecycle": [],
+        },
     }
 
 
@@ -451,6 +468,155 @@ def test_partial_selection_is_allowed_only_for_propagated_exception_modes() -> N
     assert audit._global_invariant_errors(report) == [
         "global invariant: 0 terminal statuses for 1 selections"
     ]
+
+
+def test_progress_projection_normalizes_attempt_lifecycle_without_losing_owner(
+    tmp_path: Path,
+) -> None:
+    normalizer = audit.TracingFileSystem(tmp_path / "source", tmp_path / "target")
+    attempt_one = "1" * 32
+    attempt_two = "2" * 32
+    progress = [
+        audit.Progress(
+            phase="execute",
+            items_done=0,
+            items_total=1,
+            bytes_done=0,
+            bytes_total=8,
+            current_path="copy.bin",
+            item_id="operation-one",
+            item_type="operation",
+            item_attempt_id=attempt_one,
+            item_bytes_done=0,
+            item_bytes_total=8,
+        ),
+        audit.Progress(
+            phase="execute",
+            items_done=0,
+            items_total=1,
+            bytes_done=4,
+            bytes_total=8,
+            current_path="copy.bin",
+            item_id="operation-one",
+            item_type="operation",
+            item_attempt_id=attempt_one,
+            item_bytes_done=4,
+            item_bytes_total=8,
+        ),
+        audit.Progress(
+            phase="execute",
+            items_done=0,
+            items_total=1,
+            bytes_done=4,
+            bytes_total=8,
+            current_path="copy.bin",
+            item_id="operation-one",
+            item_type="operation",
+            item_attempt_id=attempt_two,
+            item_bytes_done=0,
+            item_bytes_total=8,
+        ),
+    ]
+
+    _, _, final = audit._event_projection(progress, normalizer)
+
+    assert final is not None
+    assert final["item_attempt_id"] == "attempt-2"
+    assert final["attempt_lifecycle"] == [
+        {
+            "attempt_id": "attempt-1",
+            "phase": "execute",
+            "item_type": "operation",
+            "item_id": "operation-one",
+        },
+        {
+            "attempt_id": "attempt-2",
+            "phase": "execute",
+            "item_type": "operation",
+            "item_id": "operation-one",
+        },
+    ]
+    assert attempt_one not in json.dumps(final)
+    assert attempt_two not in json.dumps(final)
+
+    wrong_owner = replace(progress[0], item_id="operation-two")
+    with pytest.raises(audit.AuditError, match="changed nominal owner"):
+        audit._event_projection([progress[0], wrong_owner], normalizer)
+
+    inactive = replace(
+        progress[0],
+        item_id=None,
+        item_type=None,
+        item_attempt_id=None,
+        item_bytes_done=None,
+        item_bytes_total=None,
+    )
+    with pytest.raises(audit.AuditError, match="reappeared after retirement"):
+        audit._event_projection([progress[0], inactive, progress[0]], normalizer)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("phase", "verify", "phase is not execute"),
+        ("items_done", 0, "settled count differs"),
+        ("items_total", 2, "item admission differs"),
+        ("bytes_done", 1, "byte high-water differs"),
+        ("bytes_total", 2, "byte admission differs"),
+        ("item_id", "operation-one", "retains active item state"),
+    ],
+)
+def test_global_invariant_rejects_incoherent_final_progress(
+    field: str,
+    value: object,
+    message: str,
+) -> None:
+    report = _invariant_report(evidence_count=1)
+    progress = report["progress_final"]
+    assert isinstance(progress, dict)
+    progress[field] = value
+
+    errors = audit._global_invariant_errors(report)
+
+    assert any(message in error for error in errors)
+
+
+def test_global_invariant_requires_progress_to_match_reliable_phase() -> None:
+    report = _invariant_report(evidence_count=1)
+    report["reliable_events"][0]["phase"] = "verify"
+
+    errors = audit._global_invariant_errors(report)
+
+    assert any("differs from reliable phase" in error for error in errors)
+
+
+def test_global_invariant_rejects_exceptional_unwind_path() -> None:
+    report = _invariant_report(evidence_count=1)
+    report["termination"] = {"returned": None, "raised": "RuntimeError"}
+    report["progress_final"]["current_path"] = "copy.bin"
+
+    errors = audit._global_invariant_errors(report)
+
+    assert any("unwind Progress retains current_path" in error for error in errors)
+
+
+def test_global_invariant_allows_live_paused_attempt() -> None:
+    report = _invariant_report(terminal=False)
+    report["execution_set"]["bytes_done_high_water"] = 1
+    progress = report["progress_final"]
+    progress.update(
+        {
+            "bytes_done": 1,
+            "current_path": "copy.bin",
+            "item_id": "operation-one",
+            "item_type": "operation",
+            "item_attempt_id": "1" * 32,
+            "item_bytes_done": 1,
+            "item_bytes_total": 1,
+        }
+    )
+
+    assert audit._global_invariant_errors(report) == []
 
 
 def test_recorder_trace_retains_complete_normalized_payloads_and_results() -> None:
@@ -912,6 +1078,29 @@ def test_same_execution_set_resume_reuses_then_retires_continuation() -> None:
     assert capture.ok
     report = capture.scenarios["resume.pause-same-execution-set"]["variants"][0]
     first, second, third = report["invocations"]
+
+    assert [
+        (
+            invocation["execution_set"]["bytes_done_high_water"],
+            invocation["execution_set"]["bytes_total"],
+        )
+        for invocation in (first, second, third)
+    ] == [(24, 37), (37, 37), (37, 37)]
+    assert [
+        (
+            invocation["progress_final"]["phase"],
+            invocation["progress_final"]["items_done"],
+            invocation["progress_final"]["bytes_done"],
+            invocation["progress_final"]["bytes_total"],
+            invocation["progress_final"]["current_path"],
+            invocation["progress_final"]["item_attempt_id"],
+        )
+        for invocation in (first, second, third)
+    ] == [
+        ("execute", 2, 24, 37, "update.bin", None),
+        ("execute", 3, 37, 37, "third.bin", None),
+        ("execute", 3, 37, 37, None, None),
+    ]
 
     assert first["termination"] == {
         "returned": None,

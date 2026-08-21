@@ -74,7 +74,7 @@ DEFAULT_BASELINE = Path(__file__).with_name("executor_settlement_baseline.json")
 _REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_BASELINE_GIT_PATH = "tools/executor_settlement_baseline.json"
 REVIEWED_BASELINE_SHA256 = (
-    "df69bf65979c3838e3df9bcc262cd9961945e6a8603c348c22f8136f4d6547b2"
+    "ada1a5f0e5987a2dade41931319d2535a3c9e72dcdbfa9a292964623fff4ecf3"
 )
 _BYTE_KINDS = frozenset(
     {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
@@ -1213,15 +1213,60 @@ def _event_projection(
                 }
             )
     progress = [event for event in events if isinstance(event, Progress)]
+    attempt_ids: dict[str, str] = {}
+    attempt_owners: dict[str, tuple[str, str, str]] = {}
+    attempt_lifecycle: list[dict[str, object]] = []
+    active_attempt_id: str | None = None
+    retired_attempt_ids: set[str] = set()
+    for event in progress:
+        raw_attempt_id = event.item_attempt_id
+        if raw_attempt_id != active_attempt_id:
+            if active_attempt_id is not None:
+                retired_attempt_ids.add(active_attempt_id)
+            if raw_attempt_id is not None and raw_attempt_id in retired_attempt_ids:
+                raise AuditError("Progress attempt token reappeared after retirement")
+            active_attempt_id = raw_attempt_id
+        if raw_attempt_id is None:
+            continue
+        if event.item_id is None or event.item_type is None:
+            raise AuditError("Progress attempt lacks nominal item identity")
+        owner = (event.phase, event.item_type, event.item_id)
+        known_owner = attempt_owners.get(raw_attempt_id)
+        if known_owner is not None and known_owner != owner:
+            raise AuditError("Progress attempt changed nominal owner")
+        if raw_attempt_id in attempt_ids:
+            continue
+        normalized = f"attempt-{len(attempt_ids) + 1}"
+        attempt_ids[raw_attempt_id] = normalized
+        attempt_owners[raw_attempt_id] = owner
+        attempt_lifecycle.append(
+            {
+                "attempt_id": normalized,
+                "phase": event.phase,
+                "item_type": event.item_type,
+                "item_id": event.item_id,
+            }
+        )
     final_progress = None
     if progress:
         final = progress[-1]
         final_progress = {
+            "phase": final.phase,
             "items_done": final.items_done,
             "items_total": final.items_total,
             "bytes_done": final.bytes_done,
             "bytes_total": final.bytes_total,
             "current_path": final.current_path,
+            "item_id": final.item_id,
+            "item_type": final.item_type,
+            "item_attempt_id": (
+                None
+                if final.item_attempt_id is None
+                else attempt_ids[final.item_attempt_id]
+            ),
+            "item_bytes_done": final.item_bytes_done,
+            "item_bytes_total": final.item_bytes_total,
+            "attempt_lifecycle": attempt_lifecycle,
         }
 
     items = [
@@ -1270,6 +1315,11 @@ def _execution_set_projection(
             }
         )
 
+    selected_bytes_total = sum(
+        operation.content_bytes
+        for operation in operations
+        if operation.op_id in xset.selection and operation.kind in _BYTE_KINDS
+    )
     return {
         "selected": len(xset.selection),
         "selection": [
@@ -1277,6 +1327,8 @@ def _execution_set_projection(
             for operation in operations
             if operation.op_id in xset.selection
         ],
+        "bytes_done_high_water": xset.bytes_done_high_water,
+        "bytes_total": selected_bytes_total,
         "recording": xset.recording.value,
         "status": [
             {
@@ -1900,6 +1952,53 @@ def _global_invariant_errors(report: Mapping[str, object]) -> list[str]:
     item_ids = [item.get("op") for item in items if isinstance(item, Mapping)]
     if reliable_items != item_ids:
         errors.append("global invariant: reliable item event order differs from result items")
+    progress = report.get("progress_final")
+    if not isinstance(progress, Mapping):
+        errors.append("global invariant: final Progress is unavailable")
+        return errors
+    if progress.get("phase") != "execute":
+        errors.append("global invariant: final Progress phase is not execute")
+    reliable_phases = (
+        [
+            event.get("phase")
+            for event in reliable
+            if isinstance(event, Mapping) and event.get("type") == "phase"
+        ]
+        if isinstance(reliable, list)
+        else []
+    )
+    if not reliable_phases:
+        errors.append("global invariant: reliable PhaseChanged is unavailable")
+    elif progress.get("phase") != reliable_phases[-1]:
+        errors.append(
+            "global invariant: final Progress phase differs from reliable phase"
+        )
+    if progress.get("items_total") != selected:
+        errors.append("global invariant: Progress item admission differs from selection")
+    if progress.get("items_done") != len(reliable_items):
+        errors.append(
+            "global invariant: Progress settled count differs from reliable item outcomes"
+        )
+    if progress.get("bytes_done") != xset.get("bytes_done_high_water"):
+        errors.append(
+            "global invariant: Progress byte high-water differs from ExecutionSet"
+        )
+    if progress.get("bytes_total") != xset.get("bytes_total"):
+        errors.append("global invariant: Progress byte admission differs from selection")
+    termination = report.get("termination")
+    raised = termination.get("raised") if isinstance(termination, Mapping) else None
+    if raised != "PauseRequested":
+        active_fields = (
+            "item_id",
+            "item_type",
+            "item_attempt_id",
+            "item_bytes_done",
+            "item_bytes_total",
+        )
+        if any(progress.get(field) is not None for field in active_fields):
+            errors.append("global invariant: terminal Progress retains active item state")
+    if raised not in {None, "PauseRequested"} and progress.get("current_path") is not None:
+        errors.append("global invariant: unwind Progress retains current_path")
     return errors
 
 
@@ -3266,6 +3365,17 @@ def _resume_same_execution_set(base: Path) -> list[dict[str, object]]:
             ),
         }
         invocation = _policy_projection(snapshot)
+        invocation_xset = invocation.get("execution_set")
+        snapshot_xset = snapshot["execution_set"]
+        if not isinstance(invocation_xset, dict) or not isinstance(
+            snapshot_xset, dict
+        ):
+            raise AuditError("resume invocation lacks execution progress authority")
+        invocation_xset["bytes_done_high_water"] = snapshot_xset[
+            "bytes_done_high_water"
+        ]
+        invocation_xset["bytes_total"] = snapshot_xset["bytes_total"]
+        invocation["progress_final"] = progress
         invocation["recorder_commands"] = [
             entry["command"]
             for entry in recorder.trace
@@ -4387,6 +4497,8 @@ def _expected_policy_projection(expected: ExpectedSettlement) -> dict[str, objec
         "result": result,
         "execution_set": {
             "schema": [
+                "bytes_done_high_water",
+                "bytes_total",
                 "published_evidence",
                 "recording",
                 "selected",
@@ -4469,15 +4581,44 @@ def _apply_resume_policy_projection(
     first_tree.pop("$TARGET/third.bin")
     first_xset = {
         **xset,
+        "bytes_done_high_water": 24,
+        "bytes_total": 37,
         "status": list(xset["status"][:2]),
         "published_evidence": list(xset["published_evidence"][:2]),
     }
+    final_xset = {
+        **xset,
+        "bytes_done_high_water": 37,
+        "bytes_total": 37,
+    }
+
+    def progress_snapshot(
+        *, items_done: int, bytes_done: int, current_path: str | None
+    ) -> dict[str, object]:
+        return {
+            "phase": "execute",
+            "items_done": items_done,
+            "items_total": 3,
+            "bytes_done": bytes_done,
+            "bytes_total": 37,
+            "current_path": current_path,
+            "item_id": None,
+            "item_type": None,
+            "item_attempt_id": None,
+            "item_bytes_done": None,
+            "item_bytes_total": None,
+            "attempt_lifecycle": [],
+        }
+
     first_items = item_maps[:2]
     first_invocation = {
         "row": projection["row"],
         "termination": {"returned": None, "raised": "PauseRequested"},
         "result": None,
         "execution_set": first_xset,
+        "progress_final": progress_snapshot(
+            items_done=2, bytes_done=24, current_path="update.bin"
+        ),
         "items": first_items,
         "reliable_events": [
             {"type": "phase", "phase": "execute"},
@@ -4493,7 +4634,10 @@ def _apply_resume_policy_projection(
         "row": projection["row"],
         "termination": {"returned": "completed", "raised": None},
         "result": second_result,
-        "execution_set": xset,
+        "execution_set": final_xset,
+        "progress_final": progress_snapshot(
+            items_done=3, bytes_done=37, current_path="third.bin"
+        ),
         "items": [item_maps[2]],
         "reliable_events": [
             {"type": "phase", "phase": "execute"},
@@ -4509,7 +4653,10 @@ def _apply_resume_policy_projection(
         "row": projection["row"],
         "termination": {"returned": "completed", "raised": None},
         "result": terminal_result,
-        "execution_set": xset,
+        "execution_set": final_xset,
+        "progress_final": progress_snapshot(
+            items_done=3, bytes_done=37, current_path=None
+        ),
         "items": [],
         "reliable_events": [{"type": "phase", "phase": "execute"}],
         "recorder_calls": recorder_calls,

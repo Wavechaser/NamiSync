@@ -553,6 +553,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "ok",
             "selected": 2,
@@ -653,11 +655,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 12,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 2
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 2,
+            "items_total": 2,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -744,6 +753,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -1042,11 +1053,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -1181,6 +1199,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -1445,11 +1465,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 12,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -1565,6 +1592,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -2129,11 +2158,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 12,
             "bytes_total": 12,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -2317,6 +2353,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 15,
+            "bytes_total": 15,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -2962,11 +3000,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 15,
             "bytes_total": 15,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -3174,6 +3219,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -3973,11 +4020,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 11,
             "bytes_total": 11,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -4208,6 +4262,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -4475,11 +4531,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 12,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -4606,6 +4669,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -4882,11 +4947,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -5035,6 +5107,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [
               {
                 "content": {
@@ -5601,11 +5675,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -5833,6 +5914,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [
               {
                 "content": {
@@ -6652,11 +6735,25 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [
+              {
+                "attempt_id": "attempt-1",
+                "item_id": "00000000000000000000000000000001",
+                "item_type": "operation",
+                "phase": "execute"
+              }
+            ],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -6935,6 +7032,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 4,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -7211,11 +7310,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 4,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -7365,6 +7471,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -8288,11 +8396,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -8601,6 +8716,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -9175,11 +9292,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -9391,6 +9515,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -10309,11 +10435,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -10614,6 +10747,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 15,
+            "bytes_total": 15,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -11269,11 +11404,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 15,
             "bytes_total": 15,
             "current_path": "renamed.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -11508,6 +11650,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -12101,11 +12245,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -12315,6 +12466,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -12900,11 +13053,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -13104,6 +13264,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -13691,11 +13853,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -13910,6 +14079,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -14185,11 +14356,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -14325,6 +14503,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -14624,11 +14804,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "new.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -14782,6 +14969,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 15,
+            "bytes_total": 15,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -15672,11 +15861,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 15,
             "bytes_total": 15,
             "current_path": "renamed.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -15965,6 +16161,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -16271,11 +16469,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "new.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -16430,6 +16635,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -16664,11 +16871,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "KEEP.txt",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -16805,6 +17019,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -17112,11 +17328,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "trash.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -17279,6 +17502,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -17458,11 +17683,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "delete.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -17574,6 +17806,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -17812,11 +18046,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -17941,6 +18182,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -18255,11 +18498,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "new.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -18416,6 +18666,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -18731,11 +18983,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "trash.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -18900,6 +19159,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -19095,11 +19356,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "delete.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -19224,6 +19492,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -19404,11 +19674,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "delete.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -19537,6 +19814,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -19680,11 +19959,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "noop.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -19802,6 +20088,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 45,
             "published_evidence": [],
             "recording": "ok",
             "selected": 3,
@@ -20165,11 +20453,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 45,
             "current_path": "dependent.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 3,
-            "items_total": 3
+            "items_total": 3,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -20372,6 +20667,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -21170,11 +21467,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -21429,6 +21733,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -22164,11 +22470,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -22409,6 +22722,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -23204,11 +23519,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -23445,6 +23767,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -24240,11 +24564,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -24490,6 +24821,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -24673,11 +25006,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -24782,6 +25122,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -24978,11 +25320,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -25101,6 +25450,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -25339,11 +25690,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -25468,6 +25826,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -25700,11 +26060,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -25831,6 +26198,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -26061,11 +26430,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -26184,6 +26560,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 5,
             "published_evidence": [],
             "recording": "ok",
             "selected": 2,
@@ -26467,11 +26845,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 5,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 2
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 2,
+            "items_total": 2,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -26604,6 +26989,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 5,
             "published_evidence": [],
             "recording": "ok",
             "selected": 2,
@@ -26874,11 +27261,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 5,
-            "current_path": null,
-            "items_done": 0,
-            "items_total": 2
+            "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 2,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -27001,6 +27395,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 5,
             "published_evidence": [],
             "recording": "ok",
             "selected": 2,
@@ -27271,11 +27667,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 5,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 2
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 2,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -27398,6 +27801,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -27640,11 +28045,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -27793,6 +28205,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 12,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -28042,11 +28456,25 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [
+              {
+                "attempt_id": "attempt-1",
+                "item_id": "00000000000000000000000000000001",
+                "item_type": "operation",
+                "phase": "execute"
+              }
+            ],
             "bytes_done": 0,
             "bytes_total": 12,
-            "current_path": null,
+            "current_path": "copy.bin",
+            "item_attempt_id": "attempt-1",
+            "item_bytes_done": 0,
+            "item_bytes_total": 12,
+            "item_id": "00000000000000000000000000000001",
+            "item_type": "operation",
             "items_done": 0,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -28152,6 +28580,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [
               {
                 "content": {
@@ -28716,11 +29146,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -28940,6 +29377,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -29209,11 +29648,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "new.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -29375,6 +29821,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -29483,11 +29931,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "new.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -29607,6 +30062,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [
               {
                 "content": {
@@ -30173,11 +30630,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -30405,6 +30869,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 24,
+            "bytes_total": 24,
             "published_evidence": [
               {
                 "content": {
@@ -31500,11 +31966,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 24,
             "bytes_total": 24,
             "current_path": "second.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 2,
-            "items_total": 2
+            "items_total": 2,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -31905,6 +32378,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 37,
+            "bytes_total": 37,
             "published_evidence": [
               {
                 "content": {
@@ -34053,6 +34528,8 @@
             {
               "backend_calls": 2,
               "execution_set": {
+                "bytes_done_high_water": 24,
+                "bytes_total": 37,
                 "published_evidence": [
                   {
                     "content": {
@@ -34155,6 +34632,8 @@
                 ],
                 "recording": "ok",
                 "schema": [
+                  "bytes_done_high_water",
+                  "bytes_total",
                   "published_evidence",
                   "recording",
                   "selected",
@@ -34209,6 +34688,20 @@
                   "reason": null
                 }
               ],
+              "progress_final": {
+                "attempt_lifecycle": [],
+                "bytes_done": 24,
+                "bytes_total": 37,
+                "current_path": "update.bin",
+                "item_attempt_id": null,
+                "item_bytes_done": null,
+                "item_bytes_total": null,
+                "item_id": null,
+                "item_type": null,
+                "items_done": 2,
+                "items_total": 3,
+                "phase": "execute"
+              },
               "recorder_calls": [
                 {
                   "command": "copied",
@@ -34658,6 +35151,8 @@
             {
               "backend_calls": 3,
               "execution_set": {
+                "bytes_done_high_water": 37,
+                "bytes_total": 37,
                 "published_evidence": [
                   {
                     "content": {
@@ -34809,6 +35304,8 @@
                 ],
                 "recording": "ok",
                 "schema": [
+                  "bytes_done_high_water",
+                  "bytes_total",
                   "published_evidence",
                   "recording",
                   "selected",
@@ -34858,6 +35355,20 @@
                   "reason": null
                 }
               ],
+              "progress_final": {
+                "attempt_lifecycle": [],
+                "bytes_done": 37,
+                "bytes_total": 37,
+                "current_path": "third.bin",
+                "item_attempt_id": null,
+                "item_bytes_done": null,
+                "item_bytes_total": null,
+                "item_id": null,
+                "item_type": null,
+                "items_done": 3,
+                "items_total": 3,
+                "phase": "execute"
+              },
               "recorder_calls": [
                 {
                   "command": "copied",
@@ -35444,6 +35955,8 @@
             {
               "backend_calls": 3,
               "execution_set": {
+                "bytes_done_high_water": 37,
+                "bytes_total": 37,
                 "published_evidence": [
                   {
                     "content": {
@@ -35595,6 +36108,8 @@
                 ],
                 "recording": "ok",
                 "schema": [
+                  "bytes_done_high_water",
+                  "bytes_total",
                   "published_evidence",
                   "recording",
                   "selected",
@@ -35635,6 +36150,20 @@
                 ]
               },
               "items": [],
+              "progress_final": {
+                "attempt_lifecycle": [],
+                "bytes_done": 37,
+                "bytes_total": 37,
+                "current_path": null,
+                "item_attempt_id": null,
+                "item_bytes_done": null,
+                "item_bytes_total": null,
+                "item_id": null,
+                "item_type": null,
+                "items_done": 3,
+                "items_total": 3,
+                "phase": "execute"
+              },
               "recorder_calls": [
                 {
                   "command": "copied",
@@ -36344,11 +36873,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 37,
             "bytes_total": 37,
             "current_path": null,
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 3,
-            "items_total": 3
+            "items_total": 3,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -37060,6 +37596,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -37443,11 +37981,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": "new.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -37628,6 +38173,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -37934,11 +38481,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -38066,6 +38620,8 @@
             "trace": []
           },
           "execution_set": {
+            "bytes_done_high_water": 0,
+            "bytes_total": 0,
             "published_evidence": [],
             "recording": "degraded",
             "selected": 1,
@@ -38372,11 +38928,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 0,
             "bytes_total": 0,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -38519,6 +39082,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [
               {
                 "content": {
@@ -39720,11 +40285,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 11,
             "bytes_total": 11,
-            "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -40067,6 +40639,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -41273,11 +41847,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 11,
             "bytes_total": 11,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -41609,6 +42190,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [
               {
                 "content": {
@@ -42312,11 +42895,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -42571,6 +43161,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 12,
+            "bytes_total": 12,
             "published_evidence": [
               {
                 "content": {
@@ -43237,11 +43829,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 12,
             "bytes_total": 12,
             "current_path": "copy.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -43490,6 +44089,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 15,
+            "bytes_total": 15,
             "published_evidence": [
               {
                 "content": {
@@ -44526,11 +45127,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 15,
             "bytes_total": 15,
             "current_path": "renamed.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -44878,6 +45486,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [
               {
                 "content": {
@@ -46079,11 +46689,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -46462,6 +47079,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 38,
+            "bytes_total": 38,
             "published_evidence": [
               {
                 "content": {
@@ -49812,11 +50431,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 38,
             "bytes_total": 38,
             "current_path": "folder",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 9,
-            "items_total": 9
+            "items_total": 9,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -50995,6 +51621,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -52131,11 +52759,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -52462,6 +53097,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -53593,11 +54230,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -53914,6 +54558,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -55037,11 +55683,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -55348,6 +56001,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -56472,11 +57127,18 @@
             }
           ],
           "progress_final": {
+            "attempt_lifecycle": [],
             "bytes_done": 11,
             "bytes_total": 11,
             "current_path": "update.bin",
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
             "items_done": 1,
-            "items_total": 1
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -56795,6 +57457,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -57931,11 +58595,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 11,
             "bytes_total": 11,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -58240,6 +58911,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -59376,11 +60049,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 11,
             "bytes_total": 11,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -59685,6 +60365,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -60813,11 +61495,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 11,
             "bytes_total": 11,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [
@@ -61112,6 +61801,8 @@
             ]
           },
           "execution_set": {
+            "bytes_done_high_water": 11,
+            "bytes_total": 11,
             "published_evidence": [],
             "recording": "ok",
             "selected": 1,
@@ -62242,11 +62933,18 @@
             }
           ],
           "progress_final": {
-            "bytes_done": 0,
+            "attempt_lifecycle": [],
+            "bytes_done": 11,
             "bytes_total": 11,
             "current_path": null,
-            "items_done": 0,
-            "items_total": 1
+            "item_attempt_id": null,
+            "item_bytes_done": null,
+            "item_bytes_total": null,
+            "item_id": null,
+            "item_type": null,
+            "items_done": 1,
+            "items_total": 1,
+            "phase": "execute"
           },
           "recorder": {
             "trace": [

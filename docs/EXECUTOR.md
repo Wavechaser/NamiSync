@@ -489,6 +489,23 @@ settlement-policy fix may replace it after its focused regression lands. The
 replacement baseline and its semantic pin then land together in one dedicated,
 reviewed baseline-replacement commit before the three-run gate is restarted.
 
+The normalized trace projects the version-4 Progress phase, nominal item and
+attempt state, attempt-local counters, and the execution continuation's byte
+high-water and fixed selected-byte admission. Random attempt tokens are never
+erased from the authority merely to stabilize the snapshot: each token observed
+in a Progress event is replaced by a deterministic first-seen ordinal while its
+phase and nominal owner are retained, and reuse under a different owner fails
+the capture. A retired token may not reappear. The pause/resume row retains each
+invocation's v4 Progress and execution byte authority rather than projecting
+only the final continuation. Reporter transition tests remain the detailed
+attempt-state authority; the oracle records their integrated visibility across
+all settlement policies. Independent global invariants also require final
+Progress `items_done` to equal the number of emitted reliable terminal item
+outcomes,
+require its aggregate byte fields to equal the live `ExecutionSet` authority,
+and forbid terminal or exceptional-unwind activity from surviving after
+settlement.
+
 Fixture fault injection is fail-closed: every installed rule must fire its
 declared number of times. The cleanup matrix includes the failed pre-retry temp
 cleanup regression, requiring `cleanup-failed` settlement before retry sleep or
