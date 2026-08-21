@@ -97,8 +97,10 @@ CORPUS_SPEC = {
 
 # Current-source representation overlay only. The frozen v1 corpus and its
 # protected calibration/holdout hashes remain unchanged.
-CURRENT_V4_PROGRESS_REPRESENTATION = {
-    "scope": "ordinary transport custody; maximum_no_gap retains no Progress",
+CURRENT_V4_TRANSPORT_REPRESENTATION = {
+    "scope": (
+        "all current transport custody; Progress is populated only in ordinary"
+    ),
     "typed_envelope": {
         "retained_in": "EventHub replay and subscriber queues",
         "fields": {
@@ -106,7 +108,9 @@ CURRENT_V4_PROGRESS_REPRESENTATION = {
             "seq": "populated, increasing per session",
             "at": "populated UTC timestamp",
             "schema_version": "populated with live core event version 4",
-            "body": "populated Progress dataclass",
+            "body": (
+                "Progress in ordinary or an inherited reliable body named below"
+            ),
         },
     },
     "session_event_view": {
@@ -116,8 +120,10 @@ CURRENT_V4_PROGRESS_REPRESENTATION = {
             "sequence": "populated from Envelope.seq",
             "at": "populated canonical timestamp string",
             "schema_version": "populated with nested live core event version 4",
-            "body_type": "populated with Progress",
-            "body": "populated dict with exactly the progress_body keys",
+            "body_type": "Progress or one inherited reliable body name",
+            "body": (
+                "exact progress_body dict or one inherited reliable body mapping"
+            ),
         },
     },
     "progress_body": {
@@ -141,6 +147,23 @@ CURRENT_V4_PROGRESS_REPRESENTATION = {
     "mapping_families": {
         "SessionEventView.body": "ordinary Progress uses exactly progress_body",
         "other_body_types": "inherited unchanged from the frozen v1 representation",
+    },
+    "reliable_bodies": {
+        "StateChanged": "populated at admission; fields and mapping inherited",
+        "ItemOutcome": "populated in ordinary and maximum; fields inherited",
+        "Terminal": (
+            "populated at cleanup; result mapping inherited and its subject-scaled "
+            "subtree is charged separately from transport custody"
+        ),
+        "Gap": "intentionally absent under both measured envelopes",
+    },
+    "maximum_no_gap": {
+        "Progress": "intentionally absent",
+        "Envelope.schema_version": "populated with live core event version 4",
+        "SessionEventView.schema_version": (
+            "populated with nested live core event version 4"
+        ),
+        "ItemOutcome": "fields and body mapping inherited unchanged from frozen v1",
     },
     "aliasing": {
         "queue_envelope": (

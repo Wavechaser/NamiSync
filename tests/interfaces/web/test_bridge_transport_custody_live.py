@@ -84,13 +84,15 @@ def test_current_v4_progress_representation_overlay_is_complete() -> None:
     from namisync.core.events import Envelope, Progress
     from namisync.workflows.views import SessionEventView
 
-    overlay = child.CURRENT_V4_PROGRESS_REPRESENTATION
+    overlay = child.CURRENT_V4_TRANSPORT_REPRESENTATION
     assert set(overlay) == {
         "scope",
         "typed_envelope",
         "session_event_view",
         "progress_body",
         "mapping_families",
+        "reliable_bodies",
+        "maximum_no_gap",
         "aliasing",
     }
     assert set(overlay["typed_envelope"]["fields"]) == {
@@ -102,11 +104,25 @@ def test_current_v4_progress_representation_overlay_is_complete() -> None:
     assert set(overlay["progress_body"]) == {
         field.name for field in fields(Progress)
     }
+    assert set(overlay["reliable_bodies"]) == {
+        "StateChanged",
+        "ItemOutcome",
+        "Terminal",
+        "Gap",
+    }
+    assert set(overlay["maximum_no_gap"]) == {
+        "Progress",
+        "Envelope.schema_version",
+        "SessionEventView.schema_version",
+        "ItemOutcome",
+    }
     for family in (
         overlay["typed_envelope"]["fields"],
         overlay["session_event_view"]["fields"],
         overlay["progress_body"],
         overlay["mapping_families"],
+        overlay["reliable_bodies"],
+        overlay["maximum_no_gap"],
         overlay["aliasing"],
     ):
         assert all(
