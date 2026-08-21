@@ -543,8 +543,9 @@ SH-G-8 and BR-G-42 event/transport custody are now closed by the complete
 evidence below. The ordinary deterministic fixture now proves four observations
 precede tick zero, the exact 60-logical-second
 6,000-`Progress`/600-reliable-item shape is lossless and ordered, progress is
-monotonic after coalescing, all four terminal records arrive, and subscriber and
-adapter queues stay at or below 64. The separate 260-reliable overflow
+monotonic after coalescing by its byte-work high-water, all four terminal
+records arrive, and subscriber and adapter queues stay at or below 64. The
+separate 260-reliable overflow
 regression remains explicitly beyond-envelope and preserves visible
 `Gap`/tail/terminal reconciliation. The
 standalone installed-wheel WebView2 harness remains useful event and diagnostic

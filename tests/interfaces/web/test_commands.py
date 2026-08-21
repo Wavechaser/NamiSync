@@ -14,6 +14,11 @@ from typing import get_args, get_type_hints
 
 import pytest
 
+from namisync.core.events import (
+    DeliveryClass,
+    delivery_class,
+    envelope_from_dict,
+)
 from namisync.interfaces import service as service_module
 from namisync.interfaces.ui_state import (
     AppearanceValue,
@@ -60,6 +65,7 @@ from namisync.interfaces.web.drain import (
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.workflows import PLAN_KIND
+from namisync.workflows.models import HistoryEventPageView, HistoryEventView
 from namisync.workflows.views import SessionEventView
 from tests.interfaces.web._public_view_witnesses import (
     PUBLIC_VIEW_WITNESSES,
@@ -1608,6 +1614,57 @@ def test_br_g_32_public_view_witness_table_keys_are_exact_and_manual() -> None:
                 allow_nan=False,
             )
             assert json.loads(encoded) == witness.expected
+
+
+def test_history_event_witnesses_are_supported_reliable_row_contracts() -> None:
+    events = tuple(
+        witness.value for witness in PUBLIC_VIEW_WITNESSES[HistoryEventView]
+    )
+    page = PUBLIC_VIEW_WITNESSES[HistoryEventPageView][0].value
+
+    assert {event.schema_version for event in events} == {3, 4}
+    assert page.events == events
+    assert tuple(event.sequence for event in page.events) == (9, 10)
+    assert len({event.sequence for event in page.events}) == len(page.events)
+    assert page.next_after_seq == page.events[-1].sequence
+    assert page.next_after_seq <= page.through_seq
+    assert not page.has_more
+    for event in events:
+        assert event.body_type in {
+            "StateChanged",
+            "PhaseChanged",
+            "ItemOutcome",
+            "IntegrityOutcome",
+            "Gap",
+        }
+        assert len(event.payload_hash) == 64
+        assert len(event.receipt_hash) == 64
+        assert set(event.payload_hash + event.receipt_hash) <= set(
+            "0123456789abcdef"
+        )
+        if event.body is None:
+            assert event.disposition == "rejected"
+            assert event.duplicate_of_seq is None
+            assert event.rejection_reason == "event-too-large"
+            continue
+        decoded = envelope_from_dict(
+            {
+                "session_id": event.session_id,
+                "seq": event.sequence,
+                "at": event.at,
+                "schema_version": event.schema_version,
+                "body_type": event.body_type,
+                "body": event.body,
+            }
+        )
+        assert delivery_class(decoded.body) is DeliveryClass.RELIABLE
+        assert event.disposition in {"recorded", "duplicate"}
+        assert event.rejection_reason is None
+        if event.disposition == "recorded":
+            assert event.duplicate_of_seq is None
+        else:
+            assert event.duplicate_of_seq is not None
+            assert 0 < event.duplicate_of_seq < event.sequence
 
 
 def test_br_g_32_public_view_enum_manifest_matches_resolved_annotations() -> None:

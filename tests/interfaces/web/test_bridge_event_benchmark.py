@@ -105,6 +105,10 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert "PrivateUsage" in parent
     assert "_QueueMemorySampler" not in child
     assert "append_producer_timings" in child
+    assert "items_done=reliable_emissions" in child
+    assert "items_total=150" in child
+    assert "? event.body.bytes_done" in browser
+    assert "const completed = event.body.bytes_done;" in browser
     assert "publisher.publish_final(recorder.snapshot())" in child
     assert "publisher.publish_failure(recorder.snapshot())" in child
     assert ".replace(" not in child
@@ -124,6 +128,50 @@ def test_bridge_event_benchmark_sources_compile_and_keep_test_seams_external() -
     assert terminal_preflush < browser.index("samples.push(sample)")
     assert browser.count("flushSamples(true)") == 1
     assert 'sampleClass === "terminal_event" || sampleClass === "terminal_record",' in browser
+
+
+@pytest.mark.parametrize("task_index", range(4))
+def test_bridge_event_benchmark_v4_attempt_schedule_is_coherent(
+    task_index: int,
+) -> None:
+    child = _child_module()
+    from namisync.core.events import Progress
+
+    reliable_emissions = 0
+    attempts: dict[str, list[object]] = {}
+    for tick in range(1_500):
+        attempt = child._attempt_sample(task_index, tick, reliable_emissions)
+        snapshot = Progress(
+            "execute",
+            items_done=reliable_emissions,
+            items_total=150,
+            bytes_done=tick + 1,
+            bytes_total=1_500,
+            current_path=f"progress-{tick + 1}",
+            item_id=attempt.item_id,
+            item_type="operation",
+            item_attempt_id=attempt.attempt_id,
+            item_bytes_done=attempt.bytes_done,
+            item_bytes_total=attempt.bytes_total,
+        )
+        attempts.setdefault(snapshot.item_id, []).append(snapshot)
+        if attempt.settles:
+            reliable_emissions += 1
+
+    assert reliable_emissions == 150
+    assert len(attempts) == 150
+    assert tuple(attempts) == tuple(
+        f"task-{task_index}-item-{ordinal:03d}" for ordinal in range(150)
+    )
+    assert len({events[0].item_attempt_id for events in attempts.values()}) == 150
+    for events in attempts.values():
+        assert {event.item_attempt_id for event in events} == {
+            events[0].item_attempt_id
+        }
+        assert [event.item_bytes_done for event in events] == list(
+            range(1, events[0].item_bytes_total + 1)
+        )
+    assert attempts[f"task-{task_index}-item-149"][-1].bytes_done == 1_500
 
 
 def test_bridge_event_benchmark_assigns_actual_child_before_admission(

@@ -95,6 +95,71 @@ CORPUS_SPEC = {
     ),
 }
 
+# Current-source representation overlay only. The frozen v1 corpus and its
+# protected calibration/holdout hashes remain unchanged.
+CURRENT_V4_PROGRESS_REPRESENTATION = {
+    "scope": "ordinary transport custody; maximum_no_gap retains no Progress",
+    "typed_envelope": {
+        "retained_in": "EventHub replay and subscriber queues",
+        "fields": {
+            "session_id": "populated per task",
+            "seq": "populated, increasing per session",
+            "at": "populated UTC timestamp",
+            "schema_version": "populated with live core event version 4",
+            "body": "populated Progress dataclass",
+        },
+    },
+    "session_event_view": {
+        "retained_in": "TaskRegistry adapter queue",
+        "fields": {
+            "session_id": "populated from the Envelope",
+            "sequence": "populated from Envelope.seq",
+            "at": "populated canonical timestamp string",
+            "schema_version": "populated with nested live core event version 4",
+            "body_type": "populated with Progress",
+            "body": "populated dict with exactly the progress_body keys",
+        },
+    },
+    "progress_body": {
+        "phase": "populated with execute",
+        "items_done": (
+            "populated with grouped-schedule emitted outcome counts from 0..148"
+        ),
+        "items_total": "populated with fixed selected admission 150",
+        "bytes_done": "populated with attempted-work cadence 1..1500",
+        "bytes_total": "populated with fixed reviewed work budget 1500",
+        "current_path": "populated dynamic informational path; not identity",
+        "item_id": (
+            "populated 32-hex operation id; value-equals the first following "
+            "ItemOutcome id but is independently allocated there"
+        ),
+        "item_type": "populated with operation",
+        "item_attempt_id": "populated distinct 32-hex token per 25-byte attempt",
+        "item_bytes_done": "populated with attempt-local cadence 1..25",
+        "item_bytes_total": "populated with fixed attempt budget 25",
+    },
+    "mapping_families": {
+        "SessionEventView.body": "ordinary Progress uses exactly progress_body",
+        "other_body_types": "inherited unchanged from the frozen v1 representation",
+    },
+    "aliasing": {
+        "queue_envelope": (
+            "one Envelope may be referenced by replay and subscriber custody; "
+            "the recursive sizer deduplicates by identity"
+        ),
+        "view_body": (
+            "SessionEventView owns a new dict whose keys are fixed serializer "
+            "strings and whose scalar values forward the Progress field values"
+        ),
+        "item_identity": (
+            "one item-id object is reused by 25 Progress snapshots; the first "
+            "following ItemOutcome constructs an independent value-equal string"
+        ),
+        "attempt_identity": "one attempt-id value is reused by its 25 snapshots",
+        "dynamic_paths": "each Progress owns one distinct informational path value",
+    },
+}
+
 _ROOT = Path(__file__).parents[3]
 sys.path.insert(0, str(_ROOT.resolve()))
 _RETAINED = Path(__file__).with_name("_bridge_retained_memory.py")
@@ -151,14 +216,14 @@ class _CustodyInvocation:
         self._state.entered.set()
         if self._state.mode == "ordinary":
             self._run_ordinary(context)
-            item_count = 150
+            bytes_done = 1_500
         else:
             self._run_maximum(context)
-            item_count = 129
+            bytes_done = 129
         return OperationResult(
             SessionState.FAILED,
-            bytes_done=item_count,
-            bytes_total=item_count,
+            bytes_done=bytes_done,
+            bytes_total=bytes_done,
         )
 
     def _run_ordinary(self, context) -> None:
@@ -169,14 +234,25 @@ class _CustodyInvocation:
         local_outcome = 0
         for tick in range(60):
             self._state.ordinary_releases[tick].wait()
+            item_id = _item_id(
+                self._state.variant,
+                "ordinary",
+                self._state.task_index,
+                local_outcome,
+            )
+            attempt_id = _attempt_id(
+                self._state.variant,
+                self._state.task_index,
+                tick,
+            )
             for within_tick in range(25):
                 local_progress = tick * 25 + within_tick
                 ordinal = self._state.task_index * 1_500 + local_progress
                 context.emit(
                     Progress(
                         "execute",
-                        items_done=local_progress + 1,
-                        items_total=1_500,
+                        items_done=local_outcome,
+                        items_total=150,
                         bytes_done=local_progress + 1,
                         bytes_total=1_500,
                         current_path=_payload_path(
@@ -190,6 +266,11 @@ class _CustodyInvocation:
                             ),
                             self._state.variant,
                         ),
+                        item_id=item_id,
+                        item_type="operation",
+                        item_attempt_id=attempt_id,
+                        item_bytes_done=within_tick + 1,
+                        item_bytes_total=25,
                     )
                 )
             count = reliable_pattern[(self._state.task_index + tick) % 4]
@@ -391,6 +472,14 @@ def _item_id(variant: str, fixture: str, task: int, local: int) -> str:
     return hashlib.sha256(seed.encode("ascii")).hexdigest()[:32]
 
 
+def _attempt_id(variant: str, task: int, tick: int) -> str:
+    _variant_permutation(variant)
+    if not 0 <= task < 4 or not 0 <= tick < 60:
+        raise ValueError("invalid current-v4 attempt identity position")
+    seed = f"{CORPUS_VERSION}\0{variant}\0ordinary-attempt\0{task}\0{tick}"
+    return hashlib.sha256(seed.encode("ascii")).hexdigest()[:32]
+
+
 def _run_id(variant: str, fixture: str, task: int) -> str:
     _variant_permutation(variant)
     if fixture not in {"ordinary", "maximum"} or not 0 <= task < 4:
@@ -582,6 +671,8 @@ def _adapter_body_types(registry, starts) -> list[list[str]]:
             updates = tuple(task.queue)
         if any(type(update) is not SessionEventView for update in updates):
             raise AssertionError("ordinary checkpoint retained a non-event update")
+        if any(update.schema_version != 4 for update in updates):
+            raise AssertionError("ordinary checkpoint retained a non-v4 event")
         bodies.append([update.body_type for update in updates])
     return bodies
 
@@ -754,7 +845,7 @@ def _ordinary_fixture(
                     delivered_ids[start.session_id].append(event.body["item_id"])
                 elif event.body_type == "Progress":
                     delivered_progress[start.session_id].append(
-                        event.body["items_done"]
+                        event.body["bytes_done"]
                     )
         states[0].ordinary_continue[tick].set()
 
@@ -829,6 +920,8 @@ def _ordinary_fixture(
             record.state != "failed"
             or record.result is None
             or record.result.headline != "failed"
+            or record.result.bytes_done != 1_500
+            or record.result.bytes_total != 1_500
             or [item.item_id for item in record.result.items] != expected
             or any(item.result != "failed" for item in record.result.items)
             or terminal_events[start.session_id] != 1

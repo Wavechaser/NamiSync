@@ -5,7 +5,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+from dataclasses import fields
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 
 FROZEN_VALIDATOR = Path(__file__).with_name(
@@ -25,6 +29,90 @@ def _frozen_validator():
     sys.modules[name] = module
     specification.loader.exec_module(module)
     return module
+
+
+def test_current_v4_ordinary_fixture_models_attempt_and_settlement() -> None:
+    frozen = _frozen_validator()
+    child = frozen._child_module()
+    events = []
+
+    class PassGate:
+        def wait(self) -> None:
+            return None
+
+        def set(self) -> None:
+            return None
+
+    class StopAfterFirstTick:
+        def wait(self) -> None:
+            raise RuntimeError("stop after first logical tick")
+
+    state = SimpleNamespace(
+        task_index=0,
+        variant=frozen.VARIANT,
+        ordinary_releases=(PassGate(), StopAfterFirstTick()),
+        ordinary_done=(PassGate(),),
+        ordinary_continue=(PassGate(),),
+    )
+    invocation = child._CustodyInvocation(state)
+    context = SimpleNamespace(emit=events.append)
+
+    with pytest.raises(RuntimeError, match="stop after first logical tick"):
+        invocation._run_ordinary(context)
+
+    progress = events[:25]
+    outcomes = events[25:]
+    assert len(progress) == 25
+    assert len(outcomes) == 3
+    assert {event.phase for event in progress} == {"execute"}
+    assert {event.items_done for event in progress} == {0}
+    assert {event.items_total for event in progress} == {150}
+    assert [event.bytes_done for event in progress] == list(range(1, 26))
+    assert {event.bytes_total for event in progress} == {1_500}
+    assert {event.item_type for event in progress} == {"operation"}
+    assert {event.item_id for event in progress} == {outcomes[0].item_id}
+    assert len({event.item_attempt_id for event in progress}) == 1
+    assert len(progress[0].item_attempt_id) == 32
+    assert [event.item_bytes_done for event in progress] == list(range(1, 26))
+    assert {event.item_bytes_total for event in progress} == {25}
+    assert len({outcome.item_id for outcome in outcomes}) == 3
+
+
+def test_current_v4_progress_representation_overlay_is_complete() -> None:
+    frozen = _frozen_validator()
+    child = frozen._child_module()
+    from namisync.core.events import Envelope, Progress
+    from namisync.workflows.views import SessionEventView
+
+    overlay = child.CURRENT_V4_PROGRESS_REPRESENTATION
+    assert set(overlay) == {
+        "scope",
+        "typed_envelope",
+        "session_event_view",
+        "progress_body",
+        "mapping_families",
+        "aliasing",
+    }
+    assert set(overlay["typed_envelope"]["fields"]) == {
+        field.name for field in fields(Envelope)
+    }
+    assert set(overlay["session_event_view"]["fields"]) == {
+        field.name for field in fields(SessionEventView)
+    }
+    assert set(overlay["progress_body"]) == {
+        field.name for field in fields(Progress)
+    }
+    for family in (
+        overlay["typed_envelope"]["fields"],
+        overlay["session_event_view"]["fields"],
+        overlay["progress_body"],
+        overlay["mapping_families"],
+        overlay["aliasing"],
+    ):
+        assert all(
+            type(description) is str and description
+            for description in family.values()
+        )
 
 
 def test_current_source_transport_custody_stays_within_frozen_ceiling(

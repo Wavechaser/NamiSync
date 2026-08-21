@@ -35,6 +35,41 @@ class _Payload:
     value: object
 
 
+@dataclass(frozen=True, slots=True)
+class _AttemptSample:
+    item_id: str
+    attempt_id: str
+    bytes_done: int
+    bytes_total: int
+    settles: bool
+
+
+def _attempt_sample(task_index: int, tick: int, item_ordinal: int) -> _AttemptSample:
+    reliable_per_second = (3, 3, 2, 2)
+    second, within_second = divmod(tick, 25)
+    reliable_count = reliable_per_second[(task_index + second) % 4]
+    reliable_ticks = tuple(
+        ((item_index + 1) * 25) // reliable_count - 1
+        for item_index in range(reliable_count)
+    )
+    item_index = next(
+        index
+        for index, settlement_tick in enumerate(reliable_ticks)
+        if within_second <= settlement_tick
+    )
+    started_at = 0 if item_index == 0 else reliable_ticks[item_index - 1] + 1
+    settles_at = reliable_ticks[item_index]
+    item_id = f"task-{task_index}-item-{item_ordinal:03d}"
+    attempt_seed = f"benchmark-v4-attempt\0{task_index}\0{item_ordinal}"
+    return _AttemptSample(
+        item_id=item_id,
+        attempt_id=hashlib.sha256(attempt_seed.encode("ascii")).hexdigest()[:32],
+        bytes_done=within_second - started_at + 1,
+        bytes_total=settles_at - started_at + 1,
+        settles=within_second == settles_at,
+    )
+
+
 class _Recorder:
     def __init__(self, output: Path) -> None:
         self._output = output
@@ -186,7 +221,6 @@ class _BenchmarkInvocation:
         from namisync.core.evidence import Outcome
         from namisync.core.session import OperationResult, SessionState
 
-        reliable_per_second = (3, 3, 2, 2)
         self._start_barrier.wait(10)
         started = self._fixture_clock.started_at()
         progress_emissions = 0
@@ -202,14 +236,24 @@ class _BenchmarkInvocation:
             if remaining > 0:
                 sleep(remaining)
             completed = tick + 1
+            attempt = _attempt_sample(
+                self._task_index,
+                tick,
+                reliable_emissions,
+            )
             context.emit(
                 Progress(
                     "execute",
-                    items_done=completed,
-                    items_total=1_500,
+                    items_done=reliable_emissions,
+                    items_total=150,
                     bytes_done=completed,
                     bytes_total=1_500,
                     current_path=f"task-{self._task_index}/progress-{completed}",
+                    item_id=attempt.item_id,
+                    item_type="operation",
+                    item_attempt_id=attempt.attempt_id,
+                    item_bytes_done=attempt.bytes_done,
+                    item_bytes_total=attempt.bytes_total,
                 )
             )
             emitted_at = perf_counter()
@@ -218,26 +262,15 @@ class _BenchmarkInvocation:
             if first_emission_at is None:
                 first_emission_at = emitted_at
             last_emission_at = emitted_at
-            second, within_second = divmod(tick, 25)
-            reliable_count = reliable_per_second[
-                (self._task_index + second) % 4
-            ]
-            reliable_ticks = {
-                ((item_index + 1) * 25) // (reliable_count + 1)
-                for item_index in range(reliable_count)
-            }
-            if within_second in reliable_ticks:
-                item_index = sorted(reliable_ticks).index(within_second)
+            second, _ = divmod(tick, 25)
+            if attempt.settles:
                 context.emit(
                     ItemOutcome(
-                        item_id=(
-                            f"task-{self._task_index}-item-"
-                            f"{second:02d}-{item_index}"
-                        ),
+                        item_id=attempt.item_id,
                         kind="copy",
                         path=(
                             f"task-{self._task_index}/"
-                            f"file-{second:02d}-{item_index}.bin"
+                            f"file-{reliable_emissions:03d}.bin"
                         ),
                         outcome=Outcome.SUCCEEDED,
                     )

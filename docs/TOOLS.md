@@ -129,6 +129,13 @@ provenance but supplied no statistical power. It and the Tier-1 live check guard
 only the named realistic corpus, not a complete-domain hard wall. Do not extend
 or recalibrate that v1 apparatus by default.
 
+When a current event representation changes without changing the named scale
+axes, correct the live fixture, preserve the frozen calibration/holdout/ceiling,
+and rerun the installed-wheel event harness plus the one-child Tier-1 custody
+guard from clean committed source. Record the live drift and its ceiling margin;
+passing that guard is regression evidence, not a new calibration or acceptance
+artifact.
+
 BR-G-45 must first define and enforce its production aggregate-retention policy
 and derive analytical containment from the complete admitted domain. Only a
 separately identified native or renderer residual that production cannot bound

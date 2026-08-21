@@ -178,7 +178,7 @@ function recordSample(sampleClass, update) {
       ? null
       : performance.now() - benchmarkStartedAt,
     position: event?.body_type === "Progress"
-      ? event.body.items_done
+      ? event.body.bytes_done
       : null,
     record_state: record?.state ?? null,
     session_id: event?.session_id ?? record.session_id,
@@ -237,7 +237,7 @@ function acceptUpdate(task, update) {
   }
   const event = update.event;
   if (event.body_type === "Progress") {
-    const completed = event.body.items_done;
+    const completed = event.body.bytes_done;
     if (completed < task.lastProgress) {
       progressMonotonic = false;
     }

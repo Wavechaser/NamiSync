@@ -2802,6 +2802,22 @@ headings are organizational, not lane ownership.
   | Projection retention | Six populated 120,000-node inventory projections, then a seventh view to force LRU eviction |
   | Events | Four active tasks for 60 seconds at 100 aggregate `Progress` events/s plus 10 aggregate reliable events/s |
 
+  The current-source event and custody fixtures use the version-4 Progress
+  protocol rather than treating the cadence coordinate as completed items.
+  Each task admits 150 reliable items; `items_done` is the number of reliable
+  terminal item outcomes emitted before that snapshot, while the independent
+  `bytes_done` coordinate advances from 1 through 1,500 and owns coalesced
+  cadence/monotonicity sampling. Progress snapshots populate the version-4
+  operation identity, opaque attempt identity, and attempt-local byte pair;
+  each modeled attempt keeps one token through its chunks and is followed by
+  its matching reliable outcome. In the ordinary fixture, terminal results
+  retain the same 1,500-byte attempted-work high-water; maximum-no-`Gap`
+  remains an outcome-only fixture. This preserves the named 6,000-Progress /
+  600-outcome envelope without manufacturing item settlement or publication.
+  A source-hashed current-version overlay classifies every retained
+  `Envelope`, `SessionEventView`, exact Progress-body field, and reachable body
+  mapping without altering the frozen v1 corpus specification.
+
   | Measurement | Ceiling and authority |
   | --- | --- |
   | Local critical-click feedback | 50 ms maximum; Tier 0 target, Tier 2 Slice 5/6 acceptance |
@@ -2840,8 +2856,16 @@ headings are organizational, not lane ownership.
   limit, and later representations must select authority anew under
   `DEFENSE.md` §7.
 
-  **Status.** Event correctness and transport custody are closed by the frozen
-  calibration/ceiling and independent holdout recorded in
+  The v1 calibration, ceiling, and holdout remain immutable historical
+  authority. A protocol/body representation change reruns the current-source
+  one-child Tier-1 guard against that ceiling; it does not rewrite, extend, or
+  promote the old empirical artifacts. The version-4 Progress fixture change
+  is pending that clean-commit live guard and installed-wheel event rerun before
+  final delivery acceptance.
+
+  **Status.** The historical v1 representation's event correctness and
+  transport custody are closed by the frozen calibration/ceiling and
+  independent holdout recorded in
   [Close transport custody and realign the bridge boundary](../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14).
   Current-source event timing and the Slice 5–7 product-view rows remain open on
   their owning slices. BR-G-45 terminal retention and shell-owned SH-G-15
