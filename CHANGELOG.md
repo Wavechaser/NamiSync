@@ -115,7 +115,7 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
-#### Extract truthful per-item progress (2026-08-21 – 2026-08-22)
+#### Extract truthful per-item progress (2026-08-21 – 2026-08-23)
 
 - Established core Progress v4 as the central phase/item/attempt protocol:
   selected and reliably settled item counts, monotonic attempted-byte
@@ -135,14 +135,15 @@ later workflow surfaces and beta packaging remain future phases.
   live Progress is refused. Strict live versus compatibility decoding remains
   tracked debt with executable separation guards. The dormant row gallery now
   consumes only an explicitly projected 0–100 value to render 4 px Copying and
-  Verifying bars; production row matching and live binding remain Slice 5 work.
+  Verifying bars inside the standard 8 px cell padding; production row matching
+  and live binding remain Slice 5 work.
 - Rebaselined the protected settlement oracle only after semantics stabilized;
   all 30 scenarios and 70 policy rows passed three identical runs. Updated
   installed event/custody fixtures retained frozen v1 authority; a failed
   latency diagnostic and clean repeat were both retained without promoting a
   new acceptance claim. Slice 5 row projection and rendering remain open.
 
-#### Ratify desktop color semantics (2026-08-21)
+#### Ratify desktop color semantics (2026-08-21 – 2026-08-23)
 
 - Ratified one 15-token authored palette and separated operation intent,
   task-lifecycle, and integrity channels. Hue identifies class while labels,
@@ -157,6 +158,9 @@ later workflow surfaces and beta packaging remain future phases.
   or JavaScript domain inference was introduced.
 - Aligned compact filled labels to the checkbox radius and text edge, and made
   active operation chips use family main/90%/80% fills without lift or scale.
+- Matched compact badge bleed and inner padding at 4 px, restored inline progress
+  to the shared 8 px column inset, and returned inactive Delete to the normal
+  filter's distinct hover/press backgrounds without changing its red-main text.
 - Expanded the test-only gallery across intent, lifecycle, integrity, progress,
   light/dark, forced-color, and reduced-motion states, including projected sync
   and integrity lifecycle rows. Production file-list surfaces remain dormant.

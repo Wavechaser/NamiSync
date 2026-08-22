@@ -102,7 +102,6 @@ export function renderFileRow(element, rowView, details) {
 
 export function renderFileProgress(cell, label, percent, lifecycle) {
   const ownerDocument = cell.ownerDocument;
-  cell.classList.add("nami-file-row__cell--progress");
   cell.dataset.lifecycle = lifecycle;
 
   const progress = ownerDocument.createElement("div");

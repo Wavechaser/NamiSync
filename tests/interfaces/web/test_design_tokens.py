@@ -1201,8 +1201,8 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "block-size: 18px;" in file_fills
     assert "line-height: var(--font-size-caption);" in file_fills
     assert "padding-block-end: 1px;" in file_fills
-    assert "margin-inline-start: -2px;" in file_fills
-    assert "padding-inline: 2px var(--space-3);" in file_fills
+    assert "margin-inline-start: -4px;" in file_fills
+    assert "padding-inline: var(--space-2);" in file_fills
     inline_progress = _block(source, ".nami-progress--inline ")
     assert "block-size: var(--space-2);" in inline_progress
     assert "inline-size: 100%;" in inline_progress
@@ -1669,16 +1669,11 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         "var(--filter-delete-active-foreground);"
         in delete_chip
     )
-    delete_inactive_interaction = _block(
-        source,
-        '.nami-chip[data-operation="delete"]:'
-        'not([aria-pressed="true"]):not(:disabled):hover,',
-    )
     assert (
-        "background: var(--color-neutral-foreground);"
-        in delete_inactive_interaction
+        '.nami-chip[data-operation="delete"]:'
+        'not([aria-pressed="true"]):not(:disabled):hover'
+        not in source
     )
-    assert "transform:" not in delete_inactive_interaction
 
     badges = _block(source, ".nami-badge,\n.nami-status-pill ")
     assert "border: 0;" in badges

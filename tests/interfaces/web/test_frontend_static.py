@@ -702,8 +702,8 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert "--palette-" not in layout
     assert "[data-status" not in layout
     assert ".nami-file-state-label" in layout
-    assert ".nami-file-row__cell--progress" in layout
-    assert "padding-inline: 0;" in layout
+    assert ".nami-file-row__cell--progress" not in layout
+    assert "cell.classList.add(\"nami-file-row__cell--progress\")" not in file_row
     for intent in ("delete", "error", "unsupported", "blocked"):
         assert f'[data-intent="{intent}"]' in layout
     for integrity_state in (

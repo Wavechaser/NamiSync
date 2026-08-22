@@ -1439,6 +1439,7 @@ async function reportFailure(error) {
         : primaryStyle.backgroundColor;
       const primaryBounds = primaryVisual.getBoundingClientRect();
       const primaryCellBounds = primary.getBoundingClientRect();
+      const primaryCellStyle = getComputedStyle(primary);
       const progressBar = inlineProgress?.querySelector(".nami-progress__bar");
       const progressStyle = inlineProgress instanceof HTMLElement
         ? getComputedStyle(inlineProgress)
@@ -1488,6 +1489,8 @@ async function reportFailure(error) {
         primary_height: primaryBounds.height,
         primary_width: primaryBounds.width,
         primary_cell_width: primaryCellBounds.width,
+        primary_cell_padding_left: parseFloat(primaryCellStyle.paddingLeft),
+        primary_cell_padding_right: parseFloat(primaryCellStyle.paddingRight),
         primary_progress_value: inlineProgress instanceof HTMLElement
           ? Number(inlineProgress.getAttribute("aria-valuenow"))
           : null,

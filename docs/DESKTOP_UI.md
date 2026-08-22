@@ -259,8 +259,9 @@ surface and Dark uses its `dark` swatch. Dark labels use the exact `main`
 swatch; Light red and yellow labels use their exact `dark` swatches so the
 filled attention forms remain contrast-safe. Neutral fill uses the corresponding selected-neutral surface and
 secondary neutral text. Standalone badges may remain pill-shaped; compact
-file-list badges share the checkbox's 4 px radius and bleed 2 px into the
-leading cell padding so filled and unfilled text align. Text, icon/shape, and accessible state continue to name
+file-list badges share the checkbox's 4 px radius, use 4 px inner padding on
+both sides, and bleed that same 4 px into the leading cell padding so filled
+and unfilled text align. Text, icon/shape, and accessible state continue to name
 the meaning. Forced colors replace authored foregrounds and fills with Windows
 system colors.
 
@@ -395,6 +396,8 @@ ordinary themes, while its active red-main surface uses the same contrast-safe
 neutral label policy as other selected filters.
 Active operation-chip hover/press cues retain the same main RGB at 90%/80%
 strength, matching other colored clickable controls; they do not lift or scale.
+Inactive Delete retains red-main text but otherwise uses the same distinct
+grayscale hover and pressed backgrounds as every other inactive filter.
 Plain pressed chips likewise
 retain their active label color rather than carrying a latent state inversion.
 Channel-scoped labels use colored text or the borderless 18 logical px filled
@@ -451,8 +454,9 @@ keys `copy`, `mkdir`, `move`, `recase`, `update`, `move_update`, `trash`,
 `delete`, and `noop`, or exact exception keys `error`, `unsupported`, and
 `blocked`. A projected execution row may instead supply exact lifecycle key
 `executing` or `completed`. An `executing` row additionally requires a finite,
-already-projected `progressPercent` from 0 through 100 and renders a full-cell
-4 logical px mini progress bar; supplied text such as “Copying” becomes its
+already-projected `progressPercent` from 0 through 100 and renders a 4 logical
+px mini progress bar across the cell's content width, preserving the standard
+8 px inset on both sides; supplied text such as “Copying” becomes its
 accessible label. `completed` remains visible semantic text.
 `renderIntegrityRow` accepts only `verified`,
 `baselined`,
@@ -494,7 +498,7 @@ no persistence, bridge state, or production column-layout contract. Folder rows 
 button and mixed checkboxes; projected child rows carry only their basename,
 indent under the folder, and never repeat the full visual path. Plan and
 integrity cells use the channel-specific semantic text, 18 logical px filled
-form, or active 4 logical px full-cell progress form defined above, while
+form, or active 4 logical px padded-content progress form defined above, while
 JavaScript consumes only the exact already-projected key and percentage. Zebra backgrounds belong only to
 direct rendered rows, including folders; cells and columns are transparent and
 the row group has no filler height, so striping ends at the final row. The

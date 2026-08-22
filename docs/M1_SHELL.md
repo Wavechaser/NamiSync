@@ -1002,15 +1002,16 @@ carry the `headed` marker; all are collected by the release command.
   The plan and integrity renderers wrap supplied labels, accept only the exact
   already-projected keys for those two channels, and carry no form field or
   JavaScript domain inference. Narrow optional lifecycle keys render test-only
-  Copying/Verifying full-cell 4 px progress specimens from an explicit projected
-  0–100 percentage and Completed text specimens. Supplied active text remains
+  Copying/Verifying 4 px progress specimens across the 8 px-inset cell content
+  from an explicit projected 0–100 percentage and Completed text specimens. Supplied active text remains
   accessible; JavaScript derives neither a transport ratio nor row identity.
   Text forms have no semantic background; filled forms are borderless 18
   logical px badges with family-light/dark-label pairs in Light and
   family-dark/main-label pairs in Dark. Compact row badges share the checkbox's
   4 px radius and align their text with unfilled labels. Active operation chips
   use exact family main at rest and the same RGB at 90%/80% strength for hover
-  and press, without lift or scale. Paused
+  and press, without lift or scale; inactive Delete uses the ordinary filter's
+  distinct grayscale hover/press ladder while retaining red-main text. Paused
   progress freezes yellow, plain canceled progress freezes neutral gray, and
   resume restores accent. The stopped-count/percentage enhancement remains
   latent and adds no present payload field. Unchecked checkbox evidence uses a

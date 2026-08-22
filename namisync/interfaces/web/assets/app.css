@@ -332,13 +332,9 @@ body {
   background: var(--nami-state-background);
   block-size: 18px;
   line-height: var(--font-size-caption);
-  margin-inline-start: -2px;
+  margin-inline-start: -4px;
   padding-block-end: 1px;
-  padding-inline: 2px var(--space-3);
-}
-
-.nami-file-row__cell--progress {
-  padding-inline: 0;
+  padding-inline: var(--space-2);
 }
 
 .nami-plan-row__checksum,

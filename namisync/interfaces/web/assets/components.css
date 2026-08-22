@@ -1102,11 +1102,6 @@ body {
   color: var(--nami-chip-active-foreground);
 }
 
-.nami-chip[data-operation="delete"]:not([aria-pressed="true"]):not(:disabled):hover,
-.nami-chip[data-operation="delete"]:not([aria-pressed="true"]):not(:disabled):active {
-  background: var(--color-neutral-foreground);
-}
-
 [data-intent="copy"] .nami-state-cue::before {
   content: "C";
 }

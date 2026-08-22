@@ -415,7 +415,8 @@ unrealized unless an entry says otherwise.
   use inverse grayscale when inactive and exact operation-family main swatches
   at rest with contrast-selected grayscale text when active. Hover and press
   retain the same main RGB at 90%/80% strength without lift or scale; inactive Delete uses exact
-  red-main text while active Delete uses the shared contrast-safe neutral label.
+  red-main text while sharing the ordinary inactive pill's distinct grayscale
+  hover/press ladder, and active Delete uses the shared contrast-safe neutral label.
   Channel-scoped
   intent/lifecycle/integrity labels use either semantic text or a borderless
   18 logical px filled form. Hued fills use light-family surfaces in Light and
@@ -463,13 +464,13 @@ unrealized unless an entry says otherwise.
   intent exceptions, and every integrity state. Both renderers wrap supplied
   status text in the channel-scoped semantic-label component and accept exact
   already-projected keys. Test-only execution rows additionally exercise
-  a full-cell 4 px Copying progress bar and Completed text, while integrity rows
+  a 4 px Copying progress bar across the 8 px-inset cell content and Completed text, while integrity rows
   exercise the same Verifying/Completed forms. Active specimens accept an
   already-projected 0–100 percentage and retain supplied status text as the
   accessible progress label. They carry no form field and infer no domain
   result, transport ratio, row identity, hue, or urgency in JavaScript. Compact
-  filled labels use the checkbox's 4 px radius and a 2 px leading bleed to align
-  label text. Forced colors retain system authority. The
+  filled labels use the checkbox's 4 px radius, 4 px inner padding, and a
+  matching 4 px leading bleed to align label text. Forced colors retain system authority. The
   gallery headers also support pointer-drag and arrow-key column resizing
   without persistence. The first interaction freezes five pixel tracks while
   File/path remains the sole 12 rem-minimum flexible track; each of the five

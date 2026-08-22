@@ -273,7 +273,7 @@ class _Recorder:
         self._initial: str | None = None
         self._post_ready_failure: dict[str, str] | None = None
         self._data: dict[str, Any] = {
-            "schema_version": 5,
+            "schema_version": 6,
             "mode": mode,
             "startup_errors": [],
         }
@@ -1277,6 +1277,8 @@ def _valid_file_list_evidence(
         "primary_height",
         "primary_width",
         "primary_cell_width",
+        "primary_cell_padding_left",
+        "primary_cell_padding_right",
         "primary_progress_value",
         "primary_progress_bar_width",
         "primary_progress_track",
@@ -1500,6 +1502,15 @@ def _valid_file_list_evidence(
                 or row[name] <= 0
                 for name in ("primary_width", "primary_cell_width")
             )
+            or any(
+                type(row[name]) not in {int, float}
+                or not math.isfinite(row[name])
+                or row[name] < 0
+                for name in (
+                    "primary_cell_padding_left",
+                    "primary_cell_padding_right",
+                )
+            )
             or row["primary_foreground"] != row["primary_alias_foreground"]
             or row["primary_background"] != row["primary_alias_background"]
             or _transparent_css_color(row["primary_background"])
@@ -1513,9 +1524,17 @@ def _valid_file_list_evidence(
                 and (
                     not math.isclose(row["primary_height"], 4.0, abs_tol=0.5)
                     or not math.isclose(
-                        row["primary_width"],
+                        row["primary_width"]
+                        + row["primary_cell_padding_left"]
+                        + row["primary_cell_padding_right"],
                         row["primary_cell_width"],
                         abs_tol=0.5,
+                    )
+                    or not math.isclose(
+                        row["primary_cell_padding_left"], 8.0, abs_tol=0.25
+                    )
+                    or not math.isclose(
+                        row["primary_cell_padding_right"], 8.0, abs_tol=0.25
                     )
                     or type(row["primary_progress_value"]) not in {int, float}
                     or not 0 <= row["primary_progress_value"] <= 100

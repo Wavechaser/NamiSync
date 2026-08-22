@@ -779,11 +779,13 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "primary_foreground": primary_foreground,
                 "primary_background": primary_background,
                 "primary_height": 4.0 if form == "progress" else 18.0,
-                "primary_width": 100.0 if form == "progress" else 20.0,
+                "primary_width": 84.0 if form == "progress" else 20.0,
                 "primary_cell_width": 100.0,
+                "primary_cell_padding_left": 8.0,
+                "primary_cell_padding_right": 8.0,
                 "primary_progress_value": 42.0 if form == "progress" else None,
                 "primary_progress_bar_width": (
-                    42.0 if form == "progress" else 0.0
+                    35.28 if form == "progress" else 0.0
                 ),
                 "primary_progress_track": (
                     "rgb(255, 255, 255)" if form == "progress" else ""
@@ -871,11 +873,13 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "primary_foreground": primary_foreground,
                 "primary_background": primary_background,
                 "primary_height": 4.0 if form == "progress" else 18.0,
-                "primary_width": 100.0 if form == "progress" else 20.0,
+                "primary_width": 84.0 if form == "progress" else 20.0,
                 "primary_cell_width": 100.0,
+                "primary_cell_padding_left": 8.0,
+                "primary_cell_padding_right": 8.0,
                 "primary_progress_value": 67.0 if form == "progress" else None,
                 "primary_progress_bar_width": (
-                    67.0 if form == "progress" else 0.0
+                    56.28 if form == "progress" else 0.0
                 ),
                 "primary_progress_track": (
                     "rgb(255, 255, 255)" if form == "progress" else ""
@@ -1218,7 +1222,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     ) == {"accepted": True}
     recorded = EvidenceReader(report_paths).read_ready()
     assert recorded is not None
-    assert recorded["schema_version"] == 5
+    assert recorded["schema_version"] == 6
     assert recorded["report"] == report
 
     incomplete_root = tmp_path / "incomplete"
@@ -1720,6 +1724,14 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
         assert controls_by_key["filter_delete"]["rest"]["background"] == (
             inactive_filter_background
         )
+        for state in ("hover", "pressed"):
+            assert controls_by_key["filter_delete"][state]["background"] == (
+                controls_by_key["filter_copy"][state]["background"]
+            )
+        assert (
+            controls_by_key["filter_delete"]["hover"]["background"]
+            != controls_by_key["filter_delete"]["pressed"]["background"]
+        )
         assert controls_by_key["filter_copy_active"]["rest"]["background"] == (
             _MAIN_HUE_RGB["blue"]
         )
@@ -2100,7 +2112,7 @@ def _run_gallery_mode(
     result = dict(initial)
     result["exit_code"] = final["exit_code"]
     assert result["exit_code"] == 0
-    assert result["schema_version"] == 5
+    assert result["schema_version"] == 6
     assert result["startup_errors"] == []
     assert result["runtime"]["versions"] == {
         "namisync": VERSION,
@@ -2394,9 +2406,13 @@ def _assert_inline_row_progress(
 ) -> None:
     assert row["primary_form"] == "progress"
     assert row["primary_height"] == pytest.approx(4.0, abs=0.5)
-    assert row["primary_width"] == pytest.approx(
-        row["primary_cell_width"], abs=0.5
-    )
+    assert row["primary_cell_padding_left"] == pytest.approx(8.0, abs=0.25)
+    assert row["primary_cell_padding_right"] == pytest.approx(8.0, abs=0.25)
+    assert (
+        row["primary_width"]
+        + row["primary_cell_padding_left"]
+        + row["primary_cell_padding_right"]
+    ) == pytest.approx(row["primary_cell_width"], abs=0.5)
     assert row["primary_progress_value"] == pytest.approx(expected_value)
     assert row["primary_progress_bar_width"] / row["primary_width"] * 100 == (
         pytest.approx(expected_value, abs=0.5)
