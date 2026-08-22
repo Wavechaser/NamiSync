@@ -103,6 +103,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-22). Deferred-settlement activity conflation. A
+  successful directory create remained the active Progress item until later
+  descendant and metadata finalization, so the next operation replaced its
+  identity without an intervening reliable outcome. The browser reducer treated
+  that valid handoff as a protocol violation; repeated whole-batch refusal could
+  freeze observation and eventually stop the browser task drain. Fixed by
+  deactivating the directory spotlight when create work returns, allowing a
+  newer lossy snapshot to repoint activity without implying settlement, and
+  exercising the real executor/event-view stream through the packaged reducer.
 - MODERATE - FIXED (2026-08-21). Continuation progress-state loss. Pausing
   after a partial copy retained operation status and mutation evidence but not
   the aggregate byte high-water, so a resumed task could rebuild its reporter

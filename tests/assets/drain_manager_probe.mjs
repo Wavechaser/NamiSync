@@ -163,6 +163,14 @@ testWindow.pywebview = {
 
 const modulePath = process.argv[2];
 assert.ok(modulePath, "bridge module path is required");
+const crossBoundaryFixtureArgument = process.argv[3];
+const crossBoundaryFixture = crossBoundaryFixtureArgument === undefined
+  ? null
+  : JSON.parse(
+    crossBoundaryFixtureArgument.trimStart().startsWith("{")
+      ? crossBoundaryFixtureArgument
+      : await readFile(crossBoundaryFixtureArgument, "utf8"),
+  );
 const source = await readFile(modulePath, "utf8");
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
 const bridge = await import(moduleUrl);
@@ -1147,6 +1155,185 @@ for (const { progressState } of acceptedReducer.slice(-2)) {
 }
 assert.equal(refusedReducer.length, 0);
 stopReducer();
+
+// Lossy snapshots may skip an inactive handoff. A newer snapshot can therefore
+// repoint the current-item spotlight without asserting that the old item
+// settled. Attempt tokens remain item-bound, and reliable settlement still
+// prevents immediate reactivation of the settled identity.
+const handoffSession = "8a".repeat(16);
+const handoffTask = `task-${"6b".repeat(16)}`;
+const acceptedHandoff = [];
+const refusedHandoff = [];
+const stopHandoff = bridge.startTaskDrain(
+  handoffTask,
+  handoffSession,
+  (update, progressState) => acceptedHandoff.push({ update, progressState }),
+  (error) => refusedHandoff.push(error),
+);
+const handoffProgress = (itemId, attemptId, overrides = {}) => ({
+  phase: "execute",
+  items_done: 0,
+  items_total: 3,
+  bytes_done: 2,
+  bytes_total: 24,
+  current_path: `${itemId}.bin`,
+  item_id: itemId,
+  item_type: "operation",
+  item_attempt_id: attemptId,
+  item_bytes_done: 0,
+  item_bytes_total: 8,
+  ...overrides,
+});
+const handoff0 = await nextRequest(requests.length);
+success(handoff0, [
+  event(handoffSession, 1, "PhaseChanged", { phase: "execute" }),
+  event(handoffSession, 2, "Progress", handoffProgress(
+    "operation-a",
+    "71".repeat(16),
+    { item_bytes_done: 2 },
+  )),
+  event(handoffSession, 3, "Progress", handoffProgress(
+    "operation-b",
+    "72".repeat(16),
+  )),
+]);
+const handoff1 = await nextRequest(requests.length);
+assert.equal(handoff1.request.payload.replay_from, null);
+assert.deepEqual(
+  acceptedHandoff
+    .map(({ progressState }) => progressState.activeItem?.item_id ?? null)
+    .filter((itemId) => itemId !== null),
+  ["operation-a", "operation-b"],
+);
+assert.equal(
+  acceptedHandoff.at(-1).progressState.activeItem.item_id,
+  "operation-b",
+);
+
+// Reusing B's non-null attempt token for C invalidates the whole batch. A
+// replay with C's own token then applies both the lossy and reliable siblings.
+success(handoff1, [
+  event(handoffSession, 4, "Progress", handoffProgress(
+    "operation-c",
+    "72".repeat(16),
+  )),
+  event(handoffSession, 5, "StateChanged", { state: "paused" }),
+]);
+const handoffTokenRecovery = await nextRequest(requests.length);
+assert.equal(handoffTokenRecovery.request.payload.replay_from, 4);
+assert.equal(acceptedHandoff.length, 3);
+assert.equal(refusedHandoff.length, 0);
+success(handoffTokenRecovery, [
+  event(handoffSession, 4, "Progress", handoffProgress(
+    "operation-c",
+    "73".repeat(16),
+  )),
+  event(handoffSession, 5, "StateChanged", { state: "paused" }),
+]);
+const handoff2 = await nextRequest(requests.length);
+assert.equal(handoff2.request.payload.replay_from, null);
+assert.equal(
+  acceptedHandoff.at(-1).progressState.activeItem.item_id,
+  "operation-c",
+);
+
+const operationCOutcome = {
+  ...operationOutcomeBody,
+  item_id: "operation-c",
+  path: "operation-c.bin",
+};
+success(handoff2, [
+  event(handoffSession, 6, "ItemOutcome", operationCOutcome),
+  event(handoffSession, 7, "Progress", handoffProgress(
+    "operation-c",
+    "74".repeat(16),
+    { items_done: 1 },
+  )),
+]);
+const handoffReactivationRecovery = await nextRequest(requests.length);
+assert.equal(handoffReactivationRecovery.request.payload.replay_from, 6);
+assert.equal(acceptedHandoff.length, 5);
+assert.equal(refusedHandoff.length, 0);
+success(handoffReactivationRecovery, [
+  event(handoffSession, 6, "ItemOutcome", operationCOutcome),
+]);
+await turns();
+assert.equal(acceptedHandoff.at(-1).update.event.body_type, "ItemOutcome");
+assert.equal(acceptedHandoff.at(-1).progressState.activeItem, null);
+assert.equal(refusedHandoff.length, 0);
+stopHandoff();
+
+// The optional fixture carries real Python producer output through this same
+// packaged reducer. It is omitted for the standalone JavaScript matrix.
+if (crossBoundaryFixture !== null) {
+  assert.equal(typeof crossBoundaryFixture, "object");
+  assert.equal(typeof crossBoundaryFixture.task_id, "string");
+  assert.equal(typeof crossBoundaryFixture.session_id, "string");
+  assert.ok(Array.isArray(crossBoundaryFixture.batches));
+  assert.ok(Array.isArray(crossBoundaryFixture.expected_active_ids));
+  const acceptedCrossBoundary = [];
+  const refusedCrossBoundary = [];
+  const crossBoundaryRequestStart = requests.length;
+  const stopCrossBoundary = bridge.startTaskDrain(
+    crossBoundaryFixture.task_id,
+    crossBoundaryFixture.session_id,
+    (update, progressState) => {
+      acceptedCrossBoundary.push({ update, progressState });
+    },
+    (error) => refusedCrossBoundary.push(error),
+  );
+  for (let index = 0; index < crossBoundaryFixture.batches.length; index += 1) {
+    const pending = await nextRequest(crossBoundaryRequestStart + index);
+    assert.equal(
+      pending.request.payload.task_id,
+      crossBoundaryFixture.task_id,
+    );
+    assert.equal(
+      pending.request.payload.session_id,
+      crossBoundaryFixture.session_id,
+    );
+    assert.equal(pending.request.payload.replay_from, null);
+    assert.match(pending.request.payload.drain_id, /^[0-9a-f]{32}$/);
+    success(pending, crossBoundaryFixture.batches[index]);
+    await turns();
+    assert.equal(refusedCrossBoundary.length, 0);
+  }
+  const acceptedSequences = acceptedCrossBoundary
+    .filter(({ update }) => update.update_type === "event")
+    .map(({ update }) => update.event.sequence);
+  for (let index = 1; index < acceptedSequences.length; index += 1) {
+    assert.ok(acceptedSequences[index] > acceptedSequences[index - 1]);
+  }
+  const distinctActiveIds = [];
+  for (const { progressState } of acceptedCrossBoundary) {
+    const itemId = progressState.activeItem?.item_id ?? null;
+    if (
+      itemId !== null &&
+      distinctActiveIds.at(-1) !== itemId
+    ) {
+      distinctActiveIds.push(itemId);
+    }
+  }
+  assert.deepEqual(
+    distinctActiveIds,
+    crossBoundaryFixture.expected_active_ids,
+  );
+  if (crossBoundaryFixture.expected_outcome_ids !== undefined) {
+    assert.deepEqual(
+      acceptedCrossBoundary
+        .filter(({ update }) => (
+          update.update_type === "event" &&
+          update.event.body_type.endsWith("Outcome")
+        ))
+        .map(({ update }) => update.event.body.item_id),
+      crossBoundaryFixture.expected_outcome_ids,
+    );
+  }
+  if (crossBoundaryFixture.expect_final_inactive === true) {
+    assert.equal(acceptedCrossBoundary.at(-1).progressState.activeItem, null);
+  }
+  stopCrossBoundary();
+}
 
 // Gap discards the pre-gap reducer domain. A matching recovery Gap can then
 // deliver self-described Progress even when the reliable PhaseChanged was

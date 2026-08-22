@@ -3417,6 +3417,165 @@ def _assert_operation_progress_clears_after_outcome(
     )
 
 
+def test_progress_start_refuses_to_replace_an_active_operation(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    first = _reviewed_progress_copy(source, target, fs, b"first")
+    second = replace(
+        first,
+        op_id=OpId("2" * 32),
+        source_rel_path="second.bin",
+        target_rel_path="second.bin",
+    )
+    timeline: list[object] = []
+    tracker = executor_runtime._ProgressTracker(
+        _xset(_plan(source, target, (first, second))),
+        RunContext(timeline.append, lambda: None),
+        _policies(progress_interval_seconds=0),
+    )
+
+    tracker.start(first)
+
+    with pytest.raises(
+        RuntimeError,
+        match="cannot replace the active progress operation",
+    ):
+        tracker.start(second)
+
+    latest = next(
+        event for event in reversed(timeline) if isinstance(event, Progress)
+    )
+    assert (latest.item_id, latest.current_path) == (
+        str(first.op_id),
+        first.target_rel_path,
+    )
+
+
+def test_deferred_directories_leave_inactive_handoffs_before_settlement(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operations: list[PlanOperation] = []
+    for number in range(1, 4):
+        name = f"folder-{number}"
+        (source / name).mkdir()
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                number,
+                OperationKind.MKDIR,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+
+    result, timeline, _ = _run(
+        _xset(_plan(source, target, tuple(operations))),
+        fs=fs,
+        policies=_policies(progress_interval_seconds=0),
+    )
+
+    first_outcome = next(
+        index
+        for index, event in enumerate(timeline)
+        if isinstance(event, ItemOutcome)
+    )
+    before_settlement = [
+        event
+        for event in timeline[:first_outcome]
+        if isinstance(event, Progress)
+    ]
+    assert result.status is SessionState.COMPLETED
+    assert [event.item_id for event in before_settlement] == [
+        None,
+        str(operations[0].op_id),
+        None,
+        str(operations[1].op_id),
+        None,
+        str(operations[2].op_id),
+        None,
+    ]
+    assert [
+        (event.items_done, event.current_path)
+        for event in before_settlement[2::2]
+    ] == [
+        (0, operation.target_rel_path) for operation in operations
+    ]
+
+
+def test_deferred_directory_handoff_precedes_child_copy_activation(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    (source / "folder").mkdir()
+    (source / "folder" / "child.bin").write_bytes(b"child")
+    fs = NativeFileSystem()
+    directory_stat = fs.stat(source, "folder")
+    child_stat = fs.stat(source, "folder\\child.bin")
+    assert directory_stat is not None and child_stat is not None
+    mkdir = _operation(
+        1,
+        OperationKind.MKDIR,
+        source_rel_path="folder",
+        target_rel_path="folder",
+        source_expected=directory_stat,
+        target_expected=None,
+        intended=directory_stat,
+    )
+    child = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="folder\\child.bin",
+        target_rel_path="folder\\child.bin",
+        source_expected=child_stat,
+        target_expected=None,
+        intended=child_stat,
+        dependencies=(mkdir.op_id,),
+    )
+
+    result, timeline, _ = _run(
+        _xset(_plan(source, target, (mkdir, child))),
+        fs=fs,
+        policies=_policies(progress_interval_seconds=0),
+    )
+
+    progress = [event for event in timeline if isinstance(event, Progress)]
+    mkdir_active = next(
+        index
+        for index, event in enumerate(progress)
+        if event.item_id == str(mkdir.op_id)
+    )
+    child_active = next(
+        index
+        for index, event in enumerate(progress)
+        if event.item_id == str(child.op_id)
+    )
+    handoff = progress[mkdir_active + 1 : child_active]
+    assert result.status is SessionState.COMPLETED
+    assert len(handoff) == 1
+    assert (
+        handoff[0].items_done,
+        handoff[0].items_total,
+        handoff[0].current_path,
+        handoff[0].item_id,
+        handoff[0].item_type,
+        handoff[0].item_attempt_id,
+        handoff[0].item_bytes_done,
+        handoff[0].item_bytes_total,
+    ) == (0, 2, mkdir.target_rel_path, None, None, None, None, None)
+    assert not any(
+        isinstance(event, ItemOutcome)
+        for event in timeline[: timeline.index(progress[child_active])]
+    )
+
+
 class ScriptedProgressCopyBackend:
     def __init__(
         self,

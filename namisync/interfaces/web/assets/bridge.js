@@ -1300,32 +1300,40 @@ function reduceProgressSnapshot(state, progress) {
   const nextActive = progressActiveItem(progress);
   if (nextActive !== null) {
     const previousActive = domainState.activeItem;
-    if (
-      previousActive !== null &&
-      !sameActiveIdentity(previousActive, nextActive)
-    ) {
-      return null;
-    }
     if (previousActive !== null) {
       const previousAttempt = previousActive.item_attempt_id;
       const nextAttempt = nextActive.item_attempt_id;
-      if (previousAttempt !== null && nextAttempt === null) {
-        return null;
-      }
-      if (
+      if (sameActiveIdentity(previousActive, nextActive)) {
+        if (previousAttempt !== null && nextAttempt === null) {
+          return null;
+        }
+        if (
+          previousAttempt !== null &&
+          nextAttempt === previousAttempt &&
+          !sameAttemptAdvances(previousActive, nextActive)
+        ) {
+          return null;
+        }
+      } else if (
         previousAttempt !== null &&
-        nextAttempt === previousAttempt &&
-        !sameAttemptAdvances(previousActive, nextActive)
+        nextAttempt === previousAttempt
       ) {
         return null;
       }
     } else if (
       domainState.progress !== null &&
-      domainState.progress.item_id !== null &&
-      domainState.progress.item_id === nextActive.item_id &&
-      domainState.progress.item_type === nextActive.item_type
+      domainState.progress.item_id !== null
     ) {
-      return null;
+      const previousSnapshotActive = progressActiveItem(domainState.progress);
+      if (
+        sameActiveIdentity(previousSnapshotActive, nextActive) ||
+        (
+          previousSnapshotActive.item_attempt_id !== null &&
+          nextActive.item_attempt_id === previousSnapshotActive.item_attempt_id
+        )
+      ) {
+        return null;
+      }
     }
   }
 

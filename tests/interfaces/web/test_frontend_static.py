@@ -1140,7 +1140,7 @@ def test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape() -> N
     assert "value.item_bytes_total <= value.bytes_total" in validator
 
 
-def test_br_g_36_browser_separates_bridge_and_core_event_versions() -> None:
+def test_br_g_36_live_event_validator_is_current_only_and_not_for_history() -> None:
     source = (
         PROJECT_ROOT
         / "namisync"

@@ -593,6 +593,15 @@ executor's implementation of that protocol.
 Executor `Progress` snapshots use `phase=execute` and carry aggregate content
 bytes/items, the display-only current path, and `operation` item identity while
 an operation is active.
+The item identity is the current execution spotlight, not the set of every
+operation awaiting reliable settlement. A successfully created directory
+leaves that spotlight when its create step returns, while its outcome and
+`items_done` increment remain deferred until descendant work and directory
+metadata finalization complete. That inactive handoff keeps the directory as
+the informational `current_path`, clears all item/attempt fields, and uses the
+ordinary lossy throttle; a later operation may therefore replace it before a
+consumer observes the inactive snapshot. Reporter activation rejects an
+in-process attempt to overwrite an operation that is still active.
 Non-byte operations and byte operations that have not entered the copy stream
 carry no attempt id or item-byte counters. At the exact copy-backend entry, a
 byte operation mints a fresh opaque 32-lowercase-hex attempt id and starts at

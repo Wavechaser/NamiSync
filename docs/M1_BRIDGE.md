@@ -1702,12 +1702,20 @@ grow; an unknown aggregate total may become known once. One attempt's
 determinate counters cannot regress,
 change total, or reappear after becoming indeterminate. Attempt comparison is
 bounded to the current active item, and a reset token must differ from that
-item's current attempt token.
+item's current attempt token. A newer lossy snapshot may repoint activity to a
+different item without an observed inactive snapshot or reliable outcome: the
+intermediate clear is itself replaceable and may have been coalesced away.
+That handoff says nothing about settlement, which remains outcome-owned. The
+reducer nevertheless rejects adjacent reuse of one non-null attempt token
+under two different item identities, because an attempt belongs to exactly one
+item.
 
 Reliable matching outcomes clear derived activity even if the later inactive
 Progress snapshot was coalesced away. In the compound verify phase, an
 `IntegrityOutcome` with the matching plan-operation id clears the active
 `operation` identity without reinterpreting the outcome's reliable namespace.
+The just-settled identity cannot become active again without an intervening
+inactive snapshot, different active identity, or temporal domain.
 An authoritative inactive Progress may also clear activity at a reporter's
 exception boundary. `Gap` clears phase-dependent Progress state and temporal
 comparisons; a later self-described v4 Progress may restore displayable phase

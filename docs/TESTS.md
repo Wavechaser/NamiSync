@@ -77,8 +77,21 @@ Gap recovery without retained `PhaseChanged` (including a newer self-described
 phase in the retained tail), retry attempts, overshoot,
 aggregate and attempt regression refusal, reliable outcome/Terminal
 precedence, compound post-copy identity, immutable callback projections, and
-bridge reincarnation cursor recovery. These are behavior checks against the
-packaged JavaScript, not source-text witnesses.
+bridge reincarnation cursor recovery. Its deferred-directory handoff case is a
+cross-boundary fixture: the public Python executor emits real envelopes through
+the lossy event subscriber and exact `SessionEventView`, then the packaged
+JavaScript reducer accepts the coalesced direct change from directory activity
+to child-copy activity without treating it as settlement. These are behavior
+checks against production producers and the packaged JavaScript, not
+source-text witnesses.
+
+Decoder-boundary guards are deliberately separate: the browser source gate
+keeps `validateLiveSessionEvent` current-version and reachable only from the
+live `event` drain arm, while the service history guard reads a mixed v3/v4
+page as `HistoryEventView` rows. Together they prohibit treating either live
+validation or tolerant Python compatibility decode as a reusable validator for
+the other boundary; `CORE.md` records why the broader strictness repair remains
+deferred.
 
 ```powershell
 $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'

@@ -593,10 +593,26 @@ class _ProgressTracker:
         self._last_emitted_at = float("-inf")
 
     def start(self, operation: PlanOperation) -> None:
+        if self._item_active:
+            raise RuntimeError("cannot replace the active progress operation")
         self._current = operation
         self._file_bytes = None
         self._item_attempt_id = None
         self._item_active = True
+        self.emit(force=False)
+
+    def defer_settlement(self, operation: PlanOperation) -> None:
+        if (
+            not self._item_active
+            or self._current is None
+            or self._current.op_id != operation.op_id
+        ):
+            raise RuntimeError(
+                "deferred settlement does not match the active operation"
+            )
+        self._file_bytes = None
+        self._item_attempt_id = None
+        self._item_active = False
         self.emit(force=False)
 
     def begin_byte_stream(self, operation: PlanOperation) -> None:
@@ -813,6 +829,8 @@ def execute(
                             operation,
                             mutation_failure,
                         )
+                else:
+                    progress.defer_settlement(operation)
                 continue
 
             attempt = 0

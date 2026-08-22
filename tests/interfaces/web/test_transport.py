@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 import json
 import logging
 import subprocess
@@ -14,6 +15,10 @@ import pytest
 
 import namisync.interfaces.web.bridge as bridge_module
 import namisync.interfaces.web.drain as drain_module
+from namisync.core.events import ItemOutcome, PhaseChanged, Progress
+from namisync.core.planning import OperationKind
+from namisync.core.session import RunContext, SessionId, SessionState
+from namisync.dispatcher.event_bus import EventHub
 from namisync.interfaces.service import NamiSyncService
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
@@ -48,8 +53,22 @@ from namisync.interfaces.web.drain import (
     TaskUnavailableError,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
+from namisync.modules.executor import NativeFileSystem, execute
 from namisync.workflows import PLAN_KIND
-from namisync.workflows.views import SessionEventView, SessionRecordView
+from namisync.workflows.views import (
+    SessionEventView,
+    SessionRecordView,
+    session_event_view,
+)
+from tests._executor_fixtures import (
+    FakeRecorder,
+    FixedClock,
+    _operation,
+    _plan,
+    _policies,
+    _roots,
+    _xset,
+)
 from tests.interfaces.web._public_view_witnesses import (
     INVALID_RETURN_WITNESSES,
     PublicViewWitness,
@@ -616,6 +635,137 @@ def test_br_g_32_start_plan_identity_refusal_precedes_handler_entry(
     )
 
 
+def _real_deferred_mkdir_drain_fixture(tmp_path: Path) -> dict[str, object]:
+    source, target = _roots(tmp_path)
+    (source / "folder").mkdir()
+    (source / "folder" / "child.bin").write_bytes(b"real producer")
+    fs = NativeFileSystem()
+    directory_stat = fs.stat(source, "folder")
+    child_stat = fs.stat(source, "folder\\child.bin")
+    assert directory_stat is not None and child_stat is not None
+    mkdir = _operation(
+        1,
+        OperationKind.MKDIR,
+        source_rel_path="folder",
+        target_rel_path="folder",
+        source_expected=directory_stat,
+        target_expected=None,
+        intended=directory_stat,
+    )
+    child = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="folder\\child.bin",
+        target_rel_path="folder\\child.bin",
+        source_expected=child_stat,
+        target_expected=None,
+        intended=child_stat,
+        dependencies=(mkdir.op_id,),
+    )
+    bodies: list[object] = []
+
+    result = execute(
+        _xset(_plan(source, target, (mkdir, child))),
+        RunContext(bodies.append, lambda: None),
+        FakeRecorder(),
+        _policies(progress_interval_seconds=0),
+        fs,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    mkdir_active = next(
+        index
+        for index, body in enumerate(bodies)
+        if isinstance(body, Progress) and body.item_id == str(mkdir.op_id)
+    )
+    handoff = next(
+        index
+        for index, body in enumerate(bodies[mkdir_active + 1 :], mkdir_active + 1)
+        if isinstance(body, Progress)
+        and body.item_id is None
+        and body.current_path == mkdir.target_rel_path
+    )
+    child_active = next(
+        index
+        for index, body in enumerate(bodies[handoff + 1 :], handoff + 1)
+        if isinstance(body, Progress) and body.item_id == str(child.op_id)
+    )
+    assert not any(
+        isinstance(body, ItemOutcome) for body in bodies[: child_active + 1]
+    )
+
+    session_id = "c2" * 16
+    hub = EventHub(
+        session_id=SessionId(session_id),
+        initial_state=SessionState.RUNNING,
+        clock=FixedClock(),
+        observer=None,
+        replay_capacity=128,
+        subscriber_capacity=64,
+        audit_capacity=64,
+        audit_timeout=0.5,
+        audit_offer_timeout=0.5,
+    )
+    stream = hub.subscribe(from_seq=1)
+
+    def publish_batch(batch: list[object]) -> list[dict[str, object]]:
+        for body in batch:
+            hub.emit(body)
+        envelopes = []
+        while True:
+            try:
+                envelopes.append(stream.next(0))
+            except TimeoutError:
+                break
+        return [
+            {
+                "update_type": "event",
+                "event": asdict(session_event_view(envelope)),
+            }
+            for envelope in envelopes
+        ]
+
+    try:
+        batches = [
+            publish_batch(bodies[: mkdir_active + 1]),
+            publish_batch(bodies[mkdir_active + 1 : child_active + 1]),
+            publish_batch(bodies[child_active + 1 :]),
+        ]
+    finally:
+        stream.close()
+        assert hub.close(1.0)
+
+    first_progress = [
+        update["event"]["body"]
+        for update in batches[0]
+        if update["event"]["body_type"] == "Progress"
+    ]
+    second_progress = [
+        update["event"]["body"]
+        for update in batches[1]
+        if update["event"]["body_type"] == "Progress"
+    ]
+    assert [body["item_id"] for body in first_progress] == [str(mkdir.op_id)]
+    assert [body["item_id"] for body in second_progress] == [str(child.op_id)]
+    assert not any(
+        update["event"]["body_type"] == "ItemOutcome"
+        for update in batches[0] + batches[1]
+    )
+    assert any(
+        update["event"]["body_type"] == "PhaseChanged"
+        for update in batches[0]
+    )
+
+    return {
+        "task_id": "task-" + "b1" * 16,
+        "session_id": session_id,
+        "batches": batches,
+        "expected_active_ids": [str(mkdir.op_id), str(child.op_id)],
+        "expected_outcome_ids": [str(child.op_id), str(mkdir.op_id)],
+        "expect_final_inactive": True,
+    }
+
+
 def test_br_g_36_node_discovery_prefers_explicit_test_runtime(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -626,7 +776,9 @@ def test_br_g_36_node_discovery_prefers_explicit_test_runtime(
     assert _node_executable() == configured
 
 
-def test_br_g_36_node_drain_validates_progress_before_batch_delivery() -> None:
+def test_br_g_36_node_drain_validates_progress_before_batch_delivery(
+    tmp_path: Path,
+) -> None:
     node = _node_executable()
     if node is None:
         pytest.fail(
@@ -640,10 +792,15 @@ def test_br_g_36_node_drain_validates_progress_before_batch_delivery() -> None:
         )
     probe = Path(__file__).parents[2] / "assets" / "drain_manager_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
+    producer_fixture = tmp_path / "executor-progress.json"
+    producer_fixture.write_text(
+        json.dumps(_real_deferred_mkdir_drain_fixture(tmp_path)),
+        encoding="utf-8",
+    )
 
     try:
         completed = subprocess.run(
-            [str(node), str(probe), str(bridge)],
+            [str(node), str(probe), str(bridge), str(producer_fixture)],
             capture_output=True,
             check=False,
             text=True,

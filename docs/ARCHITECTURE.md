@@ -214,6 +214,7 @@ only where the table explicitly requires a forced emission.
 | --- | --- |
 | Phase entry | Start a new monotonic domain and force a snapshot from the phase's live admission and continuation state. |
 | Item activation | Publish nominal item identity; do not manufacture an attempt or byte counters before byte-pipeline entry. |
+| Item deactivation before settlement | Clear the current item, attempt, and item-byte reporter state without incrementing `items_done`. This ordinary lossy transition is required when an operation leaves the execution spotlight but its reliable settlement remains deferred. |
 | Stream entry | Mint a fresh opaque attempt id and expose the attempt-local byte pair, including `0/0` when the known total is zero. |
 | Stream progress | Advance attempt-local work monotonically and advance aggregate work only beyond its prior high-water. |
 | Retry | Keep aggregate work at its high-water; mint a new attempt id exactly when the byte pipeline will run again, permitting only that new attempt's counters to restart. |
@@ -231,6 +232,17 @@ fixed when known, and verifier `bytes_total` is nondecreasing. Within one
 item/attempt identity, present item counters are nondecreasing and the item
 total is fixed. A phase change or explicit `Gap` ends those temporal comparison
 domains.
+
+Active item identity is the current presentation and execution spotlight, not
+the set of selected work still awaiting outcomes. A newer Progress snapshot
+may therefore repoint that spotlight without proving that the former item
+settled. Consumers cannot require observation of an intermediate inactive
+snapshot: Progress is replaceable, so an ordinary deactivation may be
+coalesced away. Temporal attempt checks apply within one item identity, and one
+non-null attempt token is a producer-wide identity that must never move between
+items. The bounded consumer detects directly observed cross-item token reuse;
+it does not retain an unbounded token history. Only a reliable item outcome
+establishes settlement.
 
 Terminal counter projection preserves those work semantics. A
 `PhaseResult.bytes_done` value is that phase's final attempted-work high-water,
