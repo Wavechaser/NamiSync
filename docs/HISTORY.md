@@ -228,14 +228,28 @@ hash-only rejection receipt.
 Each `HistoryEventView.schema_version` is the persisted core event version of
 that row, not the current live-drain version. Recorded and duplicate rows may
 therefore legitimately mix supported v3 and v4 envelopes in one page. Readback
-authenticates the receipt and payload, dispatches the Python core decoder by
-the row version, and exposes a canonical typed body; a rejected receipt instead
-has `body=None`. A future browser history validator must perform the same
-per-row supported-version dispatch. It must not call the live
-`validateLiveSessionEvent`, which intentionally accepts exactly the current v4
-`SessionEventView` contract and would incorrectly reject authenticated v3
-history. The decoder/version/body strictness matrix is normative in
-`CORE.md`; history does not invent a fourth tolerance regime.
+authenticates the receipt and original payload, dispatches the Python core
+decoder by the row version, and exposes a canonical typed body; a rejected
+receipt instead has `body=None`. Because the general reliable-body decoder is
+currently additive and uses selected local defaults, that canonical view is
+not a byte-preserving copy of the authenticated JSON: accepted unknown fields
+may be absent and defaulted typed fields may be present. The payload hash, not
+the projected body, remains the identity of the retained envelope.
+
+The per-row version rule is settled; the decoder tolerance behind it is not. A
+future browser history validator must dispatch each supported persisted
+version and must not call `validateLiveSessionEvent`, which accepts exactly the
+current v4 `SessionEventView` contract and would reject authenticated v3
+history. `CORE.md` inventories the present three-tier strictness asymmetry and
+records the deferred split between strict current-live validation and
+version-dispatched compatibility decoding for authenticated persisted rows.
+That debt must reopen with browser history, event import/replay, history-based
+recovery, or a new core event version. History must not turn today's additive
+Python behavior into a fourth policy, assume that compatibility-decode success
+proves live or JavaScript-safe representation, route a row through the live
+validator, or tighten v3 compatibility without reviewing authenticated
+fixtures under an explicit version decision. Current allowances are not, by
+their existence alone, classified as required legacy shapes.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including
