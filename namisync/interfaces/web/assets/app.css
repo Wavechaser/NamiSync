@@ -306,7 +306,7 @@ body {
   align-items: center;
   background: var(--color-semantic-transparent);
   border: 0;
-  border-radius: var(--radius-circular);
+  border-radius: var(--radius-small);
   box-sizing: border-box;
   color: var(--nami-state-foreground);
   display: inline-flex;
@@ -332,8 +332,13 @@ body {
   background: var(--nami-state-background);
   block-size: 18px;
   line-height: var(--font-size-caption);
+  margin-inline-start: -2px;
   padding-block-end: 1px;
-  padding-inline: var(--space-3);
+  padding-inline: 2px var(--space-3);
+}
+
+.nami-file-row__cell--progress {
+  padding-inline: 0;
 }
 
 .nami-plan-row__checksum,

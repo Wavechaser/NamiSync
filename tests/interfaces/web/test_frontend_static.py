@@ -522,11 +522,13 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
     assert 'intentLabel.className = "nami-file-state-label";' in plan
     assert "renderText(intentLabel, rowView.intentText);" in plan
     assert "intent.append(intentLabel);" in plan
+    assert "renderFileProgress(" in plan
     assert "renderText(checksum, rowView.checksumText);" in plan
     assert "renderText(cell, text);" in integrity
     assert 'label.className = "nami-file-state-label";' in integrity
     assert "renderText(label, text);" in integrity
     assert "cell.append(label);" in integrity
+    assert "renderFileProgress(cell, text, progressPercent, lifecycle);" in integrity
     assert re.search(r"\.textContent\s*=(?!=)", file_row) is None
     assert re.search(r"\.textContent\s*=(?!=)", integrity) is None
     assert re.search(r"\.textContent\s*=(?!=)", plan) is None
@@ -551,7 +553,8 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         "renderIntegrityRow"
     ]
     assert re.findall(r"export function ([A-Za-z0-9_]+)\(", file_row) == [
-        "renderFileRow"
+        "renderFileRow",
+        "renderFileProgress",
     ]
     assert '"./plan.js"' not in production_shell
     assert '"./integrity.js"' not in production_shell
@@ -601,6 +604,11 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         "completed",
     )
     assert "ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey)" in plan
+    assert 'rowView.lifecycleKey === "executing"' in plan
+    assert "Number.isFinite(rowView.progressPercent)" in plan
+    assert "rowView.progressPercent >= 0" in plan
+    assert "rowView.progressPercent <= 100" in plan
+    assert "rowView.progressPercent === undefined" in plan
     assert "intent.dataset.lifecycle = rowView.lifecycleKey;" in plan
     assert 'intent.dataset.intent = rowView.intentKey;' in plan
     assert "intentTone" not in plan
@@ -637,6 +645,8 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         "completed",
     )
     assert "ROW_LIFECYCLE_KEYS.has(rowView.lifecycleKey)" in integrity
+    assert 'rowView.lifecycleKey === "verifying"' in integrity
+    assert "Number.isFinite(rowView.progressPercent)" in integrity
     assert "INTEGRITY_KEYS.has(rowView.presenceStatus)" in integrity
     assert "cell.dataset.lifecycle = lifecycle;" in integrity
     assert "cell.dataset.integrity = integrity;" in integrity
@@ -651,6 +661,13 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert '"nami-integrity-row__checksum"' in integrity
     assert '"nami-integrity-row__integrity"' not in integrity
     assert 'element.replaceChildren(selection, name, size, ...details.cells, notes);' in file_row
+    assert 'progress.className = "nami-progress nami-progress--inline";' in file_row
+    assert 'progress.setAttribute("role", "progressbar");' in file_row
+    assert 'progress.ariaLabel = label;' in file_row
+    assert 'progress.ariaValueNow = String(percent);' in file_row
+    assert 'bar.style.setProperty("--nami-progress-value", `${percent}%`);' in file_row
+    assert "item_bytes_done" not in dormant_renderers
+    assert "item_bytes_total" not in dormant_renderers
 
     zebra = ".nami-file-list__body > .nami-file-row:nth-child(even)"
     assert zebra in layout
@@ -685,6 +702,8 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
     assert "--palette-" not in layout
     assert "[data-status" not in layout
     assert ".nami-file-state-label" in layout
+    assert ".nami-file-row__cell--progress" in layout
+    assert "padding-inline: 0;" in layout
     for intent in ("delete", "error", "unsupported", "blocked"):
         assert f'[data-intent="{intent}"]' in layout
     for integrity_state in (

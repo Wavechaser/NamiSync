@@ -133,7 +133,9 @@ later workflow surfaces and beta packaging remain future phases.
 - Kept bridge envelopes v1, execution continuations v5, and database/page
   schemas unchanged; supported reliable v3 history remains readable while v3
   live Progress is refused. Strict live versus compatibility decoding remains
-  tracked debt with executable separation guards.
+  tracked debt with executable separation guards. The dormant row gallery now
+  consumes only an explicitly projected 0–100 value to render 4 px Copying and
+  Verifying bars; production row matching and live binding remain Slice 5 work.
 - Rebaselined the protected settlement oracle only after semantics stabilized;
   all 30 scenarios and 70 policy rows passed three identical runs. Updated
   installed event/custody fixtures retained frozen v1 authority; a failed
@@ -153,6 +155,8 @@ later workflow surfaces and beta packaging remain future phases.
 - Kept plan and integrity renderers narrow and presentation-only while tightening
   unchecked-checkbox, dark-button, and semantic-label treatment; no form payload
   or JavaScript domain inference was introduced.
+- Aligned compact filled labels to the checkbox radius and text edge, and made
+  active operation chips use family main/90%/80% fills without lift or scale.
 - Expanded the test-only gallery across intent, lifecycle, integrity, progress,
   light/dark, forced-color, and reduced-motion states, including projected sync
   and integrity lifecycle rows. Production file-list surfaces remain dormant.

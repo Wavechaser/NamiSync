@@ -1,4 +1,4 @@
-import { renderFileRow } from "./file_row.js";
+import { renderFileProgress, renderFileRow } from "./file_row.js";
 import { renderText } from "./render.js";
 
 const STRING_FIELDS = Object.freeze([
@@ -23,11 +23,22 @@ const ROW_LIFECYCLE_KEYS = Object.freeze(new Set([
   "completed",
 ]));
 
+function validProgressPercent(rowView) {
+  const verifying = rowView.lifecycleKey === "verifying";
+  return verifying
+    ? typeof rowView.progressPercent === "number" &&
+      Number.isFinite(rowView.progressPercent) &&
+      rowView.progressPercent >= 0 &&
+      rowView.progressPercent <= 100
+    : rowView.progressPercent === undefined;
+}
+
 function validRowView(rowView) {
   return rowView !== null &&
     typeof rowView === "object" &&
     !Array.isArray(rowView) &&
     STRING_FIELDS.every((name) => typeof rowView[name] === "string") &&
+    validProgressPercent(rowView) &&
     (
       rowView.lifecycleKey === undefined
         ? INTEGRITY_KEYS.has(rowView.presenceStatus)
@@ -53,8 +64,13 @@ function createIntegrityCell(
   integrity,
   lifecycle,
   text,
+  progressPercent,
 ) {
   const cell = createCell(ownerDocument, className, column, "");
+  if (lifecycle === "verifying") {
+    renderFileProgress(cell, text, progressPercent, lifecycle);
+    return cell;
+  }
   if (lifecycle !== undefined) {
     cell.dataset.lifecycle = lifecycle;
   } else {
@@ -82,6 +98,7 @@ export function renderIntegrityRow(element, rowView) {
     rowView.presenceStatus,
     rowView.lifecycleKey,
     rowView.presenceText,
+    rowView.progressPercent,
   );
   const checksum = createCell(
     ownerDocument,

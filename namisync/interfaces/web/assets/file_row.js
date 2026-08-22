@@ -99,3 +99,24 @@ export function renderFileRow(element, rowView, details) {
   element.style.setProperty("--nami-file-depth", String(rowView.depth));
   element.replaceChildren(selection, name, size, ...details.cells, notes);
 }
+
+export function renderFileProgress(cell, label, percent, lifecycle) {
+  const ownerDocument = cell.ownerDocument;
+  cell.classList.add("nami-file-row__cell--progress");
+  cell.dataset.lifecycle = lifecycle;
+
+  const progress = ownerDocument.createElement("div");
+  progress.className = "nami-progress nami-progress--inline";
+  progress.dataset.lifecycle = lifecycle;
+  progress.setAttribute("role", "progressbar");
+  progress.ariaLabel = label;
+  progress.ariaValueMin = "0";
+  progress.ariaValueMax = "100";
+  progress.ariaValueNow = String(percent);
+
+  const bar = ownerDocument.createElement("div");
+  bar.className = "nami-progress__bar";
+  bar.style.setProperty("--nami-progress-value", `${percent}%`);
+  progress.append(bar);
+  cell.append(progress);
+}

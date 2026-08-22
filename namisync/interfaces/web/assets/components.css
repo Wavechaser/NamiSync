@@ -459,6 +459,8 @@ body {
 
 .nami-chip {
   --nami-chip-active-background: var(--color-accent-fill);
+  --nami-chip-active-background-hover: var(--color-accent-fill-hover);
+  --nami-chip-active-background-pressed: var(--color-accent-fill-pressed);
   --nami-chip-active-foreground: var(--color-accent-fill-foreground);
   border-radius: var(--radius-circular);
   min-block-size: 1.75rem;
@@ -1024,18 +1026,26 @@ body {
 
 .nami-chip[data-operation="copy"] {
   --nami-chip-active-background: var(--filter-copy-background);
+  --nami-chip-active-background-hover: var(--filter-blue-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-blue-background-pressed);
 }
 
 .nami-chip[data-operation="update"] {
   --nami-chip-active-background: var(--filter-update-background);
+  --nami-chip-active-background-hover: var(--filter-yellow-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-yellow-background-pressed);
 }
 
 .nami-chip[data-operation="move"] {
   --nami-chip-active-background: var(--filter-move-background);
+  --nami-chip-active-background-hover: var(--filter-purple-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-purple-background-pressed);
 }
 
 .nami-chip[data-operation="move_update"] {
   --nami-chip-active-background: var(--filter-move-update-background);
+  --nami-chip-active-background-hover: var(--filter-yellow-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-yellow-background-pressed);
 }
 
 .nami-chip:is(
@@ -1047,35 +1057,43 @@ body {
 
 .nami-chip[data-operation="recase"] {
   --nami-chip-active-background: var(--filter-recase-background);
+  --nami-chip-active-background-hover: var(--filter-purple-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-purple-background-pressed);
 }
 
 .nami-chip[data-operation="mkdir"] {
   --nami-chip-active-background: var(--filter-mkdir-background);
+  --nami-chip-active-background-hover: var(--filter-blue-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-blue-background-pressed);
 }
 
 .nami-chip[data-operation="trash"] {
   --nami-chip-active-background: var(--filter-trash-background);
+  --nami-chip-active-background-hover: var(--filter-red-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-red-background-pressed);
 }
 
 .nami-chip[data-operation="noop"] {
   --nami-chip-active-background: var(--filter-noop-background);
+  --nami-chip-active-background-hover: var(--filter-noop-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-noop-background-pressed);
   --nami-chip-active-foreground: var(--filter-noop-foreground);
 }
 
 .nami-chip[data-operation][aria-pressed="true"]:not(:disabled):hover {
-  background: var(--nami-chip-active-background);
+  background: var(--nami-chip-active-background-hover);
   color: var(--nami-chip-active-foreground);
-  transform: translateY(-1px);
 }
 
 .nami-chip[data-operation][aria-pressed="true"]:not(:disabled):active {
-  background: var(--nami-chip-active-background);
+  background: var(--nami-chip-active-background-pressed);
   color: var(--nami-chip-active-foreground);
-  transform: scale(0.98);
 }
 
 .nami-chip[data-operation="delete"] {
   --nami-chip-active-background: var(--filter-delete-background);
+  --nami-chip-active-background-hover: var(--filter-red-background-hover);
+  --nami-chip-active-background-pressed: var(--filter-red-background-pressed);
   --nami-chip-active-foreground: var(--filter-delete-active-foreground);
   color: var(--filter-delete-foreground);
 }
@@ -1087,10 +1105,6 @@ body {
 .nami-chip[data-operation="delete"]:not([aria-pressed="true"]):not(:disabled):hover,
 .nami-chip[data-operation="delete"]:not([aria-pressed="true"]):not(:disabled):active {
   background: var(--color-neutral-foreground);
-}
-
-.nami-chip[data-operation="delete"]:not([aria-pressed="true"]):not(:disabled):active {
-  transform: scale(0.98);
 }
 
 [data-intent="copy"] .nami-state-cue::before {
@@ -1224,6 +1238,11 @@ body {
   block-size: 100%;
   inline-size: var(--nami-progress-value, 0%);
   transition: inline-size var(--motion-duration-normal) var(--motion-easing-decelerate);
+}
+
+.nami-progress--inline {
+  block-size: var(--space-2);
+  inline-size: 100%;
 }
 
 .nami-progress--indeterminate .nami-progress__bar {

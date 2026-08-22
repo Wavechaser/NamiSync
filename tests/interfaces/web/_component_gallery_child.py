@@ -146,7 +146,7 @@ _INTEGRITY_ROW_CASE_KEYS = frozenset(
 )
 _PLAN_ROW_PRIMARY = {
     "plain": ("", "", ""),
-    "copying": ("lifecycle", "executing", "text"),
+    "copying": ("lifecycle", "executing", "progress"),
     "completed": ("lifecycle", "completed", "text"),
     **{
         key: ("intent", key, form)
@@ -155,7 +155,7 @@ _PLAN_ROW_PRIMARY = {
 }
 _INTEGRITY_ROW_PRIMARY = {
     "folder": ("integrity", "unverified", "text"),
-    "verifying": ("lifecycle", "verifying", "text"),
+    "verifying": ("lifecycle", "verifying", "progress"),
     "completed": ("lifecycle", "completed", "text"),
     **{
         key: ("integrity", key, form)
@@ -273,7 +273,7 @@ class _Recorder:
         self._initial: str | None = None
         self._post_ready_failure: dict[str, str] | None = None
         self._data: dict[str, Any] = {
-            "schema_version": 4,
+            "schema_version": 5,
             "mode": mode,
             "startup_errors": [],
         }
@@ -1275,6 +1275,12 @@ def _valid_file_list_evidence(
         "primary_foreground",
         "primary_background",
         "primary_height",
+        "primary_width",
+        "primary_cell_width",
+        "primary_progress_value",
+        "primary_progress_bar_width",
+        "primary_progress_track",
+        "primary_progress_fill",
         "primary_alias_foreground",
         "primary_alias_background",
         "secondary_color",
@@ -1465,7 +1471,7 @@ def _valid_file_list_evidence(
             or type(secondary_key) is not str
             or (primary_tone == "") != (primary_key == "")
             or (secondary_tone == "") != (secondary_key == "")
-            or row["primary_form"] not in {"", "text", "fill"}
+            or row["primary_form"] not in {"", "text", "fill", "progress"}
             or (primary_tone == "") != (row["primary_form"] == "")
             or (primary_tone == "intent" and primary_key not in _INTENT_CASES)
             or (secondary_tone == "intent" and secondary_key not in _INTENT_CASES)
@@ -1488,6 +1494,12 @@ def _valid_file_list_evidence(
             or type(row["primary_height"]) not in {int, float}
             or not math.isfinite(row["primary_height"])
             or row["primary_height"] <= 0
+            or any(
+                type(row[name]) not in {int, float}
+                or not math.isfinite(row[name])
+                or row[name] <= 0
+                for name in ("primary_width", "primary_cell_width")
+            )
             or row["primary_foreground"] != row["primary_alias_foreground"]
             or row["primary_background"] != row["primary_alias_background"]
             or _transparent_css_color(row["primary_background"])
@@ -1495,6 +1507,48 @@ def _valid_file_list_evidence(
             or (
                 row["primary_form"] == "fill"
                 and not math.isclose(row["primary_height"], 18.0, abs_tol=0.5)
+            )
+            or (
+                row["primary_form"] == "progress"
+                and (
+                    not math.isclose(row["primary_height"], 4.0, abs_tol=0.5)
+                    or not math.isclose(
+                        row["primary_width"],
+                        row["primary_cell_width"],
+                        abs_tol=0.5,
+                    )
+                    or type(row["primary_progress_value"]) not in {int, float}
+                    or not 0 <= row["primary_progress_value"] <= 100
+                    or type(row["primary_progress_bar_width"])
+                    not in {int, float}
+                    or not math.isfinite(row["primary_progress_bar_width"])
+                    or row["primary_progress_bar_width"] < 0
+                    or not math.isclose(
+                        row["primary_progress_bar_width"]
+                        / row["primary_width"]
+                        * 100,
+                        row["primary_progress_value"],
+                        abs_tol=0.5,
+                    )
+                    or not all(
+                        type(row[name]) is str and bool(row[name])
+                        for name in (
+                            "primary_progress_track",
+                            "primary_progress_fill",
+                        )
+                    )
+                    or row["primary_progress_track"]
+                    == row["primary_progress_fill"]
+                )
+            )
+            or (
+                row["primary_form"] != "progress"
+                and (
+                    row["primary_progress_value"] is not None
+                    or row["primary_progress_bar_width"] != 0
+                    or row["primary_progress_track"] != ""
+                    or row["primary_progress_fill"] != ""
+                )
             )
             or type(row["cell_backgrounds"]) is not list
             or len(row["cell_backgrounds"]) != 6

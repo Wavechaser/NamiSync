@@ -114,7 +114,7 @@ async function reportFailure(error) {
     { key: "mkdir", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select photos folder", depth: 0, folder: true, expanded: true, nameText: "photos", sizeText: "14.8 MB", intentText: "Create folder", intentKey: "mkdir", checksumText: "—", notesText: "Partially selected folder." }) },
     { key: "copy", parentKey: "mkdir", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1000.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1000.jpeg", sizeText: "8.1 MB", intentText: "Copy", intentKey: "copy", checksumText: "12ab34cd", notesText: "New child file." }) },
     { key: "update", parentKey: "mkdir", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select photos DSC_1001.jpeg", depth: 1, folder: false, expanded: false, nameText: "DSC_1001.jpeg", sizeText: "6.7 MB", intentText: "Update", intentKey: "update", checksumText: "90ef12ab", notesText: "Changed child file." }) },
-    { key: "copying", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select active-copy.bin", depth: 0, folder: false, expanded: false, nameText: "active-copy.bin", sizeText: "24 MB", intentText: "Copying", intentKey: "", lifecycleKey: "executing", checksumText: "—", notesText: "Projected execution is in progress." }) },
+    { key: "copying", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select active-copy.bin", depth: 0, folder: false, expanded: false, nameText: "active-copy.bin", sizeText: "24 MB", intentText: "Copying", intentKey: "", lifecycleKey: "executing", progressPercent: 42, checksumText: "—", notesText: "Projected execution is in progress." }) },
     { key: "completed", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select completed-copy.bin", depth: 0, folder: false, expanded: false, nameText: "completed-copy.bin", sizeText: "12 MB", intentText: "Completed", intentKey: "", lifecycleKey: "completed", checksumText: "5a2f8c10", notesText: "Projected execution completed." }) },
     { key: "move", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select report.pdf", depth: 0, folder: false, expanded: false, nameText: "report.pdf", sizeText: "842 KB", intentText: "Move", intentKey: "move", checksumText: "3456cdef", notesText: "Relocate without replacing bytes." }) },
     { key: "move_update", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select notes.md", depth: 0, folder: false, expanded: false, nameText: "notes.md", sizeText: "4.6 KB", intentText: "Move + update", intentKey: "move_update", checksumText: "7890abcd", notesText: "Relocate and replace content." }) },
@@ -130,7 +130,7 @@ async function reportFailure(error) {
     { key: "folder", rowView: Object.freeze({ checked: false, mixed: true, selectionDisabled: false, selectionLabel: "Select documents folder", depth: 0, folder: true, expanded: true, nameText: "documents", sizeText: "2.5 MB", presenceText: "Unverified", presenceStatus: "unverified", checksumText: "—", notesText: "Partially selected folder rollup." }) },
     { key: "verified", parentKey: "folder", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select documents report.pdf", depth: 1, folder: false, expanded: false, nameText: "report.pdf", sizeText: "2.1 MB", presenceText: "Verified", presenceStatus: "verified", checksumText: "5a2f8c10", notesText: "Evidence matches the recorded file." }) },
     { key: "baselined", parentKey: "folder", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select documents draft.docx", depth: 1, folder: false, expanded: false, nameText: "draft.docx", sizeText: "412 KB", presenceText: "Baselined", presenceStatus: "baselined", checksumText: "90ef12ab", notesText: "Evidence was recorded for the first time." }) },
-    { key: "verifying", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select verifying.iso", depth: 0, folder: false, expanded: false, nameText: "verifying.iso", sizeText: "1.4 GB", presenceText: "Verifying", presenceStatus: "", lifecycleKey: "verifying", checksumText: "—", notesText: "Projected integrity verification is in progress." }) },
+    { key: "verifying", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select verifying.iso", depth: 0, folder: false, expanded: false, nameText: "verifying.iso", sizeText: "1.4 GB", presenceText: "Verifying", presenceStatus: "", lifecycleKey: "verifying", progressPercent: 67, checksumText: "—", notesText: "Projected integrity verification is in progress." }) },
     { key: "completed", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select completed.iso", depth: 0, folder: false, expanded: false, nameText: "completed.iso", sizeText: "824 MB", presenceText: "Completed", presenceStatus: "", lifecycleKey: "completed", checksumText: "2468bdf1", notesText: "Projected integrity verification completed." }) },
     { key: "unverified", rowView: Object.freeze({ checked: false, mixed: false, selectionDisabled: false, selectionLabel: "Select todo.txt", depth: 0, folder: false, expanded: false, nameText: "todo.txt", sizeText: "2.8 KB", presenceText: "Unverified", presenceStatus: "unverified", checksumText: "—", notesText: "No verification evidence exists yet." }) },
     { key: "modified", rowView: Object.freeze({ checked: true, mixed: false, selectionDisabled: false, selectionLabel: "Select catalog.db", depth: 0, folder: false, expanded: false, nameText: "catalog.db", sizeText: "4.2 MB", presenceText: "Modified", presenceStatus: "modified", checksumText: "2468bdf1", notesText: "Recorded metadata is stale." }) },
@@ -1403,6 +1403,7 @@ async function reportFailure(error) {
       const primary = row.querySelector('[data-file-column="primary"]');
       const secondary = row.querySelector('[data-file-column="secondary"]');
       const primaryLabel = primary?.querySelector(".nami-file-state-label");
+      const inlineProgress = primary?.querySelector(".nami-progress--inline");
       const notes = row.querySelector('.nami-file-row__notes');
       if (
         definition === undefined
@@ -1411,7 +1412,10 @@ async function reportFailure(error) {
         || !(size instanceof HTMLElement)
         || !(primary instanceof HTMLElement)
         || !(secondary instanceof HTMLElement)
-        || !(primaryLabel instanceof HTMLElement)
+        || !(
+          primaryLabel instanceof HTMLElement
+          || inlineProgress instanceof HTMLElement
+        )
         || !(notes instanceof HTMLElement)
         || cells.length !== 6
         || !cells.every((cell) => cell instanceof HTMLElement)
@@ -1420,11 +1424,28 @@ async function reportFailure(error) {
       }
       const [primaryTone, primaryKey] = toneAndKey(primary);
       const [secondaryTone, secondaryKey] = toneAndKey(secondary);
-      const primaryStyle = getComputedStyle(primaryLabel);
-      const primaryColor = primaryStyle.color;
-      const primaryBackground = primaryStyle.backgroundColor;
-      const primaryBounds = primaryLabel.getBoundingClientRect();
+      const primaryVisual = inlineProgress instanceof HTMLElement
+        ? inlineProgress
+        : primaryLabel;
+      const primaryStyle = getComputedStyle(
+        inlineProgress instanceof HTMLElement ? primary : primaryVisual,
+      );
       const primaryAliases = resolvedStateAliases(primary);
+      const primaryColor = inlineProgress instanceof HTMLElement
+        ? primaryAliases.foreground
+        : primaryStyle.color;
+      const primaryBackground = inlineProgress instanceof HTMLElement
+        ? primaryAliases.background
+        : primaryStyle.backgroundColor;
+      const primaryBounds = primaryVisual.getBoundingClientRect();
+      const primaryCellBounds = primary.getBoundingClientRect();
+      const progressBar = inlineProgress?.querySelector(".nami-progress__bar");
+      const progressStyle = inlineProgress instanceof HTMLElement
+        ? getComputedStyle(inlineProgress)
+        : null;
+      const progressBarStyle = progressBar instanceof HTMLElement
+        ? getComputedStyle(progressBar)
+        : null;
       const secondaryColor = getComputedStyle(secondary).color;
       const disclosure = row.querySelector(".nami-file-row__disclosure");
       const checkboxBounds = checkbox.getBoundingClientRect();
@@ -1447,10 +1468,14 @@ async function reportFailure(error) {
           : null,
         name: row.querySelector(".nami-file-row__name-text")?.textContent,
         size: size.textContent,
-        primary: primary.textContent,
+        primary: inlineProgress instanceof HTMLElement
+          ? inlineProgress.getAttribute("aria-label")
+          : primary.textContent,
         primary_tone: primaryTone,
         primary_key: primaryKey,
-        primary_form: primaryTone === ""
+        primary_form: inlineProgress instanceof HTMLElement
+          ? "progress"
+          : primaryTone === ""
           ? ""
           : transparentColor(primaryBackground) ? "text" : "fill",
         secondary: secondary.textContent,
@@ -1461,6 +1486,16 @@ async function reportFailure(error) {
         primary_foreground: primaryColor,
         primary_background: primaryBackground,
         primary_height: primaryBounds.height,
+        primary_width: primaryBounds.width,
+        primary_cell_width: primaryCellBounds.width,
+        primary_progress_value: inlineProgress instanceof HTMLElement
+          ? Number(inlineProgress.getAttribute("aria-valuenow"))
+          : null,
+        primary_progress_bar_width: progressBar instanceof HTMLElement
+          ? progressBar.getBoundingClientRect().width
+          : 0,
+        primary_progress_track: progressStyle?.backgroundColor ?? "",
+        primary_progress_fill: progressBarStyle?.backgroundColor ?? "",
         primary_alias_foreground: primaryTone === ""
           ? primaryColor
           : primaryAliases.foreground,

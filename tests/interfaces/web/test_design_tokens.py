@@ -37,6 +37,24 @@ AUTHORED_PALETTE = {
     "--palette-purple-dark": "#331155",
     "--palette-purple-light": "#BB88EE",
 }
+AUTHORED_FILTER_INTERACTION_VALUES = {
+    "light": {
+        "blueHover": "#33AAEEE6",
+        "bluePressed": "#33AAEECC",
+        "yellowHover": "#FFAA22E6",
+        "yellowPressed": "#FFAA22CC",
+        "purpleHover": "#8844CCE6",
+        "purplePressed": "#8844CCCC",
+        "redHover": "#EE6666E6",
+        "redPressed": "#EE6666CC",
+        "neutralHover": "#424242E6",
+        "neutralPressed": "#424242CC",
+    },
+    "dark": {
+        "neutralHover": "#D6D6D6E6",
+        "neutralPressed": "#D6D6D6CC",
+    },
+}
 FLUENT_SOURCE = {
     "package": "@fluentui/tokens@1.0.0-alpha.24",
     "commit": "32b42a5bf79c1836047dfc7fae07b1320731bce4",
@@ -512,6 +530,8 @@ def test_sh_g_11_tokens_route_authored_lights_only_to_new_semantic_roles() -> No
             *AUTHORED_CARD_VALUES["dark"].values(),
             *AUTHORED_FLYOUT_VALUES["light"].values(),
             *AUTHORED_FLYOUT_VALUES["dark"].values(),
+            *AUTHORED_FILTER_INTERACTION_VALUES["light"].values(),
+            *AUTHORED_FILTER_INTERACTION_VALUES["dark"].values(),
         )
         if value != "transparent"
     }
@@ -785,7 +805,17 @@ def test_sh_g_11_forced_colors_replaces_semantics_with_system_colors() -> None:
         "filter-trash-background",
         "filter-delete-background",
         "filter-delete-active-foreground",
+        "filter-blue-background-hover",
+        "filter-blue-background-pressed",
+        "filter-yellow-background-hover",
+        "filter-yellow-background-pressed",
+        "filter-purple-background-hover",
+        "filter-purple-background-pressed",
+        "filter-red-background-hover",
+        "filter-red-background-pressed",
         "filter-noop-background",
+        "filter-noop-background-hover",
+        "filter-noop-background-pressed",
         "filter-noop-foreground",
         "color-main-fill-foreground",
         "progress-active-fill",
@@ -1147,7 +1177,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "padding-inline: var(--space-3);" in filled_label
     file_label = _block(layout, ".nami-file-state-label ")
     assert "background: var(--color-semantic-transparent);" in file_label
-    assert "border-radius: var(--radius-circular);" in file_label
+    assert "border-radius: var(--radius-small);" in file_label
     assert "color: var(--nami-state-foreground" in file_label
     file_fill_selector = """.nami-plan-row__intent:is(
   [data-intent="delete"],
@@ -1171,7 +1201,11 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "block-size: 18px;" in file_fills
     assert "line-height: var(--font-size-caption);" in file_fills
     assert "padding-block-end: 1px;" in file_fills
-    assert "padding-inline: var(--space-3);" in file_fills
+    assert "margin-inline-start: -2px;" in file_fills
+    assert "padding-inline: 2px var(--space-3);" in file_fills
+    inline_progress = _block(source, ".nami-progress--inline ")
+    assert "block-size: var(--space-2);" in inline_progress
+    assert "inline-size: 100%;" in inline_progress
     assert ".nami-state-cue" in source
     task_rail = re.search(r"(?ms)^\.nami-task-rail\s*\{([^}]*)\}", layout)
     assert task_rail is not None
@@ -1419,6 +1453,9 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         for operation, family in filter_backgrounds.items():
             background = _resolve(f"--filter-{operation}-background", theme)
             assert background == _resolve(f"--palette-{family}-main", theme)
+            main = _resolve(f"--palette-{family}-main", theme)
+            assert theme[f"--filter-{family}-background-hover"] == f"{main}E6"
+            assert theme[f"--filter-{family}-background-pressed"] == f"{main}CC"
             foreground = (
                 _resolve("--filter-delete-active-foreground", theme)
                 if operation == "delete"
@@ -1433,6 +1470,13 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
             _resolve("--filter-noop-foreground", theme),
             _resolve("--filter-noop-background", theme),
         ) >= 4.5
+        noop = _resolve("--filter-noop-background", theme)
+        assert theme["--filter-noop-background-hover"].casefold() == (
+            f"{noop}E6".casefold()
+        )
+        assert theme["--filter-noop-background-pressed"].casefold() == (
+            f"{noop}CC".casefold()
+        )
         assert _resolve("--progress-active-fill", theme) == _resolve(
             "--color-accent-fill", theme
         )
@@ -1575,8 +1619,16 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
     )
     assert "opacity:" not in active_operation_hover
     assert "opacity:" not in active_operation_pressed
-    assert "transform: translateY(-1px);" in active_operation_hover
-    assert "transform: scale(0.98);" in active_operation_pressed
+    assert "transform:" not in active_operation_hover
+    assert "transform:" not in active_operation_pressed
+    assert (
+        "background: var(--nami-chip-active-background-hover);"
+        in active_operation_hover
+    )
+    assert (
+        "background: var(--nami-chip-active-background-pressed);"
+        in active_operation_pressed
+    )
     for operation in filter_backgrounds:
         selector_operation = operation.replace("-", "_")
         operation_filter = _block(
@@ -1586,6 +1638,17 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         assert (
             f"--nami-chip-active-background: "
             f"var(--filter-{operation}-background);"
+            in operation_filter
+        )
+        family = filter_backgrounds[operation]
+        assert (
+            "--nami-chip-active-background-hover: "
+            f"var(--filter-{family}-background-hover);"
+            in operation_filter
+        )
+        assert (
+            "--nami-chip-active-background-pressed: "
+            f"var(--filter-{family}-background-pressed);"
             in operation_filter
         )
     purple_selector = """.nami-chip:is(
@@ -1615,6 +1678,7 @@ def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> N
         "background: var(--color-neutral-foreground);"
         in delete_inactive_interaction
     )
+    assert "transform:" not in delete_inactive_interaction
 
     badges = _block(source, ".nami-badge,\n.nami-status-pill ")
     assert "border: 0;" in badges

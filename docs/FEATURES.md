@@ -413,7 +413,8 @@ unrealized unless an entry says otherwise.
   exact black or white, stay fixed through interaction, and use 90%/80%
   base-fill opacity for hover/press. Filter pills
   use inverse grayscale when inactive and exact operation-family main swatches
-  with contrast-selected grayscale text when active; inactive Delete uses exact
+  at rest with contrast-selected grayscale text when active. Hover and press
+  retain the same main RGB at 90%/80% strength without lift or scale; inactive Delete uses exact
   red-main text while active Delete uses the shared contrast-safe neutral label.
   Channel-scoped
   intent/lifecycle/integrity labels use either semantic text or a borderless
@@ -462,9 +463,13 @@ unrealized unless an entry says otherwise.
   intent exceptions, and every integrity state. Both renderers wrap supplied
   status text in the channel-scoped semantic-label component and accept exact
   already-projected keys. Test-only execution rows additionally exercise
-  Copying/Completed lifecycle projection, while integrity rows exercise
-  Verifying/Completed. They carry no form field and infer no domain result,
-  hue, or urgency in JavaScript. Forced colors retain system authority. The
+  a full-cell 4 px Copying progress bar and Completed text, while integrity rows
+  exercise the same Verifying/Completed forms. Active specimens accept an
+  already-projected 0–100 percentage and retain supplied status text as the
+  accessible progress label. They carry no form field and infer no domain
+  result, transport ratio, row identity, hue, or urgency in JavaScript. Compact
+  filled labels use the checkbox's 4 px radius and a 2 px leading bleed to align
+  label text. Forced colors retain system authority. The
   gallery headers also support pointer-drag and arrow-key column resizing
   without persistence. The first interaction freezes five pixel tracks while
   File/path remains the sole 12 rem-minimum flexible track; each of the five
@@ -494,9 +499,10 @@ unrealized unless an entry says otherwise.
   reversibility; lifecycle distinguishes ordinary progress from attention and
   failure; integrity keeps healthy inventory as text while reappearance,
   unsupported entries, missing files, mismatches, and read errors use filled
-  attention badges. Filled forms are 18 logical px pills with theme-aware
+  attention badges. Filled forms are 18 logical px badges with theme-aware
   family-secondary fills, dark red/yellow labels in Light, and main-color
-  labels in Dark. Paused progress is frozen
+  labels in Dark; compact file-list forms use the checkbox's small radius while
+  standalone badges may remain pill-shaped. Paused progress is frozen
   yellow, plain canceled
   progress is frozen neutral gray, and resume returns accent. A future stopped
   count/percentage for paused or canceled work is a recorded decision point,

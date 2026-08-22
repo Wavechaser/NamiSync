@@ -729,7 +729,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     )
     plan_primary = {
         "plain": ("", "", ""),
-        "copying": ("lifecycle", "executing", "text"),
+        "copying": ("lifecycle", "executing", "progress"),
         "completed": ("lifecycle", "completed", "text"),
         **{
             key: ("intent", key, form)
@@ -778,7 +778,19 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "background": "rgb(255, 255, 255)",
                 "primary_foreground": primary_foreground,
                 "primary_background": primary_background,
-                "primary_height": 18.0,
+                "primary_height": 4.0 if form == "progress" else 18.0,
+                "primary_width": 100.0 if form == "progress" else 20.0,
+                "primary_cell_width": 100.0,
+                "primary_progress_value": 42.0 if form == "progress" else None,
+                "primary_progress_bar_width": (
+                    42.0 if form == "progress" else 0.0
+                ),
+                "primary_progress_track": (
+                    "rgb(255, 255, 255)" if form == "progress" else ""
+                ),
+                "primary_progress_fill": (
+                    "rgb(0, 0, 0)" if form == "progress" else ""
+                ),
                 "primary_alias_foreground": primary_foreground,
                 "primary_alias_background": primary_background,
                 "secondary_color": "rgb(0, 0, 0)",
@@ -809,7 +821,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     )
     integrity_primary = {
         "folder": ("integrity", "unverified", "text"),
-        "verifying": ("lifecycle", "verifying", "text"),
+        "verifying": ("lifecycle", "verifying", "progress"),
         "completed": ("lifecycle", "completed", "text"),
         **{
             key: ("integrity", key, form)
@@ -858,7 +870,19 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "background": "rgb(255, 255, 255)",
                 "primary_foreground": primary_foreground,
                 "primary_background": primary_background,
-                "primary_height": 18.0,
+                "primary_height": 4.0 if form == "progress" else 18.0,
+                "primary_width": 100.0 if form == "progress" else 20.0,
+                "primary_cell_width": 100.0,
+                "primary_progress_value": 67.0 if form == "progress" else None,
+                "primary_progress_bar_width": (
+                    67.0 if form == "progress" else 0.0
+                ),
+                "primary_progress_track": (
+                    "rgb(255, 255, 255)" if form == "progress" else ""
+                ),
+                "primary_progress_fill": (
+                    "rgb(0, 0, 0)" if form == "progress" else ""
+                ),
                 "primary_alias_foreground": primary_foreground,
                 "primary_alias_background": primary_background,
                 "secondary_color": "rgb(0, 0, 0)",
@@ -1194,7 +1218,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
     ) == {"accepted": True}
     recorded = EvidenceReader(report_paths).read_ready()
     assert recorded is not None
-    assert recorded["schema_version"] == 4
+    assert recorded["schema_version"] == 5
     assert recorded["report"] == report
 
     incomplete_root = tmp_path / "incomplete"
@@ -1512,6 +1536,8 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                     control["state"] in {"hover", "pressed"}
                     and control["control"] in {
                         "button_primary",
+                        "filter_copy_active",
+                        "filter_delete_active",
                         "segmented_control",
                     }
                 )
@@ -1729,7 +1755,7 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 controls_by_key["filter_delete_active"][state]["background"],
             )
             >= 4.5
-            for state in {"rest", "hover", "pressed", "focused"}
+            for state in {"rest", "focused"}
         )
         assert len(
             {
@@ -1754,6 +1780,20 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 controls_by_key[filter_key][state]["opacity"] == "1"
                 for state in _CONTROL_STATES
             )
+            assert all(
+                controls_by_key[filter_key][state]["transform"] == "none"
+                for state in _CONTROL_STATES
+            )
+            base = controls_by_key[filter_key]["rest"]["background"]
+            assert controls_by_key[filter_key]["focused"]["background"] == base
+            assert _color_alpha(base) == pytest.approx(1.0)
+            for state, strength in (("hover", 0.9), ("pressed", 0.8)):
+                interaction = controls_by_key[filter_key][state]["background"]
+                assert _color_rgb(interaction) == pytest.approx(_color_rgb(base))
+                assert _color_alpha(interaction) == pytest.approx(strength)
+                assert controls_by_key[filter_key][state]["foreground"] == (
+                    controls_by_key[filter_key]["rest"]["foreground"]
+                )
         for progress_key in ("progress_determinate", "progress_indeterminate"):
             progress = controls_by_key[progress_key]
             assert progress["rest"]["background"] != progress["rest"]["fill_background"]
@@ -2060,7 +2100,7 @@ def _run_gallery_mode(
     result = dict(initial)
     result["exit_code"] = final["exit_code"]
     assert result["exit_code"] == 0
-    assert result["schema_version"] == 4
+    assert result["schema_version"] == 5
     assert result["startup_errors"] == []
     assert result["runtime"]["versions"] == {
         "namisync": VERSION,
@@ -2344,6 +2384,32 @@ def _assert_filled_semantic_colors(
     assert _contrast(foreground, background) >= 4.5
 
 
+def _assert_inline_row_progress(
+    row: dict[str, object],
+    *,
+    expected_value: float,
+    forced: bool,
+    system_colors: dict[str, str],
+    accent_fill: str,
+) -> None:
+    assert row["primary_form"] == "progress"
+    assert row["primary_height"] == pytest.approx(4.0, abs=0.5)
+    assert row["primary_width"] == pytest.approx(
+        row["primary_cell_width"], abs=0.5
+    )
+    assert row["primary_progress_value"] == pytest.approx(expected_value)
+    assert row["primary_progress_bar_width"] / row["primary_width"] * 100 == (
+        pytest.approx(expected_value, abs=0.5)
+    )
+    assert row["primary_progress_track"] != row["primary_progress_fill"]
+    assert not _opaque_color(row["primary_background"])
+    if forced:
+        assert row["primary_progress_track"] == system_colors["Canvas"]
+        assert row["primary_progress_fill"] == system_colors["Highlight"]
+    else:
+        assert row["primary_progress_fill"] == accent_fill
+
+
 def _assert_plan_list_evidence(
     evidence: dict[str, object],
     *,
@@ -2394,7 +2460,7 @@ def _assert_plan_list_evidence(
         for case, row in by_case.items()
     } == {
         "plain": ("", "", ""),
-        "copying": ("lifecycle", "executing", "text"),
+        "copying": ("lifecycle", "executing", "progress"),
         "completed": ("lifecycle", "completed", "text"),
         **{
             key: ("intent", key, form)
@@ -2430,6 +2496,15 @@ def _assert_plan_list_evidence(
             assert _contrast(
                 row["primary_foreground"], row["background"]
             ) >= 4.5
+            continue
+        if row["primary_form"] == "progress":
+            _assert_inline_row_progress(
+                row,
+                expected_value=42.0,
+                forced=forced,
+                system_colors=system_colors,
+                accent_fill=row["primary_alias_foreground"],
+            )
             continue
         hue, form = (
             _LIFECYCLE_CASES[row["primary_key"]]
@@ -2521,12 +2596,22 @@ def _assert_integrity_list_evidence(
             if tone == "lifecycle"
             else _INTEGRITY_CASES[key]
         )
+        if row["case"] == "verifying":
+            form = "progress"
         assert (row["primary_tone"], row["primary_key"]) == (tone, key)
         assert row["primary_form"] == form
         assert row["secondary_tone"] == ""
         assert row["secondary_key"] == ""
         assert row["secondary"] == "—" or len(row["secondary"]) == 8
-        if forced and form != "fill":
+        if form == "progress":
+            _assert_inline_row_progress(
+                row,
+                expected_value=67.0,
+                forced=forced,
+                system_colors=system_colors,
+                accent_fill=row["primary_alias_foreground"],
+            )
+        elif forced and form != "fill":
             assert not _opaque_color(row["primary_background"])
             assert row["primary_foreground"] == system_colors["CanvasText"]
         elif form == "fill":

@@ -1,4 +1,4 @@
-import { renderFileRow } from "./file_row.js";
+import { renderFileProgress, renderFileRow } from "./file_row.js";
 import { renderText } from "./render.js";
 
 const STRING_FIELDS = Object.freeze([
@@ -29,6 +29,16 @@ const ROW_LIFECYCLE_KEYS = Object.freeze(new Set([
   "completed",
 ]));
 
+function validProgressPercent(rowView) {
+  const executing = rowView.lifecycleKey === "executing";
+  return executing
+    ? typeof rowView.progressPercent === "number" &&
+      Number.isFinite(rowView.progressPercent) &&
+      rowView.progressPercent >= 0 &&
+      rowView.progressPercent <= 100
+    : rowView.progressPercent === undefined;
+}
+
 function validRowView(rowView) {
   return rowView !== null &&
     typeof rowView === "object" &&
@@ -42,6 +52,7 @@ function validRowView(rowView) {
     typeof rowView.folder === "boolean" &&
     typeof rowView.expanded === "boolean" &&
     STRING_FIELDS.every((name) => typeof rowView[name] === "string") &&
+    validProgressPercent(rowView) &&
     (
       rowView.lifecycleKey === undefined
         ? rowView.intentKey === "" || INTENT_KEYS.has(rowView.intentKey)
@@ -74,10 +85,19 @@ export function renderPlanRow(element, rowView) {
   } else if (rowView.intentKey !== "") {
     intent.dataset.intent = rowView.intentKey;
   }
-  const intentLabel = ownerDocument.createElement("span");
-  intentLabel.className = "nami-file-state-label";
-  renderText(intentLabel, rowView.intentText);
-  intent.append(intentLabel);
+  if (rowView.lifecycleKey === "executing") {
+    renderFileProgress(
+      intent,
+      rowView.intentText,
+      rowView.progressPercent,
+      rowView.lifecycleKey,
+    );
+  } else {
+    const intentLabel = ownerDocument.createElement("span");
+    intentLabel.className = "nami-file-state-label";
+    renderText(intentLabel, rowView.intentText);
+    intent.append(intentLabel);
+  }
 
   const checksum = createCell(ownerDocument, "nami-plan-row__checksum", "secondary");
   renderText(checksum, rowView.checksumText);

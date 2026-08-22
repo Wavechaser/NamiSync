@@ -42,8 +42,9 @@ beta-package closure.
 Current executor/verifier item progress now crosses the production bridge
 under the expanded exact browser shape. The browser reduces that protocol into
 phase, latest-snapshot, and active-item presentation state, including Gap and
-reliable-outcome precedence. Stable row projection and visual consumption
-remain Slice 5 work.
+reliable-outcome precedence. The test-only gallery can render an explicitly
+projected per-item percentage; stable production row projection, item matching,
+and live visual consumption remain Slice 5 work.
 
 `M1_BRIDGE.md` is the sole normative authority for bridge envelopes, commands,
 errors, retry/revision identity, sequence and terminal lifecycle, and BR-G
@@ -252,12 +253,14 @@ their channel-specific label, accessible state, surrounding context, and form
 keep the meanings distinct.
 
 In these tables, **text** means colored text without a semantic background.
-**Fill** means a borderless pill-shaped badge with an 18 logical px height and
-optically raised label alignment. Light uses the family's `light` swatch as the
+**Fill** means a borderless badge with an 18 logical px height and optically
+raised label alignment. Light uses the family's `light` swatch as the
 surface and Dark uses its `dark` swatch. Dark labels use the exact `main`
 swatch; Light red and yellow labels use their exact `dark` swatches so the
 filled attention forms remain contrast-safe. Neutral fill uses the corresponding selected-neutral surface and
-secondary neutral text. Text, icon/shape, and accessible state continue to name
+secondary neutral text. Standalone badges may remain pill-shaped; compact
+file-list badges share the checkbox's 4 px radius and bleed 2 px into the
+leading cell padding so filled and unfilled text align. Text, icon/shape, and accessible state continue to name
 the meaning. Forced colors replace authored foregrounds and fills with Windows
 system colors.
 
@@ -386,12 +389,13 @@ the system `Highlight`/`HighlightText` pair.
 Filter
 pills are likewise borderless: inactive pills use an inverse grayscale surface
 and text pairing, while an active operation filter uses that operation family's
-exact main swatch with contrast-selected grayscale text. Delete is the
+exact main swatch at rest with contrast-selected grayscale text. Delete is the
 deliberate exception only at rest: its inactive label is exact red-main in both
 ordinary themes, while its active red-main surface uses the same contrast-safe
 neutral label policy as other selected filters.
-Active chip hover/press cues preserve the opaque color pair and use a small
-geometric change rather than reducing opacity; plain pressed chips likewise
+Active operation-chip hover/press cues retain the same main RGB at 90%/80%
+strength, matching other colored clickable controls; they do not lift or scale.
+Plain pressed chips likewise
 retain their active label color rather than carrying a latent state inversion.
 Channel-scoped labels use colored text or the borderless 18 logical px filled
 form required by the tables above; their words and non-color cues remain
@@ -446,15 +450,21 @@ notes. `renderPlanRow` accepts an empty `intentKey` for a plain row, exact opera
 keys `copy`, `mkdir`, `move`, `recase`, `update`, `move_update`, `trash`,
 `delete`, and `noop`, or exact exception keys `error`, `unsupported`, and
 `blocked`. A projected execution row may instead supply exact lifecycle key
-`executing` or `completed`; its caller supplies the visible label such as
-“Copying” or “Completed.” `renderIntegrityRow` accepts only `verified`,
+`executing` or `completed`. An `executing` row additionally requires a finite,
+already-projected `progressPercent` from 0 through 100 and renders a full-cell
+4 logical px mini progress bar; supplied text such as “Copying” becomes its
+accessible label. `completed` remains visible semantic text.
+`renderIntegrityRow` accepts only `verified`,
 `baselined`,
 `unverified`, `modified`, `reappeared`, `unsupported`, `canceled`, `missing`,
 `mismatched`, and `error`, or exact projected lifecycle key `verifying` or
-`completed`. Each renderer wraps the supplied label in the
+`completed`; `verifying` follows the same explicit percentage/bar contract and
+uses text such as “Verifying” as its accessible label. Each non-progress state
+wraps the supplied label in the
 channel-scoped semantic-label component. The already-projected key selects its
 fixed component role; there is no form field and JavaScript does not derive a
-domain result, hue, or urgency. The renderers also do not aggregate sizes,
+domain result, hue, urgency, transport-counter ratio, or row identity. The
+renderers also do not aggregate sizes,
 truncate hashes, split paths, reconstruct hierarchy, or dispatch anything. All
 text still passes through `render.js`. Neither `app.js` nor `panels.js` imports
 these modules, so production remains the honest empty Slice 4 shell until
@@ -483,9 +493,9 @@ calculation. The gallery retains those widths only in its current DOM and adds
 no persistence, bridge state, or production column-layout contract. Folder rows expose a borderless disclosure
 button and mixed checkboxes; projected child rows carry only their basename,
 indent under the folder, and never repeat the full visual path. Plan and
-integrity cells use the channel-specific semantic text or 18 logical px filled
-form defined above, while JavaScript consumes only the exact already-projected
-key. Zebra backgrounds belong only to
+integrity cells use the channel-specific semantic text, 18 logical px filled
+form, or active 4 logical px full-cell progress form defined above, while
+JavaScript consumes only the exact already-projected key and percentage. Zebra backgrounds belong only to
 direct rendered rows, including folders; cells and columns are transparent and
 the row group has no filler height, so striping ends at the final row. The
 untouched grid has a 48 rem content floor. After manual resizing, ordinary
@@ -503,8 +513,8 @@ The component gallery owns the only current callers and fixtures. Its static
 sync array covers one plain row, every operation once, all three exception
 states, and a
 partially selected expanded `photos` folder with two indented basename-only
-children, plus explicit Copying and Completed lifecycle rows. A second static
-array covers every integrity state, Verifying and Completed lifecycle rows,
+children, plus explicit Copying progress and Completed text rows. A second static
+array covers every integrity state, Verifying progress and Completed text rows,
 and another partially selected folder with two children. Test-owned
 listeners exercise computed collapse/restore and direct-child checkbox
 reconciliation—including mixed to fully selected and back—without inventing
