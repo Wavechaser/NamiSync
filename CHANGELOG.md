@@ -117,218 +117,77 @@ later workflow surfaces and beta packaging remain future phases.
 
 #### Extract truthful per-item progress (2026-08-21 – 2026-08-22)
 
-- Ratified one central Progress protocol: selected-item admission and reliable
-  terminal-outcome counts, monotonic attempted-work byte high-water, display-only
-  paths, phase-scoped temporal rules, authoritative live forced boundaries,
-  reliable-outcome/result precedence, Gap recovery, and module-specific byte
-  budgets. Terminal and retained history byte counters now explicitly mean
-  attempted work, not proof of durable publication.
-- Bumped only the core event envelope to v4. Exact 11-key Progress snapshots
-  require nonempty phase self-description; nullable paired item fields name the
-  opaque row namespace, and nullable 32-lowercase-hex attempt state carries
-  paired attempt-local counters only for a determinate byte stream. Exact
-  `SessionEventView` exposes the nested core version; bridge envelopes remain
-  v1, execution continuations remain v5, database/page schemas remain unchanged,
-  and supported persisted reliable v3 history remains readable while v3
-  Progress is refused.
-- Replaced throttle-artifact preservation with coherent authoritative-live
-  control snapshots. Executor pause retains the active operation and latest
-  attempt while publishing live aggregate work; cancellation and exceptional
-  unwind reliably settle outcomes, publish live totals, and clear activity and
-  path. Aggregate items count every reliable terminal outcome category, and
-  accepted downstream emission—not a failed callback—advances session truth.
-- Made byte-attempt identity start only at real pipeline entry, remain stable
-  across chunks/pause/overshoot and retained post-publication continuations,
-  and renew on retry or reconstructed-resume re-entry. Executor aggregate work
-  stays fixed-review bounded and resume-monotonic through public
-  `ExecutionSet.bytes_done_high_water`; verifier physical-read budget may grow
-  by incremental overrun and its strict standalone continuation v2 retains
-  budget and recording degradation.
-- Aligned executor, standalone integrity, and linked post-copy reporters around
-  the same lifecycle without introducing a shared reporter abstraction.
-  `item_type` names the row lookup namespace (`operation` for linked post-copy,
-  `integrity` for standalone work); reliable linked results remain
-  `IntegrityOutcome`. Unexpected verifier failure now force-publishes inactive
-  live state without replacing the primary error, and workflow terminal
-  construction prefers continuation/result authority over lossy telemetry.
-- Closed the linked post-copy admission split: Progress and terminal results now
-  derive selected-item admission and the physical-read work budget from the full
-  continuation, including missing-evidence work. Direct, resumed, paused,
-  canceled, failed, and overrun paths retain one coherent phase budget while
-  reliable outcomes remain the item-settlement authority.
-- Added an O(1) browser Progress reducer with exact v4 validation, phase
-  agreement, Gap self-description recovery, attempt and aggregate monotonicity,
-  outcome/Terminal precedence, immutable callback projections, and atomic
-  whole-batch preflight/replay. The required packaged Node gate exercises these
-  semantics; one malformed snapshot cannot partially deliver reliable siblings
-  or advance the cursor.
-- Closed the deferred-directory handoff seam: a successful MKDIR now leaves the
-  active spotlight before its later reliable settlement, while the reducer
-  accepts a newer item when that ordinary inactive snapshot is coalesced away.
-  Same-item attempt rules, cross-item token ownership, and outcome settlement
-  authority remain enforced. A required test carries the real executor stream
-  through EventHub coalescing, exact `SessionEventView`, and packaged JavaScript.
-- Classified reliable-body decoder strictness as provisional compatibility
-  debt rather than a settled extension policy. The intended future repair is a
-  strict current-live decoder/validator separated from version-dispatched
-  compatibility decoding for authenticated history; browser-history,
-  import/replay, recovery, new reliable shapes, or a core-version bump must
-  reopen it, and executable guards prohibit live/history validator reuse.
-- Replaced the reviewed settlement-oracle baseline only after transition
-  semantics stabilized. Its normalized v4 phase/attempt projection, continuation
-  high-water, control boundaries, and all 70 policy rows pass the protected
-  30-scenario matrix for three identical runs.
-- Updated the installed-wheel event and current-source custody fixtures to
-  truthful v4 item/attempt transitions without mutating the frozen v1 custody
-  authorities. The clean event run was gap-free and the three-child Tier-1
-  custody characterization was stable below the historical ceiling; neither
-  result is promoted into a new v4 empirical acceptance claim. Slice 5 stable
-  row projection and rendering remain open.
-- Reran both measurements after the deferred-handoff source change. The first
-  installed-wheel diagnostic recorded a non-reproducing 476 ms reliable
-  maximum and failed its latency verdict; the immediate clean repeat passed at
-  18 ms maximum, while both remained monotonic, gap-free, and all-terminal.
-  Current-source custody stayed byte/object-identical and below the frozen
-  ceiling. The failed artifact is retained in the disposition and no result is
-  promoted beyond its existing diagnostic/Tier-1 authority.
+- Established core Progress v4 as the central phase/item/attempt protocol:
+  selected and reliably settled item counts, monotonic attempted-byte
+  high-water, display-only paths, authoritative control boundaries, and
+  explicit `Gap` recovery. Terminal and history byte counters describe
+  attempted work, not durable publication.
+- Aligned executor, standalone integrity, and linked post-copy reporting across
+  pause, resume, retry, cancellation, failure, overrun, and missing-evidence
+  work. Attempt identity begins at real byte-stream entry and renews on retry or
+  reconstructed resume; reliable outcomes remain settlement authority.
+- Added an O(1) browser reducer with exact v4 validation, phase/attempt
+  monotonicity, outcome/Terminal precedence, immutable projections, and atomic
+  whole-batch replay. The real coalesced MKDIR handoff proves a newer active item
+  can follow an omitted inactive boundary without weakening same-item ownership.
+- Kept bridge envelopes v1, execution continuations v5, and database/page
+  schemas unchanged; supported reliable v3 history remains readable while v3
+  live Progress is refused. Strict live versus compatibility decoding remains
+  tracked debt with executable separation guards.
+- Rebaselined the protected settlement oracle only after semantics stabilized;
+  all 30 scenarios and 70 policy rows passed three identical runs. Updated
+  installed event/custody fixtures retained frozen v1 authority; a failed
+  latency diagnostic and clean repeat were both retained without promoting a
+  new acceptance claim. Slice 5 row projection and rendering remain open.
 
 #### Ratify desktop color semantics (2026-08-21)
 
-- Ratified a 15-token authored palette: yellow main is `#FFAA22`, purple main
-  is `#8844CC`, and their predecessor values remain available under the new
-  yellow-light `#FFDD44` and purple-light `#BB88EE` names. Operation consumers
-  remain main-bound.
-- Defined separate intent, task-lifecycle, and integrity color channels. Hue
-  identifies class while text versus an 18 logical px filled badge identifies
-  attention; visible labels, structural cues, and accessible state remain
-  authoritative rather than color or form alone.
-- Recorded paused progress as frozen yellow, plain canceled progress as frozen
-  neutral gray, and resumed work as accent. A future stopped count or
-  percentage remains a latent presentation decision with no current payload.
-- Reduced unchecked checkboxes to a 1 logical px neutral boundary
-  while leaving textbox underlines and dual focus strokes unchanged.
-- Installed the 15 primitives in `tokens.css` only and added channel-scoped
-  intent, lifecycle, and integrity aliases/components. Main-color text handles
-  ordinary states; urgent states use borderless 18 logical px family-secondary
-  labels. Light red/yellow fills use their dark-family text and Dark fills use
-  main-colored text, so every filled pair meets the normal-text contrast floor.
-  Operation filters follow the same intent classes, and active Delete now uses
-  the shared contrast-safe neutral label.
-- Kept the plan and integrity row inputs narrow: their renderers wrap supplied
-  labels and accept exact already-projected keys, with no form payload or
-  JavaScript domain inference.
-- Expanded test-only gallery fixtures and evidence to every intent, lifecycle,
-  integrity, and paused/canceled progress case. Forced colors keep the progress
-  track on `Canvas` and the fill on `Highlight`. Production task and file-list
-  surfaces remain dormant and receive no bridge or projection contract.
-- Tuned filled semantic labels to 18 logical px with optically raised text.
-  Light uses family-light surfaces with dark red/yellow labels; Dark uses
-  family-dark surfaces with main labels, and Dark relocating text uses
-  purple-light. The gallery now requires every filled pair to reach 4.5:1.
-- Lifted ordinary Dark buttons from `#2d2d2d` to `#383838` while retaining the
-  existing hover, pressed, and subtle stroke roles. Added projected Copying and
-  Completed sync rows plus Verifying and Completed integrity rows to the
-  tests-only gallery through narrow optional lifecycle keys.
+- Ratified one 15-token authored palette and separated operation intent,
+  task-lifecycle, and integrity channels. Hue identifies class while labels,
+  structure, and accessible state remain authoritative; presentation form
+  distinguishes ordinary text from attention badges.
+- Defined paused progress as frozen yellow, canceled as neutral gray, resumed as
+  accent, and aligned operation filters plus integrity/task labels to the same
+  channel semantics. Every filled text pair meets the normal-text contrast
+  floor, with system colors retaining forced-color authority.
+- Kept plan and integrity renderers narrow and presentation-only while tightening
+  unchecked-checkbox, dark-button, and semantic-label treatment; no form payload
+  or JavaScript domain inference was introduced.
+- Expanded the test-only gallery across intent, lifecycle, integrity, progress,
+  light/dark, forced-color, and reduced-motion states, including projected sync
+  and integrity lifecycle rows. Production file-list surfaces remain dormant.
 
 #### Establish the dormant file-list row renderer (2026-08-20 – 2026-08-21)
 
-- Added a shared packaged `file_row.js` skeleton plus presentation-only
-  `renderPlanRow(element, rowView)` and `renderIntegrityRow(element, rowView)`
-  specializations. They consume explicit display values through the defended
-  text helpers, import no bridge or domain code, and remain unimported by
-  production startup, so the shipped GUI remains honestly empty.
-- Expanded the responsive grid to six columns. Both lists order selection,
-  basename, and size first; sync adds operation/status and eight-character
-  checksum, while integrity adds combined presence/status and eight-character
-  checksum cells before notes.
-  Rows are 24 px with 12 px text, checkboxes are 16 px, and projected folders expose disclosure
-  buttons, mixed selection, and indented basename-only children. The test-only
-  driver collapses/restores actual computed rows and reconciles each folder's
-  checkbox from its two direct children. Five focusable internal separators
-  resize by pointer drag or arrow key without persistence. The first interaction
-  freezes five measured pixel tracks while File/path remains the sole
-  `minmax(12rem, 1fr)` track; Notes is the 14 rem-minimum inverse reserve. Zebra
-  backgrounds belong only to rendered row elements—including folders—and stop
-  at the last row; cells stay transparent and constrained widths scroll the
-  complete aligned grid horizontally from the greater of its 48 rem floor or
-  the manually preserved-width minimum. Window resizing affects File/path
-  alone until its minimum, and no outside-edge Notes divider is exposed. The
-  gallery specimen fills the wide work area. Plan operation and integrity-state aliases use authored family main
-  colors in both ordinary themes—including red-main negative states—while
-  forced colors retain system authority.
-- Drove the installed production renderer from a test-only static gallery
-  arrays covering a plain row, all nine operation tones exactly once, a folder
-  with two children, error/unsupported statuses, and representative integrity
-  states under another two-child folder. No bridge command,
-  `SyncPlan`, workflow, dispatcher, session, or provisional wire payload was
-  introduced, and exact wheel checks exclude both fixture markers.
-- Extended four-profile headed evidence for roles and blank selection header,
-  checkbox labels/states and exact compact geometry, six columns, computed
-  collapse/restore, child-to-parent selection reconciliation, a measured 40 px
-  column drag, basename hierarchy, main status mappings, display-ready checksums,
-  finite row-only striping, transparent cells, stationary first-freeze geometry,
-  inverse Notes transfers, minimum clamps, right-edge anchoring, File/path-only
-  viewport flex, effective-minimum growth, and narrow-container overflow.
-- Added a test-owned header master checkbox to both file-list specimens. It
-  derives checked/mixed state from every selectable row and exercises select
-  all/deselect all without defining Slice 5 selection authority.
+- Added a shared packaged `file_row.js` skeleton with presentation-only plan
+  and integrity specializations. It consumes explicit defended display values,
+  imports no bridge or domain code, and remains absent from production startup,
+  so the shipped workflow surfaces are still honestly dormant.
+- Defined aligned six-column plan/integrity tables with compact rows, folder
+  disclosure and tri-state selection, a master checkbox, five accessible
+  resizers, row-only striping, one flexible path column, preserved Notes
+  reserve, and bounded horizontal overflow.
+- Drove the production renderer from test-only data covering every operation
+  tone, representative integrity/error states, hierarchy, collapse/restore,
+  selection reconciliation, column resizing, width transfer, minimum clamps,
+  and all four appearance profiles. No provisional wire payload, workflow, or
+  session contract was added.
 
 #### Tune solid desktop control states (2026-08-20 – 2026-08-21)
 
-- Kept primary buttons, filter pills, operation/file badges, and progress
-  tracks borderless, while ordinary buttons now use the WinUI-neutral
-  `#fbfbfb`/`#2d2d2d` fills and subtle `#e5e5e5`/`#353535` boundaries.
-  Keyboard focus and forced-color authority remain separate.
-- Made inactive filters inverse grayscale and active filters consume the exact
-  main swatch for their operation family with contrast-selected neutral text.
-  Delete uses exact red-main text at rest; its active pairing uses
-  red-main/red-dark, while a stronger inverse hover surface fixes
-  the 4.09:1 light-theme regression exposed by the headed matrix. Active-chip
-  interaction stays fully opaque and uses geometry instead of contrast-eroding
-  opacity.
-- Kept exactly two button tiers—solid gray and live Windows-accent primary—and
-  made the Sync/Integrity specimen an exact-one-selected radiogroup with the
-  checked half highlighted by accent rest/hover/pressed tokens.
-- Expanded installed-wheel gallery evidence for default/primary hierarchy,
-  active/inactive Copy and Delete filters, borderless file/status chips,
-  gray-track live-accent progress, and selected segmented state across light, dark,
-  forced-color, and reduced-motion profiles.
-- Made content cards static translucent material layers with the requested
-  Light/Dark fill and stroke blends, and separated borderless task cards into
-  transparent-rest, primary-tint hover/selection, and weaker active-hover states.
-- Kept inactive Delete text and light Error/Unsupported list states on exact
-  red-main, moved progress fill to the live Windows accent, and kept active
-  Delete's existing red-main/red-dark pairing.
-- Kept the raw Windows Accent/Light1/Light2/Dark1 ramp native-side and replaced
-  the old page roles with appearance v2 semantic fills: AccentDark1 in Light,
-  AccentLight2 in Dark, then 90% hover and 80% pressed opacity. Primary-button,
-  segmented, checkbox, and toggle states share that ladder and one stable
-  contrast-selected black/white foreground; progress and selection markers use
-  the base fill.
-- Replaced the packaged native theme selector with a production-owned DOM
-  combobox: a subtle gradient trigger boundary becomes flat while open, the
-  elevation-16 opaque listbox aligns its selected option and clamps to
-  the viewport, and forced colors retain system authority. The gallery now
-  includes three left-rail task-card state specimens outside content cards.
-- Split elevated-surface strokes from accessible control borders at black 6%
-  Light/20% Dark, clipped content-card fill to the padding box, and added a
-  dark-HDR shadowless flyout fallback plus normal/shadowless/opaque gallery
-  isolates for the transparent WebView2/Mica halo diagnosis.
-- Made the M1 combobox popup opaque and aligned options with task cards:
-  transparent rest, one visible hover/selected overlay, a weaker pressed
-  overlay, and one accent-pill/marker for selection. The gallery rail carries
-  only one highlighted task even when it exposes both current and selected
-  semantics.
-- Reopened the native base-accent black/white contrast result for all
-  accent-filled labels without allowing hover/press reversal; added opposing
-  inner/outer Fluent focus strokes, stabilized plain-chip labels, corrected
-  toggle-knob travel, and reduced only file-table rows from 28 px to 24 px.
-- Added a neutral Fluent strong-stroke 2 px unchecked-checkbox boundary, a
-  subtle 2 px textbox boundary with neutral-to-accent underline, and explicit
-  1280 x 800 initial / 1024 x 640 minimum
-  logical host geometry through pywebview's public construction arguments.
-  Removed the former 48 rem viewport media query while preserving the proven
-  zoom-responsive stacked layout with an inline-size container query.
+- Consolidated controls around two button tiers, borderless filters/badges/
+  progress, contrast-safe operation states, accent progress and selection, an
+  exact-one-selected mode switch, and distinct content/task-card surfaces.
+- Mapped the native Windows accent ramp into shared appearance-v2 interaction
+  roles and replaced the native theme selector with a production-owned,
+  keyboard-operable DOM combobox. Forced colors, reduced motion, Mica, and the
+  dark-HDR shadowless fallback retain independent authority.
+- Standardized Fluent focus strokes, checkbox/textbox/toggle geometry, compact
+  file rows, and responsive host/container bounds without reintroducing the
+  removed viewport media query.
+- Expanded installed-wheel gallery evidence across light, dark, forced-color,
+  and reduced-motion profiles for control hierarchy, interaction states,
+  contrast, flyout/card composition, table geometry, and responsive layout.
 
 #### Thaw and refreeze the cosmetic state channel (2026-08-19)
 
