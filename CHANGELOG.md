@@ -162,6 +162,18 @@ later workflow surfaces and beta packaging remain future phases.
   whole-batch preflight/replay. The required packaged Node gate exercises these
   semantics; one malformed snapshot cannot partially deliver reliable siblings
   or advance the cursor.
+- Closed the deferred-directory handoff seam: a successful MKDIR now leaves the
+  active spotlight before its later reliable settlement, while the reducer
+  accepts a newer item when that ordinary inactive snapshot is coalesced away.
+  Same-item attempt rules, cross-item token ownership, and outcome settlement
+  authority remain enforced. A required test carries the real executor stream
+  through EventHub coalescing, exact `SessionEventView`, and packaged JavaScript.
+- Classified reliable-body decoder strictness as provisional compatibility
+  debt rather than a settled extension policy. The intended future repair is a
+  strict current-live decoder/validator separated from version-dispatched
+  compatibility decoding for authenticated history; browser-history,
+  import/replay, recovery, new reliable shapes, or a core-version bump must
+  reopen it, and executable guards prohibit live/history validator reuse.
 - Replaced the reviewed settlement-oracle baseline only after transition
   semantics stabilized. Its normalized v4 phase/attempt projection, continuation
   high-water, control boundaries, and all 70 policy rows pass the protected
@@ -172,6 +184,13 @@ later workflow surfaces and beta packaging remain future phases.
   custody characterization was stable below the historical ceiling; neither
   result is promoted into a new v4 empirical acceptance claim. Slice 5 stable
   row projection and rendering remain open.
+- Reran both measurements after the deferred-handoff source change. The first
+  installed-wheel diagnostic recorded a non-reproducing 476 ms reliable
+  maximum and failed its latency verdict; the immediate clean repeat passed at
+  18 ms maximum, while both remained monotonic, gap-free, and all-terminal.
+  Current-source custody stayed byte/object-identical and below the frozen
+  ceiling. The failed artifact is retained in the disposition and no result is
+  promoted beyond its existing diagnostic/Tier-1 authority.
 
 #### Ratify desktop color semantics (2026-08-21)
 

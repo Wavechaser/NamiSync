@@ -2929,6 +2929,49 @@ headings are organizational, not lane ownership.
   drift evidence only. They neither recalibrate the frozen v1 authority nor
   create a new v4 acceptance claim.
 
+  **Deferred-handoff follow-up (2026-08-22).** The packaged reducer and Python
+  executor changed at `4959574`; after the documentation checkpoint at
+  `32b226e`, the clean source-authenticated measurements were rerun. The first
+  installed-wheel event artifact,
+  `namisync-bridge-event-benchmark-handoff.json` (SHA-256
+  `938ee77d930df6551db0d12f80e8c5ca63c9c5f4359be79ba8d1cc1d5121185d`),
+  retained monotonic Progress, no `Gap`, all four terminal records, and matched
+  source/runtime profiles, but reported `event_passed=false`: one sampled
+  reliable-plus-terminal delivery reached 476 ms, above the 250 ms maximum.
+  Its 620 reliable samples were otherwise 4.05 ms p95; 1,478 sampled Progress
+  values were 41 ms p95 / 670 ms maximum. The emission window was
+  59.9608865000191 seconds at 100.06523169063 Progress/s and
+  10.006523169063 reliable items/s; 44,441,600 incremental private bytes remain
+  diagnostic. An immediate clean repeat from the
+  same `32b226e7810c3727a960781108dc15c76d58b570` source produced
+  `namisync-bridge-event-benchmark-handoff-repeat.json` (SHA-256
+  `e0592621237daecab221a9167c1035a0c9d812ebef2b71a0efdb02fdd23d4eff`)
+  with `event_passed=true`: 1,493 sampled Progress values at 41 ms p95 / 48 ms
+  maximum and 620 reliable-plus-terminal values at 4 ms p95 / 18 ms maximum,
+  across 59.9607480000122 seconds at 100.06546282576 Progress/s and
+  10.006546282576 reliable items/s. Its 37,826,560 incremental private bytes
+  remain diagnostic. It again had no `Gap`, monotonic Progress, and all
+  terminals. The failed first diagnostic is retained in the disposition rather
+  than replaced by the favorable repeat; neither run creates current-v4 Tier-2
+  timing acceptance, and both retain
+  `sh_g_8_acceptance=incomplete-without-custody`.
+
+  The post-change one-child current-source custody guard also passed at exactly
+  1,378,867 ordinary bytes / 4,901 objects and 1,536,994 maximum-no-`Gap` bytes
+  / 5,499 objects. Its artifact SHA-256 is
+  `c10e6da519e8889ee7bb8da114608c9485cafb838b142952c1805a6ca0b2846f`;
+  source authority is
+  `be24b04f61ee1b9b4f14d1d25465aa058fc3f62b98c122d8d3f1cc7023bc1cb7`
+  and dependency authority remains
+  `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`.
+  The live-guard artifact's `tested_commit` remains its deliberate all-zero
+  fixture sentinel; the source authority, not that field, authenticates this
+  rerun's production source set.
+  The byte/object values are unchanged from the preceding three-child
+  characterization and retain 587,213 and 429,086 bytes of margin to the
+  historical ceiling. This is a Tier-1 drift rerun only; frozen v1 calibration,
+  ceiling, holdout, validator, and retained-sizer authorities were not edited.
+
   **Status.** The historical v1 representation's event correctness and
   transport custody are closed by the frozen calibration/ceiling and
   independent holdout recorded in

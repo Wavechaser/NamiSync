@@ -627,6 +627,20 @@ not a v4 calibration or acceptance run. `M1_BRIDGE.md` owns the exact fixture,
 artifact hashes, source/runtime/dependency receipts, queue shapes, and
 measurement disposition. No containment command/result is claimed yet.
 
+The deferred-directory spotlight/reducer follow-up was remeasured from clean
+commit `32b226e7810c3727a960781108dc15c76d58b570`. Its first installed-wheel
+diagnostic preserved event correctness, monotonic Progress, no `Gap`, and all
+terminals but failed the diagnostic latency verdict on one 476 ms reliable
+maximum; the immediate clean repeat passed at 4 ms p95 / 18 ms maximum reliable
+delivery and 41 ms p95 / 48 ms maximum Progress delivery. Both artifacts and
+the failed-then-passed disposition are retained in `M1_BRIDGE.md`; neither is
+promoted to current-v4 Tier-2 acceptance. The source-authenticated one-child
+custody guard also passed with unchanged ordinary and maximum byte/object
+values, so the historical v1 authorities remain unmodified and the new result
+remains Tier-1 drift evidence. Its deliberate all-zero `tested_commit` sentinel
+does not establish provenance; the current source hash recorded in
+`M1_BRIDGE.md` does.
+
 The 2026-07-30 reality run used CPython 3.13.14, pywebview 6.2.1,
 pythonnet 3.1.0, Bottle 0.13.4, and WebView2 Runtime 150.0.4078.105. It forced the
 `edgechromium` renderer, reached

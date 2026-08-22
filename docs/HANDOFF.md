@@ -51,6 +51,22 @@ visual consumption.
   later self-described Progress; clears activity on matching reliable outcomes
   or terminal truth; and supplies an immutable optional reducer view to existing
   callbacks without breaking one-argument consumers.
+- Corrected deferred directory activity after cross-boundary review. A
+  successful MKDIR now leaves the active spotlight when create work returns,
+  although its reliable outcome remains deferred until descendant/metadata
+  finalization. Because the inactive Progress is lossy and may be coalesced,
+  the reducer also accepts a newer item identity without treating the former
+  item as settled. It retains same-item attempt monotonicity, rejects directly
+  observed cross-item token reuse, and still gives reliable outcomes sole
+  settlement authority. The required Node gate now feeds it an actual executor
+  stream after EventHub coalescing and exact `SessionEventView` conversion.
+- Reclassified general reliable-body decoder strictness as explicit deferred
+  debt, not an intended tolerance contract. No remaining M1 checkpoint needs a
+  new decoder; browser history, event import/replay, history-based recovery, a
+  new reliable shape, or a core event-version bump must reopen the work and
+  split strict current-live validation from version-dispatched compatibility
+  decoding for authenticated persisted history. Existing live-only and mixed
+  v3/v4 history guards forbid cross-boundary validator reuse.
 - Updated the protected executor settlement oracle only after reporter semantics
   stabilized. Its v4 phase/attempt projection, continuation high-water, token
   lifecycle checks, and reviewed policy outcomes pass all 30 scenarios for
@@ -83,15 +99,27 @@ visual consumption.
   This is Tier-1 representation/drift evidence only: no v4 custody
   recalibration or empirical-acceptance promotion occurred. `M1_BRIDGE.md` owns
   the full receipts and non-promotion disposition.
+- Follow-up measurement at clean commit
+  `32b226e7810c3727a960781108dc15c76d58b570` retained both installed-wheel
+  event diagnostics. The first preserved monotonic/no-Gap/all-terminal truth
+  but failed `event_passed` on one 476 ms reliable maximum; its artifact SHA is
+  `938ee77d930df6551db0d12f80e8c5ca63c9c5f4359be79ba8d1cc1d5121185d`.
+  The immediate clean repeat passed with Progress 41 ms p95 / 48 ms maximum and
+  reliable-plus-terminal 4 ms p95 / 18 ms maximum; artifact SHA
+  `e0592621237daecab221a9167c1035a0c9d812ebef2b71a0efdb02fdd23d4eff`.
+  Neither is promoted beyond diagnostic regression evidence.
+- The post-change current-source custody guard passed at the unchanged
+  1,378,867 ordinary and 1,536,994 maximum-no-`Gap` bytes, with artifact SHA
+  `c10e6da519e8889ee7bb8da114608c9485cafb838b142952c1805a6ca0b2846f`.
+  It remains Tier-1 drift evidence and did not alter frozen v1 authorities.
 
 ## Verification
 
 - Ordinary repository with required Node runtime:
-  2,884 passed, 4 skipped, 28 deselected.
-- Real WebView2 headed interface gate: 28 passed, 2,888 deselected on the
-  immediate repeat. The first invocation's four component-gallery failures
-  shared a non-reproducing `WinError 1400` after the native window had already
-  closed; its other 24 headed cases passed.
+  2,887 passed, 4 skipped, 28 deselected.
+- Real WebView2 headed interface gate: 28 passed, 2,891 deselected.
+- Executor/dispatcher/interface department neighborhood: 1,592 passed,
+  1,327 deselected. Focused browser transport/static gate: 154 passed.
 - Schema/facade/history compatibility neighborhood:
   330 passed.
 - Protected custody, holdout, and current-source guard:
@@ -122,6 +150,8 @@ visual consumption.
 - `400fd5f docs(web): record v4 progress measurements`
 - `9a1d42b fix(web): recover self-described phase after gap`
 - `7ea8e08 fix(progress): align post-copy admission authority`
+- `4959574 fix(progress): hand off deferred item activity`
+- `32b226e docs(core): record decoder strictness debt`
 
 ## Next Checkpoint
 
@@ -135,3 +165,6 @@ visual consumption.
 - Developers running the ordinary suite must keep Node available through
   `NAMISYNC_TEST_NODE` or `PATH`; the required Progress contract/reducer gate is
   non-skippable.
+- Do not broaden the current tolerant Python event decoder incidentally. Reopen
+  the documented strict-live/versioned-history split with browser history,
+  import/replay, history recovery, another reliable body, or core event v5.
