@@ -10,6 +10,13 @@ Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
 shared workflow tree substrate without changing their semantics, and makes
 recursive inventory scope an explicit core contract.
 
+The accepted-but-inactive Stage 6 second-half contract is mapped in
+`M1_BRIDGE.md`; its scalar and retention hard walls are owned by
+`DEFENSE.md` §1.3. This document continues to describe the implemented core
+until the named protocol checkpoint updates the source and active contract
+together. Component docs should point to those authorities rather than copy the
+future event summary, numeric domain, task authority, or retention shapes.
+
 ## Purpose
 
 `namisync.core` defines the vocabulary and invariants shared by the system. It
@@ -271,68 +278,30 @@ reliable outcome remains an `IntegrityOutcome`. The central meanings,
 transition table, authority order, and Gap/replay rules live in
 `ARCHITECTURE.md` §2.3 rather than being redefined by module documents.
 
-### Decoder compatibility posture (provisional)
+### Decoder version boundaries
 
-The implementation currently has three effective decoder/validator regimes,
-plus a durable projection consequence. The following table inventories that
-behavior; it is not a ratified tolerance or extension policy. Exact Progress v4
-and exact live-drain validation are current contract safeguards. Persisted v3
-history requires separately reviewed compatibility, but the larger ignored-key
-and default-synthesis surface is unclassified debt from earlier decoders—not a
-set of proven legacy shapes and not evidence that its acceptance surface is
-intended or settled.
+The implemented boundary continues to emit core event v4, accepts exact v4 at
+the live browser boundary, and reads authenticated retained v3/v4 reliable
+history through the current history projection. These remain current-source
+facts until the coordinated protocol checkpoint lands; decoder success at one
+boundary is not authority for another.
 
-| Boundary | Accepted core versions | Current behavior and consequence |
-| --- | --- | --- |
-| Progress body in the Python core codec | v4 only | Exact eleven-key shape, exact non-Boolean scalars, JavaScript-safe counters, and all `Progress` cross-field invariants. History admission excludes this lossy body. This is the strongest Python regime. |
-| Other bodies in the Python core codec | v3 and v4 | Envelope and most body mappings are additive: unknown keys are generally ignored, and selected declared fields use local `.get()` defaults. Declared scalars are non-coercive and typed domain constructors enforce their own invariants, but exact-key checks, cross-field checks, and numeric upper bounds are body-dependent. Envelope sequence and `Gap` are JavaScript-safe; terminal and phase-result counters may be valid arbitrary-precision Python integers. Python decode success therefore proves neither exact wire conformance nor browser-safe representation. |
-| Live browser `SessionEventView` | exactly current v4 | JavaScript requires the exact view and exact body shape and applies safe-integer checks to every explicitly validated contract counter. A future core version is refused until the live validator changes. It is stricter than the general Python decoder on wire shape and safe-number domains, while Python constructors own semantic relationships that JavaScript does not reproduce; the regimes are not totally ordered. Treating Python decode success as live admission proof can make the browser refuse the entire drain batch and withhold reliable siblings. |
-| Durable `HistoryEventView` | the row's supported v3 or v4 | History authenticates the retained envelope, dispatches the Python decoder by the row's persisted version, and then exposes a canonical typed projection. Additive fields accepted during decode can disappear from that projection and local defaults can appear in it, so the view is not a byte-preserving representation of the authenticated JSON. A rejected receipt instead has `body=None`. Future history consumers require their own per-version validation and must not reuse the live-session validator. |
+The accepted checkpoint-3 target cuts every reliable producer, live consumer,
+history observer, and persisted event projection to the one exact accepted
+event version named in `M1_BRIDGE.md`. Its codec validates exact keys, closed
+primitive detail variants, cross-field invariants, and the scalar classes owned by
+`M1_BRIDGE.md` before sequence, queue, or history admission. The coordinated
+database reset means the target history schema needs no legacy event decoder.
+The live bridge validator and durable projection consume the same admitted
+immutable core snapshot without treating either representation as the other's
+decoder.
 
-Opaque JSON values inside an operation outcome's `detail` mapping are data,
-not protocol counters; their finite-number validation remains separate from
-the integer rules above. The current asymmetry has no immediate migration:
-persisted v3 reliable events remain readable, and current producers still emit
-canonical v4 bodies. Its impact is architectural: a new field can be silently
-discarded by a tolerant typed projection, an integer accepted by Python can be
-unrepresentable as an exact JavaScript number, and a validator reused at the
-wrong boundary can either accept too much or reject legitimate history.
-`IntegrityOutcome.kind` is the concrete sharp edge: current serialization and
-live JavaScript require `"integrity"`, while Python result-item decoding does
-not read that declared field and canonical history projection synthesizes the
-constant. An authenticated body containing another value can therefore decode
-and project as though it had contained the canonical value.
-
-No remaining M1 checkpoint currently needs a new event decoder. This debt is
-therefore deferred, but it must reopen before browser history work, event
-import or replay, history-based recovery, another core event-version bump, or
-any new reliable event shape. The intended repair separates purpose rather
-than forcing one tolerance policy across incompatible boundaries:
-
-- a strict current-live decoder/validator owns exact current-version shapes,
-  cross-field invariants, and JavaScript-safe contract scalars; and
-- a distinct compatibility decoder owns authenticated persisted history,
-  dispatches by each row's stored core version, and explicitly specifies every
-  allowed legacy default, additive field, numeric domain, and canonical
-  projection.
-
-Until that decision is ratified, code must not rely on ignored keys or local
-defaults as an extension mechanism, and tests describing the present regimes
-are compatibility guards rather than approval of the asymmetry. Tightening the
-persisted v3 decoder opportunistically without reviewing retained fixtures is
-likewise not a valid cleanup. The live validator must never be reused for a
-history row, and the compatibility decoder must never be treated as proof that
-a live event is current-shape or browser-safe.
-
-Core event versioning is independent of every containing or adjacent schema.
-The exact browser-facing `SessionEventView` has `session_id`, `sequence`, `at`,
-`schema_version`, `body_type`, and `body`; its nested `schema_version` carries
-the originating envelope's core event version unchanged. JavaScript names the
-current live-only boundary `LIVE_CORE_EVENT_SCHEMA_VERSION`; the name is not a
-history-version constraint. The desktop bridge command/response schema stays
-v1 and workflow continuation stays v5. History database, UI state, shell, and
-page schema versions do not change. An unversioned browser-facing event is not
-a supported compatibility boundary.
+Core event versioning is independent of bridge-envelope, continuation,
+database, UI-state, shell, and page versions. The bridge envelope remains
+versioned separately and carries the originating core event version explicitly;
+workflow continuation versions remain phase-specific process-local custody.
+Exact accepted versions and shapes are mapped in `M1_BRIDGE.md`. An
+unversioned browser-facing event is not supported.
 
 Every reliable result item carries an explicit `item_type` and `phase`;
 `run_session` accumulates only the nominal `ResultItem` base after successful

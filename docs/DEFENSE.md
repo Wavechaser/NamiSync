@@ -70,6 +70,47 @@ Probability does not excuse a hard-wall violation. Convergence is not a remedy
 after irreversible loss, and another process having similar authority does not
 excuse NamiSync crossing a hard wall during supported use.
 
+### 1.3 Accepted Stage 6 scalar and retention walls
+
+These walls are accepted design but remain inactive until their named Stage 6
+checkpoints land. `M1_BRIDGE.md` owns the mapped decision records, exact wire
+shapes, accounting graph, reservation order, and refusal schemas; other active
+documents point here instead of reproducing these limits.
+
+- Every durable or externally presented byte quantity and filesystem
+  nanosecond is in `0..9_223_372_036_854_775_807`. Typed relational values use
+  checked SQLite `INTEGER`; bridge values use canonical unsigned-decimal text.
+  Sequence numbers, bounded counts, offsets, and revisions remain
+  JavaScript-safe integers. Native file indices are an opaque exception: their
+  unsigned-64 value is canonical decimal `TEXT`, never an arithmetic scalar.
+- Out-of-domain stat evidence is rejected before ledger construction.
+  Unavailable or overflowing capacity observations follow preflight's existing
+  typed unavailable path; mutation budgets and admission-known aggregates use
+  checked arithmetic and refuse before session admission or mutation. Values
+  are never clamped or wrapped.
+- A plan or inventory tree admits at most 120,000 domain rows plus 120,000
+  informational rows. The complete retained-graph ceilings are 128 MiB for a
+  plan domain and 192 MiB independently for an inventory domain and either
+  informational population. Collection stops before the first excess and
+  never publishes a partial artifact.
+- Process-live task custody is capped at 48 tasks and a mechanically derived
+  byte budget that must admit at least four simultaneously complete
+  maximum-scale combined tasks. The separate immutable-projection cache holds
+  at most six generations, and bridge work admits at most 64 handlers.
+- Each task reserves at most 4,096 mutation receipts, including one cell that
+  ordinary commands cannot consume so an accepted close remains recoverable.
+  Setup retains at most 128 receipts for 30 minutes and 32 admitted location
+  slots; each task retains at most 64 release tombstones for five minutes, and
+  completed close tombstones are separately byte-budgeted for five minutes.
+- Admission reserves the next phase's maximum reachable permanent and
+  transient graph before work begins. It never evicts an open task or pinned
+  generation, and capacity exhaustion may refuse new work but cannot make an
+  admitted release or close fail for capacity.
+
+These are production-enforced containment claims, not sampled memory ceilings.
+Their implementation constants must be derived from the complete reachable
+graph and independently validated under §7 before the owning gates can close.
+
 ---
 
 ## 2. Supported baseline and threat ceiling
