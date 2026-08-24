@@ -8,7 +8,11 @@ product behavior, and cross-system architecture. `M1_PLAN.md` owns milestone
 decisions; `M1_SHELL.md` owns host/package sequencing and SH-G gates; and
 `DESKTOP_UI.md` owns the user-facing visual contract.
 
-**Scope.** Sections 1–8 state bridge decisions and contracts. Section 9 records
+**Scope.** Section 0 states the goals. The shared exact Stage 6 register after
+the map centralizes schemas, limits, command rows, and cross-decision authority
+ordering that cannot be defined coherently inside one DR-BR record; its
+ownership table binds every subsection back to those records. Sections 1–8
+retain the decisions, rationale, and rules local to one owner. Section 9 records
 only deferred, rejected, and resolved dispositions. Section 10 retains the
 normative BR-G gate register and the remaining M1 delivery order; a lane or
 slice closes only when all applicable gates and regressions pass. Dated build
@@ -86,17 +90,28 @@ none of them and depends on none of them.
 
 ## Map of this document
 
-This table is the navigation index. Each decision appears once under the module
-or layer it binds; the linked section contains the normative rule.
+The first table locates the deliberately shared exact register. The second
+lists each decision once under the module or layer it binds. A DR-BR record owns
+its rationale and local rule; the shared register owns only the exact
+cross-cutting shape or ordering identified here. A map entry locates accepted
+target authority; it does not activate that target before its named checkpoint.
+
+| Shared exact register | Owning DR-BR records | Authority centralized there |
+| --- | --- | --- |
+| [Epochs, scalars, and recording](#exact-epochs-scalar-classes-and-recording-views) | DR-BR-14, DR-BR-16, DR-BR-16.2, DR-BR-21, DR-BR-24, DR-BR-27 | Protocol and persistence epochs, numeric grammars, event-v5 recording truth, and production tree/diagnostic walls. |
+| [Result and presentation shapes](#exact-shared-result-shapes) | DR-BR-03, DR-BR-06, DR-BR-08, DR-BR-09, DR-BR-11, DR-BR-12, DR-BR-13, DR-BR-14, DR-BR-15, DR-BR-16, DR-BR-16.1, DR-BR-17, DR-BR-18, DR-BR-19, DR-BR-20, DR-BR-21, DR-BR-22, DR-BR-24, DR-BR-27 | Exact DTOs, tree rows, overlays, limits, view revisions, and publication-stage matrix shared by those decisions. |
+| [Task and authority ordering](#task-and-authority-ordering) | DR-BR-03, DR-BR-16.1, DR-BR-17, DR-BR-21, DR-BR-22, DR-BR-24, DR-BR-27 | Task/session ownership, claims, receipts, leases, epochs, pins, publication faults, retention, and close barriers. |
+| [Command and retry rows](#exact-command-and-retry-rows) | DR-BR-03, DR-BR-05, DR-BR-06, DR-BR-15, DR-BR-16, DR-BR-16.1, DR-BR-17, DR-BR-18, DR-BR-19, DR-BR-20, DR-BR-21, DR-BR-22, DR-BR-24, DR-BR-27 | The Stage 6 exact command rows, payload/result variants, revision order, retry class, and error vocabulary. |
+| [Location, evidence, and handoff](#location-evidence-and-handoff-policy) | DR-BR-05, DR-BR-06, DR-BR-14, DR-BR-20, DR-BR-21, DR-BR-27 | Fresh location admission, evidence acknowledgment, recording truth, and post-copy handoff rules. |
 
 | Decision | Binds | Ruling |
 | --- | --- | --- |
 | [DR-BR-01](#dr-br-01--user-selection-enters-the-facade-as-a-separate-set) | Selection workflow/service | Keep user deselection distinct from safety exclusions and retain its execution provenance. |
 | [DR-BR-02](#dr-br-02--reselection-closes-upward-over-the-user-set-only) | Selection workflow | Reselection closes dependencies only within the user-deselected set. |
 | [DR-BR-03](#dr-br-03--selection-is-revisioned-and-commitment-freezes-it) | Service selection state | Revision selection and freeze it through reviewing, committing, and committed states. |
-| [DR-BR-04](#dr-br-04--deselection-does-not-survive-a-replan) | Selection workflow/service | Replan clears deselection, advances the revision epoch, and retains retry tombstones. |
+| [DR-BR-04](#dr-br-04--direct-artifact-replacement-discards-selection) | Selection workflow/service | A lower-level direct artifact replacement clears deselection and advances its revision; desktop replanning creates a new immutable-plan task. |
 | [DR-BR-05](#dr-br-05--four-runtime-methods-reach-the-facade) | Service facade | Lift the four inventory acknowledgment/staleness reads as typed passthroughs. |
-| [DR-BR-06](#dr-br-06--location-commands-accept-opaque-ids) | Service, scanner, recorder | Resolve opaque row/folder ids server-side; folder refresh uses recursive subtree scope. |
+| [DR-BR-06](#dr-br-06--location-commands-accept-opaque-ids) | Service, scanner, recorder | Resolve opaque row/folder ids server-side; freeze recursive scope and fresh location evidence under the shared command contract. |
 | [DR-BR-07](#dr-br-07--scanner-ignore-contract-narrowed) | Scanner | Remove unused ignore snapshots while retaining the known filter-visibility gap. |
 | [DR-BR-08](#dr-br-08--the-ui-never-computes-means-authority) | Cross-cutting UI | Keep decisions authoritative on the backend while permitting cosmetic client computation. |
 | [DR-BR-09](#dr-br-09--node-trees-are-built-in-workflows-not-interfaces) | Workflow node tree | Build shared hierarchy in workflows, below presentation adapters. |
@@ -104,7 +119,7 @@ or layer it binds; the linked section contains the normative rule.
 | [DR-BR-11](#dr-br-11--node-identity-is-deterministic-and-the-plan-tree-is-memoized) | Workflow node tree | Scope deterministic node ids and memoize immutable plan trees. |
 | [DR-BR-12](#dr-br-12--folder-selection-is-path-scoped-and-the-tree-owns-the-scope) | Workflow node tree/selection | Derive folder selection and subtree membership from the same index. |
 | [DR-BR-13](#dr-br-13--decomposed-moves-render-as-a-paired-annotation) | Plan presentation | Render decomposed moves as paired annotations, not new selection units. |
-| [DR-BR-14](#dr-br-14--progress-carries-item-identity-never-a-display-path) | Core events/reporters | Carry item identity in progress; never join authority on display paths. |
+| [DR-BR-14](#dr-br-14--progress-carries-item-identity-never-a-display-path) | Core events/reporters | Carry item identity in exact event v5; retain item-free terminal recording truth and never join authority on display paths. |
 | [DR-BR-15](#dr-br-15--flattened-windows-over-a-stateless-visible-sequence) | Presentation views/web | Derive one server-side visible sequence and return bounded windows. |
 | [DR-BR-16](#dr-br-16--paging-bounds-payload-and-must-also-bound-work) | Views, service, database | Bound repeated work with plan memos, inventory projections, and database history pages. |
 | [DR-BR-16.1](#dr-br-161--the-inventory-projections-lifecycle) | Service projection cache | Own immutable revisioned projections by opaque view id under a six-entry LRU. |
@@ -113,14 +128,1172 @@ or layer it binds; the linked section contains the normative rule.
 | [DR-BR-18](#dr-br-18--search-executes-on-the-backend) | Presentation views | Execute literal search with the server-side view parameters. |
 | [DR-BR-19](#dr-br-19--autoscroll-anchors-on-the-nearest-visible-ancestor-or-self) | Presentation views | Resolve follow mode to the nearest visible ancestor-or-self. |
 | [DR-BR-20](#dr-br-20--no-inventory-snapshot-token) | Inventory presentation | Re-read at causal boundaries; acknowledgment hides rows without changing counts. |
-| [DR-BR-21](#dr-br-21--a-task-is-client-state-sessions-come-and-go-beneath-it) | Web task lifecycle | Let adapter task state outlive the sessions beneath it. |
-| [DR-BR-22](#dr-br-22--closing-a-busy-task-cancels-waits-then-closes) | Web task lifecycle | Cancel, await durable terminal truth, then unsubscribe and release. |
+| [DR-BR-21](#dr-br-21--a-task-is-client-state-sessions-come-and-go-beneath-it) | Web task lifecycle | Let one process-live task retain named bounded review state while exact sessions attach and release beneath it. |
+| [DR-BR-22](#dr-br-22--closing-a-busy-task-cancels-waits-then-closes) | Web task lifecycle | Make accepted close a visible, receipted retirement barrier that cancels, reconciles, drains, and tombstones. |
 | [DR-BR-23](#dr-br-23--single-instance-activates-the-existing-window) | Desktop host | Activate the existing window instead of starting a second instance. |
-| [DR-BR-24](#dr-br-24--bridge-handlers-are-concurrent-and-must-be-synchronized) | Web concurrency | Synchronize shared bridge state without holding adapter locks across facade I/O. |
+| [DR-BR-24](#dr-br-24--bridge-handlers-are-concurrent-and-must-be-synchronized) | Web concurrency | Synchronize claims, leases, epochs, pins, drains, and shutdown without holding adapter locks across facade I/O. |
 | [DR-BR-25](#dr-br-25--hostile-name-rendering-is-proven-in-a-real-browser) | Browser verification | Prove hostile-name sinks in installed WebView2 plus static scans. |
 | [DR-BR-26](#dr-br-26--the-node-tree-is-a-pure-function) | Workflow node tree/tests | Keep hierarchy construction pure and headlessly testable. |
-| [DR-BR-27](#dr-br-27--receipted-commands-are-idempotent-revisioned-view-mutations-are-guarded) | Service/web commands | Assign retry receipts and view-revision guards per command. |
+| [DR-BR-27](#dr-br-27--receipted-commands-are-idempotent-revisioned-view-mutations-are-guarded) | Service/web commands | Use the shared exact command table for family-specific receipts, retries, revision guards, and replay lifetimes. |
 | [DR-BR-28](#dr-br-28--cosmetic-persistence-crosses-one-typed-section-channel) | Interface UI state/web commands | Freeze one section-versioned cosmetic channel without admitting semantic or session state. |
+
+---
+
+## Shared exact Stage 6 target register
+
+**Status (2026-08-24): accepted but not active.** This section is the newest
+target register for Slices 5-6 and early Slice 7. Each row becomes production-
+active only in its named checkpoint; until then the explicitly labeled current-
+source allowlist and event-v4 implementation later in this document remain
+active. This is not a second decision layer and is not a blanket
+precedence rule. It consolidates and supersedes only repeated exact type, wire,
+command, lifetime, and ordering fragments assigned by the map above. Those
+records continue to own rationale, module placement, user interaction, and any
+local rule not centralized by their mapped register. Unmapped decisions are not
+superseded. History UI/pagination, global-settings mutation, drag/drop,
+remaining cosmetic state, cross-process task survival, GUI Break 2, and release
+packaging are outside this reslice.
+
+### Exact epochs, scalar classes, and recording views
+
+**Decision ownership:** DR-BR-14 owns event identity and reporter meaning;
+DR-BR-16 owns production serialization and retention walls; DR-BR-16.2 owns
+history and data-epoch persistence; and DR-BR-21, DR-BR-24, and DR-BR-27 own
+terminal custody, concurrent transport, and exact wire/retry projection
+respectively.
+
+Core events cut directly to exact v5 with no public legacy constant or v3/v4
+decoder. The bridge envelope remains v1 and every live `SessionEventView`
+requires nested `schema_version=5`. The process-local sync-execution payload
+is exact v6; the sync-plan payload remains exact v5, and inventory and
+standalone-integrity payloads remain exact v2. Its transient copy
+attestations may exist only while the same live/paused compound session needs
+linked verification or resume. They never enter either database, retained
+task artifacts, service presentation values, or JavaScript.
+
+The following primitive grammars are exact:
+
+| Name | Grammar and bound |
+| --- | --- |
+| `HexId` | 32 lowercase hexadecimal characters |
+| `TaskId` / `SlotId` / `ViewId` / `RecentId` / `PairId` | `task-`, `slot-`, `view-`, `recent-`, or `pair-` followed by `HexId` |
+| `NodeId` | the fixed 37-ASCII-character spelling `node-` followed by `HexId`, matching the existing BLAKE2b-128 tree identity |
+| `SafeInt` | a non-Boolean JSON integer in `0..9_007_199_254_740_991` |
+| `PositiveSafeInt` | `SafeInt` greater than zero |
+| `Scalar64` | JSON string matching `0|[1-9][0-9]*` whose `BigInt` value is at most `9_223_372_036_854_775_807` |
+| `Digest128` | 32 lowercase hexadecimal characters |
+| `Digest256` | 64 lowercase hexadecimal characters |
+| `PlanFilter` | `copy`, `update`, `move`, `move_update`, `recase`, `mkdir`, `trash`, `delete`, `noop`, `blocked`, or `unsupported` |
+| `InventoryFilter` | `present`, `unverified`, `verified`, `modified`, `reappeared`, `unsupported`, `missing`, `mismatched`, `error`, or `acknowledged` |
+| `HandoffBlockReason` | `post-settlement-state-diverged`, `eligible-work-incomplete`, `unrecorded-evidence`, `superseded-evidence`, or `no-applicable-items` |
+| `ItemRecordingReason` | `record-write-failed`, `unrecorded-mutation`, or `recording-prerequisite-failed` |
+| `TaskRecordingIssueReason` | `recording-open-failed`, `final-flush-failed`, `finish-failed`, `recording-close-failed`, or `post-settlement-state-diverged` |
+| `CandidateReason` | `relative`, `drive-relative`, `device-path`, `unc`, `mapped-remote`, `ads`, `wildcard`, `invalid-character`, `reserved-name`, `ambiguous-suffix`, `nul`, `invalid-unicode`, `too-long`, `repeated-separator`, `dot-component`, `missing`, `not-directory`, `reparse`, `placeholder`, `access-denied`, `unsupported-drive-type`, `unsupported-filesystem`, `unusable-volume-facts`, `offline`, `ambiguous-volume`, or `changed` |
+| `ExecutionStartReason` | `scope-empty` |
+| `LocationStartReason` | `candidate-changed` or `scope-empty` |
+
+Production freezes these complete-graph walls:
+
+| Population | Rows | Plan bytes | Inventory bytes |
+| --- | ---: | ---: | ---: |
+| Domain | 120,000 | 134,217,728 | 201,326,592 |
+| Informational | 120,000 | 201,326,592 | 201,326,592 |
+
+Domain means every non-informational row plus backing objects, strings, ids,
+containers, indexes, and rollups; informational means the complete plan-notice
+or inventory-warning graph. Shared objects are charged once, each full tree is
+at most 240,000 rows, and these are production walls rather than diagnostic or
+empirical targets.
+
+Closed fields use the exact `.value` sets of `EntryKind`, `OperationKind`,
+`OperationReason`, `BlockedReason`, `UnsupportedReason`, `RefusalCode`,
+`Outcome`, `Provenance`, `RecordingStatus`, `ExecutionReason`,
+`ExclusionReason`, `InventoryPresence`, `InventoryVerificationState`,
+`VerificationInvalidationReason`, `IntegrityResult`, `IntegrityReason`,
+`ReadStrategy`, `RecordDisposition`, and `ScanWarningCode`; Python and packaged
+JavaScript snapshots freeze together and reject unknowns. Only explicitly named
+detail/display/label/annotation/error fields are free text, and `phase` is exact
+nonempty core authority. `OperationOutcomeReason` is the closed union of
+`ExecutionReason` for executor-settled work, `ExclusionReason` for reviewed
+skipped/deferred work, and `BlockedReason` for directly blocked work.
+
+Sequences, bounded counts, offsets, count limits, and revisions use `SafeInt`.
+Every byte, size, capacity, work, and filesystem-nanosecond value uses internal
+checked `0..2^63-1` arithmetic and external `Scalar64`; Python recursively
+rejects unsafe native returns and JavaScript validates canonical decimal before
+`BigInt`. Opaque row identities remain strings and ledger-v4 file-identity
+indexes use canonical unsigned-decimal text.
+
+Ledger v4 and history v6 share `data_epoch=5`, contract ids
+`m1-ledger-v4-event-v5-evidence-v1` and
+`m1-history-v6-event-v5-recording-v1`, and history event schema 5. Any old,
+mixed, one-present, markerless, or orphan-sidecar pair refuses before commands
+with coordinated archive/delete guidance; there is no migration or deletion.
+
+Event-v5 item outcomes add `recording`, `recording_reason`,
+`recording_detail`, and `detail_omitted_count`; integrity outcomes share the
+omission witness. `ok` requires null reason/detail; `degraded` requires an
+`ItemRecordingReason` and permits at most 1,024 UTF-8 detail bytes. Ordered
+`OperationResult.recording_issues` retains the first `{TaskRecordingIssueReason,
+detail}` per reason under the same bound; aggregate recording is degraded iff
+an item is degraded or the tuple is nonempty.
+
+`DetailProjection` is an emitter-owned immutable snapshot with at most 32
+declared primitive leaves, eight complete path leaves, 64-byte ASCII keys,
+bounded tuples/strings, `SafeInt` counts, and signed-64 quantities; arbitrary or
+nested objects, `Path`, nonfinite/arbitrary integers, undeclared keys, and
+unbounded arrays are invalid. Outer and detail paths are complete valid Unicode
+of at most 32,767 UTF-16 units. Over-limit diagnostics become null and increment
+the checked omission witness, never truncate.
+
+Event v5 uses an item-free `TerminalSummary` with
+`recording_degraded_items`, `omitted_detail_count`, and the exact copied nullable
+`review_fact_limit`; only that typed field maps `ResultSummary.review_refusal`.
+Reliable outcomes update the compact overlay before queueing; the full result
+remains only in the dispatcher terminal record through one reconciliation and
+exact-session release. `MAX_RELIABLE_EVENT_CANONICAL_BYTES=1_048_576` is checked
+before emitter acceptance or sequence/queue/history mutation and guarantees one
+valid head fits the independent bridge-response wall.
+
+### Exact shared result shapes
+
+**Decision ownership:** the map above assigns each DTO family to its DR-BR
+domain owner; this subsection is their one shared spelling and invariant table.
+
+Every object below has exactly the named keys. Nullable means JSON `null`, not
+absence. Free-form diagnostics are already bounded before construction.
+
+- `SessionRef` = `{session_id:HexId, kind:"sync-plan"|"sync-execution"|
+  "inventory"|"baseline"|"verify"|"rebaseline"|"post-copy-verify",
+  state:"pending"|"running"|"pausing"|"paused"|"canceling"|"completed"|
+  "failed"|"canceled"|"refused"}`.
+- `TaskSummary` = `{task_id:TaskId, task_kind:"sync"|"inventory",
+  phase:"plan"|"review"|"execute"|"inventory"|"baseline"|"verify"|
+  "rebaseline"|"post-copy-verify", lifecycle:"idle"|"pending"|"running"|
+  "pausing"|"paused"|"canceling"|"closing"|"completed"|"failed"|
+  "canceled"|"refused", lifecycle_revision:SafeInt,
+  selection_revision:SafeInt, result_revision:SafeInt,
+  current_session:SessionRef|null, label:string, updated_at:string}`. `label`
+  is inert display text bounded to 1,024 UTF-8 bytes.
+- `ResultSummary` = `{headline:"failed"|"partial"|"refused"|"mismatch"|
+  "canceled"|"verification-incomplete"|"degraded"|"all-noop"|"success",
+  filesystem:"completed"|"failed"|"canceled"|"refused",
+  integrity:"not-run"|"incomplete"|"modified"|"missing"|"mismatch"|
+  "baselined"|"verified",recording:"ok"|"degraded",
+  audit:"ok"|"degraded",disposition:"ran"|"unrun",canceled:boolean,
+  bytes_done:Scalar64,bytes_total:Scalar64,error:string|null,phases:array,
+  recording_degraded_items:SafeInt,recording_issues:array,
+  omitted_detail_count:SafeInt,presentation_omitted_detail_count:SafeInt,
+  review_refusal:ReviewFactLimitExceeded|null}`. `error` is null or at
+  most 1,024 UTF-8 bytes. `phases` has 0..3 members and
+  `recording_issues` has 0..5. Each phase has exactly
+  `{phase:string,status:"completed"|"failed"|"canceled"|"incomplete",
+  items_done:SafeInt,items_total:SafeInt|null,
+  bytes_done:Scalar64,bytes_total:Scalar64|null,error:string|null}`; each issue
+  has exactly `{reason:TaskRecordingIssueReason,detail:string|null}`.
+- `ReviewFactLimitExceeded` has exactly
+  `{reason:"review_fact_limit_exceeded",tree_kind:"plan"|"inventory",
+  population:"domain"|"informational",axis:"rows"|"retained-bytes",
+  row_limit:SafeInt|null,byte_limit:Scalar64|null}`. Rows use only
+  `row_limit=120000`; retained bytes use only `byte_limit`, equal to
+  `"134217728"` for plan/domain and `"201326592"` otherwise. Prospective
+  complete-graph collection stops before the first excess with precedence
+  domain rows, domain bytes, informational rows, informational bytes; the frozen
+  sizer and independent validator charge shared objects once. Initial refusal
+  publishes no partial artifact/view, while inventory refresh or fresh-
+  execution refusal preserves the complete predecessor and replaces only its
+  named summary. The limit changes neither omission axis. Its summary is
+  refused/unrun, recording-ok, audit-ok-or-degraded, uncanceled, zero-byte/item/
+  omission, with null error and empty phases/issues; every other summary has
+  `review_refusal=null`.
+- `TaskResults` = `{plan:ResultSummary|null,execution:ResultSummary|null,
+  inventory:ResultSummary|null,integrity:ResultSummary|null,
+  post_copy_verify:ResultSummary|null}`. A session changes only its named slot:
+  plan is one-shot; execution may replace unrun but freezes at first ran;
+  inventory, ordinary integrity, and manual post-copy may replace only their own
+  slots after full old/new reservation. History keeps each session identity.
+- `SessionEventView` = `{session_id:HexId,sequence:PositiveSafeInt,
+  at:string,schema_version:5,body_type:string,body:object}`; `body_type` and
+  `body` must be the exact v5 pair owned by `CORE.md`, not independently
+  inferred. `SessionRecordView` = `{session_id:HexId,
+  kind:SessionRef.kind,state:SessionRef.state,supports_pause:boolean,
+  created_at:string,started_at:string|null,ended_at:string|null,
+  result:ResultSummary|null}`. Event and record timestamps are bounded service-
+  produced ISO-8601 strings; filesystem text never enters them.
+- A drain update is exactly `{update_type:"event",event:SessionEventView}` or
+  `{update_type:"record",record:SessionRecordView}`.
+- `TaskDetail` = `{summary:TaskSummary, setup:PlanSetupOptions|null,
+  plan_available:boolean, execution_available:boolean,
+  inventory_available:boolean, plan_view_id:ViewId|null,
+  inventory_view_id:ViewId|null, plan_view_state_revision:SafeInt,
+  inventory_view_state_revision:SafeInt, projection_revision:SafeInt,
+  results:TaskResults, diagnostic_bytes:Scalar64,
+  omitted_detail_count:SafeInt,presentation_omitted_detail_count:SafeInt,
+  publication_issue:"review-publication-protocol-failed"|null}`.
+  Sync requires the exact non-null frozen `PlanSetupOptions`; inventory requires
+  null Setup. Plan/inventory availability means a complete retained artifact,
+  not domain completeness: initial refusal leaves false and replacement refusal
+  preserves true. Execution availability means its compact generation exists;
+  preflight refusal leaves false and fault disposal of its sole provisional
+  generation restores false. View ids are non-null iff the available artifact
+  was opened; unopened associated revisions are zero. Projection eviction keeps
+  the view id/revisions for rebuild, while unavailable artifacts require null ids
+  and zero revisions.
+- `publication_issue` is ordinarily null. Stage/result mismatch, consumed
+  `stage-rejected`, or escaped-after-stage exception atomically discards the
+  stage and exact session's complete provisional overlay/index/diagnostic/
+  omission/charge generation; restores prior-settled or outer-null rows;
+  preserves dispatcher/history and prior named/result/omission generations plus
+  `result_revision`; and fails only lifecycle. Fault kind maps to the same-named
+  phase except `sync-plan→plan` and `sync-execution→execute`; `review` is invalid.
+  Kind and phase agree before release; phase survives release/rehydration.
+  Payload and retained-receipt handling remain first; R/D/exact-L/C remain, new
+  M returns stateless `internal_error`, and close alone clears the issue. Drain
+  cannot repopulate discarded rows. Issue observation first advances rail,
+  panel, and mapped tree request generations (`plan|execute|post-copy-verify`
+  versus `inventory|baseline|verify|rebaseline`), then clears/rebuilds the cache;
+  older callbacks are inert before payload read. The renderer uses exactly
+  `NamiSync could not publish this review safely. Close the task and try again.`
+- `result_revision` starts at zero and increments once per atomic named result/
+  terminal-frozen overlay publication, including every valid terminal and
+  permitted refusal/replacement. Live outcome/progress snapshots do not advance
+  it or reflow membership/count/order. A window pins one complete settled and
+  one complete live generation; terminal races conflict, live-only races may be
+  immediately stale. During integrity/post-copy replacement the old settled
+  generation owns membership while ids in the complete new candidate index use
+  the whole new object and other ids use outer null—never fallback/field merge;
+  terminal freezes and swaps that generation once.
+- `PlanSetupInput` and frozen `PlanSetupOptions` have the same exact keys:
+  `{deletion_policy:"trash"|"additive",
+  trash_on_update:boolean, filters:array-of-string, preserve_created:boolean,
+  preserve_acl:boolean, preserve_ads:false,
+  propagate_source_casing:boolean, linked_verify:boolean}`. Input filters are
+  raw bounded entries: 0..64 entries, each 1..1,024 UTF-8 bytes and at most
+  16,384 UTF-8 bytes total. The workflow, never JavaScript, rejects unsafe
+  patterns and constructs the frozen canonical array by replacing `/` with
+  `\`, preserving case and every other accepted code point, removing exact
+  post-replacement duplicates, and sorting by Python/Unicode code-point order;
+  matching remains Windows-case-insensitive domain behavior. Receipt identity
+  binds both the exact raw wire intent and the resulting canonical snapshot.
+- `CandidateAssessment` = `{purpose:"source"|"target"|"inventory",
+  state:"accepted"|"invalid"|"missing"|"not-directory"|"reparse"|
+  "placeholder"|"remote"|"unsupported-volume"|"offline"|"ambiguous"|
+  "unavailable", reason:CandidateReason|null, display:string,
+  volume:{serial:string,fs_type:string,label:string|null,
+  relative_path:string}|null}`. Accepted requires null reason and non-null
+  volume; every nonaccepted state requires null volume and exactly this total
+  reason mapping:
+
+  | State | Exact reasons |
+  | --- | --- |
+  | `invalid` | `relative`, `drive-relative`, `device-path`, `unc`, `ads`, `wildcard`, `invalid-character`, `reserved-name`, `ambiguous-suffix`, `nul`, `invalid-unicode`, `too-long`, `repeated-separator`, `dot-component` |
+  | `missing` | `missing` |
+  | `not-directory` | `not-directory` |
+  | `reparse` | `reparse` |
+  | `placeholder` | `placeholder` |
+  | `remote` | `mapped-remote` |
+  | `unsupported-volume` | `unsupported-drive-type`, `unsupported-filesystem` |
+  | `offline` | `offline` |
+  | `ambiguous` | `ambiguous-volume` |
+  | `unavailable` | `access-denied`, `unusable-volume-facts`, `changed` |
+
+  `changed` means fresh admission no longer matches the accepted slot identity;
+  it is never projected as a newly accepted authority. `DRIVE_REMOTE` maps to
+  `remote`/`mapped-remote`, while unusable native volume identity or maximum-
+  component evidence maps to `unavailable`/`unusable-volume-facts`; neither is
+  mislabeled as a filesystem refusal. `CandidateView` adds the
+  exact `slot_id:SlotId|null` key; accepted requires a non-null slot and every
+  other state requires null. A refused recent pair carries two slotless
+  assessments, while an accepted pair carries two slotted candidate views.
+- `SetupOptionIssue` = `{field:"filters",index:SafeInt|null,
+  code:"empty"|"entry-too-large"|"total-too-large"|"absolute"|
+  "device-qualified"|"nul"|"invalid-unicode"|"dot-component"}`. An options
+  refusal carries 1..65 issues and no free-form parser exception. Each input
+  entry contributes at most one issue, chosen by the exact precedence `empty`,
+  `invalid-unicode`, `entry-too-large`, `nul`, `device-qualified`, `absolute`,
+  `dot-component`. Every entry-local code
+  except `total-too-large` requires the exact zero-based input index and orders
+  by that index. `total-too-large` requires null index and, when present, is the
+  final issue. With at most 64 inputs, the array is a complete projection.
+- `PlanStartRefusal` is the exact tagged object
+  `{disposition:"refused",reason:"source"|"target"|"pair"|"options",
+  source:CandidateAssessment|null,
+  target:CandidateAssessment|null,option_issues:[SetupOptionIssue]}`. `options`
+  requires null candidates and 1..65 issues; other reasons require both fresh
+  slotless assessments, no issues, and precedence source, target, pair. After
+  envelope/receipt: options precede slot/claim, retention, and native probing;
+  valid options then check slots/claims, reserve task memory, and freshly assess
+  the pair. Thus options beat stale roots and `retention_full` beats probing.
+- `InventoryStartRefusal` is the exact tagged object
+  `{disposition:"refused",reason:"candidate",
+  candidate:CandidateAssessment}` with one fresh slotless assessment.
+  Task-reservation exhaustion returns the single fixed `retention_full` error
+  for either start; it is never a second tagged-refusal spelling.
+- `SelectionSummary` = `{selection_revision:SafeInt,selected_count:SafeInt,
+  blocked_count:SafeInt,deferred_count:SafeInt,irreversible_count:SafeInt,
+  content_bytes:Scalar64}`. Every count and the byte total describe the same
+  authoritative effective selection snapshot.
+- `RecentLocation` = `{recent_id:RecentId, display:string,
+  resolution:"resolved"|"offline"|"missing"|"unavailable"|"ambiguous",
+  volume_label:string|null, volume_relative_path:string,
+  started_at:string}`. `RecentPair` = `{pair_id:PairId,
+  source:RecentLocation,target:RecentLocation,started_at:string}`.
+- `SetupView` = `{defaults:PlanSetupOptions,
+  recent_sources:[RecentLocation],recent_targets:[RecentLocation],
+  recent_pairs:[RecentPair]}` with at most five entries in each recent array.
+- `LocationResolutionView` = `{state:"resolved"|"offline"|"missing"|
+  "unavailable"|"ambiguous",display:string,volume_label:string|null,
+  volume_relative_path:string,reason:CandidateReason|null}`. `resolved` requires
+  null reason; otherwise the exact pairs are `offline`/`offline`,
+  `missing`/`missing`, `ambiguous`/`ambiguous-volume`, and `unavailable` with
+  `access-denied` or `unusable-volume-facts`. Candidate-only lexical, type,
+  placeholder, remote, unsupported-volume, and changed reasons are invalid in
+  this remembered-location projection.
+- `ReviewedLocation` = `{display:string,volume_serial:string,fs_type:string,
+  volume_label:string|null,volume_relative_path:string}`. It is the immutable
+  location/root spelling and volume evidence reviewed with the plan, not a
+  fresh location-resolution claim; `volume_serial` remains opaque text.
+- `PlanReviewHeader` = `{source:ReviewedLocation,target:ReviewedLocation,
+  fingerprint:Digest256,selection_digest:Digest256,
+  required_bytes:Scalar64,free_bytes:Scalar64|null,
+  reclaimable_temp_bytes:Scalar64|null,reviewed_preflight_ok:boolean,
+  notice_count:SafeInt,presentation_omitted_detail_count:SafeInt}`.
+  Roots/fingerprint and reviewed capacity/verdict are immutable initial-review
+  truth; digest/required bytes are the current selection. Unavailable capacity
+  is null, checked sums never clamp, and an overflowing sum makes preflight
+  unavailable. Notice and presentation-omission counts describe the current
+  reviewed-plus-last-complete-fresh notice generation, independent of view or
+  attempt history.
+- `ReviewedStat` = `{kind:EntryKind,size:Scalar64,mtime_ns:Scalar64}`.
+- `PlanFilterCounts` has exactly `{all:SafeInt,copy:SafeInt,
+  update:SafeInt,move:SafeInt,move_update:SafeInt,recase:SafeInt,
+  mkdir:SafeInt,trash:SafeInt,delete:SafeInt,noop:SafeInt,
+  blocked:SafeInt,unsupported:SafeInt}`. `InventoryFilterCounts` has exactly
+  `{all:SafeInt,present:SafeInt,unverified:SafeInt,verified:SafeInt,
+  modified:SafeInt,reappeared:SafeInt,unsupported:SafeInt,missing:SafeInt,
+  mismatched:SafeInt,error:SafeInt,acknowledged:SafeInt}`. Each object is
+  post-search/pre-filter/collapse/hide. Plan counts cover operation-bearing rows:
+  `all`, exact kind, `unsupported`, or other `blocked`; structure, ghosts, and
+  notices add none. Inventory counts cover subjects plus warnings but no folders:
+  warnings add only all/error, facts may overlap, missing excludes acknowledged,
+  and terminal-frozen integrity error joins error. Filters union; empty means no
+  domain filter, and plan notices bypass filters but obey search.
+- `PlanView` = `{task_id:TaskId,view_id:ViewId,
+  view_state_revision:SafeInt,selection_revision:SafeInt,
+  result_revision:SafeInt,search:string,filters:[PlanFilter],
+  filter_counts:PlanFilterCounts,total_rows:SafeInt,visible_rows:SafeInt,
+  total_operations:SafeInt,risk_count:SafeInt,header:PlanReviewHeader}`. `search` is the exact currently accepted literal query
+  and is at most 65,536 UTF-8 bytes; `filters` is the unique ordered subset in
+  declared `PlanFilter` order. `total_rows` is the complete canonical plan-tree
+  row count before view parameters, while `visible_rows` is the exact current
+  visible-sequence count after search, filters, and collapse.
+  `total_operations` is the immutable canonical count of every operation-
+  bearing node, including operation-bearing folders, independent of search,
+  filters, collapse, selection, overlays, or informational rows.
+- `InventoryView` = `{task_id:TaskId,view_id:ViewId,
+  view_state_revision:SafeInt,projection_revision:SafeInt,
+  result_revision:SafeInt,
+  search:string,filters:[InventoryFilter],hide_acknowledged:boolean,
+  filter_counts:InventoryFilterCounts,total_rows:SafeInt,
+  visible_rows:SafeInt,warning_count:SafeInt,
+  presentation_omitted_detail_count:SafeInt,
+  complete:boolean,location:LocationResolutionView}`. The search/filter
+  invariants match `PlanView`. `total_rows` is the complete canonical inventory
+  projection count before hiding or view parameters; `visible_rows` is the
+  exact current sequence count after acknowledged-row visibility, search,
+  filters, and collapse. `warning_count` counts every warning in the canonical
+  projection, independent of current visibility. New views start with
+  `hide_acknowledged=true`; selecting the positive `acknowledged` filter
+  requires `hide_acknowledged=false`.
+- Every product-tree row contains the flattened exact `TreeRowFrame` keys
+  `{node_id:NodeId,display:string,depth:SafeInt,is_container:boolean,
+  visible_index:SafeInt,parent_visible_index:SafeInt|null,
+  first_child_visible_index:SafeInt|null,position_in_set:PositiveSafeInt,
+  set_size:PositiveSafeInt,expanded:boolean|null}`. These are the server-derived
+  global visible indexes and filtered sibling facts consumed directly by the
+  shipped generic renderer; an index may fall outside the returned window.
+  Window rows have contiguous `visible_index` values beginning at `offset`.
+  The single root has `depth=0`, null parent, and position/set size `1/1`;
+  every nonroot row has a non-null preceding parent whose depth is exactly one
+  less. A non-null `first_child_visible_index` names an immediate child of that
+  row, not merely a later descendant, and `position_in_set <= set_size`.
+  First determine whether an immediate child survives search/filter/hiding
+  before collapse. If none does (or the row is a noncontainer), `expanded=null`
+  and the child index is null regardless of membership in the collapsed-id
+  set. Otherwise `expanded=false` exactly when that container is collapsed and
+  has null child index; `expanded=true` exactly when it is expanded and
+  `first_child_visible_index=visible_index+1`. The browser never reconstructs any
+  of these facts from `depth`, paths, or adjacent rows.
+- `ExecutionOverlay` has exactly `{outcome:Outcome|null,
+  reason:OperationOutcomeReason|null,recording:"ok"|"degraded"|null,
+  recording_reason:ItemRecordingReason|null,
+  detail_omitted_count:SafeInt|null,progress_percent:SafeInt|null}`. Before a
+  reliable item outcome, all settled fields are null; afterward `outcome`,
+  `recording`, and `detail_omitted_count` are non-null and the reason fields
+  obey the core item invariants. `progress_percent` is null or `0..100`.
+- `IntegrityOverlay` has exactly `{result:IntegrityResult|null,
+  reason:IntegrityReason|null,recording:"ok"|"degraded"|null,
+  record_disposition:RecordDisposition|null,read_strategy:ReadStrategy|null,
+  detail:string|null,detail_omitted_count:SafeInt|null,
+  progress_percent:SafeInt|null}`. An unsettled live entry has null settled
+  fields. A settled entry has non-null `result`, `recording`, and
+  `detail_omitted_count`; its nullable reason, record disposition, read
+  strategy, and at-most-1,024-UTF-8-byte detail obey the exact
+  `IntegrityOutcome` variant. `progress_percent` is null or `0..100`.
+- `PlanRollup` has exactly `{operations:SafeInt,selected:SafeInt,
+  unselected:SafeInt,blocked:SafeInt,deferred:SafeInt,
+  irreversible:SafeInt,content_bytes:Scalar64,
+  selected_content_bytes:Scalar64}`. The four selection counts partition
+  `operations`; irreversible and selected bytes cover only the current
+  effective selection, while `content_bytes` covers all operations. Every
+  value is computed over operation-bearing rows owned by or below the plan
+  container, independent of search, filters, collapse, or move annotations. A
+  folder includes its own attached singleton operation, any grouped direct
+  member children, and descendants; an operation-group includes every direct
+  member child.
+- `InventoryRollup` has exactly `{items:SafeInt,present:SafeInt,
+  unverified:SafeInt,verified:SafeInt,modified:SafeInt,mismatched:SafeInt,
+  unsupported:SafeInt,missing:SafeInt,reappeared:SafeInt,
+  content_bytes:Scalar64|null,content_bytes_overflow:boolean}`. It covers
+  domain subject rows below the folder and excludes warnings. `items` is every
+  subject; presence and verification keys match the row's typed facts;
+  `missing` includes both acknowledged and unacknowledged missing subjects;
+  `reappeared` matches its explicit marker; and facts may overlap.
+  Acknowledgment has no rollup field and acknowledged hiding never changes the
+  rollup. `content_bytes` sums every non-null subject-row size. Byte
+  accumulation is checked signed-64. The
+  first otherwise-valid increment that would overflow is not accepted;
+  `content_bytes` becomes null and `content_bytes_overflow=true` for that folder
+  and each affected ancestor. Otherwise the flag is false and the exact sum is
+  non-null. No value clamps or wraps.
+- `PlanRow` has exactly all `TreeRowFrame` keys plus
+  `{row_kind:"folder"|"operation-group"|"operation"|"move-ghost"|"notice",
+  move_peer_id:NodeId|null,
+  operation_id:HexId|null,entry_kind:EntryKind|null,
+  operation_kind:OperationKind|null,source_path:string|null,
+  target_path:string|null,prior_target_path:string|null,
+  dependency_count:SafeInt,operation_reason:OperationReason|null,
+  blocked_reason:BlockedReason|null,risk:"none"|"reversible"|"irreversible"|null,
+  source_expected:ReviewedStat|null,target_expected:ReviewedStat|null,
+  prior_target_expected:ReviewedStat|null,intended:ReviewedStat|null,
+  selection:"selected"|"unselected"|"mixed"|"disabled"|null,
+  exclusion_outcome:Outcome|null,
+  selection_reason:ExclusionReason|BlockedReason|null,
+  content_bytes:Scalar64|null,rollup:PlanRollup|null,
+  execution:ExecutionOverlay|null,
+  post_copy:IntegrityOverlay|null,
+  notice_kind:"scan-warning"|"preflight-refusal"|null,
+  notice_stage:"review"|"execution"|null,
+  notice_session_id:HexId|null,
+  notice_side:"source"|"target"|null,
+  notice_code:ScanWarningCode|RefusalCode|null,
+  notice_path:string|null,notice_operation_id:HexId|null,
+  notice_detail:string|null,annotation:string|null}`.
+  Row invariants are exact:
+
+  | `row_kind` | container / rollup | operation and selection |
+  | --- | --- | --- |
+  | `folder` | true / required, including all-zero | optional singleton operation; selection derives from rollup |
+  | `operation-group` | true / required | null operation and exclusion facts; selection derives from rollup |
+  | `operation` | false / null | exactly one operation; selection follows the exclusion table below |
+  | `move-ghost` | false / null | null operation, selection, exclusion, and overlays |
+  | `notice` | false / null | null operation, selection, exclusion, and overlays; notice fields required as below |
+
+  `operation_id` is non-null exactly for one immutable `PlanOperation`: a
+  singleton may inhabit its path row and each exploded member is an immediate
+  operation child. Such rows require non-null kind, target, reason, risk, and
+  content bytes; nullable paths/stats/blocked reason copy the operation.
+  `entry_kind` is the first non-null `.kind` in order `intended`, source,
+  target, prior target. A null operation makes all operation-derived fields and
+  aligned overlays null and requires `dependency_count=0`; otherwise the count
+  is the exact dependency count, including zero.
+
+  | exclusion outcome / reason | operation-row selection |
+  | --- | --- |
+  | null / null | `selected` |
+  | `skipped` / `user-deselected` | `unselected` |
+  | `deferred` / `blocked-correspondence`, `blocked-dependency`, or `incomplete-scan` | `disabled` |
+  | `blocked` / one `BlockedReason` | `disabled` |
+
+  Every other or one-sided pair is structural failure; an operation is never
+  mixed. Container selection is disabled for zero operations, selected when
+  all selected, unselected when all unselected, disabled when all blocked or
+  deferred, and mixed otherwise. Only an operation-bearing folder may carry
+  its own operation's exclusion pair.
+
+  A scan notice is review-stage with null session/operation id and exact side,
+  `ScanWarningCode`, and root-as-null path. A preflight notice has a
+  `RefusalCode`, optional plan-resolving operation id, and either a subjectless
+  null side/path or the exact reviewed-root side and canonical path (empty is
+  null). Review stage requires null session; fresh execution stage requires
+  its refused session id. Detail is null, empty, or complete at most 1,024 UTF-8
+  bytes. Display is exactly `[<stage>] <side-or-plan>:
+  <path-or-Plan> — <code>` and excludes detail. Non-notices have all notice
+  fields null.
+
+  `move_peer_id` is only a symmetric destination-folder ↔ old-location
+  ghost/annotated-folder pair; groups/members never receive it. DR-BR-13 owns
+  the exact aggregate-before-suppression endpoint algorithm. Operation risk is
+  server-classified (`reversible` preserves displaced state in NamiSync trash;
+  `irreversible` does not; `none` has no destructive fact), and
+  `risk_count` covers current effective selection only.
+
+  `execution` is non-null on every operation-bearing row exactly after fresh
+  preflight and executor admission create its aligned generation; its all-null
+  body is admitted/unsettled. `post_copy` is non-null exactly for ids in the
+  latest manual post-copy candidate index and is never populated by automatic
+  linked verification. Both follow the generation pin/swap rules below.
+  Move ghosts/notices are nonactionable; collapse accepts plan containers only.
+  Group selection covers direct members, and folder selection covers its own
+  operation, grouped members, and descendants, independent of the view.
+- Reviewed notices are plan-immutable. While execution remains unrun, its last
+  completely published attempt may replace one fresh-preflight notice set and
+  refused summary atomically at one revision after charging full old/new and
+  provisional overlap. Each row names that session. Row/byte overflow instead
+  publishes typed `review_fact_limit`, preserves the prior complete state, and
+  exposes no partial causes. The first ran terminal clears the fresh set and
+  freezes execution. Reviewed preflight facts set only the initial selection;
+  execution fresh-preflights the exact committed current selection after its
+  revision/scope/confirmation/retention/claim gates, so the only immediate
+  `ExecutionStartReason` is `scope-empty`.
+- `PlanDependencyPage` = `{operation_id:HexId,offset:SafeInt,limit:SafeInt,
+  total:SafeInt,dependency_ids:[HexId],next_offset:SafeInt|null}`. `limit` is
+  1..256 and `offset <= total`. When `offset < total`, `dependency_ids` is the
+  next nonempty prefix of at most `limit` exact operation ids and
+  `next_offset=offset+dependency_ids.length` unless that equals `total`, in
+  which case it is null. `offset=total` returns an empty array and null
+  `next_offset`. Dependency ids are never folded into display text.
+- `InventoryRow` has exactly all `TreeRowFrame` keys plus
+  `{row_kind:"folder"|"file"|"unsupported"|"warning",
+  presence:InventoryPresence|null,
+  verification_state:InventoryVerificationState|null,size:Scalar64|null,
+  mtime_ns:Scalar64|null,acknowledged:boolean|null,reappeared:boolean|null,
+  unsupported_reason:UnsupportedReason|null,
+  provenance:Provenance|null,current:boolean|null,
+  invalidation:VerificationInvalidationReason|null,
+  rollup:InventoryRollup|null,
+  integrity_outcome:IntegrityOverlay|null,
+  warning_code:ScanWarningCode|null,warning_path:string|null,
+  warning_detail:string|null,annotation:string|null}`. Exact row invariants:
+
+  | `row_kind` | required facts | null facts |
+  | --- | --- | --- |
+  | `folder` | container and rollup | every subject, warning, and overlay field |
+  | `file` | noncontainer; present/missing presence, verification, acknowledgment, reappeared, currentness | rollup, unsupported reason, warning fields |
+  | `unsupported` | noncontainer; unsupported presence/reason plus the other subject facts | rollup and warning fields |
+  | `warning` | noncontainer and typed warning code | every subject, rollup, and overlay field |
+
+  A warning path is null exactly at the root; otherwise it is the complete
+  relative path. Its display is exactly `[<code>] <path-or-Inventory root>`
+  and excludes detail. Warning detail and annotation are null or complete at
+  most 1,024 UTF-8 bytes. Nonwarnings have all warning fields null.
+  `verification_state` remains ledger truth; `integrity_outcome` is only the
+  independently replaceable ordinary-integrity generation. It is non-null
+  exactly for subject NodeIds in that attempt's frozen candidate index, starts
+  all-null, and follows the generation pin/swap rules below. Linked and
+  post-copy verification never populate it. Admission freezes a one-to-one
+  workflow-item-id → emitted-domain-NodeId map before native work; unknown or
+  duplicate ids, or two ids mapping to one node, are structural producer
+  failures and publish no partial candidate.
+- `PlanWindow` and `InventoryWindow` each have exactly
+  `{offset:SafeInt,limit:SafeInt,total:SafeInt,rows:array,
+  next_offset:SafeInt|null}`, with rows of `PlanRow` and `InventoryRow`
+  respectively. `limit` is 1..256; `rows` is the longest nonempty prefix
+  fitting the complete response-byte ceiling when data remains. `offset` must
+  be at most `total`, and `total` equals the owning view's current
+  `visible_rows`; `offset=total` returns an empty array and null `next_offset`.
+  `next_offset`, when non-null, equals `offset + rows.length`; it is null
+  exactly when that sum reaches `total`.
+- `ExecutionDetail` has exactly `{item_id:HexId,outcome:Outcome,
+  reason:OperationOutcomeReason|null,recording:"ok"|"degraded",
+  recording_reason:ItemRecordingReason|null,recording_detail:string|null,
+  detail_omitted_count:SafeInt,
+  evidence:"not-applicable"|"recorded-copy"|"already-verified"|
+  "unrecorded"|"superseded",digest:Digest128|null,
+  current_digest:Digest128|null,provenance:Provenance|null,
+  size:Scalar64|null,mtime_ns:Scalar64|null,
+  invalidation:VerificationInvalidationReason|null}`.
+  Recording `ok` requires null recording reason/detail; `degraded` requires a
+  non-null `ItemRecordingReason` and permits null or at-most-1,024-UTF-8-byte
+  detail. `recorded-copy` and `already-verified` require non-null `digest`,
+  provenance, size, and mtime, null `current_digest`/invalidation, and their
+  exact allowed copy versus readback/verify provenance. `not-applicable` and
+  `unrecorded` require every digest/provenance/stat/invalidation auxiliary to be
+  null, so coincidental inventory state cannot look borrowed. `superseded`
+  requires null execution digest; its remaining auxiliaries are null or
+  describe only the separately labeled current state, and only that variant may
+  carry `current_digest` or invalidation.
+- `InventoryDetail` has exactly `{node_id:NodeId,
+  presence:InventoryPresence,provenance:Provenance|null,current:boolean,
+  unsupported_reason:UnsupportedReason|null,reappeared:boolean,
+  digest:Digest128|null,
+  observed_size:Scalar64|null,observed_mtime_ns:Scalar64|null,
+  attested_size:Scalar64|null,attested_mtime_ns:Scalar64|null,
+  last_verified_at:string|null,
+  invalidation:VerificationInvalidationReason|null,detail:string|null}`.
+  `unsupported_reason` is non-null exactly when `presence=unsupported`.
+  Only file and unsupported subject rows are detail subjects; a folder detail
+  request returns `row_not_actionable` rather than fabricating domain evidence.
+  Folder rows remain valid recursive refresh/integrity scopes, while visibility
+  changes require an applicable missing subject row. A warning
+  row already carries its complete bounded fact in `InventoryRow`; naming a
+  warning `NodeId` in detail, refresh, visibility, or integrity commands returns
+  fixed `row_not_actionable` for the whole request before any ledger or native
+  work.
+- `HandoffAssessment` = `{result_revision:SafeInt,ready:SafeInt,
+  already_verified:SafeInt,eligible_incomplete:SafeInt,unrecorded:SafeInt,
+  superseded:SafeInt,reason:HandoffBlockReason|null}`. Those five counts
+  partition every applicable selected byte-producing overlay item. A `ready`
+  disposition requires positive `ready`, permits `already_verified`, requires
+  the other three counts to be zero, and has null reason. `already-verified`
+  requires positive `already_verified`, every other count zero, and null
+  reason. `post-settlement-state-diverged` blocks regardless of those counts.
+  Absent divergence, all five zero is blocked as `no-applicable-items`. Every
+  other block uses the first applicable reason in this exact precedence:
+  `eligible-work-incomplete`, `unrecorded-evidence`, then
+  `superseded-evidence`.
+- `LocationStartRefusal` = `{reason:LocationStartReason,
+  candidate:CandidateAssessment|null}`. `candidate-changed` requires the fresh
+  non-null assessment and `scope-empty` requires null. Post-copy admission has
+  the narrower exact `CandidateStartRefusal` =
+  `{reason:"candidate-changed",candidate:CandidateAssessment}` because blocked
+  and all-verified classifications have their own assessment-bearing variants.
+  Capacity failures are fixed bridge errors, and task-claim contention is the
+  separate `busy` result; neither has a second spelling inside a refusal.
+
+### Task and authority ordering
+
+**Decision ownership:** DR-BR-21 owns task/session lifetime, DR-BR-22 owns
+close behavior, DR-BR-24 owns concurrency and teardown, and DR-BR-03,
+DR-BR-16.1, DR-BR-17, and DR-BR-27 own the narrower authorities named below.
+
+A desktop task is process-live adapter state, owns zero or one current session,
+and retains the reviewed plan, selection, separately named compact overlays and
+results, sparse reasons/diagnostics, run identity, views, and bounded receipts
+until close. Execution becomes immutable at its first ran terminal; before
+that, refusal retry replaces only its summary/fresh notices/provisional overlay.
+Inventory refresh replaces only its artifact/result/projection, and ordinary
+integrity or manual post-copy replaces only its own slot. Every replacement
+reserves complete old/new overlap. Browser state owns at most one 256-row
+window and reconstructs from `list_tasks`/`get_task`.
+
+The diagnostic budget is 1,024 UTF-8 bytes per complete value and 65,536 across
+all currently retained task generations. Stable fact order is established
+first; each nonfitting whole value becomes null plus one stable presentation-
+omission identity—never truncation. Empty remains distinct from null. Old
+diagnostics remain charged until predecessor pins drain; swap releases their
+charge but never reprojects frozen details, ids, order, or omissions, and pages
+never reapply the budget. `TaskDetail.diagnostic_bytes` is the current charge.
+Its two checked de-duplicated omission counts are respectively current producer/
+core occurrences and current presentation occurrences; the latter is never
+persisted. Generation-local summary/header/view witnesses count only their
+owner. Swap replaces those identities atomically; refused replacement preserves
+the old identities and its typed-limit summary adds none.
+
+Authorities are checked in this order:
+
+| # | Authority/action |
+| ---: | --- |
+| 1 | envelope bound, origin/readiness, allowlist, exact payload |
+| 2 | retained `command_id` replay/conflict, before every live revision |
+| 3 | `L`/`C` release/close tombstone, before live-task absence |
+| 4 | exact live task |
+| 5 | new task-bound effect-owning `M`: sticky `publication_issue` → stateless `internal_error`; `R`/`D`/`L`/`C` bypass |
+| 6 | publication/retirement classification plus precharged lease and epoch capture; pending issue makes ordinary `R`/`M` `bridge_busy`, lets `D` clean up and `L`/`C` join; retirement admits only declared cleanup/replay |
+| 7 | supplied exact current session |
+| 8 | lifecycle, then named selection/result/view/projection revisions |
+| 9 | command-family capacity and one joinable in-progress receipt cell |
+| 10 | named permanent plus completion-transient reservation |
+| 11 | sole claim, unguessable owner token, visible lifecycle advance |
+| 12 | service/facade/database/filesystem work outside task lock |
+| 13 | task-object/epoch recheck; token-guarded publish or compensate; release claim, detach response, retain receipt, release lease |
+
+Steps 4 through 6 are one atomic registry/task-lock decision: no issue or
+retirement seal can install between classification and lease acquisition, and a
+new effect-owning mutation cannot capture a post-issue epoch after bypassing the
+sticky issue gate. The same race is rechecked by step 13 before any publication.
+
+One task-wide operation claim covers control, every existing-task start,
+terminal release, and close; view/selection/projection mutations use their own
+service authority locks. Exact owner replay joins single-flight work; another
+command returns its `busy` shape without outside work. Only the token owner may
+publish or compensate. Failure closes adopted observer/session state, discards
+uninstalled candidates, releases reservation, advances lifecycle, then clears the
+claim. Observation is attached before dispatcher scheduling. Selection reports
+`committing`/`committed` while execution owns the claim.
+
+New-task starts use an unpublished registry claim keyed by command id, exact
+intent, and claimed slot generations. Under registry/slot lock it reserves task
+id/bytes and claims slots; `list_tasks` cannot see it until observation is
+attached and publication is atomic. Identical delivery joins. A different
+command naming a claimed slot returns
+`{disposition:"busy",reason:"slot-claimed"}` without task detail or outside
+work. Its renderer says exactly `Wait for the other task to finish starting. If
+this selection is no longer available, choose the folder again.` Failure
+restores still-matching slots, releases reservation/claim, and retains the typed
+Setup receipt.
+
+Each live task has a checked `publication_epoch`, mutation-publication seal,
+ordinary-retirement seal, final cleanup seal, and checked ordinary/cleanup lease
+counts; none is a bridge revision. The 64-handler pool precharges every lease
+record and admitted row's worst-case detached DTO, 8,388,608-byte native return,
+and callback copy; the browser window is separately charged. Thus admission or
+ordinary response construction cannot fail for unreserved capacity.
+
+Except bounded-under-lock `list_tasks`, every handler retaining task state past
+lookup acquires its lease atomically with exact object lookup, issue/retirement
+classification, and epoch capture; the lease retains that object and charge.
+Receipt replay may take a replay lease. Before scheduling, each attachment
+separately reserves its owner-callback/reconciler lease plus retry, latch, and
+pin bookkeeping; it is outside the handler pool and lasts through callback
+retry and cleanup. Publication issue still admits declared reads, drain,
+release, and close. After close seals ordinary leases, only `get_task`,
+`next_events`, exact-session release/busy observation, and receipt replay/
+conflict receive cleanup leases; terminal callback and close owner/replay use
+their pre-reserved authorities. Every other request is `task_unavailable`.
+
+Every referenced artifact/overlay/projection generation is read-pinned. Under
+its lock, the handler deeply copies the bounded DTO and releases the pin only
+after detachment; separately reserved transient copies hold no graph reference.
+Replacement declares write intent, blocks new pins, drains admitted pins without
+the task lock, then swaps atomically. The old graph, diagnostics, and omission
+identities remain charged until then. The six-entry inventory cache counts
+charged generations: pinned entries cannot be evicted, a seventh build with all
+six pinned is `retention_full`, and charge releases only after the last pin.
+
+`publication_epoch` starts at zero and advances only for publication issue or
+accepted close; named publications use only their own revisions/generations.
+After outside work and before publication/detachment, recheck the exact object
+and epoch. A stale read drops pins and gets at most one allowed fresh lease; a
+second race/denial returns its declared conflict or `task_unavailable`, never
+stale data. A stale effect-owning mutation publishes no task state, compensates
+its candidate/reservation, and settles its receipt `internal_error`; truthful
+independent domain/ledger effects remain and are never repeated. Construct the
+detached DTO before releasing its pins and lease.
+
+Publication-issue installation is an epoch barrier. Under the publication gate,
+the reconciler seals new effect-owning mutations and advances the epoch;
+already-published work remains, while losing mutations compensate as above.
+It blocks provisional-generation pins, drains admitted short pins without task
+lock or its own reconciler lease, discards/releases the provisional generation,
+then exposes the issue. Older mutation leases later fail their epoch recheck.
+Allowed reads use the advanced epoch; `next_events` uses a cleanup lease, and
+release/close join pin-free and begin only after issue reclassification, then
+wait for stage/latch reconciliation and cleanup. Issue observation advances
+the browser request generation before any pre-seal detached callback may update
+the page.
+
+The lifecycle claim does not substitute for a service-owned selection or
+projection authority. After winning the task claim and before domain I/O, an
+execution or integrity/refresh start atomically rechecks its expected service
+revision under that authority's own lock and freezes the selection or indexed
+scope (execution marks selection `committing`). If a narrower mutation won
+first, the claim owner publishes no work, compensates its reservation/claim,
+and returns the declared conflict. If the start won first, a selection mutation
+gets `committing`/`committed`, and projection mutation cannot alter the frozen
+scope. No start relies only on the earlier adapter snapshot.
+
+Reads take the task lease and exact generation pins above, then snapshot the
+named immutable authority without holding the task lock across JSON, database,
+facade, or filesystem work. After any such outside work, they recheck the exact
+task object, publication epoch, and every named task/session/view revision
+before returning a `current`/`opened` value; the one allowed resnapshot applies
+only where the row remains readable, otherwise a raced read returns its exact
+conflict shape or `task_unavailable` instead of publishing stale data. A
+revision conflict is a typed result, not optimistic browser repair. `next_events` and
+`release_terminal_session` are exact to `(task_id,session_id)`; a delayed
+request for an older session cannot observe, release, or close a newer one.
+Every service session start attaches observation before dispatcher
+schedulability, with the sink excluded from receipt identity and with the
+claim-owner callback as the only publication path.
+
+The retained-task cap is 48 plus an enforced byte budget. Each task owns at
+most 4,096 mutation receipts: at most 4,095 ordinary receipts plus one
+effect-owning close cell reserved as part of that total. Ordinary mutation
+admission cannot consume that cell; saturation of the ordinary cells refuses a
+new non-close command as fixed `receipt_capacity_full` and never evicts a
+receipt or affects already admitted work. That capacity observation is
+necessarily stateless because no receipt cell exists; it performs no outside
+work, and a later caller must use a fresh command id. The dedicated cell holds
+only an accepted live close's exact intent and `closing` replay until that same
+state becomes the global close tombstone, so a task whose ordinary receipt
+cells are full remains closable. The analytical maximum task includes one plan
+with at most 120,000 total domain rows under the 128-MiB plan-domain hard wall
+and 120,000 plan notices under the independent 192-MiB informational wall
+(240,000 total plan rows), authoritative selection of at most 120,000
+operations, all five
+simultaneously populated `TaskResults` slots (`plan`, `execution`, `inventory`,
+`integrity`, and `post_copy_verify`), a 120,000-row execution overlay, one
+120,000-row ordinary-integrity overlay, one 120,000-row post-copy overlay,
+capped sparse diagnostics and receipts, the published-start routing reference,
+lifecycle and view state, and a reference to an attached inventory view with
+at most 120,000 domain rows under its 192-MiB domain wall and 120,000 warning
+rows under its separate 192-MiB informational wall (240,000 total rows).
+Retrying an unrun execution refusal charges old/new summaries,
+fresh-notice sets, and any provisional overlay; inventory refresh charges both
+complete old and new artifact/result/projection, informational, and diagnostic
+generations; ordinary-integrity
+and manual-post-copy replacement each charge both old and new result-summary
+and overlay generations until replacement write intent has excluded new pins,
+the last old-generation pin has drained, and the atomic swap releases the old
+generation.
+Projection nodes themselves belong to the separately bounded six-view cache,
+whose entries may each reach 240,000 rows; only an unpinned generation may be
+evicted to invalidate/rebuild an open task's view without deleting task
+identity. Four combined maximum tasks are always admissible. Before every
+artifact-growing session attach, reserve its worst-case permanent delta,
+completion-time full result, and separately owned callback/reconciler root;
+the fixed handler pool owns detached DTO/native/browser copies. Shrink after the
+known charge, never silently evict a task or pinned projection, and return
+`retention_full` when either budget would be exceeded.
+
+Each session attachment reserves one of 64 per-task release-tombstone positions
+and its globally charged bytes before scheduling. A release tombstone is keyed
+by `(task_id,session_id)` and contains the exact returned lifecycle revision,
+release time, and expiry; it survives task close for five minutes and is never
+evicted early. Global release-tombstone capacity is part of the byte budget, so
+new attachment may return `retention_full`, but terminal release cannot fail for
+capacity. Identical delayed release returns the stored result; changed session
+identity cannot affect a successor; after expiry it returns `task_unavailable`.
+Task close materializes the reserved tombstone for any exact session it releases
+before removing the task, so a delayed release racing or following close has the
+same replay authority.
+
+`close_task` is the special `C` mutation class. Receipt lookup and live
+preconditions run first. A lifecycle conflict, a task-wide-claim busy result,
+or a different close command observing an already accepted live close is a
+stateless no-effect observation and performs no outside work. Only the command
+that wins the close claim occupies the dedicated cell; its identical retry
+joins/replays, and reuse of that owning id with changed intent is
+`command_conflict`. A nonowner command while cleanup is live returns the
+current exact `closing` object without consuming the cell. A contained handler
+failure before ownership is another stateless no-effect observation; after
+ownership, the cell remains authoritative and an uncertainty retry returns the
+current `closing`/`closed` effect rather than repeating an error that could hide
+cleanup. Acceptance seals ordinary leases and advances `publication_epoch`.
+An effect-owning mutation that published first remains authoritative; when the
+close seal wins, the mutation follows the stale-mutation compensation and
+fixed-`internal_error` rule. The close owner requests cancellation, then waits
+without the task lock for older ordinary leases and their generation pins and
+reconciles the exact terminal/session release while the allowed cleanup leases
+and separately reserved exact terminal callback remain available. After cleanup
+it atomically sets the final seal and blocks new cleanup-lease admission, then
+wakes/cancels every active `next_events` long-poll and other cleanup waiter,
+waits for the last admitted cleanup/replay lease to drain, and
+only then removes the task and releases its task, cache-reference, receipt, and
+publication-fault roots. `close_task` then atomically replaces that still-full
+task charge with a fixed, analytically charged tombstone indexed by both task id
+and its owning command id and containing only those ids, exact-intent hash,
+closed result, and expiry. It is retained for five minutes—longer than the one
+30-second uncertainty retry—and is never evicted early. Closing therefore
+cannot fail for lack of retention capacity because it strictly shrinks an
+already reserved charge; rapid create/close cycles may instead make a new task
+return `retention_full` until tombstones expire. During retention, identical
+owning-command replay returns the closed result, reuse of that owning command id
+with changed intent returns `command_conflict`, and a different `close_task`
+command id naming the tombstoned task idempotently returns the same exact
+`{disposition:"closed",task_id:TaskId,lifecycle_revision:SafeInt}` without
+creating another receipt or requiring nonexistent `TaskDetail`. After expiry,
+either form returns `task_unavailable`.
+
+Pre-task Setup mutations use a separate, charged 128-entry receipt table with a
+30-minute TTL. Receipts are never LRU-evicted before that TTL, and exact replays
+never repeat native/ledger work. An associated returned slot is pinned against
+slot LRU eviction for its first 60 seconds and is replayed while it remains
+live; after that pin, an ordinarily evicted or expired slot makes replay return
+`slot_unavailable`. Changed intent returns `command_conflict`.
+When the table is full, a new mutation returns `receipt_capacity_full`; an
+existing receipt remains replayable.
+`start_plan`/`start_inventory` begin there while their task is unpublished. On
+successful publication the input slots are atomically consumed and the same
+receipt transfers into the new
+task's 4,096-entry table and lasts until close; on refusal it remains a Setup
+receipt until its ordinary TTL. Transfer is pre-reserved and cannot make an
+already-started task lose replay authority. Because a published-start retry has
+no `task_id`, one bounded global routing index maps its `command_id` to that same
+task-owned receipt. It is an index/reference, not a second receipt, is charged
+to the task, and is removed atomically with task close. Receipt lookup consults
+the Setup table and then this index before reading slots. Exact intent returns
+the original started effect with current task detail, changed intent is
+`command_conflict`, and lookup after task close/route removal falls through to
+the consumed-slot check and returns `slot_unavailable` without native, ledger,
+or dispatcher work.
+
+Candidate intent slots have an independent 32-entry LRU capacity. Before a
+typed or picker result can begin native admission, the slot store atomically
+evicts enough unpinned entries and reserves one placeholder; recent activation
+first revalidates current membership, then does the same. Pair activation
+atomically reserves two placeholders or none after membership revalidation and
+before either native probe. A refusal or exception releases every placeholder,
+so partial pair admission creates no slot. If pinned or claimed entries leave
+insufficient room, the command returns fixed `slot_capacity_full` before native
+admission; a receipted command retains that error in its Setup receipt, while
+the interactive picker returns it directly. Slot pressure never relabels a
+candidate assessment.
+
+### Exact command and retry rows
+
+**Decision ownership:** DR-BR-27 owns the table and retry/receipt policy; each
+row's domain authority remains with the additional DR-BR records named in the
+map.
+
+All rows require `OPEN` readiness and the complete 65,536-byte request-envelope
+bound. Every complete canonical JSON response, including fixed errors, is at
+most 8,388,608 UTF-8 bytes before native-return construction. For this bound,
+canonical encoding is `ensure_ascii=False`, sorted keys, comma/colon separators,
+and strict finite primitives; it is measurement input, not a second wire shape.
+Paged reads use
+the longest nonempty row prefix within that ceiling; they never truncate a path
+or typed fact. `next_events` applies the same rule to update prefixes before it
+commits cursor advancement or removes queue entries: it returns 1..64 updates
+when any are available, consumes only the returned prefix, and returns zero only
+after its wait ends with no update. The 1,048,576-byte core reliable-envelope
+ceiling plus fixed bridge-wrapper/scalar-projection overhead guarantees one
+maximum queue head fits; a valid event can never block the drain behind a
+singular-overflow branch.
+Singular values that cannot fit fail as fixed
+`response_too_large` before pywebview construction. The accepted input/path
+bounds prove one maximum row fits; the fixed 37-ASCII-character `NodeId`
+grammar and 32,767-UTF-16-code-unit plan-path ceiling prove the at-most-16,385
+immutable plan ancestors fit. Tests cover the UTF-8 worst case for that UTF-16
+ceiling: BMP code points that encode to three bytes per one code unit, plus
+astral four-byte code points that consume two code units. The same ceiling and all
+native/browser callback copies are charged by BR-G-45.
+
+`R` is a 5,000 ms local read: at most two total identical-payload attempts, the
+second immediate only after transport timeout/uncertainty. `M` is a receipted
+30,000 ms mutation with the same two-attempt rule; fixed domain results are not
+automatically retried, and a confirmed destructive click uses a fresh command
+id. `C` is the dedicated close mutation: 30,000 ms, with at most one identical
+retry after transport uncertainty; only its accepted effect-owning command is
+receipted, while the stateless no-effect observations defined above may be
+recomputed. `I` is interactive with no deadline or automatic retry. `D` is one 25,000
+ms server wait under a 30,000 ms browser deadline; uncertainty recovery creates
+one fresh drain id and uses the exact replay cursor, never retries the old drain
+id. `L` is a 30,000 ms exact-session release with at most one identical delayed
+recovery attempt in the next 60 seconds and no `command_id`. Handler-produced
+`internal_error` is a retained/replayed M result, not a cue to repeat the
+effect; `C` follows its accepted-owner state rule above. Python and JavaScript freeze these attempts, timings, and retryable
+classes in one policy-mirror test.
+`open_plan_view` and `open_inventory_view` are read-class commands because each
+task memoizes one current view identity: an identical retry returns that same
+view or the current conflict and never allocates a second retained view.
+
+Tagged variants below are separate exact objects: keys named for one variant
+are absent from the others. An existing-task M command that can race the sole
+task claim additionally returns `{disposition:"busy",task:TaskDetail}` without
+outside work. Conflict variants carry only the current named authority or
+current task detail; they never perform the work whose stale result they would
+need in order to populate success-only fields.
+The table shorthand “`D` carries `x`, `y`” means exactly
+`{disposition:"D",x:<declared type>,y:<declared type>}` with no implicit keys;
+`task`, `view`, `candidate`, `assessment`, and `page` mean `TaskDetail`, the
+named view type, `CandidateAssessment`, `HandoffAssessment`, and
+`PlanDependencyPage`, respectively. `window` means the exact window shape above;
+`detail` means the row-specific named detail type. A named revision always uses
+`SafeInt`, and ids use their declared primitive grammar.
+
+| Command (activation) | Exact payload | Exact success result/dispositions | Class and named authority |
+| --- | --- | --- | --- |
+| `list_tasks` (cp4) | `{}` | `{tasks:[TaskSummary]}`; 0..48 | R; registry snapshot |
+| `get_task` (cp4) | `{task_id:TaskId}` | `TaskDetail` | R; task |
+| `next_events` (cp4) | `{task_id:TaskId,session_id:HexId,drain_id:HexId,replay_from:PositiveSafeInt|null}` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,updates:array}` with the byte-aware 0..64 exact drain-update prefix | D; task then exact session/cursor; consume only the returned prefix |
+| `control_task` (cp4) | `{command_id:HexId,task_id:TaskId,session_id:HexId,expected_lifecycle_revision:SafeInt,action:"pause"|"resume"|"cancel"}` | `{disposition:"applied"|"noop"|"conflict"|"busy",task:TaskDetail}` | M; receipt, task/session, lifecycle/claim |
+| `release_terminal_session` (cp4) | `{task_id:TaskId,session_id:HexId}` | `{disposition:"released",task_id:TaskId,session_id:HexId,lifecycle_revision:SafeInt}` or `{disposition:"busy",task:TaskDetail}` | L; task/exact terminal session, claim, or retained release tombstone |
+| `close_task` (cp4) | `{command_id:HexId,task_id:TaskId,expected_lifecycle_revision:SafeInt}` | live/retained success is `{disposition:"closing"|"closed",task_id:TaskId,lifecycle_revision:SafeInt}`; live conflict/busy is `{disposition:"conflict"|"busy",task:TaskDetail}`; a nonowner observing accepted live close gets the current closing object; a tombstoned different command id gets the same exact closed object | C; accepted owner cell, live task/lifecycle/claim, or task/command-indexed closed tombstone |
+| `read_setup` (cp6) | `{}` | `SetupView` | R; defaults snapshot then bounded recent probes |
+| `pick_folder` (cp6) | `{purpose:"source"|"target"|"inventory"}` | cancel `null`, otherwise `CandidateView` | I; common workflow admission then purpose slot |
+| `admit_typed_folder` (cp6) | `{command_id:HexId,purpose:"source"|"target"|"inventory",path:string}` | `CandidateView` | M; setup receipt, common workflow admission, purpose slot |
+| `activate_recent_location` (cp6) | `{command_id:HexId,recent_id:RecentId,purpose:"source"|"target"|"inventory"}` | `CandidateView` | M; setup receipt, current bounded recent membership, fresh common admission, purpose slot |
+| `activate_recent_pair` (cp6) | `{command_id:HexId,pair_id:PairId}` | `{disposition:"accepted",source:CandidateView,target:CandidateView}` or `{disposition:"refused",source:CandidateAssessment,target:CandidateAssessment}` | M; setup receipt, one current snapshot; two slots only when both accept |
+| `start_plan` (cp6) | `{command_id:HexId,source_id:SlotId,target_id:SlotId,options:PlanSetupInput}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`, `PlanStartRefusal`, or `{disposition:"busy",reason:"slot-claimed"}` | M; setup/published-start receipt route, native option canonicalization, slots, reserve, fresh pair admission, unpublished owner claim and attached plan start |
+| `start_inventory` (cp6) | `{command_id:HexId,inventory_id:SlotId}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`, `InventoryStartRefusal`, or `{disposition:"busy",reason:"slot-claimed"}` | M; setup/published-start receipt route, slot, reserve, fresh admission, unpublished owner claim and attached inventory start |
+| `open_plan_view` (cp7) | `{task_id:TaskId,expected_lifecycle_revision:SafeInt}` | `{disposition:"opened",view:PlanView}` or `{disposition:"conflict",lifecycle_revision:SafeInt}` | R; task/lifecycle, immutable plan memo |
+| `update_plan_view` (cp7) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,search:string,filters:[PlanFilter],collapse:{node_id:NodeId,collapsed:boolean}|null}` | `{disposition:"applied"|"noop"|"conflict",view:PlanView}` | M; receipt, task/view, view-state revision |
+| `get_plan_window` (cp7) | `{task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,expected_selection_revision:SafeInt,expected_result_revision:SafeInt,offset:SafeInt,limit:SafeInt}` | `{disposition:"current",view:PlanView,window:PlanWindow}` or `{disposition:"conflict",view:PlanView}` | R; task/view, view-state, selection, result |
+| `get_plan_anchor` (cp7) | `{task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,expected_result_revision:SafeInt,anchor:{anchor_type:"item",item_id:HexId}|{anchor_type:"node",node_id:NodeId}}` | `{disposition:"current",node_id:NodeId,index:SafeInt,ancestor_ids:[NodeId]}` with 0..16,385 strict ancestors ordered parent first through root; `{disposition:"not-visible",view:PlanView}`; or `{disposition:"conflict",view:PlanView}` | R; task/view/view-state/result, shared resolver; node anchors enable off-window move-peer navigation without path derivation, while current search/filter state may hide the complete chain |
+| `get_plan_detail` (cp7) | `{task_id:TaskId,view_id:ViewId,operation_id:HexId,offset:SafeInt,limit:SafeInt}` | `{disposition:"current",page:PlanDependencyPage}` | R; immutable task/view/operation dependencies |
+| `get_selection_summary` (cp7) | `{task_id:TaskId,expected_selection_revision:SafeInt}` | `{disposition:"current",summary:SelectionSummary}` or `{disposition:"conflict",summary:SelectionSummary}` | R; task/selection |
+| `mutate_selection` (cp7) | `{command_id:HexId,task_id:TaskId,expected_selection_revision:SafeInt,changes:[{node_id:NodeId,selected:boolean}]}` with 1..256 unique node ids | `{disposition:"applied"|"noop"|"conflict"|"committing"|"committed",selection_revision:SafeInt}`; the last two never mutate | M; receipt, task/selection; server recursive closure under the service selection lock |
+| `start_execution` (cp7) | `{command_id:HexId,task_id:TaskId,expected_lifecycle_revision:SafeInt,expected_selection_revision:SafeInt,destructive_acknowledged:boolean}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`; `{disposition:"confirmation-required"|"conflict"|"busy",task:TaskDetail}`; or `{disposition:"refused",task:TaskDetail,reason:ExecutionStartReason}` | M; receipt, task/lifecycle/selection, reserve/claim, core commitment with frozen linked verify, attached start |
+| `get_execution_detail` (cp8) | `{task_id:TaskId,item_id:HexId,expected_result_revision:SafeInt}` | `{disposition:"current",result_revision:SafeInt,detail:ExecutionDetail}` or `{disposition:"conflict",result_revision:SafeInt}` | R; task/result then atomic ledger snapshot |
+| `read_post_copy_handoff` (cp10) | `{task_id:TaskId,expected_result_revision:SafeInt}` | `{disposition:"ready"|"already-verified"|"blocked",assessment:HandoffAssessment}` or `{disposition:"conflict",result_revision:SafeInt}` | R; task/result then atomic ledger snapshot |
+| `start_post_copy_verify` (cp10) | `{command_id:HexId,task_id:TaskId,expected_lifecycle_revision:SafeInt,expected_result_revision:SafeInt}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`; `{disposition:"already-verified"|"blocked",assessment:HandoffAssessment,task:TaskDetail}`; `{disposition:"refused",refusal:CandidateStartRefusal,task:TaskDetail}`; or `{disposition:"conflict"|"busy",task:TaskDetail}` | M; receipt, task/lifecycle/result, reserve/claim, atomic classification, ready-only fresh root admission, final atomic classification/freeze, attached new session |
+| `open_inventory_view` (cp9) | `{task_id:TaskId,expected_lifecycle_revision:SafeInt}` | `{disposition:"opened",view:InventoryView}` or `{disposition:"conflict",lifecycle_revision:SafeInt}` | R; task/lifecycle, projection open/rebuild |
+| `update_inventory_view` (cp9) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,search:string,filters:[InventoryFilter],hide_acknowledged:boolean,collapse:{node_id:NodeId,collapsed:boolean}|null}` | `{disposition:"applied"|"noop"|"conflict",view:InventoryView}` | M; receipt, task/view/view-state |
+| `get_inventory_window` (cp9) | `{task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,expected_projection_revision:SafeInt,expected_result_revision:SafeInt,offset:SafeInt,limit:SafeInt}` | `{disposition:"current",view:InventoryView,window:InventoryWindow}` or `{disposition:"conflict",view:InventoryView}` | R; task/view, view-state, projection, then result overlay |
+| `get_inventory_detail` (cp9) | `{task_id:TaskId,view_id:ViewId,node_id:NodeId,expected_projection_revision:SafeInt}` | `{disposition:"current",projection_revision:SafeInt,detail:InventoryDetail}` or `{disposition:"conflict",projection_revision:SafeInt}` | R; task/view/projection then bounded row query |
+| `refresh_inventory` (cp9) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_lifecycle_revision:SafeInt,expected_projection_revision:SafeInt,node_ids:[NodeId]}` with 1..256 unique actionable ids | `{disposition:"started",session_id:HexId,task:TaskDetail}`; `{disposition:"conflict"|"busy",task:TaskDetail}`; or `{disposition:"refused",refusal:LocationStartRefusal,task:TaskDetail}` | M; receipt, task/lifecycle/view/projection, reserve/claim, frozen recursive scope and fresh location admission, attached refresh |
+| `change_inventory_visibility` (cp9) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_projection_revision:SafeInt,node_id:NodeId,action:"acknowledge"|"restore"}` | `{disposition:"applied"|"noop"|"conflict",projection_revision:SafeInt}` | M; receipt, task/view/projection, conditional ledger command then patch |
+| `start_integrity` (cp10) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_lifecycle_revision:SafeInt,expected_projection_revision:SafeInt,mode:"baseline"|"verify"|"rebaseline",current_evidence_acknowledged:boolean,node_ids:[NodeId]}` with 1..256 unique actionable ids | `{disposition:"started",session_id:HexId,selected:SafeInt,task:TaskDetail}`; `{disposition:"conflict"|"busy",task:TaskDetail}`; or `{disposition:"refused",refusal:LocationStartRefusal,task:TaskDetail}` | M; receipt including acknowledgement, task/lifecycle/view/projection, reserve/claim, frozen indexed descendants and fresh location admission, attached start |
+
+`start_integrity.current_evidence_acknowledged` is true exactly for
+`mode="rebaseline"`; baseline and verify require false. Missing, non-Boolean,
+false-rebaseline, and true-baseline/verify payloads are invalid before receipt,
+claim, candidate resolution, ledger, or native work. The exact Boolean remains
+part of the receipted intent, so a confirmed replay cannot be changed into an
+unconfirmed evidence replacement or a different mode.
+
+Receipt storage retains an intent hash and the smallest immutable effect
+identity, never a stale native-return graph. Replay projection is exact:
+
+| Receipted effect | First completed result | Exact-intent replay while retained |
+| --- | --- | --- |
+| setup admission/activation | candidate assessment plus any slot id | same result while the slot lives; otherwise fixed `slot_unavailable`; no new probe or slot |
+| view/visibility mutation | applied/noop/conflict effect | an applied effect becomes `noop`; noop/conflict remains unchanged; each projects the current named revision/view, and visibility preserves its established `applied` → `noop` rule |
+| selection mutation | applied/noop/conflict/committing/committed effect | an applied effect becomes `noop`; every no-effect disposition remains unchanged; all carry the current `selection_revision` and never mutate again |
+| control | applied/noop/conflict/busy effect | `noop` plus current task when the original effect applied; otherwise the retained disposition plus current task |
+| session start | started/refused/confirmation-required/already-verified/blocked/conflict/busy effect and any stable task/session identity | never attaches again; published-start routing finds the task-owned receipt without a task id; started returns the original `session_id` plus current detail for its task even after terminal release or a successor attachment, every no-start disposition remains unchanged with its declared current projection, and confirmation-required repeats until the browser sends acknowledged intent under a fresh command id; provisional Setup busy remains exactly `{disposition:"busy",reason:"slot-claimed"}` |
+| accepted close | closing/closed effect and owning command id | current `closing` while cleanup is live, then the closed-tombstone result; once tombstoned, identical intent or a different close command id returns the exact closed object, while only the owning id with changed intent is `command_conflict` |
+| M handler-contained internal failure | fixed `internal_error` effect | the same fixed error; it never reruns uncertain work |
+
+When a receipt, accepted-close cell, or tombstone owns a command id, the same id
+with any different exact wire intent is `command_conflict`, even if both inputs
+canonicalize to the same options. Stateless `receipt_capacity_full` and
+nonowning/no-effect `C` observations establish no command-id ownership and are
+the only exceptions; after a definite response the browser uses a fresh id. A
+receipt lookup precedes mutable task/recent/slot reads. Recomputed current task
+detail or revision is presentation only and cannot change the retained effect.
+Task receipts last until close; setup, release, and close cells/tombstones use
+the exact capacities and lifetimes above.
+
+Plan filters are an ordered duplicate-free subset of `copy`, `update`, `move`,
+`move_update`, `recase`, `mkdir`, `trash`, `delete`, `noop`, `blocked`, and
+`unsupported`; inventory filters are an ordered duplicate-free subset of
+`present`, `unverified`, `verified`, `modified`, `reappeared`, `unsupported`,
+`missing`, `mismatched`, `error`, and `acknowledged`. Empty means no domain
+filter. Inventory view state separately carries `hide_acknowledged`, initially
+true; a filter set containing `acknowledged` is valid only when that Boolean is
+false, so the positive acknowledged view cannot be hidden by contradictory
+state. Unknown values, non-source order, and duplicate members are invalid
+payloads. Searches are
+literal valid Unicode bounded by the complete envelope. Node/id arrays reject
+duplicates. Selection changes apply in listed order against one locked
+selection snapshot; each change applies the server-owned recursive closure,
+later overlapping changes may override earlier ones, and the successful batch
+advances `selection_revision` once. Domain refusal never leaks raw paths or exception text. The target
+adds the fixed error row `retention_full` / `NamiSync is retaining the maximum safe
+amount of review data. Close a task or wait for recent retry state to expire,
+then try again.` Existing fixed transport,
+task, conflict, busy, unavailable, and internal-error rows remain. At
+checkpoint 6, `slot_unavailable` becomes the purpose-neutral
+`That folder selection is no longer available. Choose the folder again.` The
+target additionally fixes `receipt_capacity_full` / `Close a task or wait for
+recent retry state to expire, then try again.`, `slot_capacity_full` /
+`NamiSync is holding the maximum number of folder selections. Start a task
+with an existing selection or wait a minute, then try again.`,
+`recent_unavailable` / `That remembered location is no longer available.
+Refresh Setup and choose it again.`, `row_not_actionable` / `That row does not
+support this action. Choose an actionable folder or file row.`, and `response_too_large` /
+`That review value cannot be returned safely. Shorten the path or close the
+task and start a new plan.`
+
+### Location, evidence, and handoff policy
+
+**Decision ownership:** DR-BR-06 owns location/scope admission, DR-BR-14 and
+DR-BR-21 own retained evidence transport, and DR-BR-05, DR-BR-20, and DR-BR-27
+own the facade/view/retry seams.
+
+Typed admission accepts valid Unicode of at most 32,000 UTF-16 code units and
+only ordinary absolute drive-rooted local paths. It performs no trimming,
+quote removal, URI/shell/environment/tilde expansion, Unicode normalization,
+wildcard expansion, or current-directory resolution. It replaces `/` with
+`\`, rejects repeated separators and empty/`.`/`..` components, and removes
+one trailing separator except at a drive root. It rejects device/extended/UNC,
+mapped remote, ADS, wildcard, forbidden Win32 filename characters (`<`, `>`,
+`"`, `|`, and U+0001..U+001F), reserved-DOS, ambiguous-suffix, NUL, surrogate,
+reparse, placeholder, file-leaf, unsupported drive type/filesystem, unusable
+volume facts, and inaccessible input. After lexical validation it classifies
+the drive and obtains usable volume identity/filesystem/maximum-component facts
+from the drive root. On an otherwise supported volume, any component whose
+UTF-16 length exceeds that fresh maximum refuses as `too-long` before component
+probing. It then no-follow probes every component and leaf without enumerating
+descendants or reading file content. Folder-mounted-volume roots are
+deliberately outside desktop M1 because their leaf is a reparse point.
+
+The desktop's `supported-volume` predicate is exact rather than a vague
+capability judgment: the native drive type is fixed or removable;
+`GetVolumeInformationW` supplies a
+nonempty identity and positive maximum-component length; and the uppercase
+filesystem name is one of `NTFS`, `REFS`, `EXFAT`, `FAT`, or `FAT32`. Feature
+capabilities such as stable file identity, ADS, hard links, and timestamp
+granularity remain independently observed and may disable/degrade only their
+own behavior. After lexical parsing, `DRIVE_REMOTE` maps to candidate state
+`remote` and reason `mapped-remote`; optical, RAM-disk, and unknown/no-root
+classes map to `unsupported-volume` / `unsupported-drive-type`. A filesystem
+outside the set is `unsupported-volume` / `unsupported-filesystem`, and
+unusable native identity or maximum-component facts are `unavailable` /
+`unusable-volume-facts`; none is collapsed into a guessed profile.
+
+Picker, typed input, and recent activation call that same workflow service and
+then create a 30-minute, 32-entry LRU, purpose-bound intent slot. Editing a
+field immediately discards the browser's slot reference; validation occurs on
+Enter, blur, paste settlement, or explicit action, not per keystroke. Every
+real start freshly repeats admission. Successful plan/inventory-session
+admission freezes its Setup row; pre-admission refusal leaves it editable.
+`start_plan` admits raw `PlanSetupInput` through the workflow and returns the
+canonical frozen `PlanSetupOptions` in task detail; JavaScript neither
+canonicalizes nor guesses filter policy.
+
+Recents come only from sync `runs` rows opened after successful preflight and
+exclude runs tied to soft-deleted mappings from all three lists. Failed,
+canceled, degraded, and unfinished runs still count after row creation.
+Queries return five distinct sources, five distinct targets, and five active
+pairs ordered by latest `started_at` then deterministic row id. Probe state
+never deletes remembered identity. Resolved paths display the current mount;
+otherwise the view uses volume identity/label plus stored volume-relative path.
+One `read_setup` call captures the bounded recent rows in one ledger snapshot,
+deduplicates their location identities, and probes each unique identity once;
+source, target, and pair views therefore cannot disagree because one mount
+changed midway through the same response.
+
+`RecentId` and `PairId` require no retained lookup map. A process-secret HMAC
+over the kind plus durable location identity (or ordered active pair identity)
+produces the prefixed 32-hex id. It is stable while that identity remains in the
+current process's top-five result and intentionally changes after restart.
+Activation opens one current ledger snapshot, rebuilds the bounded active
+five/five/five ids, requires the supplied id still be present and its mapping
+not soft-deleted, then performs fresh resolution. A stale/top-five-evicted id is
+`recent_unavailable`; it never revives an inactive mapping. Receipt lookup still
+precedes this revalidation for exact lost-response replay.
+
+The execution-evidence repository uses one read transaction. It resolves
+`runs.run_token` from the retained execution id, joins
+`operations.run_id=runs.id`, matches the retained overlay `item_id` to
+`operations.op_token`, and matches inventory on
+`runs.target_location_id` plus `operations.target_rel_path_key`; it requires
+`inventory.scope_token=runs.run_token`. Only filesystem-successful
+COPY/UPDATE/MOVE_UPDATE items are eligible; other rows are `not-applicable`.
+An eligible success without a committed successful operation is `unrecorded`.
+A committed row plus current matching copy provenance is `recorded-copy`; a
+current matching readback/verify provenance with non-null `last_verified_at`
+is `already-verified`. Missing/currently absent inventory, changed scope,
+invalidation, contradictory stat, unsuitable provenance, or duplicate
+canonical eligible targets is `superseded`.
+
+Manual exact post-copy verification requires every applicable selected
+byte-producing operation to have a filesystem-successful terminal outcome and
+no eligible-incomplete, unrecorded, or superseded row. An unrelated non-byte
+operation failure does not falsify copied-file evidence. The five exact counts
+partition applicable selected byte-producing overlay items: `ready`,
+`already_verified`, `eligible_incomplete`, `unrecorded`, and `superseded`.
+`post-settlement-state-diverged` blocks it; final-flush/finish/close degradation
+does not when every row is complete/current. The new dispatcher/history session
+identity conditionally reads/writes against the original execution
+`runs.run_token`; it opens no new ledger scope and does not reuse an earlier
+history identity. Start orders its outside work exactly: classify atomically
+first and return blocked/all-already-verified without native probing; only a
+ready subset triggers fresh target admission; after admission, classify once
+more and either freeze the still-ready rows or return the new assessment. At
+least one applicable selected
+byte-producing operation is required. Positive ready work may coexist with
+already-verified siblings and starts only the ready subset. All-already-
+verified starts no work; zero applicable items is blocked rather than
+mislabeled verified. Blocking reasons
+are exactly `post-settlement-state-diverged`, `eligible-work-incomplete`,
+`unrecorded-evidence`, `superseded-evidence`, and `no-applicable-items`, in that
+precedence when multiple facts exist. Otherwise an ordinary refresh/verify-
+current fallback may establish a new scope.
 
 ---
 
@@ -183,17 +1356,18 @@ selection and typed exclusions from `(plan, user_deselected)` and refuses a
 derived-selection mismatch before preflight. Pause/resume and history then see
 the same explanations that were reviewed.
 
-This is a **strict workflow-payload version change**, not an unversioned field
-addition. Payload v3's exact-key execution-set shape cannot represent the
-provenance, so Stage 5.5 advances the shared opaque workflow payload to v4 and
-continues to reject older versions. The plan-request half changes version with
-the shared envelope even though its body shape is unchanged. M1 has no durable
-cross-process queued payloads to migrate.
+This provenance entered through a **strict workflow-payload version change**,
+not an unversioned field addition. The shared epoch register owns the current
+and accepted workflow-payload versions; older exact shapes remain rejected.
+The plan-request half changes version with the shared envelope even when its
+body shape is unchanged. M1 has no durable cross-process queued payloads to
+migrate.
 
-This provenance is **not a fourth commitment binding**. The selection digest
-continues to authorize the exact runnable operation set; `user_deselected`
-explains why reviewed operations sit outside it and cannot grant additional
-filesystem authority.
+This provenance is **not an additional `Commitment` field**. The exact four
+fields remain `plan_fingerprint`, `selection_digest`, `committed_at`, and
+`linked_verify`; the selection digest authorizes the exact runnable operation
+set, while `user_deselected` explains why reviewed operations sit outside it
+and cannot grant additional filesystem authority.
 
 **An empty effective selection is refused, not executed.** If user deselection
 removes every otherwise selectable operation, `commit_plan` returns the
@@ -239,11 +1413,19 @@ queued preview, committing a selection other than the one on screen.
 
 **Resolution: optimistic concurrency with an explicit revision.**
 
+The shared [result-shape](#exact-shared-result-shapes), [task-authority
+ordering](#task-and-authority-ordering), and [command
+register](#exact-command-and-retry-rows) own the exact selection DTOs, lifecycle claim,
+revision precedence, commitment fields, conflict/busy results, and execution
+start row. This record owns selection semantics, the reviewing/committing/
+committed transition, and user-confirmation policy.
+
 - Selection state is owned by the **service**, keyed by plan request id, not
   by the web adapter. Ownership below the bridge is what lets execution
   validate atomically.
 - Every selection mutation supplies the **expected revision**. On match, the server
-  applies it and returns the new revision plus the current selection digest.
+  applies it and returns the new revision. The selection digest remains internal
+  commitment authority rather than a mutation response field.
   On mismatch it applies nothing and returns an explicit **conflict** with the
   current revision, and the client re-reads. Responses are never silently
   discarded — a late response either applied or reported conflict, so the
@@ -294,8 +1476,10 @@ re-read and retry; committed means retrying is wrong. The client settles
 silently into the frozen selection with its controls disabled — a late click
 made before the freeze changed nothing and warrants no error.
 
-A `committed` selection returns to `reviewing` only through a new plan, which
-under DR-BR-04 discards it entirely.
+An H2 desktop task's `committed` selection never returns to `reviewing`: a
+fresh plan creates a new task with a new default selection. The lower-level
+direct artifact-replacement guard in DR-BR-04 separately discards the replaced
+request's selection as defense in depth.
 
 **The client supplies a revision, never a digest.** JavaScript needs the
 revision for stale-view detection and nothing more. The service derives the
@@ -381,7 +1565,7 @@ Later, a destructive purge or `mirror` joins the same mechanism rather than
 adding a second one. Friction scales with irreversibility rather than being a
 flat toll, so the dialog carries weight on the rare occasion it appears.
 
-### DR-BR-04 — Deselection does not survive a replan
+### DR-BR-04 — Direct artifact replacement discards selection
 
 Operation ids are deterministic over intent
 (`deterministic_operation_id(kind, source, target, prior_target, reason)`),
@@ -391,16 +1575,22 @@ contain operations no human reviewed, and carrying the old set forward would
 let a checkbox state never applied to *this* plan participate in
 `selection_digest`.
 
-**Resolution:** any preflight rescan discrepancy invalidates the plan and
-forces re-review; any mutative refresh of a plan discards its selection while
-advancing the request's revision monotonically. The service retains recognized
+**Resolution:** any preflight rescan discrepancy invalidates execution and
+forces fresh review. The already-implemented lower-level service guard remains:
+if a direct facade/runtime caller mutatively replaces an artifact under the same
+request id, it discards that request's selection while advancing the request's
+revision monotonically. The service retains recognized
 mutation command ids as retry tombstones across replacement: a lost-response
 retry returns `NOOP` against the new empty selection rather than reapplying old
 intent. A new command carrying the old revision conflicts, including an Execute
 or destructive acknowledgement formed against the superseded artifact. The UI
-states that the selection was reset because the plan changed. Required coverage
-asserts the discard, monotonic revision, retry behavior, and mutation/replan
-race rather than trusting presentation.
+never invokes that replacement path. The H2 desktop protocol exposes no in-task
+replan command and its task plan slot is immutable after its one complete or
+refused publication; changed Setup or a fresh review starts a new task with a
+new request identity and default selection. Required lower-level coverage still
+asserts discard, monotonic revision, retry behavior, and the mutation/artifact-
+replacement race, while desktop coverage proves an old task's receipts and
+selection cannot enter the new task.
 
 ### DR-BR-05 — Four runtime methods reach the facade
 
@@ -422,6 +1612,13 @@ location, refuses foreign or empty id sets, and unions duplicate subjects before
 constructing one workflow request. The CLI path form remains exact-path scope;
 recursive CLI scope is not inferred.
 
+**Exact target binding:** the [command register](#exact-command-and-retry-rows) owns
+the id-array payloads, named revisions, receipt/claim order, and result variants;
+[location, evidence, and handoff](#location-evidence-and-handoff-policy) owns
+fresh desktop candidate admission, evidence acknowledgment, and post-copy
+classification. This record owns opaque-id resolution plus recursive scope,
+scan, recorder, and payload-module behavior.
+
 #### Command and scope contract
 
 - A row id denotes exactly one inventory subject. A folder-node id denotes that
@@ -435,8 +1632,10 @@ recursive CLI scope is not inferred.
   hashing.
 - Folder actions and row actions have distinct labels. No pre-admission
   descendant count is shown because baseline, verify, and rebaseline select
-  different eligible subsets. These pausable, cancelable operations require no
-  confirmation dialog; admitted progress reports the actual count.
+  different eligible subsets. Baseline and verify require no confirmation;
+  rebaseline requires explicit confirmation that current evidence will be
+  replaced. Every admitted operation reports the actual selected count in
+  progress.
 - Folder refresh uses `ScanScopeKind.SUBTREES` so new descendants are
   discoverable. A mixed refresh carries both `selected_paths` and
   `subtree_roots` in one session.
@@ -649,10 +1848,169 @@ because DR-BR-06's id-based location commands cannot validate ownership
 without it. Plan-scoped identity and the plan memo land with the plan tree in
 Stage 6 slice 5. Same rule, two arrival times.
 
-**Resolution:** node ids are deterministic over
-**`(tree kind, scope identity, canonical path key)`** — not over the path
-alone. Scope identity is the plan request id for plan nodes and the location
-id for inventory nodes.
+**Resolution:** preserve the shipped structural/domain-row codec exactly:
+`BLAKE2b-128(person=b"NamiSyncNodeV1")` over the ordered three strings
+`(tree_kind, scope_identity, canonical_path_key)`, each encoded as
+`u32be(UTF-8 byte length) || UTF-8 bytes`. It does not gain a new literal
+`"domain"` member. The semantic domain is still separate from informational
+leaves, and scope identity remains the plan request id for plan nodes and the
+location id for inventory nodes.
+
+One path node may own several distinct plan operations at the same canonical
+target key; planner collision truth must not be collapsed to one member. The
+path row keeps its `NamiSyncNodeV1` id and remains the sole path-index result.
+When it has one direct operation, that operation may inhabit the path row.
+When it has two or more, the path row becomes a container with null singular
+operation/overlay fields: an already-container path remains `folder`, while a
+leaf becomes `operation-group`. Every direct operation is emitted exactly once
+as an immediate noncontainer `operation` child whose id is
+`BLAKE2b-128(person=b"NamiSyncMemberV1")` over the ordered four length-prefixed
+strings `(tree_kind="plan", scope_identity, canonical_path_key,
+operation_id)`, using the same `u32be(length)||UTF-8` member encoding. Direct
+member children precede ordinary path children and preserve immutable
+`Plan.operations` order, with `operation_id` as a defensive tie-breaker.
+Their `display` is the exact final component of the operation's
+`target_rel_path`; the group uses the existing deterministic path-node display.
+The browser's accessible name combines operation kind, exact complete source
+(when present), exact complete target, and sibling position, so equal basenames
+do not become indistinguishable. Each filesystem component passes through the
+same fixed injective layout-control projection, bidi isolation, and text-only
+accessible-label sink as every other hostile filename; raw wire/search values
+remain byte-exact and no active control reaches layout or accessibility APIs.
+The ordinary literal
+case-folded display search evaluates each member independently and retains the
+group only as an ancestor of a matching member; counts, risk, selection,
+dependencies, anchors, and
+overlays count or target the operation children, never the group. The group
+rollup includes all direct members and descendants, and its checkbox selects
+all direct members independent of filter/window state. `node_id_for_path_key`
+still returns only the path/group id; a separate one-to-one operation-id index
+resolves item anchors to the singleton path row or exploded member row. The
+three personalized preimage domains are disjoint, and any digest collision is
+a structural failure rather than first-row-wins.
+
+Informational leaves use `BLAKE2b-128(person=b"NamiSyncInfoV1")` over an exact
+typed tuple codec. Each member is encoded in order as one of: null = byte
+`0x00`; string = byte `0x01 || u32be(UTF-8 byte length) || UTF-8 bytes`; or the
+nonnegative duplicate ordinal = byte `0x02 || u64be(value)`. Every string is
+already valid Unicode and within its owning field bound, and the ordinal fits
+`SafeInt`; no other member type is accepted. An inventory warning binds
+`("scan-warning","inventory",location_id,
+"inventory",warning_path_or_null,warning_code,bounded_detail_or_null,
+duplicate_ordinal)`. A plan scan notice binds
+`("scan-warning","plan",request_id,"review",null,source_or_target,
+warning_path_or_null,warning_code,bounded_detail_or_null,duplicate_ordinal)`.
+A plan preflight notice binds
+`("preflight-refusal","plan",request_id,notice_stage,
+notice_session_id_or_null,subject_side_or_null,
+refusal_path_or_null,refusal_code,operation_id_or_null,
+bounded_detail_or_null,duplicate_ordinal)`. Review-stage rows require null
+session id; execution-stage rows require their exact session id. All three codecs
+render the digest as the unchanged lowercase `node-` plus 32-hex `NodeId`.
+
+Projection occurs before identity. Source `ScanWarning.rel_path` values `None`
+and `""` both become typed null; every nonempty path remains its complete
+validated relative spelling. Preflight subject root id projects to `"source"`
+or `"target"` against the reviewed roots; a subjectless global refusal uses
+null, and a foreign root is rejected. The module-provided occurrence sequence
+and stable raw kind/stage/session/side/null-first-path/code/operation/detail
+key establish deterministic raw-fact order. In that order, empty detail and a
+complete at-most-1,024-byte detail are preserved only while the task's remaining
+65,536-byte diagnostic allowance admits the whole value; an individually
+over-limit or later nonfitting detail becomes null and records one owning
+presentation-omission occurrence at named-slot publication. Replacement computes the
+allowance while charging every still-retained old generation; replacement does
+not reclaim diagnostic bytes before its atomic swap. The collector also
+checks the applicable domain and informational row/retained-byte bounds before
+each append and returns the typed no-partial refusal before accepting the first
+excess row. Final stable
+kind/stage/session/side/null-first-path/code/operation/projected-detail ordering
+then assigns zero-based ordinals among otherwise identical projected leaves and
+derives ids. Null is a typed tuple member and the only root marker; no collidable
+string sentinel exists. Distinct details that project to null remain separate
+occurrences through their source order and final ordinals. Pages/rebuilds never
+reproject or recount any witness.
+
+The bounded collection and publication boundary is exact. Before attachment,
+the task service reserves overlap and snapshots a workflow-owned immutable
+`ReviewPublicationContext`: tree kind, the frozen domain/informational sizers
+and limits, the remaining presentation-diagnostic allowance after charging the
+still-retained replaceable slot, and any immutable baseline population retained
+from the accepted artifact. The workflow-owned collector consumes domain facts
+first and informational facts second and returns either one immutable complete
+candidate—rows, ids, indexes, rollups, exact charges, and presentation-omission
+occurrence identities together—or one `ReviewFactLimitExceeded`. It never
+returns or stages a partial candidate. Scanner/planner/inventory production
+feeds this boundary incrementally; no arbitrarily large raw graph may be built
+outside its charge.
+
+The service supplies an injected workflow-level `ReviewPublicationSink`
+defined below `interfaces` and implemented without any workflow import of
+`interfaces.web`. The sink owns at most one reservation-charged candidate for
+an exact current `(task_id,session_id,named_slot)`; duplicate, absent-owner, or
+foreign-session staging is a structural failure. Its reservation also
+precharges one fixed sideband latch for that exact intended tuple. Any rejected
+`stage()` call through an armed sink—including a rejected first call and a
+duplicate after a valid call—atomically latches private closed reason
+`stage-rejected`; no later stage can repair it. A call against no armed intended
+tuple is an out-of-band structural refusal that mutates no task and cannot be a
+workflow producer for a task terminal. On collection success the
+workflow stages the complete candidate before returning its `OperationResult`;
+on limit refusal it returns the typed refused result and stages nothing. Once a
+fresh execution preflight has passed and staged its complete set, every caught
+execution exception or cancellation that produces a terminal is normalized to
+a normal `disposition="ran"` result and retains that stage. An exception that
+escapes after any stage enters the nonretryable publication-issue disposition
+defined above: owner-exact compensation discards and releases the candidate,
+and the later real terminal is not reconciled into named task state.
+
+Under the task owner's terminal lock, successful reconciliation validates the
+owner/session/slot and atomically installs and consumes that staged candidate
+with its omission identities. It first consumes the tuple's latch;
+`stage-rejected` is always the nonretryable publication issue. Otherwise:
+
+| session / result | required sink state and publication |
+| --- | --- |
+| plan or inventory `review_fact_limit` | no stage; canonical refusal; tuple exactly `(sync-plan,plan,plan)` or `(inventory,inventory,inventory)` with either population |
+| completed plan/inventory | one complete stage, installed atomically |
+| other failed/canceled/refused plan/inventory before completion | no stage; actual summary; initial availability stays false or refresh preserves predecessor |
+| execution `review_fact_limit` | no stage; tuple exactly `(sync-execution,plan,plan)` and informational population |
+| normal fresh-preflight refusal | complete nonempty fresh-notice stage |
+| passed fresh preflight | complete stage, including empty, retained through later completed/failed/canceled execution terminal |
+| execution failure/cancellation before candidate completion | no stage; preserve predecessor fresh set |
+| ordinary integrity or manual post-copy, any terminal | no stage; replace only its summary/compact overlay |
+
+Every other tuple/population/stage combination is a structural producer fault.
+The callback follows the exact publication-issue compensation in Task and
+authority ordering, still delivers the actual dispatcher terminal, never
+rewrites the result, and never infers refusal from text. Only a transient
+callback exception before installation or structural decision retains the
+charged entry/latch for idempotent retry; nothing partial is exposed. Owner
+compensation, task destruction, close, and shutdown discard/release every
+uninstalled entry/latch, and terminal release/close/shutdown complete only when
+none remains.
+
+Initial plan/inventory have no baseline. Inventory-refresh population limits
+evaluate candidate in place of predecessor, while retention/diagnostics charge
+both until swap. Fresh execution evaluates immutable reviewed notices plus the
+candidate fresh set in place of its predecessor, again without early reclaim;
+an empty successful stage clears the predecessor. Thus result, tree, and task
+publication remain one workflow-owned attempt without importing web code.
+
+Inventory warnings attach to the deepest retained strict structural ancestor of
+their path, falling back to the inventory root when none exists or the path is
+null. Within each container, merge ordinary
+domain children and attached warnings by the complete canonical relative path
+key; a root warning uses the empty key and therefore precedes nonroot domain
+children, a domain child precedes warnings at the same key, and tied warnings
+retain their already frozen informational order. Plan notices attach directly
+below the plan root as one block after every domain child, in their frozen
+informational order, because source and target warning paths are not
+interchangeable with destination-tree paths. These total merge rules own
+pre-order, sibling positions, windows, and byte-stable memo rebuilds. Every
+informational leaf is a noncontainer. This preserves every occurrence,
+prevents collision with a domain row or another notice, and retains the fixed
+`node-` plus BLAKE2b-128 wire grammar.
 
 The scope component is not decoration. DR-BR-06 promises that a location
 command refuses an id belonging to another location, and a path-only id makes
@@ -669,8 +2027,21 @@ request id — and it is dropped by `drop_plan`. The memo holds *structure
 only*; selection outcomes overlay per request, since those change with every
 preview. Inventory scope is not immutable and is handled by DR-BR-16.
 
-They remain opaque in the sense DR-M1-16 requires: the client cannot
-construct one from a path, and the server resolves it through a tree it owns.
+They remain opaque in the sense DR-M1-16 requires: the client treats the fixed
+digest spelling as an indivisible id rather than deriving path authority from
+it, and the server resolves every supplied id through the exact scoped tree it
+owns. Knowledge or construction of a spelling grants no authority.
+
+`build_node_tree` and its canonical path index remain structural/domain-only
+and one-to-one. The plan/inventory projection interleaves informational leaves
+after building that tree, maintains a separate NodeId-only notice index, and
+recomputes the projected pre-order/sibling frame. Notice ids never enter
+`node_id_for_path_key`, domain subtree membership, selection, or action-scope
+resolution; this permits repeated same-path warnings/refusals without
+overwriting domain authority. Selection, collapse, dependency detail, and every
+inventory action naming an informational leaf return fixed
+`row_not_actionable` before outside work; tagged node-anchor navigation alone
+may resolve it.
 
 **Synthetic ids never become operation ids.** Folder nodes come in three
 flavors — a real `MKDIR`, a real directory-cleanup `DELETE`, or pure
@@ -719,7 +2090,12 @@ sitting alongside it.
 
 **Resolution: annotate, do not reclassify.** The destination folder node
 carries the move annotation and its rollup; a dimmed, non-interactive row at
-the old location points to it, and the two highlight together.
+the old location points to it, and the two highlight together. The exact
+projection expresses that relationship as symmetric `move_peer_id` values on
+the destination folder and old-location ghost/existing annotated folder. A
+materialized peer highlights directly; activating an off-window peer calls the
+tagged node form of `get_plan_anchor`, then requests the returned window. The
+browser never derives a peer from paths.
 
 - **The group is the folder node, not a new selection unit.** A destination
   folder may receive both moved files and genuinely new copies in the same
@@ -736,6 +2112,16 @@ the old location points to it, and the two highlight together.
 - **Nested moves suppress the inner ghost.** If a move's old path falls under
   another move's old path, the outer annotation already explains it and the
   inner would be orphaned at a position that no longer exists.
+- **Any reused endpoint suppresses inferred grouping.** Compare each move's
+  prior-target and target by canonical components and strip their longest
+  nonempty common suffix; without one, no group is inferred. Coalesce all
+  members with the same ordered canonical remaining-prefix pair before nested
+  suppression, so an ordinary multi-file folder move remains one edge and the
+  directed candidate graph has at most one edge per ordered endpoint pair.
+  Emit a pair only when one non-self edge is the sole incident candidate at
+  both endpoints. Many-to-one convergence, one-to-many split, chains, and
+  reverse/swap candidates suppress every edge touching the reused endpoint and
+  render their literal operations rather than choosing a false scalar peer.
 - **No "renamed" label.** The planner never asserts a rename; the grouping is
   inferred from path arithmetic over move operations, and enough unrelated
   files moving between two directories would be labeled falsely. The kind
@@ -753,9 +2139,11 @@ the old location points to it, and the two highlight together.
 
 ### DR-BR-14 — Progress carries item identity, never a display path
 
-This decision records the active version-4 Progress bridge contract. The
-shared field meanings, reporter transitions, authority order, and Gap behavior
-are owned by `ARCHITECTURE.md` §2.3.
+The accepted Stage 6 target is exact core event v5. The source-backed runtime
+remains v4 only until protocol checkpoint 3; that compatibility machinery is
+then deleted rather than exposed as a legacy desktop mode. Shared field
+meanings, reporter transitions, authority order, and Gap behavior are owned by
+`ARCHITECTURE.md` §§2.3 and 2.7.
 
 Follow mode anchors on the current operation, but before this extraction
 `Progress` carried only `items_done`, `items_total`, `bytes_done`,
@@ -763,7 +2151,7 @@ Follow mode anchors on the current operation, but before this extraction
 Mapping a running operation to a node would require joining on a display
 path — forbidden, ambiguous under escaping, and wrong.
 
-**Resolution:** The exact version-4 `Progress` body carries required `phase`,
+**Resolution:** The exact version-5 `Progress` body carries required `phase`,
 the aggregate/path fields, optional `item_id` and `item_type`, optional opaque
 `item_attempt_id`, and optional `item_bytes_done` and `item_bytes_total` for an
 active byte-stream attempt. This mirrors the nominal `ResultItem` vocabulary
@@ -784,16 +2172,17 @@ use `operation` even though their reliable settlement remains an
 
 An attempt id is either absent or exactly 32 lowercase hexadecimal characters.
 It requires item identity. The byte fields are likewise optional as a pair,
-require the attempt id, use exact non-Boolean JavaScript-safe nonnegative
-integers, and reject `done > total`. Identity may exist without an attempt
-before stream entry or for non-byte work. An attempt without byte counters is
-the active indeterminate shape. Each byte-pipeline entry mints a fresh opaque
-attempt id; retry or reconstructed resume may restart at zero only under that
-new id, while retained post-byte continuations do not mint another. If raw
-work exceeds the admitted item total, later snapshots preserve item and attempt
-identity but omit both counters. Aggregate executor bytes remain bounded by
-reviewed content and retain their monotonic high-water; verifier aggregates
-instead expand to count all physical read work.
+require the attempt id, use signed-64-domain integers internally and canonical
+decimal `Scalar64` strings on the bridge, and reject `done > total`. Identity
+may exist without an attempt before stream entry or for non-byte work. An
+attempt without byte counters is the active indeterminate shape. Each
+byte-pipeline entry mints a fresh opaque attempt id; retry or reconstructed
+resume may restart at zero only under that new id, while retained post-byte
+continuations do not mint another. If raw work would exceed the admitted
+signed-64 item or aggregate total, admission refuses before execution rather
+than permitting a later overshoot. Aggregate executor bytes retain their
+monotonic high-water; verifier aggregates count all admitted physical read
+work.
 
 A settled item is named by its reliable outcome, not by later lossy progress:
 later snapshots clear item, attempt, and item-byte fields. `current_path`
@@ -804,35 +2193,17 @@ reliable unwind settlement while clearing nominal item state and
 `current_path`. Verifier pause likewise force-emits its live reporter state.
 Clients must never reinterpret a retained display path as active identity.
 
-**Wire disposition:** core event-envelope v4 is an independent nested version
-boundary. Serialization and the browser require the exact eleven-key Progress
-body; missing or extra fields, invalid cross-field relationships, coercive
-numbers, and unsafe integers are rejected. New EventHub output is v4. The core
-codec retains v3 decoding only for persisted reliable history and refuses v3
-Progress because `HistoryObserver` never admitted lossy Progress.
+**Exact target binding:** the shared [epoch, scalar, and recording
+register](#exact-epochs-scalar-classes-and-recording-views) owns the v5 envelope
+cutover, `SessionEventView`/`TerminalSummary` shapes, payload epochs, strict
+decode, signed-64 projection, and removal of v3/v4 compatibility. This record
+owns why progress carries item identity and the reporter transitions above; it
+does not restate that wire table.
 
-`SessionEventView` carries the originating `Envelope.schema_version` through
-the bridge explicitly. Its exact fields are `session_id`, `sequence`, `at`,
-`schema_version`, `body_type`, and `body`, and JavaScript requires the nested
-version to be core event v4 before validating the exact body. The JavaScript
-constant is named `LIVE_CORE_EVENT_SCHEMA_VERSION` because this equality is a
-live-drain compatibility guard, not a rule for durable history. A
-`HistoryEventView` instead carries its row's supported persisted core version,
-which may be v3 or v4; future history rendering must version-dispatch those
-canonical rows and must never pass them to `validateLiveSessionEvent`. The
-containing desktop bridge command/response envelope remains v1, strict
-workflow payload remains v5, and history database, UI-state, shell, and page
-schema versions do not change. Thus v4 remains visible at the exact-shape
-compatibility boundary instead of disappearing inside an otherwise
-unversioned browser event.
-
-The landed protocol adds no event kind, dispatcher delivery policy, history
-admission, CLI item rendering, or database field. Slice 5 rendering remains a
-separate consumer of the versioned identity and attempt state.
-
-The future Slice 5 validated projection enriches `item_id` into an ancestor
-node-id chain. **Never join on `current_path`**, which remains display-only
-telemetry.
+The Slice 5 validated projection resolves `item_id` through the tagged
+`get_plan_anchor` read. The exact event body is not enriched: the command
+derives the ancestor node-id chain and returns its resolved node/index against
+the current view. **Never join on `current_path`**, which remains display-only telemetry.
 
 ### DR-BR-15 — Flattened windows over a stateless visible sequence
 
@@ -841,15 +2212,26 @@ canonical tree projection plus collapsed ids, literal search, and domain-owned
 filters. Clients request exact `[offset, limit]` windows; the DOM never owns or
 reconstructs the hierarchy.
 
+The shared [result-shape register](#exact-shared-result-shapes) owns exact
+`PlanView`/`InventoryView`, row/frame, window, revision, count, rollup, and
+overlay fields. This record owns visible-sequence derivation and renderer
+request-generation behavior.
+
 #### Sequence contract
 
 - Plan and inventory use the same pure flatten/window shape. One canonical
   projection exists per open view; changing view parameters replaces the
   derived sequence rather than retaining a parameter-keyed cache family.
-- A folder is visible only when it matches directly or retains a visible
+- Every returned product row includes the generic renderer's exact flattened
+  `TreeRowFrame`: `node_id`, global visible/parent/first-child indexes,
+  filtered sibling position/set size, `depth`, `is_container`, and `expanded`,
+  in addition to its product-domain fields.
+- A folder or plan operation-group is visible only when it matches directly or retains a visible
   descendant. Synthetic-only ancestor chains disappear with the annotation they
-  hosted. Folder rollups describe the unfiltered folder, while filter chips
-  describe the current view.
+  hosted. Folder and operation-group rollups describe their view-independent
+  operation/domain population,
+  while each filter chip reports its search-matching facet population before
+  the active filter subset, collapse, or acknowledged hiding.
 - A visible container with a retained child reports `expanded=true|false`; a
   leaf, empty root, or direct match with all descendants filtered reports
   `expanded=null` and exposes no disclosure.
@@ -864,6 +2246,15 @@ reconstructs the hierarchy.
   owner applies a fixed 150 ms trailing debounce, advances generation on every
   search/collapse/filter intent, sends only the final burst value, and ignores
   stale success or failure while leaving the current valid window visible.
+  Task-list/rail and task-detail/panel response owners use the same local
+  generation rule. A `publication_issue` observation advances those owners and its exact session-
+  kind-mapped tree owner before cache disposal/refetch, so an already returned
+  native snapshot cannot commit after the fault merely because server view and
+  result revisions intentionally stayed unchanged.
+  An accepted `closing` observation advances task-list/rail, task-detail/panel,
+  and every mounted plan/inventory tree owner before pending-renderer disposal;
+  the final `closed` observation advances them again before task removal. A DTO
+  detached before either retirement seal is therefore inert before payload read.
 
 #### Renderer contract
 
@@ -914,6 +2305,11 @@ under [Complete and harden the accessible desktop foundation](../CHANGELOG.md#co
 **Binding rule.** Windowing must bound repeated query, decode, allocation, and
 serialization work, not only response bytes.
 
+The shared [result-shape](#exact-shared-result-shapes) and [task-authority
+registers](#task-and-authority-ordering) own byte-aware window limits,
+generation pins, projection retention/refusal, and replacement lifetime. This
+record owns the work-bounding placement and cache topology.
+
 - Immutable plan trees are memoized per request id.
 - Inventory uses one slim all-row structure query per projection and fetches
   full snapshots only for the visible window's row ids.
@@ -942,8 +2338,10 @@ objects identified by opaque `view_id`.
   independent projections without importing adapter task identity into the
   service.
 - A view change, task-owned facade-artifact release, or service shutdown releases
-  the projection. Background views remain cached under a six-live-projection
-  least-recently-used cap. Plan-tree memos do not share this cap.
+  the projection after its last read pin. Background views remain cached under a
+  six-charged-projection least-recently-used cap. Only an unpinned generation is
+  evictable; a seventh build with all six pinned returns `retention_full`. Plan-
+  tree memos do not share this cap.
 - Rebuilds happen outside the service guard and swap immutable references inside
   it. The LRU map and each per-view read-modify-write patch use that same
   service-side synchronization. The adapter `TaskState` lock guards adapter
@@ -953,13 +2351,15 @@ objects identified by opaque `view_id`.
   generations cannot combine. This is an in-process projection revision, not
   the rejected database snapshot token of DR-BR-20.
 - Acknowledge/restore uses pure
-  `patch_row(projection, row_id, ...) -> projection` in
+  `patch_row(projection, node_id, ...) -> projection` in
   `workflows/node_tree.py`. It shallow-copies the node array, shares unchanged
   nodes and indexes, replaces the one workflow-constructed node, bumps revision,
   and stores atomically. Concurrent patches cannot lose one another; a patch
   against an obsolete base is dropped.
 - A session terminal that may affect many rows forces a full rebuild. Rollup
-  changes, if later introduced, update only the ancestor chain.
+  changes from a future row-local domain patch update only the exact ancestor
+  chain. Acknowledgment is deliberately absent from `InventoryRollup`, so its
+  patch remains one node and changes only the visible sequence/counts.
 - Eviction and causal invalidation share the stale-revision path. An in-flight
   request may finish against its immutable reference; the next request rebuilds
   or refuses stale state.
@@ -988,9 +2388,9 @@ windowing.
   consumes those pages. `history_events_run_item_order_idx`, the composite
   primary key, and `history_events_run_item_aggregate_idx` serve the bounded
   seeks, pinned by query-plan regressions.
-- Reset-only history v4 introduced this contract and receipt-aware v5 retains
-  it. Durable reliable pages repair live gaps; lossy progress gaps remain valid,
-  and finalized summaries supply terminal truth.
+- The shared epoch register owns current and accepted history schemas. Durable
+  reliable pages repair live gaps; lossy progress gaps remain valid, and
+  finalized summaries supply terminal truth.
 
 > **Rationale (non-normative).**
 >
@@ -1063,19 +2463,30 @@ operation is outside the materialized window, none of its ancestors need be in
 the DOM; the client could neither scroll to it nor compute the distance shown
 by the follow pill.
 
-**Resolution:** progress carries the ancestor node-id chain derived from
-`item_id` (DR-BR-14), ordered deepest node first through the root, and an
-anchor lookup resolves that chain against the same
-canonical projection and active collapse/filter/search parameters as
-DR-BR-15. It returns the deepest visible ancestor-or-self, its visible-sequence
-index, and the projection revision where applicable. The client can then
-request the window containing that index. The lookup is presentation-only and
-creates no second tree or persistent filtered projection.
-
-The ordinary window response may carry this anchor metadata when it is already
-doing the traversal; an anchor-only request serves progress that moves outside
-the current window. Both paths call the same pure visible-sequence resolver so
-their indices cannot disagree.
+**Resolution:** the exact Progress body carries only the opaque `item_id` and
+its lookup namespace (DR-BR-14). The browser submits that identity through the
+tagged item variant of `get_plan_anchor`; the service derives the candidate
+node followed by its strict ancestor chain, ordered parent first through the
+root, and resolves it
+against the same canonical projection and active collapse/filter/search
+parameters as DR-BR-15 at the supplied result revision; installation or
+clearing of a fresh execution-preflight notice set changes indexes, advances
+that revision, and makes the lookup return conflict with current `PlanView`.
+If current search/filters remove the subject and every ancestor, the command
+returns exact `not-visible` with the current `PlanView`; it does not mutate view
+state or invent a root anchor. The browser keeps follow available and offers an
+explicit clear-search/filters action through ordinary revisioned
+`update_plan_view`. Otherwise the exact response returns the deepest visible
+ancestor-or-self separately as `node_id`, its visible-sequence index, and that
+node's complete bounded strict-ancestor `ancestor_ids` chain ordered parent
+first through root. The node is not repeated in the array; a maximum-depth
+singleton path row has at most 16,384 strict ancestors when the root is
+included, and an exploded operation member has its path/group parent plus that
+chain, for a maximum of 16,385. The client can then request the window containing that
+index. This presentation-only lookup creates no second tree or persistent
+filtered projection. `PlanWindow` carries no hidden anchor metadata, so the
+command table remains the sole wire shape and every lookup uses the same pure
+visible-sequence resolver.
 
 Follow mode is on by default and any user scroll that moves the target out of
 view turns it off. It re-enables only on explicit action — a persistent pill
@@ -1105,10 +2516,10 @@ no cross-process visibility (DR-M1-08). A token would invent partial
 cross-process awareness the milestone declined to build.
 
 **Resolution:** re-read on view open, on observed session terminal for that
-location, and after an acknowledge or restore. Rendered rows key on `row_id`,
+location, and after an acknowledge or restore. Rendered rows key on `node_id`,
 so an externally torn page degrades to a missing or duplicated row that the
 next re-read corrects. Severity is low regardless: nothing in this view acts
-on display position — acknowledge and restore are row-id keyed, and
+on display position — acknowledge and restore are node-id keyed, and
 verify-selected resolves ids to paths server-side (DR-BR-06). The
 cross-process limit is documented alongside the task rail's existing one.
 
@@ -1116,17 +2527,20 @@ cross-process limit is documented alongside the task rail's existing one.
 rescanning would be the scheduled maintenance DR-M1-20 defers. Staleness is
 reported through `list_stale_inventory`, not silently repaired.
 
-**Acknowledgment hides, and is not counted.** The purpose of acknowledging a
+**Acknowledgment hides and leaves the unacknowledged-missing facet.** The purpose of acknowledging a
 missing row is to make "missing" go away, so an acknowledged row leaves the
 default view rather than sitting in it wearing a badge. Acknowledgment
-participates in **no folder rollup** — which is what reduces the projection
-patch in DR-BR-16.1 to a single node with no ancestor walk.
+participates in **no folder rollup** — the row remains a missing subject in
+rollup truth — which is what reduces the projection patch in DR-BR-16.1 to a
+single node with no ancestor walk. It remains in inventory `all` and moves from
+the unacknowledged `missing` facet into the `acknowledged` facet.
 
 Four consequences follow:
 
-- **Hidden by default is still a filter.** "Hide acknowledged" is simply the
-  inventory tree's default view parameter, applied server-side through
-  DR-BR-15 like any other. It is the one filter that starts on.
+- **Hidden by default is still view state.** `hide_acknowledged` is the
+  inventory tree's separate default-true Boolean, applied server-side beside
+  the ordered positive filter array through DR-BR-15. The positive
+  `acknowledged` filter is valid only when that Boolean is false.
 - **Counts stay honest.** Because the default view is a filtered view, the
   acknowledged chip carries its own count. The hidden population is always
   visible even when its rows are not, and the missing chip reports only what
@@ -1156,9 +2570,17 @@ but unexecuted plan has no live session at all**, so the rail cannot be
 derived purely from `list_sessions()` — session-derived fields refresh from
 it, but task identity is the adapter's.
 
-`SessionRecordView.state` and `StateChanged` already carry the core `pausing`
-value; Stage 6 must render it as **Pausing…**, not collapse it into `running` or
-prematurely show `paused`. Durable executor retries can remain in that state
+**Exact target binding:** [shared result shapes](#exact-shared-result-shapes)
+define `TaskSummary`, `TaskDetail`, the five named result slots, and compact
+overlay presence. [Task and authority ordering](#task-and-authority-ordering)
+defines one-current-session attachment, terminal reconciliation, result
+revision, retained receipts, release tombstones, and the task-close boundary.
+This record owns the process-live task/session distinction and its presentation
+consequences.
+
+`SessionRecordView.state` and `StateChanged` carry the core `pausing` value;
+Stage 6 renders it as **Pausing…**, not `running` or prematurely `paused`.
+Durable executor retries can remain in that state
 while one already-staged operation settles. Repeat pause/resume controls are
 disabled during the drain, cancellation remains available, and either `paused`
 or a legal terminal state may follow. This is presentation of an existing
@@ -1174,15 +2596,12 @@ session while retaining the task id, request id, start receipt, presentation
 state, capacity slot, and plan artifact. Only an explicit `close_task` drops the
 plan and removes the adapter task.
 
-The full terminal result is not ordinary transport custody. One completion can
-simultaneously exist as a core `Terminal(OperationResult)`, its adapter event
-view, the terminal `SessionRecordView`, the serialized response, and a browser
-retry/presentation value. BR-G-45 owns that complete artifact set and the
-aggregate policy for completed tasks. Until production enforces that policy and
-its checked maxima prove an analytical bound for every enforceable term over the
-complete admitted domain, with separate authority for any irreducible residual,
-neither the 48-task count bound nor successful session release is evidence that
-retained result bytes are bounded acceptably.
+The shared register's item-free `TerminalSummary` and compact-overlay rules keep
+the full `OperationResult` only in the dispatcher terminal record through one
+reconciliation and exact-session release. BR-G-45 owns the complete task,
+transient completion, native-return, browser-window, and projection-cache
+artifact graph; neither the task-count bound nor successful session release
+alone proves byte containment.
 
 For a compound execute-then-verify run, the two phases are one session
 producing one result with ordered `PhaseResultView`s. The rail summarizes the
@@ -1196,30 +2615,36 @@ reads `phase="verify"`. Phase counters are never summed (XV-7).
 therefore a sequence, not a call.
 
 **Resolution:** the adapter owns the sequence, and the facade keeps its
-precondition documented rather than growing a control policy.
+precondition documented rather than growing a control policy. The exact
+`close_task` row, dedicated receipt cell, retirement epoch, ordinary/cleanup
+leases, terminal-callback reservation, final seal, release/close tombstones,
+and replay results are centralized in [task and authority
+ordering](#task-and-authority-ordering) and the [command
+register](#exact-command-and-retry-rows).
 
-0. **Ask first.** Closing a queued or running task requires explicit
-   confirmation naming what is being stopped. A misclick — or a cat — must
-   not destroy a long-running transfer, and cancellation is not free:
-   the executor stops mid-plan and the user replans from the filesystem's new
-   state. Closing an already-terminal card is unconfirmed, since nothing is
-   lost. The confirmation is GUI-owned; the CLI does not need it, being
-   already resistant to accidental input, but nothing prevents it adopting the
-   same prompt.
+**Ask first.** Closing a queued or running task requires explicit confirmation
+naming what is being stopped. A misclick — or a cat — must not destroy a long-
+running transfer, and cancellation is not free: the executor stops mid-plan
+and the user replans from the filesystem's new state. Closing an already-
+terminal card is unconfirmed, since nothing is lost. The confirmation is GUI-
+owned; the CLI does not need it, being already resistant to accidental input,
+but nothing prevents it adopting the same prompt.
 
-   This is not in tension with DR-BR-03 removing the execute confirmation.
-   Starting execution begins recoverable work the user can pause or cancel;
-   closing a running task destroys work already in progress, and no later
-   control undoes it. The prompt appears where the action is irreversible,
-   which is the same rule in both places.
-1. Request the service-supported control (cancel).
-2. The card enters a visible **closing** state and remains on the rail.
-3. **On the terminal record — not the terminal event** — acknowledge browser
-   presentation by releasing the observation and session. Keep the task and its
-   reviewed artifact until explicit task close, which invokes the task-owned
-   facade artifact release and drops the adapter's presentation projections.
+This is not in tension with DR-BR-03 removing the execute confirmation.
+Starting execution begins recoverable work the user can pause or cancel;
+closing a running task destroys work already in progress, and no later control
+undoes it. The prompt appears where the action is irreversible, which is the
+same rule in both places.
+After confirmation the accepted owner enters visible **closing**, requests the
+service-supported cancel, and remains on the rail until the exact terminal
+record is reconciled and the shared close barrier retires all task authority.
+The terminal record—not the terminal event—is the cleanup boundary. Ordinary
+terminal presentation may release only the exact session while retaining the
+task; accepted task close additionally releases the task-owned facade artifact,
+presentation projections, receipts, and other roots after its final lease
+drain.
 
-Step 3's distinction is a real race, not pedantry. `SessionObserver` delivers
+That terminal-record distinction is a real race, not pedantry. `SessionObserver` delivers
 the `Terminal` event to the sink and only *afterward* calls
 `dispatcher.get()` to build the terminal `SessionRecordView`. A client that
 drains the event and immediately calls `close_session` removes the dispatcher
@@ -1270,8 +2695,16 @@ teardown ownership, not raw WebMessage thread creation. The same admission
 condition closes the race between admitted handler entry and teardown; no
 bridge-global lock spans a command handler.
 
-The ceiling is sized for one ordinary long poll on each of the 48 retained
-tasks plus 16 shared transient-command positions. Those positions are not
+**Exact target binding:** [task and authority
+ordering](#task-and-authority-ordering) owns atomic live-task lookup,
+publication/retirement classification, claims, ordinary/cleanup leases,
+owner-callback reservations, epochs, generation pins, stale-handler
+compensation, retained-memory reservation, and final close. This record owns
+why concurrent host callbacks require those mechanisms and the queue,
+reinjection, origin, and shutdown rules local to the adapter.
+
+The ceiling is sized for one ordinary long poll per allowed retained task plus
+16 shared transient-command positions. Those positions are not
 partitioned or reserved: duplicate/superseding drains and other concurrent
 calls can consume them, so saturation still produces the bounded, retryable
 `bridge_busy` result rather than a per-command availability guarantee.
@@ -1367,20 +2800,14 @@ is protected only for what it already owns (`_plans` is lock-guarded).
   `CoreWebView2.Source` remains trusted. This lock is bridge-global and never
   nests inside a `TaskState` or service lock.
 
-**Shape:** one `TaskState` per adapter-owned `task-<32-lowercase-hex>` holding a
-64-update queue, observation generation, drain claim, and view state, with a
-single lock/condition. Progress is the only replaceable member; reliable event
-and record updates are ordered and backpressure at capacity. **Never hold a task
-lock across a facade call, JSON encoding, or other I/O.** DR-BR-11's
-deterministic ids remove what would otherwise have been a node-table lock site,
-since a concurrent rebuild produces identical output.
-
-Transport-memory accounting follows those custody roots rather than process
-ownership: dispatcher replay deques, subscriber deques, and adapter task queues
-form one identity-deduplicated graph. Terminal-result subgraphs reachable from
-queue slots are reported separately under BR-G-45, never omitted and never
-double-charged. Whole-process and renderer/runtime growth belongs only to
-shell-owned SH-G-15.
+The queue substructure of each shared-register `TaskState` remains one bounded
+64-update queue, observation generation, and drain claim under one condition;
+progress alone is replaceable, while reliable events and records remain ordered
+and backpressured. **Never hold a task lock across a facade call, JSON encoding,
+or other I/O.** DR-BR-11's deterministic ids avoid a node-table lock site.
+BR-G-45 measures the identity-deduplicated replay/subscriber/task-queue graph
+and terminal subgraphs; shell-owned SH-G-15 alone measures whole-process and
+renderer/runtime growth.
 
 ---
 
@@ -1578,10 +3005,14 @@ the same resolved intent returns its retained receipt and different resolved
 intent under that command id returns `command_conflict`. A JavaScript deadline
 does not cancel an already admitted Python handler.
 
-**The native folder picker is the only path ingress.** Only it may create a
-server-side slot. A slot retains the real path, `source` or `target` purpose,
-inert display text, fixed monotonic expiry 30 minutes after insertion, and LRU
-recency. Lookup is nonconsuming and updates recency without extending expiry.
+**Slot path ingress is versioned.** In the currently implemented pre-checkpoint-
+6 Slice 2 mapping, only the native picker can create a server-side slot. The
+accepted checkpoint-6 target replaces that narrow rule with picker, typed, and
+remembered-location inputs through the one workflow admission service and adds
+the `inventory` purpose; the exact target rows and slot rules above are the
+authority for new work. A current Slice 2 slot retains the real path, `source`
+or `target` purpose, inert display text, fixed monotonic expiry 30 minutes after
+insertion, and LRU recency. Lookup is nonconsuming and updates recency without extending expiry.
 Expired entries are swept before insertion or lookup; at most 32 unexpired
 entries exist, and an insertion at capacity evicts exactly the least-recently
 used entry, with slot id breaking a timestamp tie. `start_plan` resolves and
@@ -1736,21 +3167,26 @@ Unknown/closed or mismatched task/session authority is
 `task_unavailable`; a competing observation attach/recovery generation is
 `observation_conflict`. Their fixed messages are defined by the table above.
 
-The adapter retains at most 48 tasks. After a terminal record has been returned
-by a drain, `release_terminal_session` stepwise unsubscribes and closes the
-session, then refuses further drain/recovery while retaining the plan, task,
-start receipt, and capacity slot. `close_task` completes either unfinished step,
-drops the plan, and alone removes the task and start receipt. A 48-entry
-close-receipt LRU also proves success to a delayed release retry. Browser drain,
-session-release, and explicit-close recovery use finite delayed schedules and
-become visibly retryable when their budget is exhausted; no uncertainty path
-implicitly disposes of the task.
+The currently active Slice 3 adapter uses the same retained-task count ceiling.
+After a terminal
+record has been returned by a drain, `release_terminal_session` stepwise
+unsubscribes and closes the session, then refuses further drain/recovery while
+retaining the plan, task, start receipt, and capacity slot. `close_task`
+completes either unfinished step, drops the plan, and alone removes the task and
+start receipt. Its current 48-entry close-receipt LRU proves success to a delayed
+retry. Browser drain, session-release, and explicit-close recovery use finite
+delayed schedules and become visibly retryable when their budget is exhausted;
+no uncertainty path implicitly disposes of the task.
 
-BR-G-45 remains open on which terminal-result representation, if any, survives
-successful presentation and session release. The eventual aggregate policy
-must preserve callback/release retry truth, reviewed-plan authority, and a
-truthful fallback when durable history is degraded; it may not treat the
-48-task count ceiling as a byte ceiling or clear the only exact result early.
+Checkpoint 4 retains that count cap but replaces the current close LRU
+with the globally charged, non-evictable five-minute release and close
+tombstones defined above. It also closes the BR-G-45 representation decision:
+the dispatcher terminal record alone temporarily owns the full result through
+terminal reconciliation; the task then retains the compact summary, frozen
+overlays, and reviewed artifacts until explicit close, while history retains
+the attempt independently. The mechanically derived task/transient byte budget,
+not the count cap, enforces that target. Its implementation and evidence remain
+open until checkpoints 4 and 11; the contract itself is no longer undecided.
 
 Task start is single-flight per `(command_id, resolved source, resolved target,
 deletion policy)`. One provisional adapter task exists while the facade call is
@@ -1817,10 +3253,10 @@ automatic task close, and task/listener/timer cleanup.
 
 **`ui-state.json` carries cosmetics only.** `M1_PLAN.md` DR-M1-03 established it
 as the GUI-owned counterpart to `db/settings.json`. The ratified strict v1 schema
-contains only the appearance override; later recents, window geometry, column
-and sort state, active filter chips, and file-list treegrid state require
-explicit typed section additions whose durable keys are ratified by their
-owning slice. It may **not** hold a plan
+contains only the appearance override; later window geometry, column and sort
+state, active filter chips, and file-list treegrid state require explicit typed
+section additions whose durable keys are ratified by their owning slice.
+Ledger-derived recents never enter UI state. It may **not** hold a plan
 request id, a session id, a task identity, a selection, a `view_id`, or a
 projection revision. The distinction is not stylistic — anything in the
 second list would be a durable session store arriving through the back door,
@@ -2014,119 +3450,47 @@ does not cover it.
 ### DR-BR-27 — Receipted commands are idempotent; revisioned-view mutations are guarded
 
 Selection needs both properties in DR-BR-03, but they are not one universal
-mutation schema. The gap is still not cosmetic:
-`acknowledge_inventory` and `restore_inventory` already take a caller-supplied
-`command_id` that the recorder uses as its receipt key, and DR-BR-05 lifted them
-as "plain passthroughs" without saying who mints it. A bridge that generates a
-fresh command id per attempt defeats the receipt the recorder was built around.
+mutation schema. The [exact command register](#exact-command-and-retry-rows) declares
+receipt class, retry policy, payload/result variants, and revision order per
+row; [task and authority ordering](#task-and-authority-ordering) owns receipt
+capacity, lookup precedence, claims, leases, publication, and retirement.
 
-**Each command row declares the two concerns independently.** A receipted user
-gesture carries an idempotency key that survives uncertain delivery. A command
-formed against a revisioned server view also carries that exact revision. Thus
-Slice 2's session-creating `start_plan` requires `command_id` but no revision,
-while `pick_folder` requires neither; later selection and inventory mutations
-carry the revision required by their owning view contract. The bridge never
-invents a blanket revision field for a mutation that was not formed against a
-revisioned view.
+**Resolution: keep retry identity and stale-view authority orthogonal.**
 
-- **Idempotency key.** For every receipted command, `command_id` is minted
-  **once per user gesture** by the adapter and reused verbatim across every
-  retry of that gesture. It is not regenerated on resend, and it is not minted
-  per dispatch, so a double-click or resend collapses to one applied change.
+- A receipted user gesture mints one `command_id` and reuses it byte-for-byte
+  after delivery uncertainty. Changed intent under that id is
+  `command_conflict`; an unrecognized id alone proceeds to mutable authority
+  checks and outside work. Interactive picker, reads, drain recovery, and exact-
+  session release use their distinct non-M retry rules from the register.
+- Receipt storage follows the command family. Pre-task Setup uses the bounded
+  TTL table and unpublished start claim; successful task creation transfers the
+  start receipt and its global route into task-owned capacity. Existing-task M
+  commands retain their exact effect until task close, including the original
+  started `session_id` after terminal-session release or a successor attach.
+  The reserved close cell becomes the global close tombstone only after lease
+  drain. Exact-session release instead uses its pre-reserved bounded tombstone.
+  Recorder receipts remain subordinate durable idempotency for the exact domain
+  write; they do not replace the bridge receipt or its task lifetime.
+- Replay means *do not repeat the effect*, not necessarily *return the original
+  bytes*. The shared replay table defines each current projection: an earlier
+  applied view/visibility effect becomes `noop`, a started session retains its
+  original identity plus current task detail, and accepted close reports current
+  `closing` then the exact tombstoned `closed` object.
+- A command formed against selection, lifecycle, view-state, projection, or
+  result authority carries only the revisions named by its row. Receipt lookup
+  precedes those guards. For a new command the guard and any recursive folder
+  expansion/frozen selection are one owning-lock decision, so the admitted
+  scope cannot differ from what the checked revision named. Conflict is a typed
+  no-effect result; the browser rehydrates rather than guessing or retrying
+  stale intent.
+- `dispatch` origin authorization is entry-only. Navigation or bridge
+  reinjection after admission cannot roll back committed work; uncertain
+  delivery reuses the same command id and the browser request-generation rules
+  prevent a late response from regaining UI authority.
 
-  **One mechanism cannot supply this property.** Three separate obstacles exist
-  in the current tree:
-
-  1. **The receipt reaches one command family.** `command_id` appears only on
-     `InventoryVisibilityCommand`, and only `change_inventory_visibility` keys on
-     it. Every session-creating command — refresh, baseline, verify, rebaseline,
-     plan, execute — mints `request_id = uuid4().hex` inside the facade per
-     dispatch, and `run_inventory` derives its scope token from that. A retried
-     gesture therefore mints a fresh identity and submits a **second session**.
-     Nothing dedupes, and no receipt is consulted.
-  2. **The receipt cannot express a retry across two real executions.**
-     `_payload_hash` is recursive over every dataclass field, and both
-     `InventoryVisibilityCommand` and `InventoryCommand` carry a timestamp the
-     caller does not supply (`changed_at`, `observed_at`); `InventoryCommand` also
-     carries the whole `ScanResult`. A genuine retry therefore hashes differently
-     under the same key, which raises `TokenConflictError` rather than returning
-     `NOOP`. The receipt is a crash-and-transaction guard, not a retry mechanism.
-  3. **One gesture is many calls.** `acknowledge_inventory` and
-     `restore_inventory` take one row per call while the key is minted per
-     gesture, and the receipt key is `command_id` alone. Ten rows under one
-     `command_id` collide on the second row.
-
-  **Resolution: split by mechanism.** Acknowledge/restore remain
-  recorder-keyed, using a per-(gesture, row) derived key and one
-  caller-supplied timestamp reused byte-identically on retry. Every receipted
-  facade call that mints an identity and submits a session instead uses a
-  service-held
-  `command_id → (request_id, session_id)` receipt and returns the existing pair
-  on a repeat. That receipt lives exactly as long as the retained session:
-  `close_session` removes its reverse mapping and service shutdown clears the
-  remainder, so retry safety does not become an unbounded process-lifetime map.
-- **The typed disposition reaches the view.** The recorder already answers
-  `APPLIED` / `NOOP` / `STALE` / `CONFLICT`, and DR-BR-05's "view types" phrase
-  never named one for it. A primitives-only disposition view carries that value
-  through, because the four mean different things to a user: applied and noop
-  are both success and only one should reflow the list (DR-BR-20), while stale
-  and conflict mean the row moved underneath them and the view must re-read.
-  Collapsing them into a boolean would reintroduce exactly the string-parsing
-  the four truth axes exist to prevent.
-
-  **A replay reports `NOOP`, not `APPLIED`** — `_command_receipt` maps a prior
-  `APPLIED` to `NOOP` deliberately, so the caller can tell "I just changed this"
-  from "this was already changed." Idempotency here means *applied once*, never
-  *same answer twice*, and any test asserting the latter is asserting something
-  false.
-- **Revision guard.** An id-based location command (DR-BR-06) resolves node and
-  row ids against a projection the user was looking at. Between that render and
-  admission the projection can be invalidated by an observed session terminal or
-  a completed acknowledge. The command therefore carries the `view_id` and
-  projection revision it was formed against and is **refused as stale** if the
-  projection has moved, down the same path DR-BR-16.1 already refuses a stale
-  page request. Without it, a user acts on what they see and the server freezes
-  something else — the identical failure DR-BR-03's modal interval closes for
-  selection, left open on the inventory side.
-- **The freeze is taken under the guard, not before it.** Folder integrity
-  expansion reads the descendant set inside the same validation that checks the
-  revision, so the admitted subject list and the revision the client saw cannot
-  disagree.
-- **The receipt is consulted before the guard.** These two mechanisms otherwise
-  cancel each other on the one command family where both apply: an acknowledge
-  both consumes a revision and bumps it, and the client only learns the new value
-  from the response — so a retry after a lost response necessarily carries `R`
-  while the projection sits at `R+1`, and a guard evaluated first refuses it as
-  stale without ever reaching the receipt that would have recognized it. A
-  recognized `command_id` therefore short-circuits to the recorded disposition
-  plus the current revision, and only an *unrecognized* command is revision-
-  guarded. For the same reason the guard is evaluated **once per command over the
-  whole subject set**, with a single revision bump per gesture: a per-row guard
-  refuses rows 2..n of a gesture against a revision that gesture's own first row
-  advanced.
-
-**Origin authorization is entry-only.** `dispatch` admits a handler against
-the current native committed document, then releases that lock before the
-handler runs. It does not recheck after completion or roll back a mutation
-whose response becomes undeliverable after navigation or bridge reinjection.
-That is uncertain delivery, not uncertain commit: the client retries a
-receipted gesture with the same `command_id`. Recorder-backed mutations replay
-as `NOOP` after an earlier `APPLIED`; session-creating commands return the
-retained original request/session identity. Receipt lookup still precedes
-mutable-state reread and revision validation.
-
-**Refusal is not an error dialog.** A stale command re-reads and re-renders; the
-user sees current truth and repeats the gesture if they still want it. This is
-the DR-BR-03 conflict posture, not the DR-BR-22 confirmation posture, because
-nothing was destroyed — the view was simply out of date.
-
-The recorder's receipt must also cover the scope it applied. `record_inventory`
-keys on `inventory:{location_id}:{scope_token}` plus a payload hash, so
-**DR-BR-06's subtree roots participate in that hash**: otherwise a replay under
-an equal scope token could accept a materially different scope. The generic
-hasher makes this likely automatic and "likely automatic" is precisely what
-`M1_PLAN.md` DR-M1-10 warned about when the history hasher silently skipped an
-unrecognized body — so it is asserted, not assumed.
+The recorder's receipt also covers the exact scope it applied.
+`record_inventory` hashes DR-BR-06 subtree roots as well as exact paths; an
+equal scope token cannot authorize materially different recursive work.
 
 ---
 
@@ -2180,7 +3544,7 @@ artifact documents.
 | User selection, subtree scope, partial subject-local integrity, and page size use the contracts in DR-BR-01–06 and DR-BR-15. | [Add scoped review trees and revisioned selection](../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30) |
 | Recorder mutations use reproducible row receipts; session-creating commands use service-held lifecycle receipts. | [Close the M1 safety and post-refactor audit](../CHANGELOG.md#close-the-m1-safety-and-post-refactor-audit-2026-08-08--2026-08-11) |
 | Drain recovery triggers only on explicit `Gap` or uncertain drain failure; legal progress sequence holes do not trigger it. | [Close transport custody and realign the bridge boundary](../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14) |
-| The 100,000-subject scale envelope and transport-custody authority are governed by BR-G-42; terminal artifacts remain separate under BR-G-45. | [Ratify measurement and documentation authority](../CHANGELOG.md#ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18) |
+| The 100,000-subject performance fixture and transport-custody authority are governed by BR-G-42; terminal artifacts remain separate under BR-G-45. | [Ratify measurement and documentation authority](../CHANGELOG.md#ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18) |
 | Move-ghost filtering removes synthetic-only ancestors with the ghost. | [Complete and harden the accessible desktop foundation](../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18) |
 
 ---
@@ -2234,15 +3598,6 @@ measurement may supplement pytest. Those artifacts link from the implementation
 change. BR-G-42 owns its exact reference profile and budgets below. Gate
 headings are organizational, not lane ownership.
 
-| Owner | Gate-test module | Independent Stage 5.5 scope |
-| --- | --- | --- |
-| A | `tests/test_bridge_tree.py` | BR-G-1 builder, BR-G-2 structure, BR-G-3 |
-| B | `tests/test_bridge_scan_scope.py` | BR-G-4–9, BR-G-25–28 |
-| C | `tests/test_bridge_selection.py` | BR-G-11–12 |
-| D/integration | `tests/test_bridge_service.py`, `tests/test_bridge_resume.py` | BR-G-1 service refusal, BR-G-10, BR-G-13–18, BR-G-20–21, BR-G-24, BR-G-29 |
-
-**Lane A — tree substrate**
-
 **Lane A — tree substrate**
 
 - **BR-G-1 — Node ids are scope-qualified and stable.** Two locations each
@@ -2251,7 +3606,11 @@ headings are organizational, not lane ownership.
   refused by `NamiSyncService`, not filtered. *Not satisfied by* asserting ids
   are unique within one tree, which a path-only id also satisfies; and *not
   satisfied by* testing the service refusal with a syntactically invalid id,
-  which never proves ownership is checked.
+  which never proves ownership is checked. Checkpoint 9 additionally proves a
+  same-path domain row, exploded operation members, distinct warnings, and
+  repeated otherwise-identical warnings receive stable collision-free ids
+  under the exact `NamiSyncNodeV1`, `NamiSyncMemberV1`, and typed
+  `NamiSyncInfoV1` codecs plus duplicate ordinal.
 - **BR-G-2 — The emitted array carries the structure interfaces need.** Assert
   every node exposes pre-order position, depth, parent index, subtree extent,
   and stable id→position lookup. Stage 6's BR-G-34 then asserts a
@@ -2396,7 +3755,8 @@ headings are organizational, not lane ownership.
   *Not satisfied by* storing dependency fallout in `user_deselected`, asserting
   the final selection only after a deselect-only sequence, or exercising the
   blocked-parent case without the upward closure.
-- **BR-G-13 — A replan discards.** A replan of an unchanged tree — reproducing
+- **BR-G-13 — Direct artifact replacement discards.** At the lower-level
+  facade/runtime boundary, replacement by an unchanged tree — reproducing
   identical operation ids — after at least one operation has first been
   user-deselected resets the selection, **advances** the revision, and produces
   the default `selection_digest`. A replay of the recognized old gesture is a
@@ -2404,7 +3764,9 @@ headings are organizational, not lane ownership.
   conflicts. A mutation racing replacement may not return an old-artifact
   `applied` response. *Not satisfied by* replanning an untouched default
   selection, whose digest is allowed to be identical; and *not satisfied by*
-  asserting the UI shows a message.
+  asserting the UI shows a message. This is defense-in-depth for direct service
+  callers, not an H2 bridge command; desktop replanning instead creates a new
+  immutable-plan task whose default selection is independently covered.
 - **BR-G-24 — A folder gesture covers the subtree, not the viewport.** A folder
   deselect over a subtree whose descendants are split by a collapsed ancestor
   removes every operation at or under that path, and the folder's rollup counts
@@ -2632,12 +3994,17 @@ headings are organizational, not lane ownership.
   Sparse caller-owned match counts are validated but their domain
   vocabulary is not interpreted here. The default is expanded, fixed row
   height is enforced, 256 rows are accepted, and 257 are refused rather than
-  truncated. The workflow-owned node array is consumed directly without a
-  second complete DTO copy. Anchor lookup uses the same derived sequence and
+  truncated. The workflow-owned canonical product array is consumed directly
+  without a second complete DTO copy. Inventory uses the real path-node array
+  plus its informational merge; plan uses that same path array plus the exact
+  sparse multi-member expansion, retaining original path-node identity where
+  no expansion is required and adding only `NamiSyncMemberV1` children/groups.
+  Anchor lookup uses the same derived sequence and
   exact deepest-to-root id chain and performs work proportional to chain depth,
   not tree size. Plan and inventory cases must start from real
-  `build_node_tree` output and retain object identity; hand-built generic arrays
-  alone do not close the gate. The positive renderer witness uses the same
+  `build_node_tree` output, retain path-node identity, and include a real
+  same-key multi-operation expansion fixture; hand-built generic arrays alone
+  do not close the gate. The positive renderer witness uses the same
   canonical temporary JSON bytes generated through `build_node_tree` ->
   `derive_visible_sequence` -> `window_visible_sequence` ->
   `to_visible_window_view` in both the direct Node probe and installed WebView2
@@ -2648,8 +4015,9 @@ headings are organizational, not lane ownership.
   independently authored positive row dictionaries are insufficient evidence.
   The separate renderer-local control corpus tests the fixed sink set without
   pretending invalid Windows filename characters traversed `NodeTree`. The
-  bounded window carries server-derived parent/child/sibling accessibility
-  metadata. Boolean expansion exists only
+  bounded window carries the complete exact `TreeRowFrame`, including
+  server-derived global visible parent/child indexes and filtered sibling
+  accessibility metadata. Boolean expansion exists only
   for a projected parent with a retained immediate child; leaves and filtered-
   empty containers carry `null`. A static assertion proves the
   implementation calls no path helper and reconstructs no parent or descendant
@@ -2681,38 +4049,56 @@ headings are organizational, not lane ownership.
   moves.** This is also the first consumer that proves a filtered move ghost
   removes its synthetic-only ancestor chain, an ordinary real operation keeps
   its folder visible on its own merits, folder rollups remain the original
-  unfiltered values, and each filter chip count describes filtered domain items
-  rather than structural ancestors. The plan tree memo is byte-stable per request and is dropped with the
+  view-independent values, and each filter chip count describes its search-
+  matching operation-bearing population before active filters/collapse rather
+  than structural-only ancestors or the already-filtered view. The plan tree memo is byte-stable per request and is dropped with the
   plan; selection overlays do not rebuild its structure. Move annotation uses
   the union of target and prior-target ancestors, keeps the ordinary folder
   selection scope and original operation kinds, emits a noninteractive old-path
   ghost only when no real node exists there, annotates the real old node when it
-  does, and suppresses nested ghosts. Synthetic node ids never enter execution,
+  does, and suppresses nested ghosts. Destination and old-location rows carry
+  symmetric `move_peer_id` values; tagged node anchors navigate off-window
+  peers without browser path derivation. After nested suppression, only one
+  non-self candidate edge that is the sole incident edge at both endpoints is
+  emitted. Convergence, split, chain, swap/reverse, self, and every
+  reused-endpoint case suppresses all touching inferred groups and leaves
+  literal operations; identical ordered endpoint pairs have already coalesced
+  and cannot form residual parallel edges. A same-canonical-target collision
+  keeps one path/group authority and emits every immutable operation exactly
+  once as a member child; group selection/rollup covers all members while
+  counts, risk, dependencies, and overlays remain operation-exact. Synthetic
+  node ids never enter execution,
   persistence, or a selection digest. The production plan DOM passes DR-BR-25.
   *Not satisfied by* a move-only happy path, a synthetic operation standing in
   for a folder, or a renderer that relabels inferred groups as renames.
 - **BR-G-36 — Progress compatibility and follow mode use identity, never
-  display paths.** Current serialization and the browser require an exact
-  eleven-key Progress v4 body inside an exact `SessionEventView` carrying the
-  nested core `schema_version=4`. V3 reliable history remains decodable, but v3
-  Progress, an unversioned session event, missing/extra fields, invalid
-  phase/item/attempt relationships, coercive or unsafe counters, and unknown
-  item types are rejected. The executable production-validator gate proves
-  that one malformed Progress atomically rejects its co-batched reliable
-  siblings without advancing the cursor, then a clean replay delivers those
-  reliable updates. Both production reporters emit the row-namespace pair
-  (`operation` for executor and linked post-copy ids, `integrity` for
-  standalone rows), phase self-description, and an opaque attempt id at byte
-  pipeline entry. Retry/resume resets require a new attempt id; an
-  admitted-stream overshoot preserves item and attempt identity while clearing
-  the byte pair. An
-  off-window item resolves through its server-supplied
-  ancestor chain to the deepest visible ancestor-or-self and exact visible
-  index under collapse, filter, and search; the window and anchor-only paths
-  call the same resolver. User scrolling disables follow until explicit resume.
+  display paths.** Core serialization, Python bridge projection, and the
+  browser require exact event v5 inside `SessionEventView`; no v3/v4 producer,
+  tolerant decoder, JavaScript branch, public constant, or positive fixture
+  remains after the atomic cutover. One malformed event rejects its complete
+  batch without advancing the cursor, and a clean replay delivers the reliable
+  siblings. All byte counters use checked signed-64 arithmetic internally and
+  canonical decimal strings externally; Boolean, sign, leading zero, exponent,
+  fraction, unsafe Python integer, and above-domain values are refused. Both
+  reporters project reliable detail through exact variants capped at 32
+  primitive leaves/eight paths; diagnostics over 1,024 UTF-8 bytes become null
+  with checked omission witnesses rather than truncation. The complete
+  reliable envelope is at most 1,048,576 canonical bytes before sequence/queue
+  mutation, and its bridge projection always fits as one drain head. Both
+  reporters emit the row-namespace pair (`operation` for executor and linked
+  post-copy ids, `integrity` for standalone rows), phase self-description, and
+  an opaque attempt id at byte-pipeline entry. Retry or reconstructed resume
+  resets require a new attempt id. An
+  off-window item sends its opaque identity through the exact tagged
+  `get_plan_anchor` read; the server derives the chain and returns the deepest
+  visible ancestor-or-self, exact visible index, and `ancestor_ids` under
+  collapse, filter, and search. No Progress or window variant carries an
+  undeclared chain. User scrolling disables follow until explicit resume.
   A static/counterexample test proves `current_path` is never used for identity
-  or lookup. *Not satisfied by* testing only a currently materialized operation
-  or by joining an id to a matching display path.
+  or lookup. **Status: OPEN until checkpoints 3, 7, and 8 jointly close the
+  protocol, plan-follow, and execution-review portions.** *Not satisfied by*
+  testing only a currently materialized operation, retaining a legacy decoder,
+  or joining an id to a matching display path.
 - **BR-G-37 — Virtualization cannot own or narrow selection.** Rows destroyed
   and recreated by scrolling recover the server's current selection; a folder
   gesture covers filtered, collapsed, and off-window descendants; tri-state
@@ -2727,30 +4113,50 @@ headings are organizational, not lane ownership.
 - **BR-G-38 — The inventory projection pays whole-location work once per
   lifecycle.** A slim explicit-column query builds one immutable projection per
   `view_id` without constructing full `InventorySnapshot`s; detail queries
-  fetch only the visible row ids. Rebuild occurs outside the service lock and
+  fetch only the visible node ids. Every returned row carries the complete exact
+  `TreeRowFrame`; its global indexes and filtered sibling facts remain valid at
+  window boundaries without browser reconstruction. Rebuild occurs outside the service lock and
   swaps inside it. Concurrent patches and patch-vs-rebuild races satisfy
   BR-G-22; unchanged node objects and position indexes retain identity after a
   one-row patch; session terminal causes a rebuild. Two views of one location
-  remain independent, six projections are retained LRU, the seventh evicts the
-  least-recently-used one, and location change, task close, and service shutdown
-  release their views. Eviction and invalidation take the same stale-revision
+  remain independent, six projections are retained LRU, and the seventh evicts
+  the least-recently-used unpinned one. With all six pinned it instead returns
+  `retention_full`; location change, task close, and service shutdown release
+  their views only after their last pins. Eviction and invalidation take the same stale-revision
   client path. *Not satisfied by* rebuilding on every page, deep-copying every
   node, guarding only the immutable value rather than the cache map, or testing
-  fewer than seven views.
+  fewer than seven views or omitting the all-six-pinned case.
 - **BR-G-39 — Inventory interaction exposes all observed truth and exact
-  scope.** The five XV-14 resolution states render distinctly; incomplete
-  refresh shows each typed warning's code, path, and detail; row actions remain
-  exact while folder refresh is recursive and folder integrity freezes all
-  indexed descendants regardless of filter. Each integrity action reports the
-  count it actually selected after mode eligibility. One unreadable frozen
-  descendant produces one visible `unsupported` item and an incomplete
+  scope.** The five location-resolution states render distinctly; incomplete
+  refresh shows each typed warning's code, inert path, and bounded detail.
+  Warning ids use the domain-separated tree kind, location scope, nullable path
+  with typed-null root marker, code, bounded-detail, and duplicate-ordinal
+  input, cannot collide with domain rows or one another, and
+  are informational. Every detail/refresh/visibility/integrity action naming
+  one returns fixed `row_not_actionable` before outside work. Current ledger
+  `verification_state` and the latest ordinary-integrity `integrity_outcome`
+  overlay remain independently projectable and neither overwrites the other. Row
+  actions remain exact while folder refresh is recursive and folder integrity
+  freezes all indexed descendants regardless of filter. Each integrity action
+  reports the count actually selected after mode eligibility. One unreadable
+  frozen descendant produces one visible `unsupported` item and an incomplete
   verification axis while every other eligible subject proceeds.
   Acknowledge hides the row by default, changes no ancestor rollup, refetches
   the shifted window only on `APPLIED`, and updates missing/acknowledged chip
   counts; restore is reachable through the acknowledged filter. No view-open or
-  timer path auto-scans. The production inventory DOM passes DR-BR-25. *Not
-  satisfied by* a generic warning chip, a descendant count predicted before
-  mode selection, or a default view that still contains acknowledged rows.
+  timer path auto-scans. Detail reads expose the full current digest only with
+  provenance, scope/currentness, invalidation, signed-64 decimal size and
+  nanosecond fields, and whole-second local-time rendering. Automatic linked
+  verification remains in the execution session. Manual exact post-copy
+  verification is a new dispatcher/history session, freshly admits the target,
+  performs no refresh or new ledger scope, and conditionally records against
+  the original execution run token; superseded or mixed exact/current evidence
+  refuses with an ordinary current-state verification alternative. The
+  production inventory DOM passes DR-BR-25. **Status: OPEN until checkpoints 9
+  and 10 close projection/current-evidence and integrity/handoff behavior.**
+  *Not satisfied by* a generic warning chip, displaying an unlabeled stale
+  digest, refreshing before exact handoff, or a default view that still
+  contains acknowledged rows.
 - **BR-G-40 — History work is paged before object decoding and preserves
   classification.** The summary query count is fixed and its indexed primitive
   aggregate produces one fixed-size fact object per run without selecting or
@@ -2766,32 +4172,34 @@ headings are organizational, not lane ownership.
   *Not satisfied by* a compatibility getter that materializes a whole run, or
   by matching only the final headline of an uncomplicated run.
 - **BR-G-41 — Task and process lifecycle lose neither work nor authority.** A
-  reviewed task exists without live work; a terminal plan session is absent
-  from the active rail. Its record/replay authority survives until successful
-  terminal presentation, then session release removes that live authority while
-  the plan artifact, task/start identity, and presentation state survive until
-  explicit task close; compound phases remain one session with independent
-  counters. Closing a live task asks once, enters
-  visible closing, cancels, waits for a terminal **record**, then unsubscribes,
-  closes, and releases the exact task-owned plan, selection, execution/inventory
-  detail, view/projection, session, and receipt artifacts; refusal leaves it
-  open. Plan-only and already-terminal tasks release immediately. A delayed
-  terminal leaves the card visibly closing without prematurely closing the
-  session or dropping artifacts. Repeated create/close cycles keep facade,
-  runtime, bridge, and adapter registries bounded while retained history remains
-  readable. The rail renders `pausing` distinctly until `paused` or terminal,
-  with repeat pause/resume disabled and cancel still available. Closing a
-  terminal task asks nothing. `ui-state.json` round-trips only registered typed
-  cosmetic sections — beginning with appearance and later adding file-list
-  expansion state only after its durable key is ratified — but never serializes a plan request id, session id,
-  task identity, selection, `view_id`, or projection revision; corruption
-  recovers with defaults while unsupported newer state is preserved. Settings
-  round-trip through the service;
-  invalid values do not poison the file, and changed semantics affect the next
-  plan but never an already committed one. Shutdown under concurrent dispatch
-  satisfies DR-BR-24 and XV-18. *Not satisfied by* cleanup triggered by the
-  terminal event, by releasing only the plan, by a task rail reconstructed only
-  from `list_sessions()`, or by a clean idle shutdown.
+  process-live task exists without live work and serially owns zero or one
+  current session. Plan, execution, inventory/integrity, and manual-verification
+  sessions may attach beneath it. Under the exact [task-authority
+  order](#task-and-authority-ordering), concurrent same-revision starts,
+  start/close, and release/successor races prove that identical delivery joins,
+  another command returns busy/current authority, only the token owner publishes
+  or compensates, and observation precedes scheduling. Task, session, lifecycle,
+  selection, result, view, and projection authorities remain independent; an
+  older drain/release cannot affect a successor.
+
+  Terminal record/replay authority survives until successful presentation;
+  exact-session release then removes it while compact task artifacts survive
+  until explicit task close. Closing live work asks once, enters visible
+  `closing`, cancels, waits for a terminal **record**, then unsubscribes, closes,
+  and releases every task-owned artifact; refusal or delay leaves the task open
+  and truthful. Plan-only and already-terminal tasks release immediately.
+  The task-authority register's exact receipt, release-tombstone,
+  close-tombstone, and expiry bounds make repeated create/release/close cycles
+  bounded. Shutdown
+  wakes drains, prevents new attachment, and joins observers without holding a
+  task lock across facade, JSON, database, or filesystem work. The rail renders
+  `pausing` distinctly until `paused` or terminal. Browser navigation or
+  reinjection reconstructs through `list_tasks`/`get_task`; no task/session,
+  plan, selection, named result/overlay, view, or recent-location authority enters
+  `ui-state.json`. **Status: OPEN until checkpoints 4 and 11 close ownership,
+  cleanup, and concurrent shutdown.** *Not satisfied by* cleanup triggered by
+  the terminal event, a task rail reconstructed from dispatcher sessions, or a
+  clean idle shutdown alone.
 - **BR-G-42 — The named scale envelope passes fixed budgets.** The
   implementation records every row below against the predeclared fixtures and
   profile. Ordinary pytest proves deterministic shape/query/decode/allocation
@@ -2808,11 +4216,25 @@ headings are organizational, not lane ownership.
 
   | Fixture | Required shape |
   | --- | --- |
-  | Plan | 100,000 operations plus up to 20,000 folder nodes; dependency/path depth reaches 32 |
-  | Inventory | 100,000 file rows plus up to 20,000 directory rows in one location |
+  | Plan | Base: 100,000 operation-bearing rows plus up to 20,000 combined structural-folder/operation-group/move-ghost rows, including every prior-path synthetic ancestor; every immutable operation is represented exactly once and grouped collision members fit inside that combined allowance; information-heavy: add 120,000 plan notices while their complete retained charge stays at or below 192 MiB; dependency/path depth reaches 32 |
+  | Inventory | Base: 100,000 subject rows plus up to 20,000 directory rows in one location; information-heavy: add 120,000 warning rows while their complete retained charge stays at or below 192 MiB |
   | History | 50 run summaries covering 1,000,000 retained items, including one 100,000-item run |
-  | Projection retention | Six populated 120,000-node inventory projections, then a seventh view to force LRU eviction |
+  | Projection retention | Six populated 240,000-row information-heavy inventory projections, then a seventh view to force LRU eviction |
   | Events | Four active tasks for 60 seconds at 100 aggregate `Progress` events/s plus 10 aggregate reliable events/s |
+
+  The informational count fixture is deterministic: seed `0x4E414D49`, stable
+  typed-code cycling, ASCII indexed relative paths, null detail on the initial
+  population, and fixed repeated occurrences to exercise duplicate ordinals.
+  Its byte-bound companion keeps the same 120,000-row order and deterministically
+  substitutes complete in-bound paths/details from the start until the next
+  substitution would exceed the frozen retained-sizer cap; production and the
+  independent validator use the checkpoint-4-frozen per-object/string/index
+  charges. The maximum-task reservation charges the production 120,000-row
+  domain walls, full 128-MiB plan-domain/192-MiB inventory-domain walls, and
+  the full row and 192-MiB informational allowances. This count-and-byte profile—not every Cartesian
+  combination of maximum path and detail—is the guaranteed fixture; production
+  rejects any real informational population whose next complete row exceeds
+  either limit before publication.
 
   The current-source event and custody fixtures use the version-4 Progress
   protocol rather than treating the cadence coordinate as completed items.
@@ -2837,17 +4259,24 @@ headings are organizational, not lane ownership.
   | Freeze/normalize a 100,000-subject scope | 500 ms p95, 1 s maximum; Tier 0 target, Tier 2 owning-slice acceptance |
   | Reliable/terminal delivery under event fixture | 100 ms p95, 250 ms maximum, no `Gap`; current-source Tier 2 timing remains open |
   | Replaceable progress delivery | 1 s p95, 2 s maximum, monotonic after coalescing; current-source Tier 2 timing remains open |
-  | Cold 120,000-node plan projection | 2 s maximum; Tier 2 Slice 5 acceptance |
-  | Cold 120,000-node inventory projection | 3 s maximum; Tier 2 Slice 6 acceptance |
+  | Cold 120,000-row base / 240,000-row information-heavy plan projection | 2 s / 4 s maximum; Tier 2 Slice 5 acceptance |
+  | Cold 120,000-row base / 240,000-row information-heavy inventory projection | 3 s / 6 s maximum; Tier 2 Slice 6 acceptance |
   | Unchanged-parameter 256-row window | 250 ms p95, 500 ms maximum; Tier 2 Slice 5/6 acceptance |
-  | Changed search/filter/collapse plus 256-row window | 750 ms p95, 1.5 s maximum; Tier 2 Slice 5/6 acceptance |
+  | Changed search/filter/collapse plus 256-row window at 240,000 rows | 1.5 s p95, 3 s maximum; Tier 2 Slice 5/6 acceptance |
   | `preview_selection` at depth 32 | 500 ms p95, 1 s maximum; Tier 2 Slice 5 acceptance |
   | Fifty-run/1,000,000-item history summary | 3 s maximum; Tier 2 Slice 7 acceptance |
   | 256-row history detail window | 500 ms p95, 1 s maximum; Tier 2 Slice 7 acceptance |
-  | Incremental plan projection memory | 128 MiB maximum; Tier 2 Slice 5 acceptance |
-  | Incremental inventory projection memory | 192 MiB each, 1,152 MiB for six; Tier 2 Slice 6 acceptance |
+  | Incremental plan projection memory | 320 MiB maximum (128 MiB base plus 192 MiB informational); Tier 2 Slice 5 acceptance |
+  | Incremental inventory projection memory | 384 MiB each, 2,304 MiB for six; Tier 2 Slice 6 acceptance |
   | Identity-deduplicated transport custody | 1,966,080 bytes; frozen protected authority plus Tier 1 live guard |
-  | Terminal artifacts plus completed-task retention | No derived bound yet; BR-G-45 remains open |
+  | Terminal artifacts plus completed-task retention | Mechanically derive and freeze the byte budget at checkpoint 4 to admit four maximum tasks under the retained-task cap; BR-G-45 implementation/measurement evidence remains open through checkpoints 4 and 11 |
+
+  The 128/192-MiB domain and 192-MiB informational hard walls are frozen
+  deterministic complete-graph sizer contracts with an independent validator;
+  these Tier-2 process-memory measurements neither derive nor validate them.
+  The 100,000-plus-20,000 rows above are performance fixtures, not production
+  maxima; first-excess production admission is governed by the 120,000-row and
+  matching complete-graph byte walls.
 
   **Transport-custody clause.** Custody is the identity-deduplicated live graph
   rooted at dispatcher replay deques, subscriber deques, and adapter task
@@ -2984,36 +4413,27 @@ headings are organizational, not lane ownership.
   custody root/high-water mark, including terminal artifacts in custody, or
   treating payload/whole-process bytes as the retained transport graph.
 - **BR-G-45 — Terminal artifacts and completed-task retention are bounded
-  separately.** First define a bounded production representation and enforce
-  per-completion plus aggregate completed-task budgets over the exact
-  100,000-subject admitted domain. The complete per-completion artifact set is:
-  the core `Terminal(OperationResult.items)` retained by dispatcher custody,
-  its adapter `SessionEventView`, the terminal `SessionRecordView` and
-  `OperationResultView.items`, serialization/native return values, browser
-  retry/presentation copies, and the post-callback representation. Checked
-  production maxima for every retained representation, subject-scaled field,
-  node/depth family, and aggregate budget must derive the analytical containment
-  bound without either omission or double-charging. A separately identified
-  native or renderer copy that production cannot bound analytically is an
-  empirical residual and must receive its own tier and evidence. Construction,
-  delivery, presentation, release, and settlement latency remain separately
-  classified so a memory pass cannot hide a frozen window.
+  separately.** Checkpoint 4 freezes conservative analytical per-artifact
+  constants before any surface/calibration. The exact [task-authority and
+  retention register](#task-and-authority-ordering) owns the count/byte caps,
+  maximum combined graph, replacement overlaps, handler/callback/window roots,
+  projection cache, receipts, pins/leases, and release/close tombstones. Its
+  production admission must always fit four canonical maximum combined tasks;
+  smaller tasks may consume remaining count and bytes, while first excess
+  growth returns `retention_full` without eviction or early truth release.
 
-  A separate aggregate policy fixes the maximum completed-task bytes and exact
-  representations retained before presentation, during callback or release
-  retry, after successful `release_terminal_session`, and after explicit
-  `close_task`. It preserves the reviewed plan, exact retry authority, and a
-  truthful result when durable history is degraded. Repeated complete/release/
-  close cycles and the maximum permitted completed-task set must remain within
-  the enforced budget and release retained state at the declared boundaries; a
-  task-count cap alone is not a byte policy. **Current
-  status: OPEN.** No bounded production representation, enforced aggregate
-  policy, complete-domain analytical proof, or separately justified empirical
-  residual acceptance has landed. *Not satisfied by*
-  measuring only `SessionRecordView`, excluding the full terminal event,
-  reusing one interned path/detail value, measuring an empty/summary result,
-  clearing truth before its presentation/retry boundary, assuming degraded
-  history can reconstruct it, or treating SH-G-8/SH-G-15 as substitutes.
+  Instrumentation walks every production root before presentation, with all
+  handler-response reservations occupied, during terminal-callback/release
+  retry, through generation pins and both close seals, and after release/close,
+  neither omitting nor double-charging shared pools. Irreducible native/renderer
+  copies are classified under `DEFENSE.md` §7. The four-task fixture, first
+  refused excess phase, terminal reconciliation at handler saturation, repeated
+  create/release/close cycles, and concurrent shutdown must match the declared
+  release points and budget. **Status: OPEN until checkpoint 11 calibrates,
+  verifies, and hardens the checkpoint-4-frozen model.**
+  *Not satisfied by* a task-count cap, measuring a summary-only result, omitting
+  browser/native transients, clearing truth before retry ends, or selecting a
+  ceiling after observing the fixture.
 - **BR-G-46 — Cosmetic state is typed, bounded, non-authoritative, and visually
   coherent.** The exact nine-row native mapping and browser policy mirror
   agree on both cosmetic rows, their `OPEN` phase, five-second deadline,
@@ -3043,6 +4463,83 @@ headings are organizational, not lane ownership.
   creation, persisting a
   permissive dictionary, retrying failed I/O on a timer, or proving only the
   happy-path file round trip.
+- **BR-G-47 — Setup admits one exact local-directory meaning.** Picker, typed
+  input, and remembered-location activation all pass through the same
+  workflow-owned candidate service and produce purpose-bound, 30-minute,
+  32-entry process-local slots; every plan or inventory start freshly re-admits
+  the root. The whole-string parser accepts only ordinary absolute drive-rooted
+  local directories of at most 32,000 UTF-16 code units, canonicalizes `/` to
+  `\`, permits and removes one non-root trailing separator, and rejects all
+  relative/drive-relative, device/extended, UNC/mapped-remote, ADS, wildcard,
+  invalid-character, reserved/ambiguous, NUL/surrogate, repeated-separator, empty/dot-component,
+  reparse/placeholder, file-leaf, inaccessible, unsupported-volume, and
+  folder-mounted-volume inputs without trimming, expansion, normalization,
+  enumeration, or parent substitution. No-follow probing covers every
+  component and leaf; start-time probing, not the slot, is authority.
+
+  Supported roots are fixed/removable local drives with usable native volume
+  facts and exact filesystem name `NTFS`, `REFS`, `EXFAT`, `FAT`, or `FAT32`;
+  network, optical, RAM-disk, unknown/no-root, and all other filesystem names
+  refuse. Individual capability flags still control their own feature only.
+
+  Native workflow admission converts raw bounded `PlanSetupInput` into one
+  complete frozen `PlanSetupOptions` snapshot, including canonical
+  bounded filters, disabled `preserve_ads=false`, and linked verification in
+  the core `Commitment`; `start_execution` cannot resupply it. Recents derive
+  only from opened ledger runs, exclude soft-deleted mappings from source,
+  target, and pair lists, retain unresolved identity, and return deterministic
+  five/five/five bounds. Process-secret deterministic HMAC ids require no
+  retained recent map; activation rechecks current top-five membership and
+  active mapping state. A refused pair returns two truthful slotless
+  assessments and creates no partial slot. Serial multi-pair creation reuses one frozen options
+  snapshot and stable per-row command ids, admits ordinary starts one at a time,
+  never rolls back successes, and recovers admitted tasks after navigation.
+  Exact Python/JavaScript schemas, hostile inert text, parser/TOCTOU review, and
+  installed headed picker/typed/recent witnesses all pass. **Status: OPEN until
+  checkpoints 5 and 6 close the workflow and product surface.** *Not satisfied
+  by* picker-only validation, `abspath`, trusting a stale slot or mount hint,
+  silently converting a file to its parent, or a batch backend shortcut.
+- **BR-G-48 — Recording truth and execution evidence never borrow authority.**
+  The settlement oracle and production outcomes cover the complete filesystem
+  success/failure × recording success/failure matrix. Each item has an
+  independent `ok`/`degraded` recording axis with one typed bounded reason;
+  task issues retain only the first observation of each of the five exact
+  reasons in observation order. Pre-destructive flush failure refuses before
+  mutation; later final-flush, finish, close, audit, or item failures never
+  rewrite an already committed item. Aggregate recording is degraded exactly
+  when an item is degraded or a task issue exists.
+
+  The [exact item-free terminal shape](#exact-epochs-scalar-classes-and-recording-views)
+  is decoded statelessly: recording is degraded exactly when its degraded-item
+  count is positive or task issues exist, and decode never fabricates an
+  anonymous degraded `OperationResult(items=())`.
+
+  Each event-v5 item owns a closed bounded primitive detail variant and checked
+  `detail_omitted_count`; arbitrary mappings/objects and raw out-of-domain
+  quantities are structurally impossible. Over-limit diagnostics are omitted
+  as null with exact aggregate witness, never truncated, and every complete
+  reliable envelope fits the 1,048,576-byte pre-acceptance ceiling.
+
+  One atomic ledger snapshot joins `operations.run_id=runs.id`, exact execution
+  `runs.run_token`, overlay identity to `operations.op_token`, current inventory
+  by target location plus persisted canonical
+  `operations.target_rel_path_key`, and matching inventory scope. Only
+  filesystem-successful COPY/UPDATE/MOVE_UPDATE is evidence-eligible. Missing
+  committed operation is `unrecorded`; duplicate canonical eligible targets or
+  scope/stat/presence/invalidation/provenance conflict is `superseded`;
+  same-scope copy evidence is `recorded-copy`; same-scope
+  readback/verify evidence is `already-verified` only with non-null
+  `last_verified_at`; all else is `not-applicable`. Digests are full lowercase
+  32-hex and appear as execution evidence only for recorded-copy or
+  already-verified. Manual exact handoff starts a new dispatcher/history session
+  against the original run token only when every applicable selected byte-
+  producing item succeeded, committed, and is current. Post-settlement
+  divergence blocks at task scope; all-already-verified starts no work, a zero-
+  applicable execution refuses, and mixed exact/current refuses.
+  **Status: OPEN until checkpoints 1–3, 8, and 10 close settlement, protocol,
+  review, and handoff.** *Not satisfied by* global degradation assigned to each
+  item, first-row-wins, operation-time digest persistence, an N+1 query, or
+  ordinary refresh before exact verification.
 - **BR-G-43 — Documentation describes the shipped contract, not the plan.**
   `DESKTOP_UI.md`, the focused component documents, README overview/index/
   limitations/changelog, and `ui_mockup/` status agree with the implemented
@@ -3070,25 +4567,8 @@ headings are organizational, not lane ownership.
   files, deselecting slow/platform tests, or weakening an existing assertion to
   preserve green.
 
-Stage 6 follows the same collision rule as Stage 5.5. Host/transport tests live
-under `tests/interfaces/web/` in `test_host.py`, `test_native_host_gates.py`,
-`test_slice1_headed.py`, `test_commands.py`, `test_transport.py`,
-`test_slots.py`, `test_transport_headed.py`, `test_drain.py`, and
-`test_frontend_static.py`; detector
-parity lives in `tests/test_pywebview_runtime.py`; pure presentation tests live
-in `test_visible_sequence.py`;
-sync, inventory, and lifecycle vertical tests live in `test_sync_surface.py`,
-`test_inventory_surface.py`, and `test_lifecycle.py`; scale tests live in
-`tests/test_bridge_scale.py`, the event artifact validator lives in
-`tests/interfaces/web/test_bridge_event_benchmark.py`, the custody-runner
-contract lives in `tests/interfaces/web/test_bridge_transport_custody.py`, and
-BR-G-45's focused artifact/retention cases will live in
-`tests/interfaces/web/test_terminal_artifact_scale.py`; BR-G-46's typed state
-and bridge/appearance cases live in `tests/interfaces/test_ui_state.py` and
-`tests/interfaces/web/test_cosmetic_channel.py`. Their gate tests retain the
-`test_br_g_<number>_` prefix. A slice may add narrower unit files, but moving a
-gate test elsewhere requires updating this table in the same change so no
-acceptance test becomes undiscoverable.
+`docs/TESTS.md` and `tests/_departments.py` own gate-test placement and scope;
+every bridge gate retains the `test_br_g_<number>_` discovery prefix.
 
 **Decision-to-gate traceability.** This is the completeness check. A DR is not
 implemented because its code exists; it is implemented only when every gate in
@@ -3101,104 +4581,50 @@ its row and the applicable regression rows are green.
 | DR-BR-03 | BR-G-13–15, BR-G-17, BR-G-20, BR-G-21, BR-G-37 |
 | DR-BR-04 | BR-G-13 |
 | DR-BR-05 | BR-G-16, BR-G-18, BR-G-29 |
-| DR-BR-06 | BR-G-1, BR-G-4–9, BR-G-18, BR-G-25–29, BR-G-39 |
-| DR-BR-07 | BR-G-7 and scanner hostile/completeness regression rows |
+| DR-BR-06 | BR-G-1, BR-G-4–9, BR-G-18, BR-G-25–29, BR-G-39, BR-G-47, BR-G-48 |
+| DR-BR-07 | BR-G-7, BR-G-47, and scanner hostile/completeness regression rows |
 | DR-BR-08 | BR-G-19, BR-G-34, BR-G-36, BR-G-37 |
 | DR-BR-09 | BR-G-2, BR-G-19, BR-G-34, BR-G-35, BR-G-38 |
 | DR-BR-10 | BR-G-2, BR-G-3, BR-G-19 |
 | DR-BR-11 | BR-G-1, BR-G-2, BR-G-23, BR-G-35, BR-G-38 |
 | DR-BR-12 | BR-G-12, BR-G-24, BR-G-29, BR-G-37, BR-G-39 |
 | DR-BR-13 | BR-G-34, BR-G-35 |
-| DR-BR-14 | BR-G-32, BR-G-36 |
+| DR-BR-14 | BR-G-32, BR-G-36, BR-G-48 |
 | DR-BR-15 | BR-G-2, BR-G-34, BR-G-36 |
-| DR-BR-16 | BR-G-27, BR-G-34, BR-G-38, BR-G-40, BR-G-42 |
-| DR-BR-16.1 | BR-G-22, BR-G-23, BR-G-38, BR-G-42 |
-| DR-BR-16.2 | BR-G-11, BR-G-40, BR-G-42 |
+| DR-BR-16 | BR-G-27, BR-G-34, BR-G-38, BR-G-40, BR-G-42, BR-G-45 |
+| DR-BR-16.1 | BR-G-22, BR-G-23, BR-G-38, BR-G-42, BR-G-45 |
+| DR-BR-16.2 | BR-G-11, BR-G-40, BR-G-42, BR-G-48 |
 | DR-BR-17 | BR-G-14, BR-G-24, BR-G-37 |
 | DR-BR-18 | BR-G-34, BR-G-36 |
 | DR-BR-19 | BR-G-34, BR-G-36 |
 | DR-BR-20 | BR-G-16, BR-G-23, BR-G-38, BR-G-39 |
-| DR-BR-21 | BR-G-35, BR-G-41, BR-G-45 |
-| DR-BR-22 | BR-G-21, BR-G-33, BR-G-41, BR-G-45 |
+| DR-BR-21 | BR-G-35, BR-G-41, BR-G-45, BR-G-48 |
+| DR-BR-22 | BR-G-21, BR-G-33, BR-G-41, BR-G-45, BR-G-48 |
 | DR-BR-23 | BR-G-31 |
-| DR-BR-24 | BR-G-14, BR-G-15, BR-G-21–23, BR-G-33, BR-G-38, BR-G-41, BR-G-42 |
+| DR-BR-24 | BR-G-14, BR-G-15, BR-G-21–23, BR-G-33, BR-G-38, BR-G-41, BR-G-42, BR-G-45 |
 | DR-BR-25 | BR-G-32, BR-G-35, BR-G-39 |
 | DR-BR-26 | BR-G-1–3, BR-G-35 |
-| DR-BR-27 | BR-G-9, BR-G-14–16, BR-G-23, BR-G-29, BR-G-33 |
+| DR-BR-27 | BR-G-9, BR-G-14–16, BR-G-23, BR-G-29, BR-G-33, BR-G-41, BR-G-45, BR-G-47, BR-G-48 |
 | DR-BR-28 | BR-G-46 |
 
 BR-G-19, BR-G-43, and BR-G-44 are cross-cutting release gates and therefore
 apply to every row even where not repeated. Product goals 1–5 are witnessed,
-respectively, by `{34,35,42}`, `{12,20,24,37,39}`,
-`{18,36,39,40,41}`, `{6,32,35,39}`, and `{15,20,21,37,39,41}`.
+respectively, by `{34,35,42,47}`, `{12,20,24,37,39,47}`,
+`{18,36,39,40,41,48}`, `{6,32,35,39,47}`, and
+`{15,20,21,37,39,41,45,48}`.
 
 ### Regression watchlist (existing M1)
 
-These preservation commands supplement rather than replace BR-G gates. A
-changed pre-existing assertion is a regression unless its governing DR changes
-the contract.
-
-| Watch | Required command | Why it is at risk / owner |
-
-| Watch | Required command | Why it is at risk / owner |
-| --- | --- | --- |
-| `XV-1`–`XV-8` compound execution, continuation, and phase truth | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_runtime.py tests/test_executor_native.py tests/test_executor_pipeline.py tests/test_executor_settlement.py tests/test_post_execution_workflow.py tests/test_payload_roundtrip.py tests/dispatcher/test_dispatcher.py` | `ExecutionSet` and current payload v5 change the handoff that must retain evidence, aggregate progress high-water, phase, one run, refusal settlement, and independent truth axes / C, D |
-| `XV-9`–`XV-10` history vocabulary and headline precedence | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_history.py tests/test_workflow_views.py tests/test_cli.py` | The retained classifier and `all-noop` input change; every adjacent precedence edge and secondary axis must remain visible / C, Stage 6 slice 7 |
-| `XV-11`–`XV-12` frozen settings and codec shape | `.\.venv\Scripts\python.exe -m pytest -q tests/test_settings_facade.py tests/test_payload_roundtrip.py tests/test_planner.py` | Commitment construction and execution payloads change; no live-settings read or removed field may return / C, D |
-| `XV-13` scope completeness and recorder branch | `.\.venv\Scripts\python.exe -m pytest -q tests/test_scanner.py tests/test_recorder_inventory_integrity.py` | `SUBTREES` must not alter exact `PATHS` or fall through to `FULL`; incomplete scans infer no missing rows / B |
-| `XV-14` five volume states and `XV-15` wakeup re-resolution | `.\.venv\Scripts\python.exe -m pytest -q tests/test_inventory_workflow.py tests/test_inventory_runtime.py` | Folder expansion and reshaped details must preserve five distinct states and re-resolve on resumed/woken integrity work / B, D |
-| `XV-16` shared hash factory and production composition | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_runtime.py tests/test_executor_native.py tests/test_executor_pipeline.py tests/test_executor_settlement.py tests/test_inventory_runtime.py tests/test_db_repositories.py tests/test_package.py tests/modules/test_verifier_engine.py` | Payload/runtime edits must not fork verifier construction, diverge copy from verify encoding, or import a second hash implementation / B, C |
-| `XV-17` history-v4 window contract | `.\.venv\Scripts\python.exe -m pytest -q tests/test_db_schema.py tests/test_db_history.py` | Reset-only v4, append-only reliable events, atomic window/terminal visibility, incomplete restart views, and 1..256-row summary/detail bounds remain exact / B, C, Stage 6 slice 7 |
-| `XV-18` observer and dispatcher teardown | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/dispatcher/test_event_bus.py tests/dispatcher/test_dispatcher.py` | New handler, projection, drain, and task lifecycles must still close streams before joins, recover terminal-before-subscribe, and terminate within bounds / D, slices 3, 6, 7 |
-| `XV-19` ids-in, inert layout-honest text out, independent origin check | `.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_commands.py tests/interfaces/web/test_transport.py tests/interfaces/web/test_slots.py tests/interfaces/web/test_transport_headed.py tests/interfaces/web/test_frontend_static.py tests/interfaces/web/test_visible_sequence.py tests/interfaces/web/test_shell_headed.py tests/interfaces/web/test_sync_surface.py tests/interfaces/web/test_inventory_surface.py` | The real page-JS → pinned pywebview return → sole `textContent` writer, raw Python/wire/search preservation, final filesystem layout-control markers, installed DOM/accessibility evidence, and NamiSync-owned sink scan become executable across slices 2, 4, 5, and 6; the split transport/static/visible/shell files plus both later surface files are required because one layer alone cannot prove the full chain / slices 2, 4, 5, 6 |
-| `XV-20` stateless checkpoint | `.\.venv\Scripts\python.exe -m pytest -q tests/test_executor_pipeline.py` | Selection re-derivation and bridge progress must not motivate count-coupled checkpoint behavior in execution / C, slice 5 |
-| M0/Stage 5 CLI behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_cli.py` | The initial Stage 5.5 lanes left this file byte-for-byte unchanged; the integrated adversarial closure adds only the permanent irreversible-update admission regression described by BR-G-17. Every prior explicit sync, history, inventory, and integrity command remains behaviorally unchanged. Slice 1 may later replace only the no-subcommand/entry-point expectations required by the launcher decision / B, C, D, slice 1 |
-| Planner helper behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_planner.py` | `_depth`, `_parent`, and `_is_descendant` are pure relocations; no cleanup or semantic drift is allowed / A |
-| Scanner hostile names, cancellation, and walk completeness | `.\.venv\Scripts\python.exe -m pytest -q tests/test_scanner.py` | Parameterizing the walk must preserve literal names, escaped/unrepresentable reporting, identity-cycle handling, cancellation checks, and every existing incompleteness cause / B |
-| Recorder receipt, range, and transaction behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_recorder_inventory_integrity.py tests/test_recorder_concurrency.py` | Scope enters the payload hash and missing marking gains a third branch; idempotent transaction and concurrency behavior must not weaken / B, D |
-| Inventory/integrity payload and pause behavior | `.\.venv\Scripts\python.exe -m pytest -q tests/test_inventory_workflow.py tests/test_inventory_runtime.py tests/test_payload_roundtrip.py` | A kind-aware shared validator and expanded frozen subject set must preserve strict integrity v2 authority, pause order, and incomplete-scope settlement / B, C, D |
-| Service facade and import boundary | `.\.venv\Scripts\python.exe -m pytest -q tests/test_service.py tests/test_package.py` then `.\.venv\Scripts\lint-imports.exe` | New lifts, state, launcher, and web adapter must preserve primitives-only views, lazy CLI imports, shutdown order, and every layer edge / D, slices 1–3 |
-
-A lane runs every row naming it; integration lane D runs all Stage 5.5 rows.
-Each Stage 6 slice runs its named watch rows and `test_br_g_*` module. BR-G-44
-requires the complete suite before each vertical slice and release:
-
-```powershell
-.\.venv\Scripts\python.exe -m pytest -q -o "addopts="
-.\.venv\Scripts\lint-imports.exe
-git diff --check
-```
-
-No bridge gate may be skipped, xfailed, xpassed, or uncollected on the supported
-Windows profile. The implementation record includes collected
-`test_br_g_*` ids.
+`docs/TESTS.md` and `tests/_departments.py` own executable scope and command
+routing. They supplement the BR-G gates above; changing an existing assertion
+is a regression unless its governing DR changes. BR-G-44 still requires the
+ordinary suite, import-law check, and diff check with no skipped, xfailed,
+xpassed, or uncollected bridge gate on the supported Windows profile.
 
 ### Stage 6
 
-The table is the remaining owner/dependency sequence; the BR-G entries above,
-not the slice prose, define completion. Presentation core is separated from
-plan and inventory so Slices 5 and 6 can proceed in parallel.
-
-| # | Department | Slice | Depends on | Acceptance gate |
-
-| # | Department | Slice | Depends on | Acceptance gate |
-| --- | --- | --- | --- | --- |
-| 0 | Host | pywebview reality spike | nothing | BR-G-30 |
-| 1 | Host | Promote the spike into `bridge.py` / `host.py`; hard dependency; packaged assets; launcher entry point; forced Edge Chromium; single instance | 0 | BR-G-19, BR-G-31 |
-| 2 | Transport | Command allowlist, JSON encoding, opaque-id and folder-picker slots | 1 | BR-G-32 transport/picker/static-sink portion; the gate remains open for the production DOM |
-| 3 | Transport | Event drain with coalescing, bounded wait, reliable backpressure, gap visibility, server-side drain guard | 2 | BR-G-33, BR-G-41 transport/lifecycle foundations, the historically closed v1 BR-G-42 event/transport-custody portion plus its current v4 Tier-1 drift guard, and XV-18 |
-| GUI 1 (completed/realigned) | Presentation foundation | Native material behavior; Fluent neutral/Windows accent roles; exact authored status palette and semantic aliases in `tokens.css`; alias-only controls; fixed local Fluent icon registry; headed component gallery | 3 | SH-G-11, SH-G-12, SH-G-13 foundations and SH-G-14 closed; visual contract in `DESKTOP_UI.md` |
-| 4 (completed/realigned) | Presentation core | Tree-agnostic flatten/window/search/filter and indexed anchor resolver over Lane A's ordered array; bounded installed operable tree renderer and honest shell frame | Lane A, GUI Break 1 | BR-G-2's Stage 6 clause, BR-G-32 generic-tree-sink portion, BR-G-34, SH-G-7 closed |
-| Cosmetic thaw/refreeze | Interface/web | Typed UI-state lifecycle, two-row cosmetic channel, persistent theme override, native/page agreement, and headed gallery repair | 4 | BR-G-46 |
-| 5 | Sync surface | Plan-tree presentation and memo, DR-BR-14 Progress identity, selection controls, indexed autoscroll; vertical sync slice end to end | 3, 4, Lane D | BR-G-32 plan-DOM portion, BR-G-35–37, and the plan portion of BR-G-42 |
-| 6 | Integrity surface | Cached inventory projection, `patch_row`, `view_id` lifecycle, five resolution states, recursive folder context actions, scope-warning display, per-window detail query | 3, 4, Lane D | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39, and the inventory portion of BR-G-42 |
-| 7 | Lifecycle | Database-paged history, settings, remaining typed `ui-state.json` consumers, task close sequence, clean shutdown, terminal-artifact retention policy | 5, 6 | BR-G-40, BR-G-41, BR-G-45, and the history portion of BR-G-42 |
-| GUI 2 | Visual cohesion | Holistic spacing, motion, empty/error-state, accessibility, and responsive review across the completed product surfaces | 7 | `DESKTOP_UI.md` holistic review before release |
-| 8 | Docs/release | PyInstaller and frozen smoke, dependency lock and CI, license/source release material, as-built docs and README, `ui_mockup/` status, clean-checkout release proof | GUI Break 2 | BR-G-43, BR-G-44, and shell-owned SH-G-15 |
-
-**Ordering.** Host/transport Slices 0→1→2→3 precede GUI Break 1
-and Slice 4. The cosmetic thaw/refreeze closes before Slices 5–7 add traffic to
-the bridge. Once Slice 4 and Lane D are complete, Slices 5 and 6 may run in
-parallel; Slice 7 joins them, then GUI Break 2 and Slice 8 close the milestone.
-`DESKTOP_UI.md` owns visual-cohesion criteria and `M1_SHELL.md` owns host and
-package closure. This ordering makes no duration or critical-path claim.
+The BR-G entries define bridge completion. `M1_SHELL_H2.md` is the sole owner
+of the checkpoint 0–12 sequence and review boundaries; each command row above
+records only its activation checkpoint. `M1_SHELL.md` owns the broader legacy
+slice lineage, host/package closure, and deferrals. Neither delivery plan may
+weaken an exact DR, schema, or BR-G gate in this document.
