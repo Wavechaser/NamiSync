@@ -115,6 +115,22 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
+#### Ratify the Stage 6 second-half reslice (2026-08-24)
+
+- Accepted the H2 checkpoint sequence for Slices 5–6 and early Slice 7 while
+  keeping every target contract inactive until its implementation checkpoint;
+  split checkpoint 0 into five serviceable documentation commits.
+- Centralized exact protocol, command, result, task-authority, and retry shapes
+  in one Bridge register mapped back to the owning DR-BR records, with explicit
+  supersession instead of a blanket precedence clause.
+- Made Defense the normative owner of the signed-64 and retained-resource hard
+  walls, replaced Core's decoder-debt discussion with current and accepted
+  boundaries, and reduced component docs to local consequences and pointers.
+- Kept Features at product behavior and Tests free of a parallel checkpoint or
+  case catalog. Independent authority, component, Bridge, and final integration
+  reviews closed the discovered selection, publication, epoch, recents, and
+  mixed-version contradictions before ratification.
+
 #### Extract truthful per-item progress (2026-08-21 – 2026-08-23)
 
 - Established core Progress v4 as the central phase/item/attempt protocol:
