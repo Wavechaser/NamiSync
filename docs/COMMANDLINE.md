@@ -52,6 +52,15 @@ the local
 Semantic defaults live in `settings.json` beside the selected ledger, so an
 explicit `--database` also selects an isolated sibling settings file.
 
+At the accepted Stage 6 database cutover (not active yet), standalone history
+uses the coordinated database-pair validation before querying. CLI history
+summary/detail output renders a persisted review-fact limit as typed durable
+history truth, gives the same narrow-roots or resolve-scan/preflight guidance
+as the desktop, and never reconstructs the refusal from diagnostic text or
+shows a presentation-only omission as history. `DATABASE.md` and `HISTORY.md`
+own the persisted consequence; `M1_BRIDGE.md` owns the shared protocol shape
+and `DEFENSE.md` §1.3 owns the scalar wall.
+
 At the final M1 pre-migrator boundary, ledger v3 and receipt-aware history v5
 require their exact contract markers. Opening a ledger v1-v2 database, any
 history v1-v4 database, or a current-version file with a missing/mismatched

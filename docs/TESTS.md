@@ -85,13 +85,13 @@ to child-copy activity without treating it as settlement. These are behavior
 checks against production producers and the packaged JavaScript, not
 source-text witnesses.
 
-Decoder-boundary guards are deliberately separate: the browser source gate
-keeps `validateLiveSessionEvent` current-version and reachable only from the
-live `event` drain arm, while the service history guard reads a mixed v3/v4
-page as `HistoryEventView` rows. Together they prohibit treating either live
-validation or tolerant Python compatibility decode as a reusable validator for
-the other boundary; `CORE.md` records why the broader strictness repair remains
-deferred.
+Current decoder-boundary guards remain separate: the browser source gate keeps
+`validateLiveSessionEvent` current-version and reachable only from the live
+`event` drain arm, while the service history guard reads a mixed v3/v4 page as
+`HistoryEventView` rows. These are current-behavior regressions, not an accepted
+future compatibility surface. `M1_SHELL_H2.md` checkpoint 3 replaces them at
+the coordinated reset with the exact target and reset tests owned by
+`M1_BRIDGE.md`.
 
 ```powershell
 $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'
@@ -164,6 +164,22 @@ collected test without a department filter.
 .\.venv\Scripts\python.exe -m pytest -q -o "addopts="
 .\.venv\Scripts\lint-imports.exe
 ```
+
+## Accepted-target verification
+
+Accepted but inactive M1 Stage 6 contracts do not become current behavior or
+acceptance evidence until their owning checkpoint activates them.
+`M1_SHELL_H2.md` is the newest delivery plan where it overlaps
+`M1_SHELL.md`; its checkpoint acceptance/test clauses and the referenced
+`M1_BRIDGE.md` gates own the target cases. Do not reproduce checkpoint,
+command, module, or case catalogs here.
+
+While implementing a checkpoint, run focused tests, every affected producer and
+consumer department, and the ordinary suite when a public contract crosses
+departments. Exact primary ownership remains only in
+`tests/_departments.py`. Surface work also runs the real installed WebView2
+witnesses with default addopts cleared. Quantitative evidence follows
+`DEFENSE.md`; a benchmark is not acceptance merely because it ran.
 
 ## Departments
 

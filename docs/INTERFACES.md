@@ -32,9 +32,15 @@ retention and shell-owned SH-G-15 whole-runtime containment remain independently
 open.
 GUI Break 1 and Slice 4 completed their audited realignment and were hardened
 and reverified on 2026-08-17; the user-facing
-plan, inventory, history, and control surfaces remain. The gated desktop bridge
+Setup, plan, inventory, integrity, and control surfaces remain. The history and
+global-settings pages are deferred by the accepted second-half reslice. The gated desktop bridge
 API and production mapping are active, while the current empty product page
 invokes only startup and has no later workflow-surface callers yet.
+
+The accepted Stage 6 second-half target is not active yet. It adds native
+directory admission, complete Setup, process-live desktop tasks, compact
+artifacts, and bounded evidence reads. Exact cutovers live in
+[M1_BRIDGE.md](M1_BRIDGE.md); history/settings pages remain deferred.
 
 ## Purpose
 
@@ -103,11 +109,14 @@ preserves the untouched M0/CLI default and opts into the Stage 4
 execute→verify workflow only when requested. An omitted revision is valid only
 for pristine revision-zero selection. Edited review state requires the current
 revision; commitment transitions `reviewing → committing → committed`, with
-admission failure restoring `reviewing`. Replanning resets user selection but
-advances the request's revision monotonically, even when deterministic
+admission failure restoring `reviewing`. At the direct service boundary, an
+internal replacement of an artifact under one request resets user selection
+and advances that request's revision monotonically, even when deterministic
 operation ids repeat. Recognized selection command ids remain retry tombstones
 across that replacement, so a lost response cannot reapply old intent to the
-new artifact. Folder gestures expand only toggleable descendants; a
+new artifact. The H2 desktop exposes no such in-task replacement: changed Setup
+or fresh planning creates a new task, while the old plan slot stays immutable.
+Folder gestures expand only toggleable descendants; a
 safety-disabled row remains disabled without making selectable siblings inert.
 Only the execution registration supplies
 `settle_canceled=runtime.settle_canceled_execution`; the service does not decode
@@ -164,6 +173,29 @@ get_history_items(run_token, *, after_order=0, through_order=None, limit=256)
 get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
     -> HistoryEventPageView
 ```
+
+### Accepted Stage 6 second-half service target
+
+Exact wire, scalar, task-authority, population, and retention contracts live in
+[M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md).
+
+Workflow owns parsing, fresh admission, and canonical Setup; the adapter owns
+only bounded intent slots and recomputed recent-location handles. Every desktop
+session adopts observation before schedulability. Its process-live task binds
+at most one current session, retains orthogonal named generations, and keeps a
+published H2 plan immutable without inventing domain lifecycle or volume locks.
+
+Only complete review generations and compact overlays become task state.
+Terminal reconciliation repairs delivery gaps; full result items and transient
+hashes never enter JavaScript. Server projections own hierarchy, scope, paging,
+and framing. Task reads rehydrate the UI, exact release removes session custody,
+and close destroys task presentation/receipts. Interfaces follow and recheck
+bridge authority around outside work.
+
+External values are validated before presentation construction. Numeric
+encoding follows bridge/defense domains and identity remains non-arithmetic.
+Execution evidence is an atomic ledger view, never later-start authority; exact
+classification lives in the bridge and [DATABASE.md](DATABASE.md).
 
 `DatabaseContractView` contains only primitive `state`, `reason`, and
 `reset_direction` fields. Its validation method is strictly read-only and
@@ -224,33 +256,35 @@ receipt ids, and the original UTC timestamp.
 
 The id-based location form rejects an explicit empty collection and ids from a
 different location. Row ids remain exact subjects. Folder node ids resolve
-through the location-scoped workflow tree: refresh carries a recursive subtree
-root so it can discover new descendants, while integrity freezes the indexed
-subtree to exact paths before admission. Path-based CLI calls retain their
-existing full/exact behavior.
+through the location-scoped workflow tree using the bridge-owned opaque codec.
+Refresh carries a recursive subtree root so it can discover new descendants,
+while integrity freezes the indexed subtree to exact paths before admission.
+Path-based CLI calls retain their existing full/exact behavior.
 If a queued or resumed activity becomes unresolved at wake-up, its retained
 `InventoryDetailsView` carries the same state/candidates and the CLI renders the
 same corrective guidance. A provisional ambiguous binding exposes no selected
 mount; only an actual prior explicit choice is reported as selected.
 
-Session-creating plan, execution, inventory, and integrity commands use bounded
-command-id single-flight guards around receipt lookup, mutable validation,
-admission, and receipt publication. Plan retries check the original path
-gesture before revalidating a filesystem that may have changed after admission;
-ID-based location retry signatures likewise bind the canonical raw opaque-id
-gesture and are checked before rereading mutable inventory. Different command
-ids remain independently admissible; execution keeps its named `in-flight`
-commitment response. Closing a retained session releases its receipt, and
-receipt lookup, publication, and removal share one lifecycle gate with
-dispatcher retention so neither a retry nor a late admission can return a
-receipt for an already-closed session. Shutdown prevents a late admission
-return from repopulating cleared receipt state; its closed transition and
-receipt-map clearing take that same gate, so an in-flight replay finishes
-before invalidation.
+The currently implemented session-creating plan, execution, inventory, and
+integrity commands use bounded command-id single-flight guards around receipt
+lookup, mutable validation, admission, and receipt publication. Plan retries
+check the original path gesture before revalidating a filesystem that may have
+changed after admission; ID-based location retry signatures likewise bind the
+canonical raw opaque-id gesture and are checked before rereading mutable
+inventory. Different command ids remain independently admissible; execution
+keeps its named `in-flight` commitment response. In the current session-oriented
+implementation, closing a retained session releases its receipt, and receipt
+lookup, publication, and removal share one lifecycle gate with dispatcher
+retention. The accepted task target moves desktop receipt lifetime to explicit
+task close so plan and later-session replay remain recoverable after terminal
+session release; session-exact release removes only dispatcher/observation
+authority. Shutdown still prevents a late admission return from repopulating
+cleared receipt state, and close-receipt tombstones remain bounded.
 
-The web task boundary owns its linked observation, session, plan, and start
-receipt. `M1_BRIDGE.md` exclusively defines terminal-session release, explicit
-task close, receipt convergence, and the live-task capacity exposed through the
+The web task boundary owns its linked observation, zero-or-one current session,
+retained plan and pane artifacts, revisions, reservations, and receipts.
+`M1_BRIDGE.md` exclusively defines terminal-session release, explicit task
+close, receipt convergence, and the count/byte capacity exposed through the
 bridge. Plan task records retain the workflow's exact `sync-plan` kind across
 the service and browser boundary; the adapter does not rename it. Retained
 database history remains independent of adapter task cleanup.
@@ -264,10 +298,13 @@ booleans, and source-casing propagation. A partial patch preserves omitted
 fields. Public view construction requires exact booleans, tuple-of-string
 filters, a supported deletion value, and the correct preservation view, so an
 invalid patch cannot poison the atomic settings file.
-`start_plan(..., deletion_policy=None)` captures the complete stored
-snapshot once; an explicit deletion override changes only that plan, and
-review exposes the complete frozen snapshot while commit/execution never reread
-settings.
+The currently active `start_plan(..., deletion_policy=None)` captures the
+complete stored snapshot once; an explicit deletion override changes only that
+plan, and review exposes the complete frozen snapshot while commit/execution
+never reread settings. At the accepted desktop Setup cutover, the bridge
+submits one complete raw Setup value and freezes only the backend-derived
+canonical snapshot. It leaves global settings unchanged; exact Setup fields
+remain bridge authority.
 
 `classify_result(OperationResultView)` returns a primitive
 `ResultClassificationView` containing the workflow-owned headline and the
@@ -283,10 +320,12 @@ stream, and otherwise forwards only primitive session event/record views to the
 sink. Its worker blocks on `EventStream.next()` without polling, recovers an
 ejected stream from the first undelivered sequence, and never exposes the raw
 stream. Slice 3 adds an explicit positive-first-desired-sequence resubscribe
-seam. Plan start may transactionally adopt a preopened stream before `PENDING`
-and schedulable publication; that sink is excluded from receipt identity, and
-attach failure or a shutdown race rolls back the unpublished session and starts
-no work. Unsubscribe closes every stream before joining its worker. Service
+seam. The currently implemented plan start may transactionally adopt a
+preopened stream before `PENDING` and schedulable publication. The accepted
+target makes that path mandatory for every desktop session start. In both forms
+the sink is excluded from receipt identity, and attach failure or a shutdown
+race rolls back the unpublished session and starts no work. Unsubscribe closes
+every stream before joining its worker. Service
 shutdown closes all observer streams and joins all observer threads before
 dispatcher shutdown, then closes the workflow runtime last so audit finalization
 cannot reach a closed history store. A join timeout retains the unjoined
@@ -322,8 +361,9 @@ it. This document records their interface-layer implementation.
 The replacement for the unused `interfaces/ui_state.py` prototype now owns
 strict-shape `ui-state.json` independently from database-owned
 semantic defaults. Schema v1 contains only the typed appearance section and
-its `system`, `light`, or `dark` value; later recents, geometry, column, sort,
-treegrid expansion/grouping, and filter state require typed schema additions.
+its `system`, `light`, or `dark` value. Ledger-derived recents never enter this
+file; geometry, column, sort, treegrid expansion/grouping, and filter state
+require later typed schema additions.
 The owner bounds the file before decoding, refuses duplicate or unknown
 members, and never rewrites during load. Missing state yields clean defaults;
 malformed current state yields dirty session defaults; a newer unsupported
@@ -531,8 +571,11 @@ deadlines/retry and revision identity, drain queue and recovery, visible
 sequence, terminal reconciliation, terminal-session release versus explicit
 task close, and all BR-G evidence. Implementation placement remains discrete:
 `commands.py` owns rows and validators, `bridge.py` owns dispatch security,
-`slots.py` owns process-local path authority, `drain.py` owns adapter event
-queues, and only `assets/bridge.js` references `window.pywebview`.
+`slots.py` owns bounded process-local opaque intent slots, `drain.py` owns
+adapter task/event/artifact custody, and only `assets/bridge.js` references
+`window.pywebview`. At the accepted location-admission checkpoint, workflows
+own path parsing, probing, and candidate classification; a slot never becomes a
+second path-policy authority.
 
 The explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed. Numeric holes
@@ -707,6 +750,8 @@ failure is logged without changing the close phase or service result.
   exclusively defines the desktop ceiling; a future REST, IPC, or other adapter
   must impose an equal-or-stricter whole-request limit before constructing
   internal presentation values.
+- Enforce the bridge/defense numeric-domain contract before persistence or view
+  construction; do not reinterpret opaque identity as arithmetic.
 - Validate syntax/presence early and report actionable path/input errors; domain
   validation remains in workflow/preflight.
 - Submit through dispatcher/registry rather than starting ad hoc workers that
@@ -720,9 +765,12 @@ failure is logged without changing the close phase or service result.
 - Present refusal, cancellation, partial failure, recording-behind, history
   failure, integrity mismatch, and verification-incomplete as distinct states.
 - Keep plan, inventory, and history presentation models orthogonal.
-- Commit only after the plan session terminates, binding plan fingerprint and
-  exact selection digest. Never expose an “execute anyway” path around
-  commitment or fresh preflight.
+- Commit only after the plan session terminates. Validate the exact core
+  commitment from [M1_BRIDGE.md](M1_BRIDGE.md); execution exposes no field that
+  can resupply a frozen choice. Never expose an “execute anyway” path around
+  commitment or fresh preflight. Reviewed preflight notices describe the
+  initial selection; after edits they remain context, while execution freshly
+  preflights the committed set.
 - Runtime thread/ownership guards raise real exceptions, not `assert`.
 
 ## Shared Actions
@@ -737,12 +785,12 @@ is testable without entering a modal event loop.
 
 ## Session And Worker Boundary
 
-Dispatcher is the lifecycle source of truth. A desktop may need toolkit threads
-to keep its event loop responsive, but those adapters do not invent another
-domain session state machine or own volume locks. Worker release is identity-
-checked, result delivery is marshaled to the UI thread, and close waits for
-actual thread/session completion without blocking the event delivery needed to
-complete it.
+Dispatcher remains each session's lifecycle truth. The adapter task serializes
+attachment and retains presentation without owning volume locks or rewriting
+dispatcher/history truth. Publication faults follow the bridge protocol, and
+queued events cannot repopulate discarded provisional state. Toolkit worker
+release is task/session-checked, delivery is marshaled to the UI thread, and
+close waits without blocking the terminal record needed to finish.
 
 ## Security And Data Isolation
 
@@ -790,9 +838,11 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
   core/modules/db directly under the agreed composition-root arrangement.
 - Equivalent CLI/desktop requests produce equivalent workflow payloads and
   result classification.
-- Location commands bind exactly one explicit root or retained id before
-  submission; ambiguity requires a listed mount, and no mapping role is
-  inferred.
+- Current CLI location commands bind exactly one explicit root or retained id
+  before submission; ambiguity requires a listed mount, and no mapping role is
+  inferred. The accepted desktop target instead supplies a purpose-bound slot
+  earned through the common picker/typed/recent admission service and freshly
+  re-admits it at every real start.
 - Semantic settings read/partial-commit views contain primitives only; planning
   captures one immutable full snapshot and a deletion override changes no other
   field.
@@ -824,3 +874,8 @@ test hangs, duplicated action wiring, and `assert`-only thread guards.
 - The security spike forces Edge Chromium, attaches both native navigation
   guards, rejects a dispatch after hostile navigation, and exposes only the
   versioned allowlisted structured endpoint.
+- Stage 6 interface tests cover task rehydration, immutable generations,
+  server-owned trees, shared admission, and guarded evidence; exact gates live
+  in [M1_BRIDGE.md](M1_BRIDGE.md), checkpoint coverage in
+  [M1_SHELL_H2.md](M1_SHELL_H2.md), and test-scope policy in
+  [TESTS.md](TESTS.md).

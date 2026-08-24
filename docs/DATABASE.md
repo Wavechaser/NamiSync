@@ -6,6 +6,59 @@ ledger-v3/history-v5 coordinated reset boundary and semantic settings store are
 implemented. General migrations, retention, and backup/protection workflows
 remain later work.
 
+## Accepted V4/V6 Persistence Target (Not Active)
+
+Status: accepted on 2026-08-24. Ledger v3/history v5 and their current pair
+validation remain active until protocol checkpoint 3; the checkpoint is a
+coordinated pre-release reset, not an in-place migration.
+
+| Database | Schema | `data_epoch` | `contract_id` |
+| --- | ---: | ---: | --- |
+| ledger | 4 | 5 | `m1-ledger-v4-event-v5-evidence-v1` |
+| history | 6 | 5 | `m1-history-v6-event-v5-recording-v1` |
+
+Both metadata rows are mandatory. Two absent main files with no sidecars remain
+the only fresh state. Any old or mixed pair, one-present pair, missing/wrong
+marker, or orphan WAL/SHM/journal sidecar is refused by read-only validation
+before startup or CLI work. The refusal directs the user to close NamiSync and
+archive or delete both database mains and all sidecars together; startup does
+not migrate, repair, or delete them. Standalone history adopts the same pair
+validation at this epoch.
+
+Ledger v4 adds the canonical target-relative key required by execution-evidence
+joins; it does not add an operation digest. Indexed, bounded recent-location
+queries return eligible durable run/mapping identities in deterministic order
+and exclude soft-deleted mappings. Process-local recent ids remain outside the
+database.
+
+At the accepted cutover, ledger numeric and native-identity storage follows
+`DEFENSE.md` §1.3 and the mapped bridge decision without a database-local
+domain or codec variant. `HISTORY.md` owns canonical event-envelope
+persistence.
+
+History v6 admits only its coordinated core-event version and adds a nullable,
+all-or-complete review-limit terminal group. `HISTORY.md` owns its durable
+observer/finalization consequences; `M1_BRIDGE.md` owns the exact shared shape.
+Presentation-only omission state is never stored.
+
+### Atomic execution-evidence read
+
+The execution-evidence repository resolves one retained execution identity and
+a bounded operation window in one SQLite read transaction. It joins committed
+operation identity to current target inventory evidence through the canonical
+target key, batches keys, treats duplicate eligible operations as ambiguity,
+and never substitutes an internal row id for the textual run token.
+
+It returns the evidence needed for the bridge-owned recorded-copy,
+already-verified, unrecorded, superseded, and not-applicable classification;
+current-state evidence cannot silently become execution evidence. Later task
+failure does not revoke an independently committed item receipt.
+
+Manual exact handoff requires a fresh coherent snapshot, repeats the repository
+read before verifier attachment, and retains the original execution scope as
+conditional authority. Recording degradation outside an item does not erase
+coherent item evidence; explicit settlement divergence blocks the handoff.
+
 ## Purpose And Boundaries
 
 `namisync.db` owns SQLite schemas, connection factories, recorder implementation,

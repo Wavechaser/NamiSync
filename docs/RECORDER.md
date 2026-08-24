@@ -5,6 +5,25 @@ shared conditional integrity write are implemented. M1 Stage 4 adds atomic
 copy-identity returns and one logical recorder window across optional linked
 verification. Maintenance recording remains later work.
 
+## Accepted Recording-Truth Target (Not Active)
+
+The checkpoint sequence and exact result vocabulary are owned by
+[M1_BRIDGE.md](M1_BRIDGE.md). Locally, each recorder call produces one typed,
+operation-local truth result. A committed receipt is final and idempotent; an
+identical byte-producing replay returns the same complete
+`RecordedCopyIdentity`. Storage failure remains typed and cannot degrade a
+different operation or revoke an earlier committed transaction.
+
+The identity relation remains exact: `operations.run_id` refers to `runs.id`,
+while `RecordedCopyIdentity.scope_token` is that run's textual `run_token`.
+Location id and canonical target key come from the same transaction as the
+receipt and evidence. Recorder adds no operation-digest column.
+
+Executor and workflow own settlement attribution and manual post-copy policy.
+Recorder only supplies typed storage outcomes and conditional writes against
+the original scope, rechecking row, location, canonical path, present state,
+scope, current stat, attestation, and invalidation at the point of use.
+
 ## Purpose
 
 Recorder is the only write path into the main ledger. Executor, inventory

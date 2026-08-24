@@ -196,6 +196,11 @@ Unknowns degrade conservatively: unknown seek penalty behaves like HDD for any
 future parallelism decision; absent stable identity disables identity moves;
 coarse timestamps control planner comparison tolerance.
 
+At the accepted scalar cutover, scanner projects unsupported numeric and native
+identity observations through the exact typed outcomes in
+[M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; it defines no
+local numeric domain or fallback.
+
 The stable volume key is `(serial, fs_type)`; labels are mutable corroborating
 evidence. Relabeling does not rebind, a changed filesystem type does, and
 simultaneous duplicate keys require explicit user choice.

@@ -6,7 +6,10 @@ Stage 5.5 recursive scan-scope foundation are implemented. Inventory is not a ne
 sideways-calling operation module: scanner observes, workflows coordinate, and
 database repositories/recorder retain state. The Stage 5 CLI exposes explicit
 location inventory and integrity starts through the shared service; desktop
-actions remain Stage 6.
+actions remain Stage 6. The Setup admission, remembered-location, cached-
+projection, ledger-current evidence, and manual-handoff contracts below are
+accepted Stage 6 targets and are not active until their implementation gates
+close.
 
 ## Purpose
 
@@ -79,6 +82,10 @@ widening selection. Stale-before integrity consumes the stale repository query
 directly and fetches only exact completed rows needed to preserve settlement;
 selected-path and intentional full Verify All scope remain unchanged.
 
+Desktop rebaseline requires explicit acknowledgement of current evidence;
+baseline and verify do not. The bridge owns the exact receipted request shape
+and rejects a mismatched intent before scope, ledger, or native work.
+
 Inventory continuation payloads are strict version 2 because they carry
 `subtree_roots` separately from exact `selected_paths`. Integrity continuations
 independently advance to strict version 2 so a pause retains its physical-read
@@ -96,6 +103,45 @@ verifier once as `unsupported`, receive no attestation, and keep the integrity
 result incomplete without suppressing readable siblings. An ignored subject, a
 root/global warning, cancellation, or any other unaccounted scope gap still
 refuses before hashing.
+
+## Accepted Stage 6 Desktop Contracts (Not Active)
+
+Exact Setup admission, recents, bridge wire shapes, paging, hard walls, scalar
+domains, and retention accounting are centralized in
+[M1_BRIDGE.md](M1_BRIDGE.md), with safety classification in
+[DEFENSE.md](DEFENSE.md). Inventory consumes the shared workflow-owned location
+candidate pipeline and always re-admits a real start; a slot or
+`RootAuthority` is evidence, never cached authorization.
+
+The desktop inventory projection is one canonical server-side view over a
+complete immutable inventory generation. Search, filters, collapse, visible
+order, action scope, and windows all derive from that projection; the browser
+does not reconstruct hierarchy or scope from paths or its current page.
+Projection eviction removes only rebuildable view state. A refused refresh
+stages no partial artifact and preserves the prior inventory generation and its
+view identity unchanged.
+
+Warning rows are informational leaves, not inventory subjects. They have typed,
+stable identities and attachment order, but never enter the canonical path
+index, domain subtree membership, rollups, or action-scope resolution. Detail,
+acknowledge/restore, refresh, and integrity commands reject a warning target
+before ledger or native work. Folder rollups cover domain descendants only and
+are independent of filtering and acknowledged-row hiding; checked byte
+accumulation reports overflow rather than clamping.
+
+Each inventory row keeps two orthogonal facts: ledger-derived
+`verification_state` and the latest ordinary-integrity overlay. Replacing an
+ordinary-integrity generation cannot rewrite execution or manual post-copy
+truth. Live overlays reconcile through the frozen workflow-item-to-domain-node
+map; unknown or duplicate alignment is structural failure, never a path join.
+The exact overlay and replacement protocol is owned by the bridge plan.
+
+File detail exposes current durable ledger evidence. Execution evidence is a
+separate atomic-read projection over the original execution scope; it does not
+turn a plan row into hash storage or reinterpret ordinary integrity state.
+[VERIFIER.md](VERIFIER.md) owns how eligible durable evidence becomes a manual
+exact post-copy handoff, while [DATABASE.md](DATABASE.md) and the bridge plan
+own the exact join and wire classification.
 
 ## State Model
 
@@ -263,3 +309,8 @@ summary and policy; missing acknowledgement is not pruning.
 - Fresh mode filtering and frozen-resume selection preserve original admitted
   order, completed ids/bytes, and the original row set.
 - UI filtering and Plan invalidation cannot clear or mutate inventory state.
+
+The Stage 6 checkpoint coverage is maintained in
+[M1_SHELL_H2.md](M1_SHELL_H2.md), while [TESTS.md](TESTS.md) owns test-scope
+policy; this document's criteria cover inventory-owned reconciliation and
+evidence behavior.

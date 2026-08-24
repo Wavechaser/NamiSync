@@ -9,6 +9,28 @@ continuation evidence for optional in-session readback. External writers remain
 outside NamiSync's volume-lock contract; the residual races are documented
 below rather than presented as closed.
 
+## Accepted Recording-Settlement Target (Not Active)
+
+The activation sequence and exact result/event shapes are owned by
+[M1_BRIDGE.md](M1_BRIDGE.md). Executor's local target is operation-local typed
+recording attribution: one recorder failure can lower the aggregate floor but
+cannot label another operation degraded or convert filesystem success into
+filesystem failure. Task-scoped recording issues preserve first observation
+order and never rewrite a settled item or suppress committed evidence.
+
+Publication evidence remains success-only and process-local. It may support
+immediate linked readback and pause/resume, but it is neither ledger/history
+state nor desktop presentation data and must be gone before terminal session
+publication. Exact continuation custody and omission witnesses are specified
+by the bridge plan.
+
+The settlement oracle remains the change gate. Typed projection must preserve
+its protected scenario/row manifest, normalized filesystem and recorder
+traces, baseline, and semantic hash. Structural settlement work stays blocked
+until three identical runs and independent review pass. The oracle owns its
+scenario manifest, [M1_SHELL_H2.md](M1_SHELL_H2.md) owns checkpoint coverage,
+and [TESTS.md](TESTS.md) owns test-scope policy; none is duplicated here.
+
 ## Purpose
 
 The executor is the only module that applies a reviewed `ExecutionSet` to
@@ -45,19 +67,22 @@ contract remains in `test_executor_acl.py`.
 execute(xset, ctx, recorder, policies, fs) -> OperationResult
 ```
 
-The caller holds deterministic physical-volume custody and validates that the
-`Commitment` matches both immutable plan fingerprint and exact selection digest
-before preflight. Workflow alone performs a fresh observe → preflight → execute
-sequence on every start/resume; executor imports no preflight sibling. A refusal
-permits no temp cleanup or other mutation. After a successful verdict, workflow
-passes preflight's touched-target-parent scope to the executor filesystem for
-one exact prior-run temp sweep, then processes dependency-ready operations in
-plan order. A sweep failure stops before any planned operation is admitted.
+The caller holds deterministic physical-volume custody and validates the exact
+core `Commitment` defined by [M1_BRIDGE.md](M1_BRIDGE.md). Execution admission
+cannot resupply or reinterpret frozen setup choices. Workflow alone performs a
+fresh observe → preflight → execute sequence
+on every start/resume; executor imports no preflight sibling. A refusal permits
+no temp cleanup or other mutation. After a successful verdict, workflow passes
+preflight's touched-target-parent scope to the executor filesystem for one exact
+prior-run temp sweep, then processes dependency-ready operations in plan order.
+A sweep failure stops before any planned operation is admitted.
 
 The core generic session runner emits the single terminal event. Executor emits
-phase, progress, and item outcomes only, returns one complete result,
-and lets `Canceled`/`PauseRequested` unwind to that runner after its own safe
-operation-boundary cleanup.
+phase, progress, and item outcomes only, returns one complete
+`OperationResult`, and never emits the terminal projection. Event-v5 detail,
+scalar, omission, and envelope rules are centralized in
+[M1_BRIDGE.md](M1_BRIDGE.md). `Canceled`/`PauseRequested` unwind to the runner
+after executor's own safe operation-boundary cleanup.
 
 ## Universal Operation Rules
 
@@ -472,7 +497,7 @@ The retained baseline is `tools/executor_settlement_baseline.json`, currently
 with oracle `format_version: 1`. The resume gate is exactly:
 
 ```powershell
-python -m tools.executor_settlement_audit check --repeat 3
+.\.venv\Scripts\python.exe -m tools.executor_settlement_audit check --repeat 3
 ```
 
 For the current 30-scenario, 70-row manifest, success ends with

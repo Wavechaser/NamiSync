@@ -15,6 +15,31 @@ Stage 5.5 facade integration is complete;
 Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
+## Accepted Stage 6 Second-Half Workflow Contract (Not Active)
+
+The checkpoint sequence is owned by
+[M1_SHELL_H2.md](M1_SHELL_H2.md); exact event/result and task protocols live in
+[M1_BRIDGE.md](M1_BRIDGE.md), and numeric/retention walls in
+[DEFENSE.md](DEFENSE.md) §1.3. Workflows consume those contracts without
+treating a continuation version as a global epoch or receiving an
+interface-owned task claim.
+
+Execution continuation remains opaque process-local custody. It may carry the
+operation-local recording attribution and transient publication evidence needed
+for same-session pause/resume or automatic linked verification, but that
+evidence never becomes history, ledger, desktop artifact, or JavaScript state.
+Manual exact post-copy verification instead opens a distinct session and
+classifies current durable evidence in the original execution scope.
+
+Workflow aggregation preserves operation-local recording truth and ordered
+task issues: later failure cannot rewrite an emitted item or revoke committed
+evidence. Exact item, task-issue, terminal-summary, and omission vocabularies
+remain core/bridge authority.
+
+At the accepted scalar cutover, workflow accumulation follows the exact
+checked-arithmetic contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
+[DEFENSE.md](DEFENSE.md) §1.3 without a workflow-local numeric variant.
+
 ## Purpose
 
 Workflows are plain top-to-bottom functions and the only place operation modules
@@ -32,13 +57,49 @@ execution does not receive or reread a settings provider.
 
 ### Node tree substrate
 
-`build_node_tree` is a pure workflow helper over path-keyed members. Its opaque
-node ids bind tree kind, scope identity, and canonical relative-path key; the
-empty-key root is always addressable. It emits deterministic pre-order nodes
-with position, depth, parent index, and exclusive subtree end, plus read-only
-id/path indexes, direct member ids, on-demand subtree membership, and bottom-up
-member counts. Plan presentation, move grouping, and projection caches remain
-Stage 6 concerns rather than tree-builder policy.
+`build_node_tree` is a pure workflow helper over path-keyed members. It emits
+deterministic preorder structure, immutable id/path indexes, direct member ids,
+subtree membership, and bottom-up member counts. The empty-key root is always
+addressable and the canonical path index remains one-to-one and domain-only.
+
+Plan projection preserves that single path authority when several immutable
+operations share one target. It retains one path/group row and emits every
+operation once as a direct member, with a separate operation-id index for item
+anchors. Group presentation never changes executable membership or grants
+filesystem-folder action semantics.
+
+Informational warning/notice leaves are interleaved only after the domain tree
+is built. They have typed stable identities and deterministic attachment, but
+never enter the canonical path index, subtree membership, selection, rollups,
+or actionable scope. Exact node codecs, ordering, projection frames, diagnostic
+omission, and population walls are owned by [M1_BRIDGE.md](M1_BRIDGE.md).
+Presentation filters, move grouping, overlays, and caches remain Stage 6
+service/interface concerns rather than tree-builder policy.
+
+### Review publication
+
+Stage 6 injects an immutable workflow-owned `ReviewPublicationContext` and a
+workflow-level `ReviewPublicationSink` implemented by the task service. The
+incremental collector either stages one complete immutable plan/inventory
+candidate—including indexes, rollups, charge, and omission identities—or
+returns the typed no-partial population refusal. It never returns an unbounded
+or partial raw graph.
+
+The workflow invokes the sink only for the exact session/slot/tree intent it was
+given and stages at most once. Once successful fresh preflight has staged its
+complete notice generation, expected execution failures and cancellation are
+contained into a normal terminal `OperationResult` so the stage survives for
+reconciliation. Missing, duplicate, rejected, contradictory, or escaped
+post-stage behavior is structural producer failure, not a recoverable workflow
+result. The exact stage/result matrix, latch behavior, owner reconciliation,
+fault disposition, and retry boundary are bridge authority.
+
+An initial plan or inventory publication has no prior baseline. Inventory
+refresh evaluates the complete candidate in place of the old inventory for
+population admission but does not reclaim the still-owned generation before
+atomic swap. Fresh execution preflight similarly replaces its complete notice
+set—even when empty—without replacing the immutable plan. Workflow never
+reprojects a staged candidate after publication.
 
 ## Reviewed Sync
 
@@ -63,16 +124,18 @@ Stage 6 concerns rather than tree-builder policy.
    `DEFERRED`, and withhold destructive/identity moves when either scan is
    incomplete.
 7. Observe/preflight that exact selection for review information.
-8. Return immutable serializable plan/verdict; terminate and release locks.
+8. Return the immutable plan/verdict with reviewed authority and typed warning/
+   refusal facts intact; terminate and release locks. Stage 6 projects those
+   facts as inert notices rather than flattening or dropping them.
 
 ### Execution session
 
 1. Re-derive the authoritative execution selection from the immutable plan,
-   its safety exclusions, and canonical `user_deselected` set. Accept only an
-   explicit `Commitment` whose plan fingerprint and selection digest match that
-   result and refuse a mismatched carried selection before preflight. An
-   all-skipped result refuses because there is nothing to execute; a selected
-   `NOOP` remains executable work.
+   safety exclusions, and canonical `user_deselected` set. Validate the exact
+   core `Commitment` defined by [M1_BRIDGE.md](M1_BRIDGE.md); execution cannot
+   resupply a frozen Setup choice. Refuse a malformed or mismatched commitment
+   before preflight. An all-skipped result refuses because there is nothing to
+   execute; a selected `NOOP` remains executable work.
 2. Reacquire required physical-volume custody.
 3. Consume the immutable semantic snapshot bound into the reviewed plan; never
    reread global defaults to decide admitted filesystem behavior.
@@ -100,19 +163,21 @@ Stage 6 concerns rather than tree-builder policy.
 The default execution path still ends after step 6, preserving M0 behavior.
 
 Human review occurs between sessions with nothing running. Commitment is the
-durable preauthorization and has no time expiry, but it binds exactly one plan
-fingerprint and dependency-closed selection. Scripts and queue releases may
-replay an existing commitment; no API plans and executes in one unreviewed
-breath.
+durable preauthorization and has no time expiry, but binds exactly one plan,
+dependency-closed selection, approval, and frozen linked-verification choice.
+Scripts and queue releases may replay it; no API plans and executes in one
+unreviewed breath or supplies a later linked-verification choice.
 
 The implemented Stage 5.5 selection substrate keeps safety exclusions and
 direct user deselection distinct. Effective exclusion closes downward over
 dependencies; reselection removes the requested operation and its transitive
 dependencies from `user_deselected`, but can never clear a safety exclusion.
 Execution rejects an empty or mismatched re-derived set before observation and
-preflight. The service integration owns review revisions, replan discard, and
-the reviewing/committing/committed transition; the client submits revisions and
-opaque ids but never becomes selection authority.
+preflight. The service integration owns review revisions, lower-level direct-
+artifact replacement discard, and the reviewing/committing/committed
+transition; the client submits revisions and opaque ids but never becomes
+selection authority. The H2 desktop never replaces a published task plan in
+place: a fresh review creates a new task and default selection.
 
 ### M0 implementation
 
@@ -437,8 +502,8 @@ mutation.
 
 The continuation is process-local custody state, not a durable recovery
 format. `InMemorySessionStore.load_all()` deliberately returns no sessions;
-closing the process offers no execute/verify resume even though the strict
-execution payload v5 codec can round-trip an in-process snapshot.
+closing the process offers no execute/verify resume. Exact active/accepted
+payload versions are centralized in [M1_BRIDGE.md](M1_BRIDGE.md).
 Splitting standalone-integrity continuation payloads is deferred: its exact v2
 candidate/completed/authority payload remains until a named late-run pause
 reserialization benchmark over large `completed_bytes` demonstrates that it
@@ -557,7 +622,9 @@ import from handling refusal differently than baseline/verify.
   audit axes.
 - Replay/undo/repair never execute retained historical operations directly and
   always create a new reviewed plan.
-- Plan-only option changes invalidate plan but preserve inventory; location
-  changes invalidate only state whose identity depends on that location.
+- A lower-level plan-only option change invalidates that direct caller's plan
+  while preserving unrelated inventory. The H2 desktop never mutates or
+  replaces a published task plan: changed options or locations create a new
+  planning task, while the old task remains immutable until close.
 - Import-linter proves workflows may import core/modules/db but not dispatcher
   or interfaces.

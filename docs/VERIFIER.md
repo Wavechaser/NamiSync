@@ -8,7 +8,9 @@ all four headless kinds and receipt-aware history v5 commits standalone and
 compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
-actions remain Stage 6.
+actions remain Stage 6. The no-rescan manual post-copy handoff, ledger-current
+classification, and signed-64 desktop scalar rules below are accepted Stage 6
+targets and are not active until their implementation gates close.
 
 ## Purpose
 
@@ -214,10 +216,49 @@ evidence is missing therefore remains visible in every verify `Progress`
 for it; the same admission feeds the incomplete terminal phase. This paired
 invocation context is not continuation state and does not alter payload version
 5: resume re-derives it from the exact `VerifyContinuation` before constructing
-the reporter.
+the reporter. Exact continuation and event versions, closed detail
+projection, scalar domains, omission witnesses, and envelope limits are owned by
+[M1_BRIDGE.md](M1_BRIDGE.md); verifier preserves only the local pause/resume
+state needed to continue the same admitted work.
 
-Manual verification is location-scoped and independent of any current plan or
-mapping. It must not require both source and target roots.
+Ordinary manual verification is location-scoped and independent of any current
+plan or mapping. It must not require both source and target roots. The deferred
+post-copy action is a separate, explicitly execution-linked workflow.
+
+### Accepted Stage 6 manual post-copy handoff (not active)
+
+Deferred exact verification classifies current durable ledger state; it never
+reconstructs candidates from retained operation-time hashes. Those transient
+attestations exist only for immediate linked verification and same-session
+pause/resume and never become history, ledger, task, or JavaScript state. The
+exact atomic join and presentation classification are centralized in
+[M1_BRIDGE.md](M1_BRIDGE.md) and [DATABASE.md](DATABASE.md).
+
+A handoff is ready only when every applicable selected byte-producing operation
+has a successful terminal outcome and current committed evidence. An unrelated
+non-byte failure or a task-level close/flush issue does not erase committed
+evidence, but unrecorded, superseded, incomplete, or post-settlement-diverged
+work blocks the exact handoff. An empty applicable set is not vacuous success,
+and an all-already-verified set starts no work.
+
+Start never treats a prior read as authorization. It reclassifies atomically,
+freshly admits the target only for a ready subset, then classifies once more to
+freeze the work. The verifier reads and conditionally records against the
+original execution scope; a last-moment row, stat, scope, mount, or invalidation
+race becomes a truthful item/result disposition rather than evidence for a
+different state.
+
+A ready handoff receives a new dispatcher/history session and publishes only
+the task's replaceable post-copy result. It cannot rewrite immutable execution
+truth or the ordinary-integrity result. A later attempt may retry only what is
+currently ready. When exact handoff is unavailable, the fallback is an
+explicitly ordinary verify-current workflow whose refresh may establish a new
+scope. Exact replacement retention and task attachment semantics remain bridge
+authority.
+
+At the accepted scalar cutover, verifier totals follow the checked-arithmetic
+contract in [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
+verifier defines no local numeric or file-identity variant.
 
 Verify, baseline, and the implemented rebaseline entry point carry per-item
 status as their pause continuation. They emit each reliable outcome before
@@ -383,7 +424,8 @@ Implemented by the Stage 5 interface:
 - typed counts, per-item outcomes, phase summaries, and independent result axes;
 - required selected scope plus explicit current-evidence intent for rebaseline.
 
-Desktop actions remain a later M1 stage.
+Desktop actions remain a later M1 stage. The contracts above define their
+accepted target without claiming implementation.
 
 The shared SQLite ledger already implements the injected conditional
 `record_integrity` command, including atomic evidence/reappearance updates and
@@ -462,3 +504,8 @@ imports inside the verifier.
   original exception, and emitted-outcome counts remain coherent even if
   continuation bookkeeping then fails.
 - Import-linter proves verifier imports core but no sibling module.
+
+Stage 6 checkpoint coverage is maintained in
+[M1_SHELL_H2.md](M1_SHELL_H2.md), while [TESTS.md](TESTS.md) owns test-scope
+policy; verifier criteria here cover classification, guarded reads, recording,
+and pause/cancel behavior.

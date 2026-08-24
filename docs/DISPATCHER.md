@@ -7,6 +7,12 @@ implemented. Stage 6 Slice 3 adds the domain-blind transactional admission
 domain-blind. M2 durable queue ownership, SQLite session persistence, and
 startup reconciliation remain deferred.
 
+The accepted Stage 6 second-half desktop target is not active yet. It reuses
+the existing `attach` seam for every desktop-created session and lets an
+interface-owned process-live task serially bind those sessions. No task id,
+task revision, retained presentation artifact, or bridge retention policy enters
+dispatcher; the owning implementation checkpoint must preserve that boundary.
+
 ## Purpose
 
 Dispatcher admits, schedules, controls, and observes generic sessions. It knows
@@ -49,6 +55,13 @@ closes its remaining stream/hub ownership and drops the store row. Cleanup
 failure is retained as non-schedulable cleanup-pending ownership and makes
 shutdown incomplete without replacing the initiating exception. No task
 identity or interface policy enters dispatcher.
+
+The desktop task owner-claim, binding, lease, epoch, and release protocol is an
+interface obligation specified by [M1_BRIDGE.md](M1_BRIDGE.md); it uses the
+existing transactional `attach` seam and does not expand dispatcher policy.
+Dispatcher retains the full opaque `OperationResult` until explicit session
+close, but neither builds the bridge summary nor serializes result items to
+JavaScript.
 
 One optional registration callback,
 `settle_canceled(payload, disposition) -> OperationResult`, handles cancellation
@@ -133,6 +146,19 @@ emit them twice. If cancel reaches a resumed attempt's RUNNING checkpoint before
 cancellation settlement before publishing the terminal; it cannot substitute a
 generic canceled result that strands workflow custody.
 
+At checkpoint 2, `SessionRecord.payload: bytes | None` is opaque continuation
+state only while nonterminal. Every edge into `COMPLETED`, `FAILED`, `CANCELED`,
+or `REFUSED` atomically replaces that payload with null before storing or
+publishing the terminal `SessionRecord`; the state-before-result settlement
+record and the later record with its result are both payload-free. Dispatcher
+does not inspect, decode, or
+select fields from the value. It may pass the bytes to a registered cancellation
+settler before the transition, but never retains those bytes after the
+transition. This applies equally to ordinary return/failure, cooperative
+cancel, queued discard, admission refusal, paused cancellation, and
+resume-to-pending cancellation, so execution-v6 attestations cannot survive in
+a terminal store record.
+
 ## Admission And Volume Scheduling
 
 Required local physical-volume ids are sorted deterministically before locks to
@@ -181,6 +207,16 @@ tail/detectable gap—not a false promise of full replay. When the retained repl
 is longer than one subscriber's bound, the truncation itself is what creates
 that gap, so the leading `Gap` occupies a slot inside the bound: a new stream
 never starts with more buffered envelopes than its capacity.
+
+Core event v4 remains active until the atomic event-v5 cutover defined by
+[M1_BRIDGE.md](M1_BRIDGE.md). Dispatcher accepts only the active event version;
+it does not version-dispatch a mixed live stream. At v5 the core projector
+validates, deeply copies, and size-checks one immutable emitter-owned snapshot
+before sequence, replay, history, or subscriber publication. All consumers see
+that same snapshot, and every schema-valid queue head remains drainable under
+the independent bridge response bound. Exact event fields, scalar domains,
+path/detail limits, omission witnesses, and byte ceilings remain centralized in
+the bridge and defense authorities.
 
 That full initial buffer is deliberate for now. No finite number of reserved
 slots is a contract-derived burst tolerance: a workflow can emit an arbitrarily
@@ -284,22 +320,28 @@ join allowance.
 
 ## Session Store
 
-`SessionStore` persists/retains generic `SessionRecord` with opaque workflow
-blob. Dispatcher may serialize the blob but never deserialize domain content;
-the registry/workflow adapter does that after selection.
+`SessionStore` retains generic `SessionRecord` with an opaque workflow blob only
+while the record is nonterminal. Dispatcher may serialize the blob but never
+deserializes domain content; the registry/workflow adapter does that after
+selection. Exact continuation and event/database checkpoint versions are owned
+by [M1_BRIDGE.md](M1_BRIDGE.md).
 
-M0 `InMemorySessionStore` provides process-local task state and no restart
+M0 `InMemorySessionStore` provides process-local session state and no restart
 reconciliation. It retains current-process records for `get()`/`list()` while
 deliberately returning `()` from `load_all()`, so it cannot accidentally claim
 restart durability. M2 `SqliteSessionStore` adds reload, durable pending queue,
 single queue-owner lock, and `RUNNING`→`INTERRUPTED` reconciliation when owner
 process/custody is dead. Terminal records stay in the live session table until
-the task is explicitly closed, then `drop()` removes them; history remains the
+an exact dispatcher `close(session_id)` succeeds. The web adapter may invoke
+that release after terminal presentation while retaining its process-live task,
+or as part of task close; dispatcher knows neither case. History remains the
 durable trail.
 
-Queued execution accepts only a `Commitment` matching plan fingerprint and
-selection digest, and always freshly preflights. Replanning after wakeup
-produces a material-difference review; it is not a silent replacement.
+Queued execution carries the exact core `Commitment` defined by
+[M1_BRIDGE.md](M1_BRIDGE.md). Workflow admission validates it and freshly
+preflights; dispatcher neither reconstructs nor reinterprets the commitment.
+Replanning after wakeup produces a material-difference review; it is not a
+silent replacement.
 Contending committed sets start in commit order on every declared resource,
 even when the earlier set is also waiting on another resource; disjoint-volume
 sets may start as soon as their volumes are free. A queued session discarded before running
@@ -331,8 +373,9 @@ until its owning worker acknowledges control and retires.
 - Composition root provides registry, lock provider, clock, store, and event
   capacity policy.
 - Workflows declare resources and deserialize their own opaque request.
-- Interfaces only call this public contract and subscribe; they do not manage a
-  second session lifecycle.
+- Interfaces only call this public contract and subscribe. Their task registry
+  may serialize sessions and retain presentation artifacts, but it does not
+  manage a second domain session lifecycle.
 - History attaches as the admission-time audit observer; its failure is loud but
   never rewrites filesystem or ledger truth.
 
@@ -372,6 +415,10 @@ duplicate terminal paths from being reinvented by each interface.
 - Fault injection at admission, lock acquisition, workflow start, every event,
   pause, cancel, terminal, store write, subscriber failure, and teardown releases
   exactly acquired resources and emits one terminal from the core runner.
+- Event projection tests prove immutable pre-sequence validation and that every
+  valid queue head drains; checkpoint coverage lives in
+  [M1_SHELL_H2.md](M1_SHELL_H2.md) and test-scope policy in
+  [TESTS.md](TESTS.md).
 - Cancellation during PAUSING snapshot drain, PAUSED, and resume→PENDING invokes
   an opted-in settlement callback at most once; malformed settlement fails
   loudly, repeated cancel is rejected, and same-resource followers prove
@@ -388,18 +435,22 @@ duplicate terminal paths from being reinvented by each interface.
   prefix, and observer cleanup runs exactly once without rewriting successful
   finalization.
 - Late subscription returns current state/tail and exposes sequence gaps.
-- Opaque blobs round-trip through store without dispatcher deserialization.
+- Nonterminal opaque blobs round-trip through store without dispatcher
+  deserialization; terminal records require null.
 - M0 process restart loses in-memory sessions honestly and requires rescan.
 - **M2 gate:** simulated kill marks only orphan running records interrupted and
   safely re-admits pending work; the queue owner is unique across processes and
   remains independent from volume locks.
 - Orderly teardown completes without UI-thread deadlock and reports any session
   that could not drain within policy.
-- Terminal records survive until explicit close; a timed-out audit cleanup or
-  store drop retains hub/store ownership for retry, while a timeout before the
-  hub gate leaves subscriptions available. Queued discard is observed as
+- Terminal records survive until explicit session close; terminal presentation
+  may release that exact session without removing the adapter task. A timed-out
+  audit cleanup or store drop retains hub/store ownership for retry, while a
+  timeout before the hub gate leaves subscriptions available. Queued discard is observed as
   `CANCELED+UNRUN` before `drop()` and never requires a dispatcher-to-history
   import or string parsing.
+- Terminal-edge tests prove that every terminal store view is payload-free
+  without dispatcher parsing; pause/resume remains the only continuation use.
 
 Current verification covers the non-M2 criteria with named regression/fault tests:
 focused core/dispatcher tests exercise the transition/control matrices,

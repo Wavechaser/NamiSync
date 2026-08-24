@@ -5,6 +5,10 @@ removes the unused worker-count field from the immutable plan contract.
 Stage 5.5 relocates the planner's three relative hierarchy helpers to
 `core.pathing` without changing planning behavior. Later scopes, content
 evidence, ingest policies, replay, repair, and undo reuse the same plan shape.
+The complete Stage 6 Setup snapshot, signed-64 scalar boundary, and bounded
+plan-review contract described below are accepted targets and are not active
+until their implementation checkpoints close. The 100,000-operation shape is
+a performance fixture, not the production maximum.
 
 ## Purpose
 
@@ -46,11 +50,18 @@ guesses target free space.
 filter snapshot, the selected `DestinationPolicy`, and the fingerprinted
 `propagate_source_casing` policy plus any already-extracted enrichment metadata.
 The casing policy defaults to false and is exposed through the primitive
-semantic-settings facade, while M1 intentionally has no settings CLI or GUI.
+semantic-settings facade; there is no current settings CLI or GUI control.
 `MappingSnapshot` contains prior accepted pairs/no-ops, retained missing rows,
 and ambiguity/hardlink disqualifiers keyed by canonical path. Observed target
 free space is deliberately absent: review and execution call `observe()` and
 judge the same pure required-byte formula against current space.
+
+The Stage 6 adapter supplies one backend-canonical frozen Setup snapshot. The
+workflow translates its planning fields into immutable `SyncOptions`; linked
+verification remains workflow/session policy rather than planner input.
+Planner never rereads settings or accepts a parallel execution-time choice.
+The exact Setup and filter contracts are owned by
+[M1_BRIDGE.md](M1_BRIDGE.md).
 
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
@@ -62,6 +73,11 @@ semantic options, `PreservationPolicy`, policy/version fingerprint,
 deterministic operations, dependency graph/order, required volumes, required
 content bytes, concurrency assumption, and all source/target stat evidence
 needed by preflight. It contains no target-free-space observation.
+
+A plan also contains no content hash, copy-stream attestation, verification
+digest, or ledger evidence classification. Those values cannot affect dry-run
+intent and are queried from current ledger state only by later execution or
+inventory detail surfaces.
 
 Each operation has a stable id derived from canonical intent—not list position
 or random state—and includes kind, source/target relative paths, expected
@@ -156,6 +172,11 @@ Stage 1 removed `worker_count` from options, plans, fingerprints, and payloads.
 The current executor admits one file operation at a time, and the capacity
 contract has no dormant file-concurrency tuning input.
 
+At the accepted scalar cutover, planner construction follows the checked-
+arithmetic and pre-publication refusal contract in
+[M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; planner defines
+no local numeric domain.
+
 The function consumes target `CapabilityProfile.supports_hardlinks`, populated
 from the Windows `FILE_SUPPORTS_HARD_LINKS` volume flag. For each concurrently
 in-flight update on a non-hardlink target it counts both the new replacement
@@ -170,6 +191,23 @@ are declared now. Scope uses canonical stable candidate identities, not raw UI
 row numbers or display paths. The implemented selector closes dependencies,
 recomputes capacity/summaries, and reports forced exclusions; user-edited
 partial selection remains deferred.
+
+The accepted Stage 6 review surface is a memoized workflow/interface
+projection of one immutable plan. Planner remains the authority for operations,
+dependencies, reasons, immutable statistics, and the pure dependency-closed
+selection calculation; search, collapse, windows, anchors, accessibility
+framing, live result overlays, and inferred move-peer presentation do not alter
+the plan.
+
+Multiple operations targeting one canonical path remain distinct executable
+members even when presentation groups them. Selection is global and
+dependency-closed, independent of filter and viewport, and execution commits to
+its exact digest. Notices are informational and cannot enter selection,
+collapse, path, detail, or execution scope. A refused bounded projection stages
+no partial review artifact. Exact tree frames, revisions, hard walls, paging,
+rollups, overlays, and move-peer suppression rules are owned by
+[M1_BRIDGE.md](M1_BRIDGE.md), with numeric containment in
+[DEFENSE.md](DEFENSE.md) §1.3.
 
 Replay, undo, and repair always plan fresh against current scans/evidence. A
 historical operation list is scope input, never executable authority.
@@ -267,6 +305,10 @@ work. M1 has no ADS-enabled mapping or per-operation ADS state.
   deterministic, unique, reviewable assignments.
 - Planner tests use no filesystem/database fixture, proving purity.
 - Import-linter proves planner imports core but no sibling module.
+
+Stage 6 checkpoint coverage lives in [M1_SHELL_H2.md](M1_SHELL_H2.md), while
+[TESTS.md](TESTS.md) owns test-scope policy; planner criteria here remain
+limited to plan construction and pure selection behavior.
 
 ## M0 Verification
 

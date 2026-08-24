@@ -5,6 +5,39 @@ bounded, incrementally durable windows and exposes bounded summary, item-page,
 and event-page reads. Retention, export, durable task custody, and execution
 resume remain later work.
 
+## Accepted Schema-V6 Persistence Target (Not Active)
+
+Status: accepted on 2026-08-24. History v5 remains active until the coordinated
+checkpoint-3 reset to history v6 beside ledger v4. `DATABASE.md` owns the
+pair metadata, refusal boundary, and reset instructions; there is no in-place
+migration or anticipatory schema creation.
+
+History v6 accepts only the coordinated exact core-event receipts, including
+duplicate and bounded rejection receipts; it has no mixed-version page or
+compatibility decoder. The observer stores the canonical envelope and matching
+typed projection from the same admitted snapshot. `M1_BRIDGE.md` owns the exact
+event/result shapes, bounds, and codec rules.
+
+Reliable item rows retain their accepted recording and omission facts as part
+of receipt identity. Once committed, an item receipt is immutable: later task,
+finalization, or audit failure cannot rewrite it or suppress independent ledger
+evidence.
+
+Finalization continues to consume the dispatcher's full operation result, not
+the bounded live terminal event. It persists the accepted task recording and
+producer-omission facts for authentication and bounded reconstruction; the live
+summary remains a bridge-owned transport contract.
+
+The typed review-limit fact is persisted as one all-null-or-complete terminal
+group. Writer and SQL validation reject partial or mismatched groups before
+publication; the group remains independent of audit and participates in
+authentication, repeat equality, reconstruction, bounded summary readback, and
+CLI rendering. Presentation-only omission state never enters history.
+
+Numeric persistence follows `DEFENSE.md` §1.3 and the mapped bridge decision.
+This document owns only the durable consequence: relational values are checked
+before transaction, and envelope readback must agree with its typed projection.
+
 ## Purpose And Boundary
 
 History is an independent audit of what NamiSync attempted and reported. It is
@@ -225,31 +258,27 @@ and decode no more than the requested limit. The service projects these rows as
 `HistoryEventView`; it does not synthesize a live `SessionEventView` for a
 hash-only rejection receipt.
 
-Each `HistoryEventView.schema_version` is the persisted core event version of
-that row, not the current live-drain version. Recorded and duplicate rows may
-therefore legitimately mix supported v3 and v4 envelopes in one page. Readback
-authenticates the receipt and original payload, dispatches the Python core
-decoder by the row version, and exposes a canonical typed body; a rejected
-receipt instead has `body=None`. Because the general reliable-body decoder is
-currently additive and uses selected local defaults, that canonical view is
-not a byte-preserving copy of the authenticated JSON: accepted unknown fields
-may be absent and defaulted typed fields may be present. The payload hash, not
-the projected body, remains the identity of the retained envelope.
+Under current history v5, each `HistoryEventView.schema_version` is the
+persisted core event version of that row, not the current live-drain version.
+Recorded and duplicate rows may therefore legitimately mix supported v3 and v4
+envelopes in one page. Readback authenticates the receipt and original payload,
+dispatches the Python core decoder by the row version, and exposes a canonical
+typed body; a rejected receipt instead has `body=None`. Because the current
+reliable-body decoder is additive and uses selected local defaults, that
+canonical view is not a byte-preserving copy of the authenticated JSON. The
+payload hash, not the projected body, remains the identity of the retained
+envelope.
 
-The per-row version rule is settled; the decoder tolerance behind it is not. A
-future browser history validator must dispatch each supported persisted
-version and must not call `validateLiveSessionEvent`, which accepts exactly the
-current v4 `SessionEventView` contract and would reject authenticated v3
-history. `CORE.md` inventories the present three-tier strictness asymmetry and
-records the deferred split between strict current-live validation and
-version-dispatched compatibility decoding for authenticated persisted rows.
-That debt must reopen with browser history, event import/replay, history-based
-recovery, or a new core event version. History must not turn today's additive
-Python behavior into a fourth policy, assume that compatibility-decode success
-proves live or JavaScript-safe representation, route a row through the live
-validator, or tighten v3 compatibility without reviewing authenticated
-fixtures under an explicit version decision. Current allowances are not, by
-their existence alone, classified as required legacy shapes.
+That compatibility posture ends at the accepted checkpoint-3 coordinated
+event/database reset. The target history projection consumes only the exact
+accepted event schema and needs no legacy or mixed-version browser validator;
+an old, mixed, or incomplete database pair refuses before commands. Exact
+epochs, reset rules, and projection shapes are owned by `M1_BRIDGE.md`.
+Until checkpoint 3 lands, current history validators remain boundary-specific:
+compatibility-decode success does not prove live or JavaScript-safe
+representation, a retained row does not pass through the live validator, and
+v3 compatibility is not tightened without reviewing authenticated fixtures.
+These current allowances are not accepted future shapes.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including
@@ -387,6 +416,12 @@ page limits and stable watermarks; receipt/link/hash/counter tamper detection;
 fixed summary query count without event decoding; WAL reader visibility;
 streamed CLI output; subscriber repair; finalization parity; and the relevant
 query plans.
+
+Checkpoint-3 coverage proves exact event-v5-only persistence, canonical-envelope/
+typed-projection agreement, immutable item recording facts, once-only full-
+result finalization, the all-null-or-complete review-limit group, and bounded
+rejection recovery. Shared event-shape and scalar boundary cases remain with
+the owning core/bridge checkpoint rather than being cataloged here.
 
 The structural sequence-admission test must continue to prove that adding an
 event cannot iterate all prior hashes. Wall-clock timing is not an acceptable

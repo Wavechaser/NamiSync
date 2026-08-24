@@ -36,8 +36,16 @@ earlier whole-Job delta is diagnostic input only, not a result for any of those
 new predicates. GUI Break 1 and Slice 4 completed their audited realignment and
 were hardened and reverified on 2026-08-17 with ordinary, scale, and real
 clean-wheel headed evidence. User-facing plan, inventory, history,
-and control surfaces remain; `M1_SHELL.md` owns their implementation order and
+and control surfaces remain in the wider M1 design; the accepted reslice below
+defers the history page. `M1_SHELL.md` owns implementation order and
 beta-package closure.
+
+The accepted Stage 6 second-half reslice is target state, not current behavior.
+It adds Setup and process-live task review for plan/execution, inventory, and
+integrity/manual post-copy work. History, global-settings mutation,
+drag-and-drop, and remaining cosmetic-state consumers are deferred.
+[M1_SHELL_H2.md](M1_SHELL_H2.md) is the newest implementation checklist and
+[M1_BRIDGE.md](M1_BRIDGE.md) owns all exact cutover contracts.
 
 Current executor/verifier item progress now crosses the production bridge
 under the expanded exact browser shape. The browser reduces that protocol into
@@ -69,11 +77,13 @@ starting frontend artifact to revise into the packaged UI.
 Stage 6 delivers:
 
 - a `nami-sync-gui` GUI-subsystem entry point with no retained console window;
-- one single-instance desktop shell, task rail, work area, plan review,
-  inventory view, and history dialog;
+- one single-instance desktop shell, Setup, process-live task rail, work area,
+  plan/execution review, and inventory/integrity views; the history dialog is a
+  later M1 surface outside the accepted second-half reslice;
 - desktop actions for reviewed sync, inventory, baseline, verify, rebaseline,
-  semantic settings, and pause/resume/cancel where the registered activity
-  supports them; and
+  per-task Setup overrides, and pause/resume/cancel where the registered
+  activity supports them; global semantic-settings mutation remains deferred;
+  and
 - the WebView2 bridge, static-asset packaging, security controls, and frontend
   tests needed to make those views safe to use with hostile filesystem names.
 
@@ -657,7 +667,7 @@ The desktop imports only `NamiSyncService` and its primitive workflow views.
 It must not import `core`, `modules`, `db`, CLI internals, or construct a
 dispatcher, runtime, workflow request, repository, or recorder.
 
-The service already provides the desktop's command surface:
+The service currently provides this pre-reslice command surface:
 
 ```python
 start_plan(source, target, *, deletion_policy=None, command_id=None,
@@ -669,11 +679,21 @@ commit_semantic_settings(patch) -> SemanticSettingsView
 ```
 
 `SessionObserver.observe(session_id, sink)` supplies primitive current-state
-and event/record views. Plan start's optional sink is attached transactionally
-before the session can run. `M1_BRIDGE.md` exclusively defines the recovery
-cursor and command-receipt identity exposed across the wire. The desktop owns the bounded
-presentation queue fed by that sink; it does not expose raw dispatcher streams to JavaScript. It must
-unsubscribe on task close and close every observation before service shutdown.
+and event/record views. Plan start's optional sink is currently attached
+transactionally before the session can run. The accepted target requires that
+same attach-before-schedulability path for every desktop-created execution,
+inventory, integrity, and manual-verification session. `M1_BRIDGE.md`
+exclusively defines the recovery cursor and command-receipt identity exposed
+across the wire. The desktop owns the bounded presentation queue fed by that
+sink; it does not expose raw dispatcher streams to JavaScript. It must
+unsubscribe the exact terminal session on release or task close and close every
+remaining observation before service shutdown.
+
+The target submits complete Setup and freezes the native canonical result;
+defaults only prepopulate the page and Setup never writes global settings.
+Session starts create or attach to a process-live task, and bounded readback
+reconstructs the rail/pane after navigation. Exact Setup, task authority, and
+concurrent start/close/release behavior remain bridge authority.
 
 An initial loaded-time security, unsafe-surface, or document-readiness refusal
 closes dispatcher admission and wakes the task registry before appearance
@@ -733,21 +753,26 @@ integrity, recording, audit, disposition, and cancellation axes. The frontend
 renders those facts; it never reimplements headline precedence or parses
 diagnostic text.
 
-Location commands bind one explicit root or retained location id before
+Current location commands bind one explicit root or retained location id before
 admission. `LocationResolutionError` already carries the five visible states
 (`resolved`, `offline`, `ambiguous`, `root_missing`, `root_unavailable`), exact
-candidate mounts, and corrective detail. The UI must request a user-selected
-mount for ambiguity rather than inferring one from a mapping or prior task.
+candidate mounts, and corrective detail. The accepted Setup target routes
+native picker selection, typed input, and remembered-location activation
+through one workflow-owned `LocationCandidate` admission service. The UI must
+request a user-selected current mount for ambiguity rather than inferring one
+from a mapping or prior task. Its process-local slot is purpose-bound, expires,
+and is freshly re-admitted at every real start; it is not lasting root
+authority.
 
-Semantic settings and UI state are deliberately separate. Semantic settings
-are read and partially committed through the facade, then captured immutably
-by planning. The ratified `ui_state.py` replacement will own a strict,
+Semantic settings and UI state are deliberately separate. Existing service/CLI
+callers may read and partially commit semantic settings. The accepted desktop
+Setup reads them only as initial values and freezes per-task overrides without
+writing the file. The ratified `ui_state.py` replacement owns a strict,
 section-versioned cosmetic document; schema v1 contains only the appearance
-override. Recents, geometry, columns,
-sorting, treegrid expansion/grouping state, and filter chips remain planned
-typed sections, including the state later needed by the file-list treegrid. It
-must not become
-another semantic-settings or session store.
+override. Recents are not a future cosmetic section: they derive from ledger
+runs and current workflow probing. Geometry, columns, sorting, treegrid
+expansion/grouping state, and filter chips remain deferred typed sections. UI
+state must not become another semantic-settings, task, or session store.
 
 ## Bridge and renderer security
 
@@ -847,6 +872,33 @@ selectors, ZWNJ/ZWJ, and long labels remain exact.
 
 ## Interaction contract
 
+### Accepted Setup and location flow
+
+This remains visually inactive until the Setup checkpoint lands. Setup exposes
+trash/additive deletion, trash-on-update, filters, creation-time and ACL
+preservation, source-casing propagation, and linked verification. Mirror has no
+control. ADS is visibly unavailable and frozen off; the page never implies a
+disabled checked option will be honored. Exact Setup and filter shapes are
+owned by [M1_BRIDGE.md](M1_BRIDGE.md).
+
+A path row remains editable until explicit native admission. Editing an
+accepted path immediately drops the page's slot reference and marks it
+unresolved; the UI never silently reuses cached authority. Validation runs on
+Enter, blur, completed paste, picker/remembered selection, or start—not each
+keystroke. Refusal keeps the row editable and gives action-guiding typed
+feedback. A selected file remains visible with `not-directory`; it is never
+silently converted to its parent. Native code owns parsing, volume support, and
+no-follow admission.
+
+Setup shows recent sources, targets, and active pairs derived from ledger runs.
+Unresolved remembered locations remain visible with stable identity context,
+never a stale drive hint. Multi-pair creation is a browser coordinator over
+ordinary serial plan starts: one gesture freezes one options snapshot, each row
+has a stable command id and independent outcome, and completed rows are never
+rolled back. Same-document navigation keeps the coordinator; document
+replacement may stop only rows not yet submitted, while admitted tasks are
+rediscovered from task enumeration.
+
 Slice 4 establishes only the presentation core and honest shell frame. It adds
 no presentation command or placeholder plan, inventory, history, or control
 surface. The page exposes labelled
@@ -940,57 +992,101 @@ fill. The token foundation also retains the supplied secondary and tertiary
 blends for state/context use. Forced colors replace these material blends with
 opaque system surfaces and boundaries.
 
-The task rail is a presentation grouping over live service sessions and
-retained history, not a new durable task model. It shows activity kind, source
-and target when applicable, current phase, progress, and a truthful terminal
-headline. Subject-only activities do not fabricate a source-to-target label.
-An accepted pause immediately renders **Pausing…** from the existing `pausing`
-session state and remains distinct from **Paused** until custody actually
-releases. Repeat pause/resume is disabled during that drain, cancellation stays
-available, and the next state may be paused or terminal if the active operation
-settles the run first.
-Successful terminal presentation releases only observation/session authority;
-the reviewed plan, task identity, and presentation remain. Task close is a
-separate explicit user action, with confirmation/control when work is still
-queued or busy. `M1_BRIDGE.md` exclusively defines the exact release and close
-commands, ordering, retries, and retained artifacts. Retained history remains,
-and the UI never treats a transient progress flag as completion.
+The accepted rail presents process-live adapter tasks, not dispatcher history.
+A task may outlive its serial sessions but is not durable across application
+restart. Task enumeration/detail reconstructs the rail and selected pane after
+navigation or reinjection. Cards show truthful activity, scope, phase, progress,
+and terminal headline; subject-only work never fabricates a source-to-target
+label. Exact task/result revisions and named-generation rules are bridge
+authority.
 
-Sync remains a two-session interaction: plan first, review its immutable
-fingerprint-bound intent, choose a dependency-closed selection, then start
-execution with fresh preflight. The service decides whether the selection needs
-an explicit destructive confirmation; the browser never derives that risk or
-requires a typed phrase. Editing selection or plan-affecting options requires a
-new commitment. There is no execute-anyway, auto-commit, or unattended path.
-`verify_after_execute` is an explicit option; when selected, the one execution
-session may return ordered operation and integrity items plus ordered phase
-summaries.
+An accepted pause renders **Pausing…** until custody actually reaches
+**Paused**; repeat pause/resume is disabled during the drain and cancellation
+remains available. Terminal presentation releases only that exact session while
+review artifacts remain. Closing a live task asks once, renders
+**Closing…**, requests cancellation, and stays visible until terminal-record
+cleanup completes. Failure is actionable and retryable; there is no force-close
+path. Close and publication-fault observations invalidate rail, panel, and
+affected tree request generations before clearing cached data, so detached old
+responses are inert before payload read.
 
-Plan review shows executable operation ids, dependencies, reasons, source and
-destination, bytes, evidence, conflicts, blocks, and deferred outcomes. A
-folder or rename grouping is presentation only and never turns into a hidden
-directory mutation. The UI distinguishes refusal, all-noop, partial, canceled,
-failed, mismatch, verification-incomplete, and recording/audit degradation
-from the typed result axes rather than color or byte totals alone.
+On `review-publication-protocol-failed`, the pane keeps prior settled review
+truth, clears the faulting live row decoration, disables mutating actions, and
+shows: **NamiSync could not publish this review safely. Close the task and try
+again.** Event drain and exact release continue for custody, but queued events
+cannot repopulate the discarded generation. The issue remains visible after
+release until task close. Exact fault precedence, phase mapping, disposal, and
+allowed operations are defined in [M1_BRIDGE.md](M1_BRIDGE.md).
 
-Inventory is retained state distinct from plan state. Its location scope,
-completeness, observed/missing counts, presence, and evidence come from
-`InventoryDetailsView` and `InventoryRowView`. Refresh, baseline, verify, and
-rebaseline reuse one action definition across buttons and context menus.
-Selected paths are exact root-relative scope; rebaseline always asks for its
-explicit acceptance intent. A context action first establishes a valid target
-row, and blank space targets nothing.
+The browser retains only one accepted byte-fitting tree window for the selected
+pane. It never keeps a hidden complete plan/inventory list and never receives
+`OperationResult.items` or transient operation hashes. Retention exhaustion
+guides the user to close a task or wait for retry state to expire. A tree
+population refusal instead guides them to narrow roots or resolve scan/preflight
+problems; an initial refusal has no partial tree and a replacement refusal keeps
+the prior complete tree. Exact budgets, hard-wall precedence, omission
+witnesses, paging, generation pins, and close/release reservations remain
+bridge/defense authority.
 
-History uses retained activity-aware envelopes and details. It exposes all four
-truth axes and ordered items/phases, including compound execute-to-verify runs.
-Restoring a prior run means starting a fresh plan; history is not a replay or
-resume surface.
+Plan and inventory windows carry the complete server-owned generic row frame.
+The browser passes identity, hierarchy, accessibility position, expansion, and
+revision authority through without inferring them from paths, adjacency, or the
+currently retained rows. A raced read is rejected rather than splicing
+generations.
+
+Sync is a serial task interaction: Setup creates one immutable reviewed
+plan, the user chooses a dependency-closed selection, and Execute attaches to
+the same task only after commitment and fresh preflight of that set. Changed
+Setup creates a new task. There is no execute-anyway, auto-commit, or unattended
+path. Automatic linked verification stays in the execution session; manual
+exact post-copy verification is a later session that never rewrites execution.
+When exact handoff is blocked, the UI explains why and offers only the clearly
+labelled ordinary **Verify current state** fallback.
+
+The Plan pane distinguishes immutable **Review snapshot** context from the
+current edited selection and the latest fresh-execution notices. Search,
+filters, collapse, and viewport never change selection. Notices are visible
+typed context but are inert for selection, path, detail, and execution.
+Operation groups expose every operation once, with a distinct non-folder
+semantic; group/folder checkboxes operate on server-defined membership
+independent of the current window. Move peers, item/node anchors, dependencies,
+rollups, risk, and selection authority all come from the server projection.
+The browser never reconstructs them from display paths.
+
+Plan rows remain hash-free. Execution evidence is shown only when the bounded
+atomic ledger view classifies it as execution-owned; current-state evidence is
+labelled separately. Execution and manual post-copy overlays remain independent
+fields. A replacement attempt decorates from one complete new generation, never
+a mixture or old fallback, while settled membership remains stable until
+terminal publication. Exact view fields, grouping, evidence classes, overlays,
+and anchor behavior are defined in [M1_BRIDGE.md](M1_BRIDGE.md).
+
+Inventory remains distinct from plan review. The pane supports literal search,
+server facets, collapse, default acknowledged-row hiding, and shared Refresh,
+Baseline, Verify, and Rebaseline actions. Rebaseline alone asks the user to
+confirm replacing current evidence; the receipted native command enforces that
+intent. Context actions require a valid domain row; warning rows are
+informational and never actionable.
+
+Each inventory subject presents ledger-derived verification state separately
+from the latest ordinary-integrity overlay. Manual post-copy results never enter
+that field. Folder rollups exclude warnings and do not change when acknowledged
+rows are hidden. Overflow is displayed as unavailable, never a clamped total.
+Details label current digest provenance/currentness/invalidation and render
+times without floating-point authority. Exact inventory view, filter, overlay,
+rollup, scalar, warning-identity, and replacement rules remain bridge/domain
+authority.
+
+The future history page will use retained activity-aware envelopes and details
+and remain neither replay nor resume. It is explicitly deferred from this
+second-half reslice; task review does not depend on that page or use history as
+a fallback for missing task artifacts.
 
 ## Presentation and responsiveness
 
-Progress is replaceable telemetry. The browser receives exact core event v4
-snapshots through a `SessionEventView` that exposes the nested event
-`schema_version`; the containing bridge command/response schema remains v1.
+Progress is replaceable telemetry. The browser reports the active nested event
+version truthfully; exact current/target versions and atomic cutover are owned
+by [M1_BRIDGE.md](M1_BRIDGE.md).
 Every snapshot self-describes its phase and may carry optional nominal
 active-item identity plus an opaque attempt id and paired attempt-local byte
 counters alongside aggregate bytes, item counts, and the display path. Only
@@ -1010,6 +1106,9 @@ becomes absent, while aggregate progress retains the producing module's
 monotonic semantics. The bridge drain consumes these fields through its pure
 protocol reducer and exposes a frozen derived state to update consumers; the
 dormant row renderers do not yet consume that state.
+At the accepted cutover, the UI preserves large quantities exactly and keeps
+opaque identity non-arithmetic. Scalar and event-containment mechanics remain
+bridge/defense authority.
 Executor pipeline diagnostics are opt-in developer data, not the rolling
 transfer rate or ETA promised to users.
 Filter/search state never changes the underlying plan or inventory selection;
@@ -1057,11 +1156,24 @@ Contrast and no-color-only signaling remain requirements in every theme.
 - Hostile filenames remain structured raw data. Filesystem labels render as
   inert text with exact visible layout-control markers and bidi isolation,
   never HTML or executable content; generic Unicode and identity stay exact.
-- Plan, inventory, settings, and history consume facade views only and remain
-  semantically separate; UI cosmetics never change a plan's captured settings.
+- Plan and inventory consume facade views only and remain semantically separate;
+  Setup reads defaults but commits no global setting, and UI cosmetics never
+  change a plan's captured options. The deferred history/settings pages cannot
+  be a hidden dependency of task review.
 - Busy, pausing, paused, canceled, refused, partial, degraded, mismatch, and compound
   verification outcomes are truthful and distinguishable without parsing
   strings or inferring status from bytes.
 - Tests cover destructive-confirmation gating, location ambiguity, opaque-id authority,
   duplicate/out-of-order bridge responses, event-gap recovery, context target
   selection, process-local restart limits, and one-instance behavior.
+- Setup and task-review headed evidence covers editable typed/picker/recent
+  admission, serial multi-pair behavior, immutable plan review, bounded
+  reinjection, stale-response suppression, and action-guiding refusal/close
+  states.
+- Plan and inventory headed evidence proves server-owned hierarchy, accessible
+  grouping, independent evidence/result axes, confirmation-gated rebaseline,
+  exact-handoff fallback labeling, and no browser-retained full result.
+- Exact target contracts and gates remain in
+  [M1_BRIDGE.md](M1_BRIDGE.md), checkpoint coverage in
+  [M1_SHELL_H2.md](M1_SHELL_H2.md), and test-scope policy in
+  [TESTS.md](TESTS.md).

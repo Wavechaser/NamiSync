@@ -5,6 +5,10 @@ Stage 1's immutable reviewed-policy semantics and shared ephemeral root
 authority. Fresh preflight remains mandatory immediately before every
 managed-data mutation, on resume, and on queued wakeup.
 
+At the accepted scalar cutover, preflight uses the capacity-observation and
+refusal contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
+[DEFENSE.md](DEFENSE.md) §1.3 without defining a local numeric variant.
+
 ## Purpose
 
 Preflight separates current-world observation from pure judgment:
