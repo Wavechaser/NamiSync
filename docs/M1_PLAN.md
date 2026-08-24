@@ -6,14 +6,18 @@ ledger v3 verification-invalidation boundary and history v5 receipt journal in
 `DATABASE.md` and `ARCHITECTURE.md` now govern. No compatibility migration or
 unbounded history getter remains.
 
-Status (updated 2026-08-17): Stages 1–3 (contracts/semantics, executor/hash refactor,
+Status (updated 2026-08-24): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and
 the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
 implemented. Stage 6's secured host and transport through Slice 3, GUI Break 1
 foundation, and Slice 4 presentation core and honest shell frame are also
-implemented. `M1_BRIDGE.md` is the sole normative bridge/BR-G contract;
-`M1_SHELL.md` owns the remaining slice order, host/package placement, SH-G
-definitions, and beta-packaging work. The real-WebView2 browser-witness
+implemented. The accepted Stage 6 second-half reslice is now the delivery
+target; its protocol and BR-G decisions live in `M1_BRIDGE.md`, its shell order
+lives in `M1_SHELL.md`, and its detailed checkpoint checklist lives in the
+newer `M1_SHELL_H2.md`. Older remaining-slice prose below records the
+pre-reslice plan and cannot override those authorities. The history page,
+global-settings page, remaining cosmetic state, and their headed history gate
+are deferred. The real-WebView2 browser-witness
 migration and fixed, non-sliding 150 ms progress-only linger are complete.
 The existing installed-wheel event harness has also been decontaminated: it
 streams bounded manifested evidence, assembles the report after the measured
@@ -28,8 +32,8 @@ contract freezes the 1,966,080-byte ceiling. Three fresh holdout-b runs then
 pass at 1,351,794 ordinary and 1,513,014 exact-maximum bytes. Realigned SH-G-8
 and BR-G-42 event/transport custody are closed; other BR-G-42 rows remain on
 their owning slices.
-BR-G-45 separately leaves 100,000-subject terminal artifacts and aggregate
-completed-task retention open, while shell-owned SH-G-15 leaves version-bound
+BR-G-45 separately leaves aggregate completed-task containment open, while
+shell-owned SH-G-15 leaves version-bound
 whole-runtime containment open. The earlier whole-Job delta is diagnostic input
 to SH-G-15 design, not SH-G-8 custody evidence or a limit for either gate.
 

@@ -44,6 +44,11 @@ the Fluent/accessibility foundation, and dormant gallery-proven sync/integrity
 file-list row renderers. User-facing workflow views and controls, final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
 
+The accepted Stage 6 second-half reslice covers Setup, bounded plan and
+execution review, inventory/integrity, process-live multi-session tasks, and
+early lifecycle/retention closure. These are checkpoint targets, not current
+runtime claims.
+
 M1 state remains process-local: queued sessions and unexecuted plans do not
 survive an application restart, and committed nonterminal history returns only
 as `incomplete`. The active database boundary is ledger v3 plus history v5;
@@ -197,6 +202,7 @@ never hides the other result axes in rendered output.
 - [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
 - [M1 Bridge](docs/M1_BRIDGE.md) — sole Stage 6 bridge protocol and BR-G acceptance authority.
 - [M1 Shell](docs/M1_SHELL.md) — Stage 6 slice order, host/package placement, packaging, and SH-G map.
+- [M1 Stage 6 second-half checklist](docs/M1_SHELL_H2.md) — newest checkpoints 0–12 reslice, detailed acceptance, review, and verification.
 
 ## Changelog
 
@@ -222,9 +228,11 @@ ownership explicit without changing public or persisted contracts.
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, bounded presentation core, dormant sync/integrity file-list row renderers, and a
-persisted native/page theme override over the refrozen cosmetic-state channel;
-later workflow surfaces and beta packaging remain future phases.
+foundation, bounded presentation core, dormant sync/integrity file-list row
+renderers, and a persisted native/page theme override over the refrozen
+cosmetic-state channel. The second-half workflow/protocol contracts are now
+ratified for checkpoint delivery; product surfaces and beta packaging remain
+open.
 
 ### M1 Features
 

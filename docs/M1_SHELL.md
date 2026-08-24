@@ -1,8 +1,12 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-04, contract realigned 2026-08-14, hardened and reverified
-2026-08-17): plan and progress for
-the remaining M1 desktop shell. The 2026-08-06 revision folded in the
+Status (2026-08-24 second-half reslice; earlier host/presentation contracts
+realigned 2026-08-14 and hardened 2026-08-17): plan and progress for the
+remaining M1 desktop shell. The second-half reslice replaces the former broad
+Slices 5-7 schedule with prerequisite recording/protocol/task checkpoints,
+then frozen Setup, bounded plan/execution review, inventory/integrity, and the
+early Slice 7 lifecycle/retention closure. The history page, global-settings
+page, remaining cosmetic state, and SH-G-9 are deferred. The 2026-08-06 revision folded in the
 bounded-history and terminal-cleanup contracts now recorded in `HISTORY.md`
 and `DISPATCHER.md` and added sections 5-8; the 2026-08-07 revision settles
 single-instance identity,
@@ -32,8 +36,10 @@ shell-owned SH-G-15 keeps version-bound whole-runtime containment open. GUI
 Break 1's token,
 component, icon, motion, and native-material
 foundation and Slice 4's presentation core/shell frame completed their audited
-realignment and were hardened and reverified on 2026-08-17. Slice 5 is the next delivery
-slice. NamiSync remains version `0.1.0` until
+realignment and were hardened and reverified on 2026-08-17. Second-half
+checkpoint 0 is complete after final documentation, three independent bounded
+reviews, link/anchor validation, manifest-backed test collection, stale-contract
+searches, and diff validation; checkpoint 1 has not started. NamiSync remains version `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
 
@@ -46,6 +52,12 @@ owns the implementation sequence, frontend/package layout, and release-work
 placement for the shell. Its later entry-point and packaging decisions replace
 the older statements that bare `nami-sync` opens the desktop or that no GUI
 launcher is generated.
+
+`M1_SHELL_H2.md` is the active, newest detailed execution checklist for
+second-half checkpoints 0-12. This document owns their shell ordering, while
+`M1_SHELL_H2.md` owns each checkpoint's detailed acceptance, regression,
+testing, and review boundary. Neither can redefine `M1_BRIDGE.md`'s exact wire
+contract.
 
 The shell does not move domain authority into JavaScript. The desktop remains
 an adapter over `NamiSyncService`; the import law, reviewed-plan safety model,
@@ -715,33 +727,46 @@ second transport. The pure presentation and BR-G-34 contracts live only in
 must be complete before the production renderer consumes its tokens and
 components.
 
-### Slice 5 - Sync surface
+### Stage 6 second-half checkpoint sequence
 
-Land the plan projection and review surface, selection controls,
-destructive-confirmation flow, execution admission, progress identity, and
-indexed follow mode. Extend the existing transport only through the Slice 5
-command rows and gates defined by `M1_BRIDGE.md`. Close BR-G-35 through
-BR-G-37 and the plan portion of BR-G-42. The validated Python projection may
-map into the dormant page-local row view, but that object is not a frozen wire
-payload and creates no backwards-compatibility obligation for the bridge.
+The newer `M1_SHELL_H2.md` is the detailed acceptance, regression, test, and
+review checklist for checkpoints 0–12. `M1_BRIDGE.md` remains the exact
+protocol and BR-G authority. This document retains only shell delivery order and
+gate placement.
 
-### Slice 6 - Inventory and integrity surface
+Checkpoint 0 was intentionally relanded as five documentation commits rather
+than the checklist's original single-commit shape. The split isolates bridge
+authority, shell reslicing, defense walls, component pointers, and final
+ratification; `M1_SHELL_H2.md` records the exact titles.
 
-Land cached inventory projections, location-resolution presentation,
-recursive folder actions, scope warnings, integrity controls, and bounded
-detail queries. Extend the existing transport only through the Slice 6 rows
-and gates defined by `M1_BRIDGE.md`. Close BR-G-22, BR-G-23, BR-G-38,
-BR-G-39, and the inventory portion of BR-G-42.
+| Checkpoint | Commit boundary | Objective | Status |
+| ---: | --- | --- | --- |
+| 0 | five documentation commits listed in `M1_SHELL_H2.md` | Ratify the corrected reslice without coupling independent documentation owners | complete |
+| 1 | `test(executor): pin typed recording settlement truth` | Extend the retained oracle before producer changes | pending |
+| 2 | `refactor(executor): attribute recording degradation by scope` | Add sparse item/task attribution and advance only the execution continuation | pending |
+| 3 | `feat(protocol): cut over to exact core event v5` | Switch the event/database protocol checkpoint | pending |
+| 4 | `feat(web): retain multi-session task artifacts` | Install the task lifecycle and containment foundation | pending |
+| 5 | `feat(workflows): unify location probing and recent locations` | Share location admission and ledger-derived recents | pending |
+| 6 | `feat(web): add frozen setup and serial task creation` | Deliver Setup and serial multi-pair creation | pending |
+| 7 | `feat(web): add bounded plan review and selection` | Deliver plan projection, selection, and execution admission | pending |
+| 8 | `feat(web): add execution review and ledger evidence` | Deliver live/retained execution and current evidence | pending |
+| 9 | `feat(web): add inventory projections and evidence` | Deliver bounded inventory and current provenance | pending |
+| 10 | `feat(web): add integrity and post-copy verification` | Deliver integrity controls and no-rescan manual handoff | pending |
+| 11 | `feat(web): close task lifecycle and retention budgets` | Calibrate and harden shutdown and retained-state containment | pending |
+| 12 | `docs(gui): close stage 6 surface verification` | Run the final adversarial, complete, headed, and documentation sweep | pending |
 
-### Slice 7 - Lifecycle, settings, and history
+The shell delivery groups are:
 
-Land database-paged history, semantic settings, the remaining typed
-`ui-state.json` consumers, and the task-owned cleanup UI on the cosmetic
-channel frozen by the pre-Slice-5 checkpoint. The exact lifecycle and history
-bridge rows remain exclusively in `M1_BRIDGE.md`. Design and prove BR-G-45's complete
-100,000-subject terminal artifact set and aggregate completed-task retention
-policy, then close BR-G-40, BR-G-41, BR-G-45, and the history portion of
-BR-G-42.
+- checkpoints 0–4: protocol and task prerequisites;
+- checkpoints 5–6: location admission and frozen Setup;
+- checkpoints 7–8: bounded plan and execution review;
+- checkpoints 9–10: inventory, integrity, and deferred post-copy verification;
+- checkpoint 11: early Slice 7 lifecycle and retention closure; and
+- checkpoint 12: integrated verification and documentation closure.
+
+The history page, global-settings page, SH-G-9, and remaining cosmetic-state
+consumers remain deferred. Target contracts are accepted but inactive until
+their named implementation checkpoint lands.
 
 ### GUI Break 2 - Visual cohesion
 
@@ -1228,8 +1253,8 @@ clause lands:
 | Slice 3 | SH-G-8 closed: linger/corpus/runner, calibration-a, frozen 1,966,080-byte ceiling, and independent holdout-b all passed |
 | GUI Break 1 | SH-G-11, SH-G-12, SH-G-13 (foundation), SH-G-14 |
 | Slice 4 | SH-G-7 |
-| Slice 6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
-| Slice 7 | SH-G-9 |
+| Slices 5-6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
+| Deferred history surface | SH-G-9 remains open and is not part of this reslice |
 | Slice 8 | SH-G-15 remains open pending version-bound calibration, frozen limits, and independent holdouts |
 
 ## 6. Slice-to-gate map
@@ -1246,10 +1271,15 @@ This table maps shell delivery order to the sole BR-G definitions in
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause, BR-G-32 generic-tree-sink portion, and BR-G-34 | complete |
 | Cosmetic thaw/refreeze | BR-G-46 | complete before Slices 5–7 |
-| Slice 5 | BR-G-32 plan-DOM portion, BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
-| Slice 6 | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, BR-G-39; inventory portion of BR-G-42 | pending |
-| Slice 7 | BR-G-40, BR-G-41, BR-G-45; history portion of BR-G-42 | pending |
-| GUI Break 2 | holistic `DESKTOP_UI.md` visual/accessibility review | pending after Slice 7 |
+| Second-half protocols/task foundation | revised BR-G-36, BR-G-41, BR-G-45, and BR-G-48 foundations | accepted target; implementation pending |
+| Slice 5A | BR-G-47 | pending |
+| Slice 5B | BR-G-32 plan-DOM portion, BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
+| Slice 5C | execution portion of BR-G-36 and BR-G-48 | pending |
+| Slice 6A | BR-G-32 inventory-DOM closure, BR-G-22, BR-G-23, BR-G-38, inventory portions of BR-G-39/42 | pending |
+| Slice 6B | remaining BR-G-39 and BR-G-48 | pending |
+| Early Slice 7 | BR-G-41 and BR-G-45 | pending |
+| Deferred history/settings | BR-G-40, history BR-G-42, and SH-G-9 | outside this reslice |
+| GUI Break 2 | holistic `DESKTOP_UI.md` visual/accessibility review | deferred until the history and settings surfaces also exist |
 | Slice 8 | BR-G-43, BR-G-44, and shell-owned SH-G-15 | pending |
 
 The explicit-`Gap`-only recovery decision and the command-specific
