@@ -10,12 +10,13 @@ Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
 shared workflow tree substrate without changing their semantics, and makes
 recursive inventory scope an explicit core contract.
 
-The accepted-but-inactive Stage 6 second-half contract is mapped in
+The remaining accepted-but-inactive Stage 6 second-half contract is mapped in
 `M1_BRIDGE.md`; its scalar and retention hard walls are owned by
-`DEFENSE.md` §1.3. This document continues to describe the implemented core
-until the named protocol checkpoint updates the source and active contract
-together. Component docs should point to those authorities rather than copy the
-future event summary, numeric domain, task authority, or retention shapes.
+`DEFENSE.md` §1.3. Checkpoint 2's scoped recording continuation and terminal
+payload cleanup are active below, while the event/database protocol remains v4
+until checkpoint 3 updates source and active contracts together. Component docs
+point to those authorities rather than copy the future event summary, numeric
+domain, task authority, or retention shapes.
 
 ## Purpose
 
@@ -104,14 +105,20 @@ failure decisions/reasons, copy digest, and filesystem/copy/recorder protocols.
 restore it through the dataclass constructor, `replace()` preserves it, and it
 participates in equality because it changes later progress behavior. The
 selected-content bound remains a derived, non-comparing validation cache. The
-workflow continuation wire key remains `bytes_done_high_water` in exact schema
-v5; this API cleanup does not change that payload or its schema version.
+workflow continuation wire key remains `bytes_done_high_water`; plan payloads
+remain exact v5 while execution payloads are exact v6.
+`ExecutionSet.recording_reasons` sparsely maps only settled degraded operation
+ids to the closed `ItemRecordingReason`, and `recording_issues` retains the
+first bounded `TaskRecordingIssue` for each reason in observation order. Its
+aggregate `recording` value is derived and degraded exactly when either
+collection is nonempty.
+
 Every successful selected COPY/UPDATE/MOVE_UPDATE has exactly one
 `PublishedCopyEvidence`: its copy-stream attestation plus either a complete
 `RecordedCopyIdentity` returned by the same ledger transaction or no identity
-with frozen `recording=DEGRADED`. Recorded scope/path/location values are
-validated against the execution run and reviewed target; partial or invented
-identity is unrepresentable.
+only when that operation carries `record-write-failed`. Recorded
+scope/path/location values are validated against the execution run and reviewed
+target; partial, borrowed, or invented identity is unrepresentable.
 
 `core/integrity.py` owns `PostCopyCandidate` and its mutable
 `PostCopySelection`. Candidates copy verifier-facing values from published
@@ -185,6 +192,11 @@ that later cancels or fails includes reliable outcomes earned before the pause.
 The registry adapter snapshots continuation bytes before `PAUSED`; the
 dispatcher stores those bytes without decoding them and opens a fresh adapter
 invocation on resume.
+
+`SessionRecord.payload` is opaque bytes only while a session is nonterminal.
+Every terminal record requires null, and dispatcher clears the reference in the
+same transition before storing or publishing the terminal state. The later
+result-bearing replacement remains payload-free.
 
 ## Event Contract
 
