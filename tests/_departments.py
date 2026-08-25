@@ -10,6 +10,7 @@ PROJECT_ROOT = Path(__file__).parents[1]
 
 DEPARTMENTS: dict[str, tuple[str, ...]] = {
     "core": (
+        "tests/core/test_event_v5_consumers.py",
         "tests/core/test_integrity.py",
         "tests/core/test_root_authority.py",
         "tests/core/test_session_events.py",
@@ -75,6 +76,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/interfaces/web/test_design_tokens.py",
         "tests/interfaces/web/test_document_channel.py",
         "tests/interfaces/web/test_drain.py",
+        "tests/interfaces/web/test_browser_event_v5_consumers.py",
         "tests/interfaces/web/test_frontend_static.py",
         "tests/interfaces/web/test_headed_evidence.py",
         "tests/interfaces/web/test_headed_native.py",

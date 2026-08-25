@@ -1,5 +1,6 @@
 const BRIDGE_SCHEMA_VERSION = 1;
 const LIVE_CORE_EVENT_SCHEMA_VERSION = 4;
+const DORMANT_CORE_EVENT_SCHEMA_VERSION = 5;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
 const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
 const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
@@ -1818,6 +1819,545 @@ function validateResultItem(value) {
   return value.item_type === "operation"
     ? validateOperationItem(value)
     : value.item_type === "integrity" && validateIntegrityItem(value);
+}
+
+// Direct checkpoint-3 staging seam. Production drain routing continues to call
+// validateLiveSessionEvent and therefore remains exact-v4 until the coordinated
+// producer/database cutover.
+export function validateDormantSessionEventV5(event, sessionId) {
+  if (
+    !isExactObject(event, [
+      "session_id",
+      "sequence",
+      "at",
+      "schema_version",
+      "body_type",
+      "body",
+    ]) ||
+    event.session_id !== sessionId ||
+    !ID_PATTERN.test(event.session_id) ||
+    !Number.isSafeInteger(event.sequence) ||
+    event.sequence < 1 ||
+    !isUtcTimestamp(event.at) ||
+    event.schema_version !== DORMANT_CORE_EVENT_SCHEMA_VERSION ||
+    !isPlainJsonObject(event.body)
+  ) {
+    return false;
+  }
+  switch (event.body_type) {
+    case "StateChanged":
+      return (
+        isExactObject(event.body, ["state"]) &&
+        isOneOf(event.body.state, SESSION_STATES)
+      );
+    case "PhaseChanged":
+      return (
+        isExactObject(event.body, ["phase"]) &&
+        isBoundedV5Text(event.body.phase, true)
+      );
+    case "Progress":
+      return validateDormantProgressV5(event.body);
+    case "ItemOutcome":
+      return validateDormantOperationItemV5(event.body);
+    case "IntegrityOutcome":
+      return validateDormantIntegrityItemV5(event.body);
+    case "Gap":
+      return (
+        isExactObject(event.body, ["first_missed_seq"]) &&
+        Number.isSafeInteger(event.body.first_missed_seq) &&
+        event.body.first_missed_seq > 0 &&
+        event.body.first_missed_seq <= event.sequence
+      );
+    case "Terminal":
+      return (
+        isExactObject(event.body, ["result"]) &&
+        validateDormantTerminalSummaryV5(event.body.result)
+      );
+    default:
+      return false;
+  }
+}
+
+function validateDormantProgressV5(value) {
+  if (
+    !isExactObject(value, [
+      "phase",
+      "items_done",
+      "items_total",
+      "bytes_done",
+      "bytes_total",
+      "current_path",
+      "item_id",
+      "item_type",
+      "item_attempt_id",
+      "item_bytes_done",
+      "item_bytes_total",
+    ]) ||
+    !isBoundedV5Text(value.phase, true) ||
+    !isNonnegativeInteger(value.items_done) ||
+    !isNullableNonnegativeInteger(value.items_total) ||
+    !isScalar64(value.bytes_done) ||
+    !(value.bytes_total === null || isScalar64(value.bytes_total)) ||
+    !(value.current_path === null || isV5Path(value.current_path)) ||
+    (value.items_total !== null && value.items_done > value.items_total) ||
+    (value.bytes_total !== null &&
+      BigInt(value.bytes_done) > BigInt(value.bytes_total))
+  ) {
+    return false;
+  }
+  const identityAbsent = value.item_id === null && value.item_type === null;
+  const identityPresent =
+    isBoundedV5Text(value.item_id, true) &&
+    (value.item_type === "operation" || value.item_type === "integrity");
+  if (
+    (!identityAbsent && !identityPresent) ||
+    (identityPresent &&
+      value.items_total !== null &&
+      value.items_done >= value.items_total)
+  ) {
+    return false;
+  }
+  const attemptAbsent = value.item_attempt_id === null;
+  const attemptPresent =
+    identityPresent &&
+    typeof value.item_attempt_id === "string" &&
+    ID_PATTERN.test(value.item_attempt_id);
+  if (!attemptAbsent && !attemptPresent) {
+    return false;
+  }
+  const itemBytesAbsent =
+    value.item_bytes_done === null && value.item_bytes_total === null;
+  const itemBytesPresent =
+    attemptPresent &&
+    isScalar64(value.item_bytes_done) &&
+    isScalar64(value.item_bytes_total) &&
+    BigInt(value.item_bytes_done) <= BigInt(value.item_bytes_total) &&
+    BigInt(value.item_bytes_done) <= BigInt(value.bytes_done) &&
+    (value.bytes_total === null ||
+      BigInt(value.item_bytes_total) <= BigInt(value.bytes_total));
+  return (
+    (attemptAbsent && itemBytesAbsent) ||
+    (attemptPresent && (itemBytesAbsent || itemBytesPresent))
+  );
+}
+
+const DORMANT_OPERATION_REASONS_V5 = Object.freeze([
+  "noop",
+  "already-exists",
+  "blocked",
+  "dependency-failed",
+  "source-drift",
+  "target-drift",
+  "destination-occupied",
+  "wrong-type",
+  "source-missing",
+  "target-missing",
+  "trash-collision",
+  "unsafe-path",
+  "sharing-violation",
+  "acl-copy-failed",
+  "cleanup-failed",
+  "published-size-mismatch",
+  "io-error",
+  "policy-stop",
+  "canceled",
+  "canceled-after-publish",
+  "canceled-after-mutation",
+  "recorder-failed",
+  "unsupported",
+  "case_mismatch",
+  "case_collision",
+  "type_collision",
+  "destination_collision",
+  "blocked_dependency",
+  "blocked-correspondence",
+  "blocked-dependency",
+  "incomplete-scan",
+  "user-deselected",
+]);
+const DORMANT_OPERATION_KINDS_V5 = Object.freeze([
+  "copy",
+  "update",
+  "move",
+  "move_update",
+  "recase",
+  "mkdir",
+  "trash",
+  "delete",
+  "noop",
+]);
+const DORMANT_ITEM_RECORDING_REASONS_V5 = Object.freeze([
+  "record-write-failed",
+  "unrecorded-mutation",
+  "recording-prerequisite-failed",
+]);
+const DORMANT_TASK_RECORDING_REASONS_V5 = Object.freeze([
+  "recording-open-failed",
+  "final-flush-failed",
+  "finish-failed",
+  "recording-close-failed",
+  "post-settlement-state-diverged",
+]);
+const DORMANT_DETAIL_TEXT_KEYS_V5 = Object.freeze([
+  "backup",
+  "backup_metadata",
+  "backup_state",
+  "backup_state_error",
+  "blocked_reason",
+  "cleanup_error",
+  "destination_state",
+  "durable_state",
+  "error_type",
+  "message",
+  "mutation_durable_state",
+  "mutation_state",
+  "mutation_state_error",
+  "old_state_error",
+  "publish_state",
+  "retry_error",
+  "retry_error_type",
+  "source_state",
+  "state_error",
+  "state_error_type",
+  "target_state",
+  "target_state_error",
+  "temp_state",
+  "trash_state_error",
+]);
+const DORMANT_DETAIL_PATH_KEYS_V5 = Object.freeze([
+  "backup_path",
+  "mutation_destination",
+  "prior_path",
+  "published_path",
+  "trash_path",
+]);
+const DORMANT_DETAIL_ARRAY_KEYS_V5 = Object.freeze([
+  "durability_warnings",
+  "incomplete_sides",
+  "excluded_dependencies",
+]);
+
+function validateDormantOperationItemV5(value) {
+  return (
+    isExactObject(value, [
+      "item_type",
+      "phase",
+      "item_id",
+      "kind",
+      "path",
+      "result",
+      "reason",
+      "detail",
+      "recording",
+      "recording_reason",
+      "recording_detail",
+      "detail_omitted_count",
+    ]) &&
+    value.item_type === "operation" &&
+    value.phase === "execute" &&
+    typeof value.item_id === "string" &&
+    ID_PATTERN.test(value.item_id) &&
+    isOneOf(value.kind, DORMANT_OPERATION_KINDS_V5) &&
+    isV5Path(value.path) &&
+    isOneOf(value.result, OPERATION_OUTCOMES) &&
+    (value.reason === null ||
+      isOneOf(value.reason, DORMANT_OPERATION_REASONS_V5)) &&
+    validateDormantDetailProjectionV5(value.detail) &&
+    validateDormantItemRecordingV5(
+      value.recording,
+      value.recording_reason,
+      value.recording_detail,
+    ) &&
+    isNonnegativeInteger(value.detail_omitted_count)
+  );
+}
+
+function validateDormantIntegrityItemV5(value) {
+  const rowPair =
+    (value?.row_id === null && value?.location_id === null) ||
+    (isBoundedV5Text(value?.row_id, true) &&
+      isBoundedV5Text(value?.location_id, true));
+  return (
+    isExactObject(value, [
+      "item_type",
+      "phase",
+      "item_id",
+      "row_id",
+      "location_id",
+      "kind",
+      "path",
+      "result",
+      "reason",
+      "detail",
+      "read_strategy",
+      "recording",
+      "record_disposition",
+      "detail_omitted_count",
+    ]) &&
+    value.item_type === "integrity" &&
+    isOneOf(value.phase, INTEGRITY_MODES) &&
+    isBoundedV5Text(value.item_id, true) &&
+    rowPair &&
+    value.kind === "integrity" &&
+    isV5Path(value.path) &&
+    isOneOf(value.result, INTEGRITY_RESULTS) &&
+    (value.reason === null || isOneOf(value.reason, INTEGRITY_REASONS)) &&
+    (value.detail === null || isBoundedV5Text(value.detail, false)) &&
+    (value.read_strategy === null ||
+      isOneOf(value.read_strategy, READ_STRATEGIES)) &&
+    isOneOf(value.recording, RECORDING_STATES) &&
+    (value.record_disposition === null ||
+      isOneOf(value.record_disposition, RECORD_DISPOSITIONS)) &&
+    isNonnegativeInteger(value.detail_omitted_count)
+  );
+}
+
+function validateDormantTerminalSummaryV5(value) {
+  if (
+    !isExactObject(value, [
+      "status",
+      "recording",
+      "audit",
+      "disposition",
+      "canceled",
+      "phases",
+      "bytes_done",
+      "bytes_total",
+      "error",
+      "recording_degraded_items",
+      "recording_issues",
+      "omitted_detail_count",
+      "review_fact_limit",
+    ]) ||
+    !isOneOf(value.status, TERMINAL_STATES) ||
+    !isOneOf(value.recording, RECORDING_STATES) ||
+    !isOneOf(value.audit, RECORDING_STATES) ||
+    !isOneOf(value.disposition, DISPOSITIONS) ||
+    typeof value.canceled !== "boolean" ||
+    !Array.isArray(value.phases) ||
+    value.phases.length > 3 ||
+    !value.phases.every(validateDormantPhaseResultV5) ||
+    new Set(value.phases.map((phase) => phase.phase)).size !==
+      value.phases.length ||
+    !isScalar64(value.bytes_done) ||
+    !isScalar64(value.bytes_total) ||
+    BigInt(value.bytes_done) > BigInt(value.bytes_total) ||
+    !(
+      value.error === null ||
+      (isExactObject(value.error, ["type_name", "message"]) &&
+        isBoundedV5Text(value.error.type_name, true) &&
+        isBoundedV5Text(value.error.message, false))
+    ) ||
+    !isNonnegativeInteger(value.recording_degraded_items) ||
+    !Array.isArray(value.recording_issues) ||
+    value.recording_issues.length > 5 ||
+    !value.recording_issues.every(validateDormantRecordingIssueV5) ||
+    new Set(value.recording_issues.map((issue) => issue.reason)).size !==
+      value.recording_issues.length ||
+    !isNonnegativeInteger(value.omitted_detail_count) ||
+    !(
+      value.review_fact_limit === null ||
+      validateDormantReviewFactV5(value.review_fact_limit)
+    )
+  ) {
+    return false;
+  }
+  const expectedRecording =
+    value.recording_degraded_items > 0 || value.recording_issues.length > 0
+      ? "degraded"
+      : "ok";
+  if (
+    value.recording !== expectedRecording ||
+    (value.status === "canceled" && !value.canceled) ||
+    (value.status === "refused" &&
+      (value.canceled || value.disposition !== "unrun"))
+  ) {
+    return false;
+  }
+  return (
+    value.review_fact_limit === null ||
+    (value.status === "refused" &&
+      value.disposition === "unrun" &&
+      !value.canceled &&
+      value.bytes_done === "0" &&
+      value.bytes_total === "0" &&
+      value.phases.length === 0 &&
+      value.recording_degraded_items === 0 &&
+      value.recording_issues.length === 0 &&
+      value.omitted_detail_count === 0 &&
+      value.error === null)
+  );
+}
+
+function validateDormantPhaseResultV5(value) {
+  return (
+    isExactObject(value, [
+      "phase",
+      "status",
+      "items_done",
+      "items_total",
+      "bytes_done",
+      "bytes_total",
+      "error",
+    ]) &&
+    isBoundedV5Text(value.phase, true) &&
+    isOneOf(value.status, PHASE_STATES) &&
+    isNonnegativeInteger(value.items_done) &&
+    isNullableNonnegativeInteger(value.items_total) &&
+    isScalar64(value.bytes_done) &&
+    (value.bytes_total === null || isScalar64(value.bytes_total)) &&
+    (value.items_total === null || value.items_done <= value.items_total) &&
+    (value.bytes_total === null ||
+      BigInt(value.bytes_done) <= BigInt(value.bytes_total)) &&
+    (value.error === null || isBoundedV5Text(value.error, false))
+  );
+}
+
+function validateDormantRecordingIssueV5(value) {
+  return (
+    isExactObject(value, ["reason", "detail"]) &&
+    isOneOf(value.reason, DORMANT_TASK_RECORDING_REASONS_V5) &&
+    (value.detail === null || isBoundedV5Text(value.detail, false))
+  );
+}
+
+function validateDormantReviewFactV5(value) {
+  if (
+    !isExactObject(value, [
+      "reason",
+      "tree_kind",
+      "population",
+      "axis",
+      "row_limit",
+      "byte_limit",
+    ]) ||
+    value.reason !== "review_fact_limit_exceeded" ||
+    !["plan", "inventory"].includes(value.tree_kind) ||
+    !["domain", "informational"].includes(value.population) ||
+    !["rows", "retained-bytes", "logical-bytes"].includes(value.axis) ||
+    !(value.row_limit === null || isNonnegativeInteger(value.row_limit)) ||
+    !(value.byte_limit === null || isScalar64(value.byte_limit))
+  ) {
+    return false;
+  }
+  if (value.axis === "rows") {
+    return value.row_limit === 120000 && value.byte_limit === null;
+  }
+  if (value.row_limit !== null || value.byte_limit === null) {
+    return false;
+  }
+  if (value.axis === "logical-bytes") {
+    return (
+      value.tree_kind === "plan" &&
+      value.population === "domain" &&
+      value.byte_limit === "9223372036854775807"
+    );
+  }
+  const expected =
+    value.tree_kind === "plan" && value.population === "domain"
+      ? "134217728"
+      : "201326592";
+  return value.byte_limit === expected;
+}
+
+function validateDormantItemRecordingV5(status, reason, detail) {
+  if (!isOneOf(status, RECORDING_STATES)) {
+    return false;
+  }
+  if (status === "ok") {
+    return reason === null && detail === null;
+  }
+  return (
+    isOneOf(reason, DORMANT_ITEM_RECORDING_REASONS_V5) &&
+    (detail === null || isBoundedV5Text(detail, false))
+  );
+}
+
+function validateDormantDetailProjectionV5(value) {
+  if (!isPlainJsonObject(value)) {
+    return false;
+  }
+  let leaves = 0;
+  let pathLeaves = 0;
+  for (const [key, item] of Object.entries(value)) {
+    if (!/^[\x20-\x7e]{1,64}$/.test(key)) {
+      return false;
+    }
+    if (DORMANT_DETAIL_TEXT_KEYS_V5.includes(key)) {
+      if (!isBoundedV5Text(item, false)) {
+        return false;
+      }
+      leaves += 1;
+    } else if (DORMANT_DETAIL_PATH_KEYS_V5.includes(key)) {
+      if (!isV5Path(item)) {
+        return false;
+      }
+      leaves += 1;
+      pathLeaves += 1;
+    } else if (key === "continued") {
+      if (typeof item !== "boolean") {
+        return false;
+      }
+      leaves += 1;
+    } else if (DORMANT_DETAIL_ARRAY_KEYS_V5.includes(key)) {
+      if (!Array.isArray(item) || item.length > 32) {
+        return false;
+      }
+      if (
+        key === "incomplete_sides" &&
+        !item.every((member) => ["source", "target"].includes(member))
+      ) {
+        return false;
+      }
+      if (
+        key === "excluded_dependencies" &&
+        !item.every(
+          (member) => typeof member === "string" && ID_PATTERN.test(member),
+        )
+      ) {
+        return false;
+      }
+      if (
+        key === "durability_warnings" &&
+        !item.every((member) => isBoundedV5Text(member, false))
+      ) {
+        return false;
+      }
+      leaves += item.length;
+    } else {
+      return false;
+    }
+    if (leaves > 32 || pathLeaves > 8) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isScalar64(value) {
+  return (
+    typeof value === "string" &&
+    /^(?:0|[1-9][0-9]*)$/.test(value) &&
+    BigInt(value) <= 9223372036854775807n
+  );
+}
+
+function isBoundedV5Text(value, nonempty) {
+  return (
+    typeof value === "string" &&
+    isValidUnicode(value) &&
+    (!nonempty || value.length > 0) &&
+    new TextEncoder().encode(value).length <= 1024
+  );
+}
+
+function isV5Path(value) {
+  return (
+    typeof value === "string" &&
+    isValidUnicode(value) &&
+    !value.includes("\u0000") &&
+    value.length <= 32767
+  );
 }
 
 function isNonnegativeInteger(value) {
