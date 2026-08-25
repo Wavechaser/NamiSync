@@ -337,8 +337,8 @@ def _seed_schema_version(path: Path, version: int) -> None:
         connection.close()
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4])
-def test_history_v1_through_v4_are_refused_without_mutation(
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
+def test_superseded_history_versions_are_refused_without_mutation(
     tmp_path: Path, version: int
 ) -> None:
     path = tmp_path / f"history-v{version}.db"
@@ -346,7 +346,7 @@ def test_history_v1_through_v4_are_refused_without_mutation(
 
     with pytest.raises(
         SchemaResetRequired,
-        match="history v5.*reset both database files together",
+        match="history v6.*archive or delete both database main files",
     ):
         initialize_history(path)
 
@@ -377,15 +377,18 @@ def test_history_v1_through_v4_are_refused_without_mutation(
         check.close()
 
 
-@pytest.mark.parametrize("version", [1, 2])
-def test_ledger_v1_and_v2_are_refused_without_mutation(
+@pytest.mark.parametrize("version", [1, 2, 3])
+def test_superseded_ledger_versions_are_refused_without_mutation(
     tmp_path: Path,
     version: int,
 ) -> None:
     path = tmp_path / f"ledger-v{version}.db"
     _seed_schema_version(path, version)
 
-    with pytest.raises(SchemaResetRequired, match="reset both database files together"):
+    with pytest.raises(
+        SchemaResetRequired,
+        match="ledger v4 and history v6 at data epoch 5.*archive or delete",
+    ):
         initialize_ledger(path)
 
     connection = sqlite3.connect(path)
@@ -410,7 +413,7 @@ def test_ledger_v1_and_v2_are_refused_without_mutation(
         check.close()
 
 
-def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
+def test_event_v5_coordinated_reset_recreates_exact_database_epoch(
     tmp_path: Path,
 ) -> None:
     ledger = tmp_path / "ledger.db"
@@ -441,6 +444,12 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         history_contract = history_reader.execute(
             "SELECT value FROM schema_metadata WHERE key = 'contract_id'"
         ).fetchone()[0]
+        ledger_epoch = ledger_reader.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'data_epoch'"
+        ).fetchone()[0]
+        history_epoch = history_reader.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'data_epoch'"
+        ).fetchone()[0]
         ledger_tables = {
             row[0]
             for row in ledger_reader.execute(
@@ -470,17 +479,18 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         history_reader.close()
         ledger_reader.close()
 
-    assert ledger_version == LEDGER_SCHEMA_VERSION == 3
-    assert history_version == HISTORY_SCHEMA_VERSION == 5
+    assert ledger_version == LEDGER_SCHEMA_VERSION == 4
+    assert history_version == HISTORY_SCHEMA_VERSION == 6
+    assert ledger_epoch == history_epoch == "5"
     assert (
         ledger_contract
         == LEDGER_CONTRACT_ID
-        == "m1-ledger-xxh3-128-invalidation-v1"
+        == "m1-ledger-v4-event-v5-evidence-v1"
     )
     assert (
         history_contract
         == HISTORY_CONTRACT_ID
-        == "m1-history-windowed-receipts-v1"
+        == "m1-history-v6-event-v5-recording-v1"
     )
     assert not ledger.with_name(ledger.name + "-journal").exists()
     assert not history.with_name(history.name + "-journal").exists()
@@ -501,6 +511,15 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         "event_chain_hash",
         "prefix_projection_hash",
         "terminal_payload_hash",
+        "recording_degraded_items",
+        "recording_issues_json",
+        "omitted_detail_count",
+        "review_reason",
+        "review_tree_kind",
+        "review_population",
+        "review_axis",
+        "review_row_limit",
+        "review_byte_limit",
     } <= run_columns
     assert {
         "event_seq",
@@ -520,6 +539,10 @@ def test_xv_17_coordinated_reset_recreates_windowed_history_schema(
         "phase",
         "item_id",
         "result",
+        "recording",
+        "recording_reason",
+        "recording_detail",
+        "detail_omitted_count",
     } <= event_columns
     generated_event_columns = {
         row[1] for row in event_column_rows if int(row[6]) == 3
@@ -551,7 +574,10 @@ def test_transitional_current_version_without_contract_is_refused_read_only(
     path = tmp_path / f"{name}-transitional.db"
     _seed_schema_version(path, version)
 
-    with pytest.raises(SchemaResetRequired, match="reset both database files together"):
+    with pytest.raises(
+        SchemaResetRequired,
+        match="archive or delete both database main files",
+    ):
         initializer(path)
 
     connection = sqlite3.connect(path)
@@ -714,7 +740,7 @@ def test_read_repositories_refuse_incompatible_contracts_without_mutation(
     before = _sqlite_artifact_snapshot(path)
 
     with pytest.raises(
-        SchemaResetRequired, match="reset both database files together"
+        SchemaResetRequired, match="archive or delete both database main files"
     ):
         repository_type(path)
 

@@ -59,6 +59,7 @@ from namisync.core.root_authority import (
     RootAuthorityIssue,
     observe_native_volume,
 )
+from namisync.core.scalars import MAX_SIGNED_64, ScalarDomainError
 from namisync.modules.planner import plan
 from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
 
@@ -784,6 +785,19 @@ def test_capacity_boundary_uses_same_function_and_only_exact_reclaimable_bytes()
     assert required == xset.plan.required_bytes == 30
     assert RefusalCode.INSUFFICIENT_SPACE in _codes(xset, _world(xset, free_space=29))
     assert preflight(xset, replace(_world(xset, free_space=29), reclaimable_temp_bytes=1)).ok
+
+
+def test_capacity_available_bytes_refuses_signed_64_overflow() -> None:
+    xset = _xset()
+
+    with pytest.raises(ScalarDomainError, match="available target bytes"):
+        preflight(
+            xset,
+            replace(
+                _world(xset, free_space=MAX_SIGNED_64),
+                reclaimable_temp_bytes=1,
+            ),
+        )
 
 
 def test_repeated_contexts_are_identical_for_identical_worlds_and_fresh_drift_changes_verdict() -> None:

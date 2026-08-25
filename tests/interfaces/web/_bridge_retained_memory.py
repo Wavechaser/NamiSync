@@ -89,9 +89,13 @@ def measure_retained_bridge_state(
     """
 
     adapter_roots, retained_records = _adapter_snapshots(registry)
-    replay_roots, subscriber_roots = _dispatcher_snapshots(dispatcher)
+    replay_roots, subscriber_roots, dispatcher_results = _dispatcher_snapshots(
+        dispatcher
+    )
     adapter_after, records_after = _adapter_snapshots(registry)
-    replay_after, subscriber_after = _dispatcher_snapshots(dispatcher)
+    replay_after, subscriber_after, dispatcher_results_after = (
+        _dispatcher_snapshots(dispatcher)
+    )
     _require_quiescent("adapter queues", adapter_roots, adapter_after)
     _require_quiescent("replay queues", replay_roots, replay_after)
     _require_quiescent(
@@ -102,6 +106,12 @@ def measure_retained_bridge_state(
     if tuple(map(id, retained_records)) != tuple(map(id, records_after)):
         raise RuntimeError(
             "retained-state fixture is not quiescent: terminal records changed"
+        )
+    if tuple(map(id, dispatcher_results)) != tuple(
+        map(id, dispatcher_results_after)
+    ):
+        raise RuntimeError(
+            "retained-state fixture is not quiescent: dispatcher results changed"
         )
 
     replay, _ = _size_transport(replay_roots)
@@ -114,6 +124,8 @@ def measure_retained_bridge_state(
     terminal = _DeepSizer()
     for record in retained_records:
         terminal.add(record)
+    for result in dispatcher_results:
+        terminal.add(result)
     for result in terminal_results:
         terminal.add(result)
 
@@ -148,9 +160,17 @@ def _adapter_snapshots(
 
 def _dispatcher_snapshots(
     dispatcher: object,
-) -> tuple[tuple[_QueueSnapshot, ...], tuple[_QueueSnapshot, ...]]:
+) -> tuple[
+    tuple[_QueueSnapshot, ...],
+    tuple[_QueueSnapshot, ...],
+    tuple[object, ...],
+]:
     with dispatcher._condition:
         hubs = tuple(dispatcher._hubs.values())
+        records = tuple(getattr(dispatcher, "_records", {}).values())
+        results = tuple(
+            record.result for record in records if record.result is not None
+        )
     replay_roots = []
     subscriber_roots = []
     for hub in hubs:
@@ -160,7 +180,7 @@ def _dispatcher_snapshots(
         for stream in streams:
             with stream._condition:
                 subscriber_roots.append(_snapshot_queue(stream._items))
-    return tuple(replay_roots), tuple(subscriber_roots)
+    return tuple(replay_roots), tuple(subscriber_roots), results
 
 
 def _snapshot_queue(queue: object) -> _QueueSnapshot:

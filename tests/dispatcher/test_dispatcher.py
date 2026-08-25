@@ -8,7 +8,14 @@ from time import monotonic, sleep
 import pytest
 
 from namisync.core.evidence import RecordingStatus
-from namisync.core.events import Gap, ItemOutcome, PhaseChanged, StateChanged, Terminal
+from namisync.core.events import (
+    Gap,
+    ItemOutcome,
+    PhaseChanged,
+    StateChanged,
+    Terminal,
+    TerminalSummary,
+)
 from namisync.core.evidence import Outcome
 from namisync.core.session import (
     Canceled,
@@ -892,7 +899,7 @@ def test_pause_resume_cancel_terminal_retains_pre_pause_item_outcome() -> None:
         if payload == b"initial":
             def first_attempt(context):
                 context.emit(
-                    ItemOutcome("earned", "dummy", "file", Outcome.SUCCEEDED)
+                    ItemOutcome("e" * 32, "copy", "file", Outcome.SUCCEEDED)
                 )
                 first_entered.set()
                 while True:
@@ -923,7 +930,7 @@ def test_pause_resume_cancel_terminal_retains_pre_pause_item_outcome() -> None:
     assert len(record.result.items) == 1
     earned = record.result.items[0]
     assert isinstance(earned, ItemOutcome)
-    assert earned.item_id == "earned"
+    assert earned.item_id == "e" * 32
     assert dispatcher.shutdown().complete
 
 
@@ -937,7 +944,7 @@ def test_cancel_paused_uses_registration_owned_axis_preserving_settlement() -> N
 
         def pauseable(context):
             context.emit(
-                ItemOutcome("earned", "copy", "file.bin", Outcome.SUCCEEDED)
+                ItemOutcome("e" * 32, "copy", "file.bin", Outcome.SUCCEEDED)
             )
             entered.set()
             while True:
@@ -987,7 +994,7 @@ def test_cancel_paused_uses_registration_owned_axis_preserving_settlement() -> N
     assert record.result is not None
     assert record.result.status is SessionState.COMPLETED
     assert record.result.canceled is True
-    assert [item.item_id for item in record.result.items] == ["earned"]
+    assert [item.item_id for item in record.result.items] == ["e" * 32]
     assert [phase.status for phase in record.result.phases] == [
         PhaseStatus.COMPLETED,
         PhaseStatus.CANCELED,
@@ -1001,7 +1008,7 @@ def test_cancel_paused_uses_registration_owned_axis_preserving_settlement() -> N
         if isinstance(envelope.body, Terminal):
             terminals.append(envelope.body)
     assert len(terminals) == 1
-    assert terminals[0].result == record.result
+    assert terminals[0].result == TerminalSummary.from_result(record.result)
     assert dispatcher.shutdown().complete
 
 
@@ -1021,7 +1028,7 @@ def test_cancel_during_pausing_snapshot_drain_settles_once_and_releases_custody(
 
     def pauseable(context):
         context.emit(
-            ItemOutcome("earned", "copy", "file.bin", Outcome.SUCCEEDED)
+            ItemOutcome("e" * 32, "copy", "file.bin", Outcome.SUCCEEDED)
         )
         entered.set()
         while True:
@@ -1076,7 +1083,7 @@ def test_cancel_during_pausing_snapshot_drain_settles_once_and_releases_custody(
     assert record.started_at is not None
     assert record.payload is None
     assert record.result is not None
-    assert [item.item_id for item in record.result.items] == ["earned"]
+    assert [item.item_id for item in record.result.items] == ["e" * 32]
     assert dispatcher.cancel(session_id).code is ControlCode.ILLEGAL_STATE
     assert settled == [(b"continued", Disposition.RAN)]
 
@@ -1093,7 +1100,7 @@ def test_cancel_during_pausing_snapshot_drain_settles_once_and_releases_custody(
         if isinstance(envelope.body, Terminal):
             terminals.append(envelope.body)
     assert len(terminals) == 1
-    assert terminals[0].result == record.result
+    assert terminals[0].result == TerminalSummary.from_result(record.result)
     shutdown = dispatcher.shutdown()
     assert shutdown.complete
     assert shutdown.custody_released
@@ -1151,7 +1158,7 @@ def test_malformed_canceled_settlement_fails_loudly_once() -> None:
         if isinstance(envelope.body, Terminal):
             terminals.append(envelope.body)
     assert len(terminals) == 1
-    assert terminals[0].result == record.result
+    assert terminals[0].result == TerminalSummary.from_result(record.result)
     shutdown = dispatcher.shutdown()
     assert shutdown.complete
     assert shutdown.custody_released

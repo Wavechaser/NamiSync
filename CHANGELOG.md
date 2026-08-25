@@ -115,6 +115,30 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
+#### Activate exact core event v5 (2026-08-25)
+
+- Pinned executor recording settlement truth in the retained oracle, then made
+  operation-local reasons and ordered task issues active without changing
+  filesystem outcomes or oracle traces.
+- Staged strict v5 consumers before atomically switching core producers,
+  dispatcher admission, service views, history, CLI, and packaged JavaScript to
+  one exact event schema. Reliable envelopes are rejected above 1,048,576
+  canonical bytes before sequence or queue mutation, and terminal summaries no
+  longer duplicate item arrays.
+- Activated checked signed-64 arithmetic and canonical decimal public scalars,
+  typed logical-byte review refusal, bounded diagnostic omission witnesses, and
+  the complete core-owned Windows `FILE_ID_128` adapter with no legacy high/low
+  narrowing. Workflow payloads and the version-2 verifier-rig sidecar keep the
+  complete file index as canonical text rather than a JSON number.
+- Reset persistence to ledger v4/history v6 at shared data epoch 5, stored
+  `FileIndex128` as canonical text, strengthened ledger/history integrity
+  checks, and made old, mixed, markerless, one-present, and orphan-sidecar pairs
+  refuse with coordinated reset guidance.
+- Preserved canonical CLI item detail for sessions that finish before
+  observation by reading the finalized fixed history watermark; degraded audit
+  remains an explicit live-only fallback. Checkpoint 3.3 retains the separate
+  job of deleting the now-unreachable private v3/v4 decoder source.
+
 #### Ratify the Stage 6 second-half reslice (2026-08-24 – 2026-08-25)
 
 - Accepted the H2 checkpoint sequence for Slices 5–6 and early Slice 7 while

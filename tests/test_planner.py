@@ -24,6 +24,8 @@ from namisync.core.models import (
     VolumeId,
 )
 from namisync.core.pathing import PathValidationError, normalize_relative_path
+from namisync.core.review import ReviewFactLimitError, ReviewFactLimitExceeded
+from namisync.core.scalars import MAX_SIGNED_64
 from namisync.core.planning import (
     Assignment,
     BlockedReason,
@@ -659,6 +661,22 @@ def test_capacity_formula_counts_every_update_and_no_hardlink_backup() -> None:
     assert hardlinks.required_bytes == 60
     selected = [operation for operation in no_hardlinks.operations if operation.target_rel_path == "a.bin"]
     assert calculate_required_bytes(selected, target_profile=no_hardlinks.target_profile, trash_on_update=True) == 30
+
+
+def test_unrepresentable_plan_logical_bytes_refuse_before_plan_publication() -> None:
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(
+            _file("maximum.bin", size=MAX_SIGNED_64),
+            _file("overflow.bin", size=1),
+        ),
+    )
+
+    with pytest.raises(ReviewFactLimitError) as caught:
+        _plan(source, _scan("target", TARGET_VOLUME))
+
+    assert caught.value.fact == ReviewFactLimitExceeded.plan_logical_bytes()
 
 
 def test_filters_apply_symmetrically_and_snapshot_without_target_only_deletion() -> None:

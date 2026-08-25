@@ -1170,18 +1170,16 @@ def test_br_g_36_live_event_validator_is_current_only_and_not_for_history() -> N
     ).read_text(encoding="utf-8")
     validator = source.split(
         "function validateLiveSessionEvent(event, sessionId) {", 1
-    )[1].split("function validateSessionRecord(record, sessionId) {", 1)[0]
+    )[1].split("function validateLegacySessionEvent(event, sessionId) {", 1)[0]
 
     assert "const BRIDGE_SCHEMA_VERSION = 1;" in source
-    assert "const LIVE_CORE_EVENT_SCHEMA_VERSION = 4;" in source
+    assert "const LIVE_CORE_EVENT_SCHEMA_VERSION = 5;" in source
     assert "const SCHEMA_VERSION" not in source
     assert source.count("LIVE_CORE_EVENT_SCHEMA_VERSION") == 2
     assert "schema_version: BRIDGE_SCHEMA_VERSION" in source
     assert "response.schema_version !== BRIDGE_SCHEMA_VERSION" in source
-    assert validator.count('"schema_version"') == 1
-    assert (
-        "event.schema_version !== LIVE_CORE_EVENT_SCHEMA_VERSION" in validator
-    )
+    assert validator.count('"schema_version"') == 0
+    assert "return validateDormantSessionEventV5(event, sessionId);" in validator
     assert source.count("validateLiveSessionEvent(") == 2
     assert "return validateLiveSessionEvent(update.event, sessionId);" in source
 

@@ -6,9 +6,19 @@ from time import monotonic, sleep
 
 import pytest
 
+from _event_v5_fixtures import maximum_reliable_envelope
 import namisync.dispatcher.event_bus as event_bus
-from namisync.core.evidence import RecordingStatus
-from namisync.core.events import Gap, PhaseChanged, Progress, StateChanged, Terminal
+from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.events import (
+    Gap,
+    ItemOutcome,
+    PhaseChanged,
+    Progress,
+    StateChanged,
+    Terminal,
+    TerminalSummary,
+)
+from namisync.core.execution import ItemRecordingReason
 from namisync.core.session import OperationResult, SessionId, SessionState
 from namisync.dispatcher.event_bus import EventHub, EventHubCloseStatus
 
@@ -65,6 +75,37 @@ def make_hub(**overrides) -> EventHub:
 def test_audit_flush_interval_must_be_positive() -> None:
     with pytest.raises(ValueError, match="audit flush interval must be positive"):
         make_hub(audit_flush_interval=0)
+
+
+def test_reliable_oversize_refuses_before_sequence_queue_or_audit_mutation() -> None:
+    raw = maximum_reliable_envelope()["body"]
+    assert isinstance(raw, dict)
+    path = raw["path"]
+    detail = raw["detail"]
+    assert isinstance(path, str)
+    assert isinstance(detail, dict)
+    observer = Observer()
+    hub = make_hub(observer=observer)
+    stream = hub.subscribe(from_seq=1)
+    item = ItemOutcome(
+        item_id=str(raw["item_id"]),
+        kind=str(raw["kind"]),
+        path=path + "x",
+        outcome=Outcome(str(raw["result"])),
+        detail=detail,
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+        recording_detail=str(raw["recording_detail"]),
+    )
+
+    with pytest.raises(ValueError, match="canonical byte ceiling"):
+        hub.emit(item)
+
+    assert hub._seq == 0
+    assert not hub._replay
+    assert not stream._items
+    assert observer.events == []
+    assert hub.close(0.5)
 
 
 def test_br_g_33_progress_flood_is_coalesced_and_never_ejects_slow_stream() -> None:
@@ -264,7 +305,7 @@ def test_audit_observer_receives_reliable_preterminal_events_and_finalizes() -> 
     hub.emit(Progress("execute", 0, 1, 0, 1, None))
     result = OperationResult(SessionState.COMPLETED)
     assert hub.finalize_audit(result) is RecordingStatus.OK
-    hub.emit(Terminal(result))
+    hub.emit(Terminal(TerminalSummary.from_result(result)))
     assert [type(envelope.body) for envelope in observer.events] == [PhaseChanged]
     assert observer.results == [result]
     assert observer.flushes == 0

@@ -5,10 +5,10 @@ removes the unused worker-count field from the immutable plan contract.
 Stage 5.5 relocates the planner's three relative hierarchy helpers to
 `core.pathing` without changing planning behavior. Later scopes, content
 evidence, ingest policies, replay, repair, and undo reuse the same plan shape.
-The complete Stage 6 Setup snapshot, signed-64 scalar boundary, and bounded
-plan-review contract described below are accepted targets and are not active
-until their implementation checkpoints close. The 100,000-operation shape is
-a performance fixture, not the production maximum.
+The signed-64 scalar boundary is active from Stage 6 checkpoint 3.2. The
+complete Setup snapshot and bounded retained-graph plan-review contract below
+remain accepted targets until their implementation checkpoints close. The
+100,000-operation shape is a performance fixture, not the production maximum.
 
 ## Purpose
 
@@ -172,10 +172,13 @@ Stage 1 removed `worker_count` from options, plans, fingerprints, and payloads.
 The current executor admits one file operation at a time, and the capacity
 contract has no dormant file-concurrency tuning input.
 
-At the accepted scalar cutover, planner construction follows the checked-
+At the active checkpoint-3.2 scalar cutover, planner construction follows the checked-
 arithmetic and pre-publication refusal contract in
 [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; planner defines
-no local numeric domain.
+no local numeric domain. Every logical-byte rollup uses checked signed-64
+addition; an aggregate excess refuses publication with the typed plan/domain
+`logical-bytes` review-limit fact rather than wrapping or becoming a free-space
+diagnostic.
 
 The function consumes target `CapabilityProfile.supports_hardlinks`, populated
 from the Windows `FILE_SUPPORTS_HARD_LINKS` volume flag. For each concurrently

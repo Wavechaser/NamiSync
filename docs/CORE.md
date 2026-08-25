@@ -4,8 +4,9 @@ Status: M0 scan/plan/preflight, session/event/evidence, execution, integrity,
 and recording contracts are implemented. M1 Stages 2-4 add the fixed XXH3-128
 content contract, nominal heterogeneous result vocabulary,
 published-copy/post-copy evidence, compound phase results, and the continuation
-state consumed by standalone and linked integrity workflows. Current hardening
-advances the core event codec to v4.
+state consumed by standalone and linked integrity workflows. Stage 6 checkpoint
+3.2 activates the exact core-event v5 codec, signed-64 scalar boundary, typed
+review-limit fact, and full-width Windows file identity.
 Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
 shared workflow tree substrate without changing their semantics, and makes
 recursive inventory scope an explicit core contract.
@@ -13,10 +14,11 @@ recursive inventory scope an explicit core contract.
 The remaining accepted-but-inactive Stage 6 second-half contract is mapped in
 `M1_BRIDGE.md`; its scalar and retention hard walls are owned by
 `DEFENSE.md` §1.3. Checkpoint 2's scoped recording continuation and terminal
-payload cleanup are active below, while the event/database protocol remains v4
-until checkpoint 3 updates source and active contracts together. Component docs
-point to those authorities rather than copy the future event summary, numeric
-domain, task authority, or retention shapes.
+payload cleanup remain active below. Checkpoint 3.2 has switched every live
+producer and consumer to event v5 and data epoch 5; checkpoint 3.3 still removes
+the now-unreachable read-only v3/v4 source branches. Component docs point to
+those authorities rather than copy task authority or retention shapes owned by
+later checkpoints.
 
 ## Purpose
 
@@ -227,19 +229,18 @@ The runner then constructs and releases the one immutable `Terminal` to
 ordinary subscribers. History never needs to consume or parse that Terminal,
 so no corrective second terminal or circular acknowledgement exists.
 
-The current event codec emits core event-envelope v4 and round-trips
+The active codec emits and accepts only exact core event-envelope v5 for
 `StateChanged`, `PhaseChanged`, `Progress`, nominal `ItemOutcome` and
-`IntegrityOutcome` values, `Gap`, and `Terminal`. It also retains explicit v3
-decode support for persisted reliable history without rewriting its hash
-chain. Unknown schema/body versions and v3 Progress are rejected: history
-never admitted lossy Progress, so there is no persisted legacy Progress shape
-to recover. Reliable `PhaseChanged.phase` is an exact nonempty string, matching
-the phase authority required by Progress consumers rather than allowing an
-empty phase token below the browser boundary.
+`IntegrityOutcome` values, `Gap`, and item-free `TerminalSummary`. Exact keys,
+closed primitive variants, cross-field invariants, canonical scalar text, and
+the 1,048,576-byte reliable-envelope ceiling are validated before sequence,
+queue, replay, or history mutation. Reliable `PhaseChanged.phase` is an exact
+nonempty string, matching the phase authority required by Progress consumers
+rather than allowing an empty phase token below the browser boundary.
 
-### Progress v4 shape
+### Progress v5 shape
 
-Version 4 makes every Progress body an exact eleven-key object:
+Version 5 makes every Progress body an exact eleven-key object:
 
 ```text
 phase
@@ -255,11 +256,12 @@ item_bytes_done
 item_bytes_total
 ```
 
-`phase` is a nonempty string. `items_done` and `bytes_done` are exact
-non-boolean, nonnegative integers. Each total is either an exact non-boolean,
-nonnegative integer or `None`; every done value is bounded by its known total.
-Every Progress integer is also bounded by JavaScript's maximum safe integer so
-core cannot emit a snapshot that the exact browser boundary must refuse.
+`phase` is a nonempty string. Item counts are exact non-Boolean JavaScript-safe
+integers; each item total is either one such integer or `None`, and done is
+bounded by a known total. Byte counters are checked nonnegative signed-64
+integers internally and canonical unsigned-decimal `Scalar64` strings on the
+event wire; each byte total is either one such value or null, and done is
+bounded by a known total.
 `current_path` is a string or `None`. Item id and type are both present or both
 `None`; the id is a nonempty string and the type is exactly `operation` or
 `integrity`. An active item requires `items_done < items_total` when the item
@@ -267,8 +269,8 @@ total is known.
 
 `item_attempt_id` is either `None` or exactly 32 lowercase hexadecimal
 characters. It requires paired item identity. Item-byte counters require an
-attempt id, are both present or both absent, use exact non-boolean nonnegative
-integers, and are mutually bounded when present. `item_bytes_done` cannot
+attempt id, are both present or both absent, use the same internal signed-64 /
+external `Scalar64` contract, and are mutually bounded when present. `item_bytes_done` cannot
 exceed aggregate `bytes_done`, and `item_bytes_total` cannot exceed known
 aggregate `bytes_total`. An attempt id with an absent byte pair is the only
 active indeterminate-byte shape; an item without an attempt has no item-byte
@@ -292,21 +294,19 @@ transition table, authority order, and Gap/replay rules live in
 
 ### Decoder version boundaries
 
-The implemented boundary continues to emit core event v4, accepts exact v4 at
-the live browser boundary, and reads authenticated retained v3/v4 reliable
-history through the current history projection. These remain current-source
-facts until the coordinated protocol checkpoint lands; decoder success at one
-boundary is not authority for another.
+Production now has one exact boundary: every reliable producer, live consumer,
+history observer, persisted event projection, service view, CLI adapter, and
+packaged browser validator requires event v5. The coordinated ledger-v4 /
+history-v6 reset means no readable current database can contain an older event
+epoch. The live bridge validator and durable projection consume the same
+admitted immutable core snapshot without treating either representation as the
+other's decoder.
 
-The accepted checkpoint-3 target cuts every reliable producer, live consumer,
-history observer, and persisted event projection to the one exact accepted
-event version named in `M1_BRIDGE.md`. Its codec validates exact keys, closed
-primitive detail variants, cross-field invariants, and the scalar classes owned by
-`M1_BRIDGE.md` before sequence, queue, or history admission. The coordinated
-database reset means the target history schema needs no legacy event decoder.
-The live bridge validator and durable projection consume the same admitted
-immutable core snapshot without treating either representation as the other's
-decoder.
+Checkpoint 3.2 deliberately leaves a private read-only v3/v4 decoder branch in
+`core/events.py` as unreachable source. No current constant, dispatcher,
+history reader, service route, browser route, or fixture selects it. Checkpoint
+3.3 deletes that branch and its source-only compatibility evidence; it is not a
+supported runtime mode during this safe stop.
 
 Core event versioning is independent of bridge-envelope, continuation,
 database, UI-state, shell, and page versions. The bridge envelope remains
@@ -400,6 +400,14 @@ facts live in `VolumeEvidence`: relabeling is only noted, a matching serial with
 a changed filesystem type requires explicit rebind, and two mounted volumes
 with one key require explicit user choice. File identity is nullable and never
 fabricated on filesystems that cannot supply stable identity.
+
+`FileIdentity.file_index` spans the complete unsigned 128-bit Windows domain.
+The core-owned adapter canonicalizes either CPython's witnessed NTFS/ReFS
+`st_ino` or the complete handle-bound `FILE_ID_128` from
+`GetFileInformationByHandleEx(FileIdInfo)`; native components holding a final
+handle use the latter. Persistence and codecs use canonical unsigned-decimal
+`FileIndex128` text, never JSON/SQLite arithmetic or legacy high/low 64-bit
+projection. Identity equality always includes the normalized volume serial.
 
 ## Time And Evidence
 

@@ -21,9 +21,13 @@ from .models import FileStat
 from .pathing import normalize_relative_path, validate_relative_path
 from .root_authority import RootAuthority
 from .session import ResultItem, RunContext
-
-
-_JAVASCRIPT_MAX_SAFE_INTEGER = (1 << 53) - 1
+from .scalars import (
+    bounded_utf8_text,
+    checked_add_signed_64,
+    require_safe_int,
+    require_signed_64,
+    require_utf16_path,
+)
 
 
 class InventoryState(StrEnum):
@@ -187,9 +191,16 @@ class PostCopySelection:
         known_ids = set(item_ids)
         if not set(self._completed_bytes).issubset(known_ids):
             raise ValueError("post-copy continuation contains an unknown item id")
-        if any(value < 0 for value in self._completed_bytes.values()):
-            raise ValueError("completed post-copy byte counts cannot be negative")
-        if self._processed_bytes < sum(self._completed_bytes.values()):
+        completed_bytes = 0
+        for value in self._completed_bytes.values():
+            require_signed_64(value, "completed post-copy byte count")
+            completed_bytes = checked_add_signed_64(
+                completed_bytes,
+                value,
+                "completed post-copy bytes",
+            )
+        require_signed_64(self._processed_bytes, "post-copy processed bytes")
+        if self._processed_bytes < completed_bytes:
             raise ValueError("post-copy processed bytes cannot trail completed bytes")
 
     @property
@@ -215,36 +226,62 @@ class PostCopySelection:
     def physical_bytes_total(self, additional_admitted_bytes: int = 0) -> int:
         """Return the derived read-work budget for this continuation."""
 
-        if type(additional_admitted_bytes) is not int:
-            raise TypeError("additional admitted bytes must be an integer")
-        if additional_admitted_bytes < 0:
-            raise ValueError("additional admitted bytes cannot be negative")
+        require_signed_64(
+            additional_admitted_bytes,
+            "additional admitted post-copy bytes",
+        )
         expected_by_id = {
             candidate.item_id: candidate.expected_stat.size
             for candidate in self.candidates
         }
-        planned_bytes = sum(expected_by_id.values()) + additional_admitted_bytes
-        completed_bytes = sum(self._completed_bytes.values())
+        planned_bytes = additional_admitted_bytes
+        for size in expected_by_id.values():
+            planned_bytes = checked_add_signed_64(
+                planned_bytes,
+                size,
+                "post-copy planned bytes",
+            )
+        completed_bytes = 0
+        for size in self._completed_bytes.values():
+            completed_bytes = checked_add_signed_64(
+                completed_bytes,
+                size,
+                "completed post-copy bytes",
+            )
         retry_bytes = max(0, self._processed_bytes - completed_bytes)
-        completed_overrun = sum(
-            max(0, bytes_read - expected_by_id[item_id])
-            for item_id, bytes_read in self._completed_bytes.items()
+        completed_overrun = 0
+        for item_id, bytes_read in self._completed_bytes.items():
+            completed_overrun = checked_add_signed_64(
+                completed_overrun,
+                max(0, bytes_read - expected_by_id[item_id]),
+                "post-copy completed overrun bytes",
+            )
+        physical_total = checked_add_signed_64(
+            planned_bytes,
+            retry_bytes,
+            "post-copy physical bytes",
+        )
+        physical_total = checked_add_signed_64(
+            physical_total,
+            completed_overrun,
+            "post-copy physical bytes",
         )
         return max(
             self._processed_bytes,
-            planned_bytes + retry_bytes + completed_overrun,
+            physical_total,
         )
 
     def note_bytes_processed(self, size: int) -> None:
-        if size < 0:
-            raise ValueError("post-copy processed byte increment cannot be negative")
-        self._processed_bytes += size
+        self._processed_bytes = checked_add_signed_64(
+            self._processed_bytes,
+            size,
+            "post-copy processed bytes",
+        )
 
     def mark_completed(self, item_id: str, bytes_read: int) -> None:
         if item_id in self._completed_bytes:
             raise ValueError(f"post-copy item already completed: {item_id}")
-        if bytes_read < 0:
-            raise ValueError("completed post-copy byte count cannot be negative")
+        require_signed_64(bytes_read, "completed post-copy byte count")
         if not any(candidate.item_id == item_id for candidate in self.candidates):
             raise ValueError(f"unknown post-copy item: {item_id}")
         self._completed_bytes[item_id] = bytes_read
@@ -314,18 +351,21 @@ class IntegritySelection:
         known_ids = set(item_ids)
         if not set(self._completed_bytes).issubset(known_ids):
             raise ValueError("continuation contains an unknown item id")
-        if any(
-            type(value) is not int for value in self._completed_bytes.values()
-        ):
-            raise TypeError("completed byte counts must be integers")
-        if any(value < 0 for value in self._completed_bytes.values()):
-            raise ValueError("completed byte counts cannot be negative")
-        if type(self._processed_bytes) is not int:
-            raise TypeError("processed bytes must be an integer")
-        if self._processed_bytes < sum(self._completed_bytes.values()):
+        completed_bytes = 0
+        for value in self._completed_bytes.values():
+            require_signed_64(value, "completed integrity byte count")
+            completed_bytes = checked_add_signed_64(
+                completed_bytes,
+                value,
+                "completed integrity bytes",
+            )
+        require_signed_64(self._processed_bytes, "integrity processed bytes")
+        if self._processed_bytes < completed_bytes:
             raise ValueError("processed bytes cannot trail completed bytes")
-        if type(self._bytes_total_high_water) is not int:
-            raise TypeError("integrity byte-total high-water must be an integer")
+        require_signed_64(
+            self._bytes_total_high_water,
+            "integrity byte-total high-water",
+        )
         if self._bytes_total_high_water < self._processed_bytes:
             raise ValueError(
                 "integrity byte-total high-water cannot trail processed bytes"
@@ -354,16 +394,15 @@ class IntegritySelection:
         return dict(self._completed_bytes)
 
     def note_bytes_processed(self, size: int) -> None:
-        if type(size) is not int:
-            raise TypeError("processed byte increment must be an integer")
-        if size < 0:
-            raise ValueError("processed byte increment cannot be negative")
-        self._processed_bytes += size
+        self._processed_bytes = checked_add_signed_64(
+            self._processed_bytes,
+            size,
+            "integrity processed bytes",
+        )
         self.advance_bytes_total_high_water(self._processed_bytes)
 
     def advance_bytes_total_high_water(self, value: int) -> None:
-        if type(value) is not int:
-            raise TypeError("integrity byte-total high-water must be an integer")
+        require_signed_64(value, "integrity byte-total high-water")
         if value < self._processed_bytes:
             raise ValueError(
                 "integrity byte-total high-water cannot trail processed bytes"
@@ -376,10 +415,7 @@ class IntegritySelection:
     def mark_completed(self, item_id: str, bytes_read: int) -> None:
         if item_id in self._completed_bytes:
             raise ValueError(f"integrity item already completed: {item_id}")
-        if type(bytes_read) is not int:
-            raise TypeError("completed byte count must be an integer")
-        if bytes_read < 0:
-            raise ValueError("completed byte count cannot be negative")
+        require_signed_64(bytes_read, "completed integrity byte count")
         if not any(item.item_id == item_id for item in self.items):
             raise ValueError(f"unknown integrity item: {item_id}")
         self._completed_bytes[item_id] = bytes_read
@@ -402,6 +438,7 @@ class IntegrityOutcome(ResultItem):
     recording: RecordingStatus = RecordingStatus.OK
     record_disposition: RecordDisposition | None = None
     phase: str = IntegrityMode.VERIFY.value
+    detail_omitted_count: int = 0
 
     def __post_init__(self) -> None:
         if not self.item_id:
@@ -414,8 +451,24 @@ class IntegrityOutcome(ResultItem):
             raise ValueError("integrity outcome ledger ids must be non-empty")
         if not self.path:
             raise ValueError("integrity outcome path must be non-empty")
+        require_utf16_path(self.path, "integrity outcome path")
         if self.phase not in {mode.value for mode in IntegrityMode}:
             raise ValueError("integrity outcome phase must name its integrity mode")
+        require_safe_int(
+            self.detail_omitted_count,
+            "integrity detail_omitted_count",
+        )
+        bounded = bounded_utf8_text(self.detail, "integrity detail")
+        if self.detail is not None and bounded is None:
+            object.__setattr__(self, "detail", None)
+            object.__setattr__(
+                self,
+                "detail_omitted_count",
+                require_safe_int(
+                    self.detail_omitted_count + 1,
+                    "integrity detail_omitted_count",
+                ),
+            )
 
 
 @dataclass(frozen=True)
@@ -610,18 +663,16 @@ class VerifierContext:
             self.post_copy_bytes_total is None
         ):
             raise ValueError("post-copy progress admission must be paired")
-        for name, value in (
-            ("post-copy item admission", self.post_copy_items_total),
-            ("post-copy byte budget", self.post_copy_bytes_total),
-        ):
-            if value is None:
-                continue
-            if type(value) is not int:
-                raise TypeError(f"{name} must be an integer")
-            if value < 0:
-                raise ValueError(f"{name} cannot be negative")
-            if value > _JAVASCRIPT_MAX_SAFE_INTEGER:
-                raise ValueError(f"{name} must be a JavaScript-safe integer")
+        if self.post_copy_items_total is not None:
+            require_safe_int(
+                self.post_copy_items_total,
+                "post-copy item admission",
+            )
+        if self.post_copy_bytes_total is not None:
+            require_signed_64(
+                self.post_copy_bytes_total,
+                "post-copy byte budget",
+            )
 
 
 class UnsupportedVerification(OSError):

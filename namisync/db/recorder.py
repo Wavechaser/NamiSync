@@ -32,6 +32,7 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import normalize_relative_path, validate_relative_path
 from namisync.core.planning import OpId, OperationKind, PlanOperation
+from namisync.core.scalars import file_index_128_to_text
 from namisync.core.recording import (
     FinishRunCommand,
     HostCommand,
@@ -142,10 +143,10 @@ def _payload_hash(value: object) -> bytes:
     return hashlib.sha256(encoded).digest()
 
 
-def _identity_values(identity: FileIdentity | None) -> tuple[str | None, int | None]:
+def _identity_values(identity: FileIdentity | None) -> tuple[str | None, str | None]:
     if identity is None:
         return None, None
-    return identity.volume_serial, identity.file_index
+    return identity.volume_serial, file_index_128_to_text(identity.file_index)
 
 
 def _same_volume(row: sqlite3.Row, volume_id: VolumeId | None) -> bool:
@@ -1728,7 +1729,7 @@ class SyncRunRecorder:
                 source_id,
                 target_id,
                 source.file_identity.volume_serial,
-                source.file_identity.file_index,
+                file_index_128_to_text(source.file_identity.file_index),
                 target_identity[0],
                 target_identity[1],
                 at,

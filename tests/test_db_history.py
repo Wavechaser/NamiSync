@@ -10,7 +10,6 @@ import pytest
 import namisync.db.history as history_module
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
-    LEGACY_CORE_EVENT_SCHEMA_VERSION,
     Envelope,
     Gap,
     ItemOutcome,
@@ -20,6 +19,11 @@ from namisync.core.events import (
     envelope_to_dict,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.execution import (
+    ItemRecordingReason,
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
+)
 from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityReason,
@@ -35,6 +39,8 @@ from namisync.core.session import (
     SessionRecord,
     SessionState,
 )
+from namisync.core.review import ReviewFactLimitExceeded
+from namisync.core.scalars import MAX_SAFE_INTEGER
 from namisync.db.connections import (
     connect_history_reader,
     connect_history_writer,
@@ -53,11 +59,16 @@ from namisync.db.history import (
     HistoryWindowPolicy,
 )
 from namisync.db.writer import RecordingError, TokenConflictError
+from namisync.workflows.views import operation_result_view
 
 from _db_fixtures import FakeClock, NOW
 
 
-def _record(session_id: str = "session-1", *, kind: str = "sync") -> SessionRecord:
+def _record(
+    session_id: str = "11111111111111111111111111111111",
+    *,
+    kind: str = "sync",
+) -> SessionRecord:
     return SessionRecord(
         SessionId(session_id),
         kind,
@@ -82,11 +93,11 @@ def _envelope(record: SessionRecord, seq: int, body: object) -> Envelope:
 
 def _item(seq: int, outcome: Outcome = Outcome.SUCCEEDED) -> ItemOutcome:
     return ItemOutcome(
-        f"op-{seq}",
+        f"{seq:032x}",
         "copy",
         f"{seq}.bin",
         outcome,
-        detail={"bytes": seq},
+        detail={"message": str(seq)},
     )
 
 
@@ -137,9 +148,11 @@ def _insert_history_event(
                event_disposition, envelope_json, payload_hash, receipt_hash,
                item_identity_hash, item_payload_hash, duplicate_of_seq,
                rejection_reason, item_order,
-               item_type, phase, item_id, kind, path, result, reason
+               item_type, phase, item_id, kind, path, result, reason,
+               recording, recording_reason, recording_detail,
+               detail_omitted_count
            ) VALUES (?, ?, ?, ?, ?, 'recorded', ?, ?, ?, ?, ?, NULL, NULL, ?,
-                     ?, ?, ?, ?, ?, ?, ?)""",
+                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             run_id,
             envelope.seq,
@@ -159,6 +172,10 @@ def _insert_history_event(
             None if projection is None else projection["path"],
             None if projection is None else projection["result"],
             None if projection is None else projection["reason"],
+            None if projection is None else projection["recording"],
+            None if projection is None else projection["recording_reason"],
+            None if projection is None else projection["recording_detail"],
+            None if projection is None else projection["detail_omitted_count"],
         ),
     )
 
@@ -205,7 +222,13 @@ def test_history_finalization_round_trips_summary_items_events_and_phases(
         "run-1", "host-1", source_context="source", target_context="target"
     )
     item = ItemOutcome(
-        "op-1", "copy", "a.txt", Outcome.SUCCEEDED, detail={"bytes": 7}
+        "11111111111111111111111111111111",
+        "copy",
+        "a.txt",
+        Outcome.SUCCEEDED,
+        detail={"message": "7"},
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
     )
     phases = (PhaseResult("execute", PhaseStatus.COMPLETED, 1, 1, 7, 7),)
     result = OperationResult(
@@ -254,6 +277,222 @@ def test_history_finalization_round_trips_summary_items_events_and_phases(
     assert items.items[0].item == item
     assert [event.event_seq for event in events.events] == [1, 2]
     assert events.events[1].envelope.body == item
+
+
+def test_history_review_fact_columns_are_all_null_or_reconstruct_exact_truth(
+    tmp_path: Path,
+) -> None:
+    record = _record()
+    fact = ReviewFactLimitExceeded.plan_logical_bytes()
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        store.observer(
+            record,
+            HistoryContext("run-default", "host-1"),
+        ).finalize(OperationResult(SessionState.COMPLETED))
+        store.observer(
+            record,
+            HistoryContext("run-refused", "host-1"),
+        ).finalize(
+            OperationResult(
+                SessionState.REFUSED,
+                disposition=Disposition.UNRUN,
+                review_fact_limit=fact,
+            )
+        )
+        connection = connect_history_reader(store.path)
+        try:
+            rows = {
+                row["run_token"]: row
+                for row in connection.execute(
+                    """SELECT run_token, review_reason, review_tree_kind,
+                              review_population, review_axis, review_row_limit,
+                              review_byte_limit
+                         FROM history_runs"""
+                )
+            }
+        finally:
+            connection.close()
+        with HistoryRepository(store.path) as repository:
+            default = repository.get_summary("run-default")
+            refused = repository.get_summary("run-refused")
+
+    assert tuple(rows["run-default"])[1:] == (None,) * 6
+    assert tuple(rows["run-refused"])[1:] == (
+        "review_fact_limit_exceeded",
+        "plan",
+        "domain",
+        "logical-bytes",
+        None,
+        (1 << 63) - 1,
+    )
+    assert default.review_fact_limit is None
+    assert refused.review_fact_limit == fact
+
+
+def test_history_schema_rejects_a_partial_review_fact_group(tmp_path: Path) -> None:
+    record = _record()
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        store.observer(
+            record,
+            HistoryContext("run-partial-review", "host-1"),
+        ).finalize(OperationResult(SessionState.COMPLETED))
+        connection = connect_history_writer(store.path)
+        try:
+            _allow_finalized_run_updates(connection)
+            with pytest.raises(sqlite3.IntegrityError):
+                connection.execute(
+                    """UPDATE history_runs
+                          SET review_reason = 'review_fact_limit_exceeded'
+                        WHERE run_token = 'run-partial-review'"""
+                )
+        finally:
+            connection.close()
+
+
+def test_history_terminal_recording_witnesses_round_trip_exactly(
+    tmp_path: Path,
+) -> None:
+    record = _record()
+    item = ItemOutcome(
+        "3" * 32,
+        "copy",
+        "recording.bin",
+        Outcome.SUCCEEDED,
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+        detail_omitted_count=2,
+    )
+    issue = TaskRecordingIssue(
+        TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+        "flush failed",
+    )
+    result = OperationResult(
+        SessionState.COMPLETED,
+        recording=RecordingStatus.DEGRADED,
+        items=(item,),
+        recording_issues=(issue,),
+        omitted_detail_count=3,
+    )
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext("run-recording-witnesses", "host-1"),
+        )
+        observer.on_event(_envelope(record, 1, item))
+        observer.finalize(result)
+        with HistoryRepository(store.path) as repository:
+            summary = repository.get_summary("run-recording-witnesses")
+
+    assert summary.recording is RecordingStatus.DEGRADED
+    assert summary.recording_degraded_items == 1
+    assert summary.recording_issues == (issue,)
+    assert summary.omitted_detail_count == 5
+
+
+@pytest.mark.parametrize(
+    "tamper_sql",
+    (
+        "UPDATE history_runs SET recording_degraded_items = 0",
+        "UPDATE history_runs SET recording_issues_json = '[]'",
+        "UPDATE history_runs SET omitted_detail_count = omitted_detail_count + 1",
+    ),
+)
+def test_terminal_hash_and_repeat_finalize_bind_recording_witnesses(
+    tmp_path: Path,
+    tamper_sql: str,
+) -> None:
+    record = _record()
+    context = HistoryContext("run-recording-hash", "host-1")
+    item = ItemOutcome(
+        "4" * 32,
+        "copy",
+        "recording.bin",
+        Outcome.SUCCEEDED,
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+    )
+    result = OperationResult(
+        SessionState.COMPLETED,
+        recording=RecordingStatus.DEGRADED,
+        items=(item,),
+        recording_issues=(
+            TaskRecordingIssue(
+                TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+                None,
+            ),
+        ),
+        omitted_detail_count=1,
+    )
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, context)
+        observer.on_event(_envelope(record, 1, item))
+        observer.finalize(result)
+        connection = connect_history_writer(store.path)
+        try:
+            _allow_finalized_run_updates(connection)
+            connection.execute(tamper_sql)
+        finally:
+            connection.close()
+
+        with HistoryRepository(store.path) as repository:
+            with pytest.raises(HistoryIntegrityError, match="payload hash"):
+                repository.get_summary("run-recording-hash")
+        with pytest.raises(HistoryIntegrityError, match="payload hash"):
+            observer.finalize(result)
+
+
+def test_terminal_hash_binds_the_exact_review_fact_group(tmp_path: Path) -> None:
+    record = _record()
+    fact = ReviewFactLimitExceeded.plan_logical_bytes()
+    result = OperationResult(
+        SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+        review_fact_limit=fact,
+    )
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext("run-review-hash", "host-1"),
+        )
+        observer.finalize(result)
+        connection = connect_history_writer(store.path)
+        try:
+            _allow_finalized_run_updates(connection)
+            connection.execute(
+                """UPDATE history_runs
+                      SET review_axis = 'retained-bytes',
+                          review_byte_limit = 134217728
+                    WHERE run_token = 'run-review-hash'"""
+            )
+        finally:
+            connection.close()
+
+        with HistoryRepository(store.path) as repository:
+            with pytest.raises(HistoryIntegrityError, match="payload hash"):
+                repository.get_summary("run-review-hash")
+        with pytest.raises(HistoryIntegrityError, match="payload hash"):
+            observer.finalize(result)
+
+
+def test_presentation_omission_never_enters_history_truth(tmp_path: Path) -> None:
+    record = _record()
+    error = FailureDetail("E" * 600, "m" * 600)
+    result = OperationResult(SessionState.FAILED, error=error)
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        store.observer(
+            record,
+            HistoryContext("run-presentation", "host-1"),
+        ).finalize(result)
+        with HistoryRepository(store.path) as repository:
+            summary = repository.get_summary("run-presentation")
+
+    view = operation_result_view(result)
+    assert summary.error_type == error.type_name
+    assert summary.error_message == error.message
+    assert summary.omitted_detail_count == 0
+    assert view.error is None
+    assert view.omitted_detail_count == 0
+    assert view.presentation_omitted_detail_count == 1
 
 
 def test_history_refuses_populated_lossy_progress(tmp_path: Path) -> None:
@@ -416,7 +655,7 @@ def test_rejected_oversized_item_still_guards_later_identity_reuse(
     tmp_path: Path,
 ) -> None:
     record = _record()
-    first = replace(_item(1), detail={"message": "x" * 2_000})
+    first = replace(_item(1), path=f"{'x' * 1_000}.bin")
     changed = _item(1, Outcome.FAILED)
     policy = HistoryWindowPolicy(
         max_events=1,
@@ -449,7 +688,7 @@ def test_rejected_first_exact_reuse_is_a_bounded_noncounting_duplicate(
     path = tmp_path / "history.db"
     record = _record()
     context = HistoryContext("run-rejected-repeat", "host-1")
-    item = replace(_item(1), detail={"message": "x" * 2_000})
+    item = replace(_item(1), path=f"{'x' * 1_000}.bin")
     low_policy = HistoryWindowPolicy(
         max_events=1,
         max_bytes=512,
@@ -500,7 +739,7 @@ def test_duplicate_page_authenticates_a_linked_rejected_receipt(
     path = tmp_path / "history.db"
     record = _record()
     context = HistoryContext("run-rejected-link", "host-1")
-    item = replace(_item(1), detail={"message": "x" * 2_000})
+    item = replace(_item(1), path=f"{'x' * 1_000}.bin")
     with HistoryStore(
         path,
         clock=FakeClock(),
@@ -577,9 +816,9 @@ def test_pause_barrier_and_clean_close_flush_the_pending_prefix(tmp_path: Path) 
         assert paused_summary.current_state is SessionState.PAUSED
 
         closed = store.observer(
-            _record("session-close"), HistoryContext("run-close", "host-1")
+            _record("c" * 32), HistoryContext("run-close", "host-1")
         )
-        closed.on_event(_envelope(_record("session-close"), 1, _item(1)))
+        closed.on_event(_envelope(_record("c" * 32), 1, _item(1)))
         closed.close()
         closed.close()
 
@@ -609,7 +848,10 @@ def test_crash_loses_only_the_uncommitted_tail_window(tmp_path: Path) -> None:
     assert not summary.finalized
     assert summary.last_committed_seq == 2
     assert summary.item_count == 2
-    assert [snapshot.item.item_id for snapshot in page.items] == ["op-1", "op-2"]
+    assert [snapshot.item.item_id for snapshot in page.items] == [
+        f"{1:032x}",
+        f"{2:032x}",
+    ]
 
 
 def test_failed_finalization_rolls_back_tail_and_keeps_pending_window(
@@ -777,7 +1019,7 @@ def test_new_sequence_conflicting_item_identity_breaks_the_prefix(
 ) -> None:
     record = _record()
     original = _item(1)
-    changed = replace(original, detail={"bytes": 99})
+    changed = replace(original, detail={"message": "99"})
     policy = HistoryWindowPolicy(max_events=1)
     with HistoryStore(
         tmp_path / "history.db", clock=FakeClock(), window_policy=policy
@@ -805,7 +1047,7 @@ def test_same_window_conflicting_item_identity_rolls_back_the_window(
 ) -> None:
     record = _record()
     original = _item(1)
-    changed = replace(original, reason="changed-semantics")
+    changed = replace(original, reason="blocked-correspondence")
     with HistoryStore(
         tmp_path / "history-same-window-conflict.db",
         clock=FakeClock(),
@@ -905,11 +1147,10 @@ def test_oversized_final_tail_receipt_still_allows_terminal_commit(
         record,
         2,
         ItemOutcome(
-            "oversized-item",
+            "9" * 32,
             "copy",
-            "large.bin",
+            f"{'x' * 1_000}.bin",
             Outcome.SUCCEEDED,
-            detail={"message": "x" * 2_000},
         ),
     )
     policy = HistoryWindowPolicy(max_bytes=512, max_event_bytes=512)
@@ -1342,7 +1583,7 @@ def test_summary_listing_uses_fixed_queries_and_never_decodes_event_json(
     path = tmp_path / "history.db"
     with HistoryStore(path, clock=FakeClock()) as store:
         for index in range(3):
-            record = _record(f"session-{index}")
+            record = _record(f"{index + 1:032x}")
             observer = store.observer(
                 record, HistoryContext(f"run-{index}", "host-1")
             )
@@ -1410,7 +1651,7 @@ def test_event_pages_round_trip_nonitem_reliable_events_and_sequence_gaps(
     assert not before_history.has_more
 
 
-def test_history_round_trips_a_persisted_v3_reliable_envelope(
+def test_history_round_trips_a_persisted_v5_reliable_envelope(
     tmp_path: Path,
 ) -> None:
     record = _record()
@@ -1418,15 +1659,15 @@ def test_history_round_trips_a_persisted_v3_reliable_envelope(
         record.session_id,
         1,
         NOW,
-        LEGACY_CORE_EVENT_SCHEMA_VERSION,
+        CORE_EVENT_SCHEMA_VERSION,
         PhaseChanged("execute"),
     )
     with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
-        observer = store.observer(record, HistoryContext("run-v3", "host-1"))
+        observer = store.observer(record, HistoryContext("run-v5", "host-1"))
         observer.on_event(envelope)
         observer.flush()
         with HistoryRepository(store.path) as repository:
-            page = repository.get_event_page("run-v3")
+            page = repository.get_event_page("run-v5")
 
     assert [event.envelope for event in page.events] == [envelope]
 
@@ -1708,7 +1949,7 @@ def test_event_and_item_pages_reject_envelope_session_misattribution(
             "SELECT * FROM history_events WHERE event_seq = 1"
         ).fetchone()
         raw = history_module.json.loads(str(row["envelope_json"]))
-        raw["session_id"] = "forged-session"
+        raw["session_id"] = "2" * 32
         envelope_json = history_module._json_bytes(raw).decode("utf-8")
         payload_hash = history_module.hashlib.sha256(
             envelope_json.encode("utf-8")
@@ -1745,7 +1986,6 @@ def test_event_and_item_pages_reject_envelope_session_misattribution(
     (
         "UPDATE history_events SET event_at = "
         "'2026-01-02T03:04:06.123456Z' WHERE event_seq = 1",
-        "UPDATE history_events SET schema_version = 2 WHERE event_seq = 1",
         "UPDATE history_events SET body_type = 'IntegrityOutcome' "
         "WHERE event_seq = 1",
         "UPDATE history_events SET event_seq = 2 WHERE event_seq = 1; "
@@ -1761,7 +2001,7 @@ def test_rejected_receipt_binds_retained_event_metadata(
     event = _envelope(
         record,
         1,
-        replace(_item(1), detail={"message": "x" * 2_000}),
+        replace(_item(1), path=f"{'x' * 1_000}.bin"),
     )
     with HistoryStore(
         path,
@@ -1794,7 +2034,7 @@ def test_replay_rejects_tampered_rejected_receipt_metadata(tmp_path: Path) -> No
     event = _envelope(
         record,
         1,
-        replace(_item(1), detail={"message": "x" * 2_000}),
+        replace(_item(1), path=f"{'x' * 1_000}.bin"),
     )
     with HistoryStore(
         path,
@@ -1975,6 +2215,41 @@ def test_incomplete_summary_validates_item_and_outcome_counts(
             repository.get_summary("run-incomplete")
 
 
+def test_incomplete_summary_rejects_unsafe_prefix_counter_even_with_matching_hash(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "history.db"
+    record = _record()
+    with HistoryStore(path, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext("run-unsafe-prefix", "host-1"),
+        )
+        observer.on_event(_envelope(record, 1, PhaseChanged("execute")))
+        observer.flush()
+    connection = connect_history_writer(path)
+    try:
+        connection.execute("PRAGMA ignore_check_constraints = ON")
+        connection.execute(
+            "UPDATE history_runs SET last_committed_seq = ?",
+            (MAX_SAFE_INTEGER + 1,),
+        )
+        run = connection.execute("SELECT * FROM history_runs").fetchone()
+        connection.execute(
+            "UPDATE history_runs SET prefix_projection_hash = ?",
+            (history_module._prefix_projection_hash_from_row(run),),
+        )
+    finally:
+        connection.close()
+
+    with HistoryRepository(path) as repository:
+        with pytest.raises(
+            HistoryIntegrityError,
+            match="history last_committed_seq is invalid",
+        ):
+            repository.get_summary("run-unsafe-prefix")
+
+
 @pytest.mark.parametrize(
     "column",
     ("current_state", "current_phase", "started_at", "last_committed_at"),
@@ -2080,6 +2355,67 @@ def test_event_readback_validates_duplicate_link_against_canonical_item(
             repository.get_event_page("run-link")
 
 
+def test_event_readback_rejects_duplicate_json_members_after_hash_validation(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "history.db"
+    record = _record()
+    item = _item(1)
+    with HistoryStore(path, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext("run-duplicate-json", "host-1"),
+        )
+        observer.on_event(_envelope(record, 1, item))
+        observer.flush()
+
+    connection = connect_history_writer(path)
+    try:
+        row = connection.execute(
+            "SELECT * FROM history_events WHERE event_seq = 1"
+        ).fetchone()
+        envelope_text = str(row["envelope_json"])
+        duplicate = envelope_text.replace(
+            '"schema_version":5',
+            '"schema_version":5,"schema_version":5',
+            1,
+        )
+        assert duplicate != envelope_text
+        payload_hash = history_module.hashlib.sha256(
+            duplicate.encode("utf-8")
+        ).digest()
+        receipt_hash = history_module._receipt_hash(
+            event_seq=int(row["event_seq"]),
+            event_at=str(row["event_at"]),
+            schema_version=int(row["schema_version"]),
+            body_type=str(row["body_type"]),
+            disposition=history_module.HistoryEventDisposition(
+                row["event_disposition"]
+            ),
+            payload_hash=payload_hash,
+            item_identity_hash=bytes(row["item_identity_hash"]),
+            item_payload_hash=bytes(row["item_payload_hash"]),
+            duplicate_of_seq=row["duplicate_of_seq"],
+            rejection_reason=row["rejection_reason"],
+            item_order=int(row["item_order"]),
+        )
+        _allow_history_event_updates(connection)
+        connection.execute(
+            """UPDATE history_events
+                  SET envelope_json = ?, payload_hash = ?, receipt_hash = ?
+                WHERE event_seq = 1""",
+            (duplicate, payload_hash, receipt_hash),
+        )
+    finally:
+        connection.close()
+
+    with HistoryRepository(path) as repository:
+        with pytest.raises(HistoryIntegrityError, match="invalid JSON"):
+            repository.get_event_page("run-duplicate-json")
+        with pytest.raises(HistoryIntegrityError, match="invalid JSON"):
+            repository.get_item_page("run-duplicate-json")
+
+
 def test_page_readback_rejects_a_watermark_past_its_durable_rows(
     tmp_path: Path,
 ) -> None:
@@ -2183,13 +2519,13 @@ def test_history_sequence_admission_does_not_scan_prior_hashes(tmp_path: Path) -
         assert observer._highest_event_seq == 100
 
 
-def test_unpaired_surrogate_round_trips_through_canonical_event_json(
+def test_unpaired_surrogate_diagnostic_is_omitted_before_history_json(
     tmp_path: Path,
 ) -> None:
-    record = _record("session-hostile")
+    record = _record("e" * 32)
     hostile = "bad_\udcff"
     item = ItemOutcome(
-        "op-hostile",
+        "f" * 32,
         "noop",
         "safe.txt",
         Outcome.SKIPPED,
@@ -2204,6 +2540,8 @@ def test_unpaired_surrogate_round_trips_through_canonical_event_json(
         with HistoryRepository(store.path) as repository:
             page = repository.get_item_page("run-hostile")
     assert page.items[0].item == item
+    assert dict(item.detail) == {}
+    assert item.detail_omitted_count == 1
 
 
 def test_summary_primitive_aggregates_cover_operation_and_integrity_results(
@@ -2238,7 +2576,7 @@ def test_summary_primitive_aggregates_cover_operation_and_integrity_results(
     )
 
 
-def test_summary_classification_objects_are_bounded_for_free_form_item_fields(
+def test_summary_classification_objects_are_bounded_for_many_exact_items(
     tmp_path: Path,
 ) -> None:
     record = _record()
@@ -2250,11 +2588,10 @@ def test_summary_classification_objects_are_bounded_for_free_form_item_fields(
                     record,
                     sequence,
                     ItemOutcome(
-                        f"op-{sequence}",
-                        f"kind-{sequence}",
+                        f"{sequence:032x}",
+                        "copy",
                         f"{sequence}.bin",
                         Outcome.SKIPPED,
-                        reason=f"reason-{sequence}",
                     ),
                 )
             )
@@ -2288,7 +2625,10 @@ def test_terminal_phase_count_is_bounded_before_persistence(tmp_path: Path) -> N
                 OperationResult(SessionState.COMPLETED, phases=rejected)
             )
         with HistoryRepository(store.path) as repository:
-            assert len(repository.get_summary("run-allowed").phases) == 256
+            assert (
+                len(repository.get_summary("run-allowed").phases)
+                == MAX_HISTORY_PHASES
+            )
             with pytest.raises(KeyError):
                 repository.get_summary("run-rejected")
 
@@ -2329,25 +2669,46 @@ def test_terminal_summary_text_accepts_exact_utf8_byte_bounds(
     assert summary.error_message == error.message
 
 
-@pytest.mark.parametrize(
-    ("result", "message"),
-    (
-        (
-            OperationResult(
-                SessionState.FAILED,
-                phases=(
-                    PhaseResult(
-                        "p" * (MAX_HISTORY_PHASE_NAME_BYTES + 1),
-                        PhaseStatus.FAILED,
-                        0,
-                        0,
-                        0,
-                        0,
-                    ),
-                ),
+def test_oversized_terminal_phase_name_is_refused_before_terminal_write(
+    tmp_path: Path,
+) -> None:
+    result = OperationResult(
+        SessionState.FAILED,
+        phases=(
+            PhaseResult(
+                "p" * (MAX_HISTORY_PHASE_NAME_BYTES + 1),
+                PhaseStatus.FAILED,
+                0,
+                0,
+                0,
+                0,
             ),
-            "terminal phase name",
         ),
+    )
+    record = _record()
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(
+            record, HistoryContext("run-oversized", "host-1")
+        )
+        observer.on_event(
+            _envelope(record, 1, StateChanged(SessionState.RUNNING))
+        )
+        observer.flush()
+
+        with pytest.raises(HistoryIntegrityError, match="terminal phase name"):
+            observer.finalize(result)
+
+        with HistoryRepository(store.path) as repository:
+            summary = repository.get_summary("run-oversized")
+
+    assert not summary.finalized
+    assert summary.last_committed_seq == 1
+    assert summary.phases == ()
+
+
+@pytest.mark.parametrize(
+    ("result", "has_phase"),
+    (
         (
             OperationResult(
                 SessionState.FAILED,
@@ -2363,7 +2724,7 @@ def test_terminal_summary_text_accepts_exact_utf8_byte_bounds(
                     ),
                 ),
             ),
-            "terminal phase error",
+            True,
         ),
         (
             OperationResult(
@@ -2373,7 +2734,7 @@ def test_terminal_summary_text_accepts_exact_utf8_byte_bounds(
                     "failed",
                 ),
             ),
-            "terminal error type",
+            False,
         ),
         (
             OperationResult(
@@ -2383,14 +2744,14 @@ def test_terminal_summary_text_accepts_exact_utf8_byte_bounds(
                     "x" * (MAX_HISTORY_ERROR_MESSAGE_BYTES + 1),
                 ),
             ),
-            "terminal error message",
+            False,
         ),
     ),
 )
-def test_oversized_terminal_summary_text_degrades_before_terminal_write(
+def test_oversized_terminal_diagnostics_are_omitted_without_truncation(
     tmp_path: Path,
     result: OperationResult,
-    message: str,
+    has_phase: bool,
 ) -> None:
     record = _record()
     with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
@@ -2402,15 +2763,20 @@ def test_oversized_terminal_summary_text_degrades_before_terminal_write(
         )
         observer.flush()
 
-        with pytest.raises(HistoryIntegrityError, match=message):
-            observer.finalize(result)
+        observer.finalize(result)
 
         with HistoryRepository(store.path) as repository:
             summary = repository.get_summary("run-oversized")
 
-    assert not summary.finalized
+    assert summary.finalized
     assert summary.last_committed_seq == 1
-    assert summary.phases == ()
+    assert summary.omitted_detail_count == 1
+    assert summary.error_type is None
+    assert summary.error_message is None
+    if has_phase:
+        assert summary.phases[0].phase.error is None
+    else:
+        assert summary.phases == ()
 
 
 @pytest.mark.parametrize(

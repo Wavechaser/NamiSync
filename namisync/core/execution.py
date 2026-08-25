@@ -14,6 +14,12 @@ from .evidence import Attestation, Outcome, Provenance, RecordingStatus
 from .models import EntryKind, FileStat, VolumeId
 from .pathing import normalize_relative_path
 from .planning import OpId, OperationKind, Plan, PlanFingerprint, PlanOperation
+from .scalars import (
+    bounded_utf8_text,
+    checked_add_signed_64,
+    require_safe_int,
+    require_signed_64,
+)
 
 
 RunId = NewType("RunId", str)
@@ -51,15 +57,11 @@ class TaskRecordingIssueReason(StrEnum):
 def bounded_recording_detail(value: str | None) -> str | None:
     """Return a complete bounded diagnostic, or omit it without truncation."""
 
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError("recording detail must be a string or None")
-    try:
-        encoded = value.encode("utf-8")
-    except UnicodeEncodeError:
-        return None
-    return value if len(encoded) <= RECORDING_DETAIL_MAX_BYTES else None
+    return bounded_utf8_text(
+        value,
+        "recording detail",
+        maximum_bytes=RECORDING_DETAIL_MAX_BYTES,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -161,6 +163,7 @@ class ExecutionSet:
         default_factory=dict
     )
     recording_issues: tuple[TaskRecordingIssue, ...] = ()
+    omitted_detail_count: int = 0
     user_deselected: frozenset[OpId] = frozenset()
     bytes_done_high_water: int = field(default=0, repr=False)
     _selected_bytes_bound: int = field(init=False, repr=False, compare=False)
@@ -232,20 +235,27 @@ class ExecutionSet:
         issue_reasons = tuple(issue.reason for issue in self.recording_issues)
         if len(issue_reasons) != len(set(issue_reasons)):
             raise ValueError("task recording issue reasons must be unique")
+        require_safe_int(
+            self.omitted_detail_count,
+            "execution omitted_detail_count",
+        )
         byte_kinds = {
             OperationKind.COPY,
             OperationKind.UPDATE,
             OperationKind.MOVE_UPDATE,
         }
-        self._selected_bytes_bound = sum(
-            operation.content_bytes
-            for operation in operations.values()
-            if operation.op_id in self.selection and operation.kind in byte_kinds
+        self._selected_bytes_bound = 0
+        for operation in operations.values():
+            if operation.op_id in self.selection and operation.kind in byte_kinds:
+                self._selected_bytes_bound = checked_add_signed_64(
+                    self._selected_bytes_bound,
+                    operation.content_bytes,
+                    "selected execution bytes",
+                )
+        require_signed_64(
+            self.bytes_done_high_water,
+            "execution byte high-water",
         )
-        if type(self.bytes_done_high_water) is not int:
-            raise TypeError("execution byte high-water must be an exact integer")
-        if self.bytes_done_high_water < 0:
-            raise ValueError("execution byte high-water cannot be negative")
         if self.bytes_done_high_water > self._selected_bytes_bound:
             raise ValueError("execution byte high-water exceeds selected content")
         recorded_location_id: str | None = None
@@ -354,12 +364,17 @@ class ExecutionSet:
             raise TypeError("task recording issue reason has the wrong type")
         if any(issue.reason is reason for issue in self.recording_issues):
             return
-        issue = TaskRecordingIssue(reason, bounded_recording_detail(detail))
+        bounded_detail = bounded_recording_detail(detail)
+        if detail is not None and bounded_detail is None:
+            self.omitted_detail_count = require_safe_int(
+                self.omitted_detail_count + 1,
+                "execution omitted_detail_count",
+            )
+        issue = TaskRecordingIssue(reason, bounded_detail)
         self.recording_issues = (*self.recording_issues, issue)
 
     def note_bytes_done(self, bytes_done: int) -> None:
-        if type(bytes_done) is not int:
-            raise TypeError("execution byte progress must be an exact integer")
+        require_signed_64(bytes_done, "execution byte progress")
         if bytes_done < self.bytes_done_high_water:
             raise ValueError("execution byte progress cannot regress")
         if bytes_done > self._selected_bytes_bound:
@@ -443,8 +458,7 @@ class CopyDigest:
             raise TypeError("copy digest must be bytes")
         if len(self.digest) != 16:
             raise ValueError("copy digest must be XXH3-128")
-        if self.size < 0:
-            raise ValueError("copied size cannot be negative")
+        require_signed_64(self.size, "copied size")
 
 
 class CopyBackend(Protocol):

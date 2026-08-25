@@ -62,6 +62,11 @@ from namisync.core.root_authority import (
     RootAuthorityIssue,
     admit_root,
 )
+from namisync.core.scalars import (
+    checked_add_signed_64,
+    require_safe_int,
+    require_signed_64,
+)
 
 from .native import WindowsUnbufferedReader
 
@@ -269,9 +274,20 @@ class _ProgressReporter:
     ) -> None:
         self._selection = selection
         self._ctx = ctx
-        self._items_total = items_total
+        self._items_total = require_safe_int(
+            items_total,
+            "verifier items_total",
+        )
         self._last_emitted_at: float | None = None
-        candidate_bytes_total = selection.processed_bytes + sum(pending_sizes)
+        candidate_bytes_total = selection.processed_bytes
+        for size in pending_sizes:
+            candidate_bytes_total = checked_add_signed_64(
+                candidate_bytes_total,
+                size,
+                "verifier admitted bytes",
+            )
+        if bytes_total is not None:
+            require_signed_64(bytes_total, "post-copy progress byte budget")
         if bytes_total is not None and bytes_total < candidate_bytes_total:
             raise ValueError(
                 "post-copy progress byte budget cannot exclude candidate work"
@@ -299,7 +315,10 @@ class _ProgressReporter:
                 "progress item admission cannot exclude selected verifier items"
             )
         self._outcome_item_ids = set(selection.completed_bytes)
-        self._items_done = len(self._outcome_item_ids)
+        self._items_done = require_safe_int(
+            len(self._outcome_item_ids),
+            "verifier items_done",
+        )
         self._item_id: str | None = None
         self._item_attempt_id: str | None = None
         self._current_path: str | None = None
@@ -320,6 +339,7 @@ class _ProgressReporter:
             raise RuntimeError("integrity byte stream has no active item")
         if self._item_bytes_done is not None:
             raise RuntimeError("integrity byte stream is already active")
+        require_signed_64(size, "verifier item byte total")
         self._item_attempt_id = uuid4().hex
         self._item_bytes_done = 0
         self._item_bytes_total = size
@@ -336,7 +356,11 @@ class _ProgressReporter:
         previous_overrun = max(
             0, self._item_bytes_done - self._item_bytes_total
         )
-        self._item_bytes_done += size
+        self._item_bytes_done = checked_add_signed_64(
+            self._item_bytes_done,
+            size,
+            "verifier item bytes_done",
+        )
         current_overrun = max(
             0, self._item_bytes_done - self._item_bytes_total
         )
@@ -355,10 +379,7 @@ class _ProgressReporter:
     def item_settlement_recorded(self, item_id: str, bytes_read: int) -> None:
         if self._item_id != item_id:
             return
-        if type(bytes_read) is not int:
-            raise TypeError("settled verifier bytes must be an integer")
-        if bytes_read < 0:
-            raise ValueError("settled verifier bytes cannot be negative")
+        require_signed_64(bytes_read, "settled verifier bytes")
         self._item_settled_bytes = bytes_read
 
     def item_outcome_emitted(self, item_id: str) -> None:
@@ -367,7 +388,10 @@ class _ProgressReporter:
         if item_id in self._outcome_item_ids:
             raise RuntimeError("integrity item outcome was emitted more than once")
         self._outcome_item_ids.add(item_id)
-        self._items_done += 1
+        self._items_done = require_safe_int(
+            self._items_done + 1,
+            "verifier items_done",
+        )
 
     def run_completed(self) -> None:
         if self._item_id is not None:
@@ -411,7 +435,11 @@ class _ProgressReporter:
         self._advance_bytes_total(max(0, admitted_work - settled_work))
 
     def _advance_bytes_total(self, amount: int) -> None:
-        self._live_bytes_total += amount
+        self._live_bytes_total = checked_add_signed_64(
+            self._live_bytes_total,
+            amount,
+            "verifier bytes_total",
+        )
         if isinstance(self._selection, IntegritySelection):
             self._selection.advance_bytes_total_high_water(
                 self._live_bytes_total
@@ -940,7 +968,11 @@ def _classify_subject(
                 if not chunk:
                     continue
                 update_content_hasher(digest, chunk)
-                bytes_read += len(chunk)
+                bytes_read = checked_add_signed_64(
+                    bytes_read,
+                    len(chunk),
+                    "verified bytes",
+                )
                 on_bytes(len(chunk))
 
             after = stream.stat()

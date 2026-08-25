@@ -14,7 +14,7 @@ from uuid import uuid4
 
 from xxhash import xxh3_128
 
-from namisync.core.execution import Commitment, ExecutionSet
+from namisync.core.execution import Commitment, ExecutionSet, TaskRecordingIssue
 from namisync.core.evidence import RecordingStatus
 from namisync.core.integrity import (
     IntegrityMode,
@@ -52,6 +52,7 @@ from namisync.core.session import (
     SessionRecord,
     SessionState,
 )
+from namisync.core.scalars import require_safe_int, scalar_64_to_text
 from namisync.db.connections import validate_database_path
 from namisync.db.history import (
     DEFAULT_HISTORY_WINDOW_POLICY,
@@ -148,6 +149,8 @@ from .node_tree import NodeTree, NodeTreeKind, NodeTreeMember, build_node_tree
 from .selection import SELECTION_EXCLUSION_REASONS, derive_execution_selection
 from .views import (
     PreservationSettingsView,
+    RecordingIssueView,
+    ReviewFactLimitView,
     ResultClassificationFacts,
     SemanticSettingsPatchView,
     SemanticSettingsView,
@@ -635,17 +638,30 @@ class LocalWorkflowRuntime:
             ),
             fingerprint=str(plan_value.fingerprint),
             selection_digest_hex=selection_digest(decision.selection).hex(),
-            required_bytes=calculate_required_bytes(
-                tuple(
-                    operation
-                    for operation in plan_value.operations
-                    if operation.op_id in decision.selection
+            required_bytes=scalar_64_to_text(
+                calculate_required_bytes(
+                    tuple(
+                        operation
+                        for operation in plan_value.operations
+                        if operation.op_id in decision.selection
+                    ),
+                    target_profile=plan_value.target_profile,
+                    trash_on_update=plan_value.trash_on_update,
                 ),
-                target_profile=plan_value.target_profile,
-                trash_on_update=plan_value.trash_on_update,
+                "plan review required_bytes",
             ),
-            free_bytes=artifact.verdict.observed.free_space,
-            reclaimable_temp_bytes=artifact.verdict.observed.reclaimable_temp_bytes,
+            free_bytes=(
+                None
+                if artifact.verdict.observed.free_space is None
+                else scalar_64_to_text(
+                    artifact.verdict.observed.free_space,
+                    "plan review free_bytes",
+                )
+            ),
+            reclaimable_temp_bytes=scalar_64_to_text(
+                artifact.verdict.observed.reclaimable_temp_bytes,
+                "plan review reclaimable_temp_bytes",
+            ),
             warnings=warnings,
             refusals=refusal_views(artifact.verdict),
             operations=tuple(
@@ -665,7 +681,10 @@ class LocalWorkflowRuntime:
                     selection_reason=None
                     if operation.op_id not in exclusions
                     else exclusions[operation.op_id].reason,
-                    content_bytes=operation.content_bytes,
+                    content_bytes=scalar_64_to_text(
+                        operation.content_bytes,
+                        "plan operation content_bytes",
+                    ),
                 )
                 for operation in plan_value.operations
             ),
@@ -1237,6 +1256,8 @@ class _IntegrityInvocation:
         self._deps = deps
         self._selection: IntegritySelection | None = None
         self._recording = request.recording
+        self._recording_issues = request.recording_issues
+        self._omitted_detail_count = request.omitted_detail_count
 
     def run(self, context) -> object:
         return run_integrity(
@@ -1271,16 +1292,28 @@ class _IntegrityInvocation:
                 processed_bytes=processed_bytes,
                 bytes_total_high_water=bytes_total_high_water,
                 recording=self._recording,
-                refresh_generation=self._request.refresh_generation + 1,
+                recording_issues=self._recording_issues,
+                omitted_detail_count=self._omitted_detail_count,
+                refresh_generation=require_safe_int(
+                    self._request.refresh_generation + 1,
+                    "inventory refresh generation",
+                ),
             )
         )
 
     def _capture_selection(self, selection: IntegritySelection) -> None:
         self._selection = selection
 
-    def _capture_recording(self, recording: RecordingStatus) -> None:
+    def _capture_recording(
+        self,
+        recording: RecordingStatus,
+        recording_issues: tuple[TaskRecordingIssue, ...],
+        omitted_detail_count: int,
+    ) -> None:
         if recording is RecordingStatus.DEGRADED:
             self._recording = RecordingStatus.DEGRADED
+        self._recording_issues = recording_issues
+        self._omitted_detail_count = omitted_detail_count
 
 
 class _LedgerRunRecording:
@@ -1405,6 +1438,8 @@ def _history_summary_view(value: HistoryRunSummary) -> HistoryRunSummaryView:
         value.canceled,
         value.bytes_done,
         value.bytes_total,
+        value.recording_degraded_items,
+        value.omitted_detail_count,
     )
     if value.finalized and any(item is None for item in terminal_values):
         raise ValueError("finalized history has incomplete terminal fields")
@@ -1451,8 +1486,41 @@ def _history_summary_view(value: HistoryRunSummary) -> HistoryRunSummaryView:
         canceled=value.canceled,
         integrity_status=integrity,
         headline=headline,
-        bytes_done=value.bytes_done,
-        bytes_total=value.bytes_total,
+        bytes_done=(
+            None
+            if value.bytes_done is None
+            else scalar_64_to_text(value.bytes_done, "history bytes_done")
+        ),
+        bytes_total=(
+            None
+            if value.bytes_total is None
+            else scalar_64_to_text(value.bytes_total, "history bytes_total")
+        ),
+        recording_degraded_items=value.recording_degraded_items,
+        recording_issues=tuple(
+            RecordingIssueView(issue.reason.value, issue.detail)
+            for issue in value.recording_issues
+        ),
+        omitted_detail_count=value.omitted_detail_count,
+        review_refusal=(
+            None
+            if value.review_fact_limit is None
+            else ReviewFactLimitView(
+                reason=value.review_fact_limit.reason,
+                tree_kind=value.review_fact_limit.tree_kind.value,
+                population=value.review_fact_limit.population.value,
+                axis=value.review_fact_limit.axis.value,
+                row_limit=value.review_fact_limit.row_limit,
+                byte_limit=(
+                    None
+                    if value.review_fact_limit.byte_limit is None
+                    else scalar_64_to_text(
+                        value.review_fact_limit.byte_limit,
+                        "history review byte_limit",
+                    )
+                ),
+            )
+        ),
         succeeded_count=value.succeeded_count,
         skipped_count=value.skipped_count,
         failed_count=value.failed_count,

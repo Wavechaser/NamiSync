@@ -7,8 +7,9 @@ implemented. Stage 6 Slice 3 adds the domain-blind transactional admission
 domain-blind. M2 durable queue ownership, SQLite session persistence, and
 startup reconciliation remain deferred.
 
-Checkpoint 2's terminal continuation scrubbing is active. The remaining Stage
-6 second-half desktop task target is not active yet. It reuses
+Checkpoint 2's terminal continuation scrubbing and checkpoint 3.2's exact-v5
+event admission are active. The remaining Stage 6 second-half desktop task
+target is not active yet. It reuses
 the existing `attach` seam for every desktop-created session and lets an
 interface-owned process-live task serially bind those sessions. No task id,
 task revision, retained presentation artifact, or bridge retention policy enters
@@ -209,9 +210,9 @@ is longer than one subscriber's bound, the truncation itself is what creates
 that gap, so the leading `Gap` occupies a slot inside the bound: a new stream
 never starts with more buffered envelopes than its capacity.
 
-Core event v4 remains active until the atomic event-v5 cutover defined by
-[M1_BRIDGE.md](M1_BRIDGE.md). Dispatcher accepts only the active event version;
-it does not version-dispatch a mixed live stream. At v5 the core projector
+Core event v5 is active under the coordinated cutover defined by
+[M1_BRIDGE.md](M1_BRIDGE.md). Dispatcher accepts only that exact event version;
+it does not version-dispatch a mixed live stream. The core projector
 validates, deeply copies, and size-checks one immutable emitter-owned snapshot
 before sequence, replay, history, or subscriber publication. All consumers see
 that same snapshot, and every schema-valid queue head remains drainable under

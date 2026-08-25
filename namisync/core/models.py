@@ -13,6 +13,7 @@ from .pathing import (
     relative_path_parent,
     validate_relative_path,
 )
+from .scalars import MAX_FILE_INDEX_128, require_safe_int, require_signed_64
 
 
 # Windows attributes that execution deliberately propagates from source to target.
@@ -52,9 +53,14 @@ class CapabilityProfile:
     supports_hardlinks: bool
 
     def __post_init__(self) -> None:
-        if self.mtime_granularity_ns <= 0:
+        require_signed_64(
+            self.mtime_granularity_ns,
+            "mtime granularity",
+        )
+        if self.mtime_granularity_ns == 0:
             raise ValueError("mtime granularity must be positive")
-        if self.max_path <= 0:
+        require_safe_int(self.max_path, "maximum path")
+        if self.max_path == 0:
             raise ValueError("maximum path must be positive")
 
 
@@ -64,7 +70,12 @@ class FileIdentity:
     file_index: int
 
     def __post_init__(self) -> None:
-        if not self.volume_serial or self.file_index < 0:
+        if (
+            type(self.volume_serial) is not str
+            or not self.volume_serial
+            or type(self.file_index) is not int
+            or not 0 <= self.file_index <= MAX_FILE_INDEX_128
+        ):
             raise ValueError("invalid file identity")
 
 
@@ -74,10 +85,9 @@ class MetadataSnapshot:
     created_ns: int | None
 
     def __post_init__(self) -> None:
-        if self.attributes < 0:
-            raise ValueError("attributes cannot be negative")
-        if self.created_ns is not None and self.created_ns < 0:
-            raise ValueError("creation time cannot be negative")
+        require_safe_int(self.attributes, "file attributes")
+        if self.created_ns is not None:
+            require_signed_64(self.created_ns, "creation time")
 
 
 @dataclass(frozen=True)
@@ -90,8 +100,9 @@ class FileStat:
     metadata: MetadataSnapshot
 
     def __post_init__(self) -> None:
-        if self.size < 0 or self.mtime_ns < 0:
-            raise ValueError("file stat size and mtime cannot be negative")
+        require_signed_64(self.size, "file size")
+        require_signed_64(self.mtime_ns, "file modification time")
+        require_safe_int(self.nlink, "file link count")
         if self.nlink < 1:
             raise ValueError("link count must be positive")
 
@@ -197,6 +208,7 @@ class ScanWarningCode(StrEnum):
     PLACEHOLDER = "placeholder"
     REPARSE_POINT = "reparse_point"
     UNKNOWN_TYPE = "unknown_type"
+    SCALAR_UNREPRESENTABLE = "scalar_unrepresentable"
 
 
 @dataclass(frozen=True)

@@ -97,7 +97,7 @@ CORPUS_SPEC = {
 
 # Current-source representation overlay only. The frozen v1 corpus and its
 # protected calibration/holdout hashes remain unchanged.
-CURRENT_V4_TRANSPORT_REPRESENTATION = {
+CURRENT_V5_TRANSPORT_REPRESENTATION = {
     "scope": (
         "all current transport custody; Progress is populated only in ordinary"
     ),
@@ -107,7 +107,7 @@ CURRENT_V4_TRANSPORT_REPRESENTATION = {
             "session_id": "populated per task",
             "seq": "populated, increasing per session",
             "at": "populated UTC timestamp",
-            "schema_version": "populated with live core event version 4",
+            "schema_version": "populated with live core event version 5",
             "body": (
                 "Progress in ordinary or an inherited reliable body named below"
             ),
@@ -119,7 +119,7 @@ CURRENT_V4_TRANSPORT_REPRESENTATION = {
             "session_id": "populated from the Envelope",
             "sequence": "populated from Envelope.seq",
             "at": "populated canonical timestamp string",
-            "schema_version": "populated with nested live core event version 4",
+            "schema_version": "populated with nested live core event version 5",
             "body_type": "Progress or one inherited reliable body name",
             "body": (
                 "exact progress_body dict or one inherited reliable body mapping"
@@ -159,9 +159,9 @@ CURRENT_V4_TRANSPORT_REPRESENTATION = {
     },
     "maximum_no_gap": {
         "Progress": "intentionally absent",
-        "Envelope.schema_version": "populated with live core event version 4",
+        "Envelope.schema_version": "populated with live core event version 5",
         "SessionEventView.schema_version": (
-            "populated with nested live core event version 4"
+            "populated with nested live core event version 5"
         ),
         "ItemOutcome": "fields and body mapping inherited unchanged from frozen v1",
     },
@@ -234,6 +234,7 @@ class _CustodyInvocation:
         self._state = state
 
     def run(self, context):
+        from namisync.core.evidence import RecordingStatus
         from namisync.core.session import OperationResult, SessionState
 
         self._state.entered.set()
@@ -245,12 +246,15 @@ class _CustodyInvocation:
             bytes_done = 129
         return OperationResult(
             SessionState.FAILED,
+            recording=RecordingStatus.DEGRADED,
             bytes_done=bytes_done,
             bytes_total=bytes_done,
         )
 
     def _run_ordinary(self, context) -> None:
         from namisync.core.events import ItemOutcome, Progress
+        from namisync.core.evidence import RecordingStatus
+        from namisync.core.execution import ItemRecordingReason
 
         reliable_pattern = (3, 3, 2, 2)
         outcome_offset = self._state.task_index * 150
@@ -318,12 +322,25 @@ class _CustodyInvocation:
                         path=path,
                         outcome=outcome,
                         reason=reason,
-                        detail=_detail(
-                            ordinal,
-                            length,
-                            "ordinary",
-                            self._state.variant,
-                            path,
+                        detail=_v5_detail(
+                            _detail(
+                                ordinal,
+                                length,
+                                "ordinary",
+                                self._state.variant,
+                                path,
+                            )
+                        ),
+                        recording=RecordingStatus.DEGRADED,
+                        recording_reason=(
+                            ItemRecordingReason.RECORD_WRITE_FAILED
+                            if ordinal % 3 == 1
+                            else ItemRecordingReason.UNRECORDED_MUTATION
+                        ),
+                        recording_detail=(
+                            "published filesystem mutation failed before ledger settlement"
+                            if ordinal % 3 == 1
+                            else "filesystem mutation may have committed before ledger settlement"
                         ),
                     )
                 )
@@ -349,6 +366,8 @@ class _CustodyInvocation:
 
     def _emit_maximum(self, context, local: int) -> None:
         from namisync.core.events import ItemOutcome
+        from namisync.core.evidence import RecordingStatus
+        from namisync.core.execution import ItemRecordingReason
 
         ordinal = self._state.task_index * 129 + local
         length = _length_for(
@@ -370,12 +389,25 @@ class _CustodyInvocation:
                 path=path,
                 outcome=outcome,
                 reason=reason,
-                detail=_detail(
-                    ordinal,
-                    length,
-                    "maximum",
-                    self._state.variant,
-                    path,
+                detail=_v5_detail(
+                    _detail(
+                        ordinal,
+                        length,
+                        "maximum",
+                        self._state.variant,
+                        path,
+                    )
+                ),
+                recording=RecordingStatus.DEGRADED,
+                recording_reason=(
+                    ItemRecordingReason.RECORD_WRITE_FAILED
+                    if ordinal % 3 == 1
+                    else ItemRecordingReason.UNRECORDED_MUTATION
+                ),
+                recording_detail=(
+                    "published filesystem mutation failed before ledger settlement"
+                    if ordinal % 3 == 1
+                    else "filesystem mutation may have committed before ledger settlement"
                 ),
             )
         )
@@ -498,7 +530,7 @@ def _item_id(variant: str, fixture: str, task: int, local: int) -> str:
 def _attempt_id(variant: str, task: int, tick: int) -> str:
     _variant_permutation(variant)
     if not 0 <= task < 4 or not 0 <= tick < 60:
-        raise ValueError("invalid current-v4 attempt identity position")
+        raise ValueError("invalid current-v5 attempt identity position")
     seed = f"{CORPUS_VERSION}\0{variant}\0ordinary-attempt\0{task}\0{tick}"
     return hashlib.sha256(seed.encode("ascii")).hexdigest()[:32]
 
@@ -585,6 +617,16 @@ def _detail(
         "recording_error": (
             "filesystem mutation may have committed before ledger settlement"
         ),
+    }
+
+
+def _v5_detail(value: dict[str, object]) -> dict[str, object]:
+    """Adapt the frozen v1 corpus to the closed live-v5 detail projection."""
+
+    return {
+        key: member
+        for key, member in value.items()
+        if key not in {"recording", "recording_error"}
     }
 
 
@@ -694,8 +736,8 @@ def _adapter_body_types(registry, starts) -> list[list[str]]:
             updates = tuple(task.queue)
         if any(type(update) is not SessionEventView for update in updates):
             raise AssertionError("ordinary checkpoint retained a non-event update")
-        if any(update.schema_version != 4 for update in updates):
-            raise AssertionError("ordinary checkpoint retained a non-v4 event")
+        if any(update.schema_version != 5 for update in updates):
+            raise AssertionError("ordinary checkpoint retained a non-v5 event")
         bodies.append([update.body_type for update in updates])
     return bodies
 
@@ -932,21 +974,23 @@ def _ordinary_fixture(
         ]
         if delivered_ids[start.session_id] != expected:
             raise AssertionError("ordinary reliable ordering or delivery drifted")
-        progress = delivered_progress[start.session_id]
+        progress = [int(value) for value in delivered_progress[start.session_id]]
         if len(progress) != 60 or progress[-1] != 1_500 or any(
             earlier >= later
             for earlier, later in zip(progress, progress[1:], strict=False)
         ):
             raise AssertionError("ordinary progress cadence/final value drifted")
         record = terminal_records[start.session_id]
+        retained = dispatcher.get(start.session_id)
         if (
             record.state != "failed"
             or record.result is None
             or record.result.headline != "failed"
-            or record.result.bytes_done != 1_500
-            or record.result.bytes_total != 1_500
-            or [item.item_id for item in record.result.items] != expected
-            or any(item.result != "failed" for item in record.result.items)
+            or record.result.bytes_done != "1500"
+            or record.result.bytes_total != "1500"
+            or retained.result is None
+            or [item.item_id for item in retained.result.items] != expected
+            or any(item.outcome.value != "failed" for item in retained.result.items)
             or terminal_events[start.session_id] != 1
             or terminal_orders[start.session_id]
             != ["StateChanged", "Terminal", "record"]
@@ -1131,6 +1175,7 @@ def _maximum_fixture(
             for item in range(129)
         ]
         record = terminal_records[start.session_id]
+        retained = dispatcher.get(start.session_id)
         if terminal_orders[start.session_id] != [
             "StateChanged",
             "Terminal",
@@ -1141,8 +1186,9 @@ def _maximum_fixture(
             record.state != "failed"
             or record.result is None
             or record.result.headline != "failed"
-            or [item.item_id for item in record.result.items] != expected
-            or any(item.result != "failed" for item in record.result.items)
+            or retained.result is None
+            or [item.item_id for item in retained.result.items] != expected
+            or any(item.outcome.value != "failed" for item in retained.result.items)
         ):
             raise AssertionError("maximum terminal record drifted")
 

@@ -15,6 +15,7 @@ from xxhash import xxh3_128
 import namisync.workflows.inventory as inventory_workflow
 from namisync.core.events import Progress
 from namisync.core.evidence import RecordingStatus
+from namisync.core.execution import TaskRecordingIssue, TaskRecordingIssueReason
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
@@ -54,6 +55,7 @@ from namisync.core.session import (
     RunContext,
     SessionState,
 )
+from namisync.core.scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64
 from namisync.db.connections import connect_ledger_reader
 from namisync.db.repositories import InventoryPresence, LedgerRepository
 from namisync.modules.scanner import (
@@ -1292,10 +1294,11 @@ def test_integrity_recorder_close_failure_preserves_primary_authority(
     run_inventory(prepared, _context(), inventory_deps)
 
     original_close = inventory_workflow.LedgerRecorder.close
+    close_message = "x" * 1_100 if runner_exit == "cancel" else "close failed"
 
     def failing_close(recorder) -> None:
         original_close(recorder)
-        raise RuntimeError("close failed")
+        raise RuntimeError(close_message)
 
     monkeypatch.setattr(
         inventory_workflow.LedgerRecorder,
@@ -1311,6 +1314,10 @@ def test_integrity_recorder_close_failure_preserves_primary_authority(
         if runner_exit == "pause":
             raise PauseRequested("pause wins")
         return IntegrityRunResult((), RecordingStatus.OK)
+
+    recording_observations: list[
+        tuple[RecordingStatus, tuple[TaskRecordingIssue, ...], int]
+    ] = []
 
     def invoke() -> OperationResult:
         return run_integrity(
@@ -1335,11 +1342,26 @@ def test_integrity_recorder_close_failure_preserves_primary_authority(
                 ),
                 runners={IntegrityMode.VERIFY: runner},
             ),
+            recording_sink=lambda status, issues, omitted: (
+                recording_observations.append((status, issues, omitted))
+            ),
         )
 
     if runner_exit == "pause":
         with pytest.raises(PauseRequested, match="pause wins"):
             invoke()
+        assert recording_observations == [
+            (
+                RecordingStatus.DEGRADED,
+                (
+                    TaskRecordingIssue(
+                        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+                        "RuntimeError: close failed",
+                    ),
+                ),
+                0,
+            )
+        ]
         return
 
     result = invoke()
@@ -1348,6 +1370,15 @@ def test_integrity_recorder_close_failure_preserves_primary_authority(
     assert result.canceled is (runner_exit == "cancel")
     assert result.recording is RecordingStatus.DEGRADED
     assert (result.bytes_done, result.bytes_total) == (3, 7)
+    assert result.recording_issues[0].reason is (
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED
+    )
+    if runner_exit == "cancel":
+        assert result.recording_issues[0].detail is None
+        assert result.omitted_detail_count == 1
+    else:
+        assert result.recording_issues[0].detail == "RuntimeError: close failed"
+        assert result.omitted_detail_count == 0
     if runner_exit == "return":
         assert result.error is not None
         assert result.error.type_name == "RuntimeError"
@@ -1446,6 +1477,7 @@ def test_paused_integrity_cancellation_uses_persisted_total_high_water() -> None
         processed_bytes=11,
         bytes_total_high_water=23,
         recording=RecordingStatus.DEGRADED,
+        omitted_detail_count=2,
         refresh_generation=1,
     )
 
@@ -1456,6 +1488,7 @@ def test_paused_integrity_cancellation_uses_persisted_total_high_water() -> None
     assert result.disposition is Disposition.RAN
     assert result.recording is RecordingStatus.DEGRADED
     assert (result.bytes_done, result.bytes_total) == (11, 23)
+    assert result.omitted_detail_count == 2
     with pytest.raises(ValueError, match="retain RAN"):
         settle_canceled_integrity(request, Disposition.UNRUN)
 
@@ -1746,6 +1779,13 @@ def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:
         processed_bytes=13,
         bytes_total_high_water=17,
         recording=RecordingStatus.DEGRADED,
+        recording_issues=(
+            TaskRecordingIssue(
+                TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+                None,
+            ),
+        ),
+        omitted_detail_count=2,
     )
 
     encoded_integrity = encode_integrity_request(integrity)
@@ -1767,6 +1807,8 @@ def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:
         "processed_bytes",
         "bytes_total_high_water",
         "recording",
+        "recording_issues",
+        "omitted_detail_count",
         "refresh_generation",
     }
 
@@ -1777,6 +1819,7 @@ def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:
         ("completed_bytes", (("7:11", True),)),
         ("processed_bytes", True),
         ("bytes_total_high_water", True),
+        ("omitted_detail_count", True),
         ("refresh_generation", True),
     ],
 )
@@ -1800,6 +1843,39 @@ def test_integrity_request_rejects_boolean_counters(
     fields[field] = value
 
     with pytest.raises(TypeError):
+        IntegrityWorkflowRequest(**fields)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("completed_bytes", (("7:11", MAX_SIGNED_64 + 1),)),
+        ("processed_bytes", MAX_SIGNED_64 + 1),
+        ("bytes_total_high_water", MAX_SIGNED_64 + 1),
+        ("omitted_detail_count", MAX_SAFE_INTEGER + 1),
+        ("refresh_generation", MAX_SAFE_INTEGER + 1),
+    ],
+)
+def test_integrity_request_rejects_out_of_domain_counters(
+    field: str,
+    value: object,
+) -> None:
+    fields: dict[str, object] = {
+        "request_id": "integrity-counter-domain",
+        "binding": LocationBinding(
+            VOLUME_ID,
+            "managed",
+            "M:\\",
+            ("M:\\",),
+            False,
+            7,
+        ),
+        "mode": IntegrityMode.VERIFY,
+        "selection_item_ids": ("7:11",),
+    }
+    fields[field] = value
+
+    with pytest.raises(ValueError):
         IntegrityWorkflowRequest(**fields)  # type: ignore[arg-type]
 
 
@@ -1883,6 +1959,9 @@ def test_inventory_and_integrity_codecs_reject_coercive_or_ambiguous_json() -> N
         ("bytes_total_high_water", None),
         ("recording", 1),
         ("recording", "unknown"),
+        ("omitted_detail_count", -1),
+        ("omitted_detail_count", MAX_SAFE_INTEGER + 1),
+        ("processed_bytes", MAX_SIGNED_64 + 1),
     ],
 )
 def test_integrity_v2_codec_rejects_invalid_authority_scalars(
@@ -1935,7 +2014,11 @@ def test_integrity_v2_codec_requires_exact_authority_shape() -> None:
     )
     encoded = encode_integrity_request(request)
 
-    for missing in ("bytes_total_high_water", "recording"):
+    for missing in (
+        "bytes_total_high_water",
+        "recording",
+        "omitted_detail_count",
+    ):
         body = json.loads(encoded)
         del body[missing]
         with pytest.raises(ValueError, match="missing or unknown"):

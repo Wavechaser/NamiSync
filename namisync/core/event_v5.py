@@ -1,10 +1,4 @@
-"""Dormant strict consumers for the accepted core-event v5 contract.
-
-This module is intentionally not imported by the live event dispatcher,
-history reader, workflow views, or browser route until the coordinated v5
-cutover.  Its public functions are direct test seams for the first protocol
-staging stop.
-"""
+"""Strict validators for the exact core-event v5 contract."""
 
 from __future__ import annotations
 
@@ -25,13 +19,12 @@ from .integrity import (
     RecordDisposition,
 )
 from .planning import BlockedReason, OperationKind
+from .scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64
 from .session import Disposition, PhaseStatus, SessionState
 
 
 EVENT_V5_SCHEMA_VERSION = 5
 MAX_RELIABLE_EVENT_CANONICAL_BYTES = 1_048_576
-MAX_SIGNED_64 = (1 << 63) - 1
-MAX_SAFE_INTEGER = (1 << 53) - 1
 MAX_DETAIL_LEAVES = 32
 MAX_DETAIL_PATH_LEAVES = 8
 MAX_DIAGNOSTIC_UTF8_BYTES = 1_024
@@ -248,7 +241,7 @@ _DETAIL_KEYS = frozenset(
 
 
 def validate_event_v5_envelope(value: object) -> None:
-    """Validate one exact dormant core-event v5 persistence envelope."""
+    """Validate one exact core-event v5 persistence envelope."""
 
     event = _exact_object(value, _ENVELOPE_KEYS, "event envelope")
     _hex_id(event["session_id"], "event session_id")

@@ -6,6 +6,7 @@ import argparse
 import sys
 from collections import Counter
 from pathlib import Path
+from types import SimpleNamespace
 from typing import TextIO
 
 from namisync.interfaces.service import (
@@ -282,8 +283,13 @@ def _run_sync(
                 )
                 return EXIT_REFUSED
             execution_session = admission
+            execution_items: list[object] = []
             execution_record = _wait_for_result(
-                service, execution_session.session_id, stdout, stderr
+                service,
+                execution_session.session_id,
+                stdout,
+                stderr,
+                observed_items=execution_items,
             )
         except Exception as error:
             print(f"Execution could not start: {_safe(error)}", file=stderr)
@@ -295,6 +301,13 @@ def _run_sync(
         _render_execution(
             execution_record,
             service.get_execution_details(execution_session.run_id),
+            _terminal_items(
+                service,
+                execution_session.run_id,
+                execution_record,
+                execution_items,
+                stderr,
+            ),
             stdout,
             stderr,
         )
@@ -385,8 +398,13 @@ def _run_location_workflow(
 
         try:
             try:
+                observed_items: list[object] = []
                 record = _wait_for_result(
-                    service, session.session_id, stdout, stderr
+                    service,
+                    session.session_id,
+                    stdout,
+                    stderr,
+                    observed_items=observed_items,
                 )
             except Exception as error:
                 print(
@@ -417,6 +435,13 @@ def _run_location_workflow(
                 namespace.command,
                 record,
                 details,
+                _terminal_items(
+                    service,
+                    session.request_id,
+                    record,
+                    observed_items,
+                    stderr,
+                ),
                 stdout,
                 stderr,
             )
@@ -516,6 +541,8 @@ def _wait_for_result(
     session_id: str,
     stdout: TextIO,
     stderr: TextIO,
+    *,
+    observed_items: list[object] | None = None,
 ) -> SessionRecordView:
     cancel_requested = False
 
@@ -534,6 +561,9 @@ def _wait_for_result(
                     f"{_safe(current)}",
                     file=stdout,
                 )
+        elif event.body_type in {"ItemOutcome", "IntegrityOutcome"}:
+            if observed_items is not None:
+                observed_items.append(SimpleNamespace(**event.body))
     current = service.observe(session_id, receive)
     if current.result is not None:
         return current
@@ -552,6 +582,54 @@ def _wait_for_result(
                     )
     finally:
         service.unsubscribe(session_id)
+
+
+def _terminal_items(
+    service: NamiSyncService,
+    run_token: str,
+    record: SessionRecordView,
+    observed_items: list[object],
+    errors: TextIO,
+) -> tuple[object, ...]:
+    """Return canonical retained items when the healthy audit is complete."""
+
+    live_items = tuple(observed_items)
+    if record.result is None or record.result.audit != "ok":
+        return live_items
+    try:
+        summary = service.get_history_summary(run_token)
+        if (
+            summary.completion_status != "finalized"
+            or summary.audit_status != "ok"
+        ):
+            raise RuntimeError("healthy terminal history is not finalized")
+        retained_items: list[object] = []
+        after_order = 0
+        through_order = summary.item_count
+        while True:
+            page = service.get_history_items(
+                run_token,
+                after_order=after_order,
+                through_order=through_order,
+                limit=256,
+            )
+            retained_items.extend(retained.item for retained in page.items)
+            if not page.has_more:
+                break
+            if page.next_after_order <= after_order:
+                raise RuntimeError("history item page did not advance")
+            after_order = page.next_after_order
+        if len(retained_items) != through_order:
+            raise RuntimeError("history item watermark is incomplete")
+        return tuple(retained_items)
+    except Exception as error:
+        print(
+            "Itemized terminal detail could not be reconstructed from "
+            "healthy history; showing observed live items only: "
+            f"{type(error).__name__}: {_safe(error)}",
+            file=errors,
+        )
+        return live_items
 
 
 def _database_refusal(service: NamiSyncService, stderr: TextIO) -> int | None:
@@ -675,6 +753,7 @@ def _render_integrity(
     command: str,
     record: SessionRecordView,
     details,
+    items: tuple[object, ...],
     output: TextIO,
     errors: TextIO,
 ) -> None:
@@ -688,7 +767,7 @@ def _render_integrity(
         _render_inventory_details(details, output)
     _render_phases(result, output)
     counts = Counter(
-        item.result for item in result.items if item.item_type == "integrity"
+        item.result for item in items if item.item_type == "integrity"
     )
     if counts:
         print(
@@ -698,7 +777,7 @@ def _render_integrity(
             ),
             file=output,
         )
-    for item in result.items:
+    for item in items:
         if item.item_type != "integrity":
             continue
         reason = "" if item.reason is None else f" ({_safe(item.reason)})"
@@ -821,7 +900,11 @@ def _render_plan(review, output: TextIO) -> None:
 
 
 def _render_execution(
-    record: SessionRecordView, details, output: TextIO, errors: TextIO
+    record: SessionRecordView,
+    details,
+    items: tuple[object, ...],
+    output: TextIO,
+    errors: TextIO,
 ) -> None:
     result = record.result
     if result is None:
@@ -837,7 +920,7 @@ def _render_execution(
     )
     _render_phases(result, output)
     outcomes = Counter(
-        item.result for item in result.items if item.item_type == "operation"
+        item.result for item in items if item.item_type == "operation"
     )
     if outcomes["blocked"] or outcomes["deferred"]:
         print(
@@ -846,7 +929,7 @@ def _render_execution(
             "Review the itemized exclusions and re-plan after resolving them.",
             file=output,
         )
-    for item in result.items:
+    for item in items:
         reason = "" if item.reason is None else f" ({_safe(item.reason)})"
         if item.item_type == "operation":
             print(

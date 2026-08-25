@@ -15,7 +15,7 @@ Stage 5.5 facade integration is complete;
 Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
-## Stage 6 Second-Half Workflow Contract (Checkpoint 2 Portion Active)
+## Stage 6 Second-Half Workflow Contract (Checkpoints 2 And 3.2 Active)
 
 The checkpoint sequence is owned by
 [M1_SHELL_H2.md](M1_SHELL_H2.md); exact event/result and task protocols live in
@@ -34,13 +34,14 @@ clears the only retained opaque reference. Manual exact post-copy verification
 remains a later checkpoint and instead classifies current durable evidence in
 the original execution scope.
 
-Workflow aggregation now preserves operation-local recording truth and the
+Workflow aggregation preserves operation-local recording truth and the
 first observation of each task issue in order: later failure cannot rewrite an
-emitted item or revoke committed evidence. The live core event remains exact
-v4; exact item detail, task-issue result fields, terminal summary, and omission
-vocabularies activate together at checkpoint 3.
+emitted item or revoke committed evidence. Exact event v5 now carries the item
+recording and omission fields, while its item-free terminal summary carries
+task issues and aggregate witnesses. Presentation-only omissions remain outside
+the core result and history contracts.
 
-At the accepted scalar cutover, workflow accumulation follows the exact
+At the active checkpoint-3.2 scalar cutover, workflow accumulation follows the exact
 checked-arithmetic contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
 [DEFENSE.md](DEFENSE.md) §1.3 without a workflow-local numeric variant.
 

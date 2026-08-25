@@ -25,8 +25,8 @@ committed calibration-a artifact records normative ordinary/exact-maximum
 transport measurements, the separate contract freezes the 1,966,080-byte
 ceiling, and three fresh holdout-b runs pass at 1,351,794 ordinary and 1,513,014
 exact-maximum bytes. This closes the frozen historical v1 SH-G-8 and BR-G-42
-event/transport-custody claim only. Current v4 has separate diagnostic event
-evidence and Tier-1 custody drift evidence, not a new calibration or acceptance;
+event/transport-custody claim only. The v4 diagnostic event evidence and Tier-1
+custody drift evidence remain historical, not a new calibration or acceptance;
 `M1_BRIDGE.md` owns the exact disposition. A separate current-source one-child
 guard requires both live custody shapes to remain within that frozen ceiling on
 ordinary suite runs;
@@ -40,9 +40,10 @@ and control surfaces remain in the wider M1 design; the accepted reslice below
 defers the history page. `M1_SHELL.md` owns implementation order and
 beta-package closure.
 
-The accepted Stage 6 second-half reslice is target state, not current behavior.
-It adds Setup and process-live task review for plan/execution, inventory, and
-integrity/manual post-copy work. History, global-settings mutation,
+The product-surface portion of the accepted Stage 6 second-half reslice remains
+target state. Its exact event-v5 and persistence-epoch cut is active; Setup and
+process-live task review for plan/execution, inventory, and integrity/manual
+post-copy work remain unrealized. History, global-settings mutation,
 drag-and-drop, and remaining cosmetic-state consumers are deferred.
 [M1_SHELL_H2.md](M1_SHELL_H2.md) is the newest implementation checklist and
 [M1_BRIDGE.md](M1_BRIDGE.md) owns all exact cutover contracts.

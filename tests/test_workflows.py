@@ -529,7 +529,7 @@ def test_review_and_commit_bind_the_same_safe_selection(tmp_path: Path) -> None:
     selected = execution.execution_set.selection
     assert selected == frozenset({copied.op_id})
     assert review.selection_digest_hex == selection_digest(selected).hex()
-    assert review.required_bytes == 17
+    assert review.required_bytes == "17"
     assert review.operations[2].prior_target_path == "old.txt"
     assert execution.execution_set.commitment is not None
     assert execution.execution_set.commitment.selection_digest == selection_digest(
@@ -1151,8 +1151,8 @@ def test_opt_in_recase_runs_end_to_end_without_copying_or_trashing(
         recase = review.operations[0]
         assert recase.prior_target_path == "keep.txt"
         assert recase.target_path == "KEEP.txt"
-        assert recase.content_bytes == 0
-        assert review.required_bytes == 0
+        assert recase.content_bytes == "0"
+        assert review.required_bytes == "0"
 
         # The executor renamed in place: no bytes, no displaced version, same file.
         assert result.status is SessionState.COMPLETED

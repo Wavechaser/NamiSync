@@ -11,10 +11,10 @@ from typing import Protocol
 
 from namisync.core.evidence import Outcome
 from namisync.core.execution import ExecutionSet
+from namisync.core.file_identity import file_identity_from_stat
 from namisync.core.models import (
     CapabilityProfile,
     EntryKind,
-    FileIdentity,
     FileStat,
     MetadataSnapshot,
     Root,
@@ -59,6 +59,7 @@ from namisync.core.root_authority import (
     is_reparse_stat,
     observe_native_volume,
 )
+from namisync.core.scalars import checked_add_signed_64, require_signed_64
 
 
 class ObservationFileSystem(Protocol):
@@ -229,8 +230,12 @@ class LocalObservationFileSystem:
             else:
                 return StatObservation(None, "unsupported entry type", True, representable)
             identity = (
-                FileIdentity(admitted.volume_id.serial, int(observed.st_ino))
-                if profile.stable_file_identity and int(observed.st_ino) > 0
+                file_identity_from_stat(
+                    admitted.volume_id.serial,
+                    profile.fs_type,
+                    getattr(observed, "st_ino", None),
+                )
+                if profile.stable_file_identity
                 else None
             )
             attributes = int(getattr(observed, "st_file_attributes", 0))
@@ -253,8 +258,9 @@ class LocalObservationFileSystem:
 
     def free_space(self, authority: RootAuthority) -> int:
         admit_root(authority)
-        return int(
-            shutil.disk_usage(_native_path(authority.logical_root)).free
+        return require_signed_64(
+            shutil.disk_usage(_native_path(authority.logical_root)).free,
+            "target free space",
         )
 
     def reclaimable_temp_bytes(
@@ -302,7 +308,11 @@ class LocalObservationFileSystem:
                             and owner != current_run_id
                             and entry.is_file(follow_symlinks=False)
                         ):
-                            total += int(entry.stat(follow_symlinks=False).st_size)
+                            total = checked_add_signed_64(
+                                total,
+                                entry.stat(follow_symlinks=False).st_size,
+                                "reclaimable temporary bytes",
+                            )
             except OSError:
                 continue
         return total
@@ -817,13 +827,22 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
         target_profile=plan.target_profile,
         trash_on_update=plan.trash_on_update,
     )
-    if world.free_space is None:
+    available_bytes = (
+        None
+        if world.free_space is None
+        else checked_add_signed_64(
+            world.free_space,
+            world.reclaimable_temp_bytes,
+            "available target bytes",
+        )
+    )
+    if available_bytes is None:
         refusals.append(Refusal(RefusalCode.OBSERVATION_UNAVAILABLE, detail="target free space unavailable"))
-    elif required_bytes > world.free_space + world.reclaimable_temp_bytes:
+    elif required_bytes > available_bytes:
         refusals.append(
             Refusal(
                 RefusalCode.INSUFFICIENT_SPACE,
-                detail=f"required={required_bytes}; available={world.free_space + world.reclaimable_temp_bytes}",
+                detail=f"required={required_bytes}; available={available_bytes}",
             )
         )
 

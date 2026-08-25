@@ -52,8 +52,9 @@ the local
 Semantic defaults live in `settings.json` beside the selected ledger, so an
 explicit `--database` also selects an isolated sibling settings file.
 
-At the accepted Stage 6 database cutover (not active yet), standalone history
-uses the coordinated database-pair validation before querying. CLI history
+At the active Stage 6 database cutover, mutating commands require the
+coordinated database pair. Standalone history remains deliberately read-only
+and may inspect one exact history-v6 database without a ledger peer. CLI history
 summary/detail output renders a persisted review-fact limit as typed durable
 history truth, gives the same narrow-roots or resolve-scan/preflight guidance
 as the desktop, and never reconstructs the refusal from diagnostic text or
@@ -61,12 +62,13 @@ shows a presentation-only omission as history. `DATABASE.md` and `HISTORY.md`
 own the persisted consequence; `M1_BRIDGE.md` owns the shared protocol shape
 and `DEFENSE.md` §1.3 owns the scalar wall.
 
-At the final M1 pre-migrator boundary, ledger v3 and receipt-aware history v5
-require their exact contract markers. Opening a ledger v1-v2 database, any
-history v1-v4 database, or a current-version file with a missing/mismatched
+At the current M1 pre-migrator boundary, ledger v4 and receipt-aware history v6
+require their exact contract markers. Opening any ledger v1-v3 database, any
+history v1-v5 database, or a current-version file with a missing/mismatched
 marker fails
 before schema mutation with an instruction to close NamiSync and manually
-delete **both** local database files, then rerun the command. Startup does not
+archive or delete **both** local database mains and all SQLite sidecars, then
+rerun the command. Startup does not
 delete, migrate, or backfill either database automatically. This is
 development-state recovery, not a migration or preservation promise.
 
@@ -86,6 +88,11 @@ committed watermark when no terminal row exists, then requests
 item pages of at most 256 rows through the summary's fixed item-count watermark.
 Detail memory remains page-bounded, and an incomplete history row does not
 claim that filesystem execution can resume.
+
+Live event-v5 terminal summaries carry no item array. After a healthy sync or
+integrity terminal, the CLI therefore reads the same fixed finalized item
+watermark for canonical itemized output; if audit is degraded it uses only the
+item events actually observed live.
 
 For noninteractive use, mandatory review cannot be waived by a casual `--yes`.
 The command surface may expose a separate queue-release flag that executes only

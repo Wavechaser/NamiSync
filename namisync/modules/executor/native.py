@@ -13,6 +13,10 @@ import stat as stat_module
 from typing import BinaryIO, cast
 
 from namisync.core.execution import RunId
+from namisync.core.file_identity import (
+    file_identity_from_stat,
+    file_identity_from_windows_handle,
+)
 from namisync.core.models import (
     EntryKind,
     FileIdentity,
@@ -58,6 +62,7 @@ _OPEN_EXISTING = 3
 _FILE_ATTRIBUTE_NORMAL = 0x00000080
 _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_BASIC_INFO_CLASS = 0
+_FILE_STANDARD_INFO_CLASS = 1
 _FILE_ALLOCATION_INFO_CLASS = 5
 _WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
 _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
@@ -74,18 +79,13 @@ class _FileBasicInfo(ctypes.Structure):
     ]
 
 
-class _ByHandleFileInformation(ctypes.Structure):
+class _FileStandardInfo(ctypes.Structure):
     _fields_ = [
-        ("dwFileAttributes", wintypes.DWORD),
-        ("ftCreationTime", wintypes.FILETIME),
-        ("ftLastAccessTime", wintypes.FILETIME),
-        ("ftLastWriteTime", wintypes.FILETIME),
-        ("dwVolumeSerialNumber", wintypes.DWORD),
-        ("nFileSizeHigh", wintypes.DWORD),
-        ("nFileSizeLow", wintypes.DWORD),
-        ("nNumberOfLinks", wintypes.DWORD),
-        ("nFileIndexHigh", wintypes.DWORD),
-        ("nFileIndexLow", wintypes.DWORD),
+        ("AllocationSize", ctypes.c_longlong),
+        ("EndOfFile", ctypes.c_longlong),
+        ("NumberOfLinks", wintypes.DWORD),
+        ("DeletePending", ctypes.c_ubyte),
+        ("Directory", ctypes.c_ubyte),
     ]
 
 
@@ -119,13 +119,6 @@ class _WindowsBindings:
         self.flush_file_buffers = kernel32.FlushFileBuffers
         self.flush_file_buffers.argtypes = [wintypes.HANDLE]
         self.flush_file_buffers.restype = wintypes.BOOL
-
-        self.get_file_information = kernel32.GetFileInformationByHandle
-        self.get_file_information.argtypes = [
-            wintypes.HANDLE,
-            ctypes.POINTER(_ByHandleFileInformation),
-        ]
-        self.get_file_information.restype = wintypes.BOOL
 
         self.get_file_information_ex = kernel32.GetFileInformationByHandleEx
         self.get_file_information_ex.argtypes = [
@@ -388,12 +381,15 @@ class NativeFileSystem:
             size = 0
         else:
             raise UnsafeExecutionPath(f"unsupported filesystem entry: {path}")
+        volume = self._volume_id(path)
         return FileStat(
             kind=kind,
             size=size,
             mtime_ns=info.st_mtime_ns,
-            file_identity=FileIdentity(
-                self._volume_serial(path), int(info.st_ino)
+            file_identity=file_identity_from_stat(
+                volume.serial,
+                volume.fs_type,
+                getattr(info, "st_ino", None),
             ),
             nlink=info.st_nlink,
             metadata=MetadataSnapshot(
@@ -1004,26 +1000,26 @@ class NativeFileSystem:
         handle: int, basic: _FileBasicInfo | None = None
     ) -> FileStat:
         assert _WINDOWS is not None
-        information = _ByHandleFileInformation()
-        if not _WINDOWS.get_file_information(
-            handle, ctypes.byref(information)
+        standard = _FileStandardInfo()
+        if not _WINDOWS.get_file_information_ex(
+            handle,
+            _FILE_STANDARD_INFO_CLASS,
+            ctypes.byref(standard),
+            ctypes.sizeof(standard),
         ):
             raise ctypes.WinError(ctypes.get_last_error())
         observed_basic = (
             NativeFileSystem._basic_info(handle) if basic is None else basic
         )
-        size = (information.nFileSizeHigh << 32) | information.nFileSizeLow
-        file_index = (
-            information.nFileIndexHigh << 32
-        ) | information.nFileIndexLow
         return FileStat(
             kind=EntryKind.FILE,
-            size=size,
+            size=standard.EndOfFile,
             mtime_ns=_unix_ns(observed_basic.LastWriteTime),
-            file_identity=FileIdentity(
-                f"{information.dwVolumeSerialNumber:08X}", file_index
+            file_identity=file_identity_from_windows_handle(
+                handle,
+                _WINDOWS.get_file_information_ex,
             ),
-            nlink=information.nNumberOfLinks,
+            nlink=standard.NumberOfLinks,
             metadata=MetadataSnapshot(
                 attributes=observed_basic.FileAttributes,
                 created_ns=_unix_ns(observed_basic.CreationTime),

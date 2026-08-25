@@ -12,7 +12,13 @@ from types import SimpleNamespace
 import pytest
 from xxhash import xxh3_128
 
-from namisync.core.events import ItemOutcome, PhaseChanged, Progress, Terminal
+from namisync.core.events import (
+    ItemOutcome,
+    PhaseChanged,
+    Progress,
+    Terminal,
+    TerminalSummary,
+)
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
@@ -1215,7 +1221,7 @@ def test_noncompound_execute_exception_uses_execution_continuation_bytes() -> No
     assert result.error.message == "executor escaped after authoritative work"
     assert [event.bytes_done for event in events if isinstance(event, Progress)] == [2]
     assert isinstance(events[-1], Terminal)
-    assert events[-1].result is result
+    assert events[-1].result == TerminalSummary.from_result(result)
     assert recordings[0].finishes == [
         (SessionState.FAILED, RecordingStatus.OK)
     ]
@@ -1443,7 +1449,7 @@ def test_recording_entry_cancel_uses_continuation_authority_without_reopen(
     assert settled == [(SessionState.CANCELED, outcome.result)]
     assert published == [outcome.result]
     assert isinstance(events[-1], Terminal)
-    assert events[-1].result is outcome.result
+    assert events[-1].result == TerminalSummary.from_result(outcome.result)
     assert [event.bytes_done for event in events if isinstance(event, Progress)] == [1]
 
 
@@ -2731,8 +2737,8 @@ def test_xv_8_retained_compound_history_projects_phases_after_reopen(
         )
         for phase in retained.phases
     ] == [
-        ("execute", "completed", 1, 1, len(content), len(content), None),
-        ("verify", "completed", 1, 1, len(content), len(content), None),
+        ("execute", "completed", 1, 1, str(len(content)), str(len(content)), None),
+        ("verify", "completed", 1, 1, str(len(content)), str(len(content)), None),
     ]
     assert [item.run_token for item in listed] == [run_id]
     assert listed[0].phases == retained.phases
@@ -2836,7 +2842,7 @@ def test_terminal_history_retains_rolled_back_attempted_byte_high_water(
     assert retained.completion_status == "finalized"
     assert retained.filesystem_status == SessionState.FAILED.value
     assert retained.phases == ()
-    assert (retained.bytes_done, retained.bytes_total) == (8, len(content))
+    assert (retained.bytes_done, retained.bytes_total) == ("8", str(len(content)))
 
 
 @pytest.mark.parametrize(
@@ -3447,7 +3453,8 @@ def test_dispatcher_pause_resume_retains_v6_item_attribution_and_attestation(
                 operation.kind.value,
                 operation.target_rel_path,
                 Outcome.SUCCEEDED,
-                detail={"recording": RecordingStatus.DEGRADED.value},
+                recording=RecordingStatus.DEGRADED,
+                recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
             )
             context.emit(item)
             execution_set.published_evidence[operation.op_id] = _evidence(

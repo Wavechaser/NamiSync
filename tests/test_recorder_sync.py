@@ -459,8 +459,8 @@ def test_noop_requires_both_live_snapshots_and_persists_correspondence(tmp_path:
                 "SELECT * FROM mapping_correspondence"
             ).fetchall()
             assert len(correspondence) == 1
-            assert correspondence[0]["source_identity_file_index"] == 5
-            assert correspondence[0]["target_identity_file_index"] == 6
+            assert correspondence[0]["source_identity_file_index"] == "5"
+            assert correspondence[0]["target_identity_file_index"] == "6"
             assert connection.execute("SELECT count(*) FROM operations").fetchone()[0] == 1
         finally:
             connection.close()

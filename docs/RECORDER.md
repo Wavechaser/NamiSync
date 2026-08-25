@@ -5,7 +5,7 @@ shared conditional integrity write are implemented. M1 Stage 4 adds atomic
 copy-identity returns and one logical recorder window across optional linked
 verification. Maintenance recording remains later work.
 
-## Recording Truth (Executor Attribution Active; Event v5 Pending)
+## Recording Truth (Event v5 Active)
 
 The checkpoint sequence and exact result vocabulary are owned by
 [M1_BRIDGE.md](M1_BRIDGE.md). Each recorder call produces one typed,
@@ -223,10 +223,10 @@ a collision by rolling back the entire run silently.
 
 Recorder always returns/raises the recording failure to the workflow. The
 already successful filesystem result and terminal `SessionState` are preserved
-verbatim. Internal continuation state now retains sparse item reasons and
-ordered task issues; the current event-v4 result exposes their derived
-`RecordingStatus.DEGRADED` aggregate until checkpoint 3 activates the exact v5
-wire. Recovery re-inventories/reconciles; it never rolls back true filesystem
+verbatim. Internal continuation state retains sparse item reasons and ordered
+task issues; exact event v5 exposes operation-local recording facts while its
+item-free terminal summary carries the degraded-item count and ordered task
+issues. Recovery re-inventories/reconciles; it never rolls back true filesystem
 work merely to make the ledger tidy.
 
 ## Expectations

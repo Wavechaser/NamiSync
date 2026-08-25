@@ -161,9 +161,9 @@ class DeliveryClass(StrEnum):
 The event plane is observation, not control. A module emits facts; it does not
 wait for an event consumer to decide what happens next.
 
-#### Progress v4 protocol
+#### Progress v5 protocol
 
-The active core event-envelope v4 contract below is the shared authority for
+The active exact core event-envelope v5 contract below is the shared authority for
 Progress producers, adapters, and consumers.
 
 Under this protocol, a forced Progress emission bypasses source throttling but
@@ -205,6 +205,12 @@ work. An attempt id without counters represents an active indeterminate byte
 attempt, including truthful overshoot after its admitted item total is no
 longer usable. Zero-byte streaming work still receives an attempt id and a
 known `0/0` counter pair.
+
+Item counts, sequences, and other bounded counters are exact JavaScript-safe
+integers. Byte-work counters are checked nonnegative signed-64 integers in
+Python and canonical decimal `Scalar64` strings on event/public wires. Every
+reliable envelope is validated and bounded to 1,048,576 canonical bytes before
+sequence, replay, audit, or subscriber mutation.
 
 The normative reporter transitions are below. They describe authoritative
 reporter state; because Progress is lossy, a transition guarantees delivery
@@ -254,8 +260,11 @@ removed after a failed or canceled attempt still count as attempted work.
 Neither terminal nor retained-history byte counters prove publication,
 successful content, or ledger durability. Reliable item outcomes, executor
 publication evidence, and the filesystem ledger retain those authorities.
+The live `Terminal` wraps an item-free `TerminalSummary`; ordered item truth
+travels through reliable outcomes and bounded history pages rather than being
+duplicated in every terminal transport.
 
-#### Authority, replay, and compatibility
+#### Authority, replay, and exact versioning
 
 Consumers use this precedence rather than reconstructing truth from whichever
 event arrived last:
@@ -269,7 +278,7 @@ event arrived last:
 4. `Terminal` and the workflow result own final run truth.
 
 On `Gap`, a consumer discards pre-gap Progress, active-item derivation, and
-phase-dependent temporal comparisons. A later v4 Progress may restore
+phase-dependent temporal comparisons. A later v5 Progress may restore
 displayable progress through its embedded phase even when its `PhaseChanged`
 was lost, but it does not reconstruct missed reliable outcomes or history. If
 sequence continuity is known, Progress whose phase disagrees with the latest
@@ -277,14 +286,13 @@ reliable `PhaseChanged` is a protocol error. Terminal truth always supersedes
 retained Progress.
 
 Version numbers are boundary-specific, not one global product number. The
-active protocol advances only the core event envelope to v4. The desktop bridge
-command and response envelope remains v1, workflow continuation remains v5,
-and the history database, UI state, shell, and page schemas do not change. The
-exact browser-facing `SessionEventView` carries the nested core event version
-so v4 remains visible at the compatibility boundary. Current-version producers
-emit v4; the codec retains explicit v3 decoding for persisted reliable history,
-but v3 Progress is unsupported because Progress is neither reliable nor
-persisted.
+active core event envelope is exact v5; the desktop bridge command/response
+envelope remains v1, plan continuation remains v5, execution continuation is
+v6, and the persistence cut is ledger v4/history v6 at data epoch 5. The exact
+browser-facing `SessionEventView` carries nested core version 5, and current
+history cannot contain another event version. Checkpoint 3.2 retains only a
+private unreachable read-only v3/v4 source branch for checkpoint 3.3 deletion;
+it is not part of the architectural runtime contract.
 
 Protocol evidence is intentionally layered:
 
@@ -367,8 +375,9 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Contract family | Canonical source |
 | --- | --- |
 | Sessions, phase/run results, and `SessionStore` | `namisync/core/session.py` |
-| Event bodies, envelopes, delivery classes, and event codecs | `namisync/core/events.py` |
-| Filesystem identity, capability, metadata, records, and scan scopes | `namisync/core/models.py` |
+| Event bodies, envelopes, delivery classes, codec, and exact-v5 validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
+| Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
+| Safe integer, signed-64, canonical scalar/file-index codecs, and typed review-limit facts | `namisync/core/scalars.py`, `namisync/core/review.py` |
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
 | Ephemeral root authority, native volume evidence, and admission probes | `namisync/core/root_authority.py` |
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
@@ -391,7 +400,10 @@ subject to the meanings and invariants established here.
 - A volume is identified conservatively by stable volume evidence; labels and
   mount paths corroborate but do not silently replace identity.
 - File identity is nullable because some filesystems cannot supply a stable
-  value. Features that require it degrade or refuse rather than inventing one.
+  value. Its index spans the complete unsigned Windows 128-bit domain and
+  persists as opaque canonical decimal text paired with volume identity.
+  Features that cannot obtain the complete identity degrade or refuse rather
+  than inventing, narrowing, or ordering one.
 - Path validation rejects absolute/drive-qualified relatives, traversal,
   ambiguous Windows suffixes and device names, alternate-stream syntax, NUL,
   malformed Unicode, and root escape.

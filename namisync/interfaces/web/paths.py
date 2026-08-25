@@ -21,6 +21,7 @@ _FILE_ATTRIBUTE_DIRECTORY = 0x00000010
 _FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
 _FILE_FLAG_BACKUP_SEMANTICS = 0x02000000
 _FILE_FLAG_OPEN_REPARSE_POINT = 0x00200000
+_FILE_BASIC_INFO_CLASS = 0
 _INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
 
 
@@ -234,17 +235,19 @@ class WindowsPathLeaseNative:
         )
         if handle == _INVALID_HANDLE_VALUE:
             _raise_last_error(path)
-        information = _ByHandleFileInformation()
+        information = _FileBasicInformation()
         try:
-            if not self._bindings().GetFileInformationByHandle(
+            if not self._bindings().GetFileInformationByHandleEx(
                 handle,
+                _FILE_BASIC_INFO_CLASS,
                 ctypes.byref(information),
+                ctypes.sizeof(information),
             ):
                 _raise_last_error(path)
-            if information.dwFileAttributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+            if information.FileAttributes & _FILE_ATTRIBUTE_REPARSE_POINT:
                 raise AppPathError("GUI artifact path must not be a reparse point")
             observed_directory = bool(
-                information.dwFileAttributes & _FILE_ATTRIBUTE_DIRECTORY
+                information.FileAttributes & _FILE_ATTRIBUTE_DIRECTORY
             )
             if observed_directory is not directory:
                 raise AppPathError("GUI artifact path has the wrong filesystem type")
@@ -274,27 +277,24 @@ class WindowsPathLeaseNative:
             kernel32.CreateFileW.restype = wintypes.HANDLE
             kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
             kernel32.CloseHandle.restype = wintypes.BOOL
-            kernel32.GetFileInformationByHandle.argtypes = [
+            kernel32.GetFileInformationByHandleEx.argtypes = [
                 wintypes.HANDLE,
-                ctypes.POINTER(_ByHandleFileInformation),
+                ctypes.c_int,
+                wintypes.LPVOID,
+                wintypes.DWORD,
             ]
-            kernel32.GetFileInformationByHandle.restype = wintypes.BOOL
+            kernel32.GetFileInformationByHandleEx.restype = wintypes.BOOL
             self._kernel32 = kernel32
         return self._kernel32
 
 
-class _ByHandleFileInformation(ctypes.Structure):
+class _FileBasicInformation(ctypes.Structure):
     _fields_ = [
-        ("dwFileAttributes", wintypes.DWORD),
-        ("ftCreationTime", wintypes.FILETIME),
-        ("ftLastAccessTime", wintypes.FILETIME),
-        ("ftLastWriteTime", wintypes.FILETIME),
-        ("dwVolumeSerialNumber", wintypes.DWORD),
-        ("nFileSizeHigh", wintypes.DWORD),
-        ("nFileSizeLow", wintypes.DWORD),
-        ("nNumberOfLinks", wintypes.DWORD),
-        ("nFileIndexHigh", wintypes.DWORD),
-        ("nFileIndexLow", wintypes.DWORD),
+        ("CreationTime", ctypes.c_longlong),
+        ("LastAccessTime", ctypes.c_longlong),
+        ("LastWriteTime", ctypes.c_longlong),
+        ("ChangeTime", ctypes.c_longlong),
+        ("FileAttributes", wintypes.DWORD),
     ]
 
 

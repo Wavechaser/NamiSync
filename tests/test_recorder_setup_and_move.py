@@ -261,7 +261,7 @@ def test_move_reconciles_retained_missing_destination_without_rolling_back_prior
                      FROM inventory WHERE location_id = ? AND rel_path_key = 'NEW.TXT'""",
                 (setup.target_location_id,),
             ).fetchall()
-            assert [tuple(row) for row in moved] == [("new.txt", "present", 21)]
+            assert [tuple(row) for row in moved] == [("new.txt", "present", "21")]
             assert connection.execute(
                 "SELECT count(*) FROM inventory WHERE location_id = ? AND rel_path_key = 'OLD.TXT'",
                 (setup.target_location_id,),
@@ -464,7 +464,7 @@ def test_pure_rename_recording_rejects_substituted_post_rename_identity(
                      FROM inventory WHERE location_id = ?""",
                 (setup.target_location_id,),
             ).fetchall()
-            assert [tuple(row) for row in rows] == [(old_path, 21)]
+            assert [tuple(row) for row in rows] == [(old_path, "21")]
             assert connection.execute(
                 "SELECT count(*) FROM operations"
             ).fetchone()[0] == 0

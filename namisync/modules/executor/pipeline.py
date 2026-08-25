@@ -15,6 +15,7 @@ from namisync.core.evidence import (
     update_content_hasher,
 )
 from namisync.core.execution import CopyDigest
+from namisync.core.scalars import checked_add_signed_64
 from namisync.core.session import Canceled, PauseRequested
 
 
@@ -339,7 +340,11 @@ class NativeCopyBackend:
                     accounting.reserved_bytes -= chunk_size
                     raise OSError("copy source returned more bytes than requested")
                 accounting.reserved_bytes -= chunk_size - len(chunk)
-                total_read += len(chunk)
+                total_read = checked_add_signed_64(
+                    total_read,
+                    len(chunk),
+                    "copied bytes",
+                )
                 put_coordinator(hash_queue, chunk)
                 del chunk
 

@@ -46,6 +46,7 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.core.preflight import ObservedWorld, Verdict
+from namisync.core.review import ReviewFactLimitError
 from namisync.core.root_authority import (
     RootAuthority,
     RootAuthorityError,
@@ -202,13 +203,20 @@ def run_plan(
 
     ctx.emit(PhaseChanged("plan"))
     correspondence = deps.correspondence(source_scan, target_scan)
-    plan = deps.planner(
-        source_scan,
-        target_scan,
-        correspondence,
-        request.options,
-        Scope.everything(),
-    )
+    try:
+        plan = deps.planner(
+            source_scan,
+            target_scan,
+            correspondence,
+            request.options,
+            Scope.everything(),
+        )
+    except ReviewFactLimitError as error:
+        return OperationResult(
+            status=SessionState.REFUSED,
+            disposition=Disposition.UNRUN,
+            review_fact_limit=error.fact,
+        )
     decision = derive_execution_selection(plan)
     preview = ExecutionSet(plan, decision.selection, run_id)
 
@@ -244,12 +252,16 @@ def run_execution(
 
     recording_factory = getattr(deps, "open_recording", None)
     if recording_factory is None:
-        return _run_execution(
+        result = _run_execution(
             continuation,
             ctx,
             deps,
             continuation_sink=capture,
             resumed=resumed,
+        )
+        return _result_with_execution_recording(
+            result,
+            current[0].execution_set,
         )
     boundary = _RecordingBoundary(recording_factory)
 
@@ -292,10 +304,12 @@ def run_execution(
         preserve_exit_failure(error)
         raise
     except Canceled:
-        return _recording_entry_canceled_result(
-            current[0],
-            ctx,
-            deps,
+        result = _recording_entry_canceled_result(
+            current[0], ctx, deps
+        )
+        return _result_with_execution_recording(
+            result,
+            current[0].execution_set,
         )
     except BaseException as error:
         preserve_exit_failure(error)
@@ -306,14 +320,21 @@ def run_execution(
             if isinstance(continuation, ExecutionSet)
             else continuation
         )
-        return _recording_open_failure_result(
+        result = _recording_open_failure_result(
             current,
             ctx,
             deps,
             FailureDetail(type(error).__name__, logical_error_text(error)),
         )
+        return _result_with_execution_recording(
+            result,
+            current.execution_set,
+        )
     if boundary.exit_error is None:
-        return result
+        return _result_with_execution_recording(
+            result,
+            current[0].execution_set,
+        )
     execution_set = (
         continuation
         if isinstance(continuation, ExecutionSet)
@@ -324,7 +345,7 @@ def run_execution(
         TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
         boundary.exit_error,
     )
-    return replace(
+    result = replace(
         result,
         recording=RecordingStatus.DEGRADED,
         error=(
@@ -336,6 +357,7 @@ def run_execution(
             )
         ),
     )
+    return _result_with_execution_recording(result, execution_set)
 
 
 def _run_execution(
@@ -946,6 +968,8 @@ def settle_canceled_execution(
     return OperationResult(
         status=filesystem_status,
         recording=recording_status,
+        recording_issues=xset.recording_issues,
+        omitted_detail_count=xset.omitted_detail_count,
         disposition=disposition,
         canceled=True,
         phases=phases,
@@ -1577,6 +1601,20 @@ def _note_task_recording_issue(
     xset.note_task_recording_issue(
         reason,
         f"{type(error).__name__}: {logical_error_text(error)}",
+    )
+
+
+def _result_with_execution_recording(
+    result: OperationResult,
+    xset: ExecutionSet,
+) -> OperationResult:
+    """Attach the centrally reduced item/task recording witnesses."""
+
+    return replace(
+        result,
+        recording=_combined_recording(result.recording, xset.recording),
+        recording_issues=xset.recording_issues,
+        omitted_detail_count=xset.omitted_detail_count,
     )
 
 

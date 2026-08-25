@@ -13,6 +13,11 @@ from typing import Callable, Iterator, Mapping, Protocol
 
 from namisync.core.events import PhaseChanged
 from namisync.core.evidence import RecordingStatus
+from namisync.core.execution import (
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
+    bounded_recording_detail,
+)
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
@@ -54,6 +59,11 @@ from namisync.core.root_authority import (
     RootAuthorityError,
     RootAuthorityIssue,
     admit_root_chain,
+)
+from namisync.core.scalars import (
+    checked_add_signed_64,
+    require_safe_int,
+    require_signed_64,
 )
 from namisync.core.session import (
     Canceled,
@@ -260,6 +270,8 @@ class IntegrityWorkflowRequest:
     refresh_generation: int = 0
     bytes_total_high_water: int = 0
     recording: RecordingStatus = RecordingStatus.OK
+    recording_issues: tuple[TaskRecordingIssue, ...] = ()
+    omitted_detail_count: int = 0
 
     def __post_init__(self) -> None:
         if not self.request_id:
@@ -285,20 +297,25 @@ class IntegrityWorkflowRequest:
             raise ValueError(
                 "completed integrity items must belong to the saved selection"
             )
-        if any(type(size) is not int for _, size in self.completed_bytes):
-            raise TypeError("completed integrity byte counts must be integers")
-        if any(size < 0 for _, size in self.completed_bytes):
-            raise ValueError("completed integrity byte counts cannot be negative")
-        if type(self.processed_bytes) is not int:
-            raise TypeError("integrity processed bytes must be an integer")
+        completed_bytes = 0
+        for _, size in self.completed_bytes:
+            require_signed_64(size, "completed integrity byte count")
+            completed_bytes = checked_add_signed_64(
+                completed_bytes,
+                size,
+                "completed integrity bytes",
+            )
+        require_signed_64(self.processed_bytes, "integrity processed bytes")
         if self.processed_bytes > 0 and not self.selection_item_ids:
             raise ValueError(
                 "integrity progress requires the saved admitted selection"
             )
-        if self.processed_bytes < sum(size for _, size in self.completed_bytes):
+        if self.processed_bytes < completed_bytes:
             raise ValueError("processed bytes cannot trail completed bytes")
-        if type(self.bytes_total_high_water) is not int:
-            raise TypeError("integrity byte-total high-water must be an integer")
+        require_signed_64(
+            self.bytes_total_high_water,
+            "integrity byte-total high-water",
+        )
         if self.bytes_total_high_water < self.processed_bytes:
             raise ValueError(
                 "integrity byte-total high-water cannot trail processed bytes"
@@ -309,10 +326,34 @@ class IntegrityWorkflowRequest:
             )
         if not isinstance(self.recording, RecordingStatus):
             raise TypeError("integrity recording status has the wrong type")
-        if type(self.refresh_generation) is not int:
-            raise TypeError("inventory refresh generation must be an integer")
-        if self.refresh_generation < 0:
-            raise ValueError("inventory refresh generation cannot be negative")
+        if not isinstance(self.recording_issues, tuple) or any(
+            not isinstance(issue, TaskRecordingIssue)
+            for issue in self.recording_issues
+        ):
+            raise TypeError(
+                "integrity recording issues must contain TaskRecordingIssue values"
+            )
+        issue_reasons = tuple(issue.reason for issue in self.recording_issues)
+        if len(issue_reasons) != len(set(issue_reasons)):
+            raise ValueError("integrity recording issue reasons must be unique")
+        if len(self.recording_issues) > 5:
+            raise ValueError("integrity recording issues exceed their bound")
+        if self.recording_issues and self.recording is not RecordingStatus.DEGRADED:
+            raise ValueError("integrity recording issues require degraded status")
+        require_safe_int(
+            self.omitted_detail_count,
+            "integrity omitted_detail_count",
+        )
+        require_safe_int(
+            self.refresh_generation,
+            "inventory refresh generation",
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class _ObservedTaskRecordingIssue:
+    issue: TaskRecordingIssue
+    omitted_detail_count: int
 
 
 class Scanner(Protocol):
@@ -613,7 +654,13 @@ def run_integrity(
     deps: IntegrityDependencies,
     *,
     selection_sink: Callable[[IntegritySelection], None] | None = None,
-    recording_sink: Callable[[RecordingStatus], None] | None = None,
+    recording_sink: (
+        Callable[
+            [RecordingStatus, tuple[TaskRecordingIssue, ...], int],
+            None,
+        ]
+        | None
+    ) = None,
 ) -> OperationResult:
     try:
         resolution = resolve_binding(request.binding, deps.resolver)
@@ -661,12 +708,12 @@ def run_integrity(
     selection: IntegritySelection | None = None
     observed_outcomes: list[IntegrityOutcome] = []
     observed_recording = request.recording
-    close_degraded = [False]
+    recorder_observation: list[_ObservedTaskRecordingIssue | None] = [None]
     try:
         with _integrity_recorder(
             deps,
             root,
-            close_degraded=close_degraded,
+            recorder_observation=recorder_observation,
         ) as recorder:
             host_id, location_id, scan = _register_and_scan(
                 request.request_id,
@@ -760,17 +807,27 @@ def run_integrity(
             if not isinstance(result, IntegrityRunResult):
                 raise TypeError("integrity runner must return IntegrityRunResult")
     except PauseRequested:
-        recording = _integrity_recording(
-            observed_recording,
-            close_degraded=close_degraded[0],
+        recording, recording_issues, omitted_detail_count = (
+            _integrity_recording_truth(
+                request,
+                observed_recording,
+                recorder_observation[0],
+            )
         )
         if recording_sink is not None:
-            recording_sink(recording)
+            recording_sink(
+                recording,
+                recording_issues,
+                omitted_detail_count,
+            )
         raise
     except Canceled:
-        recording = _integrity_recording(
-            observed_recording,
-            close_degraded=close_degraded[0],
+        recording, recording_issues, omitted_detail_count = (
+            _integrity_recording_truth(
+                request,
+                observed_recording,
+                recorder_observation[0],
+            )
         )
         if selection is None:
             return _integrity_request_terminal_result(
@@ -778,6 +835,8 @@ def run_integrity(
                 SessionState.CANCELED,
                 recording=recording,
                 items=tuple(observed_outcomes),
+                recording_issues=recording_issues,
+                omitted_detail_count=omitted_detail_count,
                 canceled=True,
             )
         return _integrity_terminal_result(
@@ -785,12 +844,17 @@ def run_integrity(
             SessionState.CANCELED,
             recording=recording,
             items=tuple(observed_outcomes),
+            recording_issues=recording_issues,
+            omitted_detail_count=omitted_detail_count,
             canceled=True,
         )
     except Exception as error:
-        recording = _integrity_recording(
-            observed_recording,
-            close_degraded=close_degraded[0],
+        recording, recording_issues, omitted_detail_count = (
+            _integrity_recording_truth(
+                request,
+                observed_recording,
+                recorder_observation[0],
+            )
         )
         failure = FailureDetail(type(error).__name__, logical_error_text(error))
         if selection is None:
@@ -799,6 +863,8 @@ def run_integrity(
                 SessionState.FAILED,
                 recording=recording,
                 items=tuple(observed_outcomes),
+                recording_issues=recording_issues,
+                omitted_detail_count=omitted_detail_count,
                 error=failure,
             )
         return _integrity_terminal_result(
@@ -806,18 +872,23 @@ def run_integrity(
             SessionState.FAILED,
             recording=recording,
             items=tuple(observed_outcomes),
+            recording_issues=recording_issues,
+            omitted_detail_count=omitted_detail_count,
             error=failure,
         )
 
+    recording, recording_issues, omitted_detail_count = _integrity_recording_truth(
+        request,
+        _integrity_recording(observed_recording, result.recording, has_task_issue=False),
+        recorder_observation[0],
+    )
     return _integrity_terminal_result(
         selection,
         SessionState.COMPLETED,
-        recording=_integrity_recording(
-            observed_recording,
-            result.recording,
-            close_degraded=close_degraded[0],
-        ),
+        recording=recording,
         items=result.outcomes,
+        recording_issues=recording_issues,
+        omitted_detail_count=omitted_detail_count,
     )
 
 
@@ -836,6 +907,8 @@ def settle_canceled_integrity(
         canceled=True,
         bytes_done=request.processed_bytes,
         bytes_total=request.bytes_total_high_water,
+        recording_issues=request.recording_issues,
+        omitted_detail_count=request.omitted_detail_count,
     )
 
 
@@ -844,7 +917,7 @@ def _integrity_recorder(
     deps: IntegrityDependencies,
     root: str,
     *,
-    close_degraded: list[bool],
+    recorder_observation: list[_ObservedTaskRecordingIssue | None],
 ) -> Iterator[LedgerRecorder]:
     """Close the ledger owner without replacing an in-flight primary signal."""
 
@@ -854,30 +927,39 @@ def _integrity_recorder(
             clock=deps.clock,
             managed_roots=(root,),
         )
-    except Exception:
-        close_degraded[0] = True
+    except Exception as error:
+        recorder_observation[0] = _task_recording_issue(
+            TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+            error,
+        )
         raise
     try:
         yield recorder
     except BaseException:
         try:
             recorder.close()
-        except Exception:
-            close_degraded[0] = True
+        except Exception as error:
+            recorder_observation[0] = _task_recording_issue(
+                TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+                error,
+            )
         raise
     else:
         try:
             recorder.close()
-        except Exception:
-            close_degraded[0] = True
+        except Exception as error:
+            recorder_observation[0] = _task_recording_issue(
+                TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+                error,
+            )
             raise
 
 
 def _integrity_recording(
     *statuses: RecordingStatus,
-    close_degraded: bool,
+    has_task_issue: bool,
 ) -> RecordingStatus:
-    if close_degraded or any(
+    if has_task_issue or any(
         status is RecordingStatus.DEGRADED for status in statuses
     ):
         return RecordingStatus.DEGRADED
@@ -890,6 +972,8 @@ def _integrity_terminal_result(
     *,
     recording: RecordingStatus,
     items: tuple[IntegrityOutcome, ...],
+    recording_issues: tuple[TaskRecordingIssue, ...] = (),
+    omitted_detail_count: int = 0,
     canceled: bool = False,
     error: FailureDetail | None = None,
 ) -> OperationResult:
@@ -902,6 +986,8 @@ def _integrity_terminal_result(
         bytes_done=selection.processed_bytes,
         bytes_total=selection.bytes_total_high_water,
         error=error,
+        recording_issues=recording_issues,
+        omitted_detail_count=omitted_detail_count,
     )
 
 
@@ -911,6 +997,8 @@ def _integrity_request_terminal_result(
     *,
     recording: RecordingStatus,
     items: tuple[IntegrityOutcome, ...],
+    recording_issues: tuple[TaskRecordingIssue, ...] | None = None,
+    omitted_detail_count: int | None = None,
     canceled: bool = False,
     error: FailureDetail | None = None,
 ) -> OperationResult:
@@ -925,7 +1013,73 @@ def _integrity_request_terminal_result(
         bytes_done=request.processed_bytes,
         bytes_total=request.bytes_total_high_water,
         error=error,
+        recording_issues=(
+            request.recording_issues
+            if recording_issues is None
+            else recording_issues
+        ),
+        omitted_detail_count=(
+            request.omitted_detail_count
+            if omitted_detail_count is None
+            else omitted_detail_count
+        ),
     )
+
+
+def _task_recording_issue(
+    reason: TaskRecordingIssueReason,
+    error: BaseException,
+) -> _ObservedTaskRecordingIssue:
+    raw_detail = f"{type(error).__name__}: {logical_error_text(error)}"
+    detail = bounded_recording_detail(raw_detail)
+    return _ObservedTaskRecordingIssue(
+        TaskRecordingIssue(reason, detail),
+        1 if detail is None else 0,
+    )
+
+
+def _integrity_recording_truth(
+    request: IntegrityWorkflowRequest,
+    observed_recording: RecordingStatus,
+    current: _ObservedTaskRecordingIssue | None,
+) -> tuple[RecordingStatus, tuple[TaskRecordingIssue, ...], int]:
+    current_issue = None if current is None else current.issue
+    retains_current = current_issue is not None and not any(
+        issue.reason is current_issue.reason
+        for issue in request.recording_issues
+    )
+    recording_issues = _merge_recording_issues(
+        request.recording_issues,
+        current_issue,
+    )
+    omitted_detail_count = require_safe_int(
+        request.omitted_detail_count
+        + (
+            current.omitted_detail_count
+            if current is not None and retains_current
+            else 0
+        ),
+        "integrity omitted_detail_count",
+    )
+    return (
+        _integrity_recording(
+            observed_recording,
+            has_task_issue=bool(recording_issues),
+        ),
+        recording_issues,
+        omitted_detail_count,
+    )
+
+
+def _merge_recording_issues(
+    existing: tuple[TaskRecordingIssue, ...],
+    current: TaskRecordingIssue | None,
+) -> tuple[TaskRecordingIssue, ...]:
+    if current is None or any(
+        issue.reason is current.reason for issue in existing
+    ):
+        return existing
+    return (*existing, current)
 
 
 def change_inventory_visibility(
@@ -1014,6 +1168,11 @@ def encode_integrity_request(request: IntegrityWorkflowRequest) -> bytes:
             "processed_bytes": request.processed_bytes,
             "bytes_total_high_water": request.bytes_total_high_water,
             "recording": request.recording.value,
+            "recording_issues": [
+                {"reason": issue.reason.value, "detail": issue.detail}
+                for issue in request.recording_issues
+            ],
+            "omitted_detail_count": request.omitted_detail_count,
             "refresh_generation": request.refresh_generation,
         }
     )
@@ -1036,6 +1195,8 @@ def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
             "processed_bytes",
             "bytes_total_high_water",
             "recording",
+            "recording_issues",
+            "omitted_detail_count",
             "refresh_generation",
         },
         "integrity payload",
@@ -1084,6 +1245,14 @@ def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
         ),
         recording=RecordingStatus(
             _string(value["recording"], "integrity.recording")
+        ),
+        recording_issues=tuple(
+            _decode_integrity_recording_issue(issue, index)
+            for index, issue in enumerate(_list(value["recording_issues"]))
+        ),
+        omitted_detail_count=_integer(
+            value["omitted_detail_count"],
+            "integrity.omitted_detail_count",
         ),
         refresh_generation=_integer(
             value["refresh_generation"],
@@ -1349,13 +1518,18 @@ def _integrity_selection(
         )
         for row in rows
     )
-    pending_admission = request.processed_bytes + sum(
-        item.expected_stat.size
-        for item in items
-        if item.item_id not in completed
-        and item.expected_state is InventoryState.PRESENT
-        and item.expected_stat is not None
-    )
+    pending_admission = request.processed_bytes
+    for item in items:
+        if (
+            item.item_id not in completed
+            and item.expected_state is InventoryState.PRESENT
+            and item.expected_stat is not None
+        ):
+            pending_admission = checked_add_signed_64(
+                pending_admission,
+                item.expected_stat.size,
+                "integrity admitted bytes",
+            )
     return IntegritySelection(
         items=items,
         _completed_bytes=completed,
@@ -1364,6 +1538,20 @@ def _integrity_selection(
             request.bytes_total_high_water,
             pending_admission,
         ),
+    )
+
+
+def _decode_integrity_recording_issue(
+    value: object,
+    index: int,
+) -> TaskRecordingIssue:
+    context = f"integrity.recording_issues[{index}]"
+    item = _mapping(value)
+    _expect_keys(item, {"reason", "detail"}, context)
+    raw_detail = item["detail"]
+    return TaskRecordingIssue(
+        TaskRecordingIssueReason(_string(item["reason"], f"{context}.reason")),
+        None if raw_detail is None else _string(raw_detail, f"{context}.detail"),
     )
 
 

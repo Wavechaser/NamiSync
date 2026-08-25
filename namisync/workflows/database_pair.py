@@ -23,8 +23,9 @@ from namisync.workflows._database_pair_native import (
 
 
 DATABASE_RESET_DIRECTION = (
-    "Close every NamiSync process, manually delete or otherwise reset both "
-    "database files together, and restart NamiSync."
+    "Close every NamiSync process, then archive or delete both database main "
+    "files and all of their -wal, -shm, and -journal sidecars together before "
+    "restarting NamiSync."
 )
 _SQLITE_SIDECAR_SUFFIXES = ("-wal", "-shm", "-journal")
 _ARTIFACT_NATIVE: ArtifactNative = WindowsArtifactNative()

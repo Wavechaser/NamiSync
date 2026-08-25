@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import io
 import json
+from hashlib import blake2b
 from collections import deque
 from dataclasses import asdict
 from pathlib import Path
@@ -15,13 +16,13 @@ import pytest
 import namisync.interfaces.cli as cli_module
 import namisync.interfaces.service as service_module
 from namisync.core.events import (
-    LEGACY_CORE_EVENT_SCHEMA_VERSION,
     Envelope,
     Gap,
     ItemOutcome,
     PhaseChanged,
     CORE_EVENT_SCHEMA_VERSION,
     Terminal,
+    TerminalSummary,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.integrity import IntegrityOutcome, IntegrityResult
@@ -245,7 +246,7 @@ def test_history_service_repairs_a_gap_through_one_fixed_durable_watermark(
     history = tmp_path / "history.db"
     ledger = tmp_path / "ledger.db"
     record = SessionRecord(
-        SessionId("recovery-session"),
+        SessionId("1" * 32),
         "inventory",
         SessionState.RUNNING,
         (),
@@ -319,30 +320,21 @@ def test_history_service_repairs_a_gap_through_one_fixed_durable_watermark(
     assert summary.headline == "success"
 
 
-def test_history_event_views_preserve_each_supported_persisted_version(
+def test_history_event_views_preserve_the_exact_persisted_v5_contract(
     tmp_path: Path,
 ) -> None:
     history = tmp_path / "history.db"
     ledger = tmp_path / "ledger.db"
-    record = _record("mixed-version-session")
+    record = _record("a" * 32)
     with HistoryStore(history, clock=FakeClock()) as store:
         observer = store.observer(
             record,
-            HistoryContext("mixed-version-run", "host"),
+            HistoryContext("exact-v5-run", "host"),
         )
         observer.on_event(
             Envelope(
                 record.session_id,
                 1,
-                NOW,
-                LEGACY_CORE_EVENT_SCHEMA_VERSION,
-                PhaseChanged("legacy-inventory"),
-            )
-        )
-        observer.on_event(
-            Envelope(
-                record.session_id,
-                2,
                 NOW,
                 CORE_EVENT_SCHEMA_VERSION,
                 PhaseChanged("current-inventory"),
@@ -351,13 +343,12 @@ def test_history_event_views_preserve_each_supported_persisted_version(
         observer.close()
 
     with NamiSyncService(ledger, history) as service:
-        page = service.get_history_events("mixed-version-run")
+        page = service.get_history_events("exact-v5-run")
 
     assert all(type(event) is HistoryEventView for event in page.events)
     assert all(not isinstance(event, SessionEventView) for event in page.events)
-    assert [event.schema_version for event in page.events] == [3, 4]
+    assert [event.schema_version for event in page.events] == [5]
     assert [event.body for event in page.events] == [
-        {"phase": "legacy-inventory"},
         {"phase": "current-inventory"},
     ]
 
@@ -368,7 +359,7 @@ def test_history_service_ends_a_fresh_traversal_ahead_of_durability(
     history = tmp_path / "history.db"
     ledger = tmp_path / "ledger.db"
     record = SessionRecord(
-        SessionId("recovery-ahead-session"),
+        SessionId("2" * 32),
         "inventory",
         SessionState.RUNNING,
         (),
@@ -417,13 +408,13 @@ def test_history_service_exposes_receipts_and_degradation_counts(
 ) -> None:
     history = tmp_path / "history.db"
     ledger = tmp_path / "ledger.db"
-    record = _record("receipt-session")
+    record = _record("3" * 32)
     oversized = ItemOutcome(
-        "receipt-item",
+        "4" * 32,
         "copy",
         "large.bin",
         Outcome.SUCCEEDED,
-        detail={"message": "x" * 2_000},
+        detail={"message": "x" * 500},
     )
     with HistoryStore(
         history,
@@ -459,7 +450,7 @@ def test_history_service_exposes_receipts_and_degradation_counts(
     assert summary.duplicate_item_count == 0
     assert summary.rejected_event_count == 1
     assert summary.audit_status == RecordingStatus.DEGRADED.value
-    assert page.events[0].session_id == "receipt-session"
+    assert page.events[0].session_id == "3" * 32
     assert page.events[0].schema_version == CORE_EVENT_SCHEMA_VERSION
     assert page.events[0].disposition == "rejected"
     assert page.events[0].body is None
@@ -473,7 +464,7 @@ def test_history_service_exposes_cleanly_flushed_nonterminal_run_as_incomplete(
 ) -> None:
     history = tmp_path / "history.db"
     record = SessionRecord(
-        SessionId("incomplete-session"),
+        SessionId("5" * 32),
         "inventory",
         SessionState.RUNNING,
         (),
@@ -546,7 +537,7 @@ def test_history_service_exposes_cleanly_flushed_nonterminal_run_as_incomplete(
                 audit=RecordingStatus.DEGRADED,
                 items=(
                     ItemOutcome(
-                        "blocked",
+                        "a" * 32,
                         OperationKind.NOOP.value,
                         "blocked.bin",
                         Outcome.BLOCKED,
@@ -560,7 +551,7 @@ def test_history_service_exposes_cleanly_flushed_nonterminal_run_as_incomplete(
                 SessionState.COMPLETED,
                 items=(
                     ItemOutcome(
-                        "selected-noop",
+                        "b" * 32,
                         OperationKind.NOOP.value,
                         "selected.bin",
                         Outcome.SKIPPED,
@@ -574,7 +565,7 @@ def test_history_service_exposes_cleanly_flushed_nonterminal_run_as_incomplete(
                 SessionState.COMPLETED,
                 items=(
                     ItemOutcome(
-                        "deselected-noop",
+                        "c" * 32,
                         OperationKind.NOOP.value,
                         "deselected.bin",
                         Outcome.SKIPPED,
@@ -591,7 +582,7 @@ def test_retained_summary_classification_matches_live_result(
     history = tmp_path / f"{run_token}.db"
     ledger = tmp_path / f"{run_token}-ledger.db"
     record = SessionRecord(
-        SessionId(run_token),
+        SessionId(blake2b(run_token.encode("utf-8"), digest_size=16).hexdigest()),
         "sync-execution",
         SessionState.RUNNING,
         (),
@@ -806,7 +797,7 @@ def test_close_closes_every_stream_before_joining_observers() -> None:
 
 
 def test_observer_close_timeout_retains_thread_for_retry() -> None:
-    session_id = "slow-sink"
+    session_id = "6" * 32
     stream = _SequenceStream(
         _envelope(session_id, 1, PhaseChanged("blocked"))
     )
@@ -830,7 +821,7 @@ def test_observer_close_timeout_retains_thread_for_retry() -> None:
     assert sink_entered.wait(0.5)
     observation = observer._observations[session_id]
 
-    with pytest.raises(TimeoutError, match="slow-sink"):
+    with pytest.raises(TimeoutError, match=session_id):
         observer.close()
     assert observer._observations[session_id] is observation
 
@@ -842,7 +833,7 @@ def test_observer_close_timeout_retains_thread_for_retry() -> None:
 
 
 def test_gap_recovery_resubscribes_from_first_undelivered_sequence() -> None:
-    session_id = "gap"
+    session_id = "7" * 32
     terminal_result = OperationResult(SessionState.COMPLETED)
     first = _SequenceStream(
         _envelope(session_id, 1, PhaseChanged("one")),
@@ -850,7 +841,11 @@ def test_gap_recovery_resubscribes_from_first_undelivered_sequence() -> None:
     )
     second = _SequenceStream(
         _envelope(session_id, 2, PhaseChanged("two")),
-        _envelope(session_id, 4, Terminal(terminal_result)),
+        _envelope(
+            session_id,
+            4,
+            Terminal(TerminalSummary.from_result(terminal_result)),
+        ),
     )
     terminal_record = _record(session_id, terminal=True)
 
@@ -900,7 +895,8 @@ def test_gap_recovery_resubscribes_from_first_undelivered_sequence() -> None:
 
 
 def test_sink_exception_closes_stream_and_does_not_block_shutdown() -> None:
-    stream = _SequenceStream(_envelope("sink", 1, PhaseChanged("explode")))
+    session_id = "8" * 32
+    stream = _SequenceStream(_envelope(session_id, 1, PhaseChanged("explode")))
     closed = Event()
     original_close = stream.close
 
@@ -922,18 +918,19 @@ def test_sink_exception_closes_stream_and_does_not_block_shutdown() -> None:
     def explode(_update) -> None:
         raise RuntimeError("sink failed")
 
-    observer.observe("sink", explode)
+    observer.observe(session_id, explode)
     assert closed.wait(0.5)
     with pytest.raises(RuntimeError, match="session observation failed") as raised:
-        observer.wait("sink")
+        observer.wait(session_id)
     assert isinstance(raised.value.__cause__, RuntimeError)
     assert str(raised.value.__cause__) == "sink failed"
     observer.close()
 
 
 def test_sink_can_unsubscribe_itself_without_self_join_or_deadlock() -> None:
+    session_id = "9" * 32
     stream = _SequenceStream(
-        _envelope("self-unsubscribe", 1, PhaseChanged("inventory"))
+        _envelope(session_id, 1, PhaseChanged("inventory"))
     )
 
     class Dispatcher:
@@ -947,10 +944,10 @@ def test_sink_can_unsubscribe_itself_without_self_join_or_deadlock() -> None:
     returned = Event()
 
     def receive(_update) -> None:
-        observer.unsubscribe("self-unsubscribe")
+        observer.unsubscribe(session_id)
         returned.set()
 
-    observer.observe("self-unsubscribe", receive)
+    observer.observe(session_id, receive)
 
     assert returned.wait(0.5)
     assert stream.closed

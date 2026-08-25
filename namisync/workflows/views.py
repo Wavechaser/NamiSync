@@ -9,6 +9,7 @@ from typing import Mapping
 from namisync.core.events import (
     Envelope,
     ItemOutcome,
+    TerminalSummary,
     result_item_to_dict,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
@@ -25,6 +26,7 @@ from namisync.core.session import (
     ResultItem,
     SessionRecord,
 )
+from namisync.core.scalars import bounded_utf8_text, scalar_64_to_text
 from namisync.db.repositories import InventorySnapshot
 
 from .selection import SELECTION_EXCLUSION_REASONS
@@ -68,6 +70,10 @@ class OperationItemView:
     result: str
     reason: str | None
     detail: Mapping[str, object]
+    recording: str
+    recording_reason: str | None
+    recording_detail: str | None
+    detail_omitted_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +91,7 @@ class IntegrityOutcomeView:
     read_strategy: str | None
     recording: str
     record_disposition: str | None
+    detail_omitted_count: int
 
 
 ResultItemView = OperationItemView | IntegrityOutcomeView
@@ -96,9 +103,25 @@ class PhaseResultView:
     status: str
     items_done: int
     items_total: int | None
-    bytes_done: int
-    bytes_total: int | None
+    bytes_done: str
+    bytes_total: str | None
     error: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RecordingIssueView:
+    reason: str
+    detail: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewFactLimitView:
+    reason: str
+    tree_kind: str
+    population: str
+    axis: str
+    row_limit: int | None
+    byte_limit: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,11 +133,15 @@ class OperationResultView:
     audit: str
     disposition: str
     canceled: bool
-    items: tuple[ResultItemView, ...]
     phases: tuple[PhaseResultView, ...]
-    bytes_done: int
-    bytes_total: int
+    bytes_done: str
+    bytes_total: str
     error: str | None
+    recording_degraded_items: int
+    recording_issues: tuple[RecordingIssueView, ...]
+    omitted_detail_count: int
+    presentation_omitted_detail_count: int
+    review_refusal: ReviewFactLimitView | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,8 +174,8 @@ class InventoryRowView:
     path_key: str
     entry_kind: str | None
     presence: str
-    size: int | None
-    mtime_ns: int | None
+    size: str | None
+    mtime_ns: str | None
     has_baseline: bool
     last_observed_at: str | None
     last_verified_at: str | None
@@ -259,6 +286,18 @@ def result_item_view(item: ResultItem) -> ResultItemView:
             result=str(data["result"]),
             reason=None if data["reason"] is None else str(data["reason"]),
             detail=dict(detail),
+            recording=str(data["recording"]),
+            recording_reason=(
+                None
+                if data["recording_reason"] is None
+                else str(data["recording_reason"])
+            ),
+            recording_detail=(
+                None
+                if data["recording_detail"] is None
+                else str(data["recording_detail"])
+            ),
+            detail_omitted_count=int(data["detail_omitted_count"]),
         )
     if isinstance(item, IntegrityOutcome):
         return IntegrityOutcomeView(
@@ -289,31 +328,60 @@ def result_item_view(item: ResultItem) -> ResultItemView:
                 if data["record_disposition"] is None
                 else str(data["record_disposition"])
             ),
+            detail_omitted_count=int(data["detail_omitted_count"]),
         )
     raise TypeError(f"unsupported result item: {type(item).__name__}")
 
 
 def operation_result_view(result: OperationResult) -> OperationResultView:
-    items = tuple(result_item_view(item) for item in result.items)
     integrity, headline = classify_result_facts(
         _result_classification_facts(result)
     )
+    summary = TerminalSummary.from_result(result)
+    error = (
+        None
+        if summary.error is None
+        else f"{summary.error.type_name}: {summary.error.message}"
+    )
+    bounded_error = bounded_utf8_text(error, "result summary error")
+    presentation_omitted = int(error is not None and bounded_error is None)
     return OperationResultView(
         headline=headline.value,
-        filesystem=result.status.value,
+        filesystem=summary.status.value,
         integrity=integrity,
-        recording=result.recording.value,
-        audit=result.audit.value,
-        disposition=result.disposition.value,
-        canceled=result.canceled,
-        items=items,
-        phases=tuple(phase_result_view(phase) for phase in result.phases),
-        bytes_done=result.bytes_done,
-        bytes_total=result.bytes_total,
-        error=(
+        recording=summary.recording.value,
+        audit=summary.audit.value,
+        disposition=summary.disposition.value,
+        canceled=summary.canceled,
+        phases=tuple(phase_result_view(phase) for phase in summary.phases),
+        bytes_done=scalar_64_to_text(summary.bytes_done, "result bytes_done"),
+        bytes_total=scalar_64_to_text(summary.bytes_total, "result bytes_total"),
+        error=bounded_error,
+        recording_degraded_items=summary.recording_degraded_items,
+        recording_issues=tuple(
+            RecordingIssueView(issue.reason.value, issue.detail)
+            for issue in summary.recording_issues
+        ),
+        omitted_detail_count=summary.omitted_detail_count,
+        presentation_omitted_detail_count=presentation_omitted,
+        review_refusal=(
             None
-            if result.error is None
-            else f"{result.error.type_name}: {result.error.message}"
+            if summary.review_fact_limit is None
+            else ReviewFactLimitView(
+                reason=summary.review_fact_limit.reason,
+                tree_kind=summary.review_fact_limit.tree_kind.value,
+                population=summary.review_fact_limit.population.value,
+                axis=summary.review_fact_limit.axis.value,
+                row_limit=summary.review_fact_limit.row_limit,
+                byte_limit=(
+                    None
+                    if summary.review_fact_limit.byte_limit is None
+                    else scalar_64_to_text(
+                        summary.review_fact_limit.byte_limit,
+                        "review byte_limit",
+                    )
+                ),
+            )
         ),
     )
 
@@ -324,23 +392,24 @@ def phase_result_view(phase: PhaseResult) -> PhaseResultView:
         status=phase.status.value,
         items_done=phase.items_done,
         items_total=phase.items_total,
-        bytes_done=phase.bytes_done,
-        bytes_total=phase.bytes_total,
+        bytes_done=scalar_64_to_text(phase.bytes_done, "phase bytes_done"),
+        bytes_total=(
+            None
+            if phase.bytes_total is None
+            else scalar_64_to_text(phase.bytes_total, "phase bytes_total")
+        ),
         error=phase.error,
     )
 
 
 def session_event_view(envelope: Envelope) -> SessionEventView:
-    body = envelope.body
-    if isinstance(body, ResultItem):
-        payload: Mapping[str, object] = result_item_to_dict(body)
-    else:
-        from namisync.core.events import envelope_to_dict
+    from namisync.core.events import envelope_to_dict
 
-        raw = envelope_to_dict(envelope)["body"]
-        if not isinstance(raw, Mapping):
-            raise TypeError("serialized event body must be a mapping")
-        payload = dict(raw)
+    body = envelope.body
+    raw = envelope_to_dict(envelope)["body"]
+    if not isinstance(raw, Mapping):
+        raise TypeError("serialized event body must be a mapping")
+    payload: Mapping[str, object] = dict(raw)
     return SessionEventView(
         session_id=str(envelope.session_id),
         sequence=envelope.seq,
@@ -373,8 +442,16 @@ def inventory_row_view(row: InventorySnapshot) -> InventoryRowView:
         path_key=row.rel_path_key,
         entry_kind=None if row.entry_kind is None else row.entry_kind.value,
         presence=row.presence.value,
-        size=None if observed is None else observed.size,
-        mtime_ns=None if observed is None else observed.mtime_ns,
+        size=(
+            None
+            if observed is None
+            else scalar_64_to_text(observed.size, "inventory size")
+        ),
+        mtime_ns=(
+            None
+            if observed is None
+            else scalar_64_to_text(observed.mtime_ns, "inventory mtime_ns")
+        ),
         has_baseline=row.attestation is not None,
         last_observed_at=(
             None if row.last_observed_at is None else row.last_observed_at.isoformat()

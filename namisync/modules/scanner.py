@@ -38,6 +38,7 @@ from namisync.core.pathing import (
     to_extended_length_path,
     validate_relative_path,
 )
+from namisync.core.file_identity import file_identity_from_stat
 from namisync.core.root_authority import (
     FILE_ATTRIBUTE_DIRECTORY,
     FILE_ATTRIBUTE_OFFLINE,
@@ -54,6 +55,7 @@ from namisync.core.root_authority import (
     observe_native_volume,
 )
 from namisync.core.session import RunContext
+from namisync.core.scalars import ScalarDomainError
 
 
 FILE_NAMED_STREAMS = 0x00040000
@@ -171,16 +173,17 @@ def _created_ns(stat: os.stat_result) -> int | None:
     value = getattr(stat, "st_birthtime_ns", None)
     if value is None and os.name == "nt":
         value = getattr(stat, "st_ctime_ns", None)
-    return int(value) if value is not None and value >= 0 else None
+    return int(value) if value is not None else None
 
 
 def _file_identity(stat: os.stat_result, volume: VolumeSnapshot) -> FileIdentity | None:
     if not volume.profile.stable_file_identity:
         return None
-    index = getattr(stat, "st_ino", None)
-    if index is None or int(index) <= 0:
-        return None
-    return FileIdentity(volume.volume_id.serial, int(index))
+    return file_identity_from_stat(
+        volume.volume_id.serial,
+        volume.profile.fs_type,
+        getattr(stat, "st_ino", None),
+    )
 
 
 def _to_stat(stat: os.stat_result, kind: EntryKind, volume: VolumeSnapshot) -> FileStat:
@@ -198,6 +201,26 @@ def _same_logical_path(left: str, right: str) -> bool:
     return os.path.normcase(os.path.normpath(left)) == os.path.normcase(
         os.path.normpath(right)
     )
+
+
+def _to_stat_or_warning(
+    stat: os.stat_result,
+    kind: EntryKind,
+    volume: VolumeSnapshot,
+    warnings: list[ScanWarning],
+    rel_path: str | None,
+) -> FileStat | None:
+    try:
+        return _to_stat(stat, kind, volume)
+    except ScalarDomainError as error:
+        warnings.append(
+            ScanWarning(
+                ScanWarningCode.SCALAR_UNREPRESENTABLE,
+                rel_path,
+                str(error),
+            )
+        )
+        return None
 
 
 def _scanner_root_error(error: RootAuthorityError) -> OSError:
@@ -514,9 +537,16 @@ class WalkingScanner:
                     )
                     complete = False
                     continue
-                root_snapshot = _to_stat(
-                    root_stat, EntryKind.DIRECTORY, volume
+                root_snapshot = _to_stat_or_warning(
+                    root_stat,
+                    EntryKind.DIRECTORY,
+                    volume,
+                    warnings,
+                    None,
                 )
+                if root_snapshot is None:
+                    complete = False
+                    continue
                 directories.append(
                     DirRecord(
                         "",
@@ -570,9 +600,16 @@ class WalkingScanner:
                     complete = False
                 continue
             if is_directory:
-                root_snapshot = _to_stat(
-                    root_stat, EntryKind.DIRECTORY, volume
+                root_snapshot = _to_stat_or_warning(
+                    root_stat,
+                    EntryKind.DIRECTORY,
+                    volume,
+                    warnings,
+                    relative_start,
                 )
+                if root_snapshot is None:
+                    complete = False
+                    continue
                 directories.append(
                     DirRecord(
                         relative_start,
@@ -603,7 +640,16 @@ class WalkingScanner:
                 pending.append((absolute_start, relative_start))
                 continue
             if stat_module.S_ISREG(root_stat.st_mode):
-                root_snapshot = _to_stat(root_stat, EntryKind.FILE, volume)
+                root_snapshot = _to_stat_or_warning(
+                    root_stat,
+                    EntryKind.FILE,
+                    volume,
+                    warnings,
+                    relative_start,
+                )
+                if root_snapshot is None:
+                    complete = False
+                    continue
                 files.append(
                     FileRecord(
                         relative_start,
@@ -755,7 +801,16 @@ class WalkingScanner:
                     continue
 
                 if is_directory:
-                    snapshot = _to_stat(stat, EntryKind.DIRECTORY, volume)
+                    snapshot = _to_stat_or_warning(
+                        stat,
+                        EntryKind.DIRECTORY,
+                        volume,
+                        warnings,
+                        rel_path,
+                    )
+                    if snapshot is None:
+                        complete = False
+                        continue
                     directories.append(
                         DirRecord(
                             rel_path,
@@ -789,7 +844,16 @@ class WalkingScanner:
                     )
                     is_file = False
                 if is_file:
-                    snapshot = _to_stat(stat, EntryKind.FILE, volume)
+                    snapshot = _to_stat_or_warning(
+                        stat,
+                        EntryKind.FILE,
+                        volume,
+                        warnings,
+                        rel_path,
+                    )
+                    if snapshot is None:
+                        complete = False
+                        continue
                     files.append(
                         FileRecord(
                             rel_path,
@@ -879,12 +943,30 @@ class WalkingScanner:
                 )
                 warnings.append(ScanWarning(ScanWarningCode.REPARSE_POINT, rel_path))
             elif is_directory:
-                snapshot = _to_stat(stat, EntryKind.DIRECTORY, volume)
+                snapshot = _to_stat_or_warning(
+                    stat,
+                    EntryKind.DIRECTORY,
+                    volume,
+                    warnings,
+                    rel_path,
+                )
+                if snapshot is None:
+                    complete = False
+                    continue
                 directories.append(
                     DirRecord(rel_path, normalize_relative_path(rel_path), snapshot.mtime_ns, snapshot.metadata, snapshot.file_identity, snapshot.nlink)
                 )
             elif stat_module.S_ISREG(stat.st_mode):
-                snapshot = _to_stat(stat, EntryKind.FILE, volume)
+                snapshot = _to_stat_or_warning(
+                    stat,
+                    EntryKind.FILE,
+                    volume,
+                    warnings,
+                    rel_path,
+                )
+                if snapshot is None:
+                    complete = False
+                    continue
                 files.append(
                     FileRecord(rel_path, normalize_relative_path(rel_path), snapshot.size, snapshot.mtime_ns, snapshot.file_identity, snapshot.nlink, snapshot.metadata)
                 )

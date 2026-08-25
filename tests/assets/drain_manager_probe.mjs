@@ -190,7 +190,7 @@ const event = (sessionId, sequence, bodyType = "StateChanged", body = { state: "
     session_id: sessionId,
     sequence,
     at,
-    schema_version: 4,
+    schema_version: 5,
     body_type: bodyType,
     body,
   },
@@ -203,11 +203,15 @@ const operationResult = Object.freeze({
   audit: "ok",
   disposition: "ran",
   canceled: false,
-  items: [],
   phases: [],
-  bytes_done: 0,
-  bytes_total: 0,
+  bytes_done: "0",
+  bytes_total: "0",
   error: null,
+  recording_degraded_items: 0,
+  recording_issues: [],
+  omitted_detail_count: 0,
+  presentation_omitted_detail_count: 0,
+  review_refusal: null,
 });
 const coreOperationResult = Object.freeze({
   status: "completed",
@@ -215,11 +219,14 @@ const coreOperationResult = Object.freeze({
   audit: "ok",
   disposition: "ran",
   canceled: false,
-  items: [],
   phases: [],
-  bytes_done: 0,
-  bytes_total: 0,
+  bytes_done: "0",
+  bytes_total: "0",
   error: null,
+  recording_degraded_items: 0,
+  recording_issues: [],
+  omitted_detail_count: 0,
+  review_fact_limit: null,
 });
 const terminalRecord = (sessionId, result = operationResult) => ({
   update_type: "record",
@@ -302,7 +309,7 @@ success(one0, [
     phase: "execute",
     items_done: 3,
     items_total: 3,
-    bytes_done: 0,
+    bytes_done: "0",
     bytes_total: null,
     current_path: null,
     item_id: null,
@@ -555,7 +562,7 @@ success(validEventVersionRequest, [validVersionedEvent]);
 await turns();
 assert.equal(refusedEventVersions.length, 0);
 assert.equal(acceptedEventVersions.length, 1);
-assert.equal(acceptedEventVersions[0].event.schema_version, 4);
+assert.equal(acceptedEventVersions[0].event.schema_version, 5);
 stopEventVersions();
 
 // Progress is an exact current-source shape. Malformed item identity or byte
@@ -576,14 +583,14 @@ const validProgressBody = Object.freeze({
   phase: "execute",
   items_done: 0,
   items_total: 1,
-  bytes_done: 1,
-  bytes_total: 1,
+  bytes_done: "1",
+  bytes_total: "1",
   current_path: "matrix.bin",
-  item_id: "matrix-operation",
+  item_id: "56".repeat(16),
   item_type: "operation",
   item_attempt_id: "12".repeat(16),
-  item_bytes_done: 1,
-  item_bytes_total: 1,
+  item_bytes_done: "1",
+  item_bytes_total: "1",
 });
 const invalidProgressBodies = [
   [
@@ -760,10 +767,10 @@ for (const [label, body] of invalidProgressBodies) {
 
 const validZeroProgress = {
   ...validProgressBody,
-  bytes_done: 0,
-  bytes_total: 0,
-  item_bytes_done: 0,
-  item_bytes_total: 0,
+  bytes_done: "0",
+  bytes_total: "0",
+  item_bytes_done: "0",
+  item_bytes_total: "0",
 };
 const validIndeterminateProgress = {
   ...validProgressBody,
@@ -818,12 +825,16 @@ const stopProgressBatch = bridge.startTaskDrain(
 const operationOutcomeBody = Object.freeze({
   item_type: "operation",
   phase: "execute",
-  item_id: "matrix-operation",
+  item_id: "56".repeat(16),
   kind: "copy",
   path: "matrix.bin",
   result: "succeeded",
   reason: null,
   detail: {},
+  recording: "ok",
+  recording_reason: null,
+  recording_detail: null,
+  detail_omitted_count: 0,
 });
 const malformedProgressBatch = await nextRequest(requests.length);
 assert.equal(malformedProgressBatch.request.payload.replay_from, null);
@@ -893,14 +904,14 @@ const reducerProgress = (overrides = {}) => ({
   phase: "execute",
   items_done: 1,
   items_total: 2,
-  bytes_done: 2,
-  bytes_total: 64,
+  bytes_done: "2",
+  bytes_total: "64",
   current_path: "first.bin",
-  item_id: "operation-one",
+  item_id: "67".repeat(16),
   item_type: "operation",
   item_attempt_id: "45".repeat(16),
-  item_bytes_done: 2,
-  item_bytes_total: 16,
+  item_bytes_done: "2",
+  item_bytes_total: "16",
   ...overrides,
 });
 const reducer0 = await nextRequest(requests.length);
@@ -909,13 +920,13 @@ success(reducer0, [
   event(reducerSession, 2, "Progress", reducerProgress({ items_done: 0 })),
   event(reducerSession, 3, "ItemOutcome", {
     ...operationOutcomeBody,
-    item_id: "mkdir-operation",
+    item_id: "78".repeat(16),
     kind: "mkdir",
     path: "folder",
   }),
   event(reducerSession, 4, "Progress", reducerProgress({
-    bytes_done: 4,
-    item_bytes_done: 4,
+    bytes_done: "4",
+    item_bytes_done: "4",
   })),
 ]);
 const reducer1 = await nextRequest(requests.length);
@@ -937,22 +948,22 @@ assert.deepEqual(Object.keys(executingState).sort(), [
 assert.equal(executingState.phase, "execute");
 assert.equal(executingState.phaseAuthority, "phase_changed");
 assert.deepEqual(executingState.activeItem, {
-  item_id: "operation-one",
+  item_id: "67".repeat(16),
   item_type: "operation",
   item_attempt_id: "45".repeat(16),
-  item_bytes_done: 4,
-  item_bytes_total: 16,
+  item_bytes_done: "4",
+  item_bytes_total: "16",
 });
 
 const invalidReducerTransitions = [
   [
     "same-attempt item regression",
-    reducerProgress({ bytes_done: 4, item_bytes_done: 3 }),
+    reducerProgress({ bytes_done: "4", item_bytes_done: "3" }),
   ],
   [
     "aggregate regression",
     reducerProgress({
-      bytes_done: 3,
+      bytes_done: "3",
       item_bytes_done: null,
       item_bytes_total: null,
     }),
@@ -961,49 +972,49 @@ const invalidReducerTransitions = [
     "settled item regression",
     reducerProgress({
       items_done: 0,
-      bytes_done: 4,
-      item_bytes_done: 4,
+      bytes_done: "4",
+      item_bytes_done: "4",
     }),
   ],
   [
     "fixed executor budget change",
     reducerProgress({
-      bytes_done: 4,
-      bytes_total: 65,
-      item_bytes_done: 4,
+      bytes_done: "4",
+      bytes_total: "65",
+      item_bytes_done: "4",
     }),
   ],
   [
     "selected admission change",
     reducerProgress({
       items_total: 3,
-      bytes_done: 4,
-      item_bytes_done: 4,
+      bytes_done: "4",
+      item_bytes_done: "4",
     }),
   ],
   [
     "known admissions become unknown",
     reducerProgress({
       items_total: null,
-      bytes_done: 4,
+      bytes_done: "4",
       bytes_total: null,
-      item_bytes_done: 4,
+      item_bytes_done: "4",
     }),
   ],
   [
     "same-attempt item total change",
     reducerProgress({
-      bytes_done: 4,
-      item_bytes_done: 4,
-      item_bytes_total: 17,
+      bytes_done: "4",
+      item_bytes_done: "4",
+      item_bytes_total: "17",
     }),
   ],
   [
     "uninterrupted phase disagreement",
     reducerProgress({
       phase: "verify",
-      bytes_done: 4,
-      item_bytes_done: 4,
+      bytes_done: "4",
+      item_bytes_done: "4",
     }),
   ],
 ];
@@ -1024,10 +1035,10 @@ for (const [label, body] of invalidReducerTransitions) {
 
 success(reducerPending, [
   event(reducerSession, 5, "Progress", reducerProgress({
-    bytes_done: 4,
+    bytes_done: "4",
     item_attempt_id: "56".repeat(16),
-    item_bytes_done: 0,
-    item_bytes_total: 24,
+    item_bytes_done: "0",
+    item_bytes_total: "24",
   })),
   event(reducerSession, 6, "StateChanged", { state: "paused" }),
 ]);
@@ -1035,15 +1046,15 @@ const reducer2 = await nextRequest(requests.length);
 assert.equal(reducer2.request.payload.replay_from, null);
 const pausedState = acceptedReducer.at(-1).progressState;
 assert.equal(pausedState.activeItem.item_attempt_id, "56".repeat(16));
-assert.equal(pausedState.activeItem.item_bytes_done, 0);
+assert.equal(pausedState.activeItem.item_bytes_done, "0");
 
 success(reducer2, [
   event(reducerSession, 7, "Progress", reducerProgress({
     phase: "verify",
-    bytes_done: 4,
+    bytes_done: "4",
     item_attempt_id: "56".repeat(16),
-    item_bytes_done: 0,
-    item_bytes_total: 24,
+    item_bytes_done: "0",
+    item_bytes_total: "24",
   })),
   event(reducerSession, 8, "ItemOutcome", operationOutcomeBody),
 ]);
@@ -1053,7 +1064,7 @@ assert.equal(acceptedReducer.length, 6);
 success(reducerPhaseRecovery, [
   event(reducerSession, 7, "ItemOutcome", {
     ...operationOutcomeBody,
-    item_id: "operation-one",
+    item_id: "67".repeat(16),
     path: "first.bin",
   }),
 ]);
@@ -1065,7 +1076,7 @@ assert.notEqual(acceptedReducer.at(-1).progressState.progress, null);
 const postCopyOutcomeBody = Object.freeze({
   item_type: "integrity",
   phase: "verify",
-  item_id: "operation-two",
+  item_id: "89".repeat(16),
   row_id: null,
   location_id: null,
   kind: "integrity",
@@ -1076,6 +1087,7 @@ const postCopyOutcomeBody = Object.freeze({
   read_strategy: "windows-unbuffered",
   recording: "ok",
   record_disposition: null,
+  detail_omitted_count: 0,
 });
 success(reducer3, [
   event(reducerSession, 8, "PhaseChanged", { phase: "verify" }),
@@ -1083,22 +1095,22 @@ success(reducer3, [
     phase: "verify",
     items_done: 0,
     items_total: 1,
-    bytes_done: 3,
-    bytes_total: 8,
+    bytes_done: "3",
+    bytes_total: "8",
     current_path: "second.bin",
-    item_id: "operation-two",
+    item_id: "89".repeat(16),
     item_attempt_id: "67".repeat(16),
-    item_bytes_done: 3,
-    item_bytes_total: 8,
+    item_bytes_done: "3",
+    item_bytes_total: "8",
   })),
   event(reducerSession, 10, "Progress", reducerProgress({
     phase: "verify",
     items_done: 0,
     items_total: 1,
-    bytes_done: 9,
-    bytes_total: 10,
+    bytes_done: "9",
+    bytes_total: "10",
     current_path: "second.bin",
-    item_id: "operation-two",
+    item_id: "89".repeat(16),
     item_attempt_id: "67".repeat(16),
     item_bytes_done: null,
     item_bytes_total: null,
@@ -1121,24 +1133,34 @@ success(reducer4, [
     phase: "verify",
     items_done: 0,
     items_total: 1,
-    bytes_done: 9,
-    bytes_total: 10,
+    bytes_done: "9",
+    bytes_total: "10",
     current_path: "second.bin",
-    item_id: "operation-two",
+    item_id: "89".repeat(16),
     item_attempt_id: "67".repeat(16),
-    item_bytes_done: 8,
-    item_bytes_total: 8,
+    item_bytes_done: "8",
+    item_bytes_total: "8",
   })),
   event(reducerSession, 12, "IntegrityOutcome", postCopyOutcomeBody),
 ]);
 const reducerOvershootRecovery = await nextRequest(requests.length);
 assert.equal(reducerOvershootRecovery.request.payload.replay_from, 11);
 const countBeforeOvershootRecovery = acceptedReducer.length;
-success(reducerOvershootRecovery, [
+const overshootRecoveryUpdates = [
   event(reducerSession, 11, "IntegrityOutcome", postCopyOutcomeBody),
   event(reducerSession, 12, "Terminal", { result: coreOperationResult }),
   terminalRecord(reducerSession),
-]);
+];
+for (const update of overshootRecoveryUpdates.filter(
+  (candidate) => candidate.update_type === "event",
+)) {
+  assert.equal(
+    bridge.validateDormantSessionEventV5(update.event, reducerSession),
+    true,
+    update.event.body_type,
+  );
+}
+success(reducerOvershootRecovery, overshootRecoveryUpdates);
 await turns();
 assert.equal(acceptedReducer.length, countBeforeOvershootRecovery + 3);
 const postCopyOutcomeState = acceptedReducer.at(-3).progressState;
@@ -1174,26 +1196,26 @@ const handoffProgress = (itemId, attemptId, overrides = {}) => ({
   phase: "execute",
   items_done: 0,
   items_total: 3,
-  bytes_done: 2,
-  bytes_total: 24,
+  bytes_done: "2",
+  bytes_total: "24",
   current_path: `${itemId}.bin`,
   item_id: itemId,
   item_type: "operation",
   item_attempt_id: attemptId,
-  item_bytes_done: 0,
-  item_bytes_total: 8,
+  item_bytes_done: "0",
+  item_bytes_total: "8",
   ...overrides,
 });
 const handoff0 = await nextRequest(requests.length);
 success(handoff0, [
   event(handoffSession, 1, "PhaseChanged", { phase: "execute" }),
   event(handoffSession, 2, "Progress", handoffProgress(
-    "operation-a",
+    "a1".repeat(16),
     "71".repeat(16),
-    { item_bytes_done: 2 },
+    { item_bytes_done: "2" },
   )),
   event(handoffSession, 3, "Progress", handoffProgress(
-    "operation-b",
+    "a2".repeat(16),
     "72".repeat(16),
   )),
 ]);
@@ -1203,18 +1225,18 @@ assert.deepEqual(
   acceptedHandoff
     .map(({ progressState }) => progressState.activeItem?.item_id ?? null)
     .filter((itemId) => itemId !== null),
-  ["operation-a", "operation-b"],
+  ["a1".repeat(16), "a2".repeat(16)],
 );
 assert.equal(
   acceptedHandoff.at(-1).progressState.activeItem.item_id,
-  "operation-b",
+  "a2".repeat(16),
 );
 
 // Reusing B's non-null attempt token for C invalidates the whole batch. A
 // replay with C's own token then applies both the lossy and reliable siblings.
 success(handoff1, [
   event(handoffSession, 4, "Progress", handoffProgress(
-    "operation-c",
+    "a3".repeat(16),
     "72".repeat(16),
   )),
   event(handoffSession, 5, "StateChanged", { state: "paused" }),
@@ -1225,7 +1247,7 @@ assert.equal(acceptedHandoff.length, 3);
 assert.equal(refusedHandoff.length, 0);
 success(handoffTokenRecovery, [
   event(handoffSession, 4, "Progress", handoffProgress(
-    "operation-c",
+    "a3".repeat(16),
     "73".repeat(16),
   )),
   event(handoffSession, 5, "StateChanged", { state: "paused" }),
@@ -1234,18 +1256,18 @@ const handoff2 = await nextRequest(requests.length);
 assert.equal(handoff2.request.payload.replay_from, null);
 assert.equal(
   acceptedHandoff.at(-1).progressState.activeItem.item_id,
-  "operation-c",
+  "a3".repeat(16),
 );
 
 const operationCOutcome = {
   ...operationOutcomeBody,
-  item_id: "operation-c",
+  item_id: "a3".repeat(16),
   path: "operation-c.bin",
 };
 success(handoff2, [
   event(handoffSession, 6, "ItemOutcome", operationCOutcome),
   event(handoffSession, 7, "Progress", handoffProgress(
-    "operation-c",
+    "a3".repeat(16),
     "74".repeat(16),
     { items_done: 1 },
   )),
@@ -1376,8 +1398,8 @@ success(gapProgressRecovery, [
   event(gapProgressSession, 5, "Progress", {
     ...validProgressBody,
     phase: "baseline",
-    bytes_done: 3,
-    bytes_total: 3,
+    bytes_done: "3",
+    bytes_total: "3",
     current_path: "recovered.bin",
     item_id: null,
     item_type: null,
@@ -1388,8 +1410,8 @@ success(gapProgressRecovery, [
   event(gapProgressSession, 6, "Progress", {
     ...validProgressBody,
     phase: "verify",
-    bytes_done: 2,
-    bytes_total: 4,
+    bytes_done: "2",
+    bytes_total: "4",
     current_path: "newer-phase.bin",
     item_id: null,
     item_type: null,
@@ -1407,8 +1429,8 @@ const recoveredProgressState = acceptedGapProgress.at(-1).progressState;
 assert.equal(acceptedGapProgress.at(-1).update.event.body.phase, "verify");
 assert.equal(recoveredProgressState.phase, "verify");
 assert.equal(recoveredProgressState.phaseAuthority, "progress");
-assert.equal(recoveredProgressState.progress.bytes_done, 2);
-assert.equal(recoveredProgressState.progress.bytes_total, 4);
+assert.equal(recoveredProgressState.progress.bytes_done, "2");
+assert.equal(recoveredProgressState.progress.bytes_total, "4");
 assert.equal(recoveredProgressState.progress.current_path, "newer-phase.bin");
 assert.equal(recoveredProgressState.activeItem, null);
 const acceptedBeforeGapRegression = acceptedGapProgress.length;
@@ -1417,8 +1439,8 @@ success(gapProgress2, [
   event(gapProgressSession, 8, "Progress", {
     ...validProgressBody,
     phase: "verify",
-    bytes_done: 1,
-    bytes_total: 4,
+    bytes_done: "1",
+    bytes_total: "4",
     item_id: null,
     item_type: null,
     item_attempt_id: null,
@@ -1434,8 +1456,8 @@ success(gapProgressRegressionRecovery, [
   event(gapProgressSession, 8, "Progress", {
     ...validProgressBody,
     phase: "verify",
-    bytes_done: 3,
-    bytes_total: 4,
+    bytes_done: "3",
+    bytes_total: "4",
     item_id: null,
     item_type: null,
     item_attempt_id: null,
@@ -1451,7 +1473,7 @@ assert.deepEqual(
     .map(({ update }) => update.event.sequence),
   [7, 8],
 );
-assert.equal(acceptedGapProgress.at(-1).progressState.progress.bytes_done, 3);
+assert.equal(acceptedGapProgress.at(-1).progressState.progress.bytes_done, "3");
 success(gapProgress3, [terminalRecord(gapProgressSession)]);
 await turns();
 assert.equal(acceptedGapProgress.at(-1).update.update_type, "record");
@@ -1477,19 +1499,19 @@ success(inactive0, [
     ...validProgressBody,
     phase: "verify",
     items_total: null,
-    bytes_done: 2,
+    bytes_done: "2",
     bytes_total: null,
-    item_id: "integrity-exception",
+    item_id: "b1".repeat(16),
     item_type: "integrity",
-    item_bytes_done: 2,
-    item_bytes_total: 8,
+    item_bytes_done: "2",
+    item_bytes_total: "8",
   }),
   event(inactiveSession, 3, "Progress", {
     ...validProgressBody,
     phase: "verify",
     items_total: 1,
-    bytes_done: 2,
-    bytes_total: 8,
+    bytes_done: "2",
+    bytes_total: "8",
     current_path: null,
     item_id: null,
     item_type: null,
@@ -1501,7 +1523,7 @@ success(inactive0, [
 const inactive1 = await nextRequest(requests.length);
 assert.equal(acceptedInactive.length, 3);
 assert.equal(acceptedInactive.at(-1).progressState.progress.items_total, 1);
-assert.equal(acceptedInactive.at(-1).progressState.progress.bytes_total, 8);
+assert.equal(acceptedInactive.at(-1).progressState.progress.bytes_total, "8");
 assert.equal(acceptedInactive.at(-1).progressState.activeItem, null);
 success(inactive1, [terminalRecord(inactiveSession)]);
 await turns();
@@ -1524,8 +1546,8 @@ success(samePhase0, [
   event(samePhaseSession, 1, "PhaseChanged", { phase: "execute" }),
   event(samePhaseSession, 2, "Progress", reducerProgress({
     items_done: 0,
-    bytes_done: 4,
-    item_bytes_done: 4,
+    bytes_done: "4",
+    item_bytes_done: "4",
   })),
 ]);
 const samePhase1 = await nextRequest(requests.length);
@@ -1533,8 +1555,8 @@ success(samePhase1, [
   event(samePhaseSession, 3, "PhaseChanged", { phase: "execute" }),
   event(samePhaseSession, 4, "Progress", reducerProgress({
     items_done: 0,
-    bytes_done: 3,
-    item_bytes_done: 3,
+    bytes_done: "3",
+    item_bytes_done: "3",
   })),
 ]);
 const samePhaseRecovery = await nextRequest(requests.length);
@@ -1544,13 +1566,13 @@ success(samePhaseRecovery, [
   event(samePhaseSession, 3, "PhaseChanged", { phase: "execute" }),
   event(samePhaseSession, 4, "Progress", reducerProgress({
     items_done: 0,
-    bytes_done: 5,
-    item_bytes_done: 5,
+    bytes_done: "5",
+    item_bytes_done: "5",
   })),
 ]);
 const samePhase2 = await nextRequest(requests.length);
 assert.equal(acceptedSamePhase.length, 4);
-assert.equal(acceptedSamePhase.at(-1).progressState.progress.bytes_done, 5);
+assert.equal(acceptedSamePhase.at(-1).progressState.progress.bytes_done, "5");
 assert.equal(acceptedSamePhase.at(-1).progressState.phaseAuthority, "phase_changed");
 success(samePhase2, [terminalRecord(samePhaseSession)]);
 await turns();
@@ -1575,8 +1597,8 @@ success(reducerReincarnation0, [
   event(reducerReincarnationSession, 1, "PhaseChanged", { phase: "execute" }),
   event(reducerReincarnationSession, 2, "Progress", reducerProgress({
     items_done: 0,
-    bytes_done: 4,
-    item_bytes_done: 4,
+    bytes_done: "4",
+    item_bytes_done: "4",
   })),
 ]);
 const staleReducerReincarnation = await nextRequest(requests.length);
@@ -1589,7 +1611,7 @@ const regressingReincarnationProgress = event(
   "Progress",
   reducerProgress({
     items_done: 0,
-    bytes_done: 3,
+    bytes_done: "3",
     item_bytes_done: null,
     item_bytes_total: null,
   }),
@@ -1601,19 +1623,19 @@ assert.equal(reducerReincarnationRecovery.request.payload.replay_from, 3);
 assert.equal(acceptedReducerReincarnation.length, 2);
 assert.equal(
   acceptedReducerReincarnation.at(-1).progressState.progress.bytes_done,
-  4,
+  "4",
 );
 success(reducerReincarnationRecovery, [
   event(reducerReincarnationSession, 3, "Progress", reducerProgress({
     items_done: 0,
-    bytes_done: 5,
-    item_bytes_done: 5,
+    bytes_done: "5",
+    item_bytes_done: "5",
   })),
 ]);
 const reducerReincarnationTail = await nextRequest(requests.length);
 assert.equal(
   acceptedReducerReincarnation.at(-1).progressState.progress.bytes_done,
-  5,
+  "5",
 );
 success(reducerReincarnationTail, [
   terminalRecord(reducerReincarnationSession),

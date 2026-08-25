@@ -8,6 +8,9 @@ from enum import StrEnum
 from typing import Callable, NewType, Protocol, Sequence
 
 from namisync.core.evidence import RecordingStatus
+from namisync.core.execution import TaskRecordingIssue
+from namisync.core.review import ReviewFactLimitExceeded
+from namisync.core.scalars import require_safe_int, require_signed_64
 
 SessionId = NewType("SessionId", str)
 
@@ -150,12 +153,14 @@ class PhaseResult:
     def __post_init__(self) -> None:
         if not self.phase:
             raise ValueError("phase result name must be non-empty")
-        if self.items_done < 0 or self.bytes_done < 0:
-            raise ValueError("phase result counters cannot be negative")
+        require_safe_int(self.items_done, "phase items_done")
+        require_signed_64(self.bytes_done, "phase bytes_done")
         if self.items_total is not None:
+            require_safe_int(self.items_total, "phase items_total")
             if self.items_total < self.items_done:
                 raise ValueError("phase items_done cannot exceed items_total")
         if self.bytes_total is not None:
+            require_signed_64(self.bytes_total, "phase bytes_total")
             if self.bytes_total < self.bytes_done:
                 raise ValueError("phase bytes_done cannot exceed bytes_total")
 
@@ -169,6 +174,7 @@ class ResultItem:
     item_type: str
     phase: str
     recording: RecordingStatus = RecordingStatus.OK
+    detail_omitted_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,6 +191,9 @@ class OperationResult:
     bytes_done: int = 0
     bytes_total: int = 0
     error: FailureDetail | None = None
+    recording_issues: tuple[TaskRecordingIssue, ...] = ()
+    omitted_detail_count: int = 0
+    review_fact_limit: ReviewFactLimitExceeded | None = None
 
     def __post_init__(self) -> None:
         if not is_terminal(self.status):
@@ -200,10 +209,33 @@ class OperationResult:
         phase_names = [phase.phase for phase in self.phases]
         if len(phase_names) != len(set(phase_names)):
             raise ValueError("operation result phases must be unique")
-        if self.bytes_done < 0 or self.bytes_total < 0:
-            raise ValueError("result byte counts cannot be negative")
+        require_signed_64(self.bytes_done, "result bytes_done")
+        require_signed_64(self.bytes_total, "result bytes_total")
         if self.bytes_done > self.bytes_total:
             raise ValueError("bytes_done cannot exceed bytes_total")
+        if not isinstance(self.recording_issues, tuple) or any(
+            not isinstance(issue, TaskRecordingIssue)
+            for issue in self.recording_issues
+        ):
+            raise TypeError(
+                "result recording_issues must contain TaskRecordingIssue values"
+            )
+        issue_reasons = tuple(issue.reason for issue in self.recording_issues)
+        if len(issue_reasons) != len(set(issue_reasons)):
+            raise ValueError("result recording issue reasons must be unique")
+        if len(self.recording_issues) > 5:
+            raise ValueError("result recording issues exceed their bound")
+        require_safe_int(
+            self.omitted_detail_count,
+            "result omitted_detail_count",
+        )
+        if self.review_fact_limit is not None and not isinstance(
+            self.review_fact_limit,
+            ReviewFactLimitExceeded,
+        ):
+            raise TypeError(
+                "result review_fact_limit must be ReviewFactLimitExceeded or None"
+            )
         if self.status is SessionState.CANCELED and not self.canceled:
             raise ValueError("canceled filesystem status requires canceled=True")
         if self.canceled and self.status is SessionState.REFUSED:
@@ -247,6 +279,20 @@ class OperationResult:
                 )
         if self.status is SessionState.REFUSED and self.disposition is not Disposition.UNRUN:
             raise ValueError("refused sessions must have unrun disposition")
+        if self.review_fact_limit is not None and not (
+            self.status is SessionState.REFUSED
+            and self.disposition is Disposition.UNRUN
+            and not self.canceled
+            and not self.items
+            and not self.phases
+            and self.bytes_done == 0
+            and self.bytes_total == 0
+            and self.error is None
+            and not self.recording_issues
+            and self.omitted_detail_count == 0
+            and self.recording is RecordingStatus.OK
+        ):
+            raise ValueError("review fact limit contradicts result truth")
 
 
 def result_terminal_state(result: OperationResult) -> SessionState:
@@ -353,7 +399,7 @@ def run_session(
     to create a second terminal path.
     """
 
-    from namisync.core.events import Progress, Terminal
+    from namisync.core.events import Progress, Terminal, TerminalSummary
 
     if item_accumulator is not None and any(
         not isinstance(item, ResultItem) for item in item_accumulator
@@ -412,8 +458,13 @@ def run_session(
             error=FailureDetail(type(error).__name__, str(error)),
         )
 
-    if any(item.recording is RecordingStatus.DEGRADED for item in items):
-        result = replace(result, recording=RecordingStatus.DEGRADED)
+    recording = (
+        RecordingStatus.DEGRADED
+        if result.recording_issues
+        or any(item.recording is RecordingStatus.DEGRADED for item in items)
+        else RecordingStatus.OK
+    )
+    result = replace(result, recording=recording)
 
     settle(result_terminal_state(result), result)
     try:
@@ -422,5 +473,5 @@ def run_session(
         audit = RecordingStatus.DEGRADED
     final_result = replace(result, audit=audit)
     publish_result(final_result)
-    emit(Terminal(final_result))
+    emit(Terminal(TerminalSummary.from_result(final_result)))
     return RunOutcome(paused=False, result=final_result)

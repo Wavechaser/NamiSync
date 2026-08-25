@@ -44,16 +44,18 @@ the Fluent/accessibility foundation, and dormant gallery-proven sync/integrity
 file-list row renderers. User-facing workflow views and controls, final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
 
-The accepted Stage 6 second-half reslice covers Setup, bounded plan and
-execution review, inventory/integrity, process-live multi-session tasks, and
-early lifecycle/retention closure. These are checkpoint targets, not current
-runtime claims.
+The Stage 6 second-half reslice covers Setup, bounded plan and execution review,
+inventory/integrity, process-live multi-session tasks, and early lifecycle/
+retention closure. Its exact core-event-v5, recording, signed-64 scalar, full-
+width Windows file-identity, and coordinated persistence epoch are active;
+the product surfaces and task lifecycle remain checkpoint targets.
 
 M1 state remains process-local: queued sessions and unexecuted plans do not
 survive an application restart, and committed nonterminal history returns only
-as `incomplete`. The active database boundary is ledger v3 plus history v5;
-older, missing, transitional, or mismatched databases are refused and the two
-local database files must be reset together before creating a fresh pair.
+as `incomplete`. The active database boundary is ledger v4 plus history v6 at
+shared data epoch 5. Older, one-present, markerless, transitional, mismatched,
+or orphan-sidecar pairs are refused; both local database mains and their SQLite
+sidecars must be archived or deleted together before creating a fresh pair.
 
 ## Compatibility
 
@@ -231,8 +233,8 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, dormant sync/integrity file-list row
 renderers, and a persisted native/page theme override over the refrozen
 cosmetic-state channel. The second-half workflow/protocol contracts are now
-ratified for checkpoint delivery; product surfaces and beta packaging remain
-open.
+ratified for checkpoint delivery, and the exact event-v5/data-epoch-5 protocol
+cut is active. Product surfaces and beta packaging remain open.
 
 ### M1 Features
 

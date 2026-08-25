@@ -16,13 +16,14 @@ from .connections import (
 )
 
 
-LEDGER_SCHEMA_VERSION = 3
-HISTORY_SCHEMA_VERSION = 5
-LEDGER_CONTRACT_ID = "m1-ledger-xxh3-128-invalidation-v1"
-HISTORY_CONTRACT_ID = "m1-history-windowed-receipts-v1"
-MAX_HISTORY_PHASE_NAME_BYTES = 256
-MAX_HISTORY_ERROR_TYPE_BYTES = 256
-MAX_HISTORY_ERROR_MESSAGE_BYTES = 4_096
+LEDGER_SCHEMA_VERSION = 4
+HISTORY_SCHEMA_VERSION = 6
+DATA_EPOCH = 5
+LEDGER_CONTRACT_ID = "m1-ledger-v4-event-v5-evidence-v1"
+HISTORY_CONTRACT_ID = "m1-history-v6-event-v5-recording-v1"
+MAX_HISTORY_PHASE_NAME_BYTES = 1_024
+MAX_HISTORY_ERROR_TYPE_BYTES = 1_024
+MAX_HISTORY_ERROR_MESSAGE_BYTES = 1_024
 
 
 class SchemaResetRequired(sqlite3.DatabaseError):
@@ -43,6 +44,10 @@ ON CONFLICT(key) DO NOTHING;
 
 INSERT INTO schema_metadata(key, value)
 VALUES ('contract_id', '{LEDGER_CONTRACT_ID}')
+ON CONFLICT(key) DO NOTHING;
+
+INSERT INTO schema_metadata(key, value)
+VALUES ('data_epoch', '{DATA_EPOCH}')
 ON CONFLICT(key) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS hosts (
@@ -98,13 +103,19 @@ CREATE TABLE IF NOT EXISTS inventory (
     entry_kind TEXT NOT NULL CHECK(entry_kind IN ('file', 'directory', 'unsupported')),
     presence TEXT NOT NULL CHECK(presence IN ('present', 'missing', 'unsupported')),
 
-    observed_size INTEGER,
-    observed_mtime_ns INTEGER,
+    observed_size INTEGER CHECK(observed_size IS NULL OR observed_size >= 0),
+    observed_mtime_ns INTEGER CHECK(
+        observed_mtime_ns IS NULL OR observed_mtime_ns >= 0
+    ),
     file_identity_volume_serial TEXT,
-    file_identity_file_index INTEGER,
-    observed_nlink INTEGER,
-    observed_attributes INTEGER,
-    observed_created_ns INTEGER,
+    file_identity_file_index TEXT,
+    observed_nlink INTEGER CHECK(observed_nlink IS NULL OR observed_nlink >= 1),
+    observed_attributes INTEGER CHECK(
+        observed_attributes IS NULL OR observed_attributes >= 0
+    ),
+    observed_created_ns INTEGER CHECK(
+        observed_created_ns IS NULL OR observed_created_ns >= 0
+    ),
     hardlink_group TEXT,
     last_observed_at TEXT,
     observation_host_id INTEGER REFERENCES hosts(id),
@@ -112,17 +123,23 @@ CREATE TABLE IF NOT EXISTS inventory (
 
     content_algorithm TEXT,
     content_digest BLOB,
-    content_size INTEGER,
+    content_size INTEGER CHECK(content_size IS NULL OR content_size >= 0),
     hash_provenance TEXT,
     content_observed_at TEXT,
     attested_kind TEXT,
-    attested_size INTEGER,
-    attested_mtime_ns INTEGER,
+    attested_size INTEGER CHECK(attested_size IS NULL OR attested_size >= 0),
+    attested_mtime_ns INTEGER CHECK(
+        attested_mtime_ns IS NULL OR attested_mtime_ns >= 0
+    ),
     attested_file_identity_volume_serial TEXT,
-    attested_file_identity_file_index INTEGER,
-    attested_nlink INTEGER,
-    attested_attributes INTEGER,
-    attested_created_ns INTEGER,
+    attested_file_identity_file_index TEXT,
+    attested_nlink INTEGER CHECK(attested_nlink IS NULL OR attested_nlink >= 1),
+    attested_attributes INTEGER CHECK(
+        attested_attributes IS NULL OR attested_attributes >= 0
+    ),
+    attested_created_ns INTEGER CHECK(
+        attested_created_ns IS NULL OR attested_created_ns >= 0
+    ),
     last_verified_at TEXT,
     verification_invalidated_at TEXT,
     verification_invalidated_reason TEXT CHECK(
@@ -155,6 +172,55 @@ CREATE TABLE IF NOT EXISTS inventory (
         verification_invalidated_reason IS NULL OR content_algorithm IS NOT NULL
     ),
     CHECK(last_verified_at IS NULL OR content_algorithm IS NOT NULL),
+    CHECK(
+        (file_identity_volume_serial IS NULL)
+        = (file_identity_file_index IS NULL)
+    ),
+    CHECK(
+        (attested_file_identity_volume_serial IS NULL)
+        = (attested_file_identity_file_index IS NULL)
+    ),
+    CHECK(
+        file_identity_file_index IS NULL OR (
+            typeof(file_identity_file_index) = 'text'
+            AND (
+                file_identity_file_index = '0'
+                OR (
+                    file_identity_file_index NOT GLOB '*[^0-9]*'
+                    AND substr(file_identity_file_index, 1, 1) BETWEEN '1' AND '9'
+                    AND (
+                        length(file_identity_file_index) < 39
+                        OR (
+                            length(file_identity_file_index) = 39
+                            AND file_identity_file_index <=
+                                '340282366920938463463374607431768211455'
+                        )
+                    )
+                )
+            )
+        )
+    ),
+    CHECK(
+        attested_file_identity_file_index IS NULL OR (
+            typeof(attested_file_identity_file_index) = 'text'
+            AND (
+                attested_file_identity_file_index = '0'
+                OR (
+                    attested_file_identity_file_index NOT GLOB '*[^0-9]*'
+                    AND substr(attested_file_identity_file_index, 1, 1)
+                        BETWEEN '1' AND '9'
+                    AND (
+                        length(attested_file_identity_file_index) < 39
+                        OR (
+                            length(attested_file_identity_file_index) = 39
+                            AND attested_file_identity_file_index <=
+                                '340282366920938463463374607431768211455'
+                        )
+                    )
+                )
+            )
+        )
+    ),
     CHECK(
         content_algorithm IS NULL
         OR verification_invalidated_at IS NOT NULL
@@ -210,7 +276,7 @@ CREATE TABLE IF NOT EXISTS operations (
     source_rel_path TEXT,
     target_rel_path TEXT NOT NULL,
     outcome TEXT NOT NULL,
-    content_bytes INTEGER NOT NULL DEFAULT 0,
+    content_bytes INTEGER NOT NULL DEFAULT 0 CHECK(content_bytes >= 0),
     trash_rel_path TEXT,
     recorded_at TEXT NOT NULL,
     payload_hash BLOB NOT NULL,
@@ -224,9 +290,45 @@ CREATE TABLE IF NOT EXISTS mapping_correspondence (
     source_inventory_id INTEGER NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
     target_inventory_id INTEGER NOT NULL REFERENCES inventory(id) ON DELETE CASCADE,
     source_identity_volume_serial TEXT NOT NULL,
-    source_identity_file_index INTEGER NOT NULL,
+    source_identity_file_index TEXT NOT NULL CHECK(
+        typeof(source_identity_file_index) = 'text'
+        AND (
+            source_identity_file_index = '0'
+            OR (
+                source_identity_file_index NOT GLOB '*[^0-9]*'
+                AND substr(source_identity_file_index, 1, 1) BETWEEN '1' AND '9'
+                AND (
+                    length(source_identity_file_index) < 39
+                    OR (
+                        length(source_identity_file_index) = 39
+                        AND source_identity_file_index <=
+                            '340282366920938463463374607431768211455'
+                    )
+                )
+            )
+        )
+    ),
     target_identity_volume_serial TEXT,
-    target_identity_file_index INTEGER,
+    target_identity_file_index TEXT CHECK(
+        target_identity_file_index IS NULL OR (
+            typeof(target_identity_file_index) = 'text'
+            AND (
+                target_identity_file_index = '0'
+                OR (
+                    target_identity_file_index NOT GLOB '*[^0-9]*'
+                    AND substr(target_identity_file_index, 1, 1) BETWEEN '1' AND '9'
+                    AND (
+                        length(target_identity_file_index) < 39
+                        OR (
+                            length(target_identity_file_index) = 39
+                            AND target_identity_file_index <=
+                                '340282366920938463463374607431768211455'
+                        )
+                    )
+                )
+            )
+        )
+    ),
     last_seen_at TEXT NOT NULL,
     run_token TEXT NOT NULL,
     op_token TEXT NOT NULL,
@@ -303,6 +405,10 @@ INSERT INTO schema_metadata(key, value)
 VALUES ('contract_id', '{HISTORY_CONTRACT_ID}')
 ON CONFLICT(key) DO NOTHING;
 
+INSERT INTO schema_metadata(key, value)
+VALUES ('data_epoch', '{DATA_EPOCH}')
+ON CONFLICT(key) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS history_runs (
     id INTEGER PRIMARY KEY,
     run_token TEXT NOT NULL UNIQUE,
@@ -319,24 +425,31 @@ CREATE TABLE IF NOT EXISTS history_runs (
     current_state TEXT NOT NULL,
     current_phase TEXT,
     last_committed_seq INTEGER NOT NULL DEFAULT 0
-        CHECK(last_committed_seq >= 0),
-    item_count INTEGER NOT NULL DEFAULT 0 CHECK(item_count >= 0),
+        CHECK(last_committed_seq BETWEEN 0 AND 9007199254740991),
+    item_count INTEGER NOT NULL DEFAULT 0
+        CHECK(item_count BETWEEN 0 AND 9007199254740991),
     duplicate_item_count INTEGER NOT NULL DEFAULT 0
-        CHECK(duplicate_item_count >= 0),
+        CHECK(duplicate_item_count BETWEEN 0 AND 9007199254740991),
     rejected_event_count INTEGER NOT NULL DEFAULT 0
-        CHECK(rejected_event_count >= 0),
+        CHECK(rejected_event_count BETWEEN 0 AND 9007199254740991),
     last_committed_at TEXT,
     context_hash BLOB NOT NULL,
     event_chain_hash BLOB NOT NULL,
     prefix_projection_hash BLOB NOT NULL
         CHECK(length(prefix_projection_hash) = 32),
     terminal_payload_hash BLOB,
-    succeeded_count INTEGER NOT NULL DEFAULT 0 CHECK(succeeded_count >= 0),
-    skipped_count INTEGER NOT NULL DEFAULT 0 CHECK(skipped_count >= 0),
-    failed_count INTEGER NOT NULL DEFAULT 0 CHECK(failed_count >= 0),
-    canceled_count INTEGER NOT NULL DEFAULT 0 CHECK(canceled_count >= 0),
-    deferred_count INTEGER NOT NULL DEFAULT 0 CHECK(deferred_count >= 0),
-    blocked_count INTEGER NOT NULL DEFAULT 0 CHECK(blocked_count >= 0),
+    succeeded_count INTEGER NOT NULL DEFAULT 0
+        CHECK(succeeded_count BETWEEN 0 AND 9007199254740991),
+    skipped_count INTEGER NOT NULL DEFAULT 0
+        CHECK(skipped_count BETWEEN 0 AND 9007199254740991),
+    failed_count INTEGER NOT NULL DEFAULT 0
+        CHECK(failed_count BETWEEN 0 AND 9007199254740991),
+    canceled_count INTEGER NOT NULL DEFAULT 0
+        CHECK(canceled_count BETWEEN 0 AND 9007199254740991),
+    deferred_count INTEGER NOT NULL DEFAULT 0
+        CHECK(deferred_count BETWEEN 0 AND 9007199254740991),
+    blocked_count INTEGER NOT NULL DEFAULT 0
+        CHECK(blocked_count BETWEEN 0 AND 9007199254740991),
     filesystem_status TEXT,
     recording_status TEXT,
     audit_status TEXT,
@@ -344,6 +457,28 @@ CREATE TABLE IF NOT EXISTS history_runs (
     canceled INTEGER CHECK(canceled IN (0, 1)),
     bytes_done INTEGER,
     bytes_total INTEGER,
+    recording_degraded_items INTEGER CHECK(
+        recording_degraded_items IS NULL
+        OR recording_degraded_items BETWEEN 0 AND 9007199254740991
+    ),
+    recording_issues_json TEXT CHECK(
+        recording_issues_json IS NULL
+        OR (
+            json_valid(recording_issues_json)
+            AND json_type(recording_issues_json, '$') = 'array'
+            AND json_array_length(recording_issues_json) <= 5
+        )
+    ),
+    omitted_detail_count INTEGER CHECK(
+        omitted_detail_count IS NULL
+        OR omitted_detail_count BETWEEN 0 AND 9007199254740991
+    ),
+    review_reason TEXT,
+    review_tree_kind TEXT,
+    review_population TEXT,
+    review_axis TEXT,
+    review_row_limit INTEGER,
+    review_byte_limit INTEGER,
     error_type TEXT CHECK(
         error_type IS NULL
         OR length(CAST(error_type AS BLOB)) <= {MAX_HISTORY_ERROR_TYPE_BYTES}
@@ -364,6 +499,15 @@ CREATE TABLE IF NOT EXISTS history_runs (
             AND canceled IS NULL
             AND bytes_done IS NULL
             AND bytes_total IS NULL
+            AND recording_degraded_items IS NULL
+            AND recording_issues_json IS NULL
+            AND omitted_detail_count IS NULL
+            AND review_reason IS NULL
+            AND review_tree_kind IS NULL
+            AND review_population IS NULL
+            AND review_axis IS NULL
+            AND review_row_limit IS NULL
+            AND review_byte_limit IS NULL
             AND error_type IS NULL
             AND error_message IS NULL
         )
@@ -381,8 +525,56 @@ CREATE TABLE IF NOT EXISTS history_runs (
             AND bytes_total IS NOT NULL
             AND bytes_total >= 0
             AND bytes_done <= bytes_total
+            AND recording_degraded_items IS NOT NULL
+            AND recording_issues_json IS NOT NULL
+            AND omitted_detail_count IS NOT NULL
             AND ((error_type IS NULL) = (error_message IS NULL))
             AND (rejected_event_count = 0 OR audit_status = 'degraded')
+        )
+    ),
+    CHECK(
+        (
+            review_reason IS NULL
+            AND review_tree_kind IS NULL
+            AND review_population IS NULL
+            AND review_axis IS NULL
+            AND review_row_limit IS NULL
+            AND review_byte_limit IS NULL
+        )
+        OR
+        (
+            review_reason IS NOT NULL
+            AND review_tree_kind IS NOT NULL
+            AND review_population IS NOT NULL
+            AND review_axis IS NOT NULL
+            AND review_reason = 'review_fact_limit_exceeded'
+            AND review_tree_kind IN ('plan', 'inventory')
+            AND review_population IN ('domain', 'informational')
+            AND review_axis IN ('rows', 'retained-bytes', 'logical-bytes')
+            AND (
+                (
+                    review_axis = 'rows'
+                    AND review_row_limit = 120000
+                    AND review_byte_limit IS NULL
+                )
+                OR (
+                    review_axis = 'retained-bytes'
+                    AND review_row_limit IS NULL
+                    AND review_byte_limit = CASE
+                        WHEN review_tree_kind = 'plan'
+                         AND review_population = 'domain'
+                        THEN 134217728
+                        ELSE 201326592
+                    END
+                )
+                OR (
+                    review_axis = 'logical-bytes'
+                    AND review_tree_kind = 'plan'
+                    AND review_population = 'domain'
+                    AND review_row_limit IS NULL
+                    AND review_byte_limit = 9223372036854775807
+                )
+            )
         )
     )
 ) STRICT;
@@ -426,9 +618,10 @@ END;
 
 CREATE TABLE IF NOT EXISTS history_events (
     run_id INTEGER NOT NULL REFERENCES history_runs(id) ON DELETE CASCADE,
-    event_seq INTEGER NOT NULL CHECK(event_seq > 0),
+    event_seq INTEGER NOT NULL
+        CHECK(event_seq BETWEEN 1 AND 9007199254740991),
     event_at TEXT NOT NULL,
-    schema_version INTEGER NOT NULL CHECK(schema_version > 0),
+    schema_version INTEGER NOT NULL CHECK(schema_version = 5),
     body_type TEXT NOT NULL CHECK(length(body_type) > 0),
     event_disposition TEXT NOT NULL
         CHECK(event_disposition IN ('recorded', 'duplicate', 'rejected')),
@@ -441,9 +634,14 @@ CREATE TABLE IF NOT EXISTS history_events (
     item_payload_hash BLOB CHECK(
         item_payload_hash IS NULL OR length(item_payload_hash) = 32
     ),
-    duplicate_of_seq INTEGER,
+    duplicate_of_seq INTEGER CHECK(
+        duplicate_of_seq IS NULL
+        OR duplicate_of_seq BETWEEN 1 AND 9007199254740991
+    ),
     rejection_reason TEXT,
-    item_order INTEGER CHECK(item_order IS NULL OR item_order > 0),
+    item_order INTEGER CHECK(
+        item_order IS NULL OR item_order BETWEEN 1 AND 9007199254740991
+    ),
     item_type TEXT,
     phase TEXT,
     item_id TEXT,
@@ -451,6 +649,16 @@ CREATE TABLE IF NOT EXISTS history_events (
     path TEXT,
     result TEXT,
     reason TEXT,
+    recording TEXT,
+    recording_reason TEXT,
+    recording_detail TEXT CHECK(
+        recording_detail IS NULL
+        OR length(CAST(recording_detail AS BLOB)) <= 1024
+    ),
+    detail_omitted_count INTEGER CHECK(
+        detail_omitted_count IS NULL
+        OR detail_omitted_count BETWEEN 0 AND 9007199254740991
+    ),
     PRIMARY KEY(run_id, event_seq),
     UNIQUE(run_id, item_order),
     FOREIGN KEY(run_id, duplicate_of_seq)
@@ -477,6 +685,10 @@ CREATE TABLE IF NOT EXISTS history_events (
             AND path IS NULL
             AND result IS NULL
             AND reason IS NULL
+            AND recording IS NULL
+            AND recording_reason IS NULL
+            AND recording_detail IS NULL
+            AND detail_omitted_count IS NULL
         )
         OR
         (
@@ -493,6 +705,33 @@ CREATE TABLE IF NOT EXISTS history_events (
             AND kind IS NOT NULL AND length(kind) > 0
             AND path IS NOT NULL
             AND result IS NOT NULL AND length(result) > 0
+            AND recording IN ('ok', 'degraded')
+            AND detail_omitted_count IS NOT NULL
+            AND (
+                (
+                    item_type = 'operation'
+                    AND (
+                        (
+                            recording = 'ok'
+                            AND recording_reason IS NULL
+                            AND recording_detail IS NULL
+                        )
+                        OR (
+                            recording = 'degraded'
+                            AND recording_reason IN (
+                                'record-write-failed',
+                                'unrecorded-mutation',
+                                'recording-prerequisite-failed'
+                            )
+                        )
+                    )
+                )
+                OR (
+                    item_type = 'integrity'
+                    AND recording_reason IS NULL
+                    AND recording_detail IS NULL
+                )
+            )
         )
         OR
         (
@@ -511,6 +750,33 @@ CREATE TABLE IF NOT EXISTS history_events (
             AND kind IS NOT NULL AND length(kind) > 0
             AND path IS NOT NULL
             AND result IS NOT NULL AND length(result) > 0
+            AND recording IN ('ok', 'degraded')
+            AND detail_omitted_count IS NOT NULL
+            AND (
+                (
+                    item_type = 'operation'
+                    AND (
+                        (
+                            recording = 'ok'
+                            AND recording_reason IS NULL
+                            AND recording_detail IS NULL
+                        )
+                        OR (
+                            recording = 'degraded'
+                            AND recording_reason IN (
+                                'record-write-failed',
+                                'unrecorded-mutation',
+                                'recording-prerequisite-failed'
+                            )
+                        )
+                    )
+                )
+                OR (
+                    item_type = 'integrity'
+                    AND recording_reason IS NULL
+                    AND recording_detail IS NULL
+                )
+            )
         )
         OR
         (
@@ -546,6 +812,10 @@ CREATE TABLE IF NOT EXISTS history_events (
             AND path IS NULL
             AND result IS NULL
             AND reason IS NULL
+            AND recording IS NULL
+            AND recording_reason IS NULL
+            AND recording_detail IS NULL
+            AND detail_omitted_count IS NULL
         )
     )
 ) STRICT, WITHOUT ROWID;
@@ -750,8 +1020,11 @@ CREATE TABLE IF NOT EXISTS history_phases (
     UNIQUE(run_id, phase),
     CHECK(length(phase) > 0),
     CHECK(length(status) > 0),
-    CHECK(items_done >= 0),
-    CHECK(items_total IS NULL OR items_total >= items_done),
+    CHECK(items_done BETWEEN 0 AND 9007199254740991),
+    CHECK(
+        items_total IS NULL
+        OR items_total BETWEEN items_done AND 9007199254740991
+    ),
     CHECK(bytes_done >= 0),
     CHECK(bytes_total IS NULL OR bytes_total >= bytes_done)
 ) STRICT;
@@ -834,9 +1107,10 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
     database = "history" if history else "ledger"
     raise SchemaResetRequired(
         f"unsupported {database} schema version {version}; "
-        "NamiSync M1 requires ledger v3 and history v5. "
-        "Close every NamiSync process, manually delete or otherwise reset both "
-        "database files together, and restart."
+        "NamiSync M1 requires ledger v4 and history v6 at data epoch 5. "
+        "Close every NamiSync process, then archive or delete both database "
+        "main files and all of their -wal, -shm, and -journal sidecars "
+        "together before restarting."
     )
 
 
@@ -853,9 +1127,24 @@ def _require_contract_id(
         value = "missing" if actual is None else actual
         raise SchemaResetRequired(
             f"unsupported {database} schema contract {value}; "
-            "NamiSync M1 requires ledger v3 and history v5 with the final "
-            "M1 contract. Close every NamiSync process, manually delete or "
-            "otherwise reset both database files together, and restart."
+            "NamiSync M1 requires ledger v4 and history v6 at data epoch 5. "
+            "Close every NamiSync process, then archive or delete both database "
+            "main files and all of their -wal, -shm, and -journal sidecars "
+            "together before restarting."
+        )
+    epoch_row = connection.execute(
+        "SELECT value FROM schema_metadata WHERE key = 'data_epoch'"
+    ).fetchone()
+    epoch = None if epoch_row is None else str(epoch_row[0])
+    if epoch != str(DATA_EPOCH):
+        database = "history" if history else "ledger"
+        value = "missing" if epoch is None else epoch
+        raise SchemaResetRequired(
+            f"unsupported {database} data epoch {value}; "
+            "NamiSync M1 requires ledger v4 and history v6 at data epoch 5. "
+            "Close every NamiSync process, then archive or delete both database "
+            "main files and all of their -wal, -shm, and -journal sidecars "
+            "together before restarting."
         )
 
 

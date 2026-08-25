@@ -20,6 +20,7 @@ from namisync.core.events import (
     Progress,
     StateChanged,
     Terminal,
+    canonical_event_bytes,
     delivery_class,
 )
 from namisync.core.session import OperationResult, SessionId, SessionState
@@ -539,14 +540,16 @@ class EventHub:
 
         if audit_offer_timeout is not None and audit_offer_timeout < 0:
             raise ValueError("audit offer timeout cannot be negative")
-        self._seq += 1
+        next_sequence = self._seq + 1
         envelope = Envelope(
             session_id=self._session_id,
-            seq=self._seq,
+            seq=next_sequence,
             at=self._clock.now(),
             schema_version=CORE_EVENT_SCHEMA_VERSION,
             body=body,
         )
+        canonical_event_bytes(envelope)
+        self._seq = next_sequence
         if isinstance(body, StateChanged):
             self._state = body.state
         if isinstance(body, Progress):

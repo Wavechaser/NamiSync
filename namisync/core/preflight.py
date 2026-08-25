@@ -10,6 +10,7 @@ from typing import Mapping, NamedTuple
 from .models import FileStat, VolumeEvidence, VolumeId
 from .planning import OpId
 from .root_authority import RootAuthorityIssue
+from .scalars import require_signed_64
 
 
 class Subject(NamedTuple):
@@ -61,10 +62,12 @@ class ObservedWorld:
     observed_at: datetime
 
     def __post_init__(self) -> None:
-        if self.free_space is not None and self.free_space < 0:
-            raise ValueError("free space cannot be negative")
-        if self.reclaimable_temp_bytes < 0:
-            raise ValueError("reclaimable temp bytes cannot be negative")
+        if self.free_space is not None:
+            require_signed_64(self.free_space, "free space")
+        require_signed_64(
+            self.reclaimable_temp_bytes,
+            "reclaimable temporary bytes",
+        )
         if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
             raise ValueError("observation timestamp must be timezone-aware")
         if self.observed_at.utcoffset() != timezone.utc.utcoffset(self.observed_at):

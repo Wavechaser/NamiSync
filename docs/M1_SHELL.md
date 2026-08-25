@@ -971,7 +971,7 @@ carry the `headed` marker; all are collected by the release command.
   On 2026-08-22 the v4 installed-wheel event diagnostic and the protected
   one-child plus three-child current-source custody characterization also
   passed. They are respectively diagnostic and Tier-1 drift evidence: neither
-  creates current-v4 Tier-2 timing acceptance nor recalibrates the v1
+  creates v4 Tier-2 timing acceptance nor recalibrates the v1
   authority. `M1_BRIDGE.md` records their fixture, receipts, values, and exact
   disposition.
 
@@ -1299,7 +1299,7 @@ authority. The committed calibration-a artifact records the normative
 The separate contract freezes the 1,966,080-byte ceiling, and independent
 holdout-b passes at 1,351,794 ordinary and 1,513,014 exact-maximum bytes.
 The frozen historical v1 SH-G-8 and BR-G-42 event/transport-custody claim is
-closed; current-v4 measurement evidence consists only of its diagnostic event
+closed; historical v4 measurement evidence consists only of its diagnostic event
 rerun and Tier-1 current-source custody drift characterization, as dispositioned in
 `M1_BRIDGE.md`. Other BR-G-42 rows remain on their owning slices. The valid
 2026-08-13 run passed its duration/rate/event/latency/shutdown predicates, but

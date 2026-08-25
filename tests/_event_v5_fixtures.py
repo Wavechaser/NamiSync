@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
 
 
 SESSION_ID = "0123456789abcdef0123456789abcdef"
@@ -156,4 +157,47 @@ def session_event_view(
 ) -> dict[str, object]:
     value = envelope(body_type, body=body)
     value["sequence"] = value.pop("seq")
+    return value
+
+
+def maximum_reliable_envelope() -> dict[str, object]:
+    """Build one structurally valid envelope at the exact reliable byte wall."""
+
+    item = operation_item_body()
+    item["detail"] = {
+        key: "\x01" * 32_767
+        for key in (
+            "backup_path",
+            "mutation_destination",
+            "prior_path",
+            "published_path",
+            "trash_path",
+        )
+    }
+    item["path"] = ""
+    value = envelope("ItemOutcome", body=item)
+    encoded = json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    deficit = 1_048_576 - len(encoded)
+    if deficit < 0:
+        raise AssertionError("maximum reliable fixture base exceeds its wall")
+    escaped, plain = divmod(deficit, 6)
+    path = "\x01" * escaped + "x" * plain
+    if len(path.encode("utf-16-le")) // 2 > 32_767:
+        raise AssertionError("maximum reliable fixture exceeds the path wall")
+    item["path"] = path
+    value = envelope("ItemOutcome", body=item)
+    if len(
+        json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ) != 1_048_576:
+        raise AssertionError("maximum reliable fixture is not exact")
     return value

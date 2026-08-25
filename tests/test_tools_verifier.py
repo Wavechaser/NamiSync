@@ -170,10 +170,14 @@ def test_batch_fixture_requires_exact_membership_and_portable_stat_fidelity() ->
 
 def test_sidecar_bound_round_trip_preserves_identity(tmp_path: Path) -> None:
     path = tmp_path / "baseline.jsonl"
-    expected = {"A.TXT": _attestation()}
+    file_index = (1 << 127) + 17
+    expected = {"A.TXT": _attestation(index=file_index)}
 
     assert sidecar.write(path, expected, identity_mode=sidecar.BOUND) == 1
 
+    header, rows = _read_document(path)
+    assert header["format"] == "namisync-rig-baseline-2"
+    assert rows[0]["file_index"] == str(file_index)
     actual, identity_mode = sidecar.read(path)
     assert identity_mode == sidecar.BOUND
     assert actual == expected
@@ -218,10 +222,10 @@ def test_sidecar_refuses_existing_destination_without_explicit_replace(
 
 @pytest.mark.parametrize(
     ("serial", "index"),
-    [(None, None), ("volume", None), (None, 1)],
+    [(None, None), ("volume", None), (None, "1")],
 )
 def test_sidecar_bound_read_rejects_missing_or_partial_identity(
-    tmp_path: Path, serial: str | None, index: int | None
+    tmp_path: Path, serial: str | None, index: object
 ) -> None:
     path = tmp_path / "baseline.jsonl"
     sidecar.write(path, {"A.TXT": _attestation()}, identity_mode=sidecar.BOUND)
@@ -233,6 +237,24 @@ def test_sidecar_bound_read_rejects_missing_or_partial_identity(
     with pytest.raises(
         sidecar.SidecarError, match="file identity|requires file identity"
     ):
+        sidecar.read(path)
+
+
+@pytest.mark.parametrize(
+    "file_index",
+    [True, 1, "", "01", "-1", str(1 << 128)],
+)
+def test_sidecar_rejects_noncanonical_file_index(
+    tmp_path: Path,
+    file_index: object,
+) -> None:
+    path = tmp_path / "baseline.jsonl"
+    sidecar.write(path, {"A.TXT": _attestation()}, identity_mode=sidecar.BOUND)
+    header, rows = _read_document(path)
+    rows[0]["file_index"] = file_index
+    _replace_document(path, header, rows)
+
+    with pytest.raises(sidecar.SidecarError, match="line 2.*file_index"):
         sidecar.read(path)
 
 
@@ -262,8 +284,8 @@ def test_sidecar_requires_object_header_with_explicit_fields(
 def test_sidecar_rejects_duplicate_header_fields(tmp_path: Path) -> None:
     path = tmp_path / "baseline.jsonl"
     path.write_text(
-        '{"format":"namisync-rig-baseline-1",'
-        '"format":"namisync-rig-baseline-1",'
+        '{"format":"namisync-rig-baseline-2",'
+        '"format":"namisync-rig-baseline-2",'
         '"identity_mode":"portable"}\n',
         encoding="utf-8",
     )

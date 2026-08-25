@@ -21,7 +21,6 @@ from namisync.core.evidence import (
 )
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
-    LEGACY_CORE_EVENT_SCHEMA_VERSION,
     Envelope,
     Gap,
     ItemOutcome,
@@ -29,8 +28,15 @@ from namisync.core.events import (
     Progress,
     StateChanged,
     Terminal,
+    TerminalSummary,
     envelope_from_dict,
     envelope_to_dict,
+    terminal_summary_to_dict,
+)
+from namisync.core.execution import (
+    ItemRecordingReason,
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
 )
 from namisync.core.integrity import (
     IntegrityMode,
@@ -81,7 +87,7 @@ def test_terminal_members_are_frozen() -> None:
 
 
 def test_phase_changed_requires_nonempty_string_authority() -> None:
-    with pytest.raises(TypeError, match="string"):
+    with pytest.raises(TypeError, match="text"):
         PhaseChanged(1)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="non-empty"):
         PhaseChanged("")
@@ -253,7 +259,7 @@ def test_runner_emits_exactly_one_terminal(path: str) -> None:
 
     def work(context):
         context.emit(
-            ItemOutcome("one", "dummy", "file", Outcome.SUCCEEDED)
+            ItemOutcome("1" * 32, "copy", "file", Outcome.SUCCEEDED)
         )
         if path == "cancel":
             raise Canceled()
@@ -272,7 +278,8 @@ def test_runner_emits_exactly_one_terminal(path: str) -> None:
 
     terminals = [body for body in emitted if isinstance(body, Terminal)]
     assert len(terminals) == 1
-    assert outcome.result is terminals[0].result
+    assert outcome.result is not None
+    assert terminals[0].result == TerminalSummary.from_result(outcome.result)
     assert settled[0][0] is terminals[0].result.status
     if path == "failure":
         assert terminals[0].result.error is not None
@@ -281,7 +288,7 @@ def test_runner_emits_exactly_one_terminal(path: str) -> None:
 
 def test_runner_accumulates_result_item_only_after_emitter_accepts_it() -> None:
     rejected = ItemOutcome(
-        "rejected", "dummy", "file", Outcome.SUCCEEDED
+        "2" * 32, "copy", "file", Outcome.SUCCEEDED
     )
     accepted: list[object] = []
 
@@ -308,7 +315,7 @@ def test_runner_accumulates_result_item_only_after_emitter_accepts_it() -> None:
     assert outcome.result.items == ()
     assert rejected not in accepted
     terminal = next(body for body in accepted if isinstance(body, Terminal))
-    assert terminal.result.items == ()
+    assert terminal.result.recording_degraded_items == 0
 
 
 def test_runner_reliable_item_degradation_is_terminal_recording_authority() -> None:
@@ -609,13 +616,13 @@ def test_verify_cancellation_round_trips_terminal_event_and_session_record(
         seq=3,
         at=datetime(2026, 7, 25, tzinfo=timezone.utc),
         schema_version=CORE_EVENT_SCHEMA_VERSION,
-        body=Terminal(result),
+        body=Terminal(TerminalSummary.from_result(result)),
     )
 
     decoded = envelope_from_dict(envelope_to_dict(envelope))
 
     assert isinstance(decoded.body, Terminal)
-    assert decoded.body.result == result
+    assert decoded.body.result == TerminalSummary.from_result(result)
     record = SessionRecord(
         SessionId("verify-canceled"),
         "sync-execution",
@@ -627,7 +634,7 @@ def test_verify_cancellation_round_trips_terminal_event_and_session_record(
         datetime(2026, 7, 25, tzinfo=timezone.utc),
         started_at=datetime(2026, 7, 25, tzinfo=timezone.utc),
         ended_at=datetime(2026, 7, 25, tzinfo=timezone.utc),
-        result=decoded.body.result,
+        result=result,
     )
     assert record.result is not None
     assert record.result.status is filesystem_status
@@ -742,7 +749,7 @@ def test_runner_rejects_structural_item_guessing_and_retains_nominal_integrity()
 
 
 def test_runner_seeds_cancel_result_from_prior_pause_items() -> None:
-    prior = [ItemOutcome("prior", "dummy", "file", Outcome.SUCCEEDED)]
+    prior = [ItemOutcome("3" * 32, "copy", "file", Outcome.SUCCEEDED)]
     outcome = run_session(
         lambda context: (_ for _ in ()).throw(Canceled()),
         emit=lambda body: None,
@@ -757,7 +764,7 @@ def test_runner_seeds_cancel_result_from_prior_pause_items() -> None:
 
 
 def test_runner_success_merges_prior_pause_and_new_items_in_emission_order() -> None:
-    prior = ItemOutcome("prior", "dummy", "prior.txt", Outcome.SUCCEEDED)
+    prior = ItemOutcome("4" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
     current = IntegrityOutcome(
         "current",
         "row",
@@ -843,14 +850,96 @@ def test_runner_cancel_with_unknown_progress_total_keeps_truthful_counts() -> No
     assert outcome.result.bytes_total == 17
 
 
+def test_item_diagnostics_are_omitted_whole_without_truncation() -> None:
+    oversized = "é" * 513
+    operation = ItemOutcome(
+        item_id="1" * 32,
+        kind="copy",
+        path="file.bin",
+        outcome=Outcome.SUCCEEDED,
+        detail={"message": oversized},
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+        recording_detail=oversized,
+    )
+    integrity = IntegrityOutcome(
+        item_id="row-1",
+        row_id="1",
+        location_id="2",
+        path="file.bin",
+        result=IntegrityResult.ERROR,
+        detail=oversized,
+    )
+
+    assert dict(operation.detail) == {}
+    assert operation.recording_detail is None
+    assert operation.detail_omitted_count == 2
+    assert integrity.detail is None
+    assert integrity.detail_omitted_count == 1
+    assert oversized[:512] not in repr(operation)
+    assert oversized[:512] not in repr(integrity)
+
+
+@pytest.mark.parametrize(
+    "detail",
+    (
+        {"message": None},
+        {"durability_warnings": [None]},
+    ),
+)
+def test_item_detail_rejects_null_declared_values(
+    detail: dict[str, object],
+) -> None:
+    with pytest.raises(TypeError):
+        ItemOutcome(
+            item_id="1" * 32,
+            kind="copy",
+            path="file.bin",
+            outcome=Outcome.SUCCEEDED,
+            detail=detail,
+        )
+
+
+def test_terminal_summary_copies_bounded_truth_without_retaining_items() -> None:
+    item = ItemOutcome(
+        item_id="2" * 32,
+        kind="copy",
+        path="file.bin",
+        outcome=Outcome.SUCCEEDED,
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+        detail_omitted_count=1,
+    )
+    issue = TaskRecordingIssue(
+        TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+        "flush failed",
+    )
+    result = OperationResult(
+        SessionState.COMPLETED,
+        items=(item,),
+        recording=RecordingStatus.DEGRADED,
+        recording_issues=(issue,),
+        omitted_detail_count=2,
+    )
+
+    summary = TerminalSummary.from_result(result)
+    wire = terminal_summary_to_dict(summary)
+
+    assert summary.recording_degraded_items == 1
+    assert summary.recording_issues == (issue,)
+    assert summary.omitted_detail_count == 3
+    assert not hasattr(summary, "items")
+    assert "items" not in wire
+
+
 def _event_bodies() -> tuple[object, ...]:
     item = ItemOutcome(
-        item_id="one",
-        kind="dummy",
+        item_id="1" * 32,
+        kind="copy",
         path="folder\\file",
         outcome=Outcome.SKIPPED,
-        reason="none",
-        detail={"number": 1},
+        reason=None,
+        detail={"message": "already current"},
     )
     result = OperationResult(
         status=SessionState.COMPLETED,
@@ -873,23 +962,23 @@ def _event_bodies() -> tuple[object, ...]:
         Progress("execute", 1, 2, 3, 4, "folder\\file"),
         item,
         IntegrityOutcome(
-            item_id="integrity",
-            row_id="11",
-            location_id="4",
+            item_id="2" * 32,
+            row_id="3" * 32,
+            location_id="4" * 32,
             path="folder\\file",
             result=IntegrityResult.VERIFIED,
             read_strategy=ReadStrategy.WINDOWS_UNBUFFERED,
             record_disposition=RecordDisposition.APPLIED,
         ),
         ItemOutcome(
-            item_id="blocked",
+            item_id="5" * 32,
             kind="noop",
             path="junction",
             outcome=Outcome.BLOCKED,
-            reason="unsupported",
+            reason="blocked-correspondence",
         ),
         Gap(7),
-        Terminal(result),
+        Terminal(TerminalSummary.from_result(result)),
     )
 
 
@@ -897,7 +986,7 @@ def _event_bodies() -> tuple[object, ...]:
 def test_m1_event_bodies_round_trip(body: object) -> None:
     envelope = Envelope(
         session_id=SessionId("a" * 32),
-        seq=1,
+        seq=7 if isinstance(body, Gap) else 1,
         at=datetime(2026, 7, 18, tzinfo=timezone.utc),
         schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=body,
@@ -937,33 +1026,23 @@ def _progress_envelope(body: Progress | None = None) -> Envelope:
     )
 
 
-def test_progress_v4_serializes_exact_self_describing_telemetry() -> None:
+def test_progress_v5_serializes_exact_self_describing_telemetry() -> None:
     envelope = _progress_envelope()
 
     serialized = envelope_to_dict(envelope)
 
-    assert serialized["schema_version"] == 4
-    assert serialized["body"] == _progress_values()
+    assert serialized["schema_version"] == 5
+    assert serialized["body"] == {
+        **_progress_values(),
+        "bytes_done": "7",
+        "bytes_total": "20",
+        "item_bytes_done": "7",
+        "item_bytes_total": "10",
+    }
     assert envelope_from_dict(serialized) == envelope
 
 
-@pytest.mark.parametrize(
-    "body",
-    [body for body in _event_bodies() if not isinstance(body, Progress)],
-)
-def test_v3_reliable_event_envelopes_remain_decodable(body: object) -> None:
-    envelope = Envelope(
-        session_id=SessionId("a" * 32),
-        seq=1,
-        at=datetime(2026, 8, 21, tzinfo=timezone.utc),
-        schema_version=LEGACY_CORE_EVENT_SCHEMA_VERSION,
-        body=body,
-    )
-
-    assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
-
-
-def test_v3_terminal_codec_does_not_inherit_v4_progress_safe_integer_bound() -> None:
+def test_v5_terminal_codec_preserves_signed_64_values_above_safe_int() -> None:
     larger_than_javascript_safe = 1 << 53
     result = OperationResult(
         SessionState.COMPLETED,
@@ -984,33 +1063,29 @@ def test_v3_terminal_codec_does_not_inherit_v4_progress_safe_integer_bound() -> 
         session_id=SessionId("a" * 32),
         seq=1,
         at=datetime(2026, 8, 21, tzinfo=timezone.utc),
-        schema_version=LEGACY_CORE_EVENT_SCHEMA_VERSION,
-        body=Terminal(result),
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
+        body=Terminal(TerminalSummary.from_result(result)),
     )
 
     assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
 
 
-def test_v3_progress_is_explicitly_refused_by_envelope_and_decoder() -> None:
-    with pytest.raises(ValueError, match="Progress requires core event schema"):
+@pytest.mark.parametrize("version", (3, 4, 6))
+def test_non_v5_epoch_is_explicitly_refused_by_envelope_and_decoder(
+    version: int,
+) -> None:
+    with pytest.raises(ValueError, match="exactly 5"):
         Envelope(
             session_id=SessionId("a" * 32),
             seq=1,
             at=datetime(2026, 8, 21, tzinfo=timezone.utc),
-            schema_version=LEGACY_CORE_EVENT_SCHEMA_VERSION,
+            schema_version=version,
             body=_progress(),
         )
 
     serialized = envelope_to_dict(_progress_envelope())
-    serialized["schema_version"] = LEGACY_CORE_EVENT_SCHEMA_VERSION
-    serialized["body"] = {
-        "items_done": 0,
-        "items_total": 1,
-        "bytes_done": 0,
-        "bytes_total": 1,
-        "current_path": None,
-    }
-    with pytest.raises(ValueError, match="Progress requires core event schema"):
+    serialized["schema_version"] = version
+    with pytest.raises(ValueError, match="exactly 5"):
         envelope_from_dict(serialized)
 
 
@@ -1052,11 +1127,11 @@ def test_progress_accepts_all_normative_activity_shapes(
     assert envelope_from_dict(envelope_to_dict(_progress_envelope(body))).body == body
 
 
-def test_progress_accepts_the_javascript_safe_integer_boundary() -> None:
-    maximum = (1 << 53) - 1
+def test_progress_accepts_signed_64_bytes_above_javascript_safe_integer() -> None:
+    maximum = (1 << 53) + 17
     body = _progress(
-        items_done=maximum,
-        items_total=maximum,
+        items_done=1,
+        items_total=1,
         bytes_done=maximum,
         bytes_total=maximum,
         item_id=None,
@@ -1066,7 +1141,7 @@ def test_progress_accepts_the_javascript_safe_integer_boundary() -> None:
         item_bytes_total=None,
     )
 
-    assert body.items_done == maximum
+    assert body.bytes_done == maximum
 
 
 @pytest.mark.parametrize(
@@ -1086,10 +1161,10 @@ def test_progress_accepts_the_javascript_safe_integer_boundary() -> None:
         {"bytes_done": True},
         {"bytes_done": -1},
         {"bytes_done": 21},
-        {"bytes_done": 1 << 53},
+        {"bytes_done": 1 << 63},
         {"bytes_total": True},
         {"bytes_total": -1},
-        {"bytes_total": 1 << 53},
+        {"bytes_total": 1 << 63},
         {"current_path": 7},
         {"item_id": None},
         {"item_type": None},
@@ -1112,12 +1187,12 @@ def test_progress_accepts_the_javascript_safe_integer_boundary() -> None:
         {"item_bytes_done": True},
         {"item_bytes_done": 0.5},
         {"item_bytes_done": -1},
-        {"item_bytes_done": 1 << 53},
+        {"item_bytes_done": 1 << 63},
         {"item_bytes_done": 8, "bytes_done": 7},
         {"item_bytes_done": 11},
         {"item_bytes_total": True},
         {"item_bytes_total": -1},
-        {"item_bytes_total": 1 << 53},
+        {"item_bytes_total": 1 << 63},
         {"item_bytes_total": 21},
     ],
 )
@@ -1146,7 +1221,7 @@ def test_progress_rejects_invalid_scalars_and_cross_field_states(
         {"item_bytes_total": 21},
     ],
 )
-def test_progress_v4_decoder_rejects_invalid_scalar_and_cross_field_states(
+def test_progress_v5_decoder_rejects_invalid_scalar_and_cross_field_states(
     changes: dict[str, object],
 ) -> None:
     serialized = envelope_to_dict(_progress_envelope())
@@ -1159,7 +1234,7 @@ def test_progress_v4_decoder_rejects_invalid_scalar_and_cross_field_states(
 
 
 @pytest.mark.parametrize("missing", sorted(_progress_values()))
-def test_progress_v4_decoder_rejects_every_missing_field(missing: str) -> None:
+def test_progress_v5_decoder_rejects_every_missing_field(missing: str) -> None:
     serialized = envelope_to_dict(_progress_envelope())
     raw_body = serialized["body"]
     assert isinstance(raw_body, dict)
@@ -1169,7 +1244,7 @@ def test_progress_v4_decoder_rejects_every_missing_field(missing: str) -> None:
         envelope_from_dict(serialized)
 
 
-def test_progress_v4_decoder_rejects_extra_fields() -> None:
+def test_progress_v5_decoder_rejects_extra_fields() -> None:
     serialized = envelope_to_dict(_progress_envelope())
     raw_body = serialized["body"]
     assert isinstance(raw_body, dict)
@@ -1243,13 +1318,13 @@ def test_event_deserialization_rejects_unknown_schema() -> None:
     )
     serialized = envelope_to_dict(envelope)
     serialized["schema_version"] = 999
-    with pytest.raises(ValueError, match="unsupported event schema"):
+    with pytest.raises(ValueError, match="exactly 5"):
         envelope_from_dict(serialized)
 
 
 def test_event_sequence_scalars_share_the_browser_safe_integer_domain() -> None:
     unsafe = 1 << 53
-    with pytest.raises(ValueError, match="JavaScript-safe"):
+    with pytest.raises(ValueError, match="SafeInt"):
         Envelope(
             session_id=SessionId("a" * 32),
             seq=unsafe,
@@ -1257,7 +1332,7 @@ def test_event_sequence_scalars_share_the_browser_safe_integer_domain() -> None:
             schema_version=CORE_EVENT_SCHEMA_VERSION,
             body=PhaseChanged("phase"),
         )
-    with pytest.raises(ValueError, match="JavaScript-safe"):
+    with pytest.raises(ValueError, match="SafeInt"):
         Gap(unsafe)
 
     envelope = Envelope(
@@ -1269,7 +1344,7 @@ def test_event_sequence_scalars_share_the_browser_safe_integer_domain() -> None:
     )
     serialized = envelope_to_dict(envelope)
     serialized["seq"] = unsafe
-    with pytest.raises(ValueError, match="JavaScript-safe"):
+    with pytest.raises(ValueError, match="SafeInt"):
         envelope_from_dict(serialized)
 
 
@@ -1284,19 +1359,19 @@ def test_event_deserialization_rejects_coercive_scalar_types() -> None:
 
     serialized = envelope_to_dict(envelope)
     serialized["schema_version"] = float(CORE_EVENT_SCHEMA_VERSION)
-    with pytest.raises(ValueError, match="schema version"):
+    with pytest.raises(ValueError, match="schema_version"):
         envelope_from_dict(serialized)
 
     serialized = envelope_to_dict(envelope)
     serialized["seq"] = 1.0
-    with pytest.raises(ValueError, match="sequence"):
+    with pytest.raises((TypeError, ValueError), match="sequence"):
         envelope_from_dict(serialized)
 
     serialized = envelope_to_dict(envelope)
     body = serialized["body"]
     assert isinstance(body, dict)
     body["phase"] = 7
-    with pytest.raises(ValueError, match="phase"):
+    with pytest.raises((TypeError, ValueError), match="phase"):
         envelope_from_dict(serialized)
 
     canceled = Envelope(
@@ -1305,10 +1380,12 @@ def test_event_deserialization_rejects_coercive_scalar_types() -> None:
         at=datetime(2026, 7, 18, tzinfo=timezone.utc),
         schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=Terminal(
-            OperationResult(
-                SessionState.CANCELED,
-                disposition=Disposition.RAN,
-                canceled=True,
+            TerminalSummary.from_result(
+                OperationResult(
+                    SessionState.CANCELED,
+                    disposition=Disposition.RAN,
+                    canceled=True,
+                )
             )
         ),
     )
@@ -1318,5 +1395,5 @@ def test_event_deserialization_rejects_coercive_scalar_types() -> None:
     result = body["result"]
     assert isinstance(result, dict)
     result["canceled"] = "false"
-    with pytest.raises(ValueError, match="canceled"):
+    with pytest.raises((TypeError, ValueError), match="canceled"):
         envelope_from_dict(serialized)

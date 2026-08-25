@@ -1,13 +1,13 @@
 # Features
 
-Status note (updated 2026-08-24): the headless sync, inventory, integrity,
+Status note (updated 2026-08-25): the headless sync, inventory, integrity,
 history, selection, and CLI capabilities are active. The secured desktop host,
 transport, and shared presentation foundation are active; its product plan,
 inventory, history, and lifecycle surfaces remain unrealized. Exact M1 delivery
 status and acceptance evidence live in `M1_PLAN.md`, `M1_BRIDGE.md`,
 `M1_SHELL.md`, and `M1_SHELL_H2.md`, which controls where the shell plans
-overlap. Stage 6 second-half entries below are accepted targets, not active
-behavior.
+overlap. The Stage 6 event-v5/scalar/file-identity/persistence subset is active;
+other second-half entries below remain accepted targets unless stated active.
 
 This document lists active and unrealized NamiSync features. A feature states
 its unrealized status directly when the distinction is not obvious; milestone
@@ -251,13 +251,13 @@ provision.
 - **Mapping-Scoped State**. Shared physical locations can participate in multiple mappings while retaining independent source identity and correspondence state.
 - **Run Idempotency**. Executor run tokens uniquely correlate and protect repeated ledger recording.
 - **Ledger-Current Execution Evidence** *(accepted Stage 6 target; unrealized)*. Execution review exposes a digest only when a successful byte-producing operation has coherent current evidence from the same retained run. It distinguishes recorded copy, already verified, unrecorded, superseded, and not-applicable states; coincidental inventory hashes and transient copy digests never become durable execution evidence. Current inventory detail may show separately labelled current-state evidence, while plan review contains no content digest.
-- **Exact Large Values** *(accepted Stage 6 target; unrealized)*. File sizes, byte totals, and filesystem timestamps remain exact through persistence and desktop display. An unrepresentable timestamp or aggregate plan total is refused instead of clamped or rounded, while inventory folder totals disclose aggregate overflow. `DEFENSE.md` §1.3 and `M1_BRIDGE.md` own reachability and mechanics.
+- **Exact Large Values**. File sizes, byte totals, and filesystem timestamps use checked signed-64 arithmetic and canonical decimal public values. An unrepresentable timestamp or aggregate plan total is refused instead of clamped or rounded, while inventory aggregate overflow remains explicit. Full Windows file indexes use opaque canonical 128-bit text. Later desktop surfaces consume this active protocol without changing it. `DEFENSE.md` §1.3 and `M1_BRIDGE.md` own reachability and mechanics.
 - **Generic Annotations**. A generic entity-scoped annotations table (kind, id, key, value) carries small user-authored labels — a session note, a future task annotation — without a schema change each time a new place wants one.
 - **Split Local Settings**. Semantic defaults live beside the selected ledger and are snapshotted into plans so admitted execution never rereads them. Cosmetic desktop preferences live separately in `ui-state.json`. Accepted Stage 6 recents come from ledger runs rather than UI state, and process-local tasks or requests are never presented as durable state.
 - **Database Safety Settings**. Ledger connections use foreign keys, WAL mode, and a bounded busy timeout.
-- **M1 Evidence Reset Boundary**. Ledger v3/history v5 require immutable final-contract markers. Ledger v1-v2, every history v1-v4 file, and current-version files missing or mismatching those markers are refused read-only and tell the user to close NamiSync and manually recreate both local databases together; normal startup never deletes data. Settings and UI state survive.
-- **Coordinated Evidence Reset** *(accepted Stage 6 target; unrealized)*. The Stage 6 evidence cutover refuses an old, mixed, incomplete, or marker-less local database pair before work and tells the user to archive or delete both databases and their sidecars together. It does not migrate or delete data automatically. `DATABASE.md` and `HISTORY.md` own the persistence consequences; the exact event and scalar contracts live in `M1_BRIDGE.md` and `DEFENSE.md` §1.3.
-- **M1 Windowed History Contract**. History v5 stores an append-only reliable receipt journal, dense canonical item projections, exact semantic-duplicate links, bounded hash-only rejection receipts, provisional run watermarks/counts, and bounded terminal phase summaries. The reset boundary is deliberate: history v4 lacks the receipt facts needed to reconstruct the new authenticated chain.
+- **M1 Evidence Reset Boundary**. Ledger v4/history v6 share data epoch 5 and immutable exact contract markers. Ledger v1-v3, every history v1-v5 file, and current-version files missing or mismatching those markers are refused read-only; normal startup never deletes data. Settings and UI state survive.
+- **Coordinated Evidence Reset**. The active Stage 6 evidence cutover refuses an old, mixed, incomplete, markerless, or orphan-sidecar local database pair before mutating work and tells the user to archive or delete both databases and sidecars together. It does not migrate or delete data automatically. `DATABASE.md` and `HISTORY.md` own the persistence consequences; the exact event and scalar contracts live in `M1_BRIDGE.md` and `DEFENSE.md` §1.3.
+- **M1 Windowed History Contract**. History v6 stores exact event-v5 append-only reliable receipts, dense canonical item projections, exact semantic-duplicate links, bounded defensive rejection receipts, provisional run watermarks/counts, and bounded item-free terminal summaries. The reset boundary is deliberate: older epochs cannot reconstruct the exact authenticated contract.
 
 - **Hardlink Groups**. Schema room is reserved for grouping paths that share one file identity, so hard-link-aware correspondence and, later, hard-link preservation on copy remain additive rather than a rework.
 - **Named Mappings**. A mapping will carry a user-assigned display name distinct from its source and target paths.
@@ -277,8 +277,8 @@ provision.
 
 - **Independent Audit Store**. Sync, baseline, and verification attempts are recorded in a separate local history database.
 - **Audit Delivery Guarantee**. History subscribes at session admission on the reliable event plane under one clear contract: every audit event is delivered within the timeout, or the session result says `audit=DEGRADED` — nothing is silently lost behind a result claiming OK. A durable per-event rejection can degrade while later delivery continues; an observer exception or timeout breaks the prefix without changing filesystem or ledger truth. Durable finalization success is latched before exact-once observer cleanup, so cleanup failure cannot rewrite the committed/live terminal axis.
-- **Bounded Incremental History**. The observer retains at most 256 reliable receipts and 1 MiB of canonical retained data. A supported event over 1 MiB becomes an immediate bounded hash-only receipt, degrades audit, and does not poison the later run. Count/byte, one-second age, pause, clean close, and finalization boundaries commit. Continuous events never postpone the original age deadline; a crash loses at most the uncommitted window.
-- **Typed Run Details**. History v5 retains ordered reliable receipts, dense typed canonical result-item projections, non-counting exact duplicate envelopes, and bounded phase summaries. Every item carries explicit phase and item-type tags, so sync and integrity outcomes coexist without duck typing or parallel domain lists.
+- **Bounded Incremental History**. Reliable producer admission rejects a structurally over-1-MiB event before sequencing or queue mutation. The observer separately retains at most 256 reliable receipts and 1 MiB of canonical data per pending window; count/byte, one-second age, pause, clean close, and finalization boundaries commit. Continuous events never postpone the original age deadline; a crash loses at most the uncommitted window.
+- **Typed Run Details**. History v6 retains ordered reliable receipts, dense typed canonical result-item projections, non-counting exact duplicate envelopes, bounded phase summaries, and the exact v5 recording/omission/review-limit terminal facts. Every item carries explicit phase and item-type tags, so sync and integrity outcomes coexist without duck typing or parallel domain lists.
 - **No-Op and Cancellation Audit**. Explicit no-op and canceled activities are recorded alongside successful and failed activities.
 - **Blocked And Deferred Audit**. Safe-subset runs retain every direct blocker as the sixth `BLOCKED` outcome and retain quarantined or incomplete-scan-withheld work as `DEFERRED` with typed reasons and itemized paths. The history schema stores a blocked summary count without multiplying quarantine/withholding into new top-level categories.
 - **History Idempotency**. Repeating a recorded run token or the same sequence/payload is idempotent. A new sequence carrying an exact semantic item duplicate remains a visible non-counting receipt; changing that item's payload is producer corruption.

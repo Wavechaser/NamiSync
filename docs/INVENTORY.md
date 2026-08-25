@@ -104,7 +104,7 @@ result incomplete without suppressing readable siblings. An ignored subject, a
 root/global warning, cancellation, or any other unaccounted scope gap still
 refuses before hashing.
 
-## Accepted Stage 6 Desktop Contracts (Not Active)
+## Stage 6 Desktop Contracts (Protocol Subset Active)
 
 Exact Setup admission, recents, bridge wire shapes, paging, hard walls, scalar
 domains, and retention accounting are centralized in
@@ -112,6 +112,11 @@ domains, and retention accounting are centralized in
 [DEFENSE.md](DEFENSE.md). Inventory consumes the shared workflow-owned location
 candidate pipeline and always re-admits a real start; a slot or
 `RootAuthority` is evidence, never cached authorization.
+
+Checkpoint 3.2 activates the signed-64 scalar, full-width native identity, and
+event/persistence epoch consumed here. Setup, recents, desktop projection,
+paging, and retention behavior below remain inactive until their named
+checkpoints.
 
 The desktop inventory projection is one canonical server-side view over a
 complete immutable inventory generation. Search, filters, collapse, visible

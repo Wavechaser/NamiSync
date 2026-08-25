@@ -18,6 +18,7 @@ from namisync.core.evidence import (
     RecordingStatus,
 )
 from namisync.core.events import PhaseChanged, Progress, StateChanged, Terminal
+from namisync.core.execution import TaskRecordingIssueReason
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityOutcome,
@@ -1068,7 +1069,7 @@ def test_paused_integrity_snapshot_persists_recorder_close_degradation(
 
     def failing_close(recorder) -> None:
         original_close(recorder)
-        raise RuntimeError("pause close failed")
+        raise RuntimeError("x" * 1_100)
 
     monkeypatch.setattr(
         inventory_workflow.LedgerRecorder,
@@ -1099,11 +1100,19 @@ def test_paused_integrity_snapshot_persists_recorder_close_degradation(
         assert continuation.processed_bytes == 3
         assert continuation.bytes_total_high_water == 14
         assert continuation.recording is RecordingStatus.DEGRADED
+        assert len(continuation.recording_issues) == 1
+        assert continuation.recording_issues[0].reason is (
+            TaskRecordingIssueReason.RECORDING_CLOSE_FAILED
+        )
+        assert continuation.recording_issues[0].detail is None
+        assert continuation.omitted_detail_count == 1
 
         assert dispatcher.cancel(session_id).accepted
         canceled = _wait_for(dispatcher, session_id, SessionState.CANCELED)
         assert canceled.result is not None
         assert canceled.result.recording is RecordingStatus.DEGRADED
+        assert canceled.result.recording_issues == continuation.recording_issues
+        assert canceled.result.omitted_detail_count == 1
         assert (canceled.result.bytes_done, canceled.result.bytes_total) == (
             3,
             14,
@@ -1188,6 +1197,13 @@ def test_preselection_pause_persists_recorder_close_degradation(
         assert continuation.processed_bytes == 0
         assert continuation.bytes_total_high_water == 0
         assert continuation.recording is RecordingStatus.DEGRADED
+        assert continuation.recording_issues[0].reason is (
+            TaskRecordingIssueReason.RECORDING_CLOSE_FAILED
+        )
+        assert continuation.recording_issues[0].detail == (
+            "RuntimeError: preselection pause close failed"
+        )
+        assert continuation.omitted_detail_count == 0
 
         assert dispatcher.cancel(session_id).accepted
         canceled = _wait_for(dispatcher, session_id, SessionState.CANCELED)

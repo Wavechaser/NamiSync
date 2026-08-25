@@ -31,7 +31,7 @@ def _frozen_validator():
     return module
 
 
-def test_current_v4_ordinary_fixture_models_attempt_and_settlement() -> None:
+def test_current_v5_ordinary_fixture_models_attempt_and_settlement() -> None:
     frozen = _frozen_validator()
     child = frozen._child_module()
     events = []
@@ -76,15 +76,17 @@ def test_current_v4_ordinary_fixture_models_attempt_and_settlement() -> None:
     assert [event.item_bytes_done for event in progress] == list(range(1, 26))
     assert {event.item_bytes_total for event in progress} == {25}
     assert len({outcome.item_id for outcome in outcomes}) == 3
+    assert {outcome.recording.value for outcome in outcomes} == {"degraded"}
+    assert all(outcome.recording_reason is not None for outcome in outcomes)
 
 
-def test_current_v4_progress_representation_overlay_is_complete() -> None:
+def test_current_v5_progress_representation_overlay_is_complete() -> None:
     frozen = _frozen_validator()
     child = frozen._child_module()
     from namisync.core.events import Envelope, Progress
     from namisync.workflows.views import SessionEventView
 
-    overlay = child.CURRENT_V4_TRANSPORT_REPRESENTATION
+    overlay = child.CURRENT_V5_TRANSPORT_REPRESENTATION
     assert set(overlay) == {
         "scope",
         "typed_envelope",

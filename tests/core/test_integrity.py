@@ -7,7 +7,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from namisync.core.integrity import VerifierContext, matches_expected_stat
+from namisync.core.integrity import (
+    IntegritySelection,
+    PostCopySelection,
+    VerifierContext,
+    matches_expected_stat,
+)
 from namisync.core.models import (
     EntryKind,
     FileIdentity,
@@ -15,6 +20,7 @@ from namisync.core.models import (
     MetadataSnapshot,
 )
 from namisync.core.session import RunContext
+from namisync.core.scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64, ScalarDomainError
 
 
 _IDENTITY = FileIdentity("A1B2C3D4", 7)
@@ -73,8 +79,8 @@ def test_post_copy_progress_admission_is_paired() -> None:
         ("post_copy_bytes_total", True, TypeError),
         ("post_copy_items_total", -1, ValueError),
         ("post_copy_bytes_total", -1, ValueError),
-        ("post_copy_items_total", 1 << 53, ValueError),
-        ("post_copy_bytes_total", 1 << 53, ValueError),
+        ("post_copy_items_total", MAX_SAFE_INTEGER + 1, ValueError),
+        ("post_copy_bytes_total", MAX_SIGNED_64 + 1, ValueError),
     ),
 )
 def test_post_copy_progress_admission_uses_wire_safe_counters(
@@ -89,3 +95,32 @@ def test_post_copy_progress_admission_uses_wire_safe_counters(
     }
     with pytest.raises(error):
         _verifier_context(**values)
+
+
+def test_post_copy_byte_admission_uses_scalar64_not_safeint() -> None:
+    value = MAX_SAFE_INTEGER + 1
+
+    context = _verifier_context(
+        post_copy_items_total=1,
+        post_copy_bytes_total=value,
+    )
+
+    assert context.post_copy_bytes_total == value
+
+
+@pytest.mark.parametrize(
+    "selection",
+    (
+        IntegritySelection(
+            (),
+            _processed_bytes=MAX_SIGNED_64,
+            _bytes_total_high_water=MAX_SIGNED_64,
+        ),
+        PostCopySelection((), _processed_bytes=MAX_SIGNED_64),
+    ),
+)
+def test_selection_byte_counters_fail_closed_on_post_admission_overflow(
+    selection: IntegritySelection | PostCopySelection,
+) -> None:
+    with pytest.raises(ScalarDomainError, match="exceeds"):
+        selection.note_bytes_processed(1)

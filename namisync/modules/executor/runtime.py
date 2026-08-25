@@ -51,6 +51,11 @@ from namisync.core.planning import (
     PlanOperation,
 )
 from namisync.core.root_authority import RootAuthority
+from namisync.core.scalars import (
+    checked_add_signed_64,
+    require_safe_int,
+    require_signed_64,
+)
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -93,6 +98,7 @@ class OperationFailure(Exception):
 class _RecordObservation:
     recorded_identity: RecordedCopyIdentity | None = None
     recording_reason: ItemRecordingReason | None = None
+    recording_detail: str | None = None
 
     def __post_init__(self) -> None:
         if self.recorded_identity is not None and not isinstance(
@@ -105,6 +111,8 @@ class _RecordObservation:
             raise TypeError("record observation reason has the wrong type")
         if self.recorded_identity is not None and self.recording_reason is not None:
             raise ValueError("record observation cannot succeed and fail")
+        if self.recording_reason is None and self.recording_detail is not None:
+            raise ValueError("record observation detail requires a reason")
 
 
 class SystemClock:
@@ -174,6 +182,7 @@ class _Settled:
     detail: dict[str, object] = field(default_factory=dict)
     published_evidence: PublishedCopyEvidence | None = None
     recording_reason: ItemRecordingReason | None = None
+    recording_detail: str | None = None
 
 
 class _TerminalKind(Enum):
@@ -343,6 +352,7 @@ class _TerminalCause:
 class _SettlementReduction:
     settled: _Settled
     recording_reason: ItemRecordingReason | None
+    recording_detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,24 +590,40 @@ class _ProgressTracker:
         self._xset = xset
         self._ctx = ctx
         self._policies = policies
-        self.items_total = len(xset.selection)
-        self.items_done = len(xset.status)
-        self.bytes_total = sum(
-            operation.content_bytes
-            for operation in xset.plan.operations
-            if operation.op_id in xset.selection
-            and operation.kind
-            in {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
+        self.items_total = require_safe_int(
+            len(xset.selection),
+            "executor items_total",
         )
+        self.items_done = require_safe_int(
+            len(xset.status),
+            "executor items_done",
+        )
+        self.bytes_total = 0
+        byte_kinds = {
+            OperationKind.COPY,
+            OperationKind.UPDATE,
+            OperationKind.MOVE_UPDATE,
+        }
+        for operation in xset.plan.operations:
+            if operation.op_id in xset.selection and operation.kind in byte_kinds:
+                self.bytes_total = checked_add_signed_64(
+                    self.bytes_total,
+                    operation.content_bytes,
+                    "executor selected bytes",
+                )
         settled_ids = set(xset.status)
-        self._committed_bytes = sum(
-            operation.content_bytes
-            for operation in xset.plan.operations
-            if operation.op_id in settled_ids
-            and xset.status[operation.op_id] is Outcome.SUCCEEDED
-            and operation.kind
-            in {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
-        )
+        self._committed_bytes = 0
+        for operation in xset.plan.operations:
+            if (
+                operation.op_id in settled_ids
+                and xset.status[operation.op_id] is Outcome.SUCCEEDED
+                and operation.kind in byte_kinds
+            ):
+                self._committed_bytes = checked_add_signed_64(
+                    self._committed_bytes,
+                    operation.content_bytes,
+                    "executor committed bytes",
+                )
         self.bytes_done = max(
             min(self._committed_bytes, self.bytes_total),
             xset.bytes_done_high_water,
@@ -651,24 +677,42 @@ class _ProgressTracker:
             or self._file_bytes is None
         ):
             raise RuntimeError("copy progress arrived outside an active byte stream")
-        self._file_bytes += size
+        require_signed_64(size, "executor copied byte increment")
+        self._file_bytes = checked_add_signed_64(
+            self._file_bytes,
+            size,
+            "executor item bytes_done",
+        )
+        candidate_committed = checked_add_signed_64(
+            self._committed_bytes,
+            min(self._file_bytes, self._current.content_bytes),
+            "executor progress bytes",
+        )
         candidate = min(
             self.bytes_total,
-            self._committed_bytes + min(self._file_bytes, self._current.content_bytes),
+            candidate_committed,
         )
         self.bytes_done = max(self.bytes_done, candidate)
         self._xset.note_bytes_done(self.bytes_done)
         self.emit(force=False)
 
     def settled(self, operation: PlanOperation, outcome: Outcome) -> None:
-        self.items_done += 1
+        self.items_done = require_safe_int(
+            self.items_done + 1,
+            "executor items_done",
+        )
         if outcome is Outcome.SUCCEEDED and operation.kind in {
             OperationKind.COPY,
             OperationKind.UPDATE,
             OperationKind.MOVE_UPDATE,
         }:
             self._committed_bytes = min(
-                self.bytes_total, self._committed_bytes + operation.content_bytes
+                self.bytes_total,
+                checked_add_signed_64(
+                    self._committed_bytes,
+                    operation.content_bytes,
+                    "executor committed bytes",
+                ),
             )
             self.bytes_done = max(self.bytes_done, self._committed_bytes)
         self._xset.note_bytes_done(self.bytes_done)
@@ -1037,8 +1081,14 @@ def execute(
             kind=operation.kind.value,
             path=operation.target_rel_path,
             outcome=xset.status[operation.op_id],
-            reason="previously-settled",
+            reason=None,
             detail={"continued": True},
+            recording=(
+                RecordingStatus.DEGRADED
+                if operation.op_id in xset.recording_reasons
+                else RecordingStatus.OK
+            ),
+            recording_reason=xset.recording_reasons.get(operation.op_id),
         )
         for operation in xset.plan.operations
         if operation.op_id in xset.selection
@@ -1058,6 +1108,8 @@ def execute(
         items=items,
         bytes_done=min(progress.bytes_done, progress.bytes_total),
         bytes_total=progress.bytes_total,
+        recording_issues=xset.recording_issues,
+        omitted_detail_count=xset.omitted_detail_count,
     )
 
 
@@ -1644,6 +1696,7 @@ def _complete_published_byte_operation(
             record_observation.recorded_identity,
         ),
         recording_reason=record_observation.recording_reason,
+        recording_detail=record_observation.recording_detail,
     )
 
 
@@ -2291,6 +2344,7 @@ def _move(
         Outcome.SUCCEEDED,
         detail=detail,
         recording_reason=record_observation.recording_reason,
+        recording_detail=record_observation.recording_detail,
     )
 
 
@@ -2376,6 +2430,7 @@ def _recase(
         Outcome.SUCCEEDED,
         detail=detail,
         recording_reason=record_observation.recording_reason,
+        recording_detail=record_observation.recording_detail,
     )
 
 
@@ -2669,6 +2724,7 @@ def _trash(
         Outcome.SUCCEEDED,
         detail=detail,
         recording_reason=record_observation.recording_reason,
+        recording_detail=record_observation.recording_detail,
     )
 
 
@@ -2746,6 +2802,7 @@ def _delete(
         Outcome.SUCCEEDED,
         detail=detail,
         recording_reason=record_observation.recording_reason,
+        recording_detail=record_observation.recording_detail,
     )
 
 
@@ -2795,6 +2852,7 @@ def _noop(
         ExecutionReason.NOOP,
         detail,
         recording_reason=record_observation.recording_reason,
+        recording_detail=record_observation.recording_detail,
     )
 
 
@@ -2903,6 +2961,7 @@ def _finalize_directories(
                     Outcome.SUCCEEDED,
                     detail=detail,
                     recording_reason=record_observation.recording_reason,
+                    recording_detail=record_observation.recording_detail,
                 ),
             )
         except (Canceled, PauseRequested):
@@ -3069,6 +3128,13 @@ def _settle(
         outcome=settled.outcome,
         reason=None if settled.reason is None else settled.reason.value,
         detail=settled.detail,
+        recording=(
+            RecordingStatus.DEGRADED
+            if settled.recording_reason is not None
+            else RecordingStatus.OK
+        ),
+        recording_reason=settled.recording_reason,
+        recording_detail=settled.recording_detail,
     )
     ctx.emit(event)
     if settled.published_evidence is not None:
@@ -3099,6 +3165,11 @@ def _settle_failure(
         if isinstance(error, OperationFailure)
         else None
     )
+    recording_detail = (
+        getattr(error, "_recording_detail", None)
+        if recording_reason is not None
+        else None
+    )
     _settle(
         xset,
         state,
@@ -3110,6 +3181,7 @@ def _settle_failure(
             reason,
             {"error_type": type(error).__name__, "message": detail},
             recording_reason=recording_reason,
+            recording_detail=recording_detail,
         ),
     )
 
@@ -3699,6 +3771,8 @@ def _reduce_publication(
         or verdict.kind is OperationKind.UPDATE
         else {}
     )
+    detail.pop("recording", None)
+    detail.pop("recording_error", None)
     if cause.kind is _TerminalKind.ORDINARY_FAILURE:
         detail.update(
             {
@@ -3747,8 +3821,7 @@ def _reduce_publication(
         if cause.kind is _TerminalKind.ORDINARY_FAILURE:
             detail["published_path"] = verdict.published_path
             detail["durable_state"] = _DurableState.PUBLICATION_UNVERIFIED.value
-            detail["recording"] = RecordingStatus.DEGRADED.value
-            detail["recording_error"] = (
+            recording_detail = (
                 "filesystem mutation may have published but durable state "
                 "could not be verified"
             )
@@ -3762,6 +3835,7 @@ def _reduce_publication(
             )
             reason = verdict.probe_error.reason
             degrade = False
+            recording_detail = None
         detail["state_error_type"] = verdict.probe_error.type_name
         detail["state_error"] = verdict.probe_error.message
         return _SettlementReduction(
@@ -3771,6 +3845,7 @@ def _reduce_publication(
                 if degrade
                 else None
             ),
+            recording_detail=recording_detail,
         )
 
     if verdict.classification is not _PublicationClassification.CONFIRMED:
@@ -3804,8 +3879,7 @@ def _reduce_publication(
             detail["durable_state"] = target_durable_state.value
     else:
         detail["durable_state"] = target_durable_state.value
-    detail["recording"] = RecordingStatus.DEGRADED.value
-    detail["recording_error"] = (
+    recording_detail = (
         "published filesystem mutation failed before ledger settlement"
         if cause.kind is _TerminalKind.ORDINARY_FAILURE
         else "cancellation interrupted settlement of a published filesystem mutation"
@@ -3821,6 +3895,7 @@ def _reduce_publication(
             detail,
         ),
         recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
+        recording_detail=recording_detail,
     )
 
 
@@ -3858,8 +3933,7 @@ def _reduce_mutation(
         detail["mutation_state_error"] = _inline_probe_error(
             verdict.probe_error
         )
-    detail["recording"] = RecordingStatus.DEGRADED.value
-    detail["recording_error"] = (
+    recording_detail = (
         "filesystem mutation may have committed before ledger settlement"
     )
     return _SettlementReduction(
@@ -3873,6 +3947,7 @@ def _reduce_mutation(
             detail,
         ),
         recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
+        recording_detail=recording_detail,
     )
 
 
@@ -3902,9 +3977,6 @@ def _reduce_effect_settlement(
     if cause.kind is _TerminalKind.ORDINARY_FAILURE:
         for duplicate in ("error_type", "message", "publish_state"):
             mutation_detail.pop(duplicate, None)
-        if publication_reduction.recording_reason is not None:
-            for duplicate in ("recording", "recording_error"):
-                mutation_detail.pop(duplicate, None)
         mutation_durable_state = mutation_detail.pop("durable_state", None)
         publication_detail.update(mutation_detail)
         if mutation_durable_state is not None:
@@ -3937,9 +4009,14 @@ def _reduce_effect_settlement(
     }
     if len(recording_reasons) > 1:
         raise RuntimeError("settlement reducers disagree on recording cause")
+    recording_detail = (
+        publication_reduction.recording_detail
+        or mutation_reduction.recording_detail
+    )
     return _SettlementReduction(
         settled=settled,
         recording_reason=next(iter(recording_reasons), None),
+        recording_detail=recording_detail,
     )
 
 
@@ -3951,6 +4028,7 @@ def _apply_settlement_reduction(
     return replace(
         reduction.settled,
         recording_reason=reduction.recording_reason,
+        recording_detail=reduction.recording_detail,
     )
 
 
@@ -4694,10 +4772,9 @@ def _record(
                 "copy recorder did not return a recorded copy identity"
             )
     except Exception as error:
-        detail["recording"] = RecordingStatus.DEGRADED.value
-        detail["recording_error"] = _recording_error_detail(error)
         return _RecordObservation(
-            recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED
+            recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+            recording_detail=_recording_error_detail(error),
         )
     return _RecordObservation(
         recorded_identity=(
@@ -4718,6 +4795,7 @@ def _flush_before_destructive(recorder: Recorder) -> None:
         failure._recording_reason = (
             ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
         )
+        failure._recording_detail = _recording_error_detail(error)
         raise failure from error
 
 

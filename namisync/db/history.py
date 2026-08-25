@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
 from namisync.core.events import (
+    CORE_EVENT_SCHEMA_VERSION,
     Envelope,
     Gap,
     ItemOutcome,
@@ -21,11 +22,14 @@ from namisync.core.events import (
     Progress,
     StateChanged,
     Terminal,
+    TerminalSummary,
     envelope_from_dict,
     envelope_to_dict,
     result_item_to_dict,
+    terminal_summary_to_dict,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.execution import TaskRecordingIssue, TaskRecordingIssueReason
 from namisync.core.integrity import IntegrityMode, IntegrityResult
 from namisync.core.session import (
     Disposition,
@@ -38,6 +42,13 @@ from namisync.core.session import (
     SessionState,
     result_terminal_state,
 )
+from namisync.core.review import (
+    ReviewFactLimitExceeded,
+    ReviewLimitAxis,
+    ReviewPopulation,
+    ReviewTreeKind,
+)
+from namisync.core.scalars import require_safe_int
 
 from .connections import (
     DEFAULT_BUSY_TIMEOUT_MS,
@@ -61,8 +72,28 @@ from .writer import (
 
 
 MAX_HISTORY_PAGE_SIZE = 256
-MAX_HISTORY_PHASES = 256
+MAX_HISTORY_PHASES = 3
 _EMPTY_EVENT_CHAIN = hashlib.sha256(b"").digest()
+_HISTORY_BODY_TYPES = frozenset(
+    {
+        "StateChanged",
+        "PhaseChanged",
+        "Progress",
+        "ItemOutcome",
+        "IntegrityOutcome",
+        "Gap",
+        "Terminal",
+    }
+)
+
+
+def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    result: dict[str, object] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f"history JSON contains duplicate key: {key}")
+        result[key] = value
+    return result
 
 
 class Clock(Protocol):
@@ -241,6 +272,10 @@ class HistoryRunSummary:
     canceled: bool | None
     bytes_done: int | None
     bytes_total: int | None
+    recording_degraded_items: int | None
+    recording_issues: tuple[TaskRecordingIssue, ...]
+    omitted_detail_count: int | None
+    review_fact_limit: ReviewFactLimitExceeded | None
     succeeded_count: int
     skipped_count: int
     failed_count: int
@@ -399,25 +434,106 @@ def _context_payload(
     }
 
 
-def _terminal_result_payload(result: OperationResult) -> dict[str, object]:
-    return {
-        "status": result.status.value,
-        "recording": result.recording.value,
-        "audit": result.audit.value,
-        "disposition": result.disposition.value,
-        "canceled": result.canceled,
-        "phases": [_phase_to_dict(phase) for phase in result.phases],
-        "bytes_done": result.bytes_done,
-        "bytes_total": result.bytes_total,
-        "error": (
-            None
-            if result.error is None
-            else {
-                "type_name": result.error.type_name,
-                "message": result.error.message,
-            }
-        ),
-    }
+def _terminal_result_payload(result: TerminalSummary) -> dict[str, object]:
+    return terminal_summary_to_dict(result)
+
+
+def _recording_issues_json(issues: tuple[TaskRecordingIssue, ...]) -> str:
+    return json.dumps(
+        [
+            {"reason": issue.reason.value, "detail": issue.detail}
+            for issue in issues
+        ],
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _recording_issues_from_json(value: object) -> tuple[TaskRecordingIssue, ...]:
+    if type(value) is not str:
+        raise HistoryIntegrityError("history recording issues must be JSON text")
+    try:
+        raw = json.loads(value, object_pairs_hook=_unique_json_object)
+    except (TypeError, ValueError) as error:
+        raise HistoryIntegrityError(
+            "history recording issues are invalid JSON"
+        ) from error
+    if type(raw) is not list:
+        raise HistoryIntegrityError("history recording issues must be an array")
+    issues: list[TaskRecordingIssue] = []
+    try:
+        for item in raw:
+            if type(item) is not dict or set(item) != {"reason", "detail"}:
+                raise HistoryIntegrityError(
+                    "history recording issue shape is invalid"
+                )
+            detail = item["detail"]
+            if detail is not None and type(detail) is not str:
+                raise HistoryIntegrityError(
+                    "history recording issue detail is invalid"
+                )
+            issues.append(
+                TaskRecordingIssue(
+                    TaskRecordingIssueReason(item["reason"]),
+                    detail,
+                )
+            )
+    except HistoryIntegrityError:
+        raise
+    except (TypeError, ValueError) as error:
+        raise HistoryIntegrityError(
+            "history recording issue value is invalid"
+        ) from error
+    result = tuple(issues)
+    if _recording_issues_json(result) != value:
+        raise HistoryIntegrityError(
+            "history recording issues are not canonically encoded"
+        )
+    return result
+
+
+def _review_fact_values(
+    fact: ReviewFactLimitExceeded | None,
+) -> tuple[object, object, object, object, object, object]:
+    if fact is None:
+        return (None, None, None, None, None, None)
+    return (
+        fact.reason,
+        fact.tree_kind.value,
+        fact.population.value,
+        fact.axis.value,
+        fact.row_limit,
+        fact.byte_limit,
+    )
+
+
+def _review_fact_from_row(row: sqlite3.Row) -> ReviewFactLimitExceeded | None:
+    values = (
+        row["review_reason"],
+        row["review_tree_kind"],
+        row["review_population"],
+        row["review_axis"],
+        row["review_row_limit"],
+        row["review_byte_limit"],
+    )
+    if all(value is None for value in values):
+        return None
+    if any(value is None for value in values[:4]):
+        raise HistoryIntegrityError("history review-limit columns disagree")
+    try:
+        return ReviewFactLimitExceeded(
+            reason=str(values[0]),
+            tree_kind=ReviewTreeKind(str(values[1])),
+            population=ReviewPopulation(str(values[2])),
+            axis=ReviewLimitAxis(str(values[3])),
+            row_limit=None if values[4] is None else int(values[4]),
+            byte_limit=None if values[5] is None else int(values[5]),
+        )
+    except (TypeError, ValueError) as error:
+        raise HistoryIntegrityError(
+            "history review-limit columns are invalid"
+        ) from error
 
 
 def _prefix_projection_hash(
@@ -467,7 +583,7 @@ def _terminal_payload_hash(
     context_hash: bytes,
     prefix_projection_hash: bytes,
     ended_at: datetime,
-    result: OperationResult,
+    result: TerminalSummary,
 ) -> bytes:
     return _hash(
         {
@@ -479,7 +595,7 @@ def _terminal_payload_hash(
     )
 
 
-def _validate_terminal_text(result: OperationResult) -> None:
+def _validate_terminal_text(result: OperationResult | TerminalSummary) -> None:
     for phase in result.phases:
         _validate_bounded_text(
             phase.phase,
@@ -508,9 +624,20 @@ def _validate_terminal_text(result: OperationResult) -> None:
 def _validate_bounded_text(value: object, maximum: int, field: str) -> str:
     if not isinstance(value, str):
         raise HistoryIntegrityError(f"{field} must be text")
-    if len(value.encode("utf-8", errors="backslashreplace")) > maximum:
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise HistoryIntegrityError(f"{field} must be valid Unicode") from error
+    if len(encoded) > maximum:
         raise HistoryIntegrityError(f"{field} exceeds its UTF-8 byte bound")
     return value
+
+
+def _history_safe_int(value: object, field: str) -> int:
+    try:
+        return require_safe_int(value, field)
+    except (TypeError, ValueError) as error:
+        raise HistoryIntegrityError(f"{field} is invalid") from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -932,10 +1059,13 @@ class HistoryObserver:
                 f"history supports at most {MAX_HISTORY_PHASES} terminal phases"
             )
         try:
-            _validate_terminal_text(result)
-        except BaseException:
+            terminal_summary = TerminalSummary.from_result(result)
+            _validate_terminal_text(terminal_summary)
+        except BaseException as error:
             self._failed = True
-            raise
+            if isinstance(error, HistoryIntegrityError):
+                raise
+            raise HistoryIntegrityError("history terminal summary is invalid") from error
         try:
             _, payload_hash, audit = self._commit_window(result)
         except BaseException:
@@ -971,6 +1101,7 @@ class HistoryObserver:
                 if append.rejected_event_count > 0
                 else result
             )
+            terminal_summary = TerminalSummary.from_result(durable_result)
             terminal_state = result_terminal_state(durable_result).value
             projection_row = connection.execute(
                 "SELECT * FROM history_runs WHERE id = ?", (run_id,)
@@ -988,7 +1119,7 @@ class HistoryObserver:
                 self._context_hash,
                 terminal_prefix_hash,
                 ended_at,
-                durable_result,
+                terminal_summary,
             )
             if append.terminal_payload_hash is not None:
                 stored_phases = _load_phase_snapshots(connection, (run_id,))[run_id]
@@ -998,7 +1129,7 @@ class HistoryObserver:
                 )
                 if append.terminal_payload_hash != payload_hash:
                     raise TokenConflictError("history run token payload changed")
-                return append, payload_hash, durable_result.audit
+                return append, payload_hash, terminal_summary.audit
             started_at = append.started_at
             if ended_at < (started_at or self._record.created_at):
                 raise RecordingError("history end precedes actual start")
@@ -1020,7 +1151,7 @@ class HistoryObserver:
                         phase.bytes_total,
                         phase.error,
                     )
-                    for order, phase in enumerate(durable_result.phases)
+                    for order, phase in enumerate(terminal_summary.phases)
                 ),
             )
             connection.execute(
@@ -1029,30 +1160,38 @@ class HistoryObserver:
                           filesystem_status = ?, recording_status = ?,
                           audit_status = ?, disposition = ?, canceled = ?,
                           bytes_done = ?, bytes_total = ?, error_type = ?,
-                          error_message = ?, prefix_projection_hash = ?,
-                          terminal_payload_hash = ?
+                          error_message = ?, recording_degraded_items = ?,
+                          recording_issues_json = ?, omitted_detail_count = ?,
+                          review_reason = ?, review_tree_kind = ?,
+                          review_population = ?, review_axis = ?,
+                          review_row_limit = ?, review_byte_limit = ?,
+                          prefix_projection_hash = ?, terminal_payload_hash = ?
                     WHERE id = ?""",
                 (
                     None if started_at is None else encode_utc(started_at),
                     encode_utc(ended_at),
                     terminal_state,
-                    durable_result.status.value,
-                    durable_result.recording.value,
-                    durable_result.audit.value,
-                    durable_result.disposition.value,
-                    int(durable_result.canceled),
-                    durable_result.bytes_done,
-                    durable_result.bytes_total,
+                    terminal_summary.status.value,
+                    terminal_summary.recording.value,
+                    terminal_summary.audit.value,
+                    terminal_summary.disposition.value,
+                    int(terminal_summary.canceled),
+                    terminal_summary.bytes_done,
+                    terminal_summary.bytes_total,
                     (
                         None
-                        if durable_result.error is None
-                        else durable_result.error.type_name
+                        if terminal_summary.error is None
+                        else terminal_summary.error.type_name
                     ),
                     (
                         None
-                        if durable_result.error is None
-                        else durable_result.error.message
+                        if terminal_summary.error is None
+                        else terminal_summary.error.message
                     ),
+                    terminal_summary.recording_degraded_items,
+                    _recording_issues_json(terminal_summary.recording_issues),
+                    terminal_summary.omitted_detail_count,
+                    *_review_fact_values(terminal_summary.review_fact_limit),
                     terminal_prefix_hash,
                     payload_hash,
                     run_id,
@@ -1069,7 +1208,7 @@ class HistoryObserver:
                     rejected_event_count=append.rejected_event_count,
                 ),
                 payload_hash,
-                durable_result.audit,
+                terminal_summary.audit,
             )
 
         return self._store._writer.transact(apply)
@@ -1312,9 +1451,11 @@ class HistoryObserver:
                        event_disposition, envelope_json, payload_hash,
                        receipt_hash, item_identity_hash, item_payload_hash,
                        duplicate_of_seq, rejection_reason, item_order,
-                       item_type, phase, item_id, kind, path, result, reason
+                       item_type, phase, item_id, kind, path, result, reason,
+                       recording, recording_reason, recording_detail,
+                       detail_omitted_count
                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                             ?, ?, ?, ?, ?, ?, ?)""",
+                             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     run_id,
                     event.event_seq,
@@ -1337,6 +1478,22 @@ class HistoryObserver:
                     None if projection is None else projection["path"],
                     None if projection is None else projection["result"],
                     None if projection is None else projection["reason"],
+                    None if projection is None else projection["recording"],
+                    (
+                        None
+                        if projection is None
+                        else projection["recording_reason"]
+                    ),
+                    (
+                        None
+                        if projection is None
+                        else projection["recording_detail"]
+                    ),
+                    (
+                        None
+                        if projection is None
+                        else projection["detail_omitted_count"]
+                    ),
                 ),
             )
             if (
@@ -1839,8 +1996,14 @@ class HistoryRepository:
         }
         for row in rows:
             run_id = int(row["run_id"])
-            selected_count = int(row["selected_operation_count"])
-            selected_other_count = int(row["selected_other_operation_count"])
+            selected_count = _history_safe_int(
+                row["selected_operation_count"],
+                "history selected operation count",
+            )
+            selected_other_count = _history_safe_int(
+                row["selected_other_operation_count"],
+                "history selected other operation count",
+            )
             if not 0 <= selected_other_count <= selected_count:
                 raise HistoryIntegrityError(
                     "history selected-operation aggregate is inconsistent"
@@ -1897,6 +2060,18 @@ def _item_projection(body: object) -> dict[str, object] | None:
         "path": str(data["path"]),
         "result": str(data["result"]),
         "reason": None if data["reason"] is None else str(data["reason"]),
+        "recording": str(data["recording"]),
+        "recording_reason": (
+            None
+            if data.get("recording_reason") is None
+            else str(data["recording_reason"])
+        ),
+        "recording_detail": (
+            None
+            if data.get("recording_detail") is None
+            else str(data["recording_detail"])
+        ),
+        "detail_omitted_count": int(data["detail_omitted_count"]),
     }
 
 
@@ -2050,6 +2225,29 @@ def _validated_receipt(row: sqlite3.Row) -> _ValidatedReceipt:
         raise HistoryIntegrityError(
             "history event receipt metadata is invalid"
         ) from error
+    try:
+        _history_safe_int(event_seq, "history event sequence")
+        if event_seq < 1:
+            raise ValueError("history event sequence must be positive")
+        if duplicate_of_seq is not None:
+            _history_safe_int(
+                duplicate_of_seq,
+                "history duplicate sequence",
+            )
+            if duplicate_of_seq < 1:
+                raise ValueError("history duplicate sequence must be positive")
+        if item_order is not None:
+            _history_safe_int(item_order, "history item order")
+            if item_order < 1:
+                raise ValueError("history item order must be positive")
+        if schema_version != CORE_EVENT_SCHEMA_VERSION:
+            raise ValueError("history event schema version is unsupported")
+        if body_type not in _HISTORY_BODY_TYPES:
+            raise ValueError("history event body type is unsupported")
+    except (TypeError, ValueError) as error:
+        raise HistoryIntegrityError(
+            "history event receipt counters are invalid"
+        ) from error
     expected_receipt_hash = _receipt_hash(
         event_seq=event_seq,
         event_at=event_at_text,
@@ -2185,7 +2383,10 @@ def _history_event(
     if hashlib.sha256(envelope_text.encode("utf-8")).digest() != payload_hash:
         raise HistoryIntegrityError("history event payload hash disagrees")
     try:
-        raw = json.loads(envelope_text)
+        raw = json.loads(
+            envelope_text,
+            object_pairs_hook=_unique_json_object,
+        )
     except (TypeError, ValueError) as error:
         raise HistoryIntegrityError("history event payload is invalid JSON") from error
     if not isinstance(raw, Mapping):
@@ -2212,6 +2413,10 @@ def _history_event(
             "path": row["path"],
             "result": row["result"],
             "reason": row["reason"],
+            "recording": row["recording"],
+            "recording_reason": row["recording_reason"],
+            "recording_detail": row["recording_detail"],
+            "detail_omitted_count": row["detail_omitted_count"],
         }
         if row["item_type"] is not None
         else None
@@ -2271,8 +2476,12 @@ def _history_item(
         raise HistoryIntegrityError("history item row does not contain a result item")
     if row["item_order"] is None:
         raise HistoryIntegrityError("history item order is missing")
+    item_order = _history_safe_int(
+        row["item_order"],
+        "history item order",
+    )
     return HistoryItemSnapshot(
-        item_order=int(row["item_order"]),
+        item_order=item_order,
         event_seq=event.event_seq,
         item=event.envelope.body,
     )
@@ -2349,6 +2558,22 @@ def _history_summary(
         bytes_total=(
             None if row["bytes_total"] is None else int(row["bytes_total"])
         ),
+        recording_degraded_items=(
+            None
+            if row["recording_degraded_items"] is None
+            else int(row["recording_degraded_items"])
+        ),
+        recording_issues=(
+            ()
+            if row["recording_issues_json"] is None
+            else _recording_issues_from_json(row["recording_issues_json"])
+        ),
+        omitted_detail_count=(
+            None
+            if row["omitted_detail_count"] is None
+            else int(row["omitted_detail_count"])
+        ),
+        review_fact_limit=_review_fact_from_row(row),
         succeeded_count=int(row["succeeded_count"]),
         skipped_count=int(row["skipped_count"]),
         failed_count=int(row["failed_count"]),
@@ -2440,7 +2665,7 @@ def _validate_terminal_snapshot(
         canceled = int(row["canceled"])
         if canceled not in (0, 1):
             raise HistoryIntegrityError("history terminal canceled flag is invalid")
-        result = OperationResult(
+        result = TerminalSummary(
             status=SessionState(str(row["filesystem_status"])),
             recording=RecordingStatus(str(row["recording_status"])),
             audit=RecordingStatus(str(row["audit_status"])),
@@ -2450,6 +2675,12 @@ def _validate_terminal_snapshot(
             bytes_done=int(row["bytes_done"]),
             bytes_total=int(row["bytes_total"]),
             error=error,
+            recording_degraded_items=int(row["recording_degraded_items"]),
+            recording_issues=_recording_issues_from_json(
+                row["recording_issues_json"]
+            ),
+            omitted_detail_count=int(row["omitted_detail_count"]),
+            review_fact_limit=_review_fact_from_row(row),
         )
         if (
             int(row["rejected_event_count"]) > 0
@@ -2459,9 +2690,10 @@ def _validate_terminal_snapshot(
                 "history rejected receipts require degraded audit status"
             )
         _validate_terminal_text(result)
-        if result_terminal_state(result) is not SessionState(
-            str(row["current_state"])
-        ):
+        terminal_state = (
+            SessionState.CANCELED if result.canceled else result.status
+        )
+        if terminal_state is not SessionState(str(row["current_state"])):
             raise HistoryIntegrityError(
                 "history terminal lifecycle disagrees with its result"
             )
@@ -2516,6 +2748,22 @@ def _prefix_projection_hash_from_row(
 
 def _validate_prefix_snapshot(row: sqlite3.Row) -> None:
     try:
+        for column in (
+            "last_committed_seq",
+            "item_count",
+            "duplicate_item_count",
+            "rejected_event_count",
+            "succeeded_count",
+            "skipped_count",
+            "failed_count",
+            "canceled_count",
+            "deferred_count",
+            "blocked_count",
+        ):
+            _history_safe_int(
+                row[column],
+                f"history {column}",
+            )
         expected_hash = _prefix_projection_hash_from_row(row)
         if expected_hash != bytes(row["prefix_projection_hash"]):
             raise HistoryIntegrityError(
@@ -2627,10 +2875,9 @@ def _validate_summary_limit(limit: int) -> None:
 def _validate_page_arguments(
     after: int, through: int | None, limit: int, kind: str
 ) -> None:
-    if type(after) is not int or after < 0:
-        raise ValueError(f"history {kind} cursor must be a non-negative integer")
-    if through is not None and (type(through) is not int or through < 0):
-        raise ValueError(f"history {kind} watermark must be a non-negative integer")
+    require_safe_int(after, f"history {kind} cursor")
+    if through is not None:
+        require_safe_int(through, f"history {kind} watermark")
     if type(limit) is not int or not 1 <= limit <= MAX_HISTORY_PAGE_SIZE:
         raise ValueError(
             f"history {kind} page limit must be between 1 and "

@@ -24,6 +24,7 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import MappingPair, MappingSnapshot
+from namisync.core.scalars import file_index_128_from_text
 
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_reader
 from .schema import validate_ledger_reader_contract
@@ -121,10 +122,13 @@ def _optional_time(value: str | None) -> datetime | None:
     return None if value is None else decode_utc(value)
 
 
-def _identity(serial: str | None, index: int | None) -> FileIdentity | None:
-    if serial is None or index is None:
+def _identity(serial: str | None, index: str | None) -> FileIdentity | None:
+    if (serial is None) != (index is None):
+        raise ValueError("stored file identity columns disagree")
+    if serial is None:
         return None
-    return FileIdentity(serial, int(index))
+    assert index is not None
+    return FileIdentity(serial, file_index_128_from_text(index))
 
 
 def _observed_stat(row: sqlite3.Row) -> FileStat | None:
@@ -427,7 +431,9 @@ class LedgerRepository:
                 target_rel_path_key=normalize_relative_path(row["target_rel_path_key"]),
                 source_identity=FileIdentity(
                     row["source_identity_volume_serial"],
-                    int(row["source_identity_file_index"]),
+                    file_index_128_from_text(
+                        row["source_identity_file_index"]
+                    ),
                 ),
                 target_identity=_identity(
                     row["target_identity_volume_serial"],
@@ -510,7 +516,8 @@ class LedgerRepository:
             (location_id,),
         ).fetchall()
         return frozenset(
-            FileIdentity(row[0], int(row[1])) for row in rows
+            FileIdentity(row[0], file_index_128_from_text(row[1]))
+            for row in rows
         )
 
     def mapping_ids_for_location(self, location_id: int) -> tuple[int, ...]:

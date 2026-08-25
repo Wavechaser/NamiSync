@@ -9,6 +9,7 @@ from enum import StrEnum
 from typing import Literal, Protocol, TypeAlias
 
 from namisync.core.models import FileStat
+from namisync.core.scalars import require_signed_64
 
 
 class Outcome(StrEnum):
@@ -121,8 +122,7 @@ class ContentEvidence:
             raise TypeError("xxh3_128 digest must be bytes")
         if len(self.digest) != 16:
             raise ValueError("xxh3_128 digest must contain exactly 16 bytes")
-        if self.size < 0:
-            raise ValueError("evidence size cannot be negative")
+        require_signed_64(self.size, "evidence size")
         _require_utc(self.observed_at, "observed_at")
 
 

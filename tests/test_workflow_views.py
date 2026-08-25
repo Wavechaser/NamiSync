@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import pytest
 
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.execution import ItemRecordingReason
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
     Envelope,
@@ -25,20 +26,41 @@ from namisync.core.session import (
     SessionId,
     SessionState,
 )
-from namisync.workflows.views import operation_result_view, session_event_view
+from namisync.workflows.views import (
+    operation_result_view,
+    result_item_view,
+    session_event_view,
+)
 
 
-def _operation(outcome: Outcome, *, kind: str = "copy") -> ItemOutcome:
-    return ItemOutcome("operation", kind, "file.txt", outcome)
+def _operation(
+    outcome: Outcome,
+    *,
+    kind: str = "copy",
+    recording: RecordingStatus = RecordingStatus.OK,
+) -> ItemOutcome:
+    return ItemOutcome(
+        "a" * 32,
+        kind,
+        "file.txt",
+        outcome,
+        recording=recording,
+        recording_reason=(
+            ItemRecordingReason.RECORD_WRITE_FAILED
+            if recording is RecordingStatus.DEGRADED
+            else None
+        ),
+    )
 
 
 def _integrity(
     result: IntegrityResult,
     *,
     phase: str = IntegrityMode.VERIFY.value,
+    recording: RecordingStatus = RecordingStatus.OK,
 ) -> IntegrityOutcome:
     return IntegrityOutcome(
-        "integrity",
+        "b" * 32,
         "row",
         "location",
         "file.txt",
@@ -49,6 +71,7 @@ def _integrity(
             else None
         ),
         phase=phase,
+        recording=recording,
     )
 
 
@@ -60,7 +83,7 @@ def test_session_event_view_preserves_expanded_progress_body() -> None:
         7,
         20,
         "folder\\file.bin",
-        item_id="operation-1",
+        item_id="b" * 32,
         item_type="operation",
         item_attempt_id="a" * 32,
         item_bytes_done=7,
@@ -80,21 +103,21 @@ def test_session_event_view_preserves_expanded_progress_body() -> None:
         "phase": "execute",
         "items_done": 1,
         "items_total": 2,
-        "bytes_done": 7,
-        "bytes_total": 20,
+        "bytes_done": "7",
+        "bytes_total": "20",
         "current_path": "folder\\file.bin",
-        "item_id": "operation-1",
+        "item_id": "b" * 32,
         "item_type": "operation",
         "item_attempt_id": "a" * 32,
-        "item_bytes_done": 7,
-        "item_bytes_total": 10,
+        "item_bytes_done": "7",
+        "item_bytes_total": "10",
     }
     assert view.schema_version == CORE_EVENT_SCHEMA_VERSION
 
 
 def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
     item = IntegrityOutcome(
-        item_id="rowless",
+        item_id="c" * 32,
         row_id=None,
         location_id=None,
         path="file.txt",
@@ -103,6 +126,7 @@ def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
         recording=RecordingStatus.DEGRADED,
     )
 
+    item_view = result_item_view(item)
     view = operation_result_view(
         OperationResult(
             SessionState.COMPLETED,
@@ -111,10 +135,11 @@ def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
         )
     )
 
-    assert view.items[0].row_id is None
-    assert view.items[0].location_id is None
+    assert item_view.row_id is None
+    assert item_view.location_id is None
     assert view.integrity == "verified"
     assert view.recording == "degraded"
+    assert view.recording_degraded_items == 1
 
 
 @pytest.mark.parametrize(
@@ -165,7 +190,12 @@ def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
-                items=(_integrity(IntegrityResult.ERROR),),
+                items=(
+                    _integrity(
+                        IntegrityResult.ERROR,
+                        recording=RecordingStatus.DEGRADED,
+                    ),
+                ),
             ),
             "verification-incomplete",
         ),
@@ -173,7 +203,12 @@ def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
-                items=(_integrity(IntegrityResult.MODIFIED),),
+                items=(
+                    _integrity(
+                        IntegrityResult.MODIFIED,
+                        recording=RecordingStatus.DEGRADED,
+                    ),
+                ),
             ),
             "verification-incomplete",
         ),
@@ -189,7 +224,12 @@ def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
-                items=(_integrity(IntegrityResult.BASELINED),),
+                items=(
+                    _integrity(
+                        IntegrityResult.BASELINED,
+                        recording=RecordingStatus.DEGRADED,
+                    ),
+                ),
             ),
             "verification-incomplete",
         ),
@@ -221,7 +261,12 @@ def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
-                items=(_integrity(IntegrityResult.MISMATCHED),),
+                items=(
+                    _integrity(
+                        IntegrityResult.MISMATCHED,
+                        recording=RecordingStatus.DEGRADED,
+                    ),
+                ),
             ),
             "mismatch",
         ),
@@ -229,7 +274,12 @@ def test_rowless_post_copy_integrity_view_preserves_absent_identity() -> None:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
-                items=(_operation(Outcome.SKIPPED),),
+                items=(
+                    _operation(
+                        Outcome.SKIPPED,
+                        recording=RecordingStatus.DEGRADED,
+                    ),
+                ),
             ),
             "degraded",
         ),
@@ -256,7 +306,10 @@ def test_result_category_precedence(
 
 
 def test_result_view_keeps_order_tags_and_independent_truth_axes() -> None:
-    operation = _operation(Outcome.SUCCEEDED)
+    operation = _operation(
+        Outcome.SUCCEEDED,
+        recording=RecordingStatus.DEGRADED,
+    )
     integrity = _integrity(IntegrityResult.MISMATCHED)
     view = operation_result_view(
         OperationResult(
@@ -267,7 +320,8 @@ def test_result_view_keeps_order_tags_and_independent_truth_axes() -> None:
         )
     )
 
-    assert [(item.item_type, item.phase) for item in view.items] == [
+    item_views = tuple(result_item_view(item) for item in (operation, integrity))
+    assert [(item.item_type, item.phase) for item in item_views] == [
         ("operation", "execute"),
         ("integrity", "verify"),
     ]
@@ -341,7 +395,10 @@ def test_partial_precedes_mismatch_without_hiding_secondary_axes() -> None:
             recording=RecordingStatus.DEGRADED,
             audit=RecordingStatus.DEGRADED,
             items=(
-                _operation(Outcome.BLOCKED),
+                _operation(
+                    Outcome.BLOCKED,
+                    recording=RecordingStatus.DEGRADED,
+                ),
                 _integrity(IntegrityResult.MISMATCHED),
             ),
             phases=(

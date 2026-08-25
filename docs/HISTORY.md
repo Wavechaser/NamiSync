@@ -1,18 +1,17 @@
 # History Module
 
-Status: history schema v5 records receipt-aware reliable session events in
+Status: history schema v6 records exact core-event-v5 reliable receipts in
 bounded, incrementally durable windows and exposes bounded summary, item-page,
 and event-page reads. Retention, export, durable task custody, and execution
 resume remain later work.
 
-## Accepted Schema-V6 Persistence Target (Not Active)
+## Active Schema-V6 Persistence Boundary
 
-Status: accepted on 2026-08-24. History v5 remains active until the coordinated
-checkpoint-3 reset to history v6 beside ledger v4. `DATABASE.md` owns the
-pair metadata, refusal boundary, and reset instructions; there is no in-place
-migration or anticipatory schema creation.
+Status: active from Stage 6 checkpoint 3.2 beside ledger v4. `DATABASE.md` owns
+the pair metadata, refusal boundary, and reset instructions; there is no
+in-place migration.
 
-History v6 accepts only the coordinated exact core-event receipts, including
+History v6 accepts only the coordinated exact core-event-v5 receipts, including
 duplicate and bounded rejection receipts; it has no mixed-version page or
 compatibility decoder. The observer stores the canonical envelope and matching
 typed projection from the same admitted snapshot. `M1_BRIDGE.md` owns the exact
@@ -63,18 +62,16 @@ uses execute as the top-level byte domain. History records what NamiSync
 attempted and reported; reliable item receipts and the independent filesystem
 ledger, not this aggregate byte pair, own settlement and publication truth.
 
-## Schema V5 And Reset Boundary
+## Schema V6 And Reset Boundary
 
 The current exact marker is
-`contract_id=m1-history-windowed-receipts-v1` with
-`HISTORY_SCHEMA_VERSION = 5`. NamiSync refuses history v1-v4 and a v5 database
-with a missing or mismatched marker through a read-only connection. Refusal
+`contract_id=m1-history-v6-event-v5-recording-v1` with
+`HISTORY_SCHEMA_VERSION = 6` and `data_epoch=5`. NamiSync refuses history
+v1-v5 and a v6 database with a missing or mismatched marker through a read-only connection. Refusal
 must not alter the database or its WAL, SHM, or journal sidecars. This remains
 a pre-release reset-only boundary: close every NamiSync process and reset the
 ledger and history databases together. Startup never deletes either file and
-there is no v4-to-v5 migration because v4 has no receipt dispositions,
-semantic duplicate links, or hash-only rejection rows from which to
-reconstruct the v5 chain.
+there is no migration from an older event/evidence epoch.
 
 `history_runs` is created provisionally by the first committed window. It holds
 immutable context, lifecycle and phase, the committed sequence and item
@@ -123,9 +120,8 @@ bounded even if that identity has many linked rejected receipts.
 
 `history_phases` remains a small terminal summary, not an event-detail store.
 Its explicit phase-count ceiling protects summary reads from hostile or broken
-producers. Phase names and terminal failure type names are limited to 256
-UTF-8 bytes; phase errors and terminal failure messages are limited to 4,096
-UTF-8 bytes. Oversize text rejects history finalization before its transaction,
+producers. Phase names, terminal failure type names, phase errors, and terminal
+failure messages are each limited to 1,024 UTF-8 bytes. Oversize text rejects history finalization before its transaction,
 degrading audit while leaving any earlier committed prefix incomplete and
 readable. Matching SQLite byte-length checks defend the stored contract. Phase
 detail and terminal axes are written only in the finalization transaction.
@@ -140,10 +136,11 @@ these defaults:
 - `max_event_bytes = 1_048_576` serialized bytes
 - `max_age_seconds = 1.0`
 
-An observer serializes and hashes a reliable envelope before retaining it. An
-individual supported event over the per-event ceiling becomes a bounded
-hash-only `event-too-large` receipt, commits immediately, and returns
-`audit=DEGRADED`; later events still enter the same run. Before accepting an
+An observer serializes and hashes a reliable envelope before retaining it. The
+production event-v5 hub rejects an envelope over the same per-event ceiling
+before assigning a sequence; history's bounded hash-only `event-too-large`
+receipt remains a defensive observer seam for direct injection or a deliberately
+stricter policy. Before accepting an
 event that would cross the window byte or count bound, the existing window is
 committed. Reaching either bound commits immediately. `StateChanged(PAUSED)`
 forces a commit after that event is admitted. The audit pump commits by the
@@ -258,27 +255,14 @@ and decode no more than the requested limit. The service projects these rows as
 `HistoryEventView`; it does not synthesize a live `SessionEventView` for a
 hash-only rejection receipt.
 
-Under current history v5, each `HistoryEventView.schema_version` is the
-persisted core event version of that row, not the current live-drain version.
-Recorded and duplicate rows may therefore legitimately mix supported v3 and v4
-envelopes in one page. Readback authenticates the receipt and original payload,
-dispatches the Python core decoder by the row version, and exposes a canonical
-typed body; a rejected receipt instead has `body=None`. Because the current
-reliable-body decoder is additive and uses selected local defaults, that
-canonical view is not a byte-preserving copy of the authenticated JSON. The
-payload hash, not the projected body, remains the identity of the retained
-envelope.
-
-That compatibility posture ends at the accepted checkpoint-3 coordinated
-event/database reset. The target history projection consumes only the exact
-accepted event schema and needs no legacy or mixed-version browser validator;
-an old, mixed, or incomplete database pair refuses before commands. Exact
-epochs, reset rules, and projection shapes are owned by `M1_BRIDGE.md`.
-Until checkpoint 3 lands, current history validators remain boundary-specific:
-compatibility-decode success does not prove live or JavaScript-safe
-representation, a retained row does not pass through the live validator, and
-v3 compatibility is not tightened without reviewing authenticated fixtures.
-These current allowances are not accepted future shapes.
+Every current `HistoryEventView.schema_version` is exactly 5. Recorded and
+duplicate rows authenticate and decode the exact canonical envelope; rejected
+receipts instead expose `body=None`. The coordinated reset makes a mixed-version
+page unrepresentable: old, mixed, markerless, or incomplete database pairs
+refuse before mutating commands. The payload hash remains the identity of the
+retained envelope. Checkpoint 3.2 still carries an unreachable private legacy
+decoder in core source, but no history-v6 row or repository route can select it;
+checkpoint 3.3 removes it.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including
@@ -297,8 +281,11 @@ Workflow code supplies the finite selection-exclusion/no-op predicates and,
 not SQL, interprets the resulting primitive counts into integrity and headline
 values. The service exposes `list_history()`,
 `get_history_summary()`, `get_history_items()`, and `get_history_events()`.
-There is no unbounded `get_history()` compatibility path. CLI detail rendering
-prints the summary and streams item pages without assembling a complete run.
+There is no unbounded `get_history()` compatibility path. History-detail CLI
+rendering streams item pages without assembling a complete run. A healthy live
+terminal CLI render also replays the fixed finalized item watermark, so a run
+that finishes before observation still has canonical itemized output; a
+degraded audit falls back to the items observed live.
 
 ## Subscriber Repair
 
@@ -417,7 +404,7 @@ fixed summary query count without event decoding; WAL reader visibility;
 streamed CLI output; subscriber repair; finalization parity; and the relevant
 query plans.
 
-Checkpoint-3 coverage proves exact event-v5-only persistence, canonical-envelope/
+Checkpoint-3.2 coverage proves exact event-v5-only persistence, canonical-envelope/
 typed-projection agreement, immutable item recording facts, once-only full-
 result finalization, the all-null-or-complete review-limit group, and bounded
 rejection recovery. Shared event-shape and scalar boundary cases remain with

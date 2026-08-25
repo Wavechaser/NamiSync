@@ -10,11 +10,12 @@ from contextlib import contextmanager
 from pathlib import Path, PureWindowsPath
 from typing import Iterator
 
+from namisync.core.file_identity import file_identity_from_windows_handle
 from namisync.core.integrity import (
     ReadStrategy,
     UnsupportedVerification,
 )
-from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
+from namisync.core.models import EntryKind, FileStat, MetadataSnapshot
 from namisync.core.pathing import (
     lexical_absolute_path,
     logical_error_text,
@@ -51,6 +52,8 @@ _ERROR_PATH_NOT_FOUND = 3
 _ERROR_ACCESS_DENIED = 5
 _ERROR_INVALID_PARAMETER = 87
 _WINDOWS_EPOCH_TICKS = 116_444_736_000_000_000
+_FILE_BASIC_INFO_CLASS = 0
+_FILE_STANDARD_INFO_CLASS = 1
 
 
 class WindowsUnbufferedReader:
@@ -176,25 +179,23 @@ def _same_logical_path(left: str, right: str) -> bool:
     )
 
 
-class _FileTime(ctypes.Structure):
+class _FileBasicInfo(ctypes.Structure):
     _fields_ = [
-        ("dwLowDateTime", ctypes.c_uint32),
-        ("dwHighDateTime", ctypes.c_uint32),
+        ("CreationTime", ctypes.c_longlong),
+        ("LastAccessTime", ctypes.c_longlong),
+        ("LastWriteTime", ctypes.c_longlong),
+        ("ChangeTime", ctypes.c_longlong),
+        ("FileAttributes", ctypes.c_uint32),
     ]
 
 
-class _ByHandleFileInformation(ctypes.Structure):
+class _FileStandardInfo(ctypes.Structure):
     _fields_ = [
-        ("dwFileAttributes", ctypes.c_uint32),
-        ("ftCreationTime", _FileTime),
-        ("ftLastAccessTime", _FileTime),
-        ("ftLastWriteTime", _FileTime),
-        ("dwVolumeSerialNumber", ctypes.c_uint32),
-        ("nFileSizeHigh", ctypes.c_uint32),
-        ("nFileSizeLow", ctypes.c_uint32),
-        ("nNumberOfLinks", ctypes.c_uint32),
-        ("nFileIndexHigh", ctypes.c_uint32),
-        ("nFileIndexLow", ctypes.c_uint32),
+        ("AllocationSize", ctypes.c_longlong),
+        ("EndOfFile", ctypes.c_longlong),
+        ("NumberOfLinks", ctypes.c_uint32),
+        ("DeletePending", ctypes.c_ubyte),
+        ("Directory", ctypes.c_ubyte),
     ]
 
 
@@ -218,11 +219,13 @@ class _WindowsApi:
         k32.CreateFileW.restype = ctypes.c_void_p
         k32.CloseHandle.argtypes = [ctypes.c_void_p]
         k32.CloseHandle.restype = ctypes.c_int
-        k32.GetFileInformationByHandle.argtypes = [
+        k32.GetFileInformationByHandleEx.argtypes = [
             ctypes.c_void_p,
-            ctypes.POINTER(_ByHandleFileInformation),
+            ctypes.c_int,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
         ]
-        k32.GetFileInformationByHandle.restype = ctypes.c_int
+        k32.GetFileInformationByHandleEx.restype = ctypes.c_int
         k32.ReadFile.argtypes = [
             ctypes.c_void_p,
             ctypes.c_void_p,
@@ -307,32 +310,45 @@ class _WindowsApi:
         self._kernel32.CloseHandle(handle)
 
     def stat(self, handle: int) -> FileStat:
-        info = _ByHandleFileInformation()
-        if not self._kernel32.GetFileInformationByHandle(handle, ctypes.byref(info)):
-            error = ctypes.get_last_error()
-            raise OSError(error, os.strerror(error))
-        if info.dwFileAttributes & _FILE_ATTRIBUTE_REPARSE_POINT:
+        basic = _FileBasicInfo()
+        self._get_file_information(handle, _FILE_BASIC_INFO_CLASS, basic)
+        standard = _FileStandardInfo()
+        self._get_file_information(handle, _FILE_STANDARD_INFO_CLASS, standard)
+        if basic.FileAttributes & _FILE_ATTRIBUTE_REPARSE_POINT:
             raise UnsupportedVerification("verification refuses a reparse subject")
-        if info.dwFileAttributes & _FILE_ATTRIBUTE_DIRECTORY:
+        if basic.FileAttributes & _FILE_ATTRIBUTE_DIRECTORY:
             raise UnsupportedVerification("verification selections must name files")
 
-        size = (info.nFileSizeHigh << 32) | info.nFileSizeLow
-        file_index = (info.nFileIndexHigh << 32) | info.nFileIndexLow
-        identity = FileIdentity(
-            volume_serial=f"{info.dwVolumeSerialNumber:08X}",
-            file_index=file_index,
+        identity = file_identity_from_windows_handle(
+            handle,
+            self._kernel32.GetFileInformationByHandleEx,
         )
         return FileStat(
             kind=EntryKind.FILE,
-            size=size,
-            mtime_ns=_filetime_to_unix_ns(info.ftLastWriteTime),
+            size=standard.EndOfFile,
+            mtime_ns=_filetime_to_unix_ns(basic.LastWriteTime),
             file_identity=identity,
-            nlink=info.nNumberOfLinks,
+            nlink=standard.NumberOfLinks,
             metadata=MetadataSnapshot(
-                attributes=info.dwFileAttributes,
-                created_ns=_filetime_to_unix_ns(info.ftCreationTime),
+                attributes=basic.FileAttributes,
+                created_ns=_filetime_to_unix_ns(basic.CreationTime),
             ),
         )
+
+    def _get_file_information(
+        self,
+        handle: int,
+        information_class: int,
+        target: ctypes.Structure,
+    ) -> None:
+        if not self._kernel32.GetFileInformationByHandleEx(
+            handle,
+            information_class,
+            ctypes.byref(target),
+            ctypes.sizeof(target),
+        ):
+            error = ctypes.get_last_error()
+            raise OSError(error, os.strerror(error))
 
     def sector_size(self, path: Path) -> int:
         volume_buffer = ctypes.create_unicode_buffer(32768)
@@ -450,9 +466,8 @@ def _align_up(value: int, alignment: int) -> int:
     return ((value + alignment - 1) // alignment) * alignment
 
 
-def _filetime_to_unix_ns(value: _FileTime) -> int:
-    ticks = (value.dwHighDateTime << 32) | value.dwLowDateTime
-    return (ticks - _WINDOWS_EPOCH_TICKS) * 100
+def _filetime_to_unix_ns(windows_ticks: int) -> int:
+    return (windows_ticks - _WINDOWS_EPOCH_TICKS) * 100
 
 
 def _extended_path(path: Path) -> str:

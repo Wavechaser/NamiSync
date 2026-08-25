@@ -1,5 +1,5 @@
 const BRIDGE_SCHEMA_VERSION = 1;
-const LIVE_CORE_EVENT_SCHEMA_VERSION = 4;
+const LIVE_CORE_EVENT_SCHEMA_VERSION = 5;
 const DORMANT_CORE_EVENT_SCHEMA_VERSION = 5;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
 const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
@@ -1236,7 +1236,7 @@ function sameActiveIdentity(left, right) {
 function progressAggregateAdvances(previous, current) {
   if (
     current.items_done < previous.items_done ||
-    current.bytes_done < previous.bytes_done
+    BigInt(current.bytes_done) < BigInt(previous.bytes_done)
   ) {
     return false;
   }
@@ -1262,7 +1262,7 @@ function progressAggregateAdvances(previous, current) {
   return !(
     previous.phase !== "execute" &&
     previous.bytes_total !== null &&
-    current.bytes_total < previous.bytes_total
+    BigInt(current.bytes_total) < BigInt(previous.bytes_total)
   );
 }
 
@@ -1276,7 +1276,7 @@ function sameAttemptAdvances(previous, current) {
     return true;
   }
   return (
-    current.item_bytes_done >= previous.item_bytes_done &&
+    BigInt(current.item_bytes_done) >= BigInt(previous.item_bytes_done) &&
     current.item_bytes_total === previous.item_bytes_total
   );
 }
@@ -1513,6 +1513,10 @@ function validateTaskUpdate(update, sessionId) {
 }
 
 function validateLiveSessionEvent(event, sessionId) {
+  return validateDormantSessionEventV5(event, sessionId);
+}
+
+function validateLegacySessionEvent(event, sessionId) {
   if (
     !isExactObject(event, [
       "session_id",
@@ -1776,8 +1780,8 @@ function validateCoreOperationResult(value) {
 }
 
 function validateOperationResultView(value) {
-  return (
-    isExactObject(value, [
+  if (
+    !isExactObject(value, [
       "headline",
       "filesystem",
       "integrity",
@@ -1785,30 +1789,72 @@ function validateOperationResultView(value) {
       "audit",
       "disposition",
       "canceled",
-      "items",
       "phases",
       "bytes_done",
       "bytes_total",
       "error",
-    ]) &&
-    isOneOf(value.headline, RESULT_HEADLINES) &&
-    isOneOf(value.filesystem, TERMINAL_STATES) &&
-    isOneOf(value.integrity, RESULT_INTEGRITY_STATES) &&
-    isOneOf(value.recording, RECORDING_STATES) &&
-    isOneOf(value.audit, RECORDING_STATES) &&
-    isOneOf(value.disposition, DISPOSITIONS) &&
-    typeof value.canceled === "boolean" &&
-    Array.isArray(value.items) &&
-    value.items.every(validateResultItem) &&
-    Array.isArray(value.phases) &&
-    value.phases.every(validatePhaseResult) &&
-    isNonnegativeInteger(value.bytes_done) &&
-    isNonnegativeInteger(value.bytes_total) &&
-    value.bytes_done <= value.bytes_total &&
-    (value.filesystem !== "canceled" || value.canceled) &&
-    !(value.filesystem === "refused" && value.canceled) &&
-    (value.filesystem !== "refused" || value.disposition === "unrun") &&
-    isNullableText(value.error)
+      "recording_degraded_items",
+      "recording_issues",
+      "omitted_detail_count",
+      "presentation_omitted_detail_count",
+      "review_refusal",
+    ]) ||
+    !isOneOf(value.headline, RESULT_HEADLINES) ||
+    !isOneOf(value.filesystem, TERMINAL_STATES) ||
+    !isOneOf(value.integrity, RESULT_INTEGRITY_STATES) ||
+    !isOneOf(value.recording, RECORDING_STATES) ||
+    !isOneOf(value.audit, RECORDING_STATES) ||
+    !isOneOf(value.disposition, DISPOSITIONS) ||
+    typeof value.canceled !== "boolean" ||
+    !Array.isArray(value.phases) ||
+    value.phases.length > 3 ||
+    !value.phases.every(validateDormantPhaseResultV5) ||
+    new Set(value.phases.map((phase) => phase.phase)).size !==
+      value.phases.length ||
+    !isScalar64(value.bytes_done) ||
+    !isScalar64(value.bytes_total) ||
+    BigInt(value.bytes_done) > BigInt(value.bytes_total) ||
+    !(value.error === null || isBoundedV5Text(value.error, false)) ||
+    !isNonnegativeInteger(value.recording_degraded_items) ||
+    !Array.isArray(value.recording_issues) ||
+    value.recording_issues.length > 5 ||
+    !value.recording_issues.every(validateDormantRecordingIssueV5) ||
+    new Set(value.recording_issues.map((issue) => issue.reason)).size !==
+      value.recording_issues.length ||
+    !isNonnegativeInteger(value.omitted_detail_count) ||
+    !isNonnegativeInteger(value.presentation_omitted_detail_count) ||
+    !(
+      value.review_refusal === null ||
+      validateDormantReviewFactV5(value.review_refusal)
+    )
+  ) {
+    return false;
+  }
+  const expectedRecording =
+    value.recording_degraded_items > 0 || value.recording_issues.length > 0
+      ? "degraded"
+      : "ok";
+  if (
+    value.recording !== expectedRecording ||
+    (value.filesystem === "canceled" && !value.canceled) ||
+    (value.filesystem === "refused" &&
+      (value.canceled || value.disposition !== "unrun"))
+  ) {
+    return false;
+  }
+  return (
+    value.review_refusal === null ||
+    (value.filesystem === "refused" &&
+      value.disposition === "unrun" &&
+      !value.canceled &&
+      value.bytes_done === "0" &&
+      value.bytes_total === "0" &&
+      value.phases.length === 0 &&
+      value.recording_degraded_items === 0 &&
+      value.recording_issues.length === 0 &&
+      value.omitted_detail_count === 0 &&
+      value.presentation_omitted_detail_count === 0 &&
+      value.error === null)
   );
 }
 
@@ -1821,9 +1867,8 @@ function validateResultItem(value) {
     : value.item_type === "integrity" && validateIntegrityItem(value);
 }
 
-// Direct checkpoint-3 staging seam. Production drain routing continues to call
-// validateLiveSessionEvent and therefore remains exact-v4 until the coordinated
-// producer/database cutover.
+// Direct checkpoint-3 seam retained through the v5 safe stop. Production now
+// routes through this exact validator; the legacy branch above is read-only.
 export function validateDormantSessionEventV5(event, sessionId) {
   if (
     !isExactObject(event, [

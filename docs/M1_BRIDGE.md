@@ -141,11 +141,11 @@ target authority; it does not activate that target before its named checkpoint.
 
 ## Shared exact Stage 6 target register
 
-**Status (2026-08-24): accepted but not active.** This section is the newest
-target register for Slices 5-6 and early Slice 7. Each row becomes production-
-active only in its named checkpoint; until then the explicitly labeled current-
-source allowlist and event-v4 implementation later in this document remain
-active. This is not a second decision layer and is not a blanket
+**Status (2026-08-25): checkpoint 3.2 protocol subset active.** This section is
+the newest target register for Slices 5-6 and early Slice 7. The exact epoch,
+scalar, recording, and persistence subsection is production-active; every
+remaining row becomes active only in its named checkpoint. Checkpoint 3.3 still
+removes the unreachable private legacy event source seam. This is not a second decision layer and is not a blanket
 precedence rule. It consolidates and supersedes only repeated exact type, wire,
 command, lifetime, and ordering fragments assigned by the map above. Those
 records continue to own rationale, module placement, user interaction, and any
@@ -163,8 +163,14 @@ storage, and data-epoch persistence; and DR-BR-21, DR-BR-24, and DR-BR-27 own
 terminal custody, concurrent transport, and exact wire/retry projection
 respectively.
 
-Core events cut directly to exact v5 with no public legacy constant or v3/v4
-decoder. The bridge envelope remains v1 and every live `SessionEventView`
+**Activation status:** active from checkpoint 3.2. Later task, artifact,
+population-retention, and product-surface shapes in this register remain
+accepted targets until their named checkpoints.
+
+Production core events now use exact v5 with no public legacy constant or
+reachable v3/v4 decoder. Checkpoint 3.2 retains one private, read-only legacy
+branch that no current dispatcher, history, service, or browser route can
+select; checkpoint 3.3 deletes it. The bridge envelope remains v1 and every live `SessionEventView`
 requires nested `schema_version=5`. The process-local sync-execution payload
 is exact v6; the sync-plan payload remains exact v5, and inventory and
 standalone-integrity payloads remain exact v2. Its transient copy
@@ -228,7 +234,7 @@ branches and which remain fail-closed assertions after an earlier platform or
 aggregate bound. Opaque row identities remain strings and ledger-v4 file-
 identity indexes use `FileIndex128` text.
 
-At checkpoint 3, `FileIdentity.file_index` admits the full Windows 128-bit
+From checkpoint 3.2, `FileIdentity.file_index` admits the full Windows 128-bit
 file-id domain internally and every workflow/persistence codec emits
 `FileIndex128`; no file identity crosses JSON or SQLite as a numeric value. One
 core-owned Windows adapter canonicalizes CPython 3.13 `st_ino` and the complete
@@ -2235,9 +2241,10 @@ browser never derives a peer from paths.
 
 ### DR-BR-14 — Progress carries item identity, never a display path
 
-The accepted Stage 6 target is exact core event v5. The source-backed runtime
-remains v4 only until protocol checkpoint 3; that compatibility machinery is
-then deleted rather than exposed as a legacy desktop mode. Shared field
+The accepted Stage 6 target and active source-backed runtime use exact core
+event v5. Checkpoint 3.2 has made older compatibility unreachable; checkpoint
+3.3 deletes the remaining private read-only source branch rather than exposing
+it as a legacy desktop mode. Shared field
 meanings, reporter transitions, authority order, and Gap behavior are owned by
 `ARCHITECTURE.md` §§2.3 and 2.7.
 
@@ -3247,7 +3254,7 @@ The just-settled identity cannot become active again without an intervening
 inactive snapshot, different active identity, or temporal domain.
 An authoritative inactive Progress may also clear activity at a reporter's
 exception boundary. `Gap` clears phase-dependent Progress state and temporal
-comparisons; a later self-described v4 Progress may restore displayable phase
+comparisons; a later self-described v5 Progress may restore displayable phase
 authority without reconstructing missed outcomes. `Terminal` and the terminal
 session record clear Progress and remain final truth. A pause state does not
 clear activity, and `current_path` never creates or joins identity. Callback
@@ -4497,7 +4504,7 @@ headings are organizational, not lane ownership.
   10.006546282576 reliable items/s. Its 37,826,560 incremental private bytes
   remain diagnostic. It again had no `Gap`, monotonic Progress, and all
   terminals. The failed first diagnostic is retained in the disposition rather
-  than replaced by the favorable repeat; neither run creates current-v4 Tier-2
+  than replaced by the favorable repeat; neither run creates v4 Tier-2
   timing acceptance, and both retain
   `sh_g_8_acceptance=incomplete-without-custody`.
 

@@ -1622,7 +1622,7 @@ def test_history_event_witnesses_are_supported_reliable_row_contracts() -> None:
     )
     page = PUBLIC_VIEW_WITNESSES[HistoryEventPageView][0].value
 
-    assert {event.schema_version for event in events} == {3, 4}
+    assert {event.schema_version for event in events} == {5}
     assert page.events == events
     assert tuple(event.sequence for event in page.events) == (9, 10)
     assert len({event.sequence for event in page.events}) == len(page.events)
@@ -1654,7 +1654,7 @@ def test_history_event_witnesses_are_supported_reliable_row_contracts() -> None:
                 "at": event.at,
                 "schema_version": event.schema_version,
                 "body_type": event.body_type,
-                "body": event.body,
+                    "body": dict(event.body),
             }
         )
         assert delivery_class(decoded.body) is DeliveryClass.RELIABLE

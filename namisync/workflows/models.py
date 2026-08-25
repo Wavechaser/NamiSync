@@ -16,6 +16,8 @@ from namisync.core.preflight import Verdict
 from namisync.core.session import PhaseResult, PhaseStatus, SessionState
 from namisync.workflows.views import (
     PhaseResultView,
+    RecordingIssueView,
+    ReviewFactLimitView,
     ResultItemView,
     SemanticSettingsView,
 )
@@ -253,7 +255,7 @@ class PlanOperationView:
     blocked_reason: str | None
     selection_outcome: str | None
     selection_reason: str | None
-    content_bytes: int
+    content_bytes: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,9 +270,9 @@ class PlanReview:
     semantic_settings: SemanticSettingsView
     fingerprint: str
     selection_digest_hex: str
-    required_bytes: int
-    free_bytes: int | None
-    reclaimable_temp_bytes: int
+    required_bytes: str
+    free_bytes: str | None
+    reclaimable_temp_bytes: str
     warnings: tuple[str, ...]
     refusals: tuple[RefusalView, ...]
     operations: tuple[PlanOperationView, ...]
@@ -314,8 +316,12 @@ class HistoryRunSummaryView:
     canceled: bool | None
     integrity_status: str
     headline: str
-    bytes_done: int | None
-    bytes_total: int | None
+    bytes_done: str | None
+    bytes_total: str | None
+    recording_degraded_items: int | None
+    recording_issues: tuple[RecordingIssueView, ...]
+    omitted_detail_count: int | None
+    review_refusal: ReviewFactLimitView | None
     succeeded_count: int
     skipped_count: int
     failed_count: int

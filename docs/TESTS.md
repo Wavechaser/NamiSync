@@ -85,13 +85,14 @@ to child-copy activity without treating it as settlement. These are behavior
 checks against production producers and the packaged JavaScript, not
 source-text witnesses.
 
-Current decoder-boundary guards remain separate: the browser source gate keeps
-`validateLiveSessionEvent` current-version and reachable only from the live
-`event` drain arm, while the service history guard reads a mixed v3/v4 page as
-`HistoryEventView` rows. These are current-behavior regressions, not an accepted
-future compatibility surface. `M1_SHELL_H2.md` checkpoint 3 replaces them at
-the coordinated reset with the exact target and reset tests owned by
-`M1_BRIDGE.md`.
+Current decoder-boundary guards freeze one exact event-v5 graph across Python,
+the live `event` drain arm, service/history projections, and packaged
+JavaScript. Duplicate-key, wrong-version, noncanonical `Scalar64`, Boolean-as-
+integer, cross-field, and reliable-envelope-bound corpora must fail before
+cursor or queue mutation; the exact maximum event is drained alone. History-v6
+pages cannot carry a prior event version. Checkpoint 3.2 leaves only an
+unreachable private read-only v3/v4 source seam for checkpoint 3.3 to delete;
+it is not a positive runtime fixture or supported compatibility surface.
 
 ```powershell
 $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'

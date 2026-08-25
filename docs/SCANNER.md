@@ -196,12 +196,13 @@ Unknowns degrade conservatively: unknown seek penalty behaves like HDD for any
 future parallelism decision; absent stable identity disables identity moves;
 coarse timestamps control planner comparison tolerance.
 
-At the accepted scalar cutover, scanner projects unsupported numeric and native
+At the active checkpoint-3.2 scalar cutover, scanner projects unsupported numeric and native
 identity observations through the exact typed outcomes in
 [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; it defines no
-local numeric domain or fallback. Its checkpoint-3 implementation takes stable
-file identity from the shared native adapter and emits the accepted path-local
-warning when a timestamp cannot enter the scalar domain.
+local numeric domain or fallback. Stable NTFS/ReFS identity comes from the
+shared complete-file-id adapter, and a path-local
+`scalar_unrepresentable` warning marks an otherwise observable entry whose
+size or timestamp cannot enter the signed-64 domain.
 
 The stable volume key is `(serial, fs_type)`; labels are mutable corroborating
 evidence. Relabeling does not rebind, a changed filesystem type does, and

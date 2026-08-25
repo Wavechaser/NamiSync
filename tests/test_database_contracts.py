@@ -149,6 +149,44 @@ def test_wrong_role_contract_marker_refuses_read_only(
     service.close()
 
 
+@pytest.mark.parametrize(
+    ("role", "key", "old_value"),
+    (
+        ("ledger", "schema_version", "3"),
+        ("history", "schema_version", "5"),
+        ("ledger", "data_epoch", "4"),
+        ("history", "data_epoch", "4"),
+    ),
+)
+def test_old_or_mixed_database_epoch_refuses_without_mutation(
+    tmp_path: Path,
+    role: str,
+    key: str,
+    old_value: str,
+) -> None:
+    service, ledger, history = _service(tmp_path)
+    initialize_ledger(ledger)
+    initialize_history(history)
+    selected = ledger if role == "ledger" else history
+    with closing(sqlite3.connect(selected)) as connection:
+        with connection:
+            connection.execute(
+                "UPDATE schema_metadata SET value = ? WHERE key = ?",
+                (old_value, key),
+            )
+    before = _snapshot(ledger, history)
+
+    first = service.validate_database_contracts()
+    second = service.validate_database_contracts()
+
+    assert first == second
+    assert first.state == "refused"
+    assert first.reason == f"{role}-contract"
+    assert first.reset_direction is not None
+    assert _snapshot(ledger, history) == before
+    service.close()
+
+
 def test_matching_database_pair_is_ready_and_read_only(tmp_path: Path) -> None:
     service, ledger, history = _service(tmp_path)
     initialize_ledger(ledger)

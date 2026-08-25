@@ -4,13 +4,14 @@ Status: the verifier component package and M1 Stage 3 location-centric
 inventory/baseline/verify/rebaseline workflows are implemented. M1 Stage 4
 also feeds the same ledger-neutral classifier transient post-copy candidates
 for optional in-session readback. The production dispatcher registry carries
-all four headless kinds and receipt-aware history v5 commits standalone and
+all four headless kinds and receipt-aware history v6 commits standalone and
 compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
-actions remain Stage 6. The no-rescan manual post-copy handoff, ledger-current
-classification, and signed-64 desktop scalar rules below are accepted Stage 6
-targets and are not active until their implementation gates close.
+actions remain Stage 6. Signed-64 totals, exact event v5, and full-width native
+identity are active from checkpoint 3.2. The no-rescan manual post-copy handoff
+and ledger-current classification below remain accepted Stage 6 targets until
+their implementation gates close.
 
 ## Purpose
 
@@ -219,7 +220,8 @@ invocation context is not continuation state and does not alter payload version
 the reporter. Exact continuation and event versions, closed detail
 projection, scalar domains, omission witnesses, and envelope limits are owned by
 [M1_BRIDGE.md](M1_BRIDGE.md); verifier preserves only the local pause/resume
-state needed to continue the same admitted work.
+state needed to continue the same admitted work. The enclosing sync-execution
+payload is exact v6.
 
 Ordinary manual verification is location-scoped and independent of any current
 plan or mapping. It must not require both source and target roots. The deferred
@@ -256,7 +258,7 @@ explicitly ordinary verify-current workflow whose refresh may establish a new
 scope. Exact replacement retention and task attachment semantics remain bridge
 authority.
 
-At the accepted scalar cutover, verifier totals follow the checked-arithmetic
+At the active checkpoint-3.2 scalar cutover, verifier totals follow the checked-arithmetic
 contract in [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
 verifier defines no local numeric or file-identity variant.
 
@@ -291,7 +293,7 @@ failure cannot replace an in-flight pause, cancellation, or verifier exception;
 it degrades recording where a terminal result exists, and a lone close failure
 becomes a selection-derived failure with authoritative bytes.
 
-The shared version-4 field meanings, transition authority, and recovery rules
+The shared version-5 field meanings, transition authority, and recovery rules
 are owned centrally by `ARCHITECTURE.md` §2.3. The following paragraphs record
 only the verifier's implementation of that protocol.
 

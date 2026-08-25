@@ -20,9 +20,10 @@ custody corpora and production-path runner have also landed. SH-G-8's realigned
 event/custody evidence now includes a committed normative calibration-a
 artifact, a frozen 1,966,080-byte ceiling, and an accepted independent
 holdout-b dataset. That frozen v1 representation closes the historical
-SH-G-8/BR-G-42 event-and-transport-custody claim. The current v4 representation
-has separate diagnostic event evidence and Tier-1 custody drift evidence; it
-does not inherit or alter the v1 acceptance. Other BR-G-42 rows, including
+SH-G-8/BR-G-42 event-and-transport-custody claim. The historical v4
+representation has separate diagnostic event evidence and Tier-1 custody drift
+evidence; exact v5 now owns the current-source child and does not inherit or
+alter the v1 acceptance. Other BR-G-42 rows, including
 current-source event timing and later feature surfaces, remain open on their
 owning slices. One current-source child runs as a separate ordinary-suite drift
 guard and requires both live custody shapes to remain within the frozen
@@ -37,10 +38,11 @@ global-settings pages are deferred by the accepted second-half reslice. The gate
 API and production mapping are active, while the current empty product page
 invokes only startup and has no later workflow-surface callers yet.
 
-The accepted Stage 6 second-half target is not active yet. It adds native
-directory admission, complete Setup, process-live desktop tasks, compact
-artifacts, and bounded evidence reads. Exact cutovers live in
-[M1_BRIDGE.md](M1_BRIDGE.md); history/settings pages remain deferred.
+Stage 6 checkpoint 3.2 has activated the exact event-v5, scalar, recording, and
+database-epoch boundary. Native directory admission, complete Setup, process-
+live desktop tasks, compact artifacts, and bounded evidence reads remain later
+checkpoint targets. Exact cutovers live in [M1_BRIDGE.md](M1_BRIDGE.md);
+history/settings pages remain deferred.
 
 ## Purpose
 
@@ -77,6 +79,13 @@ For an irreversible in-place update, the CLI renders the authoritative risk in
 the reviewed plan and treats the exact typed `execute` response as the
 destructive acknowledgement. It never guesses acknowledgement from a truthy
 adapter value.
+
+The event-v5 terminal summary is intentionally item-free. For a healthy audit,
+terminal sync and integrity rendering therefore reads canonical item pages
+through the finalized fixed watermark; this preserves item order even when a
+fast session finishes before observation begins. If audit is degraded, the CLI
+falls back to the item events it actually observed and reports the independent
+audit warning rather than inventing missing detail.
 
 The implemented options and numeric exits are recorded in
 [COMMANDLINE.md](COMMANDLINE.md). The service composition root registers
@@ -133,7 +142,9 @@ canonical items and reliable receipts are separate bounded page views; a
 `HistoryEventView` exposes sequence/time/schema/body type,
 disposition/hash/link/rejection metadata, and an optional body rather than
 fabricating a live session event for a hash-only receipt. All detail readback
-remains page-bounded.
+remains page-bounded. Every current event view requires nested schema version 5;
+byte/size/nanosecond fields in public views are canonical `Scalar64` strings,
+while counts, cursors, and revisions remain exact JavaScript-safe integers.
 
 The current public service surface includes:
 
@@ -179,10 +190,13 @@ get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
     -> HistoryEventPageView
 ```
 
-### Accepted Stage 6 second-half service target
+### Stage 6 second-half service target
 
 Exact wire, scalar, task-authority, population, and retention contracts live in
 [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md).
+The event/scalar/persistence subset is active from checkpoint 3.2; task
+authority, population retention, and product-surface rows activate only in
+their named later checkpoints.
 
 Workflow owns parsing, fresh admission, and canonical Setup; the adapter owns
 only bounded intent slots and recomputed recent-location handles. Every desktop
@@ -681,8 +695,8 @@ diagnostic preserved event correctness, monotonic Progress, no `Gap`, and all
 terminals but failed the diagnostic latency verdict on one 476 ms reliable
 maximum; the immediate clean repeat passed at 4 ms p95 / 18 ms maximum reliable
 delivery and 41 ms p95 / 48 ms maximum Progress delivery. Both artifacts and
-the failed-then-passed disposition are retained in `M1_BRIDGE.md`; neither is
-promoted to current-v4 Tier-2 acceptance. The source-authenticated one-child
+the failed-then-passed disposition are retained in `M1_BRIDGE.md`; neither was
+promoted to v4 Tier-2 acceptance. The source-authenticated one-child
 custody guard also passed with unchanged ordinary and maximum byte/object
 values, so the historical v1 authorities remain unmodified and the new result
 remains Tier-1 drift evidence. Its deliberate all-zero `tested_commit` sentinel

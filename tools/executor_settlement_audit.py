@@ -28,11 +28,12 @@ from typing import Any
 from xxhash import xxh3_128
 
 from namisync.core.evidence import Outcome, RecordingStatus
-from namisync.core.events import ItemOutcome, PhaseChanged, Progress
+from namisync.core.events import DetailProjection, ItemOutcome, PhaseChanged, Progress
 from namisync.core.execution import (
     Continue,
     CopyDigest,
     ExecutionSet,
+    ItemRecordingReason as CoreItemRecordingReason,
     RecordedCopyIdentity,
     Retry,
     Stop,
@@ -492,6 +493,8 @@ class TracingFileSystem:
                 "attributes": value.metadata.attributes,
                 "created": self.timestamp("created", value.metadata.created_ns),
             }
+        if isinstance(value, DetailProjection):
+            return self.value(value.to_wire())
         if is_dataclass(value) and not isinstance(value, type):
             return {
                 field.name: self.value(getattr(value, field.name))
@@ -1502,6 +1505,34 @@ def _run_fixture(
     )
 
 
+def _oracle_item_detail(
+    item: ItemOutcome, normalizer: TracingFileSystem
+) -> dict[str, object]:
+    """Project event v5 recording fields into the frozen oracle trace shape."""
+
+    normalized = normalizer.value(item.detail)
+    if not isinstance(normalized, Mapping):
+        raise AuditError("normalized item detail is not a mapping")
+    detail = dict(normalized)
+    if (
+        item.recording is RecordingStatus.DEGRADED
+        and item.recording_reason
+        is not CoreItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    ):
+        detail["recording"] = RecordingStatus.DEGRADED.value
+        if item.recording_detail is not None:
+            detail["recording_error"] = normalizer.value(item.recording_detail)
+    return dict(sorted(detail.items()))
+
+
+def _oracle_item_reason(item: ItemOutcome) -> str | None:
+    """Restore the retired continuation label used by the frozen oracle."""
+
+    if item.reason is None and item.detail.get("continued") is True:
+        return "previously-settled"
+    return item.reason
+
+
 def _event_projection(
     events: Sequence[object], normalizer: TracingFileSystem
 ) -> tuple[list[dict[str, object]], list[dict[str, object]], dict[str, object] | None]:
@@ -1515,11 +1546,11 @@ def _event_projection(
                 {
                     "type": "item",
                     "op": event.item_id,
-                    "kind": event.kind,
+                    "kind": event.kind.value,
                     "path": event.path,
                     "outcome": event.outcome.value,
                     "reason": event.reason,
-                    "detail": normalizer.value(event.detail),
+                    "detail": _oracle_item_detail(event, normalizer),
                 }
             )
     progress = [event for event in events if isinstance(event, Progress)]
@@ -1582,11 +1613,11 @@ def _event_projection(
     items = [
         {
             "op": event.item_id,
-            "kind": event.kind,
+            "kind": event.kind.value,
             "path": event.path,
             "outcome": event.outcome.value,
             "reason": event.reason,
-            "detail": normalizer.value(event.detail),
+            "detail": _oracle_item_detail(event, normalizer),
         }
         for event in item_events
     ]
@@ -1741,11 +1772,11 @@ def _operation_result(
         "items": [
             {
                 "op": item.item_id,
-                "kind": item.kind,
+                "kind": item.kind.value,
                 "path": item.path,
                 "outcome": item.outcome.value,
-                "reason": item.reason,
-                "detail": normalizer.value(item.detail),
+                "reason": _oracle_item_reason(item),
+                "detail": _oracle_item_detail(item, normalizer),
             }
             for item in result.items
         ],

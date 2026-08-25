@@ -26,6 +26,7 @@ from namisync.core.models import (
     VolumeId,
 )
 from namisync.core.pathing import PathValidationError, to_extended_length_path
+from namisync.core.scalars import MAX_SIGNED_64
 from namisync.core.session import Canceled, RunContext
 from namisync.modules.scanner import (
     FILE_ATTRIBUTE_OFFLINE,
@@ -68,6 +69,49 @@ def test_native_walk_recovers_identity_when_directory_entry_omits_it(
 
     if result.profile.stable_file_identity:
         assert result.files[0].file_identity is not None
+
+
+@pytest.mark.parametrize(
+    ("field", "detail"),
+    (
+        ("st_size", "file size"),
+        ("st_mtime_ns", "file modification time"),
+        ("st_birthtime_ns", "creation time"),
+    ),
+)
+def test_path_local_unrepresentable_scalars_become_typed_scan_warnings(
+    field: str,
+    detail: str,
+) -> None:
+    values = {
+        "st_size": 1,
+        "st_mtime_ns": 2,
+        "st_birthtime_ns": 3,
+        "st_ino": (1 << 64) + 9,
+        "st_nlink": 1,
+        "st_file_attributes": 0,
+    }
+    values[field] = MAX_SIGNED_64 + 1
+    volume = VolumeSnapshot(
+        VolumeId("A1B2C3D4", "NTFS"),
+        VolumeEvidence(device_id="fixture"),
+        CapabilityProfile("NTFS", 100, True, False, 32_767, True, True),
+    )
+    warnings = []
+
+    observed = scanner_module._to_stat_or_warning(
+        SimpleNamespace(**values),
+        EntryKind.FILE,
+        volume,
+        warnings,
+        r"folder\subject.bin",
+    )
+
+    assert observed is None
+    assert len(warnings) == 1
+    assert warnings[0].code is ScanWarningCode.SCALAR_UNREPRESENTABLE
+    assert warnings[0].rel_path == r"folder\subject.bin"
+    assert detail in (warnings[0].detail or "")
 
 
 def test_scanner_never_opens_file_content_and_built_in_ignores_preserve_user_files(

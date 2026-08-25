@@ -5,7 +5,7 @@ Stage 1's immutable reviewed-policy semantics and shared ephemeral root
 authority. Fresh preflight remains mandatory immediately before every
 managed-data mutation, on resume, and on queued wakeup.
 
-At the accepted scalar cutover, preflight uses the capacity-observation and
+At the active checkpoint-3.2 scalar cutover, preflight uses the capacity-observation and
 refusal contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
 [DEFENSE.md](DEFENSE.md) §1.3 without defining a local numeric variant.
 
@@ -142,6 +142,11 @@ The shared formula uses the target's reviewed
 `CapabilityProfile.supports_hardlinks`; a no-hardlink update selection includes
 the old target's backup-copy bytes as well as replacement temps. Preflight never
 probes support or substitutes a filesystem-name guess.
+
+Free-space and reclaimable-byte observations must each enter the nonnegative
+signed-64 domain, and their effective-capacity sum uses checked addition before
+comparison with the already bounded required bytes. A scalar-domain violation
+fails closed; it is not relabeled as ordinary insufficient capacity.
 
 ## Expectations Of Other Modules
 

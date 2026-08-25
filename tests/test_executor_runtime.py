@@ -437,7 +437,7 @@ def test_run_session_excludes_executor_outcomes_rejected_by_sink(
     assert session_outcome.result.status is SessionState.FAILED
     assert session_outcome.result.items == ()
     terminal = next(body for body in accepted if isinstance(body, Terminal))
-    assert terminal.result.items == ()
+    assert terminal.result.recording_degraded_items == 0
     final_progress = next(
         body for body in reversed(accepted) if isinstance(body, Progress)
     )
@@ -2337,7 +2337,8 @@ def test_failed_trash_settlement_rejects_matching_destination_decoy(
     assert item.detail["mutation_state"] == "unverified"
     assert item.detail["durable_state"] == "trash-state-unverified"
     assert "reparse points" in item.detail["mutation_state_error"]
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
     assert fs.decoy_reads == 0
     assert not live.exists()
     assert (fs.detached_root / "file.bin").read_bytes() == b"old-version"

@@ -56,6 +56,11 @@ from namisync.core.planning import (
     SyncOptions,
 )
 from namisync.core.session import PhaseResult, PhaseStatus, SessionState
+from namisync.core.scalars import (
+    file_index_128_from_text,
+    file_index_128_to_text,
+    require_safe_int,
+)
 
 from .models import (
     ExecuteContinuation,
@@ -211,7 +216,7 @@ def _stat(value: FileStat | None) -> object:
         if identity is None
         else {
             "volume_serial": identity.volume_serial,
-            "file_index": identity.file_index,
+            "file_index": file_index_128_to_text(identity.file_index),
         },
         "nlink": value.nlink,
         "metadata": _metadata(value.metadata),
@@ -242,7 +247,7 @@ def _decode_stat(value: object, context: str) -> FileStat | None:
                 identity_item["volume_serial"],
                 f"{identity_context}.volume_serial",
             ),
-            _integer(
+            file_index_128_from_text(
                 identity_item["file_index"],
                 f"{identity_context}.file_index",
             ),
@@ -937,6 +942,7 @@ def _execution_set(value: ExecutionSet) -> dict[str, object]:
             {"reason": issue.reason.value, "detail": issue.detail}
             for issue in value.recording_issues
         ],
+        "omitted_detail_count": value.omitted_detail_count,
         "bytes_done_high_water": value.bytes_done_high_water,
     }
 
@@ -956,6 +962,7 @@ def _decode_execution_set(value: object) -> ExecutionSet:
             "recording",
             "recording_reasons",
             "recording_issues",
+            "omitted_detail_count",
             "bytes_done_high_water",
         },
         "execution_set",
@@ -1006,6 +1013,13 @@ def _decode_execution_set(value: object) -> ExecutionSet:
                 f"execution_set.recording_issues[{index}]",
             )
             for index, issue in enumerate(_list(item["recording_issues"]))
+        ),
+        omitted_detail_count=require_safe_int(
+            _integer(
+                item["omitted_detail_count"],
+                "execution_set.omitted_detail_count",
+            ),
+            "execution_set.omitted_detail_count",
         ),
         bytes_done_high_water=_integer(
             item["bytes_done_high_water"],

@@ -73,6 +73,8 @@ from namisync.workflows.views import (
     OperationItemView,
     OperationResultView,
     PhaseResultView,
+    RecordingIssueView,
+    ReviewFactLimitView,
 )
 
 
@@ -118,6 +120,8 @@ NESTED_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
         OperationItemView,
         OperationResultView,
         PhaseResultView,
+        RecordingIssueView,
+        ReviewFactLimitView,
         PlanOperationView,
         PlanReview,
         RefusalView,

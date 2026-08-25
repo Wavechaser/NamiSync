@@ -9,7 +9,7 @@ continuation evidence for optional in-session readback. External writers remain
 outside NamiSync's volume-lock contract; the residual races are documented
 below rather than presented as closed.
 
-## Recording Settlement (Internal Attribution Active; Event v5 Pending)
+## Recording Settlement (Event v5 Active)
 
 The activation sequence and exact result/event shapes are owned by
 [M1_BRIDGE.md](M1_BRIDGE.md). Executor now attributes recording degradation
@@ -44,9 +44,9 @@ and [TESTS.md](TESTS.md) owns test-scope policy; none is duplicated here.
 Checkpoint 1's immutable tool-local projection pins the four
 filesystem/recording combinations and three ordering cases named by the H2
 plan. Checkpoint 2 implements the corresponding internal production
-attribution without changing the current event-v4 fields or retained oracle
-trace. The coordinated result/event and persistence cutover remains checkpoint
-3 work.
+attribution. Checkpoint 3.2 now projects that truth through exact event-v5 item
+fields and the item-free terminal summary without changing the retained oracle
+trace; checkpoint 3.3 removes only unreachable legacy decoder source.
 
 ## Purpose
 
@@ -531,14 +531,14 @@ settlement-policy fix may replace it after its focused regression lands. The
 replacement baseline and its semantic pin then land together in one dedicated,
 reviewed baseline-replacement commit before the three-run gate is restarted.
 
-The normalized trace projects the version-4 Progress phase, nominal item and
+The normalized frozen oracle trace projects the historical version-4 Progress phase, nominal item and
 attempt state, attempt-local counters, and the execution continuation's byte
 high-water and fixed selected-byte admission. Random attempt tokens are never
 erased from the authority merely to stabilize the snapshot: each token observed
 in a Progress event is replaced by a deterministic first-seen ordinal while its
 phase and nominal owner are retained, and reuse under a different owner fails
 the capture. A retired token may not reappear. The pause/resume row retains each
-invocation's v4 Progress and execution byte authority rather than projecting
+invocation's historical v4 Progress and execution byte authority rather than projecting
 only the final continuation. Reporter transition tests remain the detailed
 attempt-state authority; the oracle records their integrated visibility across
 all settlement policies. Independent global invariants also require final
@@ -628,7 +628,7 @@ exception rather than replacing it.
 
 ## Progress
 
-The shared version-4 field meanings, transition authority, and recovery rules
+The shared version-5 field meanings, transition authority, and recovery rules
 are owned centrally by `ARCHITECTURE.md` §2.3. This section records only the
 executor's implementation of that protocol.
 

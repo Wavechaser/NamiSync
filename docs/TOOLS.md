@@ -276,7 +276,7 @@ refactor acceptance and at least the following settlement-hardening window.
 
 The retained baseline still uses tool `format_version: 1`; that number is not
 the core event schema. Its reviewed projection now projects and protects the
-integrated consequences of core event v4 phase and attempt lifecycle, live
+integrated consequences of the historical core-event-v4 phase and attempt lifecycle, live
 control-boundary aggregates/path, continuation byte high-water, and
 reliable-outcome item counts. Opaque attempt ids are normalized
 by first-seen lifecycle ordinal, and a retired token may not resurrect. Future
@@ -535,6 +535,9 @@ report settings instead of silently ignoring them. `--identity` and
 Loads require an explicit format and identity mode, exact row schemas without
 duplicate JSON members, XXH3-128 evidence, complete key coverage, and a fresh
 stat match through the same pure core predicate used by verifier classification.
+The active `namisync-rig-baseline-2` format stores a bound Windows file index as
+canonical `FileIndex128` decimal text, never a JSON number. Version-1 sidecars
+are refused at the format boundary and must be reseeded explicitly.
 
 `portable` identity compares kind, size, and mtime and survives relocation.
 `bound` additionally requires volume serial and file index for every row; it

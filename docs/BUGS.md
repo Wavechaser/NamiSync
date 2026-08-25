@@ -1217,22 +1217,24 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - OPEN (2026-08-25). Native file-identity narrowing. Scanner and
+- MODERATE - FIXED (2026-08-25). Native file-identity narrowing. Scanner and
   preflight could observe Windows/Python file indexes wider than 64 bits while
   executor and verifier reconstructed only legacy high/low 64-bit fields and
   the ledger stored signed SQLite integers. The same file could therefore
   compare differently across safety boundaries or fail persistence. Cause:
   three consumers owned incompatible native and storage representations.
-  Checkpoint 3 replaces them with one complete `FILE_ID_128` adapter and
-  canonical text through core codecs and the reset ledger.
+  Fixed with one complete core-owned `FILE_ID_128` adapter, witnessed NTFS/ReFS
+  stat equivalence, canonical full-width text through codecs and ledger v4,
+  and removal of legacy high/low handle projection and numeric storage.
 - MINOR - OPEN (2026-08-25). Cross-consumer schema acceptance drift. The core
   decoder retains exact v3 history compatibility beside v4 while the live
   browser validator and canonical history projection accept different version-
   specific populations; later reuse can therefore make a shape valid in one
   boundary and unusable in another. Cause: compatibility was added at individual
-  consumers without one event/data epoch and removal point. Checkpoint 3 now
-  stages strict v5 consumers first, performs one producer/database reset cut,
-  and then deletes all positive v3/v4 compatibility before the gate can close.
+  consumers without one event/data epoch and removal point. Checkpoint 3.2 now
+  makes production exact-v5-only at data epoch 5. The finding remains open only
+  until checkpoint 3.3 deletes the unreachable private read-only v3/v4 source
+  branch and its positive compatibility fixtures.
 - MODERATE - FIXED (2026-08-22). Lossy-progress authority conflation. Forced
   control snapshots combined aggregates from an earlier throttled emission with
   live item-attempt state, producing internally contradictory pause/cancel views;

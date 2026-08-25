@@ -4,6 +4,7 @@ import pytest
 
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.events import ItemOutcome
+from namisync.core.execution import TaskRecordingIssue, TaskRecordingIssueReason
 from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityReason,
@@ -29,6 +30,11 @@ from namisync.interfaces.cli import (
 )
 from namisync.interfaces.service import SessionRecordView, classify_result
 from namisync.workflows.views import operation_result_view
+
+
+_DEGRADED_ISSUES = (
+    TaskRecordingIssue(TaskRecordingIssueReason.FINAL_FLUSH_FAILED),
+)
 
 
 def _operation(
@@ -167,11 +173,13 @@ def _record(result: OperationResult) -> SessionRecordView:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
+                recording_issues=_DEGRADED_ISSUES,
                 phases=(_incomplete_phase(),),
             ),
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
+                recording_issues=_DEGRADED_ISSUES,
             ),
             "verification-incomplete",
             "degraded",
@@ -181,6 +189,7 @@ def _record(result: OperationResult) -> SessionRecordView:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
+                recording_issues=_DEGRADED_ISSUES,
                 items=(_operation(Outcome.SKIPPED, kind="noop"),),
             ),
             OperationResult(
@@ -231,6 +240,7 @@ def test_compound_partial_keeps_every_secondary_axis_renderable() -> None:
         OperationResult(
             SessionState.COMPLETED,
             recording=RecordingStatus.DEGRADED,
+            recording_issues=_DEGRADED_ISSUES,
             audit=RecordingStatus.DEGRADED,
             items=(
                 _operation(Outcome.BLOCKED),

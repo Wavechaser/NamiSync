@@ -194,7 +194,8 @@ def test_unverifiable_publish_failure_degrades_recording(tmp_path: Path) -> None
     assert item.detail["publish_state"] == "unverified"
     assert item.detail["durable_state"] == "publication-unverified"
     assert item.detail["state_error_type"] == "PermissionError"
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
 
 
 class ReadObservedStream:
@@ -770,7 +771,7 @@ def test_failed_durable_settlement_observes_once_before_cleanup(
     assert result.recording is RecordingStatus.DEGRADED
     assert outcome.outcome is Outcome.FAILED
     assert outcome.reason == "io-error"
-    assert outcome.detail == {
+    assert dict(outcome.detail) == {
         "error_type": "PermissionError",
         "message": "injected publish failure",
         "publish_state": "unverified",
@@ -778,13 +779,14 @@ def test_failed_durable_settlement_observes_once_before_cleanup(
         "durable_state": "publication-unverified",
         "state_error_type": "PermissionError",
         "state_error": "injected one-shot publication probe failure",
-        "recording": RecordingStatus.DEGRADED.value,
-        "recording_error": (
-            "filesystem mutation may have published but durable state "
-            "could not be verified"
-        ),
         "cleanup_error": "injected cleanup failure",
     }
+    assert outcome.recording is RecordingStatus.DEGRADED
+    assert outcome.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
+    assert outcome.recording_detail == (
+        "filesystem mutation may have published but durable state "
+        "could not be verified"
+    )
     assert fs.settlement_probe_calls == 1
     assert recorder.calls == []
     owned_temp = target / (
@@ -1031,7 +1033,8 @@ def test_retry_rejects_replaced_published_target(
     assert item.detail["publish_state"] == "published"
     assert item.detail["target_state"] == "changed-after-publish"
     assert item.detail["durable_state"] == "target-changed-after-publish"
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
     assert fs.metadata_attempts == 1
     assert fs.flush_attempts == (0 if before_stat_cache else 1)
     assert recorder.calls == []
@@ -1086,7 +1089,8 @@ def test_cancel_after_published_target_changes_reports_changed_durable_state(
     assert item.detail["publish_state"] == "published"
     assert item.detail["target_state"] == "changed-after-publish"
     assert item.detail["durable_state"] == "target-changed-after-publish"
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
     assert xset.recording is RecordingStatus.DEGRADED
     assert xset.published_evidence == {}
 
@@ -1180,7 +1184,8 @@ def _assert_terminal_publication_failure(
     assert item.detail["publish_state"] == "published"
     assert item.detail["target_state"] == "published"
     assert item.detail["durable_state"] == durable_state
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
     assert published_target.read_bytes() == b"new-version"
     assert recorder.calls == []
     assert xset.published_evidence == {}
@@ -1219,7 +1224,7 @@ def test_terminal_post_publish_failure_degrades_recording_and_reports_durable_st
         durable_state,
     )
     assert item.detail["published_path"] == operation.target_rel_path
-    assert item.detail["recording_error"] == (
+    assert item.recording_detail == (
         "published filesystem mutation failed before ledger settlement"
     )
     assert fs.metadata_attempts == 3
@@ -2089,7 +2094,8 @@ def test_cancel_during_update_retry_reports_owned_durable_state(
     else:
         assert item.reason == "canceled-after-publish"
         assert xset.recording is RecordingStatus.DEGRADED
-        assert item.detail["recording"] == "degraded"
+        assert item.recording is RecordingStatus.DEGRADED
+        assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
         assert (target / "file.bin").read_bytes() == b"new-version"
 
 
@@ -2541,7 +2547,8 @@ def test_recorder_failure_preserves_filesystem_success_and_degrades_axis(
     assert (target / "file.bin").read_bytes() == b"copied"
     item = _item_outcome(events)
     assert item.outcome is Outcome.SUCCEEDED
-    assert item.detail["recording"] == "degraded"
+    assert item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is ItemRecordingReason.RECORD_WRITE_FAILED
     assert xset.recording is RecordingStatus.DEGRADED
     assert xset.recording_reasons == {
         operation.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
@@ -2589,7 +2596,9 @@ def test_copy_recorder_none_return_is_degraded_not_recorded(
     assert not published.copy_recorded
     assert published.recorded_identity is None
     item = _item_outcome(events)
-    assert "did not return a recorded copy identity" in item.detail["recording_error"]
+    assert item.recording_reason is ItemRecordingReason.RECORD_WRITE_FAILED
+    assert item.recording_detail is not None
+    assert "did not return a recorded copy identity" in item.recording_detail
 
 
 class FailFirstCopyRecorder(FakeRecorder):
@@ -2984,7 +2993,8 @@ def test_a15_move_update_stage_faults_never_lose_both_versions_or_false_record(
         assert result.recording is RecordingStatus.DEGRADED
         assert item.outcome is Outcome.SUCCEEDED
         assert item.reason is None
-        assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+        assert item.recording is RecordingStatus.DEGRADED
+        assert item.recording_reason is ItemRecordingReason.RECORD_WRITE_FAILED
         assert recorder.move_update_attempts == 1
     else:
         assert result.status is SessionState.FAILED
@@ -3000,10 +3010,12 @@ def test_a15_move_update_stage_faults_never_lose_both_versions_or_false_record(
         }:
             assert result.recording is RecordingStatus.DEGRADED
             assert item.detail["publish_state"] == "published"
-            assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+            assert item.recording is RecordingStatus.DEGRADED
+            assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
         else:
             assert result.recording is RecordingStatus.OK
-            assert "recording" not in item.detail
+            assert item.recording is RecordingStatus.OK
+            assert item.recording_reason is None
 
 
 class MoveUpdateTrashSharingOnceFileSystem(NativeFileSystem):
@@ -3257,7 +3269,8 @@ def test_cancel_during_move_update_retry_reports_partial_publish(
     assert item.detail["trash_path"] == (
         f".synctrash\\{RUN_ID}\\old.bin"
     )
-    assert item.detail["recording"] == "degraded"
+    assert item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
     assert xset.recording is RecordingStatus.DEGRADED
     assert xset.published_evidence == {}
     assert (target / "renamed.bin").read_bytes() == b"changed"
@@ -3348,7 +3361,8 @@ def test_cancel_move_update_settlement_rejects_matching_trash_decoy(
     assert item.reason == "canceled-after-publish"
     assert item.detail["durable_state"] == "new-and-old-unverified"
     assert "reparse points" in item.detail["trash_state_error"]
-    assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+    assert item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
     assert not old_path.exists()
     assert new_path.read_bytes() == b"changed"
     assert (detached / "old.bin").read_bytes() == b"old"
@@ -4237,7 +4251,7 @@ def test_failed_readonly_update_reports_durable_truth(
         assert item.reason == "io-error"
         assert result.recording is RecordingStatus.DEGRADED
         assert not restored.metadata.attributes & 1
-        assert item.detail == {
+        assert dict(item.detail) == {
             "error_type": "PermissionError",
             "message": "injected readonly restoration failure",
             "publish_state": "unverified",
@@ -4245,14 +4259,15 @@ def test_failed_readonly_update_reports_durable_truth(
             "durable_state": "publication-unverified",
             "state_error_type": "PermissionError",
             "state_error": "ordinary publication-state probe unavailable",
-            "recording": RecordingStatus.DEGRADED.value,
-            "recording_error": (
-                "filesystem mutation may have published but durable state "
-                "could not be verified"
-            ),
             "mutation_state": "unverified",
             "mutation_durable_state": "target-metadata-changed-before-publish",
         }
+        assert item.recording is RecordingStatus.DEGRADED
+        assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
+        assert item.recording_detail == (
+            "filesystem mutation may have published but durable state "
+            "could not be verified"
+        )
     elif fail_restore:
         assert result.recording is RecordingStatus.DEGRADED
         assert not restored.metadata.attributes & 1
@@ -4271,8 +4286,12 @@ def test_failed_readonly_update_reports_durable_truth(
             assert item.detail["mutation_durable_state"] == (
                 "target-metadata-changed-before-publish"
             )
-            assert item.detail["recording"] == RecordingStatus.DEGRADED.value
-            assert item.detail["recording_error"] == (
+            assert item.recording is RecordingStatus.DEGRADED
+            assert (
+                item.recording_reason
+                is ItemRecordingReason.UNRECORDED_MUTATION
+            )
+            assert item.recording_detail == (
                 "filesystem mutation may have committed before ledger settlement"
             )
             assert "published_path" not in item.detail
@@ -4378,7 +4397,8 @@ def test_cancel_composes_byte_and_readonly_mutation_state(
         assert item.detail["mutation_durable_state"] == (
             "target-metadata-changed-before-publish"
         )
-        assert item.detail["recording"] == RecordingStatus.DEGRADED.value
+        assert item.recording is RecordingStatus.DEGRADED
+        assert item.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION
         if retain_backup:
             backup = target / ".synctrash" / str(RUN_ID) / "readonly.bin"
             assert backup.read_bytes() == b"old-version"
@@ -4544,7 +4564,6 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
         MC.AMBIGUOUS, MS.UNVERIFIED, DS.TARGET_CHANGED_AFTER_DELETE_ATTEMPT
     )
     unreadable = mutation(MC.UNREADABLE, MS.UNVERIFIED, DS.DELETE_STATE_UNVERIFIED)
-    degraded = RecordingStatus.DEGRADED.value
     mutation_error = "filesystem mutation may have committed before ledger settlement"
     unverified_error = (
         "filesystem mutation may have published but durable state could not be verified"
@@ -4565,8 +4584,10 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
         publish: str | None = None
         durable: str | None = None
         sibling: str | None = None
-        recording: str | None = degraded
-        recording_error: str | None = mutation_error
+        recording_reason: ItemRecordingReason | None = (
+            ItemRecordingReason.UNRECORDED_MUTATION
+        )
+        recording_detail: str | None = mutation_error
 
     # Selected precedence axes only; operation tests retain probe and timing coverage.
     cases = [
@@ -4584,8 +4605,8 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 degrade=False,
                 publish="not-published",
                 durable="backup-retained",
-                recording=None,
-                recording_error=None,
+                recording_reason=None,
+                recording_detail=None,
             ),
         ),
         (
@@ -4601,7 +4622,7 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 publish="unverified",
                 durable="publication-unverified",
                 sibling="target-changed-after-delete-attempt",
-                recording_error=unverified_error,
+                recording_detail=unverified_error,
             ),
         ),
         (
@@ -4615,7 +4636,7 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
             Expected(
                 publish="published",
                 durable="target-published",
-                recording_error=published_error,
+                recording_detail=published_error,
             ),
         ),
         (
@@ -4629,8 +4650,8 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 degrade=False,
                 publish="not-published",
                 durable="target-not-published",
-                recording=None,
-                recording_error=None,
+                recording_reason=None,
+                recording_detail=None,
             ),
         ),
         (
@@ -4645,7 +4666,7 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 reason=ExecutionReason.CANCELED_AFTER_PUBLISH,
                 publish="published",
                 durable="target-published",
-                recording_error=canceled_publish,
+                recording_detail=canceled_publish,
             ),
         ),
         (
@@ -4664,8 +4685,8 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 degrade=False,
                 publish="unverified",
                 durable="backup-retained",
-                recording=None,
-                recording_error=None,
+                recording_reason=None,
+                recording_detail=None,
             ),
         ),
         (
@@ -4713,8 +4734,8 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 publish=detail.get("publish_state"),
                 durable=detail.get("durable_state"),
                 sibling=detail.get("mutation_durable_state"),
-                recording=detail.get("recording"),
-                recording_error=detail.get("recording_error"),
+                recording_reason=reduction.recording_reason,
+                recording_detail=reduction.recording_detail,
             )
             assert reduction.settled.published_evidence is None, name
             assert actual == expected, name
@@ -4723,6 +4744,8 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 if expected.degrade
                 else None
             ), name
+            assert "recording" not in detail, name
+            assert "recording_error" not in detail, name
         assert published is None or published.base_detail == before, name
 
     assert details["ordinary-unverified-plus-ambiguous"]["state_error"] == (
@@ -4907,7 +4930,10 @@ def test_mutation_observer_and_reducer_cover_restored_missing_and_unreadable_sta
         assert reduction.settled.outcome is Outcome.FAILED, name
         assert reduction.settled.reason is ExecutionReason.TARGET_DRIFT, name
         assert reduction.settled.detail["durable_state"] == durable_state.value, name
-        assert reduction.settled.detail["recording"] == "degraded", name
+        assert reduction.recording_detail == (
+            "filesystem mutation may have committed before ledger settlement"
+        ), name
+        assert "recording" not in reduction.settled.detail, name
         if classification is executor_runtime._MutationClassification.UNREADABLE:
             assert reduction.settled.detail["mutation_state"] == "unverified", name
             assert "mutation_state_error" in reduction.settled.detail, name

@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 from typing import Protocol
 
+from namisync.core.file_identity import file_identity_from_windows_handle
 from namisync.core.pathing import to_extended_length_path
 
 
@@ -239,16 +240,12 @@ class WindowsArtifactNative:
         return handle
 
     def _identity(self, handle: int) -> ArtifactIdentity:
-        information = _ByHandleFileInformation()
-        if not self._bindings().GetFileInformationByHandle(
+        bindings = self._bindings()
+        identity = file_identity_from_windows_handle(
             handle,
-            ctypes.byref(information),
-        ):
-            _raise_last_error()
-        file_index = (
-            information.nFileIndexHigh << 32
-        ) | information.nFileIndexLow
-        return information.dwVolumeSerialNumber, file_index
+            bindings.GetFileInformationByHandleEx,
+        )
+        return int(identity.volume_serial, 16), identity.file_index
 
     def _bindings(self) -> ctypes.WinDLL:
         if os.name != "nt":
@@ -267,11 +264,6 @@ class WindowsArtifactNative:
             kernel32.CreateFileW.restype = wintypes.HANDLE
             kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
             kernel32.CloseHandle.restype = wintypes.BOOL
-            kernel32.GetFileInformationByHandle.argtypes = [
-                wintypes.HANDLE,
-                ctypes.POINTER(_ByHandleFileInformation),
-            ]
-            kernel32.GetFileInformationByHandle.restype = wintypes.BOOL
             kernel32.GetFileInformationByHandleEx.argtypes = [
                 wintypes.HANDLE,
                 ctypes.c_int,
@@ -295,21 +287,6 @@ class WindowsArtifactNative:
             kernel32.SetFileInformationByHandle.restype = wintypes.BOOL
             self._kernel32 = kernel32
         return self._kernel32
-
-
-class _ByHandleFileInformation(ctypes.Structure):
-    _fields_ = [
-        ("dwFileAttributes", wintypes.DWORD),
-        ("ftCreationTime", wintypes.FILETIME),
-        ("ftLastAccessTime", wintypes.FILETIME),
-        ("ftLastWriteTime", wintypes.FILETIME),
-        ("dwVolumeSerialNumber", wintypes.DWORD),
-        ("nFileSizeHigh", wintypes.DWORD),
-        ("nFileSizeLow", wintypes.DWORD),
-        ("nNumberOfLinks", wintypes.DWORD),
-        ("nFileIndexHigh", wintypes.DWORD),
-        ("nFileIndexLow", wintypes.DWORD),
-    ]
 
 
 class _FileStandardInformation(ctypes.Structure):

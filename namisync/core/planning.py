@@ -22,6 +22,8 @@ from .models import (
     VolumeId,
 )
 from .pathing import normalize_relative_path, validate_relative_path
+from .review import ReviewFactLimitError, ReviewFactLimitExceeded
+from .scalars import ScalarDomainError, checked_add_signed_64, require_signed_64
 
 
 OpId = NewType("OpId", str)
@@ -266,8 +268,7 @@ class PlanOperation:
         validate_relative_path(self.target_rel_path)
         if self.prior_target_rel_path is not None:
             validate_relative_path(self.prior_target_rel_path)
-        if self.content_bytes < 0:
-            raise ValueError("operation content bytes cannot be negative")
+        require_signed_64(self.content_bytes, "operation content bytes")
         if len(set(self.dependencies)) != len(self.dependencies):
             raise ValueError("operation dependencies must be unique")
 
@@ -300,8 +301,7 @@ class Plan:
     fingerprint: PlanFingerprint
 
     def __post_init__(self) -> None:
-        if self.required_bytes < 0:
-            raise ValueError("invalid plan capacity snapshot")
+        require_signed_64(self.required_bytes, "plan required bytes")
         known_ids: set[OpId] = set()
         for operation in self.operations:
             if operation.op_id in known_ids:
@@ -371,19 +371,40 @@ def calculate_required_bytes(
     """Return a conservative start-of-run free-space requirement."""
 
     required = 0
-    for operation in operations:
-        if operation.blocked:
-            continue
-        if operation.kind in {OperationKind.COPY, OperationKind.UPDATE, OperationKind.MOVE_UPDATE}:
-            required += operation.content_bytes
-        if (
-            trash_on_update
-            and not target_profile.supports_hardlinks
-            and operation.kind in {OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
-        ):
-            displaced = operation.target_expected or operation.prior_target_expected
-            if displaced is not None:
-                required += displaced.size
+    try:
+        for operation in operations:
+            if operation.blocked:
+                continue
+            if operation.kind in {
+                OperationKind.COPY,
+                OperationKind.UPDATE,
+                OperationKind.MOVE_UPDATE,
+            }:
+                required = checked_add_signed_64(
+                    required,
+                    operation.content_bytes,
+                    "plan logical bytes",
+                )
+            if (
+                trash_on_update
+                and not target_profile.supports_hardlinks
+                and operation.kind
+                in {OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
+            ):
+                displaced = (
+                    operation.target_expected
+                    or operation.prior_target_expected
+                )
+                if displaced is not None:
+                    required = checked_add_signed_64(
+                        required,
+                        displaced.size,
+                        "plan logical bytes",
+                    )
+    except ScalarDomainError as error:
+        raise ReviewFactLimitError(
+            ReviewFactLimitExceeded.plan_logical_bytes()
+        ) from error
     return required
 
 

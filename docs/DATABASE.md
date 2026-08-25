@@ -2,15 +2,14 @@
 
 Status: schema bones, safe connection factories, the M0 ledger/repositories,
 inventory reconciliation, bounded receipt-journal history, and M1's
-ledger-v3/history-v5 coordinated reset boundary and semantic settings store are
+ledger-v4/history-v6 data-epoch-5 reset boundary and semantic settings store are
 implemented. General migrations, retention, and backup/protection workflows
 remain later work.
 
-## Accepted V4/V6 Persistence Target (Not Active)
+## Active V4/V6 Persistence Boundary
 
-Status: accepted on 2026-08-24. Ledger v3/history v5 and their current pair
-validation remain active until protocol checkpoint 3; the checkpoint is a
-coordinated pre-release reset, not an in-place migration.
+Status: active from Stage 6 checkpoint 3.2. This was a coordinated pre-release
+reset, not an in-place migration.
 
 | Database | Schema | `data_epoch` | `contract_id` |
 | --- | ---: | ---: | --- |
@@ -20,18 +19,19 @@ coordinated pre-release reset, not an in-place migration.
 Both metadata rows are mandatory. Two absent main files with no sidecars remain
 the only fresh state. Any old or mixed pair, one-present pair, missing/wrong
 marker, or orphan WAL/SHM/journal sidecar is refused by read-only validation
-before startup or CLI work. The refusal directs the user to close NamiSync and
+before mutating startup or CLI work. The refusal directs the user to close NamiSync and
 archive or delete both database mains and all sidecars together; startup does
-not migrate, repair, or delete them. Standalone history adopts the same pair
-validation at this epoch.
+not migrate, repair, or delete them. A standalone read-only history command may
+open one exact history-v6 database without creating or requiring its ledger
+peer; it still validates the history role, version, contract id, and epoch.
 
-Ledger v4 adds the canonical target-relative key required by execution-evidence
-joins; it does not add an operation digest. Indexed, bounded recent-location
-queries return eligible durable run/mapping identities in deterministic order
-and exclude soft-deleted mappings. Process-local recent ids remain outside the
-database.
+Ledger v4 stores complete file identities as canonical `FileIndex128` text and
+strengthens pair, canonical-domain, and attestation checks. It does not add an
+operation digest. The execution-evidence join and indexed recent-location
+queries described below remain later checkpoint targets; process-local recent
+ids remain outside the database.
 
-At the accepted cutover, ledger numeric and native-identity storage follows
+At the active cutover, ledger numeric and native-identity storage follows
 `DEFENSE.md` §1.3 and the mapped bridge decision without a database-local
 domain or codec variant. `HISTORY.md` owns canonical event-envelope
 persistence.
@@ -42,6 +42,9 @@ observer/finalization consequences; `M1_BRIDGE.md` owns the exact shared shape.
 Presentation-only omission state is never stored.
 
 ### Atomic execution-evidence read
+
+Status: accepted for the later execution-review checkpoint; not active in
+checkpoint 3.2.
 
 The execution-evidence repository resolves one retained execution identity and
 a bounded operation window in one SQLite read transaction. It joins committed
@@ -74,7 +77,7 @@ state is interface-owned and never shares this file.
 
 ## Implemented Foundation
 
-`schema.py` creates a version-3 ledger and version-5 history schema. The ledger
+`schema.py` creates a version-4 ledger and version-6 history schema. The ledger
 freezes hosts, stable volumes plus mutable evidence, role-free locations,
 soft-deletable mappings, current versus attested inventory state, mapping-scoped
 correspondence, run/operation tokens, generic annotations, and nullable hardlink
@@ -147,9 +150,9 @@ but link to that representative; a bulk bounded lookup never scans the linked
 history for that identity.
 Commit time is sampled under serialized transaction ownership and remains
 logically nondecreasing across wall-clock rollback, never preceding admission
-or any newly committed event timestamp. Terminal phase names and failure type
-names are capped at 256 UTF-8 bytes; phase and terminal error messages are
-capped at 4,096 UTF-8 bytes in both observer validation and schema checks.
+or any newly committed event timestamp. Terminal phase names, failure type
+names, phase errors, and terminal failure messages are each capped at 1,024
+UTF-8 bytes in both observer validation and schema checks.
 Each window also stores a prefix-projection hash over context/receipt-chain
 hashes, lifecycle timestamps/state/phase, watermarks, and every rolling count.
 Summary reads validate it for incomplete and finalized runs. Repeat
@@ -162,25 +165,26 @@ summary/page reads, observer reopen, and writer admission, so an out-of-band
 tail cannot affect classification or reopen a committed prefix.
 
 `HistoryWindowPolicy` bounds one pending window to 256 reliable events and
-1 MiB of canonical serialized data, replaces an individual supported event
-over 1 MiB with a durable hash-only rejection receipt, and supplies the
-one-second age used by the dispatcher flush scheduler. Count,
+1 MiB of canonical serialized data. Core event v5 refuses a reliable envelope
+over that same ceiling before sequence or queue mutation; the history observer
+retains its hash-only rejection path as defensive policy for directly injected
+or deliberately stricter-policy tests. The policy also supplies the one-second
+age used by the dispatcher flush scheduler. Count,
 byte, pause, age, clean-close, and finalization boundaries all commit; a crash
 can lose only the last uncommitted window. A nonterminal committed row is
 readable as `incomplete` after restart and is not classified as interrupted or
 resumable without future durable custody.
 
 The current schemas carry immutable whole-contract metadata: ledger
-`contract_id=m1-ledger-xxh3-128-invalidation-v1` and history
-`contract_id=m1-history-windowed-receipts-v1`. Opening ledger v1-v2, history
-v1-v4, or a current database with a missing/mismatched
-marker raises the same actionable
+`contract_id=m1-ledger-v4-event-v5-evidence-v1`, history
+`contract_id=m1-history-v6-event-v5-recording-v1`, and shared `data_epoch=5`.
+Opening ledger v1-v3, history v1-v5, or a current database with a
+missing/mismatched marker raises the same actionable
 `SchemaResetRequired` family without altering the old tables or version stamp.
 During this pre-release window the user must close NamiSync and manually delete
-both local database files before restarting. History version 4 cannot be
-migrated into the receipt journal because it lacks the disposition,
-semantic-duplicate link, rejection row, and receipt-chain facts required by
-version 5.
+or archive both local database files and their sidecars before restarting.
+There is no migration into this coordinated event-v5/evidence epoch because an
+older pair lacks facts required by the exact contracts.
 `reset_databases()` is an explicit
 development/test helper that validates both exact paths before deleting their
 database/WAL/SHM artifacts and recreates both current schemas; normal startup
@@ -238,7 +242,7 @@ The initial schema reserves the expensive identity/evidence bones:
   independent of plan or interface view state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
-At the accepted checkpoint-3 reset, file-index columns and repository binds use
+At the active checkpoint-3 reset, file-index columns and repository binds use
 canonical `FileIndex128` text rather than SQLite numeric affinity. The exact
 identity domain and native-source rule remain owned by `M1_BRIDGE.md` and
 `DEFENSE.md` §1.3.
@@ -251,12 +255,11 @@ conditional integrity writes; pause closes/reopens the connection without
 ending the row, and terminal settlement fills `ended_at` once.
 
 Official writers keep observed and attested file-identity fields paired and
-clear attested-only fields when no content evidence exists. Ledger v3 does not
-encode every one of those defensive invariants as a raw-SQL `CHECK`, and
-attested creation time remains legitimately optional. Stronger half-identity
-and no-attestation constraints, plus defensive reader rejection of corrupt
-rows, are deferred to the next coordinated ledger schema revision rather than
-retrofitted into the reset-only v3 contract.
+clear attested-only fields when no content evidence exists. Ledger v4 encodes
+identity-pair, canonical `FileIndex128`, invalidation, and current-versus-
+attested consistency rules as raw-SQL checks, and repositories defensively
+reject corrupt identity text. Attested creation time remains legitimately
+optional.
 
 Drive letters are current mount/display data, never persisted identity. Label
 drift is noted without rebind; a matching serial with a changed filesystem type
@@ -443,10 +446,11 @@ rather than current implementation claims.
   decode at most the requested limit, use one indexed lookahead row across
   legitimate sequence gaps, and reject an official durable maximum that does
   not match its event rows.
-- Ledger v1-v2, history v1-v4, and current-number transitional schemas lacking the
+- Ledger v1-v3, history v1-v5, and current-number transitional schemas lacking the
   exact final M1 contract marker are refused before writer/WAL/schema mutation
   with an actionable instruction to recreate both local databases.
-- The explicit coordinated development reset recreates ledger v3/history v5;
+- The explicit coordinated development reset recreates ledger v4/history v6
+  with shared data epoch 5;
   normal startup never deletes either database.
 - Pair preflight returns fresh only when both mains and every SQLite sidecar are
   absent; ready requires both role-specific contracts. Every other combination

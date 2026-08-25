@@ -1628,7 +1628,7 @@ def test_integrity_selection_byte_total_high_water_is_monotonic() -> None:
     assert selection.bytes_total_high_water == 9
     with pytest.raises(ValueError, match="cannot trail processed"):
         selection.advance_bytes_total_high_water(2)
-    with pytest.raises(TypeError, match="must be an integer"):
+    with pytest.raises(TypeError, match="non-Boolean integer"):
         selection.advance_bytes_total_high_water(True)  # type: ignore[arg-type]
     with pytest.raises(AttributeError):
         selection.bytes_total_high_water = 0  # type: ignore[misc]
@@ -1638,7 +1638,7 @@ def test_integrity_selection_byte_total_high_water_is_monotonic() -> None:
             _processed_bytes=2,
             _bytes_total_high_water=1,
         )
-    with pytest.raises(TypeError, match="must be an integer"):
+    with pytest.raises(TypeError, match="non-Boolean integer"):
         IntegritySelection((), _bytes_total_high_water=True)  # type: ignore[arg-type]
 
 

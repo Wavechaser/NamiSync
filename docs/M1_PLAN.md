@@ -1,18 +1,19 @@
 # M1 Plan
 
-Supersession note (2026-08-08): ledger-v2, history-v3, and `HistoryRunView`
-references below record earlier milestone design. The implemented reset-only
-ledger v3 verification-invalidation boundary and history v5 receipt journal in
-`DATABASE.md` and `ARCHITECTURE.md` now govern. No compatibility migration or
+Supersession note (updated 2026-08-25): ledger-v2/history-v3 and later
+ledger-v3/history-v5 references below record earlier milestone design. The
+implemented reset-only ledger v4/history v6 data-epoch-5 boundary in
+`DATABASE.md` and `ARCHITECTURE.md` now governs. No compatibility migration or
 unbounded history getter remains.
 
-Status (updated 2026-08-24): Stages 1–3 (contracts/semantics, executor/hash refactor,
+Status (updated 2026-08-25): Stages 1–3 (contracts/semantics, executor/hash refactor,
 and inventory/standalone integrity), Stage 4 post-execution integration, and
 the two-part Stage 5 facade/CLI work plus Stage 5.5 facade completion are
 implemented. Stage 6's secured host and transport through Slice 3, GUI Break 1
 foundation, and Slice 4 presentation core and honest shell frame are also
 implemented. The accepted Stage 6 second-half reslice is now the delivery
-target; its protocol and BR-G decisions live in `M1_BRIDGE.md`, its shell order
+target; checkpoint 3.2's exact event/scalar/persistence cut is active. Its
+remaining protocol and BR-G decisions live in `M1_BRIDGE.md`, its shell order
 lives in `M1_SHELL.md`, and its detailed checkpoint checklist lives in the
 newer `M1_SHELL_H2.md`. Older remaining-slice prose below records the
 pre-reslice plan and cannot override those authorities. The history page,

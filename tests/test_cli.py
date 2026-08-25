@@ -7,6 +7,7 @@ import sqlite3
 import stat
 import subprocess
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -15,6 +16,7 @@ import pytest
 import namisync.interfaces.cli as cli_module
 from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.execution import TaskRecordingIssue, TaskRecordingIssueReason
 from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityReason,
@@ -49,6 +51,7 @@ from namisync.interfaces.cli import (
     _render_plan,
     _render_result_warnings,
     _render_resolution_error,
+    _terminal_items,
     build_parser,
     main,
 )
@@ -61,7 +64,7 @@ from namisync.interfaces.service import (
 )
 from namisync.modules.executor import NativeFileSystem
 from namisync.workflows.models import PlanOperationView
-from namisync.workflows.views import session_record_view
+from namisync.workflows.views import result_item_view, session_record_view
 
 from _db_fixtures import FakeClock, NOW
 
@@ -334,6 +337,7 @@ def test_queued_resolution_refusal_keeps_action_and_candidates() -> None:
             )
         ),
         details,
+        (),
         output,
         errors,
     )
@@ -367,37 +371,50 @@ def test_completed_execution_with_exclusions_is_reported_as_partial() -> None:
     stdout = io.StringIO()
     stderr = io.StringIO()
 
-    _render_execution(record, details, stdout, stderr)
+    _render_execution(
+        record,
+        details,
+        tuple(result_item_view(item) for item in (blocked, deferred)),
+        stdout,
+        stderr,
+    )
 
     assert _exit_for_record(record) == EXIT_PARTIAL
     assert "completed with exceptions: blocked=1; deferred=1" in stdout.getvalue()
 
 
 def test_execution_rendering_preserves_interleaved_typed_item_order() -> None:
+    items = (
+        IntegrityOutcome(
+            "integrity-first",
+            "row",
+            "location",
+            "first.bin",
+            IntegrityResult.VERIFIED,
+        ),
+        ItemOutcome(
+            "operation-second",
+            "copy",
+            "second.bin",
+            Outcome.SUCCEEDED,
+        ),
+    )
     record = _record_for_result(
         OperationResult(
             SessionState.COMPLETED,
-            items=(
-                IntegrityOutcome(
-                    "integrity-first",
-                    "row",
-                    "location",
-                    "first.bin",
-                    IntegrityResult.VERIFIED,
-                ),
-                ItemOutcome(
-                    "operation-second",
-                    "copy",
-                    "second.bin",
-                    Outcome.SUCCEEDED,
-                ),
-            ),
+            items=items,
         )
     )
     details = SimpleNamespace(commitment_error=None, refusals=())
     output = io.StringIO()
 
-    _render_execution(record, details, output, io.StringIO())
+    _render_execution(
+        record,
+        details,
+        tuple(result_item_view(item) for item in items),
+        output,
+        io.StringIO(),
+    )
 
     rendered = output.getvalue()
     assert rendered.index("verify/integrity first.bin") < rendered.index(
@@ -435,6 +452,11 @@ def test_final_partial_exit_precedes_degradation() -> None:
             SessionState.COMPLETED,
             recording=RecordingStatus.DEGRADED,
             items=_exception_items(),
+            recording_issues=(
+                TaskRecordingIssue(
+                    TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+                ),
+            ),
         )
     )
 
@@ -475,6 +497,11 @@ def test_final_partial_exit_precedes_degradation() -> None:
             OperationResult(
                 SessionState.COMPLETED,
                 recording=RecordingStatus.DEGRADED,
+                recording_issues=(
+                    TaskRecordingIssue(
+                        TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+                    ),
+                ),
             ),
             EXIT_DEGRADED,
         ),
@@ -627,6 +654,11 @@ def test_recording_and_audit_warnings_remain_independent() -> None:
         OperationResult(
             SessionState.COMPLETED,
             recording=RecordingStatus.DEGRADED,
+            recording_issues=(
+                TaskRecordingIssue(
+                    TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+                ),
+            ),
         )
     ).result
     assert recording_result is not None
@@ -697,7 +729,7 @@ def test_plan_review_renders_prior_target_for_rename_operations() -> None:
 def test_recent_history_lists_safe_subset_exception_counts(tmp_path: Path) -> None:
     history = tmp_path / "history.db"
     record = SessionRecord(
-        SessionId("session"),
+        SessionId("a" * 32),
         "sync-execution",
         SessionState.PENDING,
         (),
@@ -707,7 +739,7 @@ def test_recent_history_lists_safe_subset_exception_counts(tmp_path: Path) -> No
         NOW,
     )
     blocked = ItemOutcome(
-        "blocked",
+        "b" * 32,
         "noop",
         "junction",
         Outcome.BLOCKED,
@@ -966,6 +998,58 @@ def test_declined_plan_mutates_neither_files_nor_databases(tmp_path: Path) -> No
     assert stderr.getvalue() == ""
 
 
+def test_terminal_items_reconstruct_a_healthy_fixed_history_watermark() -> None:
+    first = SimpleNamespace(item_id="first")
+    second = SimpleNamespace(item_id="second")
+    calls: list[tuple[int, int | None, int]] = []
+
+    class Service:
+        def get_history_summary(self, run_token: str):
+            assert run_token == "run"
+            return SimpleNamespace(
+                completion_status="finalized",
+                audit_status="ok",
+                item_count=2,
+            )
+
+        def get_history_items(
+            self,
+            run_token: str,
+            *,
+            after_order: int,
+            through_order: int | None,
+            limit: int,
+        ):
+            assert run_token == "run"
+            calls.append((after_order, through_order, limit))
+            if after_order == 0:
+                return SimpleNamespace(
+                    next_after_order=1,
+                    has_more=True,
+                    items=(SimpleNamespace(item=first),),
+                )
+            return SimpleNamespace(
+                next_after_order=2,
+                has_more=False,
+                items=(SimpleNamespace(item=second),),
+            )
+
+    record = _record_for_result(OperationResult(SessionState.COMPLETED))
+    errors = io.StringIO()
+
+    items = _terminal_items(
+        Service(),
+        "run",
+        record,
+        [SimpleNamespace(item_id="late-live-item")],
+        errors,
+    )
+
+    assert items == (first, second)
+    assert calls == [(0, 2, 256), (1, 2, 256)]
+    assert errors.getvalue() == ""
+
+
 def test_mutating_cli_refuses_mismatched_database_pair_read_only(
     tmp_path: Path,
 ) -> None:
@@ -1004,7 +1088,8 @@ def test_mutating_cli_refuses_mismatched_database_pair_read_only(
     assert result == EXIT_REFUSED
     assert (ledger.read_bytes(), history.read_bytes()) == before
     assert "Database pair refused: history-contract" in stderr.getvalue()
-    assert "reset both database files together" in stderr.getvalue()
+    assert "archive or delete both database main files" in stderr.getvalue()
+    assert "-wal, -shm, and -journal sidecars together" in stderr.getvalue()
 
 
 def test_read_only_history_command_is_exempt_from_missing_ledger_peer(
@@ -1176,6 +1261,46 @@ def test_cli_runs_real_reviewed_sync_and_browses_history(tmp_path: Path) -> None
     assert "completed" in history_output.getvalue()
     assert str(source) in history_output.getvalue()
     assert history_errors.getvalue() == ""
+
+
+def test_cli_reconstructs_items_when_observation_starts_after_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    original_observe = NamiSyncService.observe
+
+    def observe_after_terminal(self, session_id, sink):
+        deadline = time.monotonic() + 5.0
+        while self.get_session(session_id).result is None:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("session did not reach terminal state")
+            time.sleep(0.001)
+        return original_observe(self, session_id, sink)
+
+    monkeypatch.setattr(NamiSyncService, "observe", observe_after_terminal)
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "payload.bin").write_bytes(b"fast terminal")
+    output = io.StringIO()
+    errors = io.StringIO()
+
+    result = main(
+        _arguments(
+            source,
+            target,
+            tmp_path / "ledger.db",
+            tmp_path / "history.db",
+        ),
+        stdin=io.StringIO("execute\n"),
+        stdout=output,
+        stderr=errors,
+    )
+
+    assert result == EXIT_SUCCESS, (output.getvalue(), errors.getvalue())
+    assert "payload.bin: succeeded" in output.getvalue()
+    assert errors.getvalue() == ""
 
 
 def test_cli_verify_after_copy_renders_compound_typed_result(

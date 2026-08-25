@@ -6,12 +6,14 @@ from collections import deque
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+import json
 from pathlib import Path
 from threading import Condition, Event, Thread
 from time import monotonic, sleep
 
 import pytest
 
+from _event_v5_fixtures import maximum_reliable_envelope
 from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, ItemOutcome, Progress
 from namisync.core.evidence import Outcome
 from namisync.core.session import OperationResult, SessionState
@@ -24,6 +26,7 @@ from namisync.dispatcher import (
 from namisync.dispatcher import event_bus as event_bus_module
 from namisync.interfaces import service as service_module
 from namisync.interfaces.service import NamiSyncService, PlanSession
+from namisync.interfaces.web.bridge import BRIDGE_SCHEMA_VERSION, to_primitive_view
 from namisync.interfaces.web import drain as drain_module
 from namisync.interfaces.web.drain import (
     DrainBusyError,
@@ -252,6 +255,50 @@ def _start(registry: TaskRegistry, command_id: str = "4" * 32):
     )
 
 
+def test_maximum_reliable_head_drains_alone_below_the_bridge_response_wall() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    value = maximum_reliable_envelope()
+    event = SessionEventView(
+        SESSION,
+        2,
+        str(value["at"]),
+        CORE_EVENT_SCHEMA_VERSION,
+        str(value["body_type"]),
+        value["body"],  # type: ignore[arg-type]
+    )
+    service.sink(event)
+
+    drained = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    response = {
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": "6" * 32,
+        "ok": True,
+        "result": to_primitive_view(drained),
+    }
+    encoded = json.dumps(
+        response,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    assert len(drained.updates) == 1
+    assert drained.updates[0].event == event  # type: ignore[union-attr]
+    assert len(encoded) < 8_388_608
+    registry.begin_close()
+
+
+def _envelope_item_id(run_index: int, tick: int, item_index: int) -> str:
+    return f"{run_index * 1_000 + tick * 10 + item_index + 1:032x}"
+
+
 @dataclass
 class _IntegratedRun:
     entered: Event
@@ -285,7 +332,7 @@ class _IntegratedInvocation:
         for index in range(state.reliable_count):
             context.emit(
                 ItemOutcome(
-                    item_id=f"{self.name}-item-{index}",
+                    item_id=f"{index + 1:032x}",
                     kind="copy",
                     path=f"{self.name}-{index}.txt",
                     outcome=Outcome.SUCCEEDED,
@@ -342,7 +389,11 @@ class _EnvelopeInvocation:
             for item_index in range(reliable_count):
                 context.emit(
                     ItemOutcome(
-                        item_id=f"{state.name}-item-{tick:02d}-{item_index}",
+                        item_id=_envelope_item_id(
+                            state.index,
+                            tick,
+                            item_index,
+                        ),
                         kind="copy",
                         path=f"{state.name}-{tick:02d}-{item_index}.txt",
                         outcome=Outcome.SUCCEEDED,
@@ -574,7 +625,7 @@ def test_br_g_33_integrated_admission_and_visible_overflow_gap(
         assert retained_tail
         assert retained_tail[0].sequence > first_missed
         accepted_item_ids.update(event.body["item_id"] for event in retained_tail)
-        emitted_item_ids = {f"overflow-item-{index}" for index in range(260)}
+        emitted_item_ids = {f"{index + 1:032x}" for index in range(260)}
         assert emitted_item_ids - accepted_item_ids
 
         overflow_finish.set()
@@ -592,7 +643,9 @@ def test_br_g_33_integrated_admission_and_visible_overflow_gap(
         )
         assert terminal.state == "completed"
         assert terminal.result is not None
-        assert len(terminal.result.items) == 260
+        full_result = dispatcher.get(overflow.session_id).result
+        assert full_result is not None
+        assert len(full_result.items) == 260
         assert any(
             update.update_type == "event" and update.event.body_type == "Terminal"
             for update in terminal_updates
@@ -751,7 +804,7 @@ def test_sh_g_8_br_g_42_normal_event_envelope_is_bounded_and_lossless(
                 assert remaining > 0 and run.tick_emitted[tick].wait(remaining)
             for index, start in enumerate(starts):
                 expected_ids = {
-                    f"envelope-{index}-item-{tick:02d}-{item_index}"
+                    _envelope_item_id(index, tick, item_index)
                     for item_index in range(
                         reliable_pattern[(index + tick) % 4]
                     )
@@ -809,7 +862,7 @@ def test_sh_g_8_br_g_42_normal_event_envelope_is_bounded_and_lossless(
         assert sum(map(len, delivered_reliable.values())) == 600
         for index, start in enumerate(starts):
             expected = [
-                f"envelope-{index}-item-{tick:02d}-{item_index}"
+                _envelope_item_id(index, tick, item_index)
                 for tick in range(60)
                 for item_index in range(reliable_pattern[(index + tick) % 4])
             ]
@@ -835,8 +888,10 @@ def test_sh_g_8_br_g_42_normal_event_envelope_is_bounded_and_lossless(
             assert result.disposition == "ran"
             assert result.canceled is False
             assert result.error is None
-            assert [item.item_id for item in result.items] == expected
-            assert all(item.result == "succeeded" for item in result.items)
+            full_result = dispatcher.get(start.session_id).result
+            assert full_result is not None
+            assert [item.item_id for item in full_result.items] == expected
+            assert all(item.outcome is Outcome.SUCCEEDED for item in full_result.items)
         assert set(terminal_records) == {
             start.session_id for start in starts
         }

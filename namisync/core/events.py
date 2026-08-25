@@ -1,32 +1,69 @@
-"""Versioned event bodies and envelopes for generic sessions."""
+"""Exact core-event v5 bodies, envelopes, and bounded projections."""
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass, field
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import StrEnum
-from typing import ClassVar, Mapping
+import json
+import re
+from typing import ClassVar
 
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.event_v5 import (
+    EVENT_V5_SCHEMA_VERSION,
+    MAX_DETAIL_LEAVES,
+    MAX_DETAIL_PATH_LEAVES,
+    validate_event_v5_envelope,
+)
+from namisync.core.execution import (
+    ExecutionReason,
+    ItemRecordingReason,
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
+)
 from namisync.core.integrity import (
-    IntegrityMode,
     IntegrityOutcome,
     IntegrityReason,
     IntegrityResult,
     ReadStrategy,
     RecordDisposition,
 )
-from namisync.core.session import ResultItem
-
-CORE_EVENT_SCHEMA_VERSION = 4
-LEGACY_CORE_EVENT_SCHEMA_VERSION = 3
-SUPPORTED_CORE_EVENT_SCHEMA_VERSIONS = frozenset(
-    {LEGACY_CORE_EVENT_SCHEMA_VERSION, CORE_EVENT_SCHEMA_VERSION}
+from namisync.core.planning import BlockedReason, OperationKind
+from namisync.core.review import (
+    ReviewFactLimitExceeded,
+    ReviewLimitAxis,
+    ReviewPopulation,
+    ReviewTreeKind,
+)
+from namisync.core.scalars import (
+    bounded_utf8_text,
+    require_safe_int,
+    require_signed_64,
+    require_utf16_path,
+    scalar_64_from_text,
+    scalar_64_to_text,
+)
+from namisync.core.session import (
+    Disposition,
+    FailureDetail,
+    OperationResult,
+    PhaseResult,
+    PhaseStatus,
+    ResultItem,
+    SessionId,
+    SessionState,
 )
 
-_JAVASCRIPT_MAX_SAFE_INTEGER = (1 << 53) - 1
-_PROGRESS_ATTEMPT_ID = re.compile(r"[0-9a-f]{32}\Z")
+
+CORE_EVENT_SCHEMA_VERSION = EVENT_V5_SCHEMA_VERSION
+
+# Kept private and unreachable for the checkpoint-3.2 safe stop. The final
+# checkpoint-3 commit removes these read-only branches and their fixtures.
+_LEGACY_CORE_EVENT_SCHEMA_VERSIONS = frozenset({3, 4})
+
+_HEX_ID = re.compile(r"[0-9a-f]{32}\Z")
 _PROGRESS_BODY_FIELDS = frozenset(
     {
         "phase",
@@ -42,6 +79,67 @@ _PROGRESS_BODY_FIELDS = frozenset(
         "item_bytes_total",
     }
 )
+_DETAIL_TEXT_KEYS = frozenset(
+    {
+        "backup",
+        "backup_metadata",
+        "backup_state",
+        "backup_state_error",
+        "blocked_reason",
+        "cleanup_error",
+        "destination_state",
+        "durable_state",
+        "error_type",
+        "message",
+        "mutation_durable_state",
+        "mutation_state",
+        "mutation_state_error",
+        "old_state_error",
+        "publish_state",
+        "retry_error",
+        "retry_error_type",
+        "source_state",
+        "state_error",
+        "state_error_type",
+        "target_state",
+        "target_state_error",
+        "temp_state",
+        "trash_state_error",
+    }
+)
+_DETAIL_PATH_KEYS = frozenset(
+    {
+        "backup_path",
+        "mutation_destination",
+        "prior_path",
+        "published_path",
+        "trash_path",
+    }
+)
+_DETAIL_BOOLEAN_KEYS = frozenset({"continued"})
+_DETAIL_TEXT_ARRAY_KEYS = frozenset({"durability_warnings"})
+_DETAIL_SIDE_ARRAY_KEYS = frozenset({"incomplete_sides"})
+_DETAIL_ID_ARRAY_KEYS = frozenset({"excluded_dependencies"})
+_DETAIL_KEYS = frozenset(
+    {
+        *_DETAIL_TEXT_KEYS,
+        *_DETAIL_PATH_KEYS,
+        *_DETAIL_BOOLEAN_KEYS,
+        *_DETAIL_TEXT_ARRAY_KEYS,
+        *_DETAIL_SIDE_ARRAY_KEYS,
+        *_DETAIL_ID_ARRAY_KEYS,
+    }
+)
+_OPERATION_REASONS = frozenset(
+    {
+        *(reason.value for reason in ExecutionReason),
+        *(reason.value for reason in BlockedReason),
+        "blocked-correspondence",
+        "blocked-dependency",
+        "incomplete-scan",
+        "user-deselected",
+    }
+)
 
 
 class DeliveryClass(StrEnum):
@@ -51,7 +149,7 @@ class DeliveryClass(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class StateChanged:
-    state: "SessionState"
+    state: SessionState
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,10 +157,7 @@ class PhaseChanged:
     phase: str
 
     def __post_init__(self) -> None:
-        if not isinstance(self.phase, str):
-            raise TypeError("phase must be a string")
-        if not self.phase:
-            raise ValueError("phase must be non-empty")
+        _require_nonempty_text(self.phase, "phase")
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,22 +175,15 @@ class Progress:
     item_bytes_total: int | None = None
 
     def __post_init__(self) -> None:
-        if not isinstance(self.phase, str):
-            raise TypeError("progress phase must be a string")
-        if not self.phase:
-            raise ValueError("progress phase must be non-empty")
-        _require_nonnegative_safe_integer(self.items_done, "progress items_done")
-        _require_nonnegative_safe_integer(self.bytes_done, "progress bytes_done")
-        _require_optional_nonnegative_safe_integer(
-            self.items_total, "progress items_total"
-        )
-        _require_optional_nonnegative_safe_integer(
-            self.bytes_total, "progress bytes_total"
-        )
-        if self.current_path is not None and not isinstance(
-            self.current_path, str
-        ):
-            raise TypeError("progress current_path must be a string or None")
+        _require_nonempty_text(self.phase, "progress phase")
+        require_safe_int(self.items_done, "progress items_done")
+        require_signed_64(self.bytes_done, "progress bytes_done")
+        if self.items_total is not None:
+            require_safe_int(self.items_total, "progress items_total")
+        if self.bytes_total is not None:
+            require_signed_64(self.bytes_total, "progress bytes_total")
+        if self.current_path is not None:
+            require_utf16_path(self.current_path, "progress current_path")
         if self.items_total is not None and self.items_done > self.items_total:
             raise ValueError("items_done cannot exceed items_total")
         if self.bytes_total is not None and self.bytes_done > self.bytes_total:
@@ -103,47 +191,59 @@ class Progress:
         if (self.item_id is None) != (self.item_type is None):
             raise ValueError("progress item identity must be present as a pair")
         if self.item_id is not None:
-            if not isinstance(self.item_id, str) or not self.item_id:
-                raise ValueError("progress item_id must be a non-empty string")
-            if (
-                not isinstance(self.item_type, str)
-                or self.item_type not in {"operation", "integrity"}
-            ):
+            _require_nonempty_text(self.item_id, "progress item_id")
+            if self.item_type not in {"operation", "integrity"}:
                 raise ValueError("progress item_type is unsupported")
             if self.items_total is not None and self.items_done >= self.items_total:
                 raise ValueError(
                     "active progress item requires an unsettled selected item"
                 )
         if self.item_attempt_id is not None:
-            if self.item_id is None:
-                raise ValueError("progress item attempt requires item identity")
-            if (
-                not isinstance(self.item_attempt_id, str)
-                or _PROGRESS_ATTEMPT_ID.fullmatch(self.item_attempt_id) is None
-            ):
+            if self.item_id is None or _HEX_ID.fullmatch(self.item_attempt_id) is None:
                 raise ValueError(
-                    "progress item_attempt_id must be 32 lowercase hexadecimal characters"
+                    "progress item_attempt_id requires 32 lowercase hex characters"
                 )
         if (self.item_bytes_done is None) != (self.item_bytes_total is None):
             raise ValueError("progress item byte counters must be present as a pair")
         if self.item_bytes_done is not None:
             if self.item_attempt_id is None:
                 raise ValueError("progress item byte counters require an item attempt")
-            _require_nonnegative_safe_integer(
-                self.item_bytes_done, "progress item_bytes_done"
-            )
-            _require_nonnegative_safe_integer(
-                self.item_bytes_total, "progress item_bytes_total"
-            )
+            require_signed_64(self.item_bytes_done, "progress item_bytes_done")
+            require_signed_64(self.item_bytes_total, "progress item_bytes_total")
             if self.item_bytes_done > self.item_bytes_total:
                 raise ValueError("item_bytes_done cannot exceed item_bytes_total")
             if self.item_bytes_done > self.bytes_done:
                 raise ValueError("item_bytes_done cannot exceed bytes_done")
-            if (
-                self.bytes_total is not None
-                and self.item_bytes_total > self.bytes_total
-            ):
+            if self.bytes_total is not None and self.item_bytes_total > self.bytes_total:
                 raise ValueError("item_bytes_total cannot exceed bytes_total")
+
+
+DetailValue = str | bool | tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DetailProjection(Mapping[str, DetailValue]):
+    """One closed, immutable executor detail snapshot."""
+
+    entries: tuple[tuple[str, DetailValue], ...] = ()
+
+    def __iter__(self) -> Iterator[str]:
+        return (key for key, _value in self.entries)
+
+    def __len__(self) -> int:
+        return len(self.entries)
+
+    def __getitem__(self, key: str) -> DetailValue:
+        for candidate, value in self.entries:
+            if candidate == key:
+                return value
+        raise KeyError(key)
+
+    def to_wire(self) -> dict[str, object]:
+        return {
+            key: list(value) if isinstance(value, tuple) else value
+            for key, value in self.entries
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,15 +252,60 @@ class ItemOutcome(ResultItem):
     phase: ClassVar[str] = "execute"
 
     item_id: str
-    kind: str
+    kind: OperationKind | str
     path: str
     outcome: Outcome
     reason: str | None = None
-    detail: Mapping[str, object] = field(default_factory=dict)
+    detail: Mapping[str, object] | DetailProjection = field(default_factory=dict)
+    recording: RecordingStatus = RecordingStatus.OK
+    recording_reason: ItemRecordingReason | None = None
+    recording_detail: str | None = None
+    detail_omitted_count: int = 0
 
     def __post_init__(self) -> None:
-        if not self.item_id or not self.kind:
-            raise ValueError("item_id and kind must be non-empty")
+        if not self.item_id:
+            raise ValueError("item_id must be non-empty")
+        kind = self.kind
+        if isinstance(kind, str):
+            try:
+                kind = OperationKind(kind)
+            except ValueError as error:
+                raise ValueError("operation item kind is unsupported") from error
+            object.__setattr__(self, "kind", kind)
+        if not isinstance(kind, OperationKind):
+            raise TypeError("operation item kind must be OperationKind")
+        require_utf16_path(self.path, "operation path")
+        if self.reason is not None and self.reason not in _OPERATION_REASONS:
+            raise ValueError("operation item reason is unsupported")
+        projection, omitted = project_detail(self.detail)
+        object.__setattr__(self, "detail", projection)
+        require_safe_int(
+            self.detail_omitted_count,
+            "operation detail_omitted_count",
+        )
+        bounded_recording = bounded_utf8_text(
+            self.recording_detail,
+            "operation recording_detail",
+        )
+        if self.recording_detail is not None and bounded_recording is None:
+            omitted += 1
+            object.__setattr__(self, "recording_detail", None)
+        object.__setattr__(
+            self,
+            "detail_omitted_count",
+            require_safe_int(
+                self.detail_omitted_count + omitted,
+                "operation detail_omitted_count",
+            ),
+        )
+        if self.recording is RecordingStatus.OK:
+            if self.recording_reason is not None or self.recording_detail is not None:
+                raise ValueError("recording ok requires null reason and detail")
+        elif self.recording is RecordingStatus.DEGRADED:
+            if not isinstance(self.recording_reason, ItemRecordingReason):
+                raise ValueError("degraded recording requires an item reason")
+        else:
+            raise TypeError("operation recording has the wrong type")
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,16 +313,154 @@ class Gap:
     first_missed_seq: int
 
     def __post_init__(self) -> None:
-        _require_nonnegative_safe_integer(
-            self.first_missed_seq, "first_missed_seq"
-        )
+        require_safe_int(self.first_missed_seq, "first_missed_seq")
         if self.first_missed_seq < 1:
             raise ValueError("first_missed_seq must be positive")
 
 
 @dataclass(frozen=True, slots=True)
+class TerminalSummary:
+    """Bounded item-free terminal truth transported in event v5."""
+
+    status: SessionState
+    recording: RecordingStatus
+    audit: RecordingStatus
+    disposition: Disposition
+    canceled: bool
+    phases: tuple[PhaseResult, ...]
+    bytes_done: int
+    bytes_total: int
+    error: FailureDetail | None
+    recording_degraded_items: int
+    recording_issues: tuple[TaskRecordingIssue, ...]
+    omitted_detail_count: int
+    review_fact_limit: ReviewFactLimitExceeded | None
+
+    def __post_init__(self) -> None:
+        if self.status not in {
+            SessionState.COMPLETED,
+            SessionState.FAILED,
+            SessionState.CANCELED,
+            SessionState.REFUSED,
+        }:
+            raise ValueError("terminal summary status must be terminal")
+        if type(self.canceled) is not bool:
+            raise TypeError("terminal canceled must be a boolean")
+        if not isinstance(self.phases, tuple) or len(self.phases) > 3:
+            raise ValueError("terminal phases exceed their bound")
+        if len({phase.phase for phase in self.phases}) != len(self.phases):
+            raise ValueError("terminal phase names must be unique")
+        require_signed_64(self.bytes_done, "terminal bytes_done")
+        require_signed_64(self.bytes_total, "terminal bytes_total")
+        if self.bytes_done > self.bytes_total:
+            raise ValueError("terminal bytes_done cannot exceed bytes_total")
+        require_safe_int(
+            self.recording_degraded_items,
+            "terminal recording_degraded_items",
+        )
+        if not isinstance(self.recording_issues, tuple) or len(self.recording_issues) > 5:
+            raise ValueError("terminal recording issues exceed their bound")
+        if any(not isinstance(issue, TaskRecordingIssue) for issue in self.recording_issues):
+            raise TypeError("terminal recording issues have the wrong type")
+        if len({issue.reason for issue in self.recording_issues}) != len(
+            self.recording_issues
+        ):
+            raise ValueError("terminal recording issue reasons must be unique")
+        require_safe_int(self.omitted_detail_count, "terminal omitted_detail_count")
+        expected_recording = (
+            RecordingStatus.DEGRADED
+            if self.recording_degraded_items or self.recording_issues
+            else RecordingStatus.OK
+        )
+        if self.recording is not expected_recording:
+            raise ValueError("terminal recording aggregate contradicts its witnesses")
+        if self.status is SessionState.CANCELED and not self.canceled:
+            raise ValueError("canceled terminal status requires canceled=true")
+        if self.status is SessionState.REFUSED and (
+            self.canceled or self.disposition is not Disposition.UNRUN
+        ):
+            raise ValueError("refused terminal summary must be uncanceled and unrun")
+        if self.review_fact_limit is not None and not (
+            self.status is SessionState.REFUSED
+            and self.disposition is Disposition.UNRUN
+            and not self.canceled
+            and not self.phases
+            and self.bytes_done == 0
+            and self.bytes_total == 0
+            and self.error is None
+            and self.recording_degraded_items == 0
+            and not self.recording_issues
+            and self.omitted_detail_count == 0
+        ):
+            raise ValueError("review-limit terminal summary has contradictory facts")
+
+    @classmethod
+    def from_result(cls, result: OperationResult) -> "TerminalSummary":
+        omitted = result.omitted_detail_count
+        degraded_items = 0
+        for item in result.items:
+            omitted = require_safe_int(
+                omitted + item.detail_omitted_count,
+                "terminal omitted_detail_count",
+            )
+            if item.recording is RecordingStatus.DEGRADED:
+                degraded_items += 1
+        degraded_items = require_safe_int(
+            degraded_items,
+            "terminal recording_degraded_items",
+        )
+        expected_recording = (
+            RecordingStatus.DEGRADED
+            if degraded_items or result.recording_issues
+            else RecordingStatus.OK
+        )
+        if result.recording is not expected_recording:
+            raise ValueError("operation recording aggregate contradicts its witnesses")
+        phases: list[PhaseResult] = []
+        for phase in result.phases:
+            bounded = bounded_utf8_text(phase.error, "terminal phase error")
+            if phase.error is not None and bounded is None:
+                omitted = require_safe_int(
+                    omitted + 1,
+                    "terminal omitted_detail_count",
+                )
+                phases.append(replace(phase, error=None))
+            else:
+                phases.append(phase)
+        error = result.error
+        if error is not None:
+            type_name = bounded_utf8_text(error.type_name, "terminal error type")
+            message = bounded_utf8_text(error.message, "terminal error message")
+            if not type_name or message is None:
+                error = None
+                omitted = require_safe_int(
+                    omitted + 1,
+                    "terminal omitted_detail_count",
+                )
+        return cls(
+            status=result.status,
+            recording=result.recording,
+            audit=result.audit,
+            disposition=result.disposition,
+            canceled=result.canceled,
+            phases=tuple(phases),
+            bytes_done=result.bytes_done,
+            bytes_total=result.bytes_total,
+            error=error,
+            recording_degraded_items=degraded_items,
+            recording_issues=result.recording_issues,
+            omitted_detail_count=omitted,
+            review_fact_limit=result.review_fact_limit,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class Terminal:
-    result: "OperationResult"
+    result: TerminalSummary | OperationResult
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.result, (TerminalSummary, OperationResult)):
+            raise TypeError("Terminal result has the wrong type")
 
 
 EventBody = (
@@ -193,44 +476,108 @@ EventBody = (
 
 @dataclass(frozen=True, slots=True)
 class Envelope:
-    session_id: "SessionId"
+    session_id: SessionId
     seq: int
     at: datetime
     schema_version: int
     body: object
 
     def __post_init__(self) -> None:
-        if not isinstance(self.session_id, str) or not self.session_id:
-            raise ValueError("session_id must be non-empty")
-        _require_nonnegative_safe_integer(self.seq, "event sequence")
+        if type(self.session_id) is not str or _HEX_ID.fullmatch(self.session_id) is None:
+            raise ValueError("session_id must be 32 lowercase hexadecimal characters")
+        require_safe_int(self.seq, "event sequence")
         if self.seq < 1:
             raise ValueError("event sequence must be positive")
-        if (
-            type(self.schema_version) is not int
-            or self.schema_version not in SUPPORTED_CORE_EVENT_SCHEMA_VERSIONS
-        ):
-            raise ValueError(f"unsupported event schema version: {self.schema_version}")
-        if (
-            self.schema_version == LEGACY_CORE_EVENT_SCHEMA_VERSION
-            and isinstance(self.body, Progress)
-        ):
-            raise ValueError("Progress requires core event schema version 4")
-        if not isinstance(self.at, datetime):
-            raise TypeError("event timestamp must be a datetime")
-        if self.at.tzinfo is None or self.at.utcoffset() is None:
-            raise ValueError("event timestamp must be timezone-aware")
-        if self.at.utcoffset() != timezone.utc.utcoffset(self.at):
-            raise ValueError("event timestamp must be UTC")
+        if type(self.schema_version) is not int or self.schema_version != 5:
+            raise ValueError("event schema version must be exactly 5")
+        _require_utc(self.at, "event timestamp")
 
 
 def delivery_class(body: object) -> DeliveryClass:
     return DeliveryClass.LOSSY if isinstance(body, Progress) else DeliveryClass.RELIABLE
 
 
-def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
-    """Serialize M0 core event bodies without interpreting domain details."""
+def project_detail(
+    value: Mapping[str, object] | DetailProjection,
+) -> tuple[DetailProjection, int]:
+    """Snapshot one declared detail map and omit only oversized diagnostics."""
 
-    from namisync.core.session import OperationResult
+    if isinstance(value, DetailProjection):
+        return value, 0
+    if not isinstance(value, Mapping):
+        raise TypeError("operation detail must be a mapping")
+    entries: list[tuple[str, DetailValue]] = []
+    leaves = 0
+    path_leaves = 0
+    omitted = 0
+    for key, raw in value.items():
+        if type(key) is not str:
+            raise TypeError("operation detail keys must be strings")
+        try:
+            encoded_key = key.encode("ascii")
+        except UnicodeEncodeError as error:
+            raise ValueError("operation detail keys must be ASCII") from error
+        if not encoded_key or len(encoded_key) > 64 or key not in _DETAIL_KEYS:
+            raise ValueError(f"operation detail key is undeclared: {key!r}")
+        if key in _DETAIL_TEXT_KEYS:
+            if type(raw) is not str:
+                raise TypeError(f"operation detail {key} must be text")
+            bounded = bounded_utf8_text(raw, f"operation detail {key}")
+            if bounded is None:
+                omitted += 1
+                continue
+            projected: DetailValue = bounded
+            leaves += 1
+        elif key in _DETAIL_PATH_KEYS:
+            projected = require_utf16_path(raw, f"operation detail {key}")
+            leaves += 1
+            path_leaves += 1
+        elif key in _DETAIL_BOOLEAN_KEYS:
+            if type(raw) is not bool:
+                raise TypeError(f"operation detail {key} must be a boolean")
+            projected = raw
+            leaves += 1
+        else:
+            if type(raw) not in {list, tuple}:
+                raise TypeError(f"operation detail {key} must be a bounded array")
+            if len(raw) > 32:
+                raise ValueError(f"operation detail {key} exceeds its array bound")
+            members: list[str] = []
+            omit_array = False
+            for member in raw:
+                if key in _DETAIL_SIDE_ARRAY_KEYS:
+                    if member not in {"source", "target"}:
+                        raise ValueError(f"operation detail {key} has an invalid side")
+                    members.append(member)
+                elif key in _DETAIL_ID_ARRAY_KEYS:
+                    if type(member) is not str or _HEX_ID.fullmatch(member) is None:
+                        raise ValueError(f"operation detail {key} has an invalid id")
+                    members.append(member)
+                else:
+                    if type(member) is not str:
+                        raise TypeError(
+                            f"operation detail {key} members must be text"
+                        )
+                    bounded = bounded_utf8_text(member, f"operation detail {key}")
+                    if bounded is None:
+                        omit_array = True
+                        break
+                    members.append(bounded)
+            if omit_array:
+                omitted += 1
+                continue
+            projected = tuple(members)
+            leaves += len(members)
+        if leaves > MAX_DETAIL_LEAVES:
+            raise ValueError("operation detail exceeds its primitive-leaf bound")
+        if path_leaves > MAX_DETAIL_PATH_LEAVES:
+            raise ValueError("operation detail exceeds its path-leaf bound")
+        entries.append((key, projected))
+    return DetailProjection(tuple(entries)), omitted
+
+
+def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
+    """Serialize and validate one exact core-event v5 envelope."""
 
     body = envelope.body
     if isinstance(body, StateChanged):
@@ -238,220 +585,113 @@ def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
     elif isinstance(body, PhaseChanged):
         body_data = {"phase": body.phase}
     elif isinstance(body, Progress):
-        body_data = {
-            "phase": body.phase,
-            "items_done": body.items_done,
-            "items_total": body.items_total,
-            "bytes_done": body.bytes_done,
-            "bytes_total": body.bytes_total,
-            "current_path": body.current_path,
-            "item_id": body.item_id,
-            "item_type": body.item_type,
-            "item_attempt_id": body.item_attempt_id,
-            "item_bytes_done": body.item_bytes_done,
-            "item_bytes_total": body.item_bytes_total,
-        }
+        body_data = _progress_to_dict(body)
     elif isinstance(body, ResultItem):
         body_data = result_item_to_dict(body)
     elif isinstance(body, Gap):
         body_data = {"first_missed_seq": body.first_missed_seq}
     elif isinstance(body, Terminal):
-        body_data = {"result": _result_to_dict(body.result)}
+        if not isinstance(body.result, TerminalSummary):
+            raise TypeError("live Terminal must contain TerminalSummary")
+        body_data = {"result": terminal_summary_to_dict(body.result)}
     else:
         raise TypeError(f"unsupported event body: {type(body).__name__}")
-    if isinstance(body, Terminal) and not isinstance(body.result, OperationResult):
-        raise TypeError("Terminal result must be OperationResult")
-    return {
+    value = {
         "session_id": str(envelope.session_id),
         "seq": envelope.seq,
         "at": envelope.at.isoformat(),
-        "schema_version": envelope.schema_version,
+        "schema_version": CORE_EVENT_SCHEMA_VERSION,
         "body_type": type(body).__name__,
         "body": body_data,
     }
+    validate_event_v5_envelope(value)
+    return value
+
+
+def canonical_event_bytes(envelope: Envelope) -> bytes:
+    """Return the exact bytes used for reliable-event admission."""
+
+    return json.dumps(
+        envelope_to_dict(envelope),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
 
 
 def envelope_from_dict(data: Mapping[str, object]) -> Envelope:
-    """Deserialize an M0 envelope and reject unknown schema/body versions."""
+    """Decode only the exact current core-event version."""
 
-    from namisync.core.session import (
-        Disposition,
-        FailureDetail,
-        OperationResult,
-        PhaseResult,
-        PhaseStatus,
-        SessionId,
-        SessionState,
-    )
-
-    version = _integer(data["schema_version"], "event schema version")
-    if version not in SUPPORTED_CORE_EVENT_SCHEMA_VERSIONS:
-        raise ValueError(f"unsupported event schema version: {version}")
-    body_type = _string(data["body_type"], "event body type")
-    raw = data["body"]
-    if not isinstance(raw, Mapping):
-        raise TypeError("event body must be a mapping")
+    plain = dict(data)
+    validate_event_v5_envelope(plain)
+    raw = _plain_object(plain["body"], "event body")
+    body_type = _text(plain["body_type"], "event body type")
     if body_type == "StateChanged":
-        body: object = StateChanged(
-            SessionState(_string(raw["state"], "state event state"))
-        )
+        body: object = StateChanged(SessionState(_text(raw["state"], "state")))
     elif body_type == "PhaseChanged":
-        body = PhaseChanged(_string(raw["phase"], "phase event phase"))
+        body = PhaseChanged(_text(raw["phase"], "phase"))
     elif body_type == "Progress":
-        if version != CORE_EVENT_SCHEMA_VERSION:
-            raise ValueError("Progress requires core event schema version 4")
-        _require_exact_keys(raw, _PROGRESS_BODY_FIELDS, "progress body")
         body = Progress(
-            phase=_string(raw["phase"], "progress phase"),
-            items_done=_integer(
-                raw["items_done"], "progress items_done"
-            ),
-            items_total=_optional_int(
-                raw["items_total"], "progress items_total"
-            ),
-            bytes_done=_integer(
-                raw["bytes_done"], "progress bytes_done"
-            ),
-            bytes_total=_optional_int(
-                raw["bytes_total"], "progress bytes_total"
-            ),
-            current_path=_optional_str(
-                raw["current_path"], "progress current_path"
-            ),
-            item_id=_optional_str(
-                raw["item_id"], "progress item_id"
-            ),
-            item_type=_optional_str(
-                raw["item_type"], "progress item_type"
-            ),
-            item_attempt_id=_optional_str(
-                raw["item_attempt_id"], "progress item_attempt_id"
-            ),
-            item_bytes_done=_optional_int(
-                raw["item_bytes_done"], "progress item_bytes_done"
-            ),
-            item_bytes_total=_optional_int(
-                raw["item_bytes_total"], "progress item_bytes_total"
-            ),
+            phase=_text(raw["phase"], "progress phase"),
+            items_done=_int(raw["items_done"], "progress items_done"),
+            items_total=_optional_int(raw["items_total"], "progress items_total"),
+            bytes_done=scalar_64_from_text(raw["bytes_done"], "progress bytes_done"),
+            bytes_total=_optional_scalar(raw["bytes_total"], "progress bytes_total"),
+            current_path=_optional_text(raw["current_path"], "progress current_path"),
+            item_id=_optional_text(raw["item_id"], "progress item_id"),
+            item_type=_optional_text(raw["item_type"], "progress item_type"),
+            item_attempt_id=_optional_text(raw["item_attempt_id"], "progress item_attempt_id"),
+            item_bytes_done=_optional_scalar(raw["item_bytes_done"], "progress item_bytes_done"),
+            item_bytes_total=_optional_scalar(raw["item_bytes_total"], "progress item_bytes_total"),
         )
     elif body_type in {"ItemOutcome", "IntegrityOutcome"}:
         body = result_item_from_dict(raw)
         if type(body).__name__ != body_type:
             raise ValueError("event body type disagrees with item_type")
     elif body_type == "Gap":
-        body = Gap(
-            _integer(raw["first_missed_seq"], "gap first_missed_seq")
-        )
+        body = Gap(_int(raw["first_missed_seq"], "gap first_missed_seq"))
     elif body_type == "Terminal":
-        result_raw = raw["result"]
-        if not isinstance(result_raw, Mapping):
-            raise TypeError("terminal result must be a mapping")
-        error_raw = result_raw.get("error")
-        error = None
-        if error_raw is not None:
-            if not isinstance(error_raw, Mapping):
-                raise ValueError("terminal result error must be an object or null")
-            error = FailureDetail(
-                _string(error_raw["type_name"], "terminal error type_name"),
-                _string(error_raw["message"], "terminal error message"),
-            )
-        items_raw = result_raw.get("items", ())
-        if not isinstance(items_raw, list):
-            raise TypeError("terminal items must be a list")
-        phases_raw = result_raw["phases"]
-        if not isinstance(phases_raw, list):
-            raise TypeError("terminal phases must be a list")
         body = Terminal(
-            OperationResult(
-                status=SessionState(
-                    _string(result_raw["status"], "terminal status")
-                ),
-                recording=RecordingStatus(
-                    _string(result_raw["recording"], "terminal recording")
-                ),
-                audit=RecordingStatus(
-                    _string(result_raw["audit"], "terminal audit")
-                ),
-                disposition=Disposition(
-                    _string(
-                        result_raw["disposition"],
-                        "terminal disposition",
-                    )
-                ),
-                canceled=_boolean(
-                    result_raw["canceled"], "terminal canceled"
-                ),
-                items=tuple(result_item_from_dict(item) for item in items_raw),
-                phases=tuple(
-                    PhaseResult(
-                        phase=_string(
-                            _mapping_value(phase, "phase"),
-                            "terminal phase name",
-                        ),
-                        status=PhaseStatus(
-                            _string(
-                                _mapping_value(phase, "status"),
-                                "terminal phase status",
-                            )
-                        ),
-                        items_done=_integer(
-                            _mapping_value(phase, "items_done"),
-                            "terminal phase items_done",
-                        ),
-                        items_total=_optional_int(
-                            _mapping_value(phase, "items_total"),
-                            "terminal phase items_total",
-                        ),
-                        bytes_done=_integer(
-                            _mapping_value(phase, "bytes_done"),
-                            "terminal phase bytes_done",
-                        ),
-                        bytes_total=_optional_int(
-                            _mapping_value(phase, "bytes_total"),
-                            "terminal phase bytes_total",
-                        ),
-                        error=_optional_str(
-                            _mapping_value(phase, "error"),
-                            "terminal phase error",
-                        ),
-                    )
-                    for phase in phases_raw
-                ),
-                bytes_done=_integer(
-                    result_raw["bytes_done"], "terminal bytes_done"
-                ),
-                bytes_total=_integer(
-                    result_raw["bytes_total"], "terminal bytes_total"
-                ),
-                error=error,
+            terminal_summary_from_dict(
+                _plain_object(raw["result"], "terminal result")
             )
         )
     else:
         raise ValueError(f"unsupported event body type: {body_type}")
     return Envelope(
-        session_id=SessionId(
-            _string(data["session_id"], "event session_id")
-        ),
-        seq=_integer(data["seq"], "event sequence"),
-        at=_datetime(data["at"], "event timestamp"),
-        schema_version=version,
+        session_id=SessionId(_text(plain["session_id"], "event session_id")),
+        seq=_int(plain["seq"], "event sequence"),
+        at=_datetime(plain["at"], "event timestamp"),
+        schema_version=CORE_EVENT_SCHEMA_VERSION,
         body=body,
     )
 
 
 def result_item_to_dict(item: ResultItem) -> dict[str, object]:
-    """Serialize one nominal result item with explicit type and phase tags."""
+    """Serialize one exact v5 result item."""
 
     if isinstance(item, ItemOutcome):
+        detail = item.detail
+        if not isinstance(detail, DetailProjection):
+            raise TypeError("operation detail was not projected")
+        kind = item.kind
+        if not isinstance(kind, OperationKind):
+            raise TypeError("operation kind was not normalized")
         return {
             "item_type": item.item_type,
             "phase": item.phase,
             "item_id": item.item_id,
-            "kind": item.kind,
+            "kind": kind.value,
             "path": item.path,
             "result": item.outcome.value,
             "reason": item.reason,
-            "detail": dict(item.detail),
+            "detail": detail.to_wire(),
+            "recording": item.recording.value,
+            "recording_reason": (
+                None if item.recording_reason is None else item.recording_reason.value
+            ),
+            "recording_detail": item.recording_detail,
+            "detail_omitted_count": item.detail_omitted_count,
         }
     if isinstance(item, IntegrityOutcome):
         return {
@@ -465,193 +705,360 @@ def result_item_to_dict(item: ResultItem) -> dict[str, object]:
             "result": item.result.value,
             "reason": None if item.reason is None else item.reason.value,
             "detail": item.detail,
-            "read_strategy": (
-                None if item.read_strategy is None else item.read_strategy.value
-            ),
+            "read_strategy": None if item.read_strategy is None else item.read_strategy.value,
             "recording": item.recording.value,
             "record_disposition": (
-                None
-                if item.record_disposition is None
-                else item.record_disposition.value
+                None if item.record_disposition is None else item.record_disposition.value
             ),
+            "detail_omitted_count": item.detail_omitted_count,
         }
     raise TypeError(f"unsupported result item: {type(item).__name__}")
 
 
 def result_item_from_dict(data: Mapping[str, object]) -> ResultItem:
-    """Deserialize a tagged result item and reject structural guessing."""
-
-    item_type = _string(data["item_type"], "result item type")
-    phase = _string(data["phase"], "result item phase")
-    if item_type == ItemOutcome.item_type:
-        if phase != ItemOutcome.phase:
-            raise ValueError("operation result item must use execute phase")
-        detail = data.get("detail", {})
-        if not isinstance(detail, Mapping):
-            raise TypeError("operation item detail must be a mapping")
+    item_type = _text(data["item_type"], "result item type")
+    phase = _text(data["phase"], "result item phase")
+    if item_type == "operation":
         return ItemOutcome(
-            item_id=_string(data["item_id"], "operation item id"),
-            kind=_string(data["kind"], "operation item kind"),
-            path=_string(data["path"], "operation item path"),
-            outcome=Outcome(
-                _string(data["result"], "operation item result")
+            item_id=_text(data["item_id"], "operation item id"),
+            kind=OperationKind(_text(data["kind"], "operation kind")),
+            path=_text(data["path"], "operation path"),
+            outcome=Outcome(_text(data["result"], "operation result")),
+            reason=_optional_text(data["reason"], "operation reason"),
+            detail=_plain_object(data["detail"], "operation detail"),
+            recording=RecordingStatus(_text(data["recording"], "operation recording")),
+            recording_reason=(
+                None
+                if data["recording_reason"] is None
+                else ItemRecordingReason(
+                    _text(data["recording_reason"], "operation recording reason")
+                )
             ),
-            reason=_optional_str(
-                data.get("reason"), "operation item reason"
+            recording_detail=_optional_text(
+                data["recording_detail"], "operation recording detail"
             ),
-            detail=dict(detail),
+            detail_omitted_count=_int(
+                data["detail_omitted_count"], "operation detail_omitted_count"
+            ),
         )
-    if item_type == IntegrityOutcome.item_type:
-        if phase not in {mode.value for mode in IntegrityMode}:
-            raise ValueError("integrity result item has an invalid phase")
+    if item_type == "integrity":
         return IntegrityOutcome(
-            item_id=_string(data["item_id"], "integrity item id"),
-            row_id=_optional_str(
-                data["row_id"], "integrity item row_id"
-            ),
-            location_id=_optional_str(
-                data["location_id"], "integrity item location_id"
-            ),
-            path=_string(data["path"], "integrity item path"),
-            result=IntegrityResult(
-                _string(data["result"], "integrity item result")
-            ),
+            item_id=_text(data["item_id"], "integrity item id"),
+            row_id=_optional_text(data["row_id"], "integrity row_id"),
+            location_id=_optional_text(data["location_id"], "integrity location_id"),
+            path=_text(data["path"], "integrity path"),
+            result=IntegrityResult(_text(data["result"], "integrity result")),
             reason=(
                 None
-                if data.get("reason") is None
-                else IntegrityReason(
-                    _string(data["reason"], "integrity item reason")
-                )
+                if data["reason"] is None
+                else IntegrityReason(_text(data["reason"], "integrity reason"))
             ),
-            detail=_optional_str(
-                data.get("detail"), "integrity item detail"
-            ),
+            detail=_optional_text(data["detail"], "integrity detail"),
             read_strategy=(
                 None
-                if data.get("read_strategy") is None
-                else ReadStrategy(
-                    _string(
-                        data["read_strategy"],
-                        "integrity item read_strategy",
-                    )
-                )
+                if data["read_strategy"] is None
+                else ReadStrategy(_text(data["read_strategy"], "integrity read strategy"))
             ),
-            recording=RecordingStatus(
-                _string(data["recording"], "integrity item recording")
-            ),
+            recording=RecordingStatus(_text(data["recording"], "integrity recording")),
             record_disposition=(
                 None
-                if data.get("record_disposition") is None
+                if data["record_disposition"] is None
                 else RecordDisposition(
-                    _string(
-                        data["record_disposition"],
-                        "integrity item record_disposition",
-                    )
+                    _text(data["record_disposition"], "integrity record disposition")
                 )
             ),
             phase=phase,
+            detail_omitted_count=_int(
+                data["detail_omitted_count"], "integrity detail_omitted_count"
+            ),
         )
     raise ValueError(f"unsupported result item type: {item_type}")
 
 
-def _result_to_dict(result: "OperationResult") -> dict[str, object]:
+def terminal_summary_to_dict(result: TerminalSummary) -> dict[str, object]:
     return {
         "status": result.status.value,
         "recording": result.recording.value,
         "audit": result.audit.value,
         "disposition": result.disposition.value,
         "canceled": result.canceled,
-        "items": [result_item_to_dict(item) for item in result.items],
-        "phases": [
-            {
-                "phase": phase.phase,
-                "status": phase.status.value,
-                "items_done": phase.items_done,
-                "items_total": phase.items_total,
-                "bytes_done": phase.bytes_done,
-                "bytes_total": phase.bytes_total,
-                "error": phase.error,
-            }
-            for phase in result.phases
-        ],
-        "bytes_done": result.bytes_done,
-        "bytes_total": result.bytes_total,
+        "phases": [_phase_to_dict(phase) for phase in result.phases],
+        "bytes_done": scalar_64_to_text(result.bytes_done, "terminal bytes_done"),
+        "bytes_total": scalar_64_to_text(result.bytes_total, "terminal bytes_total"),
         "error": (
             None
             if result.error is None
             else {"type_name": result.error.type_name, "message": result.error.message}
         ),
+        "recording_degraded_items": result.recording_degraded_items,
+        "recording_issues": [
+            {"reason": issue.reason.value, "detail": issue.detail}
+            for issue in result.recording_issues
+        ],
+        "omitted_detail_count": result.omitted_detail_count,
+        "review_fact_limit": (
+            None
+            if result.review_fact_limit is None
+            else _review_fact_to_dict(result.review_fact_limit)
+        ),
     }
 
 
-def _integer(value: object, context: str) -> int:
+def terminal_summary_from_dict(data: Mapping[str, object]) -> TerminalSummary:
+    error_raw = data["error"]
+    error = None
+    if error_raw is not None:
+        error_value = _plain_object(error_raw, "terminal error")
+        error = FailureDetail(
+            _text(error_value["type_name"], "terminal error type"),
+            _text(error_value["message"], "terminal error message"),
+        )
+    phases_raw = _plain_list(data["phases"], "terminal phases")
+    issues_raw = _plain_list(data["recording_issues"], "terminal recording issues")
+    review_raw = data["review_fact_limit"]
+    return TerminalSummary(
+        status=SessionState(_text(data["status"], "terminal status")),
+        recording=RecordingStatus(_text(data["recording"], "terminal recording")),
+        audit=RecordingStatus(_text(data["audit"], "terminal audit")),
+        disposition=Disposition(_text(data["disposition"], "terminal disposition")),
+        canceled=_bool(data["canceled"], "terminal canceled"),
+        phases=tuple(
+            _phase_from_dict(_plain_object(value, "terminal phase"))
+            for value in phases_raw
+        ),
+        bytes_done=scalar_64_from_text(data["bytes_done"], "terminal bytes_done"),
+        bytes_total=scalar_64_from_text(data["bytes_total"], "terminal bytes_total"),
+        error=error,
+        recording_degraded_items=_int(
+            data["recording_degraded_items"], "terminal recording_degraded_items"
+        ),
+        recording_issues=tuple(
+            _recording_issue_from_dict(
+                _plain_object(value, "terminal recording issue")
+            )
+            for value in issues_raw
+        ),
+        omitted_detail_count=_int(
+            data["omitted_detail_count"], "terminal omitted_detail_count"
+        ),
+        review_fact_limit=(
+            None
+            if review_raw is None
+            else _review_fact_from_dict(_plain_object(review_raw, "review fact limit"))
+        ),
+    )
+
+
+def _recording_issue_from_dict(data: Mapping[str, object]) -> TaskRecordingIssue:
+    return TaskRecordingIssue(
+        TaskRecordingIssueReason(_text(data["reason"], "recording issue reason")),
+        _optional_text(data["detail"], "recording issue detail"),
+    )
+
+
+def _progress_to_dict(progress: Progress) -> dict[str, object]:
+    return {
+        "phase": progress.phase,
+        "items_done": progress.items_done,
+        "items_total": progress.items_total,
+        "bytes_done": scalar_64_to_text(progress.bytes_done, "progress bytes_done"),
+        "bytes_total": (
+            None
+            if progress.bytes_total is None
+            else scalar_64_to_text(progress.bytes_total, "progress bytes_total")
+        ),
+        "current_path": progress.current_path,
+        "item_id": progress.item_id,
+        "item_type": progress.item_type,
+        "item_attempt_id": progress.item_attempt_id,
+        "item_bytes_done": (
+            None
+            if progress.item_bytes_done is None
+            else scalar_64_to_text(progress.item_bytes_done, "progress item_bytes_done")
+        ),
+        "item_bytes_total": (
+            None
+            if progress.item_bytes_total is None
+            else scalar_64_to_text(progress.item_bytes_total, "progress item_bytes_total")
+        ),
+    }
+
+
+def _phase_to_dict(phase: PhaseResult) -> dict[str, object]:
+    return {
+        "phase": phase.phase,
+        "status": phase.status.value,
+        "items_done": phase.items_done,
+        "items_total": phase.items_total,
+        "bytes_done": scalar_64_to_text(phase.bytes_done, "phase bytes_done"),
+        "bytes_total": (
+            None
+            if phase.bytes_total is None
+            else scalar_64_to_text(phase.bytes_total, "phase bytes_total")
+        ),
+        "error": phase.error,
+    }
+
+
+def _phase_from_dict(data: Mapping[str, object]) -> PhaseResult:
+    return PhaseResult(
+        phase=_text(data["phase"], "phase name"),
+        status=PhaseStatus(_text(data["status"], "phase status")),
+        items_done=_int(data["items_done"], "phase items_done"),
+        items_total=_optional_int(data["items_total"], "phase items_total"),
+        bytes_done=scalar_64_from_text(data["bytes_done"], "phase bytes_done"),
+        bytes_total=_optional_scalar(data["bytes_total"], "phase bytes_total"),
+        error=_optional_text(data["error"], "phase error"),
+    )
+
+
+def _review_fact_to_dict(value: ReviewFactLimitExceeded) -> dict[str, object]:
+    return {
+        "reason": value.reason,
+        "tree_kind": value.tree_kind.value,
+        "population": value.population.value,
+        "axis": value.axis.value,
+        "row_limit": value.row_limit,
+        "byte_limit": (
+            None
+            if value.byte_limit is None
+            else scalar_64_to_text(value.byte_limit, "review byte_limit")
+        ),
+    }
+
+
+def _review_fact_from_dict(data: Mapping[str, object]) -> ReviewFactLimitExceeded:
+    return ReviewFactLimitExceeded(
+        reason=_text(data["reason"], "review reason"),
+        tree_kind=ReviewTreeKind(_text(data["tree_kind"], "review tree_kind")),
+        population=ReviewPopulation(_text(data["population"], "review population")),
+        axis=ReviewLimitAxis(_text(data["axis"], "review axis")),
+        row_limit=_optional_int(data["row_limit"], "review row_limit"),
+        byte_limit=_optional_scalar(data["byte_limit"], "review byte_limit"),
+    )
+
+
+# Unreachable read-only v3/v4 decoder retained only until checkpoint 3.3.
+@dataclass(frozen=True, slots=True)
+class _LegacyEnvelope:
+    session_id: SessionId
+    seq: int
+    at: datetime
+    schema_version: int
+    body: object
+
+
+def _legacy_envelope_from_dict(data: Mapping[str, object]) -> _LegacyEnvelope:
+    version = _int(data["schema_version"], "legacy event schema version")
+    if version not in _LEGACY_CORE_EVENT_SCHEMA_VERSIONS:
+        raise ValueError(f"unsupported legacy event schema version: {version}")
+    raw = _plain_object(data["body"], "legacy event body")
+    body_type = _text(data["body_type"], "legacy event body type")
+    if body_type == "StateChanged":
+        body: object = StateChanged(SessionState(_text(raw["state"], "legacy state")))
+    elif body_type == "PhaseChanged":
+        body = PhaseChanged(_text(raw["phase"], "legacy phase"))
+    elif body_type == "Progress" and version == 4:
+        _require_exact_keys(raw, _PROGRESS_BODY_FIELDS, "legacy progress body")
+        body = Progress(
+            phase=_text(raw["phase"], "legacy progress phase"),
+            items_done=_int(raw["items_done"], "legacy progress items_done"),
+            items_total=_optional_int(raw["items_total"], "legacy progress items_total"),
+            bytes_done=_int(raw["bytes_done"], "legacy progress bytes_done"),
+            bytes_total=_optional_int(raw["bytes_total"], "legacy progress bytes_total"),
+            current_path=_optional_text(raw["current_path"], "legacy progress path"),
+            item_id=_optional_text(raw["item_id"], "legacy progress item_id"),
+            item_type=_optional_text(raw["item_type"], "legacy progress item_type"),
+            item_attempt_id=_optional_text(raw["item_attempt_id"], "legacy progress attempt"),
+            item_bytes_done=_optional_int(raw["item_bytes_done"], "legacy progress item bytes"),
+            item_bytes_total=_optional_int(raw["item_bytes_total"], "legacy progress item total"),
+        )
+    elif body_type == "Gap":
+        body = Gap(_int(raw["first_missed_seq"], "legacy first_missed_seq"))
+    else:
+        raise ValueError(f"unsupported legacy event body type: {body_type}")
+    return _LegacyEnvelope(
+        SessionId(_text(data["session_id"], "legacy session_id")),
+        _int(data["seq"], "legacy sequence"),
+        _datetime(data["at"], "legacy timestamp"),
+        version,
+        body,
+    )
+
+
+def _require_nonempty_text(value: object, context: str) -> str:
+    result = _text(value, context)
+    if not result:
+        raise ValueError(f"{context} must be non-empty")
+    return result
+
+
+def _text(value: object, context: str) -> str:
+    if type(value) is not str:
+        raise TypeError(f"{context} must be text")
+    return value
+
+
+def _optional_text(value: object, context: str) -> str | None:
+    return None if value is None else _text(value, context)
+
+
+def _int(value: object, context: str) -> int:
     if type(value) is not int:
-        raise ValueError(f"{context} must be an integer")
+        raise TypeError(f"{context} must be a non-Boolean integer")
     return value
 
 
 def _optional_int(value: object, context: str) -> int | None:
-    return None if value is None else _integer(value, context)
+    return None if value is None else _int(value, context)
 
 
-def _string(value: object, context: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{context} must be a string")
-    return value
+def _optional_scalar(value: object, context: str) -> int | None:
+    return None if value is None else scalar_64_from_text(value, context)
 
 
-def _optional_str(value: object, context: str) -> str | None:
-    return None if value is None else _string(value, context)
-
-
-def _boolean(value: object, context: str) -> bool:
+def _bool(value: object, context: str) -> bool:
     if type(value) is not bool:
-        raise ValueError(f"{context} must be a boolean")
+        raise TypeError(f"{context} must be a boolean")
     return value
 
 
 def _datetime(value: object, context: str) -> datetime:
     try:
-        return datetime.fromisoformat(_string(value, context))
+        result = datetime.fromisoformat(_text(value, context))
     except ValueError as error:
         raise ValueError(f"{context} must be an ISO-8601 datetime") from error
+    _require_utc(result, context)
+    return result
 
 
-def _mapping_value(value: object, key: str) -> object:
-    if not isinstance(value, Mapping):
-        raise TypeError("terminal phase must be a mapping")
-    return value[key]
+def _require_utc(value: datetime, context: str) -> None:
+    if not isinstance(value, datetime):
+        raise TypeError(f"{context} must be a datetime")
+    if value.tzinfo is None or value.utcoffset() != timezone.utc.utcoffset(value):
+        raise ValueError(f"{context} must be UTC")
 
 
-def _require_nonnegative_safe_integer(value: object, context: str) -> None:
-    if type(value) is not int:
-        raise TypeError(f"{context} must be an exact integer")
-    if value < 0:
-        raise ValueError(f"{context} cannot be negative")
-    if value > _JAVASCRIPT_MAX_SAFE_INTEGER:
-        raise ValueError(f"{context} must be a JavaScript-safe integer")
+def _plain_object(value: object, context: str) -> dict[str, object]:
+    if type(value) is not dict:
+        raise TypeError(f"{context} must be a plain object")
+    return value
 
 
-def _require_optional_nonnegative_safe_integer(
-    value: object, context: str
-) -> None:
-    if value is not None:
-        _require_nonnegative_safe_integer(value, context)
+def _plain_list(value: object, context: str) -> list[object]:
+    if type(value) is not list:
+        raise TypeError(f"{context} must be an array")
+    return value
 
 
 def _require_exact_keys(
-    value: Mapping[str, object], expected: frozenset[str], context: str
+    value: Mapping[str, object],
+    expected: frozenset[str],
+    context: str,
 ) -> None:
     actual = frozenset(value)
     if actual != expected:
-        missing = sorted(expected - actual)
-        extra = sorted(actual - expected)
         raise ValueError(
-            f"{context} has an invalid exact shape; missing={missing}, extra={extra}"
+            f"{context} has an invalid exact shape; "
+            f"missing={sorted(expected - actual)}, extra={sorted(actual - expected)}"
         )
-
-
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from namisync.core.session import OperationResult, SessionId, SessionState

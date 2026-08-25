@@ -24,6 +24,10 @@ from namisync.core.evidence import Attestation, ContentEvidence, Provenance
 from namisync.core.integrity import matches_expected_stat
 from namisync.core.models import EntryKind, FileIdentity, FileStat, MetadataSnapshot
 from namisync.core.root_authority import is_reparse_stat
+from namisync.core.scalars import (
+    file_index_128_from_text,
+    file_index_128_to_text,
+)
 
 
 IdentityMode = str
@@ -31,7 +35,7 @@ BOUND: IdentityMode = "bound"
 PORTABLE: IdentityMode = "portable"
 IDENTITY_MODES = (BOUND, PORTABLE)
 
-FORMAT = "namisync-rig-baseline-1"
+FORMAT = "namisync-rig-baseline-2"
 _HEADER_FIELDS = frozenset({"format", "identity_mode"})
 _ROW_FIELDS = frozenset(
     {
@@ -302,7 +306,11 @@ def _encode(key: str, attestation: Attestation) -> dict[str, object]:
         "attributes": subject.metadata.attributes,
         "created_ns": subject.metadata.created_ns,
         "volume_serial": None if identity is None else identity.volume_serial,
-        "file_index": None if identity is None else identity.file_index,
+        "file_index": (
+            None
+            if identity is None
+            else file_index_128_to_text(identity.file_index)
+        ),
         "algorithm": content.algorithm,
         "digest": content.digest.hex(),
         "provenance": content.provenance.value,
@@ -319,7 +327,12 @@ def _decode(
     if not key:
         raise ValueError("key must be non-empty")
     serial = _optional_string(row, "volume_serial")
-    index = _optional_int(row, "file_index")
+    raw_index = row["file_index"]
+    index = (
+        None
+        if raw_index is None
+        else file_index_128_from_text(raw_index, "file_index")
+    )
     if (serial is None) != (index is None):
         raise ValueError("file identity must include both volume_serial and file_index")
     if identity_mode == BOUND and serial is None:

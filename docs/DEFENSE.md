@@ -70,12 +70,13 @@ Probability does not excuse a hard-wall violation. Convergence is not a remedy
 after irreversible loss, and another process having similar authority does not
 excuse NamiSync crossing a hard wall during supported use.
 
-### 1.3 Accepted Stage 6 scalar and retention walls
+### 1.3 Stage 6 scalar and retention walls
 
-These walls are accepted design but remain inactive until their named Stage 6
-checkpoints land. `M1_BRIDGE.md` owns the mapped decision records, exact wire
-shapes, accounting graph, reservation order, and refusal schemas; other active
-documents point here instead of reproducing these limits.
+The scalar/native-identity walls are active from Stage 6 checkpoint 3.2. The
+complete-graph and process-live retention walls remain accepted design until
+their named later checkpoints land. `M1_BRIDGE.md` owns the mapped decision
+records, exact wire shapes, accounting graph, reservation order, and refusal
+schemas; other active documents point here instead of reproducing these limits.
 
 - Every durable or externally presented byte quantity and filesystem
   nanosecond is in `0..9_223_372_036_854_775_807`. Typed relational values use
@@ -113,6 +114,10 @@ documents point here instead of reproducing these limits.
   apparent-size overflow is, timestamp conversion can exceed signed Unix
   nanoseconds, and file identity must stay outside the scalar domain. Values are
   never clamped, wrapped, or narrowed.
+
+The remaining complete-graph and process-live containment walls below are not
+active until their owning checkpoints:
+
 - A plan or inventory tree admits at most 120,000 domain rows plus 120,000
   informational rows. The complete retained-graph ceilings are 128 MiB for a
   plan domain and 192 MiB independently for an inventory domain and either
@@ -132,9 +137,10 @@ documents point here instead of reproducing these limits.
   generation, and capacity exhaustion may refuse new work but cannot make an
   admitted release or close fail for capacity.
 
-These are production-enforced containment claims, not sampled memory ceilings.
-Their implementation constants must be derived from the complete reachable
-graph and independently validated under §7 before the owning gates can close.
+An activated wall is a production-enforced containment claim, not a sampled
+memory ceiling. Its implementation constants must be derived from the complete
+reachable graph and independently validated under §7 before the owning gate
+can close.
 
 ---
 

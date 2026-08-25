@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sqlite3
 
 import pytest
 
@@ -13,7 +14,8 @@ from namisync.core.integrity import (
 )
 from namisync.core.planning import OperationKind, OperationReason
 from namisync.core.recording import InventoryCommand
-from namisync.db.connections import connect_ledger_writer
+from namisync.core.scalars import MAX_FILE_INDEX_128
+from namisync.db.connections import connect_ledger_reader, connect_ledger_writer
 from namisync.db.repositories import LedgerRepository
 
 from _db_fixtures import (
@@ -52,6 +54,80 @@ def test_mapping_repository_round_trips_paired_noop_correspondence(tmp_path: Pat
         assert pair.target_rel_path_key == "A.TXT"
         assert pair.source_identity.file_index == 41
         assert pair.target_identity.file_index == 42
+    finally:
+        setup.recorder.close()
+
+
+def test_ledger_round_trips_full_width_file_indexes_as_canonical_text(
+    tmp_path: Path,
+) -> None:
+    source_index = (1 << 64) + 41
+    target_index = MAX_FILE_INDEX_128
+    source = file_stat(identity_index=source_index)
+    target = file_stat(
+        identity_index=target_index,
+        volume_serial="target-serial",
+    )
+    noop = operation(
+        OperationKind.NOOP,
+        source=source,
+        target=target,
+        intended=target,
+        reason=OperationReason.METADATA_MATCH,
+    )
+    setup = setup_recorder(tmp_path / "ledger.db", plan((noop,)))
+    try:
+        setup.run.record_noop(noop.op_id, source, target)
+        with LedgerRepository(setup.recorder.path) as repository:
+            pair = repository.get_mapping_snapshot(setup.mapping_id).pairs[0]
+            inventory = repository.get_inventory(setup.target_location_id)
+
+        assert pair.source_identity.file_index == source_index
+        assert pair.target_identity.file_index == target_index
+        assert inventory[0].observed.file_identity.file_index == target_index
+
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            raw_pair = connection.execute(
+                """SELECT source_identity_file_index,
+                          typeof(source_identity_file_index) AS source_type,
+                          target_identity_file_index,
+                          typeof(target_identity_file_index) AS target_type
+                     FROM mapping_correspondence"""
+            ).fetchone()
+            raw_inventory = connection.execute(
+                """SELECT file_identity_file_index,
+                          typeof(file_identity_file_index) AS identity_type
+                     FROM inventory
+                    WHERE location_id = ?""",
+                (setup.target_location_id,),
+            ).fetchone()
+        finally:
+            connection.close()
+
+        assert tuple(raw_pair) == (
+            str(source_index),
+            "text",
+            str(target_index),
+            "text",
+        )
+        assert tuple(raw_inventory) == (str(target_index), "text")
+
+        writer = connect_ledger_writer(setup.recorder.path)
+        try:
+            with pytest.raises(sqlite3.IntegrityError):
+                writer.execute(
+                    """UPDATE mapping_correspondence
+                          SET source_identity_file_index = '01'"""
+                )
+            with pytest.raises(sqlite3.IntegrityError):
+                writer.execute(
+                    """UPDATE mapping_correspondence
+                          SET target_identity_file_index = ?""",
+                    (str(MAX_FILE_INDEX_128 + 1),),
+                )
+        finally:
+            writer.close()
     finally:
         setup.recorder.close()
 

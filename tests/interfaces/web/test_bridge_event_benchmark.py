@@ -358,23 +358,28 @@ def test_retained_state_sizer_separates_terminal_results_and_queue_roots() -> No
         Envelope,
         ItemOutcome,
         Terminal,
+        TerminalSummary,
     )
     from namisync.core.evidence import Outcome
-    from namisync.core.session import OperationResult, SessionState
+    from namisync.core.session import FailureDetail, OperationResult, SessionState
     from namisync.workflows.views import (
         SessionEventView,
         SessionRecordView,
         operation_result_view,
+        session_event_view,
     )
 
     retained = _retained_module()
 
     def measure(shared_text: str, terminal_text: str):
+        session_id = "d" * 32
+        item_id = "e" * 32
         result = OperationResult(
             SessionState.COMPLETED,
+            error=FailureDetail("SyntheticFailure", terminal_text),
             items=(
                 ItemOutcome(
-                    item_id="item-1",
+                    item_id=item_id,
                     kind="copy",
                     path="terminal/path.bin",
                     outcome=Outcome.SUCCEEDED,
@@ -382,15 +387,16 @@ def test_retained_state_sizer_separates_terminal_results_and_queue_roots() -> No
                 ),
             ),
         )
+        terminal_summary = TerminalSummary.from_result(result)
         terminal_envelope = Envelope(
-            session_id=shared_text,
+            session_id=session_id,
             seq=2,
             at=datetime.now(timezone.utc),
             schema_version=CORE_EVENT_SCHEMA_VERSION,
-            body=Terminal(result),
+            body=Terminal(terminal_summary),
         )
         nonterminal = SessionEventView(
-            shared_text,
+            session_id,
             1,
             "2026-08-14T00:00:00+00:00",
             CORE_EVENT_SCHEMA_VERSION,
@@ -399,26 +405,19 @@ def test_retained_state_sizer_separates_terminal_results_and_queue_roots() -> No
                 "phase": "execute",
                 "items_done": 1,
                 "items_total": 2,
-                "bytes_done": 1,
-                "bytes_total": 2,
+                "bytes_done": "1",
+                "bytes_total": "2",
                 "current_path": shared_text,
-                "item_id": shared_text,
+                "item_id": item_id,
                 "item_type": "operation",
                 "item_attempt_id": "a" * 32,
-                "item_bytes_done": 1,
-                "item_bytes_total": 2,
+                "item_bytes_done": "1",
+                "item_bytes_total": "2",
             },
         )
-        terminal_event = SessionEventView(
-            shared_text,
-            2,
-            "2026-08-14T00:00:01+00:00",
-            CORE_EVENT_SCHEMA_VERSION,
-            "Terminal",
-            {"result": {"items": [terminal_text]}},
-        )
+        terminal_event = session_event_view(terminal_envelope)
         record = SessionRecordView(
-            shared_text,
+            session_id,
             "sync-plan",
             "completed",
             False,
@@ -447,12 +446,13 @@ def test_retained_state_sizer_separates_terminal_results_and_queue_roots() -> No
         )
         dispatcher = SimpleNamespace(
             _condition=Condition(),
-            _hubs={"session": hub},
+            _hubs={session_id: hub},
+            _records={session_id: SimpleNamespace(result=result)},
         )
         return retained.measure_retained_bridge_state(dispatcher, registry)
 
     small = measure("shared-session", "terminal")
-    large_terminal = measure("shared-session", "terminal" * 2_000)
+    large_terminal = measure("shared-session", "terminal" * 100)
     shared_long = measure("shared-session" * 300, "terminal")
 
     assert large_terminal["transport_custody_bytes"] == small[
@@ -464,7 +464,7 @@ def test_retained_state_sizer_separates_terminal_results_and_queue_roots() -> No
     assert shared_long["transport_custody_bytes"] > small[
         "transport_custody_bytes"
     ]
-    assert shared_long["terminal_artifact_bytes"] > small[
+    assert shared_long["terminal_artifact_bytes"] == small[
         "terminal_artifact_bytes"
     ]
     assert small["transport_custody_bytes"] < sum(

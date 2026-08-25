@@ -284,7 +284,9 @@ def test_br_g_11_service_executes_nonempty_noop_plan_as_all_noop(
 
         assert completed.result is not None
         assert completed.result.headline == "all-noop"
-        assert completed.result.items
+        retained = service._dispatcher.get(started.session_id)
+        assert retained.result is not None
+        assert retained.result.items
     finally:
         service.close()
 

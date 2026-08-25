@@ -69,6 +69,7 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.core.pathing import normalize_relative_path
+from namisync.core.scalars import MAX_FILE_INDEX_128
 from namisync.core.session import PhaseResult, PhaseStatus, SessionState
 from namisync.workflows.models import (
     ExecuteContinuation,
@@ -226,10 +227,10 @@ def _assignment_item(source: str, target: str) -> DestinationAssignment:
     )
 
 
-def _rich_plan() -> Plan:
+def _rich_plan(*, identity_index: int = 4242) -> Plan:
     """A plan touching every operation kind and non-default optional field."""
 
-    identity = FileIdentity("A1B2C3D4", 4242)
+    identity = FileIdentity("A1B2C3D4", identity_index)
     source_profile = CapabilityProfile(
         fs_type="NTFS",
         mtime_granularity_ns=100,
@@ -441,8 +442,8 @@ def _copy_identity(
     )
 
 
-def _rich_execution_request() -> ExecutionRequest:
-    plan = _rich_plan()
+def _rich_execution_request(*, plan: Plan | None = None) -> ExecutionRequest:
+    plan = _rich_plan() if plan is None else plan
     selection = frozenset(operation.op_id for operation in plan.operations)
     run_id = "a" * 32
     copy = plan.operations[1]
@@ -622,6 +623,30 @@ def test_execution_payload_is_a_lossless_round_trip() -> None:
     assert str(decoded.execution_set.run_id) == str(original.execution_set.run_id)
 
 
+def test_execution_payload_preserves_full_width_file_identity_as_text() -> None:
+    plan = _rich_plan(identity_index=MAX_FILE_INDEX_128)
+    encoded = encode_execution_request(_rich_execution_request(plan=plan))
+    value = json.loads(encoded)
+    identity = value["execution_set"]["plan"]["operations"][1][
+        "source_expected"
+    ]["identity"]
+
+    assert identity["file_index"] == str(MAX_FILE_INDEX_128)
+    decoded = decode_execution_request(encoded)
+    decoded_identity = decoded.execution_set.plan.operations[1].source_expected
+    assert decoded_identity is not None
+    assert decoded_identity.file_identity is not None
+    assert decoded_identity.file_identity.file_index == MAX_FILE_INDEX_128
+
+    for invalid in (MAX_FILE_INDEX_128, "01", str(MAX_FILE_INDEX_128 + 1)):
+        malformed = json.loads(encoded)
+        malformed["execution_set"]["plan"]["operations"][1][
+            "source_expected"
+        ]["identity"]["file_index"] = invalid
+        with pytest.raises((TypeError, ValueError)):
+            decode_execution_request(json.dumps(malformed).encode("utf-8"))
+
+
 def test_execution_set_byte_high_water_is_bounded_and_strictly_monotonic() -> None:
     xset = _rich_execution_request().execution_set
 
@@ -633,7 +658,7 @@ def test_execution_set_byte_high_water_is_bounded_and_strictly_monotonic() -> No
         xset.note_bytes_done(22)
     with pytest.raises(ValueError, match="exceeds selected content"):
         xset.note_bytes_done(10**9)
-    with pytest.raises(TypeError, match="exact integer"):
+    with pytest.raises(TypeError, match="non-Boolean integer"):
         xset.note_bytes_done(True)
     assert xset.bytes_done_high_water == 23
 
@@ -671,8 +696,8 @@ def test_execution_set_replace_and_equality_use_only_public_high_water() -> None
 @pytest.mark.parametrize(
     ("high_water", "error", "match"),
     [
-        (True, TypeError, "exact integer"),
-        (-1, ValueError, "cannot be negative"),
+        (True, TypeError, "non-Boolean integer"),
+        (-1, ValueError, "nonnegative signed-64 domain"),
         (10**9, ValueError, "exceeds selected content"),
     ],
 )
@@ -744,6 +769,7 @@ def test_execution_payload_v6_keeps_progress_and_recording_attribution() -> None
         "recording",
         "recording_reasons",
         "recording_issues",
+        "omitted_detail_count",
         "bytes_done_high_water",
     }
     assert value["execution_set"]["bytes_done_high_water"] == 17
@@ -754,6 +780,7 @@ def test_execution_payload_v6_keeps_progress_and_recording_attribution() -> None
             "detail": "RuntimeError: final flush failed",
         }
     ]
+    assert value["execution_set"]["omitted_detail_count"] == 0
     assert (
         encode_execution_request(decode_execution_request(encoded)) == encoded
     )
@@ -800,6 +827,12 @@ def test_task_recording_issue_omits_overlimit_detail_without_truncation() -> Non
         TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
         None,
     )
+    assert xset.omitted_detail_count == 1
+    decoded = decode_execution_request(
+        encode_execution_request(ExecutionRequest(ExecuteContinuation(xset), NOW))
+    )
+    assert decoded.execution_set.omitted_detail_count == 1
+    assert decoded.execution_set.recording_issues == xset.recording_issues
     with pytest.raises(ValueError, match="detail exceeds"):
         TaskRecordingIssue(
             TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
