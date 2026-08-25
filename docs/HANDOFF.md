@@ -31,6 +31,10 @@ their named implementation checkpoints. Checkpoint 1 has not started.
 - Reopened BR-G-46's command-map clause with exact checkpoint totals, retained
   its completed cosmetic-state clause, and moved the checkpoint-0 findings
   record from this session handoff to the bottom of `M1_SHELL_H2.md`.
+- Reconciled the same revisions with BR-G-32: its current nine-row prose is now
+  explicitly current-source truth, and its executable exact-order table plus
+  JavaScript mirror advance at every command-activating checkpoint. BR-G-46
+  remains specially reopened only for the checkpoint-4/6 revisions.
 - Re-audited the retained findings against their DR-BRs, exact rows, checkpoint
   dependencies, and gates. No additional authority loop required redesign; the
   pass did expose and reconcile native file-identity narrowing plus missing
@@ -60,6 +64,7 @@ their named implementation checkpoints. Checkpoint 1 has not started.
   and 36 after all target rows plus the four retained bootstrap/cosmetic rows
   are active.
 - `tests/test_department_policy.py`: `16 passed`.
+- BR-G-32's current exact production command-table test: `1 passed`.
 - Repository collection during ratification: `2891/2919 tests collected`,
   `28 deselected`.
 - Markdown consistency searches, exact command-row counts, and

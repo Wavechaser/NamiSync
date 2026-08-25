@@ -1270,8 +1270,8 @@ This table maps shell delivery order to the sole BR-G definitions in
 | Slice 3 | BR-G-33, BR-G-41 transport/lifecycle foundations, and event/transport-custody portion of BR-G-42 | complete, including accepted independent holdout-b; full BR-G-41 and other BR-G-42 rows remain on later owning slices |
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause, BR-G-32 generic-tree-sink portion, and BR-G-34 | complete |
-| Cosmetic thaw/refreeze | BR-G-46 cosmetic clause | complete before Slices 5–7; command-map clause reopened for checkpoint 4/6 revisions |
-| Second-half protocols/task foundation | revised BR-G-36, BR-G-41, BR-G-45, BR-G-46 command-map, and BR-G-48 foundations | accepted target; implementation pending |
+| Cosmetic thaw/refreeze | BR-G-46 cosmetic clause | complete before Slices 5–7; command-map clause reopened for checkpoint 4/6 revisions alongside BR-G-32's exact table |
+| Second-half protocols/task foundation | revised BR-G-32 command table, BR-G-36, BR-G-41, BR-G-45, BR-G-46 command-map, and BR-G-48 foundations | accepted target; implementation pending |
 | Slice 5A | BR-G-47 | pending |
 | Slice 5B | BR-G-32 plan-DOM portion, BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
 | Slice 5C | execution portion of BR-G-36 and BR-G-48 | pending |

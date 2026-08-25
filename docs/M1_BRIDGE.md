@@ -4029,7 +4029,15 @@ headings are organizational, not lane ownership.
   `next_events`, plus
   lifecycle-only `release_terminal_session` and `close_task`, and the
   pre-Slice-5 cosmetic rows `read_cosmetic_section` and
-  `replace_cosmetic_section`, while
+  `replace_cosmetic_section`. That nine-row enumeration is current-source
+  truth, not a freeze across accepted future checkpoints. The command-table
+  clause is revision-controlled by each activating checkpoint in the shared
+  exact command register:
+  `tests/interfaces/web/test_commands.py::test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete`
+  remains the executable exact-order owner and advances atomically with the
+  JavaScript policy mirror. Checkpoints 4 and 6 additionally satisfy the two
+  reopened BR-G-46 map revisions; later command checkpoints remain ordinary
+  BR-G-32 surface revisions. Meanwhile,
   `test_report` is possible only through test-owned
   constructor composition. Host composition, rather than transport, joins the
   final command mapping to current-document readiness through an exact opaque
@@ -4576,8 +4584,9 @@ headings are organizational, not lane ownership.
   After all checkpoints, the 32 target rows plus the four retained bootstrap/
   cosmetic rows make 36. Python/JavaScript policy mirrors must freeze each exact
   intermediate set and prove removed rows are replacements, not aliases or
-  duplicates. **Gate status: open until the checkpoint-4 and checkpoint-6 map
-  revisions pass.** *Not
+  duplicates. The BR-G-32 exact ordered production-table test is the executable
+  owner of both revisions. **Gate status: open until the checkpoint-4 and
+  checkpoint-6 map revisions pass.** *Not
   satisfied by* changing page CSS alone, seeding gallery DOM state after window
   creation, persisting a
   permissive dictionary, retrying failed I/O on a timer, or proving only the

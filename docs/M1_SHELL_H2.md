@@ -47,6 +47,10 @@ decision record, not by treating this prose as a second authority.
   mapped bridge decisions and `DEFENSE.md` §1.3.
 - Protocol targets are accepted but inactive until their implementation
   checkpoint; current-version documentation remains truthful until then.
+- Every checkpoint that activates command rows updates BR-G-32's exact ordered
+  production-table test and the JavaScript policy mirror in the same commit.
+  Checkpoints 4 and 6 also advance BR-G-46's two reopened map revisions; later
+  command additions remain ordinary BR-G-32 revisions.
 
 ### Setup, paths, and remembered locations
 
@@ -227,7 +231,7 @@ Commit: `feat(web): retain multi-session task artifacts`
   tombstones; byte-aware drain; reinjection; delayed terminal cleanup; and
   shutdown during observation. Python and JavaScript policy mirrors freeze the
   exact 12-row mapping with no retained alias for a replaced task/session row.
-- **Docs/review:** Update ARCHITECTURE, M1_BRIDGE, DESKTOP_UI, INTERFACES, and DISPATCHER. Review the complete ownership graph and initial BR-G-45 analytical model; land the checkpoint-4 BR-G-46 command-map revision.
+- **Docs/review:** Update ARCHITECTURE, M1_BRIDGE, DESKTOP_UI, INTERFACES, and DISPATCHER. Review the complete ownership graph and initial BR-G-45 analytical model; land the checkpoint-4 BR-G-32 command-table and BR-G-46 command-map revisions together.
 
 ### 5. Unify probing, recents, and typed directory admission
 
@@ -247,7 +251,7 @@ Commit: `feat(web): add frozen setup and serial task creation`
 - **Acceptance:** Render typed/picker fields, probed recents/pairs, all implemented semantic controls, disabled ADS, raw bounded inputs admitted to backend-canonical complete snapshots, immediate path invalidation, admission freeze, truthful slotless partial-pair refusal, standalone inventory-task creation, and serial best-effort pair creation. Add explicit Plan again through `activate_task_pair` followed by ordinary `start_plan`: resolve the retained plan's reviewed volume identities, publish two slots only when both accept, reuse its frozen Setup options, and create a new default-selection task without background replanning or authorization carry-forward. No Setup edit writes global defaults and JavaScript owns no filter normalization. Replace the two current Setup rows with the eight checkpoint-6 rows, producing 18 unique commands with the six checkpoint-4 and four retained bootstrap/cosmetic rows.
 - **Regression watch:** Default-settings race, hidden `null` fallback, filter amplification, stale slots, drive-letter reuse, task close or plan-generation change during reviewed-pair resolution, display text promoted to path authority, double click, command-ID reuse after edits, automatic retry with a new ID, background task creation, selection carry-forward, partial pair activation, navigation/reinjection, and unsafe filesystem labels in the DOM.
 - **Tests:** Exact 18-row Python/JS command policy mirrors and key validators; filter bounds/canonicalization; mixed batch successes/refusals; exact `slot-claimed` busy guidance; one-slot and atomic two-slot `slot_capacity_full` under all/partially pinned capacity with no native probing or partial slot; `recent_unavailable`; task-pair resolved/remounted/missing/offline/ambiguous identities; exact replay before and after task close; plan-generation and slot-expiry races; lost response both before and after task publication, with post-publication lookup using the bounded route rather than expired/consumed slots; document replacement; admitted-task recovery; settings fingerprint/commitment; headed typed/paste/picker/recent/Plan-again flows and hostile text.
-- **Docs/review:** Update DESKTOP_UI, M1_BRIDGE, M1_SHELL, FEATURES, and INTERFACES. Close BR-G-47 only after headed evidence and parser review, and close the reopened BR-G-46 command-map clause only after the exact checkpoint-6 revision passes.
+- **Docs/review:** Update DESKTOP_UI, M1_BRIDGE, M1_SHELL, FEATURES, and INTERFACES. Close BR-G-47 only after headed evidence and parser review; land BR-G-32's checkpoint-6 exact-table revision and close BR-G-46's reopened command-map clause only after that revision passes.
 
 ### 7. Deliver bounded plan review and execution admission
 
@@ -432,7 +436,7 @@ documented resolution.
 | `HISTORY.md` and `TESTS.md` still required a future mixed-v3/v4 browser-history validator and referenced Core’s removed decoder-debt section. | Current history-v5 compatibility guards are now labelled temporary; checkpoint 3 replaces them with the exact reset target and no legacy browser decoder. |
 | Retry and retention clauses allowed replacement of an unrun result, while DR-BR-03 permanently froze the committed selection that any retry needed to change. | Submission failure and terminal `disposition=unrun` now reopen selection at a new revision; the first `disposition=ran` is the authority-consumption boundary. |
 | A fresh plan from a refused task had no safe way to reconstruct reviewed roots after drive-letter reuse. | `activate_task_pair` resolves both reviewed volume identities afresh and publishes two slots only when both accept; **Plan again** then starts a new task with the frozen setup. |
-| Command arithmetic omitted retained bootstrap/cosmetic rows and had no explicit BR-G-46 revision boundary. | BR-G-46's command-map clause is reopened: checkpoint 4 has 12 unique production commands, checkpoint 6 has 18, and the final surface has 32 target rows plus four retained rows, 36 total. |
+| Command arithmetic omitted retained bootstrap/cosmetic rows, BR-G-32 still froze the current nine-row table, and BR-G-46 had no explicit revision boundary. | BR-G-32's exact ordered test advances at every command-activating checkpoint; BR-G-46's map clause is additionally reopened at checkpoints 4 and 6, producing 12 then 18 unique commands and finally 32 target plus four retained rows, 36 total. |
 
 ### Pre-checkpoint 1 resolution
 
@@ -450,8 +454,9 @@ filesystem, and evidence authority. Four preparatory items are resolved:
 - **Command arithmetic:** confirmed from the exact register rather than prose:
   checkpoint row counts are 6/8/8/1/6/3 for checkpoints 4/6/7/8/9/10, 32
   target rows total. The four retained bootstrap/cosmetic rows produce 12 after
-  checkpoint 4, 18 after checkpoint 6, and 36 finally. BR-G-46 remains reopened
-  only for the two implementation revisions.
+  checkpoint 4, 18 after checkpoint 6, and 36 finally. BR-G-32's executable
+  exact table advances with every activating checkpoint; BR-G-46 remains
+  reopened only for the checkpoint-4 and checkpoint-6 revisions.
 - **Scalar reachability:** `DEFENSE.md` §1.3 now distinguishes reachable native
   file-index/timestamp and aggregate-logical-byte cases from impossible single-
   volume capacity and post-admission counter overflow. Reachable boundaries
