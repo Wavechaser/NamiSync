@@ -317,9 +317,65 @@ def test_pause_releases_custody_and_resume_reopens_snapshotted_payload() -> None
     paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
     assert paused.payload == b"continued"
     assert dispatcher.resume(session_id).accepted
-    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    completed_record = wait_for(
+        dispatcher, session_id, SessionState.COMPLETED
+    )
+    assert completed_record.payload is None
     assert opened == [b"initial", b"continued"]
     assert dispatcher.shutdown().custody_released
+
+
+@pytest.mark.parametrize(
+    "terminal_state",
+    [
+        SessionState.COMPLETED,
+        SessionState.FAILED,
+        SessionState.CANCELED,
+        SessionState.REFUSED,
+    ],
+)
+def test_paused_resumed_terminal_paths_scrub_continuation_payload(
+    terminal_state: SessionState,
+) -> None:
+    entered = Event()
+    store = InMemorySessionStore()
+
+    def run_for(payload):
+        if payload == b"continued":
+            return lambda context: OperationResult(
+                terminal_state,
+                disposition=(
+                    Disposition.UNRUN
+                    if terminal_state is SessionState.REFUSED
+                    else Disposition.RAN
+                ),
+                canceled=terminal_state is SessionState.CANCELED,
+            )
+
+        def pauseable(context):
+            entered.set()
+            while True:
+                context.checkpoint()
+                sleep(0.005)
+
+        return pauseable
+
+    dispatcher = Dispatcher(
+        {"pausable": registration(run_for, supports_pause=True)},
+        store=store,
+    )
+    session_id = dispatcher.submit("pausable", b"initial")
+    assert entered.wait(2)
+    assert dispatcher.pause(session_id).accepted
+    paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
+    assert paused.payload == b"continued"
+    assert dispatcher.resume(session_id).accepted
+
+    terminal = wait_for(dispatcher, session_id, terminal_state)
+
+    assert terminal.payload is None
+    assert store.snapshot()[0].payload is None
+    assert dispatcher.shutdown().complete
 
 
 def test_pause_settlement_and_live_event_wait_for_durable_audit_attempt() -> None:
@@ -697,6 +753,7 @@ def test_pause_before_invocation_run_snapshots_before_later_cancel(
 
     assert dispatcher.cancel(session_id).accepted
     record = wait_for(dispatcher, session_id, SessionState.CANCELED)
+    assert record.payload is None
     assert record.result is not None
     assert record.result.disposition is Disposition.RAN
     assert settled_payloads == [b"continued"]
@@ -1017,7 +1074,7 @@ def test_cancel_during_pausing_snapshot_drain_settles_once_and_releases_custody(
     record = wait_for(dispatcher, session_id, SessionState.CANCELED)
     assert settled == [(b"continued", Disposition.RAN)]
     assert record.started_at is not None
-    assert record.payload == b"continued"
+    assert record.payload is None
     assert record.result is not None
     assert [item.item_id for item in record.result.items] == ["earned"]
     assert dispatcher.cancel(session_id).code is ControlCode.ILLEGAL_STATE
@@ -1998,7 +2055,7 @@ def test_payload_is_passed_to_adapter_and_store_without_dispatcher_decoding() ->
     dispatcher = Dispatcher({"opaque": registration_value})
     session_id = dispatcher.submit("opaque", opaque)
     record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
-    assert record.payload == opaque
+    assert record.payload is None
     assert opened == [opaque]
     assert dispatcher.shutdown().complete
 
@@ -2008,7 +2065,7 @@ def test_in_memory_store_is_honest_about_absent_restart_state() -> None:
     dispatcher = Dispatcher({"opaque": registration(lambda payload: completed)}, store=store)
     session_id = dispatcher.submit("opaque", b"payload")
     wait_for(dispatcher, session_id, SessionState.COMPLETED)
-    assert store.snapshot()[0].payload == b"payload"
+    assert store.snapshot()[0].payload is None
     assert store.load_all() == ()
     assert dispatcher.shutdown().complete
 
@@ -2572,10 +2629,12 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
     provisional = dispatcher.get(session_id)
     assert provisional.state is SessionState.COMPLETED
     assert provisional.result is None
+    assert provisional.payload is None
     with pytest.raises(SessionNotTerminal):
         dispatcher.close(session_id)
     release_finalize.set()
     final = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert final.payload is None
     assert final.result is not None
     assert final.result.audit is RecordingStatus.OK
     dispatcher.close(session_id)

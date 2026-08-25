@@ -9,20 +9,30 @@ continuation evidence for optional in-session readback. External writers remain
 outside NamiSync's volume-lock contract; the residual races are documented
 below rather than presented as closed.
 
-## Recording-Settlement Target (Oracle Active; Production Not Active)
+## Recording Settlement (Internal Attribution Active; Event v5 Pending)
 
 The activation sequence and exact result/event shapes are owned by
-[M1_BRIDGE.md](M1_BRIDGE.md). Executor's local target is operation-local typed
-recording attribution: one recorder failure can lower the aggregate floor but
-cannot label another operation degraded or convert filesystem success into
-filesystem failure. Task-scoped recording issues preserve first observation
-order and never rewrite a settled item or suppress committed evidence.
+[M1_BRIDGE.md](M1_BRIDGE.md). Executor now attributes recording degradation
+internally by scope. `_record()` returns a typed observation; settled operations
+retain only their own `ItemRecordingReason`, while final-flush and
+post-settlement restoration divergence retain ordered task issues. The
+`ExecutionSet.recording` aggregate is derived from those sparse item reasons
+and task issues, so one recorder failure cannot label another operation
+degraded or convert filesystem success into filesystem failure.
 
-Publication evidence remains success-only and process-local. It may support
-immediate linked readback and pause/resume, but it is neither ledger/history
-state nor desktop presentation data and must be gone before terminal session
-publication. Exact continuation custody and omission witnesses are specified
-by the bridge plan.
+A reliable item outcome is accepted by the event sink before its status,
+publication evidence, and recording reason enter continuation state. Sink
+rejection therefore cannot create a continuation-only settlement. Publication
+and non-byte mutation reducers attach `unrecorded-mutation` centrally, and a
+pre-destructive flush refusal attaches `recording-prerequisite-failed` only to
+the refused operation.
+
+Publication evidence remains success-only and process-local. An identityless
+attestation is valid only beside that same operation's
+`record-write-failed` reason. Execution payload v6 preserves these reasons,
+ordered task issues, and permitted attestations across pause/resume, while the
+dispatcher clears the opaque payload on every terminal edge. None of this is
+ledger/history state or desktop presentation data.
 
 The settlement oracle remains the change gate. Typed projection must preserve
 its protected scenario/row manifest, normalized filesystem and recorder
@@ -31,12 +41,12 @@ until three identical runs and independent review pass. The oracle owns its
 scenario manifest, [M1_SHELL_H2.md](M1_SHELL_H2.md) owns checkpoint coverage,
 and [TESTS.md](TESTS.md) owns test-scope policy; none is duplicated here.
 
-Checkpoint 1 is active only in that oracle. Its immutable tool-local projection
-pins the four filesystem/recording combinations and the three ordering cases
-named by the H2 plan, including item-local prerequisite/write/mutation reasons,
-the final-flush task issue, and sticky aggregate degradation. It does not add a
-production result field, change the current event wire, or enter the retained
-normalized trace; those producer changes begin at checkpoints 2 and 3.
+Checkpoint 1's immutable tool-local projection pins the four
+filesystem/recording combinations and three ordering cases named by the H2
+plan. Checkpoint 2 implements the corresponding internal production
+attribution without changing the current event-v4 fields or retained oracle
+trace. The coordinated result/event and persistence cutover remains checkpoint
+3 work.
 
 ## Purpose
 

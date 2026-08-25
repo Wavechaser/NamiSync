@@ -554,6 +554,8 @@ class LocalWorkflowRuntime:
         )
 
     def audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
+        if record.payload is None:
+            raise ValueError("audit observer requires a nonterminal payload")
         if record.kind == EXECUTION_KIND:
             request = decode_execution_request(record.payload)
             plan_value = request.execution_set.plan

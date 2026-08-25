@@ -79,7 +79,7 @@ def _record(
         "test",
         state,
         (),
-        b"payload",
+        None if terminal else b"payload",
         True,
         0,
         NOW,

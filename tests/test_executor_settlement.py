@@ -18,9 +18,11 @@ from namisync.core.execution import (
     CopyDigest,
     ExecutionReason,
     ExecutionSet,
+    ItemRecordingReason,
     RecordedCopyIdentity,
     Retry,
     Stop,
+    TaskRecordingIssueReason,
 )
 from namisync.core.models import FileStat
 from namisync.core.pathing import to_extended_length_path
@@ -83,15 +85,17 @@ def test_parent_directory_flush_error_records_nothing_after_publish(
         intended=source_stat,
     )
 
-    result, events, recorder = _run(
-        _xset(_plan(source, target, (operation,))), fs=fs
-    )
+    xset = _xset(_plan(source, target, (operation,)))
+    result, events, recorder = _run(xset, fs=fs)
 
     item = _item_outcome(events)
     assert result.status is SessionState.FAILED
     assert item.reason == "io-error"
     assert (target / "file.bin").read_bytes() == b"durable-content"
     assert recorder.calls == []
+    assert xset.recording_reasons == {
+        operation.op_id: ItemRecordingReason.UNRECORDED_MUTATION
+    }
 
 
 class ReplaceFaultFileSystem(NativeFileSystem):
@@ -438,12 +442,19 @@ def test_pause_flush_degradation_is_retained_for_resume(
     assert xset.status == {}
     assert xset.published_evidence == {}
     assert xset.recording is RecordingStatus.DEGRADED
+    assert xset.recording_reasons == {}
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+    )
 
     result, _, _ = _run(xset, fs=fs)
 
     assert result.status is SessionState.COMPLETED
     assert result.recording is RecordingStatus.DEGRADED
     assert xset.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+    )
     assert xset.published_evidence[operation.op_id].copy_recorded
 
 
@@ -2532,6 +2543,10 @@ def test_recorder_failure_preserves_filesystem_success_and_degrades_axis(
     assert item.outcome is Outcome.SUCCEEDED
     assert item.detail["recording"] == "degraded"
     assert xset.recording is RecordingStatus.DEGRADED
+    assert xset.recording_reasons == {
+        operation.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
+    }
+    assert xset.recording_issues == ()
     assert set(xset.published_evidence) == {operation.op_id}
     published = xset.published_evidence[operation.op_id]
     assert not published.copy_recorded
@@ -2589,6 +2604,18 @@ class FailFirstCopyRecorder(FakeRecorder):
         return super().record_copied(op, attestation)
 
 
+class FailSecondCopyRecorder(FakeRecorder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.copy_attempts = 0
+
+    def record_copied(self, op, attestation) -> RecordedCopyIdentity:
+        self.copy_attempts += 1
+        if self.copy_attempts == 2:
+            raise RuntimeError("injected second copy record failure")
+        return super().record_copied(op, attestation)
+
+
 def test_recording_truth_is_per_copy_while_aggregate_degradation_is_sticky(
     tmp_path: Path,
 ) -> None:
@@ -2628,7 +2655,99 @@ def test_recording_truth_is_per_copy_while_aggregate_degradation_is_sticky(
     }
     assert not xset.published_evidence[first.op_id].copy_recorded
     assert xset.published_evidence[second.op_id].copy_recorded
+    assert xset.recording_reasons == {
+        first.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
+    }
+    assert xset.recording_issues == ()
     assert recorder.copy_attempts == 2
+
+
+def test_later_record_failure_does_not_rewrite_committed_copy_truth(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operations = []
+    for number, name in enumerate(("first.bin", "second.bin"), start=1):
+        (source / name).write_bytes(name.encode("ascii"))
+        source_stat = fs.stat(source, name)
+        assert source_stat is not None
+        operations.append(
+            _operation(
+                number,
+                OperationKind.COPY,
+                source_rel_path=name,
+                target_rel_path=name,
+                source_expected=source_stat,
+                target_expected=None,
+                intended=source_stat,
+            )
+        )
+    first, second = operations
+    xset = _xset(_plan(source, target, tuple(operations)))
+
+    result, _, recorder = _run(
+        xset,
+        fs=fs,
+        recorder=FailSecondCopyRecorder(),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert xset.published_evidence[first.op_id].copy_recorded
+    assert not xset.published_evidence[second.op_id].copy_recorded
+    assert xset.recording_reasons == {
+        second.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
+    }
+    assert xset.recording_issues == ()
+    assert recorder.copy_attempts == 2
+
+
+def test_later_item_failure_does_not_rewrite_committed_copy_truth(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    (source / "first.bin").write_bytes(b"committed")
+    source_stat = fs.stat(source, "first.bin")
+    assert source_stat is not None
+    first = _operation(
+        1,
+        OperationKind.COPY,
+        source_rel_path="first.bin",
+        target_rel_path="first.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    second = _operation(
+        2,
+        OperationKind.COPY,
+        source_rel_path="missing.bin",
+        target_rel_path="missing.bin",
+        source_expected=source_stat,
+        target_expected=None,
+        intended=source_stat,
+    )
+    xset = _xset(_plan(source, target, (first, second)))
+
+    result, events, _ = _run(xset, fs=fs)
+
+    items = [event for event in events if isinstance(event, ItemOutcome)]
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.OK
+    assert [item.outcome for item in items] == [
+        Outcome.SUCCEEDED,
+        Outcome.FAILED,
+    ]
+    assert xset.status == {
+        first.op_id: Outcome.SUCCEEDED,
+        second.op_id: Outcome.FAILED,
+    }
+    assert xset.published_evidence[first.op_id].copy_recorded
+    assert second.op_id not in xset.published_evidence
+    assert xset.recording_reasons == {}
+    assert xset.recording_issues == ()
 
 
 class MoveUpdateStageFaultStream:
@@ -3412,6 +3531,10 @@ def test_nonbyte_commit_then_raise_degrades_unrecorded_mutation(
     assert item.detail["durable_state"] == durable_state
     assert recorder.calls == []
     assert xset.published_evidence == {}
+    assert xset.recording_reasons == {
+        operation.op_id: ItemRecordingReason.UNRECORDED_MUTATION
+    }
+    assert xset.recording_issues == ()
     if kind is OperationKind.MOVE:
         assert not (target / "old.bin").exists()
         assert (target / "new.bin").read_bytes() == b"reviewed"
@@ -3447,6 +3570,8 @@ def test_nonbyte_precommit_failure_keeps_recording_ok_when_state_is_unchanged(
     assert "durable_state" not in item.detail
     assert recorder.calls == []
     assert xset.published_evidence == {}
+    assert xset.recording_reasons == {}
+    assert xset.recording_issues == ()
     if kind is OperationKind.MOVE:
         assert (target / "old.bin").exists()
         assert not (target / "new.bin").exists()
@@ -3910,6 +4035,10 @@ def test_resumed_directory_restore_failure_degrades_recording(
     assert result.recording is RecordingStatus.DEGRADED
     assert xset.status[mkdir.op_id] is Outcome.SUCCEEDED
     assert xset.status[copy.op_id] is Outcome.SUCCEEDED
+    assert xset.recording_reasons == {}
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        TaskRecordingIssueReason.POST_SETTLEMENT_STATE_DIVERGED,
+    )
     assert _recorder_names(recorder) == ["copied"]
 
 
@@ -3926,6 +4055,8 @@ def test_resumed_directory_restore_then_raise_keeps_recording_truth(
     assert fs.restore_attempts == 1
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.OK
+    assert xset.recording_reasons == {}
+    assert xset.recording_issues == ()
     assert _recorder_names(recorder) == ["copied"]
 
 
@@ -4578,7 +4709,7 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
             actual = Expected(
                 outcome=reduction.settled.outcome,
                 reason=reduction.settled.reason,
-                degrade=reduction.degrade_recording,
+                degrade=reduction.recording_reason is not None,
                 publish=detail.get("publish_state"),
                 durable=detail.get("durable_state"),
                 sibling=detail.get("mutation_durable_state"),
@@ -4586,7 +4717,12 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 recording_error=detail.get("recording_error"),
             )
             assert reduction.settled.published_evidence is None, name
-        assert actual == expected, name
+            assert actual == expected, name
+            assert reduction.recording_reason is (
+                ItemRecordingReason.UNRECORDED_MUTATION
+                if expected.degrade
+                else None
+            ), name
         assert published is None or published.base_detail == before, name
 
     assert details["ordinary-unverified-plus-ambiguous"]["state_error"] == (
@@ -4764,7 +4900,10 @@ def test_mutation_observer_and_reducer_cover_restored_missing_and_unreadable_sta
             verdict,
         )
         assert reduction is not None, name
-        assert reduction.degrade_recording, name
+        assert (
+            reduction.recording_reason
+            is ItemRecordingReason.UNRECORDED_MUTATION
+        ), name
         assert reduction.settled.outcome is Outcome.FAILED, name
         assert reduction.settled.reason is ExecutionReason.TARGET_DRIFT, name
         assert reduction.settled.detail["durable_state"] == durable_state.value, name
@@ -4835,7 +4974,10 @@ def test_published_target_observer_and_reducer_cover_changed_missing_and_unreada
             None,
         )
         assert reduction is not None, name
-        assert reduction.degrade_recording, name
+        assert (
+            reduction.recording_reason
+            is ItemRecordingReason.UNRECORDED_MUTATION
+        ), name
         assert reduction.settled.detail["publish_state"] == "published", name
         assert reduction.settled.detail["target_state"] == target_state.value, name
         assert reduction.settled.detail["durable_state"] == durable_state.value, name

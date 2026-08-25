@@ -23,8 +23,10 @@ from namisync.core.evidence import (
 from namisync.core.execution import (
     Commitment,
     ExecutionSet,
+    ItemRecordingReason,
     PublishedCopyEvidence,
     RecordedCopyIdentity,
+    TaskRecordingIssueReason,
     validated_run_id,
 )
 from namisync.core.integrity import (
@@ -802,7 +804,10 @@ def test_rowless_matching_readback_keeps_filesystem_success_and_degrades_recordi
             operation,
             evidence=evidence,
         )
-        execution_set.recording = RecordingStatus.DEGRADED
+        execution_set.note_item_recording_failure(
+            operation.op_id,
+            ItemRecordingReason.RECORD_WRITE_FAILED,
+        )
         return OperationResult(
             SessionState.COMPLETED,
             recording=RecordingStatus.DEGRADED,
@@ -846,7 +851,11 @@ def test_executor_result_degradation_is_frozen_before_verify_handoff() -> None:
             execution_set,
             context,
             operation,
-            evidence=_evidence(operation),
+            evidence=_evidence(operation, recorded=False),
+        )
+        execution_set.note_item_recording_failure(
+            operation.op_id,
+            ItemRecordingReason.RECORD_WRITE_FAILED,
         )
         return OperationResult(
             SessionState.COMPLETED,
@@ -1266,6 +1275,13 @@ def test_recording_boundary_failure_preserves_execution_truth(boundary: str) -> 
     assert result.error.type_name == "OSError"
     assert result.error.message == f"recording {boundary} failed"
     assert xset.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        (
+            TaskRecordingIssueReason.RECORDING_OPEN_FAILED
+            if boundary == "enter"
+            else TaskRecordingIssueReason.RECORDING_CLOSE_FAILED
+        ),
+    )
     assert finished_without_open == (
         [(SessionState.FAILED, RecordingStatus.DEGRADED)]
         if boundary == "enter"
@@ -1431,6 +1447,42 @@ def test_recording_entry_cancel_uses_continuation_authority_without_reopen(
     assert [event.bytes_done for event in events if isinstance(event, Progress)] == [1]
 
 
+def test_recording_entry_cancel_attributes_fallback_finish_failure() -> None:
+    operation = _operation(72, 9)
+    xset = _execution_set(operation)
+
+    def cancel_open(execution_set):
+        assert execution_set is xset
+        raise Canceled()
+
+    def fail_finish(execution_set, status, recording_status):
+        assert execution_set is xset
+        assert status is SessionState.CANCELED
+        assert recording_status is RecordingStatus.OK
+        raise OSError("fallback finish failed")
+
+    deps = _deps(
+        executor=lambda *args: pytest.fail("executor unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+        recordings=[],
+    )
+    deps.open_recording = cancel_open
+    deps.finish_existing_recording = fail_finish
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+        resumed=True,
+    )
+
+    assert result.status is SessionState.CANCELED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        TaskRecordingIssueReason.FINISH_FAILED,
+    )
+
+
 def test_pause_recording_exit_failure_persists_degraded_continuation() -> None:
     operation = _operation(69, 9)
     xset = _execution_set(operation)
@@ -1461,6 +1513,9 @@ def test_pause_recording_exit_failure_persists_degraded_continuation() -> None:
         for note in raised.value.__notes__
     )
     assert xset.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+    )
     assert captured
     assert isinstance(captured[-1], ExecuteContinuation)
     assert captured[-1].execution_set.recording is RecordingStatus.DEGRADED
@@ -1469,6 +1524,9 @@ def test_pause_recording_exit_failure_persists_degraded_continuation() -> None:
         encode_execution_request(ExecutionRequest(captured[-1], NOW))
     ).continuation
     assert isinstance(restored, ExecuteContinuation)
+    assert tuple(
+        issue.reason for issue in restored.execution_set.recording_issues
+    ) == (TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,)
     canceled_recordings: list[_Recording] = []
     canceled = settle_canceled_execution(
         restored,
@@ -1547,7 +1605,10 @@ def test_verify_recording_open_failure_does_not_rewrite_execution_axis() -> None
     assert result.phases[1].status is PhaseStatus.INCOMPLETE
     assert result.error is not None
     assert result.error.type_name == "OSError"
-    assert xset.recording is RecordingStatus.OK
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+    )
 
 
 def test_verify_base_exception_escapes_and_does_not_finish() -> None:
@@ -2111,6 +2172,9 @@ def test_paused_verify_cancel_preserves_execute_truth_and_finish_failure_axis() 
     assert recording.finishes == [
         (SessionState.COMPLETED, RecordingStatus.OK)
     ]
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        TaskRecordingIssueReason.FINISH_FAILED,
+    )
 
 
 def test_paused_execute_cancel_finishes_without_starting_verify() -> None:
@@ -2167,6 +2231,13 @@ def test_paused_execute_cancel_preserves_continuation_on_recording_fault(
     assert result.error.type_name == "OSError"
     assert result.error.message == f"recording {boundary} failed"
     assert xset.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in xset.recording_issues) == (
+        (
+            TaskRecordingIssueReason.RECORDING_OPEN_FAILED
+            if boundary == "enter"
+            else TaskRecordingIssueReason.RECORDING_CLOSE_FAILED
+        ),
+    )
 
 
 def test_running_execute_cancel_never_starts_verify() -> None:
@@ -2254,7 +2325,10 @@ def test_running_execute_cancel_preserves_degraded_recording_status(
     def cancel_executor(execution_set, context, recorder, policies, fs):
         del recorder, policies, fs
         _settle(execution_set, context, operation)
-        execution_set.recording = RecordingStatus.DEGRADED
+        execution_set.note_item_recording_failure(
+            operation.op_id,
+            ItemRecordingReason.RECORD_WRITE_FAILED,
+        )
         raise Canceled()
 
     result = run_execution(
@@ -3343,6 +3417,117 @@ def test_dispatcher_paused_execute_cancel_finishes_same_run_without_verify(
     assert rows[0]["ended_at"] is not None
     assert rows[0]["filesystem_status"] == SessionState.CANCELED.value
     assert tuple(target.iterdir()) == ()
+
+
+def test_dispatcher_pause_resume_retains_v6_item_attribution_and_attestation(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    (source / "file.bin").write_bytes(b"transient evidence")
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    entered = Event()
+    executor_calls = 0
+
+    def pause_after_attributed_settlement(
+        execution_set, context, recorder, policies, fs
+    ):
+        nonlocal executor_calls
+        del recorder, policies, fs
+        executor_calls += 1
+        operation = execution_set.plan.operations[0]
+        if operation.op_id not in execution_set.status:
+            item = ItemOutcome(
+                str(operation.op_id),
+                operation.kind.value,
+                operation.target_rel_path,
+                Outcome.SUCCEEDED,
+                detail={"recording": RecordingStatus.DEGRADED.value},
+            )
+            context.emit(item)
+            execution_set.published_evidence[operation.op_id] = _evidence(
+                operation,
+                recorded=False,
+            )
+            execution_set.status[operation.op_id] = Outcome.SUCCEEDED
+            execution_set.note_item_recording_failure(
+                operation.op_id,
+                ItemRecordingReason.RECORD_WRITE_FAILED,
+            )
+            entered.set()
+            while True:
+                context.checkpoint()
+                sleep(0.005)
+        return OperationResult(
+            SessionState.COMPLETED,
+            recording=execution_set.recording,
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    runtime._deps = replace(
+        runtime._deps,
+        executor=pause_after_attributed_settlement,
+    )
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=runtime.clock,
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        request = PlanRequest(
+            request_id="9" * 32,
+            source_path=str(source),
+            target_path=str(target),
+        )
+        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+            RunContext(lambda body: None, lambda: None)
+        )
+        execution = runtime.commit_plan(
+            request.request_id,
+            run_id="a" * 32,
+            committed_at=NOW,
+            verify_after_execute=False,
+        )
+        session_id = dispatcher.submit(EXECUTION_KIND, execution)
+        assert entered.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        paused = _wait_for_session(
+            dispatcher,
+            session_id,
+            SessionState.PAUSED,
+        )
+        assert paused.payload is not None
+        carried = decode_execution_request(paused.payload).execution_set
+        operation = carried.plan.operations[0]
+        assert carried.recording_reasons == {
+            operation.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
+        }
+        assert carried.published_evidence[
+            operation.op_id
+        ].recorded_identity is None
+
+        assert dispatcher.resume(session_id).accepted
+        terminal = _wait_for_session(
+            dispatcher,
+            session_id,
+            SessionState.COMPLETED,
+        )
+    finally:
+        shutdown = dispatcher.shutdown()
+        runtime.close()
+
+    assert shutdown.complete
+    assert executor_calls == 2
+    assert terminal.payload is None
+    assert terminal.result is not None
+    assert terminal.result.recording is RecordingStatus.DEGRADED
 
 
 def test_dispatcher_paused_verify_cancel_uses_runtime_compound_settlement(

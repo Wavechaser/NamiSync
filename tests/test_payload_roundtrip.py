@@ -29,8 +29,11 @@ from namisync.core.evidence import (
 from namisync.core.execution import (
     Commitment,
     ExecutionSet,
+    ItemRecordingReason,
     PublishedCopyEvidence,
     RecordedCopyIdentity,
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
     validated_run_id,
 )
 from namisync.core.integrity import (
@@ -139,7 +142,7 @@ def test_old_workflow_payload_is_refused_after_contract_change(
         decode_plan_request(json.dumps(value).encode("utf-8"))
 
 
-def test_plan_and_execution_payloads_explicitly_use_schema_v5() -> None:
+def test_plan_v5_and_execution_v6_are_independent_exact_payloads() -> None:
     plan_value = json.loads(
         encode_plan_request(
             PlanRequest("request", r"C:\source", r"D:\target")
@@ -150,9 +153,9 @@ def test_plan_and_execution_payloads_explicitly_use_schema_v5() -> None:
     )
 
     assert plan_value["schema_version"] == 5
-    assert execution_value["schema_version"] == 5
+    assert execution_value["schema_version"] == 6
 
-    execution_value["schema_version"] = 4
+    execution_value["schema_version"] = 5
     with pytest.raises(ValueError, match="unsupported workflow payload schema"):
         decode_execution_request(
             json.dumps(execution_value).encode("utf-8")
@@ -461,7 +464,12 @@ def _rich_execution_request() -> ExecutionRequest:
                 _copy_identity(copy, run_id),
             )
         },
-        recording=RecordingStatus.DEGRADED,
+        recording_issues=(
+            TaskRecordingIssue(
+                TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+                "RuntimeError: final flush failed",
+            ),
+        ),
         bytes_done_high_water=17,
     )
     return ExecutionRequest(
@@ -506,7 +514,9 @@ def _rich_verify_request() -> ExecutionRequest:
                 None,
             ),
         },
-        recording=RecordingStatus.DEGRADED,
+        recording_reasons={
+            move_update.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
+        },
         bytes_done_high_water=61,
     )
     candidates = PostCopySelection(
@@ -718,11 +728,11 @@ def test_execution_payload_requires_exact_byte_high_water_field(
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
-def test_execution_payload_v5_keeps_the_public_high_water_wire_shape() -> None:
+def test_execution_payload_v6_keeps_progress_and_recording_attribution() -> None:
     encoded = encode_execution_request(_rich_execution_request())
     value = json.loads(encoded)
 
-    assert value["schema_version"] == 5
+    assert value["schema_version"] == 6
     assert set(value["execution_set"]) == {
         "plan",
         "selection",
@@ -732,12 +742,69 @@ def test_execution_payload_v5_keeps_the_public_high_water_wire_shape() -> None:
         "commitment",
         "published_evidence",
         "recording",
+        "recording_reasons",
+        "recording_issues",
         "bytes_done_high_water",
     }
     assert value["execution_set"]["bytes_done_high_water"] == 17
+    assert value["execution_set"]["recording_reasons"] == {}
+    assert value["execution_set"]["recording_issues"] == [
+        {
+            "reason": "final-flush-failed",
+            "detail": "RuntimeError: final flush failed",
+        }
+    ]
     assert (
         encode_execution_request(decode_execution_request(encoded)) == encoded
     )
+
+
+def test_task_recording_issues_retain_first_reason_in_observation_order() -> None:
+    xset = _rich_execution_request().execution_set
+
+    xset.note_task_recording_issue(
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+        "OSError: open failed",
+    )
+    xset.note_task_recording_issue(
+        TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+        "later duplicate must not replace the first detail",
+    )
+
+    assert xset.recording_issues == (
+        TaskRecordingIssue(
+            TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+            "RuntimeError: final flush failed",
+        ),
+        TaskRecordingIssue(
+            TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+            "OSError: open failed",
+        ),
+    )
+    decoded = decode_execution_request(
+        encode_execution_request(ExecutionRequest(ExecuteContinuation(xset), NOW))
+    )
+    assert decoded.execution_set.recording_issues == xset.recording_issues
+
+
+def test_task_recording_issue_omits_overlimit_detail_without_truncation() -> None:
+    xset = _rich_execution_request().execution_set
+    overlimit = "é" * 513
+
+    xset.note_task_recording_issue(
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+        overlimit,
+    )
+
+    assert xset.recording_issues[-1] == TaskRecordingIssue(
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+        None,
+    )
+    with pytest.raises(ValueError, match="detail exceeds"):
+        TaskRecordingIssue(
+            TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+            overlimit,
+        )
 
 
 @pytest.mark.parametrize("high_water", [True, 1.5, -1, 10**9])
@@ -912,37 +979,53 @@ def test_execution_set_rejects_published_evidence_on_non_byte_operation() -> Non
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
-def test_execution_set_rejects_identityless_evidence_while_recording_is_ok() -> None:
+def test_execution_set_rejects_identityless_evidence_with_only_a_task_issue() -> None:
     value = json.loads(encode_execution_request(_rich_execution_request()))
     copy_id = str(_op_id(2))
-    value["execution_set"]["recording"] = RecordingStatus.OK.value
     value["execution_set"]["published_evidence"][copy_id][
         "recorded_identity"
     ] = None
 
     with pytest.raises(
         ValueError,
-        match="identityless published evidence requires degraded recording",
+        match="requires that operation's record-write-failed reason",
     ):
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
-def test_execution_set_accepts_identityless_evidence_after_recording_degrades() -> None:
+def test_execution_set_accepts_identityless_evidence_for_that_record_failure() -> None:
     value = json.loads(encode_execution_request(_rich_execution_request()))
     copy_id = str(_op_id(2))
     value["execution_set"]["published_evidence"][copy_id][
         "recorded_identity"
     ] = None
+    value["execution_set"]["recording_reasons"][copy_id] = (
+        ItemRecordingReason.RECORD_WRITE_FAILED.value
+    )
 
     decoded = decode_execution_request(json.dumps(value).encode("utf-8"))
 
     assert decoded.execution_set.recording is RecordingStatus.DEGRADED
+    assert decoded.execution_set.recording_reasons == {
+        _op_id(2): ItemRecordingReason.RECORD_WRITE_FAILED
+    }
     assert (
         decoded.execution_set.published_evidence[
             _op_id(2)
         ].recorded_identity
         is None
     )
+
+
+def test_execution_set_rejects_record_failure_with_a_durable_identity() -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    copy_id = str(_op_id(2))
+    value["execution_set"]["recording_reasons"][copy_id] = (
+        ItemRecordingReason.RECORD_WRITE_FAILED.value
+    )
+
+    with pytest.raises(ValueError, match="cannot carry a recorded identity"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
 @pytest.mark.parametrize(
@@ -987,6 +1070,8 @@ def test_execution_set_rejects_recorded_identities_from_multiple_locations() -> 
         "scope_token": "b" * 32,
         "rel_path_key": normalize_relative_path("moved-changed.bin"),
     }
+    del value["execution_set"]["recording_reasons"][move_update_id]
+    value["execution_set"]["recording"] = RecordingStatus.OK.value
 
     with pytest.raises(ValueError, match="share one target location"):
         decode_execution_request(json.dumps(value).encode("utf-8"))

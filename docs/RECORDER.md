@@ -5,14 +5,17 @@ shared conditional integrity write are implemented. M1 Stage 4 adds atomic
 copy-identity returns and one logical recorder window across optional linked
 verification. Maintenance recording remains later work.
 
-## Accepted Recording-Truth Target (Not Active)
+## Recording Truth (Executor Attribution Active; Event v5 Pending)
 
 The checkpoint sequence and exact result vocabulary are owned by
-[M1_BRIDGE.md](M1_BRIDGE.md). Locally, each recorder call produces one typed,
+[M1_BRIDGE.md](M1_BRIDGE.md). Each recorder call produces one typed,
 operation-local truth result. A committed receipt is final and idempotent; an
 identical byte-producing replay returns the same complete
-`RecordedCopyIdentity`. Storage failure remains typed and cannot degrade a
-different operation or revoke an earlier committed transaction.
+`RecordedCopyIdentity`. Executor now retains a failing call as that operation's
+typed recording reason. Executor retains final-flush and post-settlement
+divergence at task scope; workflow retains recording-open, finish, and close
+issues there. Storage failure cannot degrade a different operation or revoke an
+earlier committed transaction.
 
 The identity relation remains exact: `operations.run_id` refers to `runs.id`,
 while `RecordedCopyIdentity.scope_token` is that run's textual `run_token`.
@@ -57,7 +60,8 @@ COPY/UPDATE/MOVE_UPDATE recording returns a complete
 same transaction that stores the copy evidence. Replaying the identical
 operation token reconstructs the same tuple; conflicting token reuse fails.
 There is no partial/fake identity. If that transaction fails after bytes
-publish, executor retains rowless evidence and degrades the recording axis.
+publish, executor retains rowless evidence only beside that operation's
+`record-write-failed` reason and derives a degraded aggregate.
 
 All sync operation kinds record only after the executor reports matching
 filesystem success. Copy/update evidence is bound to the published target stat,
@@ -219,10 +223,11 @@ a collision by rolling back the entire run silently.
 
 Recorder always returns/raises the recording failure to the workflow. The
 already successful filesystem result and terminal `SessionState` are preserved
-verbatim; `OperationResult.recording` becomes `RecordingStatus.DEGRADED` and
-interfaces disclose “files changed; ledger behind” rather than “copy failed.”
-Recovery re-inventories/reconciles; it never rolls back true filesystem work
-merely to make the ledger tidy.
+verbatim. Internal continuation state now retains sparse item reasons and
+ordered task issues; the current event-v4 result exposes their derived
+`RecordingStatus.DEGRADED` aggregate until checkpoint 3 activates the exact v5
+wire. Recovery re-inventories/reconciles; it never rolls back true filesystem
+work merely to make the ledger tidy.
 
 ## Expectations
 

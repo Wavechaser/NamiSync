@@ -9,13 +9,13 @@ verification, compound history/views, generic history reads, semantic-settings
 snapshot/patch translation, and the shared facade used by the location CLI
 commands. Stage 5.5's workflow-owned selection semantics are now implemented:
 direct user deselection remains distinct from safety exclusion, execution
-re-derives the authoritative set, and strict payload v5 preserves that
-provenance plus executor aggregate progress high-water across continuations.
+re-derives the authoritative set, and plan payload v5 plus execution payload v6
+preserve that provenance and executor continuation truth.
 Stage 5.5 facade integration is complete;
 Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
-## Accepted Stage 6 Second-Half Workflow Contract (Not Active)
+## Stage 6 Second-Half Workflow Contract (Checkpoint 2 Portion Active)
 
 The checkpoint sequence is owned by
 [M1_SHELL_H2.md](M1_SHELL_H2.md); exact event/result and task protocols live in
@@ -24,17 +24,21 @@ The checkpoint sequence is owned by
 treating a continuation version as a global epoch or receiving an
 interface-owned task claim.
 
-Execution continuation remains opaque process-local custody. It may carry the
-operation-local recording attribution and transient publication evidence needed
-for same-session pause/resume or automatic linked verification, but that
-evidence never becomes history, ledger, desktop artifact, or JavaScript state.
-Manual exact post-copy verification instead opens a distinct session and
-classifies current durable evidence in the original execution scope.
+Execution continuation is opaque process-local custody. Its exact v6 codec now
+carries sparse operation recording reasons, ordered task issues, aggregate byte
+high-water, and transient publication evidence needed for same-session
+pause/resume or automatic linked verification; payload v5 is refused. The plan
+codec remains exact v5. Transient evidence never becomes history, ledger,
+desktop artifact, or JavaScript state, and dispatcher terminal settlement
+clears the only retained opaque reference. Manual exact post-copy verification
+remains a later checkpoint and instead classifies current durable evidence in
+the original execution scope.
 
-Workflow aggregation preserves operation-local recording truth and ordered
-task issues: later failure cannot rewrite an emitted item or revoke committed
-evidence. Exact item, task-issue, terminal-summary, and omission vocabularies
-remain core/bridge authority.
+Workflow aggregation now preserves operation-local recording truth and the
+first observation of each task issue in order: later failure cannot rewrite an
+emitted item or revoke committed evidence. The live core event remains exact
+v4; exact item detail, task-issue result fields, terminal summary, and omission
+vocabularies activate together at checkpoint 3.
 
 At the accepted scalar cutover, workflow accumulation follows the exact
 checked-arithmetic contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
@@ -217,7 +221,10 @@ version 1-3 payloads are refused instead of being guessed into the changed
 contract. Progress-continuation hardening advances the shared plan/execution
 codec to strict version 5, requires an exact bounded byte high-water on every
 execution set, and refuses versions 1-4 rather than resetting a resumed task's
-aggregate bar. Inventory request payloads advance to version 2 for recursive
+aggregate bar. Stage 6 checkpoint 2 then keeps plan payload v5 and advances only
+the process-local execution payload to exact v6 for sparse recording reasons,
+ordered task issues, and transient attestation consistency; execution payload
+v5 is refused. Inventory request payloads advance to version 2 for recursive
 subtree scope. The independent standalone-integrity continuation also advances
 to strict version 2 to retain its physical-read total high-water and aggregate
 recording status; the shared validator remains kind-aware rather than treating
@@ -266,9 +273,11 @@ with service exposure completed by the facade integration.
 Stage 4 linked verification deliberately does not build its immediate candidate set
 from inventory rows. The execution continuation retains each successfully
 published operation's post-publish attestation plus its complete recorded
-identity, or no identity when recording degraded, then turns those values into
-transient verifier candidates. This survives an in-process pause because the
-evidence and aggregate byte high-water are encoded beside execution status;
+identity, or no identity only when the same operation carries
+`record-write-failed`, then turns those values into transient verifier
+candidates. This survives an in-process pause because evidence, recording
+attribution, task issues, and aggregate byte high-water are encoded beside
+execution status;
 neither the continuation nor process-local plans survive closing/restarting
 the M1 application. Later standalone integrity sessions use durable ledger
 evidence.
@@ -277,7 +286,7 @@ The implemented compound transition rules are explicit:
 
 ```text
 execute
-  pause  -> snapshot operation status + published evidence + aggregate byte high-water
+  pause  -> snapshot status + item/task recording truth + evidence + byte high-water
   cancel -> typed terminal canceled; preserve recording truth; start no readback
   settle -> when requested, enter verify for candidates or missing-evidence failures
 
@@ -317,10 +326,9 @@ or resume cannot recover an `OK` aggregate from the failed recording owner.
 During linked verification, the phase summary counts
 successfully emitted reliable outcome identities as a floor, so a later
 continuation-bookkeeping failure cannot erase an already-published settlement.
-A newly degraded recording snapshot is the one prerequisite: workflow attempts
-that continuation update before releasing the reliable outcome, so a sink
-failure cannot leave the reporter uncertain whether downstream accepted the
-item. Candidate completion still advances only after reliable emission returns.
+Executor advances operation status, recording reason, and transient evidence
+only after reliable item emission returns; a sink failure therefore leaves no
+continuation-only settlement. Candidate completion follows the same ordering.
 
 Fresh preflight still runs on every resume. If an already-started execute
 continuation is refused or faults there, workflow reopens the same run only to

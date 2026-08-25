@@ -745,7 +745,7 @@ ratification; `M1_SHELL_H2.md` records the exact titles.
 | ---: | --- | --- | --- |
 | 0 | five documentation commits listed in `M1_SHELL_H2.md` | Ratify the corrected reslice without coupling independent documentation owners | complete |
 | 1 | `test(executor): pin typed recording settlement truth` | Extend the retained oracle before producer changes | complete |
-| 2 | `refactor(executor): attribute recording degradation by scope` | Add sparse item/task attribution and advance only the execution continuation | pending |
+| 2 | `refactor(executor): attribute recording degradation by scope` | Add sparse item/task attribution and advance only the execution continuation | complete |
 | 3 | three ordered protocol commits listed in `M1_SHELL_H2.md` | Switch the event/database protocol with dormant consumer, producer/reset, and legacy-removal stops | pending |
 | 4 | three ordered model, dormant-lifecycle, and activation commits listed in `M1_SHELL_H2.md` | Install the task lifecycle and containment foundation | pending |
 | 5 | `feat(workflows): unify location probing and recent locations` | Share location admission and ledger-derived recents | pending |

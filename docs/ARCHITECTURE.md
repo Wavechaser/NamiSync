@@ -374,7 +374,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
 | Preflight subjects, observations, refusals, and verdicts | `namisync/core/preflight.py` |
 | Outcomes, recording status, provenance, content evidence, attestation, and hashing protocols | `namisync/core/evidence.py` |
-| Commitments, execution state/evidence, failure decisions, copy/recorder/filesystem protocols | `namisync/core/execution.py` |
+| Commitments, execution state/evidence, scoped recording reasons/issues, failure decisions, copy/recorder/filesystem protocols | `namisync/core/execution.py` |
 | Integrity state, selections, outcomes, commands, and verifier/recorder protocols | `namisync/core/integrity.py` |
 | Ledger-bound host, volume, location, mapping, run, and inventory commands | `namisync/core/recording.py` |
 
@@ -441,7 +441,7 @@ that depend on absence or stable identity.
 | `Plan` | Deterministic immutable intent, operations, dependencies, semantic settings, capacity requirement, and fingerprint. |
 | `ExecutionSet.selection` | Dependency-closed executable subset, distinct from the full reviewed plan. |
 | `Commitment` | Binding from human approval to plan fingerprint and selection digest. |
-| `ExecutionSet` | Plan, authoritative selection, commitment, operation status, continuation evidence, and validated aggregate byte high-water. |
+| `ExecutionSet` | Plan, authoritative selection, commitment, operation status, sparse item recording reasons, ordered task recording issues, continuation evidence, and validated aggregate byte high-water. |
 | `ObservedWorld` | Fresh, scoped filesystem facts used by pure preflight judgment. |
 | `Verdict` | Typed per-operation refusals plus the observation judged. |
 

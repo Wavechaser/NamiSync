@@ -16,6 +16,7 @@ from namisync.core.execution import (
     ExecutorFileSystem,
     PublishedCopyEvidence,
     Recorder,
+    TaskRecordingIssueReason,
     validated_run_id,
 )
 from namisync.core.integrity import (
@@ -257,13 +258,15 @@ def run_execution(
             return
         active = current[0]
         try:
+            _note_task_recording_issue(
+                active.execution_set,
+                TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+                boundary.exit_error,
+            )
             if isinstance(active, VerifyContinuation):
                 if active.recording is RecordingStatus.OK:
                     active = replace(active, recording=RecordingStatus.DEGRADED)
-                    capture(active)
-            else:
-                active.execution_set.recording = RecordingStatus.DEGRADED
-                capture(active)
+            capture(active)
         except Exception as continuation_error:
             error.add_note(
                 "recording degradation continuation capture also failed: "
@@ -316,8 +319,11 @@ def run_execution(
         if isinstance(continuation, ExecutionSet)
         else continuation.execution_set
     )
-    if not any(phase.phase == "verify" for phase in result.phases):
-        execution_set.recording = RecordingStatus.DEGRADED
+    _note_task_recording_issue(
+        execution_set,
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+        boundary.exit_error,
+    )
     return replace(
         result,
         recording=RecordingStatus.DEGRADED,
@@ -571,6 +577,7 @@ def _run_execution(
             finished = True
             finished_recording = _finish_recording(
                 recording,
+                xset,
                 filesystem_status,
                 recording_status,
             )
@@ -603,7 +610,13 @@ def _run_execution(
                     xset.recording,
                     result.recording,
                 )
-                xset.recording = execution_recording
+                if (
+                    result.recording is RecordingStatus.DEGRADED
+                    and xset.recording is RecordingStatus.OK
+                ):
+                    raise RuntimeError(
+                        "executor returned unattributed recording degradation"
+                    )
                 result = replace(result, recording=execution_recording)
                 if not verify_after_execute:
                     recording_status = finish_once(
@@ -899,13 +912,19 @@ def settle_canceled_execution(
         with boundary.open(xset) as recording:
             recording_status = _finish_recording(
                 recording,
+                xset,
                 filesystem_status,
                 recording_status,
             )
     except Exception as error:
         recording_error = error
-        recording_status = RecordingStatus.DEGRADED
-        _finish_recording_without_open(
+        _note_task_recording_issue(
+            xset,
+            TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+            boundary.enter_error or error,
+        )
+        recording_status = xset.recording
+        recording_status = _finish_recording_without_open(
             deps,
             xset,
             filesystem_status,
@@ -913,11 +932,12 @@ def settle_canceled_execution(
         )
     if boundary.exit_error is not None:
         recording_error = boundary.exit_error
-        recording_status = RecordingStatus.DEGRADED
-    if recording_error is not None and isinstance(
-        continuation, ExecuteContinuation
-    ):
-        xset.recording = RecordingStatus.DEGRADED
+        _note_task_recording_issue(
+            xset,
+            TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+            boundary.exit_error,
+        )
+        recording_status = xset.recording
     execute_phase = (
         phase
         if isinstance(continuation, ExecuteContinuation)
@@ -1241,12 +1261,17 @@ def _recording_open_failure_result(
 ) -> OperationResult:
     """Project an unavailable run recording from authoritative continuation."""
 
+    xset = continuation.execution_set
+    xset.note_task_recording_issue(
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+        f"{error.type_name}: {error.message}",
+    )
     if isinstance(continuation, VerifyContinuation):
         _finish_recording_without_open(
             deps,
-            continuation.execution_set,
+            xset,
             continuation.filesystem_status,
-            RecordingStatus.DEGRADED,
+            xset.recording,
         )
         phase = _verify_phase(
             continuation,
@@ -1267,8 +1292,6 @@ def _recording_open_failure_result(
             error=error,
         )
 
-    xset = continuation.execution_set
-    xset.recording = RecordingStatus.DEGRADED
     _finish_recording_without_open(
         deps,
         xset,
@@ -1360,7 +1383,7 @@ def _recording_entry_canceled_result(
             continuation.recording,
         )
         execute_phase = continuation.execute_phase
-    _finish_recording_without_open(
+    recording_status = _finish_recording_without_open(
         deps,
         xset,
         filesystem_status,
@@ -1478,11 +1501,35 @@ def _finish_existing_recording(
     if finisher is not None:
         try:
             finisher(xset, status, recording_status)
-        except Exception:
-            return RecordingStatus.DEGRADED
-        return recording_status
-    with deps.open_recording(xset) as recording:
-        return _finish_recording(recording, status, recording_status)
+        except Exception as error:
+            _note_task_recording_issue(
+                xset,
+                TaskRecordingIssueReason.FINISH_FAILED,
+                error,
+            )
+        return _combined_recording(recording_status, xset.recording)
+    boundary = _RecordingBoundary(deps.open_recording)
+    try:
+        with boundary.open(xset) as recording:
+            recording_status = _finish_recording(
+                recording,
+                xset,
+                status,
+                recording_status,
+            )
+    except Exception as error:
+        _note_task_recording_issue(
+            xset,
+            TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+            boundary.enter_error or error,
+        )
+    if boundary.exit_error is not None:
+        _note_task_recording_issue(
+            xset,
+            TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+            boundary.exit_error,
+        )
+    return _combined_recording(recording_status, xset.recording)
 
 
 def _finish_recording_without_open(
@@ -1490,26 +1537,47 @@ def _finish_recording_without_open(
     xset: ExecutionSet,
     status: SessionState,
     recording_status: RecordingStatus,
-) -> None:
+) -> RecordingStatus:
     finisher = getattr(deps, "finish_existing_recording", None)
     if finisher is None:
-        return
+        return _combined_recording(recording_status, xset.recording)
     try:
         finisher(xset, status, recording_status)
-    except Exception:
-        return
+    except Exception as error:
+        _note_task_recording_issue(
+            xset,
+            TaskRecordingIssueReason.FINISH_FAILED,
+            error,
+        )
+    return _combined_recording(recording_status, xset.recording)
 
 
 def _finish_recording(
     recording: RunRecording,
+    xset: ExecutionSet,
     status: SessionState,
     recording_status: RecordingStatus,
 ) -> RecordingStatus:
     try:
         recording.finish(status, recording_status)
-    except Exception:
-        return RecordingStatus.DEGRADED
-    return recording_status
+    except Exception as error:
+        _note_task_recording_issue(
+            xset,
+            TaskRecordingIssueReason.FINISH_FAILED,
+            error,
+        )
+    return _combined_recording(recording_status, xset.recording)
+
+
+def _note_task_recording_issue(
+    xset: ExecutionSet,
+    reason: TaskRecordingIssueReason,
+    error: BaseException,
+) -> None:
+    xset.note_task_recording_issue(
+        reason,
+        f"{type(error).__name__}: {logical_error_text(error)}",
+    )
 
 
 def _commitment_error(xset: ExecutionSet) -> str | None:

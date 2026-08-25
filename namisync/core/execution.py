@@ -19,6 +19,7 @@ from .planning import OpId, OperationKind, Plan, PlanFingerprint, PlanOperation
 RunId = NewType("RunId", str)
 
 _FIXED_ID = re.compile(r"[0-9a-f]{32}\Z")
+RECORDING_DETAIL_MAX_BYTES = 1024
 
 
 def validated_run_id(value: str) -> RunId:
@@ -27,6 +28,52 @@ def validated_run_id(value: str) -> RunId:
     if _FIXED_ID.fullmatch(value) is None:
         raise ValueError("run id must contain exactly 32 lowercase hex digits")
     return RunId(value)
+
+
+class ItemRecordingReason(StrEnum):
+    """Closed operation-local causes of recording degradation."""
+
+    RECORD_WRITE_FAILED = "record-write-failed"
+    UNRECORDED_MUTATION = "unrecorded-mutation"
+    RECORDING_PREREQUISITE_FAILED = "recording-prerequisite-failed"
+
+
+class TaskRecordingIssueReason(StrEnum):
+    """Closed task-wide causes of recording degradation."""
+
+    RECORDING_OPEN_FAILED = "recording-open-failed"
+    FINAL_FLUSH_FAILED = "final-flush-failed"
+    FINISH_FAILED = "finish-failed"
+    RECORDING_CLOSE_FAILED = "recording-close-failed"
+    POST_SETTLEMENT_STATE_DIVERGED = "post-settlement-state-diverged"
+
+
+def bounded_recording_detail(value: str | None) -> str | None:
+    """Return a complete bounded diagnostic, or omit it without truncation."""
+
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError("recording detail must be a string or None")
+    try:
+        encoded = value.encode("utf-8")
+    except UnicodeEncodeError:
+        return None
+    return value if len(encoded) <= RECORDING_DETAIL_MAX_BYTES else None
+
+
+@dataclass(frozen=True, slots=True)
+class TaskRecordingIssue:
+    """First bounded observation of one task-wide recording failure class."""
+
+    reason: TaskRecordingIssueReason
+    detail: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.reason, TaskRecordingIssueReason):
+            raise TypeError("task recording issue reason has the wrong type")
+        if bounded_recording_detail(self.detail) != self.detail:
+            raise ValueError("task recording issue detail exceeds its bound")
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +157,10 @@ class ExecutionSet:
     published_evidence: dict[OpId, PublishedCopyEvidence] = field(
         default_factory=dict
     )
-    recording: RecordingStatus = RecordingStatus.OK
+    recording_reasons: dict[OpId, ItemRecordingReason] = field(
+        default_factory=dict
+    )
+    recording_issues: tuple[TaskRecordingIssue, ...] = ()
     user_deselected: frozenset[OpId] = frozenset()
     bytes_done_high_water: int = field(default=0, repr=False)
     _selected_bytes_bound: int = field(init=False, repr=False, compare=False)
@@ -149,8 +199,39 @@ class ExecutionSet:
                 "published evidence contains unselected operation ids: "
                 f"{sorted(invalid_evidence)!r}"
             )
-        if not isinstance(self.recording, RecordingStatus):
-            raise TypeError("execution recording status has the wrong type")
+        if not isinstance(self.recording_reasons, dict):
+            raise TypeError("execution recording reasons must be a dict")
+        invalid_recording = self.recording_reasons.keys() - self.selection
+        if invalid_recording:
+            raise ValueError(
+                "recording degradation contains unselected operation ids: "
+                f"{sorted(invalid_recording)!r}"
+            )
+        for op_id, reason in self.recording_reasons.items():
+            if not isinstance(reason, ItemRecordingReason):
+                raise TypeError("item recording reason has the wrong type")
+            outcome = self.status.get(op_id)
+            expected = (
+                {Outcome.SUCCEEDED, Outcome.SKIPPED}
+                if reason is ItemRecordingReason.RECORD_WRITE_FAILED
+                else {Outcome.FAILED}
+            )
+            if outcome not in expected:
+                raise ValueError(
+                    "item recording reason contradicts operation outcome"
+                )
+        if not isinstance(self.recording_issues, tuple):
+            raise TypeError("task recording issues must be a tuple")
+        if any(
+            not isinstance(issue, TaskRecordingIssue)
+            for issue in self.recording_issues
+        ):
+            raise TypeError(
+                "task recording issues must contain TaskRecordingIssue values"
+            )
+        issue_reasons = tuple(issue.reason for issue in self.recording_issues)
+        if len(issue_reasons) != len(set(issue_reasons)):
+            raise ValueError("task recording issue reasons must be unique")
         byte_kinds = {
             OperationKind.COPY,
             OperationKind.UPDATE,
@@ -186,11 +267,22 @@ class ExecutionSet:
                 )
             identity = evidence.recorded_identity
             if identity is None:
-                if self.recording is RecordingStatus.OK:
+                if (
+                    self.recording_reasons.get(op_id)
+                    is not ItemRecordingReason.RECORD_WRITE_FAILED
+                ):
                     raise ValueError(
-                        "identityless published evidence requires degraded recording"
-                    )
+                        "identityless published evidence requires that operation's "
+                        "record-write-failed reason"
+                )
                 continue
+            if (
+                self.recording_reasons.get(op_id)
+                is ItemRecordingReason.RECORD_WRITE_FAILED
+            ):
+                raise ValueError(
+                    "record-write-failed evidence cannot carry a recorded identity"
+                )
             if identity.scope_token != str(self.run_id):
                 raise ValueError(
                     "recorded copy scope token does not match the execution run"
@@ -208,6 +300,62 @@ class ExecutionSet:
                 raise ValueError(
                     "recorded copy identities do not share one target location"
                 )
+
+    @property
+    def recording(self) -> RecordingStatus:
+        """Aggregate recording truth derived from item and task attribution."""
+
+        return (
+            RecordingStatus.DEGRADED
+            if self.recording_reasons or self.recording_issues
+            else RecordingStatus.OK
+        )
+
+    def note_item_recording_failure(
+        self,
+        op_id: OpId,
+        reason: ItemRecordingReason,
+    ) -> None:
+        """Retain one settled operation's recording failure."""
+
+        if op_id not in self.selection:
+            raise ValueError("recording degradation belongs to an unselected operation")
+        if not isinstance(reason, ItemRecordingReason):
+            raise TypeError("item recording reason has the wrong type")
+        outcome = self.status.get(op_id)
+        expected = (
+            {Outcome.SUCCEEDED, Outcome.SKIPPED}
+            if reason is ItemRecordingReason.RECORD_WRITE_FAILED
+            else {Outcome.FAILED}
+        )
+        if outcome not in expected:
+            raise ValueError("item recording reason contradicts operation outcome")
+        evidence = self.published_evidence.get(op_id)
+        if (
+            reason is ItemRecordingReason.RECORD_WRITE_FAILED
+            and evidence is not None
+            and evidence.recorded_identity is not None
+        ):
+            raise ValueError(
+                "record-write-failed evidence cannot carry a recorded identity"
+            )
+        if op_id in self.recording_reasons:
+            raise ValueError("operation recording degradation is already settled")
+        self.recording_reasons[op_id] = reason
+
+    def note_task_recording_issue(
+        self,
+        reason: TaskRecordingIssueReason,
+        detail: str | None = None,
+    ) -> None:
+        """Retain the first observation of one task-wide issue reason."""
+
+        if not isinstance(reason, TaskRecordingIssueReason):
+            raise TypeError("task recording issue reason has the wrong type")
+        if any(issue.reason is reason for issue in self.recording_issues):
+            return
+        issue = TaskRecordingIssue(reason, bounded_recording_detail(detail))
+        self.recording_issues = (*self.recording_issues, issue)
 
     def note_bytes_done(self, bytes_done: int) -> None:
         if type(bytes_done) is not int:

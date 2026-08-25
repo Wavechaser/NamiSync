@@ -17,8 +17,11 @@ from namisync.core.evidence import (
 from namisync.core.execution import (
     Commitment,
     ExecutionSet,
+    ItemRecordingReason,
     PublishedCopyEvidence,
     RecordedCopyIdentity,
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
     validated_run_id,
 )
 from namisync.core.integrity import (
@@ -62,7 +65,8 @@ from .models import (
 )
 
 
-_SCHEMA_VERSION = 5
+_PLAN_SCHEMA_VERSION = 5
+_EXECUTION_SCHEMA_VERSION = 6
 
 
 def _json_bytes(value: object) -> bytes:
@@ -922,6 +926,17 @@ def _execution_set(value: ExecutionSet) -> dict[str, object]:
             )
         },
         "recording": value.recording.value,
+        "recording_reasons": {
+            str(key): reason.value
+            for key, reason in sorted(
+                value.recording_reasons.items(),
+                key=lambda pair: str(pair[0]),
+            )
+        },
+        "recording_issues": [
+            {"reason": issue.reason.value, "detail": issue.detail}
+            for issue in value.recording_issues
+        ],
         "bytes_done_high_water": value.bytes_done_high_water,
     }
 
@@ -939,13 +954,16 @@ def _decode_execution_set(value: object) -> ExecutionSet:
             "commitment",
             "published_evidence",
             "recording",
+            "recording_reasons",
+            "recording_issues",
             "bytes_done_high_water",
         },
         "execution_set",
     )
     raw_status = _mapping(item["status"])
     raw_evidence = _mapping(item["published_evidence"])
-    return ExecutionSet(
+    raw_recording_reasons = _mapping(item["recording_reasons"])
+    execution_set = ExecutionSet(
         plan=_decode_plan(item["plan"]),
         selection=frozenset(
             OpId(_string(raw, "execution_set.selection[]"))
@@ -973,13 +991,48 @@ def _decode_execution_set(value: object) -> ExecutionSet:
             )
             for key, evidence in raw_evidence.items()
         },
-        recording=RecordingStatus(
-            _string(item["recording"], "execution_set.recording")
+        recording_reasons={
+            OpId(key): ItemRecordingReason(
+                _string(
+                    reason,
+                    f"execution_set.recording_reasons.{key}",
+                )
+            )
+            for key, reason in raw_recording_reasons.items()
+        },
+        recording_issues=tuple(
+            _decode_task_recording_issue(
+                issue,
+                f"execution_set.recording_issues[{index}]",
+            )
+            for index, issue in enumerate(_list(item["recording_issues"]))
         ),
         bytes_done_high_water=_integer(
             item["bytes_done_high_water"],
             "execution_set.bytes_done_high_water",
         ),
+    )
+    encoded_recording = RecordingStatus(
+        _string(item["recording"], "execution_set.recording")
+    )
+    if encoded_recording is not execution_set.recording:
+        raise ValueError(
+            "execution aggregate recording contradicts its item/task attribution"
+        )
+    return execution_set
+
+
+def _decode_task_recording_issue(
+    value: object,
+    context: str,
+) -> TaskRecordingIssue:
+    item = _mapping(value)
+    _expect_keys(item, {"reason", "detail"}, context)
+    return TaskRecordingIssue(
+        reason=TaskRecordingIssueReason(
+            _string(item["reason"], f"{context}.reason")
+        ),
+        detail=_optional_string(item["detail"], f"{context}.detail"),
     )
 
 
@@ -1038,7 +1091,7 @@ def encode_plan_request(request: PlanRequest) -> bytes:
             "workflow payloads support only the identity destination policy"
         )
     value = {
-        "schema_version": _SCHEMA_VERSION,
+        "schema_version": _PLAN_SCHEMA_VERSION,
         "kind": "plan",
         "request_id": request.request_id,
         "source_path": request.source_path,
@@ -1064,7 +1117,7 @@ def encode_plan_request(request: PlanRequest) -> bytes:
 
 
 def decode_plan_request(payload: bytes) -> PlanRequest:
-    item = _payload(payload, "plan")
+    item = _payload(payload, "plan", _PLAN_SCHEMA_VERSION)
     _expect_keys(
         item,
         {
@@ -1147,7 +1200,7 @@ def decode_plan_request(payload: bytes) -> PlanRequest:
 def encode_execution_request(request: ExecutionRequest) -> bytes:
     continuation = request.continuation
     value: dict[str, object] = {
-        "schema_version": _SCHEMA_VERSION,
+        "schema_version": _EXECUTION_SCHEMA_VERSION,
         "kind": "execute",
         "phase": continuation.phase,
         "execution_set": _execution_set(continuation.execution_set),
@@ -1179,7 +1232,7 @@ def encode_execution_request(request: ExecutionRequest) -> bytes:
 
 
 def decode_execution_request(payload: bytes) -> ExecutionRequest:
-    item = _payload(payload, "execute")
+    item = _payload(payload, "execute", _EXECUTION_SCHEMA_VERSION)
     if "phase" not in item:
         raise ValueError("execution payload requires a phase discriminator")
     phase = _string(item["phase"], "execution payload.phase")
@@ -1255,7 +1308,11 @@ def decode_execution_request(payload: bytes) -> ExecutionRequest:
     return ExecutionRequest(continuation, started_at)
 
 
-def _payload(payload: bytes, expected_kind: str) -> Mapping[str, object]:
+def _payload(
+    payload: bytes,
+    expected_kind: str,
+    expected_schema_version: int,
+) -> Mapping[str, object]:
     try:
         value = json.loads(
             payload.decode("utf-8"),
@@ -1266,7 +1323,10 @@ def _payload(payload: bytes, expected_kind: str) -> Mapping[str, object]:
         raise ValueError("workflow payload is not valid UTF-8 JSON") from error
     item = _mapping(value)
     schema_version = item.get("schema_version")
-    if type(schema_version) is not int or schema_version != _SCHEMA_VERSION:
+    if (
+        type(schema_version) is not int
+        or schema_version != expected_schema_version
+    ):
         raise ValueError("unsupported workflow payload schema")
     if item.get("kind") != expected_kind:
         raise ValueError("workflow payload kind does not match registration")

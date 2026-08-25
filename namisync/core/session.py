@@ -282,7 +282,7 @@ class SessionRecord:
     kind: str
     state: SessionState
     resources: tuple[ResourceId, ...]
-    payload: bytes
+    payload: bytes | None
     supports_pause: bool
     admission_order: int
     created_at: datetime
@@ -295,8 +295,11 @@ class SessionRecord:
             raise ValueError("session id and kind must be non-empty")
         if tuple(sorted(set(self.resources))) != self.resources:
             raise ValueError("resources must be unique and deterministically sorted")
-        if not isinstance(self.payload, bytes):
-            raise TypeError("workflow payload must be opaque bytes")
+        if is_terminal(self.state):
+            if self.payload is not None:
+                raise ValueError("terminal session payload must be cleared")
+        elif not isinstance(self.payload, bytes):
+            raise TypeError("nonterminal workflow payload must be opaque bytes")
         if self.admission_order < 0:
             raise ValueError("admission order cannot be negative")
         _require_utc(self.created_at, "created_at")

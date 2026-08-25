@@ -29,11 +29,13 @@ from namisync.core.execution import (
     ExecutorFileSystem,
     FailureDecision,
     FailurePolicy,
+    ItemRecordingReason,
     PublishedCopyEvidence,
     Recorder,
     RecordedCopyIdentity,
     Retry,
     Stop,
+    TaskRecordingIssueReason,
 )
 from namisync.core.models import EntryKind, FileStat, MANAGED_FILE_ATTRIBUTE_MASK
 from namisync.core.pathing import (
@@ -85,6 +87,24 @@ class OperationFailure(Exception):
         self.reason = reason
         self.detail = detail
         self.cause = cause
+
+
+@dataclass(frozen=True, slots=True)
+class _RecordObservation:
+    recorded_identity: RecordedCopyIdentity | None = None
+    recording_reason: ItemRecordingReason | None = None
+
+    def __post_init__(self) -> None:
+        if self.recorded_identity is not None and not isinstance(
+            self.recorded_identity, RecordedCopyIdentity
+        ):
+            raise TypeError("record observation identity has the wrong type")
+        if self.recording_reason is not None and not isinstance(
+            self.recording_reason, ItemRecordingReason
+        ):
+            raise TypeError("record observation reason has the wrong type")
+        if self.recorded_identity is not None and self.recording_reason is not None:
+            raise ValueError("record observation cannot succeed and fail")
 
 
 class SystemClock:
@@ -153,6 +173,7 @@ class _Settled:
     reason: ExecutionReason | None = None
     detail: dict[str, object] = field(default_factory=dict)
     published_evidence: PublishedCopyEvidence | None = None
+    recording_reason: ItemRecordingReason | None = None
 
 
 class _TerminalKind(Enum):
@@ -321,7 +342,7 @@ class _TerminalCause:
 @dataclass(frozen=True, slots=True)
 class _SettlementReduction:
     settled: _Settled
-    degrade_recording: bool
+    recording_reason: ItemRecordingReason | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -547,10 +568,6 @@ class _ExecutionState:
     @property
     def recording(self) -> RecordingStatus:
         return self.execution_set.recording
-
-    @recording.setter
-    def recording(self, value: RecordingStatus) -> None:
-        self.execution_set.recording = value
 
 
 class _ProgressTracker:
@@ -938,10 +955,7 @@ def execute(
             xset, ctx, recorder, fs, target_root, state, progress
         )
         _restore_completed_directory_metadata(xset, fs, target_root, state)
-        try:
-            recorder.flush()
-        except Exception:
-            state.recording = RecordingStatus.DEGRADED
+        _flush_final(recorder, xset)
     except Canceled:
         try:
             _handle_canceled(
@@ -1013,10 +1027,7 @@ def execute(
             fs,
             None if current is None else current.op_id,
         )
-        try:
-            recorder.flush()
-        except Exception:
-            state.recording = RecordingStatus.DEGRADED
+        _flush_final(recorder, xset)
         raise
 
     items = tuple(
@@ -1105,10 +1116,7 @@ def _handle_canceled(
                 _Settled(Outcome.CANCELED, ExecutionReason.CANCELED, detail),
             )
     progress.unwind_completed()
-    try:
-        recorder.flush()
-    except Exception:
-        state.recording = RecordingStatus.DEGRADED
+    _flush_final(recorder, xset)
 
 
 def _handle_pause(
@@ -1128,10 +1136,7 @@ def _handle_pause(
     )
     _finalize_directories(xset, ctx, recorder, fs, target_root, state, progress)
     _restore_completed_directory_metadata(xset, fs, target_root, state)
-    try:
-        recorder.flush()
-    except Exception:
-        state.recording = RecordingStatus.DEGRADED
+    _flush_final(recorder, xset)
     progress.pause_completed()
 
 
@@ -1234,10 +1239,7 @@ def _unexpected_exception_backstop(
             "executor terminal progress emission also failed: "
             f"{logical_error_text(progress_error)}"
         )
-    try:
-        recorder.flush()
-    except Exception:
-        state.recording = RecordingStatus.DEGRADED
+    _flush_final(recorder, xset)
 
 
 def _backstop_operation(
@@ -1629,8 +1631,7 @@ def _complete_published_byte_operation(
             policies.clock,
         )
     assert continuation.attestation is not None
-    recorded_identity = _record(
-        state,
+    record_observation = _record(
         continuation.detail,
         lambda: record_published(continuation.attestation),
         identity_required=True,
@@ -1640,8 +1641,9 @@ def _complete_published_byte_operation(
         detail=continuation.detail,
         published_evidence=PublishedCopyEvidence(
             continuation.attestation,
-            recorded_identity,
+            record_observation.recorded_identity,
         ),
+        recording_reason=record_observation.recording_reason,
     )
 
 
@@ -2045,7 +2047,7 @@ def _update(
         raise RuntimeError("executor continuation kind does not match update")
 
     if not continuation.published:
-        _flush_before_destructive(recorder, state)
+        _flush_before_destructive(recorder)
         _revalidate_source_root(fs, xset, source_root)
         _revalidate_target_root(fs, xset, target_root)
         if continuation.backup is not None:
@@ -2230,7 +2232,7 @@ def _move(
             "move operation lacks source evidence",
         )
     old_rel, old_expected = _prior_target(operation)
-    _flush_before_destructive(recorder, state)
+    _flush_before_destructive(recorder)
     _revalidate_source_root(fs, xset, source_root)
     _revalidate_target_root(fs, xset, target_root)
     _guard_present(
@@ -2281,8 +2283,15 @@ def _move(
         ExecutionReason.TARGET_DRIFT,
         "moved target is not the reviewed target version",
     )
-    _record(state, detail, lambda: recorder.record_moved(operation.op_id, moved))
-    return _Settled(Outcome.SUCCEEDED, detail=detail)
+    record_observation = _record(
+        detail,
+        lambda: recorder.record_moved(operation.op_id, moved),
+    )
+    return _Settled(
+        Outcome.SUCCEEDED,
+        detail=detail,
+        recording_reason=record_observation.recording_reason,
+    )
 
 
 def _recase(
@@ -2309,7 +2318,7 @@ def _recase(
             ExecutionReason.UNSAFE_PATH,
             "recase paths must differ only by Windows filename casing",
         )
-    _flush_before_destructive(recorder, state)
+    _flush_before_destructive(recorder)
     _revalidate_source_root(fs, xset, source_root)
     _revalidate_target_root(fs, xset, target_root)
     _guard_present(
@@ -2359,12 +2368,15 @@ def _recase(
         ExecutionReason.TARGET_DRIFT,
         "recased target is not the reviewed target version",
     )
-    _record(
-        state,
+    record_observation = _record(
         detail,
         lambda: recorder.record_recased(operation.op_id, recased),
     )
-    return _Settled(Outcome.SUCCEEDED, detail=detail)
+    return _Settled(
+        Outcome.SUCCEEDED,
+        detail=detail,
+        recording_reason=record_observation.recording_reason,
+    )
 
 
 def _finish_move_update_filesystem(
@@ -2398,7 +2410,7 @@ def _finish_move_update_filesystem(
     )
     trash_actual = _stat_target_path(fs, xset, target_root, trash)
     if old_actual is not None:
-        _flush_before_destructive(recorder, state)
+        _flush_before_destructive(recorder)
         _revalidate_target_root(fs, xset, target_root)
         old_actual = fs.stat(target_root, continuation.old_relative_path)
         fs.revalidate_trash_destination(
@@ -2597,7 +2609,7 @@ def _trash(
     destination = fs.trash_destination(
         target_root, xset.run_id, operation.target_rel_path
     )
-    _flush_before_destructive(recorder, state)
+    _flush_before_destructive(recorder)
     _revalidate_target_root(fs, xset, target_root)
     source_actual = _guard_present(
         fs,
@@ -2649,12 +2661,15 @@ def _trash(
         xset.plan.target_profile.stable_file_identity,
     )
     trash_relative = str(destination.relative_to(target_root)).replace(os.sep, "\\")
-    _record(
-        state,
+    record_observation = _record(
         detail,
         lambda: recorder.record_trashed(operation.op_id, trash_relative, moved),
     )
-    return _Settled(Outcome.SUCCEEDED, detail=detail)
+    return _Settled(
+        Outcome.SUCCEEDED,
+        detail=detail,
+        recording_reason=record_observation.recording_reason,
+    )
 
 
 def _delete(
@@ -2673,7 +2688,7 @@ def _delete(
         operation.target_expected.kind is EntryKind.DIRECTORY
         and operation.reason is OperationReason.DIRECTORY_CLEANUP
     )
-    _flush_before_destructive(recorder, state)
+    _flush_before_destructive(recorder)
     _revalidate_target_root(fs, xset, target_root)
     target_actual = _guard_present(
         fs,
@@ -2723,12 +2738,15 @@ def _delete(
                     apply_readonly=True,
                 )
     detail = _durability_detail(fs, target.parent)
-    _record(
-        state,
+    record_observation = _record(
         detail,
         lambda: recorder.record_deleted(operation.op_id, operation.target_expected),
     )
-    return _Settled(Outcome.SUCCEEDED, detail=detail)
+    return _Settled(
+        Outcome.SUCCEEDED,
+        detail=detail,
+        recording_reason=record_observation.recording_reason,
+    )
 
 
 def _noop(
@@ -2764,8 +2782,7 @@ def _noop(
         drift=ExecutionReason.TARGET_DRIFT,
     )
     detail: dict[str, object] = {}
-    _record(
-        state,
+    record_observation = _record(
         detail,
         lambda: recorder.record_noop(
             operation.op_id,
@@ -2773,7 +2790,12 @@ def _noop(
             _normalized_live_stat(target, operation.target_expected),
         ),
     )
-    return _Settled(Outcome.SKIPPED, ExecutionReason.NOOP, detail)
+    return _Settled(
+        Outcome.SKIPPED,
+        ExecutionReason.NOOP,
+        detail,
+        recording_reason=record_observation.recording_reason,
+    )
 
 
 def _start_directory(
@@ -2865,8 +2887,7 @@ def _finalize_directories(
                 _require_target_stat(fs, xset, target_root, target),
                 xset.plan.target_profile.stable_file_identity,
             )
-            _record(
-                state,
+            record_observation = _record(
                 detail,
                 lambda operation=operation, actual=actual: recorder.record_mkdir(
                     operation.op_id, actual
@@ -2878,7 +2899,11 @@ def _finalize_directories(
                 progress,
                 ctx,
                 operation,
-                _Settled(Outcome.SUCCEEDED, detail=detail),
+                _Settled(
+                    Outcome.SUCCEEDED,
+                    detail=detail,
+                    recording_reason=record_observation.recording_reason,
+                ),
             )
         except (Canceled, PauseRequested):
             raise
@@ -2940,10 +2965,14 @@ def _restore_completed_directory_metadata(
                 preserve_created=xset.plan.preservation.preserve_created,
                 apply_readonly=True,
             )
-        except Exception:
+        except Exception as restoration_error:
             state.filesystem_failed = True
             if target is None:
-                state.recording = RecordingStatus.DEGRADED
+                _note_task_recording_issue(
+                    xset,
+                    TaskRecordingIssueReason.POST_SETTLEMENT_STATE_DIVERGED,
+                    restoration_error,
+                )
                 continue
             try:
                 actual = _stat_target_path(
@@ -2952,15 +2981,23 @@ def _restore_completed_directory_metadata(
                     target_root,
                     target,
                 )
-            except Exception:
-                state.recording = RecordingStatus.DEGRADED
+            except Exception as state_error:
+                _note_task_recording_issue(
+                    xset,
+                    TaskRecordingIssueReason.POST_SETTLEMENT_STATE_DIVERGED,
+                    state_error,
+                )
                 continue
             if actual is None or not _matches_restored_directory_metadata(
                 actual,
                 intended,
                 preserve_created=xset.plan.preservation.preserve_created,
             ):
-                state.recording = RecordingStatus.DEGRADED
+                _note_task_recording_issue(
+                    xset,
+                    TaskRecordingIssueReason.POST_SETTLEMENT_STATE_DIVERGED,
+                    restoration_error,
+                )
 
 
 def _matches_restored_directory_metadata(
@@ -3037,6 +3074,11 @@ def _settle(
     if settled.published_evidence is not None:
         xset.published_evidence[operation.op_id] = settled.published_evidence
     xset.status[operation.op_id] = settled.outcome
+    if settled.recording_reason is not None:
+        xset.note_item_recording_failure(
+            operation.op_id,
+            settled.recording_reason,
+        )
     state.outcomes[operation.op_id] = event
     progress.settled(operation, settled.outcome)
     state.effects.settle(operation.op_id)
@@ -3052,6 +3094,11 @@ def _settle_failure(
     error: Exception,
 ) -> None:
     reason, detail = _failure_reason_and_message(error)
+    recording_reason = (
+        getattr(error, "_recording_reason", None)
+        if isinstance(error, OperationFailure)
+        else None
+    )
     _settle(
         xset,
         state,
@@ -3062,6 +3109,7 @@ def _settle_failure(
             Outcome.FAILED,
             reason,
             {"error_type": type(error).__name__, "message": detail},
+            recording_reason=recording_reason,
         ),
     )
 
@@ -3689,7 +3737,7 @@ def _reduce_publication(
                 cause.reason,
                 detail,
             ),
-            degrade_recording=False,
+            recording_reason=None,
         )
 
     if verdict.classification is _PublicationClassification.UNVERIFIED:
@@ -3718,7 +3766,11 @@ def _reduce_publication(
         detail["state_error"] = verdict.probe_error.message
         return _SettlementReduction(
             _Settled(Outcome.FAILED, reason, detail),
-            degrade_recording=degrade,
+            recording_reason=(
+                ItemRecordingReason.UNRECORDED_MUTATION
+                if degrade
+                else None
+            ),
         )
 
     if verdict.classification is not _PublicationClassification.CONFIRMED:
@@ -3768,7 +3820,7 @@ def _reduce_publication(
             ),
             detail,
         ),
-        degrade_recording=True,
+        recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
     )
 
 
@@ -3820,7 +3872,7 @@ def _reduce_mutation(
             ),
             detail,
         ),
-        degrade_recording=True,
+        recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
     )
 
 
@@ -3850,7 +3902,7 @@ def _reduce_effect_settlement(
     if cause.kind is _TerminalKind.ORDINARY_FAILURE:
         for duplicate in ("error_type", "message", "publish_state"):
             mutation_detail.pop(duplicate, None)
-        if publication_reduction.degrade_recording:
+        if publication_reduction.recording_reason is not None:
             for duplicate in ("recording", "recording_error"):
                 mutation_detail.pop(duplicate, None)
         mutation_durable_state = mutation_detail.pop("durable_state", None)
@@ -3875,24 +3927,31 @@ def _reduce_effect_settlement(
             mutation_reduction.settled,
             detail=publication_detail,
         )
+    recording_reasons = {
+        reason
+        for reason in (
+            publication_reduction.recording_reason,
+            mutation_reduction.recording_reason,
+        )
+        if reason is not None
+    }
+    if len(recording_reasons) > 1:
+        raise RuntimeError("settlement reducers disagree on recording cause")
     return _SettlementReduction(
         settled=settled,
-        degrade_recording=(
-            publication_reduction.degrade_recording
-            or mutation_reduction.degrade_recording
-        ),
+        recording_reason=next(iter(recording_reasons), None),
     )
 
 
 def _apply_settlement_reduction(
-    state: _ExecutionState,
     reduction: _SettlementReduction | None,
 ) -> _Settled | None:
     if reduction is None:
         return None
-    if reduction.degrade_recording:
-        state.recording = RecordingStatus.DEGRADED
-    return reduction.settled
+    return replace(
+        reduction.settled,
+        recording_reason=reduction.recording_reason,
+    )
 
 
 def _settle_durable_effects(
@@ -3925,7 +3984,6 @@ def _settle_durable_effects(
         else _observe_mutation(effects.mutation, fs, state)
     )
     return _apply_settlement_reduction(
-        state,
         _reduce_effect_settlement(
             cause,
             publication,
@@ -4624,12 +4682,11 @@ def _guard_attestation_size(digest: CopyDigest, subject: FileStat) -> None:
 
 
 def _record(
-    state: _ExecutionState,
     detail: dict[str, object],
     command: Callable[[], object],
     *,
     identity_required: bool = False,
-) -> RecordedCopyIdentity | None:
+) -> _RecordObservation:
     try:
         result = command()
         if identity_required and not isinstance(result, RecordedCopyIdentity):
@@ -4637,27 +4694,54 @@ def _record(
                 "copy recorder did not return a recorded copy identity"
             )
     except Exception as error:
-        state.recording = RecordingStatus.DEGRADED
         detail["recording"] = RecordingStatus.DEGRADED.value
-        detail["recording_error"] = (
-            f"{type(error).__name__}: {logical_error_text(error)}"
+        detail["recording_error"] = _recording_error_detail(error)
+        return _RecordObservation(
+            recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED
         )
-        return None
-    return result if isinstance(result, RecordedCopyIdentity) else None
+    return _RecordObservation(
+        recorded_identity=(
+            result if isinstance(result, RecordedCopyIdentity) else None
+        )
+    )
 
 
-def _flush_before_destructive(
-    recorder: Recorder, state: _ExecutionState
-) -> None:
+def _flush_before_destructive(recorder: Recorder) -> None:
     try:
         recorder.flush()
     except Exception as error:
-        state.recording = RecordingStatus.DEGRADED
-        raise OperationFailure(
+        failure = OperationFailure(
             ExecutionReason.RECORDER_FAILED,
             "recorder flush failed before destructive operation",
             cause=error,
-        ) from error
+        )
+        failure._recording_reason = (
+            ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+        )
+        raise failure from error
+
+
+def _recording_error_detail(error: BaseException) -> str:
+    return f"{type(error).__name__}: {logical_error_text(error)}"
+
+
+def _note_task_recording_issue(
+    xset: ExecutionSet,
+    reason: TaskRecordingIssueReason,
+    error: BaseException,
+) -> None:
+    xset.note_task_recording_issue(reason, _recording_error_detail(error))
+
+
+def _flush_final(recorder: Recorder, xset: ExecutionSet) -> None:
+    try:
+        recorder.flush()
+    except Exception as error:
+        _note_task_recording_issue(
+            xset,
+            TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+            error,
+        )
 
 
 def _durability_detail(

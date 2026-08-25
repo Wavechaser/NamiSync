@@ -986,6 +986,10 @@ class Dispatcher:
                 self._run_canceled(key, registration, current)
                 return
             try:
+                if current.payload is None:
+                    raise RuntimeError(
+                        "nonterminal session lost its continuation payload"
+                    )
                 invocation = registration.open(current.payload)
             except BaseException as error:
                 self._run_core(
@@ -1135,6 +1139,10 @@ class Dispatcher:
     ) -> OperationResult | None:
         if record.started_at is None or registration.settle_canceled is None:
             return None
+        if record.payload is None:
+            raise RuntimeError(
+                "nonterminal canceled session lost its continuation payload"
+            )
         result = registration.settle_canceled(record.payload, disposition)
         if result_terminal_state(result) is not SessionState.CANCELED:
             raise ValueError("canceled settlement must project to CANCELED")
@@ -1197,6 +1205,7 @@ class Dispatcher:
         updated = replace(
             record,
             state=state,
+            payload=None if is_terminal(state) else record.payload,
             started_at=started_at,
             ended_at=ended_at,
             result=result,

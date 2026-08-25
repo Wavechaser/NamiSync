@@ -7,7 +7,8 @@ implemented. Stage 6 Slice 3 adds the domain-blind transactional admission
 domain-blind. M2 durable queue ownership, SQLite session persistence, and
 startup reconciliation remain deferred.
 
-The accepted Stage 6 second-half desktop target is not active yet. It reuses
+Checkpoint 2's terminal continuation scrubbing is active. The remaining Stage
+6 second-half desktop task target is not active yet. It reuses
 the existing `attach` seam for every desktop-created session and lets an
 interface-owned process-live task serially bind those sessions. No task id,
 task revision, retained presentation artifact, or bridge retention policy enters
@@ -146,7 +147,7 @@ emit them twice. If cancel reaches a resumed attempt's RUNNING checkpoint before
 cancellation settlement before publishing the terminal; it cannot substitute a
 generic canceled result that strands workflow custody.
 
-At checkpoint 2, `SessionRecord.payload: bytes | None` is opaque continuation
+`SessionRecord.payload: bytes | None` is opaque continuation
 state only while nonterminal. Every edge into `COMPLETED`, `FAILED`, `CANCELED`,
 or `REFUSED` atomically replaces that payload with null before storing or
 publishing the terminal `SessionRecord`; the state-before-result settlement

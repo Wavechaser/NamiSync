@@ -463,7 +463,7 @@ def test_compound_cancel_preserves_filesystem_truth_and_projects_lifecycle() -> 
         "sync-execution",
         SessionState.CANCELED,
         (),
-        b"payload",
+        None,
         True,
         1,
         datetime(2026, 7, 18, tzinfo=timezone.utc),
@@ -473,6 +473,35 @@ def test_compound_cancel_preserves_filesystem_truth_and_projects_lifecycle() -> 
     )
     assert record.result is not None
     assert record.result.status is SessionState.COMPLETED
+
+
+def test_session_record_payload_exists_only_while_nonterminal() -> None:
+    created_at = datetime(2026, 7, 18, tzinfo=timezone.utc)
+
+    with pytest.raises(ValueError, match="terminal session payload"):
+        SessionRecord(
+            SessionId("terminal-payload"),
+            "sync-execution",
+            SessionState.COMPLETED,
+            (),
+            b"stale-continuation",
+            True,
+            1,
+            created_at,
+            ended_at=created_at,
+        )
+
+    with pytest.raises(TypeError, match="nonterminal workflow payload"):
+        SessionRecord(
+            SessionId("missing-payload"),
+            "sync-execution",
+            SessionState.PAUSED,
+            (),
+            None,
+            True,
+            2,
+            created_at,
+        )
 
 
 def test_compound_cancel_rejects_inconsistent_execute_or_verify_phase() -> None:
@@ -592,7 +621,7 @@ def test_verify_cancellation_round_trips_terminal_event_and_session_record(
         "sync-execution",
         SessionState.CANCELED,
         (),
-        b"payload",
+        None,
         True,
         1,
         datetime(2026, 7, 25, tzinfo=timezone.utc),

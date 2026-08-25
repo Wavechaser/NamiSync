@@ -24,6 +24,7 @@ from namisync.core.events import ItemOutcome, Progress, Terminal
 from namisync.core.execution import (
     CopyDigest,
     ExecutionReason,
+    ItemRecordingReason,
     validated_run_id,
 )
 from namisync.core.models import (
@@ -357,7 +358,7 @@ def test_failed_reliable_outcome_emit_does_not_settle_continuation_or_progress(
         execute(
             xset,
             RunContext(emit, lambda: None),
-            FakeRecorder(),
+            FakeRecorder(fail="noop"),
             _policies(),
             fs,
         )
@@ -366,6 +367,8 @@ def test_failed_reliable_outcome_emit_does_not_settle_continuation_or_progress(
     assert outcome_attempts >= 1
     assert xset.status == {}
     assert xset.published_evidence == {}
+    assert xset.recording_reasons == {}
+    assert xset.recording_issues == ()
     assert progress
     final = progress[-1]
     assert (final.items_done, final.items_total) == (0, 1)
@@ -762,8 +765,9 @@ def test_source_drift_after_stream_removes_temp_and_records_nothing(tmp_path: Pa
         intended=source_stat,
     )
 
+    xset = _xset(_plan(source, target, (operation,)))
     result, events, recorder = _run(
-        _xset(_plan(source, target, (operation,))),
+        xset,
         fs=fs,
         policies=_policies(copy_backend=MutatingBackend(path)),
     )
@@ -772,6 +776,8 @@ def test_source_drift_after_stream_removes_temp_and_records_nothing(tmp_path: Pa
     assert not (target / "file.bin").exists()
     assert not list(target.glob("*.synctmp-*"))
     assert recorder.calls == []
+    assert xset.recording_reasons == {}
+    assert xset.recording_issues == ()
     outcome = _item_outcome(events)
     assert outcome.reason == "source-drift"
 
@@ -2705,6 +2711,13 @@ def test_successful_trash_delete_and_noop_record_after_filesystem_result(
     assert _recorder_names(recorder) == ["noop", "trashed", "deleted"]
 
 
+class FailFirstFlushRecorder(FakeRecorder):
+    def flush(self) -> None:
+        self.flushes += 1
+        if self.flushes == 1:
+            raise RuntimeError("injected first flush failure")
+
+
 def test_recorder_flush_failure_blocks_destructive_delete(tmp_path: Path) -> None:
     source, target = _roots(tmp_path)
     (target / "file.bin").write_bytes(b"keep")
@@ -2721,14 +2734,19 @@ def test_recorder_flush_failure_blocks_destructive_delete(tmp_path: Path) -> Non
         intended=None,
     )
 
+    xset = _xset(_plan(source, target, (operation,)))
     result, _, _ = _run(
-        _xset(_plan(source, target, (operation,))),
+        xset,
         fs=fs,
-        recorder=FakeRecorder(fail="flush"),
+        recorder=FailFirstFlushRecorder(),
     )
 
     assert result.status is SessionState.FAILED
     assert result.recording is RecordingStatus.DEGRADED
+    assert xset.recording_reasons == {
+        operation.op_id: ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    }
+    assert xset.recording_issues == ()
     assert (target / "file.bin").read_bytes() == b"keep"
 
 
