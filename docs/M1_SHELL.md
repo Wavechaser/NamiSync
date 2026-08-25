@@ -39,7 +39,8 @@ foundation and Slice 4's presentation core/shell frame completed their audited
 realignment and were hardened and reverified on 2026-08-17. Second-half
 checkpoint 0 is complete after final documentation, three independent bounded
 reviews, link/anchor validation, manifest-backed test collection, stale-contract
-searches, and diff validation; checkpoint 1 has not started. NamiSync remains version `0.1.0` until
+searches, and diff validation; checkpoint 1 settlement-oracle work is in
+progress. NamiSync remains version `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
 
@@ -742,17 +743,17 @@ ratification; `M1_SHELL_H2.md` records the exact titles.
 | Checkpoint | Commit boundary | Objective | Status |
 | ---: | --- | --- | --- |
 | 0 | five documentation commits listed in `M1_SHELL_H2.md` | Ratify the corrected reslice without coupling independent documentation owners | complete |
-| 1 | `test(executor): pin typed recording settlement truth` | Extend the retained oracle before producer changes | pending |
+| 1 | `test(executor): pin typed recording settlement truth` | Extend the retained oracle before producer changes | in progress |
 | 2 | `refactor(executor): attribute recording degradation by scope` | Add sparse item/task attribution and advance only the execution continuation | pending |
-| 3 | three ordered protocol commits listed in `M1_SHELL_H2.md` | Switch the event/database protocol with runnable consumer, producer/reset, and legacy-removal stops | pending |
-| 4 | `feat(web): retain multi-session task artifacts` | Install the task lifecycle and containment foundation | pending |
+| 3 | three ordered protocol commits listed in `M1_SHELL_H2.md` | Switch the event/database protocol with dormant consumer, producer/reset, and legacy-removal stops | pending |
+| 4 | three ordered model, dormant-lifecycle, and activation commits listed in `M1_SHELL_H2.md` | Install the task lifecycle and containment foundation | pending |
 | 5 | `feat(workflows): unify location probing and recent locations` | Share location admission and ledger-derived recents | pending |
 | 6 | `feat(web): add frozen setup and serial task creation` | Deliver Setup and serial multi-pair creation | pending |
 | 7 | `feat(web): add bounded plan review and selection` | Deliver plan projection, selection, and execution admission | pending |
 | 8 | `feat(web): add execution review and ledger evidence` | Deliver live/retained execution and current evidence | pending |
 | 9 | `feat(web): add inventory projections and evidence` | Deliver bounded inventory and current provenance | pending |
 | 10 | `feat(web): add integrity and post-copy verification` | Deliver integrity controls and no-rescan manual handoff | pending |
-| 11 | `feat(web): close task lifecycle and retention budgets` | Calibrate and harden shutdown and retained-state containment | pending |
+| 11 | separate policy fixes if required, then the closure commit in `M1_SHELL_H2.md` | Calibrate and harden shutdown and retained-state containment | pending |
 | 12 | `docs(gui): close stage 6 surface verification` | Run the final adversarial, complete, headed, and documentation sweep | pending |
 
 The shell delivery groups are:

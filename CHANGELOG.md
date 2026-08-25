@@ -140,7 +140,8 @@ later workflow surfaces and beta packaging remain future phases.
   corrected native file identity to full-width canonical text from one shared
   adapter, and assigned reachable plan/timestamp failures exact typed outcomes.
   Retained checkpoint 3 before its v5-dependent task foundation with three
-  runnable landing stops and added four nonduplicative causal bug records.
+  independently testable landing stops and added four nonduplicative causal bug
+  records.
 - Bound every command-activating checkpoint to BR-G-32's executable exact-order
   production table and JavaScript mirror, while keeping BR-G-46's reopened
   command-map status scoped to its checkpoint-4 and checkpoint-6 revisions.

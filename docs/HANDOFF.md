@@ -3,7 +3,8 @@
 Status (2026-08-25): Stage 6 second-half checkpoint 0 and its pre-checkpoint-1
 adversarial follow-up are complete. The accepted Bridge, scalar, retention,
 Setup, task, review, inventory, and integrity targets remain inactive until
-their named implementation checkpoints. Checkpoint 1 has not started.
+their named implementation checkpoints. Checkpoint 1 settlement-oracle work is
+in progress and remains uncommitted.
 
 ## Delivered
 
@@ -49,7 +50,14 @@ their named implementation checkpoints. Checkpoint 1 has not started.
   outcomes; later probes reuse their existing unavailable/unreadable states.
 - Kept the event-v5 cut before checkpoint 4 because task results already depend
   on it, and split checkpoint 3 internally into consumer preparation, atomic
-  producer/database reset, and legacy-removal commits with runnable safe stops.
+  producer/database reset, and legacy-removal commits with independently
+  testable safe stops.
+- Hardened H2 for cold-start delivery: every checkpoint now has one entry,
+  evidence, activation, defect-fix, status, and handoff protocol; checkpoint 3
+  keeps v5 unreachable at its first stop; checkpoint 4 predeclares retention
+  and installs lifecycle machinery before activation; checkpoint 7 cannot
+  expose a blind execution start; and checkpoint 11's named commit is its final
+  closure after any separate policy fixes.
 - Added only four distinct causal records to `BUGS.md`; existing entries already
   cover split protocol authority, publication compensation, retention, and
   lifecycle ownership classes.
@@ -73,10 +81,16 @@ their named implementation checkpoints. Checkpoint 1 has not started.
   corrected the scalar/file-identity contract where it did not survive runtime
   comparison, checked checkpoint-3 dependency direction, and deduplicated the
   causal bug ledger.
+- The in-progress checkpoint-1 settlement oracle passed all 30 scenarios in
+  three identical runs; this does not close the checkpoint before its focused,
+  department, diff, and independent projection review completes.
 
 ## Immediate Next Context
 
-The pre-checkpoint decisions are closed. Checkpoint 1 is next: extend only the
-settlement oracle's pre-production typed projection and focused tests for item-
-versus-task recording attribution, then require three identical complete runs.
-Do not start protocol or task implementation first.
+Checkpoint 1 is in progress in `docs/EXECUTOR.md`, `docs/TOOLS.md`,
+`tests/test_tools_executor_settlement_audit.py`, and
+`tools/executor_settlement_audit.py`. Finish its focused and executor/tools
+department verification, independently review the pre-production projection,
+then commit those four files under the named checkpoint-1 title and mark its
+shell row complete. Do not start checkpoint 2 protocol or producer changes
+first.

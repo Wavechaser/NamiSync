@@ -41,7 +41,7 @@ decision record, not by treating this prose as a second authority.
 - Checkpoint 2 changes only the process-local execution continuation.
   Checkpoint 3 is the coordinated core-event, terminal-summary, bridge-
   validator, ledger, history, CLI, and compatibility cutover with three
-  runnable landing stops.
+  independently testable landing stops.
 - The exact `TerminalSummary`, refusal fact, recording fields, database epoch,
   scalar codec, checked-arithmetic policy, and reset posture are owned by the
   mapped bridge decisions and `DEFENSE.md` §1.3.
@@ -91,6 +91,46 @@ decision record, not by treating this prose as a second authority.
   `M1_BRIDGE.md`.
 
 ## Committable checkpoints
+
+### Checkpoint execution protocol
+
+The ordered checkpoint list is also the recovery protocol for an implementer
+who has no session context. Before starting a checkpoint, confirm that the
+preceding row in `M1_SHELL.md` is complete, inventory every existing worktree
+change, and reread that checkpoint's mapped `M1_BRIDGE.md` decisions and BR-G
+gates plus any `DEFENSE.md` wall it cites. Do not absorb, rewrite, or commit
+unrelated or already-started work merely to obtain a clean tree.
+
+Except where a checkpoint lists multiple mandatory commits, its `Commit:` line
+names the required activation/closure commit; it does not require all
+preparatory work to be compressed into one commit. Preparatory commits may add
+types, independent validators, fixtures, backend machinery, or browser code
+only while the accepted target remains unreachable from every production
+dispatcher, command map, persistence reader, and rendered control. The closure
+commit makes the checkpoint coherent at once: no production row points at a
+partial backend or UI, and every replaced row loses its old alias in that same
+commit. A checkpoint may be `in progress` at a documented safe stop, but it is
+not `complete` until this closure lands.
+
+Run focused tests while editing. Before an activation/closure commit, run every
+affected producer and consumer department and the ordinary suite for a shared
+or cross-department contract; run `lint-imports` when dependency boundaries
+move and the installed headed witnesses when a user surface activates. A BR-G
+gate closes only with the exact production entry point, counterexample, and
+collected `test_br_g_<number>_*` nodes required by `M1_BRIDGE.md`; skipped,
+xfail, comment-only, dormant, or uncollected evidence does not count. Record
+measurement fixtures and validators before observing acceptance evidence, as
+required by `DEFENSE.md`.
+
+If a gate or adversarial review exposes a policy defect, land the policy and
+persistent regression in a separate commit, invalidate affected evidence, and
+rerun the gate from its declared entry state. Do not weaken a gate or silently
+retune a constant to preserve green. At closure, update the checkpoint row in
+`M1_SHELL.md`, every owning document's active/inactive wording, and any gate
+status changed by the checkpoint in the same commit. When work stops before
+the next checkpoint closes, replace `HANDOFF.md` with the exact safe stop,
+verification already run, dirty-file ownership, and next command; checkpoint
+12 remains the one integrated CHANGELOG and final-documentation closure.
 
 ### 0. Ratify the reslice and protocols
 
@@ -147,7 +187,7 @@ Commit: `refactor(executor): attribute recording degradation by scope`
 
 Commits, in order:
 
-1. `test(protocol): prepare exact event v5 consumers`
+1. `refactor(protocol): prepare dormant event v5 consumers`
 2. `feat(protocol): publish exact core event v5`
 3. `refactor(protocol): remove legacy event compatibility`
 
@@ -156,14 +196,19 @@ Commits, in order:
   Checkpoint 4's retained task/result model already consumes the exact v5
   `TerminalSummary`, recording axes, and database epoch; moving the cut behind
   checkpoint 7 would build checkpoints 4–7 against a disposable v4 task
-  contract. The first commit adds strict, version-dispatched v5 consumers and
-  validators while current producers remain v4, so its safe stop changes no
-  emitted or persisted behavior. The second commit switches every producer and
-  performs the coordinated database epoch/reset cut; its safe stop is a fully
-  working v5 runtime with the now-read-only v3/v4 consumer branches still
-  present. The third deletes those branches and positive fixtures, freezes the
-  one exact version, and closes the checkpoint. Never land a producer switch
-  before its consumers or delete compatibility before the v5 runtime passes.
+  contract. The first commit adds strict v5-specific consumers, validators,
+  fixtures, and direct test seams, but keeps every production current-version
+  constant, dispatcher, allowlist, history/database reader, and browser route
+  exact-v4. The v5 path is unreachable except by its explicit tests, so this
+  stop changes neither emitted/persisted behavior nor accepted production
+  input. The second commit atomically switches every producer and live consumer
+  dispatcher and performs the coordinated database epoch/reset cut; its safe
+  stop is a fully working exact-v5 runtime with now-unreachable, read-only v3/v4
+  branches still present in source. The third deletes those branches and
+  positive fixtures, freezes the one exact version, and closes the checkpoint.
+  Never make v5 reachable from production before the coordinated switch, land
+  a producer switch before its consumers, or delete compatibility before the
+  v5 runtime passes.
 - **Acceptance:** Implement the mapped recording, reliable-event,
   terminal-summary, review-limit, scalar-codec, file-identity, and persistence
   decisions from `M1_BRIDGE.md` and `DEFENSE.md` §1.3 across core producers,
@@ -179,8 +224,10 @@ Commits, in order:
   precedence, history audit degradation, Boolean-as-integer mistakes, unsafe-
   number or narrowed-file-identity leakage, reachable logical-byte/timestamp
   refusal, and stale development databases.
-- **Tests:** At the first stop, prove current v4 behavior unchanged and exact
-  v5 consumer/validator acceptance and rejection. At the second, run Core,
+- **Tests:** At the first stop, prove production dispatch and persistence stay
+  exact-v4, no production route can select v5, and the directly addressed v5
+  consumer/validator helpers accept and reject the exact target. At the second,
+  run Core,
   executor, verifier, database, workflows, dispatcher, and interfaces
   departments; strict codec/payload round trips and wrong-version refusal;
   every detail/reason/review-limit population/axis variant, key, nullability,
@@ -206,9 +253,25 @@ Commits, in order:
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
-Commit: `feat(web): retain multi-session task artifacts`
+Commits, in order:
+
+1. `test(web): pin task artifact reservation model`
+2. `feat(web): install dormant task lifecycle`
+3. `feat(web): retain multi-session task artifacts`
 
 - **Objective:** Remove the one-session assumption before adding production surfaces.
+- **Position and safe stops:** The first commit freezes the complete analytical
+  artifact graph, per-artifact constants, aggregate formula, maximum fixtures,
+  independent validator, and typed reservation/refusal expectations before any
+  result is measured or surface is reachable. The second installs the task
+  registry, ownership/lifecycle machinery, bounded artifacts, and dormant UI
+  consumers while the production nine-row command map and current one-session
+  behavior remain exact. The third is the activation/closure commit: it
+  switches the command map to the exact 12 rows, removes replaced aliases,
+  exposes the coherent task rail and controls, and proves the predeclared model
+  without changing its constants. Any defect in that model follows the
+  checkpoint execution protocol and restarts its evidence; it is never folded
+  into the activation commit by amendment.
 - **Acceptance:** Implement the mapped one-current-session task model,
   lifecycle and result authorities, owner claim, transactional observation
   attachment, task reads/control, exact-session release, task close, compact
@@ -220,7 +283,12 @@ Commit: `feat(web): retain multi-session task artifacts`
   four bootstrap/cosmetic and two current Setup rows while replacing three
   current task/session rows with the six checkpoint-4 task rows.
 - **Regression watch:** No task lock across facade, JSON, database, or filesystem work; non-atomic issue/retirement classification and lease acquisition; normal named publication advancing the task epoch; same-revision start/start, control/start, control/close, start/close, and release/successor races; claim-owner and attach/start compensation; terminal-event versus terminal-record race; stale drain/release; pinned-generation release or eviction; observer-thread and close-long-poll deadlock; receipts released before task close; references retaining full results; uncharged read/native/callback copies; capacity failure during release/close; mutation rows accidentally taking the lifecycle claim.
-- **Tests:** Dispatcher/interfaces/service neighborhood; competing starts and
+- **Tests:** At the first stop, prove the independent validator rejects every
+  constant, formula, root-class, and refusal-boundary drift before retaining
+  evidence. At the second, prove the exact current nine-row production map and
+  one-session behavior remain reachable while every new task command and
+  rendered control is unreachable. At activation, run the dispatcher/
+  interfaces/service neighborhood; competing starts and
   unpublished-task claims; control/start/close/release interleavings; atomic
   lookup, issue, retirement, claim, lease, and epoch decisions; publication-
   versus-close barriers; exact overlay/result revision invariants; no mixing of
@@ -271,6 +339,14 @@ Commit: `feat(web): add bounded plan review and selection`
   terminal unrun result return it to reviewing with one revision advance, while
   the first ran result freezes it permanently. A retry uses a fresh start command
   and commitment; replay of the old command returns only its original attempt.
+  At this checkpoint's closure, an execution started from the plan remains
+  usable through checkpoint 4's task rail, generic live state, pause/resume/
+  cancel controls, bounded terminal summary, and an action-guiding generic
+  "Execution did not start" state that returns an unrun selection to review.
+  Rich item overlays and ledger evidence remain checkpoint 8 work. If that
+  complete generic path is not available, keep both the `start_execution` row
+  and rendered Execute gesture dormant until checkpoint 8 rather than expose a
+  blind execution start.
 - **Regression watch:** Rebuilding trees per window, operation-scaled responses, client-derived hierarchy/domain status, filter-dependent selection, synthetic ancestors, move annotations, stale selection/view revisions, double execution, failed or terminal-unrun admission leaving selection frozen, reopening without a revision advance, stale pre-commit mutation after reopening, replay creating a second authorization, and treating zero-byte ran work as unrun.
 - **Tests:** Planner/workflow/interface neighborhood and the exact BR-G plan
   fixtures/boundaries in `M1_BRIDGE.md`; first-excess/no-partial publication;
@@ -280,6 +356,7 @@ Commit: `feat(web): add bounded plan review and selection`
   folder/group selection and rollups; stale/replayed mutations; submission-
   failure and terminal-unrun revision transitions; edited-subset execution-
   refusal retry with a new commitment; permanent freeze at the first ran result;
+  checkpoint-4 task-rail/live/control/terminal usability before checkpoint 8;
   search/filter/facet/window/dependency boundaries; move-peer
   positive and suppression cases; off-window follow; destructive confirmation;
   hostile DOM; latency/memory; and headed production witnesses.
@@ -339,7 +416,7 @@ Commit: `feat(web): add integrity and post-copy verification`
 
 ### 11. Close early Slice 7 lifecycle and scale
 
-Commit: `feat(web): close task lifecycle and retention budgets`
+Closure commit: `feat(web): close task lifecycle and retention budgets`
 
 - **Objective:** Prove cleanup, shutdown, and retained-task containment across the completed surfaces.
 - **Acceptance:** Calibrate and verify without post-selecting or silently
@@ -349,7 +426,9 @@ Commit: `feat(web): close task lifecycle and retention budgets`
   retry, explicit close, repeated create/release/close, complete response/native/
   browser transients, and concurrent shutdown. Any policy defect lands
   separately, revises the enforced constant before a new run, and resets the
-  evidence run.
+  evidence run. The named commit lands only after any such fix commits and is
+  the final evidence/status closure, not the sole allowed commit for checkpoint
+  11.
 - **Regression watch:** Silent eviction, count-only enforcement, uncharged receipts/string pools/full results/native copies, diagnostic bypass, browser callback copies, blocked close handlers, cleanup before terminal record, task rail reconstructed from dispatcher sessions, and authority surviving declared release points.
 - **Tests:** BR-G-41 lifecycle tests; BR-G-45 complete artifact-root and
   aggregate-retention instrumentation, including the accepted maximum handler
@@ -397,7 +476,7 @@ documented resolution.
 | An unrun task could need a genuinely new plan, but it had no recent ledger run and its reviewed display path was unsafe to reuse after drive-letter reassignment. | Add identity-resolving `activate_task_pair`; explicit **Plan again** activates two fresh slots and starts a new task with the old frozen setup, default selection, and no copied authorization. | Accepted target, checkpoint 6. |
 | User deselection, dependency fallout, and safety exclusion could collapse into one omitted-operation meaning. | Retain canonical `user_deselected` provenance separately, dependency-close only that set, and derive typed excluded outcomes from the reviewed plan plus provenance. | Existing direction retained; desktop admission lands at checkpoint 7. |
 | Filesystem success and recording success were conflated, so a recorder failure could misstate durable mutation truth. | Keep filesystem, integrity, recording, and audit axes independent; add item-local recording degradation and ordered task-wide recording issues without rewriting committed filesystem outcomes. | Accepted target, checkpoints 1–3 and 8. |
-| Item-local recorder failure and task-wide open/flush/finish/close failure lacked a stable attribution boundary. | Pin the four-way settlement matrix in the oracle, then add sparse typed item attribution and centrally reduced task issues before changing the event wire. | Accepted target; checkpoint 1 is the next implementation step. |
+| Item-local recorder failure and task-wide open/flush/finish/close failure lacked a stable attribution boundary. | Pin the four-way settlement matrix in the oracle, then add sparse typed item attribution and centrally reduced task issues before changing the event wire. | Accepted target; checkpoint 1 oracle work is in progress. |
 | Operation-time copy evidence was being treated as if it could become a durable task artifact. | Keep copy attestations transient inside the same live execution continuation; durable evidence comes only from committed ledger facts and never enters retained tasks or JavaScript. | Accepted target, checkpoint 2. |
 | Python’s additive v3/v4 compatibility decoder, exact live-v4 JavaScript validator, and canonical history projection accepted different shapes. | Make the current asymmetry explicit only until a coordinated exact event cut; then use one exact event schema and reset the database pair rather than retain a legacy decoder. | Accepted target, checkpoint 3. |
 | Ledger, history, event, and evidence epochs could be upgraded independently and leave a mixed readable-looking pair. | Advance them as one coordinated reset boundary; reject old, mixed, markerless, incomplete, or orphan-sidecar pairs before commands with archive/delete guidance and no automatic migration. | Accepted target, checkpoint 3. |
@@ -465,7 +544,7 @@ filesystem, and evidence authority. Four preparatory items are resolved:
   ordinary user-facing failure states.
 - **Checkpoint 3:** keep it before checkpoint 4 because the task/result
   foundation consumes v5 terminal, recording, and epoch shapes. Its three
-  ordered commits now provide runnable consumer-preparation, producer/reset,
+  ordered commits now provide dormant consumer-preparation, producer/reset,
   and legacy-removal stops instead of one indivisible landing.
 - **Bug ledger:** record only the newly distinct authorization, location-
   reactivation, file-identity-width, and cross-consumer protocol causal classes.
