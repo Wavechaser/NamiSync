@@ -236,14 +236,22 @@ unchanged rows from the corrected monolith plus 12 independently reviewed
 post-refactor stabilization rows. `check` requires both the policy oracle and
 the committed trace to match; either can fail while the other passes.
 
-The in-code oracle also carries a typed pre-production recording projection for
-the seven checkpoint-1 rows named by `M1_SHELL_H2.md`. It keeps filesystem,
-item recording, task recording issues, and aggregate recording as separate
-axes, and rejects cross-axis combinations that could relabel a filesystem
-outcome or assign task degradation to an item. This projection participates in
-the independent oracle result but is intentionally absent from normalized
-reports and the JSON baseline, so it can pin the accepted producer target
-without changing the protected trace or current event contract.
+The in-code oracle also carries a typed recording projection for the exact
+seven checkpoint-1 rows named by `M1_SHELL_H2.md`; that catalog is part of the
+fail-closed manifest. Before normalization, an oracle-only side channel
+snapshots authoritative production `ExecutionSet.status`,
+`recording_reasons`, `recording_issues`, and aggregate recording alongside the
+typed reliable-item order. The projection keeps filesystem, item recording,
+task recording issues, and aggregate recording as separate axes, and rejects
+cross-axis combinations that could relabel a filesystem outcome or assign task
+degradation to an item.
+
+The side channel is removed only after the independent oracle validates it and
+before normalized capture. Separately, `_oracle_item_detail` and
+`_oracle_item_reason` remain explicit historical event-v4 trace adapters for
+the frozen normalized report. Those adapters protect trace compatibility; they
+are not recording-attribution authority. The normalized trace, JSON baseline,
+and current event contract therefore remain unchanged.
 
 `snapshot` requires at least three byte-identical complete runs, refuses every
 oracle mismatch, writes atomically, and will not replace an existing baseline

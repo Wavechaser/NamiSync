@@ -4738,7 +4738,6 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
                 recording_detail=reduction.recording_detail,
             )
             assert reduction.settled.published_evidence is None, name
-            assert actual == expected, name
             assert reduction.recording_reason is (
                 ItemRecordingReason.UNRECORDED_MUTATION
                 if expected.degrade
@@ -4746,6 +4745,7 @@ def test_effect_settlement_reducer_policy_matrix() -> None:
             ), name
             assert "recording" not in detail, name
             assert "recording_error" not in detail, name
+        assert actual == expected, name
         assert published is None or published.base_detail == before, name
 
     assert details["ordinary-unverified-plus-ambiguous"]["state_error"] == (

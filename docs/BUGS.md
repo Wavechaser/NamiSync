@@ -44,6 +44,19 @@ defect, and move implementation-level test choreography out of the log.
 
 ## DEVELOPMENT TOOLS
 
+### Executor settlement authority
+
+- MINOR - FIXED (2026-08-26). Derived oracle acceptance truth. The seven-row
+  recording oracle reconstructed item attribution from frozen event-v4 detail
+  and task issues from recorder calls, so producer-side `ExecutionSet` reason
+  or issue drift could pass; deleting a catalog row also disabled that check,
+  and the reducer matrix compared expectations only when reduction returned a
+  value. Cause: compatibility evidence was reused as semantic authority and
+  the catalog/matrix checks were incomplete. Fixed with an authoritative typed
+  side channel stripped before normalized capture, an exact manifest-protected
+  catalog, typed producer-drift regressions, and unconditional reducer result
+  comparison. The protected trace, baseline, and semantic hash are unchanged.
+
 ### Workspace and measurement integrity
 
 - MINOR - FIXED (2026-08-18). Cross-sample fixture drift. Verifier repetitions

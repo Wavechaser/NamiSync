@@ -33,10 +33,12 @@ from namisync.core.execution import (
     Continue,
     CopyDigest,
     ExecutionSet,
-    ItemRecordingReason as CoreItemRecordingReason,
+    ItemRecordingReason,
     RecordedCopyIdentity,
     Retry,
     Stop,
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
     validated_run_id,
 )
 from namisync.core.models import (
@@ -89,6 +91,7 @@ _CLOCK_INCIDENTAL_TREE_TIMESTAMPS = {
         ),
     },
 }
+_TYPED_RECORDING_SIDE_CHANNEL = "__typed_execution_set_recording__"
 
 
 class AuditError(RuntimeError):
@@ -96,35 +99,17 @@ class AuditError(RuntimeError):
 
 
 class _FilesystemSettlement(StrEnum):
-    """Binary filesystem axis used only by the pre-production recording oracle."""
+    """Binary filesystem axis used by the typed recording oracle."""
 
     SUCCEEDED = "succeeded"
     FAILED = "failed"
-
-
-class _ItemRecordingReason(StrEnum):
-    """Accepted item-local reasons projected before the production cutover."""
-
-    RECORD_WRITE_FAILED = "record-write-failed"
-    UNRECORDED_MUTATION = "unrecorded-mutation"
-    RECORDING_PREREQUISITE_FAILED = "recording-prerequisite-failed"
-
-
-class _TaskRecordingIssueReason(StrEnum):
-    """Accepted task-wide reasons projected before the production cutover."""
-
-    RECORDING_OPEN_FAILED = "recording-open-failed"
-    FINAL_FLUSH_FAILED = "final-flush-failed"
-    FINISH_FAILED = "finish-failed"
-    RECORDING_CLOSE_FAILED = "recording-close-failed"
-    POST_SETTLEMENT_STATE_DIVERGED = "post-settlement-state-diverged"
 
 
 @dataclass(frozen=True, slots=True)
 class _ItemRecordingProjection:
     filesystem: _FilesystemSettlement
     recording: RecordingStatus
-    reason: _ItemRecordingReason | None
+    reason: ItemRecordingReason | None
 
     def __post_init__(self) -> None:
         if not isinstance(self.filesystem, _FilesystemSettlement):
@@ -134,15 +119,15 @@ class _ItemRecordingProjection:
         if self.recording is RecordingStatus.OK and self.reason is not None:
             raise ValueError("recording-ok projection cannot carry an item reason")
         if self.recording is RecordingStatus.DEGRADED and not isinstance(
-            self.reason, _ItemRecordingReason
+            self.reason, ItemRecordingReason
         ):
             raise ValueError("recording-degraded projection requires an item reason")
         expected_filesystem = {
-            _ItemRecordingReason.RECORD_WRITE_FAILED: (
+            ItemRecordingReason.RECORD_WRITE_FAILED: (
                 _FilesystemSettlement.SUCCEEDED
             ),
-            _ItemRecordingReason.UNRECORDED_MUTATION: _FilesystemSettlement.FAILED,
-            _ItemRecordingReason.RECORDING_PREREQUISITE_FAILED: (
+            ItemRecordingReason.UNRECORDED_MUTATION: _FilesystemSettlement.FAILED,
+            ItemRecordingReason.RECORDING_PREREQUISITE_FAILED: (
                 _FilesystemSettlement.FAILED
             ),
         }.get(self.reason)
@@ -154,7 +139,7 @@ class _ItemRecordingProjection:
 class _RecordingProjection:
     items: tuple[_ItemRecordingProjection, ...]
     aggregate: RecordingStatus
-    task_issues: tuple[_TaskRecordingIssueReason, ...]
+    task_issues: tuple[TaskRecordingIssueReason, ...]
 
     def __post_init__(self) -> None:
         if not isinstance(self.items, tuple) or not all(
@@ -164,7 +149,7 @@ class _RecordingProjection:
         if not isinstance(self.aggregate, RecordingStatus):
             raise TypeError("projected aggregate recording has the wrong type")
         if not isinstance(self.task_issues, tuple) or not all(
-            isinstance(issue, _TaskRecordingIssueReason)
+            isinstance(issue, TaskRecordingIssueReason)
             for issue in self.task_issues
         ):
             raise TypeError("projected task recording issues must be a typed tuple")
@@ -185,7 +170,7 @@ class _RecordingProjectionCase:
     item_indexes: tuple[int, ...]
     items: tuple[_ItemRecordingProjection, ...]
     aggregate: RecordingStatus
-    task_issues: tuple[_TaskRecordingIssueReason, ...]
+    task_issues: tuple[TaskRecordingIssueReason, ...]
 
     def __post_init__(self) -> None:
         if (
@@ -199,6 +184,80 @@ class _RecordingProjectionCase:
         if len(self.item_indexes) != len(self.items):
             raise ValueError("recording projection indexes and items must align")
         _RecordingProjection(self.items, self.aggregate, self.task_issues)
+
+
+@dataclass(frozen=True, slots=True)
+class _TypedExecutionSetRecording:
+    """Oracle-only typed snapshot of authoritative execution recording state."""
+
+    declared_op_ids: tuple[OpId, ...]
+    selected_op_ids: tuple[OpId, ...]
+    item_op_ids: tuple[OpId, ...]
+    status: tuple[tuple[OpId, Outcome], ...]
+    recording_reasons: tuple[tuple[OpId, ItemRecordingReason], ...]
+    recording_issues: tuple[TaskRecordingIssue, ...]
+    recording: RecordingStatus
+
+    def __post_init__(self) -> None:
+        for name, op_ids in (
+            ("declared", self.declared_op_ids),
+            ("selected", self.selected_op_ids),
+            ("item", self.item_op_ids),
+        ):
+            if not isinstance(op_ids, tuple) or not all(
+                isinstance(op_id, str) and op_id for op_id in op_ids
+            ):
+                raise TypeError(
+                    f"typed recording {name} ids must be a nonempty-string tuple"
+                )
+        if len(self.declared_op_ids) != len(set(self.declared_op_ids)):
+            raise ValueError("typed recording declarations contain duplicate operations")
+        if len(self.selected_op_ids) != len(set(self.selected_op_ids)):
+            raise ValueError("typed recording selection contains duplicate operations")
+        if not isinstance(self.status, tuple) or not all(
+            isinstance(entry, tuple)
+            and len(entry) == 2
+            and isinstance(entry[0], str)
+            and bool(entry[0])
+            and isinstance(entry[1], Outcome)
+            for entry in self.status
+        ):
+            raise TypeError("typed recording statuses have the wrong shape")
+        if len(self.status) != len({op_id for op_id, _outcome in self.status}):
+            raise ValueError("typed recording statuses contain duplicate operations")
+        if not isinstance(self.recording_reasons, tuple) or not all(
+            isinstance(entry, tuple)
+            and len(entry) == 2
+            and isinstance(entry[0], str)
+            and bool(entry[0])
+            and isinstance(entry[1], ItemRecordingReason)
+            for entry in self.recording_reasons
+        ):
+            raise TypeError("typed recording reasons have the wrong shape")
+        if len(self.recording_reasons) != len(
+            {op_id for op_id, _reason in self.recording_reasons}
+        ):
+            raise ValueError("typed recording reasons contain duplicate operations")
+        if not isinstance(self.recording_issues, tuple) or not all(
+            isinstance(issue, TaskRecordingIssue)
+            for issue in self.recording_issues
+        ):
+            raise TypeError("typed task recording issues have the wrong shape")
+        if not isinstance(self.recording, RecordingStatus):
+            raise TypeError("typed aggregate recording has the wrong type")
+
+
+_REQUIRED_RECORDING_PROJECTION_ROWS = frozenset(
+    {
+        "success.all-nine",
+        "record.copy-failure",
+        "failure.copy-prepublish-cleanup-ok",
+        "failure.byte-published.copy",
+        "recording.pre-destructive-flush-refusal",
+        "recording.final-flush-degradation",
+        "recording.sticky-aggregate-degradation",
+    }
+)
 
 
 _RECORDING_PROJECTION_CASES = {
@@ -220,7 +279,7 @@ _RECORDING_PROJECTION_CASES = {
             _ItemRecordingProjection(
                 _FilesystemSettlement.SUCCEEDED,
                 RecordingStatus.DEGRADED,
-                _ItemRecordingReason.RECORD_WRITE_FAILED,
+                ItemRecordingReason.RECORD_WRITE_FAILED,
             ),
         ),
         aggregate=RecordingStatus.DEGRADED,
@@ -244,7 +303,7 @@ _RECORDING_PROJECTION_CASES = {
             _ItemRecordingProjection(
                 _FilesystemSettlement.FAILED,
                 RecordingStatus.DEGRADED,
-                _ItemRecordingReason.UNRECORDED_MUTATION,
+                ItemRecordingReason.UNRECORDED_MUTATION,
             ),
         ),
         aggregate=RecordingStatus.DEGRADED,
@@ -256,7 +315,7 @@ _RECORDING_PROJECTION_CASES = {
             _ItemRecordingProjection(
                 _FilesystemSettlement.FAILED,
                 RecordingStatus.DEGRADED,
-                _ItemRecordingReason.RECORDING_PREREQUISITE_FAILED,
+                ItemRecordingReason.RECORDING_PREREQUISITE_FAILED,
             ),
         ),
         aggregate=RecordingStatus.DEGRADED,
@@ -272,7 +331,7 @@ _RECORDING_PROJECTION_CASES = {
             ),
         ),
         aggregate=RecordingStatus.DEGRADED,
-        task_issues=(_TaskRecordingIssueReason.FINAL_FLUSH_FAILED,),
+        task_issues=(TaskRecordingIssueReason.FINAL_FLUSH_FAILED,),
     ),
     "recording.sticky-aggregate-degradation": _RecordingProjectionCase(
         item_indexes=(0, 1),
@@ -280,7 +339,7 @@ _RECORDING_PROJECTION_CASES = {
             _ItemRecordingProjection(
                 _FilesystemSettlement.SUCCEEDED,
                 RecordingStatus.DEGRADED,
-                _ItemRecordingReason.RECORD_WRITE_FAILED,
+                ItemRecordingReason.RECORD_WRITE_FAILED,
             ),
             _ItemRecordingProjection(
                 _FilesystemSettlement.SUCCEEDED,
@@ -916,20 +975,25 @@ class ExpectedSettlement:
         difference = _first_strict_difference(expected_policy, observed_policy)
         if difference is not None:
             errors.append(f"exact policy projection: {difference}")
-        recording_case = _RECORDING_PROJECTION_CASES.get(self.row)
-        if recording_case is not None:
-            try:
-                recording_projection = _recording_projection(report)
-            except AuditError as error:
-                errors.append(f"typed recording projection: {error}")
-            else:
-                errors.extend(
-                    f"typed recording projection: {error}"
-                    for error in _recording_projection_errors(
-                        recording_case,
-                        recording_projection,
-                    )
+        if self.row in _REQUIRED_RECORDING_PROJECTION_ROWS:
+            recording_case = _RECORDING_PROJECTION_CASES.get(self.row)
+            if recording_case is None:
+                errors.append(
+                    "typed recording projection: required attribution case is missing"
                 )
+            else:
+                try:
+                    recording_projection = _recording_projection(report)
+                except AuditError as error:
+                    errors.append(f"typed recording projection: {error}")
+                else:
+                    errors.extend(
+                        f"typed recording projection: {error}"
+                        for error in _recording_projection_errors(
+                            recording_case,
+                            recording_projection,
+                        )
+                    )
         _expect(errors, "row", report.get("row"), self.row)
         termination = _mapping(report.get("termination"), "termination", errors)
         _expect(errors, "termination.returned", termination.get("returned"), self.returned)
@@ -1103,86 +1167,78 @@ def _first_strict_difference(expected: object, observed: object, path: str = "$"
 
 
 def _recording_projection(report: Mapping[str, object]) -> _RecordingProjection:
-    """Adapt current oracle facts into the accepted future recording axes."""
+    """Read authoritative typed execution state into independent recording axes."""
 
     row = report.get("row")
-    if not isinstance(row, str) or row not in _RECORDING_PROJECTION_CASES:
+    if not isinstance(row, str) or row not in _REQUIRED_RECORDING_PROJECTION_ROWS:
         raise AuditError("report row has no typed recording projection case")
-    case = _RECORDING_PROJECTION_CASES[row]
+    case = _RECORDING_PROJECTION_CASES.get(row)
+    if case is None:
+        raise AuditError("required typed recording projection case is missing")
+    side_channel = report.get(_TYPED_RECORDING_SIDE_CHANNEL)
+    if not isinstance(side_channel, _TypedExecutionSetRecording):
+        raise AuditError("authoritative typed recording side channel is missing")
 
-    raw_items = report.get("items")
-    if not isinstance(raw_items, list):
-        raise AuditError("report items are not a list")
+    declared = set(side_channel.declared_op_ids)
+    selected = set(side_channel.selected_op_ids)
+    emitted = set(side_channel.item_op_ids)
+    statuses = dict(side_channel.status)
+    recording_reasons = dict(side_channel.recording_reasons)
+    status_ids = set(statuses)
+    recording_reason_ids = set(recording_reasons)
+    if extra := selected - declared:
+        raise AuditError(
+            f"typed recording selection contains undeclared operations: {sorted(extra)}"
+        )
+    if extra := status_ids - selected:
+        raise AuditError(
+            f"typed recording statuses contain unselected operations: {sorted(extra)}"
+        )
+    if extra := recording_reason_ids - status_ids:
+        raise AuditError(
+            "typed recording reasons contain operations without status: "
+            f"{sorted(extra)}"
+        )
+    if len(side_channel.item_op_ids) != len(emitted):
+        raise AuditError("typed reliable item ids contain duplicate operations")
+    if emitted != status_ids:
+        raise AuditError(
+            "typed reliable item ids differ from settled status operations: "
+            f"missing={sorted(status_ids - emitted)}, "
+            f"extra={sorted(emitted - status_ids)}"
+        )
+
     projected_items: list[_ItemRecordingProjection] = []
     for index in case.item_indexes:
-        if index >= len(raw_items) or not isinstance(raw_items[index], Mapping):
-            raise AuditError(f"report item {index} is missing or malformed")
-        item = raw_items[index]
-        raw_outcome = item.get("outcome")
-        try:
-            filesystem = _FilesystemSettlement(raw_outcome)
-        except (TypeError, ValueError):
-            raise AuditError(
-                f"report item {index} has non-binary filesystem outcome {raw_outcome!r}"
-            ) from None
-
-        detail = item.get("detail")
-        if not isinstance(detail, Mapping):
-            raise AuditError(f"report item {index} detail is not a mapping")
-        if item.get("reason") == "recorder-failed":
-            if "recording" in detail or "recording_error" in detail:
-                raise AuditError(
-                    f"report item {index} has contradictory prerequisite "
-                    "recording detail"
-                )
-            recording = RecordingStatus.DEGRADED
-            reason = _ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
-        elif "recording" not in detail:
-            recording = RecordingStatus.OK
-            reason = None
-        elif detail.get("recording") == RecordingStatus.DEGRADED.value:
-            recording = RecordingStatus.DEGRADED
-            reason = (
-                _ItemRecordingReason.RECORD_WRITE_FAILED
-                if filesystem is _FilesystemSettlement.SUCCEEDED
-                else _ItemRecordingReason.UNRECORDED_MUTATION
-            )
+        if index >= len(side_channel.item_op_ids):
+            raise AuditError(f"typed recording item {index} is missing")
+        op_id = side_channel.item_op_ids[index]
+        outcome = statuses.get(op_id)
+        if outcome is Outcome.SUCCEEDED:
+            filesystem = _FilesystemSettlement.SUCCEEDED
+        elif outcome is Outcome.FAILED:
+            filesystem = _FilesystemSettlement.FAILED
         else:
             raise AuditError(
-                f"report item {index} has unsupported recording detail "
-                f"{detail.get('recording')!r}"
+                f"typed recording item {index} has non-binary filesystem "
+                f"outcome {outcome!r}"
             )
+        reason = recording_reasons.get(op_id)
+        recording = (
+            RecordingStatus.DEGRADED
+            if reason is not None
+            else RecordingStatus.OK
+        )
         projected_items.append(
             _ItemRecordingProjection(filesystem, recording, reason)
         )
 
-    xset = report.get("execution_set")
-    if not isinstance(xset, Mapping):
-        raise AuditError("report execution set is not a mapping")
     try:
-        aggregate = RecordingStatus(xset.get("recording"))
-    except (TypeError, ValueError):
-        raise AuditError("report aggregate recording status is invalid") from None
-
-    task_issues: tuple[_TaskRecordingIssueReason, ...] = ()
-    recorder = report.get("recorder")
-    if not isinstance(recorder, Mapping):
-        raise AuditError("report recorder is not a mapping")
-    trace = recorder.get("trace")
-    if not isinstance(trace, list):
-        raise AuditError("report recorder trace is not a list")
-    if trace:
-        final_call = trace[-1]
-        if not isinstance(final_call, Mapping):
-            raise AuditError("report final recorder call is malformed")
-        if final_call.get("command") == "flush" and "error" in final_call:
-            error_name = final_call.get("error")
-            if not isinstance(error_name, str) or not error_name:
-                raise AuditError("report has invalid final flush failure evidence")
-            task_issues = (_TaskRecordingIssueReason.FINAL_FLUSH_FAILED,)
-
-    try:
-        return _RecordingProjection(tuple(projected_items), aggregate, task_issues)
+        return _RecordingProjection(
+            tuple(projected_items),
+            side_channel.recording,
+            tuple(issue.reason for issue in side_channel.recording_issues),
+        )
     except (TypeError, ValueError) as error:
         raise AuditError(f"report recording axes are inconsistent: {error}") from error
 
@@ -1508,7 +1564,11 @@ def _run_fixture(
 def _oracle_item_detail(
     item: ItemOutcome, normalizer: TracingFileSystem
 ) -> dict[str, object]:
-    """Project event v5 recording fields into the frozen oracle trace shape."""
+    """Adapt event v5 fields to the frozen historical event-v4 trace shape.
+
+    This compatibility adapter protects the normalized trace; it is not the
+    authoritative typed recording oracle.
+    """
 
     normalized = normalizer.value(item.detail)
     if not isinstance(normalized, Mapping):
@@ -1517,7 +1577,7 @@ def _oracle_item_detail(
     if (
         item.recording is RecordingStatus.DEGRADED
         and item.recording_reason
-        is not CoreItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+        is not ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
     ):
         detail["recording"] = RecordingStatus.DEGRADED.value
         if item.recording_detail is not None:
@@ -1526,7 +1586,7 @@ def _oracle_item_detail(
 
 
 def _oracle_item_reason(item: ItemOutcome) -> str | None:
-    """Restore the retired continuation label used by the frozen oracle."""
+    """Restore the retired event-v4 continuation label in the frozen trace."""
 
     if item.reason is None and item.detail.get("continued") is True:
         return "previously-settled"
@@ -1684,6 +1744,40 @@ def _execution_set_projection(
     }
 
 
+def _typed_execution_set_recording(
+    xset: ExecutionSet,
+    events: Sequence[object],
+) -> _TypedExecutionSetRecording:
+    """Snapshot production recording truth outside the normalized trace."""
+
+    item_op_ids = tuple(
+        OpId(event.item_id)
+        for event in events
+        if isinstance(event, ItemOutcome)
+    )
+    return _TypedExecutionSetRecording(
+        declared_op_ids=tuple(
+            operation.op_id for operation in xset.plan.operations
+        ),
+        selected_op_ids=tuple(sorted(xset.selection, key=str)),
+        item_op_ids=item_op_ids,
+        status=tuple(
+            sorted(
+                xset.status.items(),
+                key=lambda entry: str(entry[0]),
+            )
+        ),
+        recording_reasons=tuple(
+            sorted(
+                xset.recording_reasons.items(),
+                key=lambda entry: str(entry[0]),
+            )
+        ),
+        recording_issues=xset.recording_issues,
+        recording=xset.recording,
+    )
+
+
 def _operation_contract_projection(
     operations: Sequence[PlanOperation],
     normalizer: TracingFileSystem,
@@ -1727,7 +1821,7 @@ def _build_report(
     timeline: list[str],
 ) -> dict[str, object]:
     items, reliable_events, final_progress = _event_projection(events, filesystem)
-    return {
+    report: dict[str, object] = {
         "row": row,
         "termination": {
             "returned": None if result is None else result.status.value,
@@ -1758,6 +1852,12 @@ def _build_report(
         "timeline": timeline,
         "tree": _tree_snapshot(source, target, filesystem, row=row),
     }
+    if row in _REQUIRED_RECORDING_PROJECTION_ROWS:
+        report[_TYPED_RECORDING_SIDE_CHANNEL] = _typed_execution_set_recording(
+            xset,
+            events,
+        )
+    return report
 
 
 def _operation_result(
@@ -7863,6 +7963,14 @@ def manifest_errors() -> list[str]:
             f"extra={sorted(set(rows) - _REQUIRED_ROWS)}"
         )
     row_set = set(rows)
+    recording_rows = set(_RECORDING_PROJECTION_CASES)
+    if recording_rows != _REQUIRED_RECORDING_PROJECTION_ROWS:
+        errors.append(
+            "typed recording attribution catalog differs from its required rows: "
+            "missing="
+            f"{sorted(_REQUIRED_RECORDING_PROJECTION_ROWS - recording_rows)}, "
+            f"extra={sorted(recording_rows - _REQUIRED_RECORDING_PROJECTION_ROWS)}"
+        )
     exact_catalogs = {
         "item details": set(_EXACT_ITEM_DETAILS),
         "item coordinates": set(_ITEM_COORDINATES),
@@ -7965,7 +8073,12 @@ def _run_scenario(scenario: Scenario) -> tuple[dict[str, object], list[str]]:
             f"{scenario.scenario_id}[{expected.row}]: {error}"
             for error in expected.errors(report)
         )
-    return {"variants": reports}, errors
+    normalized_reports: list[dict[str, object]] = []
+    for report in reports:
+        normalized = dict(report)
+        normalized.pop(_TYPED_RECORDING_SIDE_CHANNEL, None)
+        normalized_reports.append(normalized)
+    return {"variants": normalized_reports}, errors
 
 
 def capture_all(*, repeat: int = 3) -> Capture:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+from collections.abc import Sequence
 import copy
 from dataclasses import fields, replace
 import json
@@ -10,7 +11,9 @@ import subprocess
 
 import pytest
 
-from namisync.core.planning import OperationKind
+from namisync.core.evidence import Outcome
+from namisync.core.execution import ItemRecordingReason, TaskRecordingIssueReason
+from namisync.core.planning import OpId, OperationKind
 from tools import executor_settlement_audit as audit
 
 
@@ -324,15 +327,15 @@ def test_manifest_is_complete_labeled_and_has_no_escape_state() -> None:
         assert all(expected.row for expected in scenario.expected)
 
 
-def test_preproduction_recording_projection_pins_the_seven_target_rows() -> None:
+def test_authoritative_recording_projection_pins_the_seven_target_rows() -> None:
     succeeded = audit._FilesystemSettlement.SUCCEEDED
     failed = audit._FilesystemSettlement.FAILED
     ok = audit.RecordingStatus.OK
     degraded = audit.RecordingStatus.DEGRADED
-    record_write_failed = audit._ItemRecordingReason.RECORD_WRITE_FAILED
-    unrecorded_mutation = audit._ItemRecordingReason.UNRECORDED_MUTATION
-    prerequisite_failed = audit._ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
-    final_flush_failed = audit._TaskRecordingIssueReason.FINAL_FLUSH_FAILED
+    record_write_failed = ItemRecordingReason.RECORD_WRITE_FAILED
+    unrecorded_mutation = ItemRecordingReason.UNRECORDED_MUTATION
+    prerequisite_failed = ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    final_flush_failed = TaskRecordingIssueReason.FINAL_FLUSH_FAILED
 
     assert audit._RECORDING_PROJECTION_CASES == {
         "success.all-nine": audit._RecordingProjectionCase(
@@ -425,7 +428,7 @@ def test_preproduction_recording_projection_pins_the_seven_target_rows() -> None
         assert audit._recording_projection_errors(expected, actual) == []
 
 
-def test_preproduction_recording_projection_rejects_cross_axis_drift() -> None:
+def test_authoritative_recording_projection_rejects_cross_axis_drift() -> None:
     succeeded = audit._FilesystemSettlement.SUCCEEDED
     degraded = audit.RecordingStatus.DEGRADED
 
@@ -435,7 +438,7 @@ def test_preproduction_recording_projection_rejects_cross_axis_drift() -> None:
         audit._ItemRecordingProjection(
             succeeded,
             audit.RecordingStatus.OK,
-            audit._ItemRecordingReason.RECORD_WRITE_FAILED,
+            ItemRecordingReason.RECORD_WRITE_FAILED,
         )
     with pytest.raises(ValueError, match="aggregate must be degraded exactly"):
         audit._RecordingProjection(
@@ -451,9 +454,63 @@ def test_preproduction_recording_projection_rejects_cross_axis_drift() -> None:
         )
 
 
-def test_preproduction_recording_projection_rejects_contradictory_raw_facts() -> None:
+def test_typed_recording_key_alignment_allows_only_unsettled_selected_gaps() -> None:
+    scenario = audit._SCENARIO_BY_ID["record.copy-failure"]
+    report = audit._run_in_sandbox(scenario.runner)[0]
+    state = report[audit._TYPED_RECORDING_SIDE_CHANNEL]
+    assert isinstance(state, audit._TypedExecutionSetRecording)
+    original = audit._recording_projection(report)
+    pending = OpId("pending-op")
+    deselected = OpId("deselected-op")
+
+    allowed = copy.deepcopy(report)
+    allowed[audit._TYPED_RECORDING_SIDE_CHANNEL] = replace(
+        state,
+        declared_op_ids=(*state.declared_op_ids, pending, deselected),
+        selected_op_ids=tuple(sorted((*state.selected_op_ids, pending), key=str)),
+    )
+    assert audit._recording_projection(allowed) == original
+
+    mutations = (
+        (
+            replace(
+                state,
+                selected_op_ids=(*state.selected_op_ids, pending),
+            ),
+            "selection contains undeclared operations",
+        ),
+        (
+            replace(
+                state,
+                declared_op_ids=(*state.declared_op_ids, pending),
+                selected_op_ids=(*state.selected_op_ids, pending),
+                recording_reasons=(
+                    *state.recording_reasons,
+                    (pending, ItemRecordingReason.UNRECORDED_MUTATION),
+                ),
+            ),
+            "reasons contain operations without status",
+        ),
+        (
+            replace(state, item_op_ids=()),
+            "reliable item ids differ from settled status operations",
+        ),
+        (
+            replace(state, item_op_ids=(*state.item_op_ids, *state.item_op_ids)),
+            "reliable item ids contain duplicate operations",
+        ),
+    )
+    for mutation, message in mutations:
+        changed = copy.deepcopy(report)
+        changed[audit._TYPED_RECORDING_SIDE_CHANNEL] = mutation
+        with pytest.raises(audit.AuditError, match=message):
+            audit._recording_projection(changed)
+
+
+def test_authoritative_recording_projection_ignores_frozen_v4_adapter_facts() -> None:
+    scenario = audit._SCENARIO_BY_ID["recording.flush-and-sticky-matrix"]
     flush_reports = audit._run_in_sandbox(
-        audit._SCENARIO_BY_ID["recording.flush-and-sticky-matrix"].runner
+        scenario.runner
     )
     prerequisite = copy.deepcopy(
         next(
@@ -462,9 +519,9 @@ def test_preproduction_recording_projection_rejects_contradictory_raw_facts() ->
             if report["row"] == "recording.pre-destructive-flush-refusal"
         )
     )
+    prerequisite_projection = audit._recording_projection(prerequisite)
     prerequisite["items"][0]["detail"]["recording"] = "ok"
-    with pytest.raises(audit.AuditError, match="contradictory prerequisite"):
-        audit._recording_projection(prerequisite)
+    assert audit._recording_projection(prerequisite) == prerequisite_projection
 
     final_flush = copy.deepcopy(
         next(
@@ -473,9 +530,265 @@ def test_preproduction_recording_projection_rejects_contradictory_raw_facts() ->
             if report["row"] == "recording.final-flush-degradation"
         )
     )
+    final_flush_projection = audit._recording_projection(final_flush)
     final_flush["recorder"]["trace"][-1]["error"] = None
-    with pytest.raises(audit.AuditError, match="invalid final flush failure"):
-        audit._recording_projection(final_flush)
+    assert audit._recording_projection(final_flush) == final_flush_projection
+
+    normalized, errors = audit._run_scenario(
+        replace(scenario, runner=lambda _base: flush_reports)
+    )
+    assert errors == []
+    assert all(
+        audit._TYPED_RECORDING_SIDE_CHANNEL not in report
+        for report in normalized["variants"]
+    )
+
+
+def test_authoritative_recording_projection_rejects_typed_producer_drift() -> None:
+    scenario = audit._SCENARIO_BY_ID["recording.flush-and-sticky-matrix"]
+    reports = audit._run_in_sandbox(scenario.runner)
+    expected_by_row = {expected.row: expected for expected in scenario.expected}
+
+    def frozen_fields(report: dict[str, object]) -> dict[str, object]:
+        return copy.deepcopy(
+            {
+                key: value
+                for key, value in report.items()
+                if key != audit._TYPED_RECORDING_SIDE_CHANNEL
+            }
+        )
+
+    prerequisite = copy.deepcopy(
+        next(
+            report
+            for report in reports
+            if report["row"] == "recording.pre-destructive-flush-refusal"
+        )
+    )
+    prerequisite_frozen = frozen_fields(prerequisite)
+    prerequisite_state = prerequisite[audit._TYPED_RECORDING_SIDE_CHANNEL]
+    assert isinstance(prerequisite_state, audit._TypedExecutionSetRecording)
+    prerequisite_op_id = prerequisite_state.item_op_ids[0]
+    prerequisite[audit._TYPED_RECORDING_SIDE_CHANNEL] = replace(
+        prerequisite_state,
+        recording_reasons=(
+            (prerequisite_op_id, ItemRecordingReason.UNRECORDED_MUTATION),
+        ),
+    )
+    prerequisite_errors = expected_by_row[
+        "recording.pre-destructive-flush-refusal"
+    ].errors(prerequisite)
+    assert frozen_fields(prerequisite) == prerequisite_frozen
+    assert any(
+        "typed recording projection: items" in error
+        for error in prerequisite_errors
+    )
+
+    final_flush = copy.deepcopy(
+        next(
+            report
+            for report in reports
+            if report["row"] == "recording.final-flush-degradation"
+        )
+    )
+    final_flush_frozen = frozen_fields(final_flush)
+    final_flush_state = final_flush[audit._TYPED_RECORDING_SIDE_CHANNEL]
+    assert isinstance(final_flush_state, audit._TypedExecutionSetRecording)
+    final_flush_issue = final_flush_state.recording_issues[0]
+    final_flush[audit._TYPED_RECORDING_SIDE_CHANNEL] = replace(
+        final_flush_state,
+        recording_issues=(
+            replace(
+                final_flush_issue,
+                reason=TaskRecordingIssueReason.FINISH_FAILED,
+            ),
+        ),
+    )
+    final_flush_errors = expected_by_row[
+        "recording.final-flush-degradation"
+    ].errors(final_flush)
+    assert frozen_fields(final_flush) == final_flush_frozen
+    assert any(
+        "typed recording projection: task issues" in error
+        for error in final_flush_errors
+    )
+
+    status_drift = copy.deepcopy(
+        next(
+            report
+            for report in reports
+            if report["row"] == "recording.final-flush-degradation"
+        )
+    )
+    status_frozen = frozen_fields(status_drift)
+    status_state = status_drift[audit._TYPED_RECORDING_SIDE_CHANNEL]
+    assert isinstance(status_state, audit._TypedExecutionSetRecording)
+    assert len(status_state.status) == 1
+    status_op_id, status_outcome = status_state.status[0]
+    assert status_outcome is Outcome.SUCCEEDED
+    status_drift[audit._TYPED_RECORDING_SIDE_CHANNEL] = replace(
+        status_state,
+        status=((status_op_id, Outcome.FAILED),),
+    )
+    status_errors = expected_by_row[
+        "recording.final-flush-degradation"
+    ].errors(status_drift)
+    assert frozen_fields(status_drift) == status_frozen
+    assert any(
+        "typed recording projection: items" in error
+        for error in status_errors
+    )
+
+    aggregate_drift = copy.deepcopy(
+        next(
+            report
+            for report in reports
+            if report["row"] == "recording.final-flush-degradation"
+        )
+    )
+    aggregate_frozen = frozen_fields(aggregate_drift)
+    aggregate_state = aggregate_drift[audit._TYPED_RECORDING_SIDE_CHANNEL]
+    assert isinstance(aggregate_state, audit._TypedExecutionSetRecording)
+    aggregate_drift[audit._TYPED_RECORDING_SIDE_CHANNEL] = replace(
+        aggregate_state,
+        recording=audit.RecordingStatus.OK,
+    )
+    aggregate_errors = expected_by_row[
+        "recording.final-flush-degradation"
+    ].errors(aggregate_drift)
+    assert frozen_fields(aggregate_drift) == aggregate_frozen
+    assert any(
+        "typed recording projection: report recording axes are inconsistent"
+        in error
+        for error in aggregate_errors
+    )
+
+    sticky_order_drift = copy.deepcopy(
+        next(
+            report
+            for report in reports
+            if report["row"] == "recording.sticky-aggregate-degradation"
+        )
+    )
+    sticky_frozen = frozen_fields(sticky_order_drift)
+    sticky_state = sticky_order_drift[audit._TYPED_RECORDING_SIDE_CHANNEL]
+    assert isinstance(sticky_state, audit._TypedExecutionSetRecording)
+    assert len(sticky_state.item_op_ids) == 2
+    sticky_order_drift[audit._TYPED_RECORDING_SIDE_CHANNEL] = replace(
+        sticky_state,
+        item_op_ids=tuple(reversed(sticky_state.item_op_ids)),
+    )
+    sticky_errors = expected_by_row[
+        "recording.sticky-aggregate-degradation"
+    ].errors(sticky_order_drift)
+    assert frozen_fields(sticky_order_drift) == sticky_frozen
+    assert any(
+        "typed recording projection: items" in error
+        for error in sticky_errors
+    )
+
+
+def test_authoritative_recording_snapshot_rejects_exhaustive_bogus_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario = audit._SCENARIO_BY_ID["recording.flush-and-sticky-matrix"]
+    row = "recording.final-flush-degradation"
+    clean_report = copy.deepcopy(
+        next(
+            report
+            for report in audit._run_in_sandbox(scenario.runner)
+            if report["row"] == row
+        )
+    )
+    clean_frozen = {
+        key: value
+        for key, value in clean_report.items()
+        if key != audit._TYPED_RECORDING_SIDE_CHANNEL
+    }
+    original_snapshot = audit._typed_execution_set_recording
+    bogus_op_id = OpId("bogus-op")
+
+    def contaminated_snapshot(
+        xset: audit.ExecutionSet,
+        events: Sequence[object],
+    ) -> audit._TypedExecutionSetRecording:
+        retained_status = dict(xset.status)
+        xset.status.clear()
+        xset.status[bogus_op_id] = Outcome.FAILED
+        xset.status.update(retained_status)
+        xset.recording_reasons[bogus_op_id] = (
+            ItemRecordingReason.UNRECORDED_MUTATION
+        )
+        return original_snapshot(xset, events)
+
+    monkeypatch.setattr(
+        audit,
+        "_typed_execution_set_recording",
+        contaminated_snapshot,
+    )
+    contaminated = next(
+        report
+        for report in audit._run_in_sandbox(scenario.runner)
+        if report["row"] == row
+    )
+    state = contaminated[audit._TYPED_RECORDING_SIDE_CHANNEL]
+    assert isinstance(state, audit._TypedExecutionSetRecording)
+    status_ids = tuple(op_id for op_id, _outcome in state.status)
+    assert bogus_op_id in status_ids
+    assert status_ids == tuple(sorted(status_ids, key=str))
+    assert dict(state.recording_reasons)[bogus_op_id] is (
+        ItemRecordingReason.UNRECORDED_MUTATION
+    )
+    assert bogus_op_id not in state.selected_op_ids
+    assert {
+        key: value
+        for key, value in contaminated.items()
+        if key != audit._TYPED_RECORDING_SIDE_CHANNEL
+    } == clean_frozen
+
+    expected = next(expected for expected in scenario.expected if expected.row == row)
+    errors = expected.errors(contaminated)
+    assert any(
+        "typed recording statuses contain unselected operations: ['bogus-op']"
+        in error
+        for error in errors
+    )
+
+
+def test_typed_recording_catalog_is_exact_manifest_and_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert (
+        frozenset(audit._RECORDING_PROJECTION_CASES)
+        == audit._REQUIRED_RECORDING_PROJECTION_ROWS
+    )
+    scenario = audit._SCENARIO_BY_ID["record.copy-failure"]
+    report = audit._run_in_sandbox(scenario.runner)[0]
+    without_side_channel = dict(report)
+    without_side_channel.pop(audit._TYPED_RECORDING_SIDE_CHANNEL)
+    missing_side_channel = scenario.expected[0].errors(without_side_channel)
+    assert any(
+        "authoritative typed recording side channel is missing" in error
+        for error in missing_side_channel
+    )
+
+    changed = dict(audit._RECORDING_PROJECTION_CASES)
+    replacement = changed.pop("record.copy-failure")
+    changed["failure.byte-published.update"] = replacement
+    monkeypatch.setattr(audit, "_RECORDING_PROJECTION_CASES", changed)
+
+    manifest = audit.manifest_errors()
+    assert any(
+        "typed recording attribution catalog" in error
+        and "missing=['record.copy-failure']" in error
+        and "extra=['failure.byte-published.update']" in error
+        for error in manifest
+    )
+    settlement = scenario.expected[0].errors(report)
+    assert any(
+        "required attribution case is missing" in error
+        for error in settlement
+    )
 
 
 def test_manifest_rejects_empty_duplicate_missing_and_extra_rows(

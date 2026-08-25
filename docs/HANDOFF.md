@@ -1,62 +1,75 @@
 # Session Handoff
 
-Status (2026-08-26): independent review remediation checkpoint 3R.0 is complete
+Status (2026-08-26): independent review remediation checkpoint 3R.1 is complete
 in `M1_SHELL_H2.md`. The checkpoint 3.2 runtime is unchanged, checkpoint 3.3
-has not started, and its legacy-removal commit is blocked until the ordered
-3R.1–3R.15 sequence closes and S5 receives a user-approved disposition.
+has not started, and checkpoint 3R.2 is the only authorized next delivery. S5
+remains on design hold and still requires a user-approved disposition before
+3R.15 or checkpoint 3.3 can close.
 
 ## Delivered
 
-- Added the interstitial 3R sequence as 16 serviceable commits: one ratification
-  row, fourteen independently reviewable remediation boundaries, and one
-  integrated documentation/evidence closure. Every row requires a distinct
-  builder/reviewer handoff, exact staged-snapshot review, focused gates, and a
-  clean commit before later-row work enters the snapshot.
-- Mapped every Reviewer O/S finding at the aspect level. Executor settlement,
-  workflow projection, exact-v5 semantics, live bridge custody, database-pair
-  admission, and file-identity codecs remain inside the existing architecture
-  and checkpoints 1–3.2.
-- Left Reviewer S5 outside the authorized sequence. The current
-  `SessionStore.put/load_all/drop` contract cannot guarantee terminal scrub
-  after its own mutator fails. Dispatcher-owned process memory with redacted
-  persisted records, a stronger atomic store contract, and separately revocable
-  protected continuation storage remain explicit alternatives for user choice.
+- Reconnected the settlement oracle's seven required recording-attribution rows
+  to authoritative production `ExecutionSet.status`, `recording_reasons`,
+  `recording_issues`, and aggregate recording through an oracle-only typed side
+  channel. The side channel is validated before capture and stripped before the
+  frozen normalized report is produced.
+- Made the side channel lossless for the mutable execution mappings and enforced
+  declared ⊇ selected ⊇ settled status = unique reliable item IDs ⊇ item
+  recording reasons. Selected-but-unsettled and declared-but-deselected gaps
+  remain valid; undeclared, unselected, reason-only, duplicate, missing, and
+  reviewed two-item attribution-order drift fails closed.
+- Protected the exact seven-row attribution catalog in the manifest, retained
+  the event-v4 adapters solely as historical trace compatibility, and restored
+  the reducer matrix comparison for both reduction and no-reduction results.
+- Recorded the causal gate defect in `BUGS.md` and the authoritative-versus-
+  historical evidence boundary in `TOOLS.md`.
 - Retained the appended independent review reports below as the active detailed
   finding source until remediation closure.
 
 ## Safe Stop
 
-This checkpoint changes documentation only. All authorized production and test
-defects remain open until their named 3R row lands, while S5 remains on design
-hold; no prior green evidence is treated as rebutting the reproduced
-counterexamples. The unreachable private v3/v4 decoder seam remains in source
-for checkpoint 3.3 and must not be removed or widened during remediation.
+This checkpoint changes the retained audit tool, its tests, one executor test,
+and owning documentation only; production runtime and wire behavior are
+unchanged. Execution-v6 continuation codec hardening remains wholly in 3R.2,
+and every later finding remains open until its named row lands. The unreachable
+private v3/v4 decoder seam remains in source for checkpoint 3.3 and must not be
+removed or widened during remediation.
 
-The working tree is expected to be clean after the named 3R.0 commit. No
-generated artifact, settlement baseline, normalized trace, or protected hash
-change belongs to this checkpoint.
+The working tree is expected to be clean after the named 3R.1 commit. No
+generated artifact, production source change, settlement baseline, normalized
+trace, protected manifest row, or semantic-hash change belongs to this
+checkpoint.
 
 ## Verification
 
-- Two independent reviewers iterated on the exact plan/handoff snapshot. Their
-  findings corrected ordering, cause precedence, persistent-sink truth,
-  checkpoint isolation, database WAL/journal handling, timestamp grammar,
-  public-contract consumer gates, S5 closure, and handoff lifecycle.
-- Both final stable-snapshot read-only passes reported `CLEAN`. The retained raw
-  reviewer-report tail is byte-identical to HEAD.
-- `git diff --check -- docs/M1_SHELL_H2.md docs/HANDOFF.md` passes. No runtime
-  test is credited to this documentation-only checkpoint.
+- Focused audit-tool tests: `95 passed`; focused executor-settlement tests:
+  `126 passed`.
+- Tools department: `305 passed, 3 skipped`; executor department: `352 passed`.
+- The mandatory settlement check passed `30 scenarios x 3 runs` against the
+  committed baseline.
+- The baseline worktree and HEAD blob IDs are both
+  `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`; the observed and pinned semantic
+  SHA-256 are both
+  `ada1a5f0e5987a2dade41931319d2535a3c9e72dcdbfa9a292964623fff4ecf3`.
+- The first independent review reproduced an extra-mapping entry that the
+  filtered side channel hid. The repaired snapshot retains and rejects that
+  entry, and producer-only status, aggregate, reason, issue, and item-order
+  mutations now fail while the frozen report stays unchanged.
+- `git diff --check` passes, the baseline diff is empty, and the retained raw
+  reviewer-report tail is byte-identical to the preceding checkpoint.
 
 ## Immediate Next Context
 
-Start only checkpoint 3R.1, `test(executor): restore settlement gate authority`.
+Start only checkpoint 3R.2, `test(workflows): pin recording continuation codec`.
 First inventory the clean tree and reread 3R's execution protocol, ownership
-map, and 3R.1 acceptance. Keep the frozen normalized trace, baseline JSON,
-scenario/row manifest, and semantic hash unchanged; add the typed oracle-only
-side channel and fail-closed seven-case catalog, repair the reducer assertion,
-and leave execution-v6 codec coverage to 3R.2. Run the named focused/departments
-and three-run oracle gates, obtain an independent exact-diff review, refresh
-this handoff, and commit before starting 3R.2.
+map, and 3R.2 acceptance. Pin literal sets of exactly three item reasons and
+five task reasons independently of encoder/decoder enum iteration, reject every
+unknown raw execution-v6 reason, and directly reject redundant aggregate-
+versus-attribution contradictions. Treat this as a test-authority checkpoint;
+do not change the production codec unless a counterexample exposes a separate
+policy defect. Run focused payload tests and the workflows department, obtain
+an independent closed-vocabulary review of the exact staged snapshot, refresh
+this handoff, and commit before starting 3R.3.
 
 ## Reviewer O.
 
