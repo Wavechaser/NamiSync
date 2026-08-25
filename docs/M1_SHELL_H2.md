@@ -251,6 +251,357 @@ Commits, in order:
   remain untouched historical evidence.
 - **Docs/review:** Mark v5 active in CORE, DATABASE, HISTORY, TESTS, M1_BRIDGE, INTERFACES, and README. Repeat the settlement oracle three times and independently inspect removal completeness.
 
+### 3R. Remediate independent checkpoint-review findings
+
+Checkpoint 3.3 is blocked until the authorized remediation sequence closes and
+Reviewer S5 has a user-approved disposition: an implemented design or an
+explicitly accepted deferral/residual recorded in its owning authorities. The
+findings were reported after checkpoints 1–3.2 had already landed, so this
+sequence repairs those delivered boundaries without folding the work into the
+legacy-removal commit or changing checkpoints 4–12.
+
+Every row below is a separately reviewed and committed checkpoint. One builder
+implements only that row, runs its declared focused and departmental gates,
+and presents the exact diff to a reviewer who did not build it. The reviewer
+checks requirement drift, fault combinations, security consequences, test
+authority, and unnecessary scope. Findings are corrected and the affected
+gates rerun before the row is committed. Review the staged snapshot and run
+`git diff --cached --check` immediately before every commit; do not carry a
+partly implemented later row into that snapshot. Matching component docs and
+causal `BUGS.md` entries travel with the behavior they describe. At every safe
+stop, replace HANDOFF's operational sections with the completed row, exact
+verification, dirty-file ownership, and next command; retain the appended raw
+review reports as the active finding source through this sequence. The final
+row reconciles cross-cutting status, changelog, and integrated evidence.
+
+Finding ownership is exact at the aspect level:
+
+| Finding or finding aspect | Owning row |
+| --- | --- |
+| F1, F4, F7, S2 | 3R.4 prerequisite-cause settlement |
+| F2, F3, F10, S3, S7 reducer-matrix gap | 3R.1 settlement gate |
+| F6, S7 payload closed-set/contradiction gaps | 3R.2 continuation codec gate |
+| F5, S4, the first three post-F7 behavior notes | 3R.6 compound workflow failure |
+| Post-F7 canceled-settlement assignment note | 3R.6 direct dataflow check; remove only if it is still dead |
+| F8, F9 | 3R.11 private seam and source gates |
+| F11, S8 | 3R.15 documentation closure |
+| F12 production Python-view validation | 3R.10 live task-update boundary |
+| F12 logical-byte Node corpus | 3R.9 timestamp/reliable-size corpus |
+| F12 Python-to-JavaScript witness binding | 3R.11 source/differential gate |
+| F13, S16 | 3R.14 file-identity codecs |
+| F14 | 3R.7 scalar/file-id boundary |
+| S1 | 3R.3 retained committed settlement |
+| S5 | explicit design hold; no implementation row |
+| S6 | 3R.5 diagnostic containment |
+| S9, S13 | 3R.10 live task-update/custody boundary |
+| S10, S11 | 3R.8 exact event operation truth |
+| S12, S17 | 3R.9 timestamp/reliable-size boundary |
+| S14 topology authority and direct tests | 3R.12 dormant database authority |
+| S14 production admission and S15 | 3R.13 WAL-aware database activation |
+| S18 positive v4 task-view fixtures | 3R.10 live task-update boundary |
+| S18 contradictory recording/cancellation corpora | 3R.8 operation truth |
+| S18 timestamp/size/logical-byte Node corpora | 3R.9 timestamp/size boundary |
+| S18 legacy Progress/vocabulary/live-route gates | 3R.11 source gates |
+| S18 active-document drift | 3R.15 documentation closure |
+
+#### 3R.0 Ratify the remediation sequence
+
+Commit: `docs: plan independent checkpoint remediation`
+
+- **Acceptance:** Freeze this order and the aspect-level ownership map above,
+  preserve checkpoint 3.2 as the active runtime, and keep checkpoint 3.3
+  unstarted.
+- **Tests/review:** Finding-map completeness, active-plan consistency,
+  documentation links, `git diff --check`, and independent plan review.
+
+#### 3R.1 Restore settlement-gate authority
+
+Commit: `test(executor): restore settlement gate authority`
+
+- **Findings:** F2, F3, F10, S3, and S7's reducer-matrix gap.
+- **Acceptance:** The settlement oracle reads the authoritative production
+  `ExecutionSet.recording_reasons` and `recording_issues` through a typed
+  oracle-only side channel; its exact seven-case attribution catalog fails
+  closed and is manifest-protected. Keep the historical event-v4 normalized
+  trace adapter explicit, and leave the protected scenario/row manifest,
+  normalized trace, baseline JSON, and semantic hash byte-for-byte unchanged.
+  Restore both directions of the reducer matrix assertion.
+- **Tests/review:** Focused executor/tool tests; tools and executor departments;
+  three-run settlement check; baseline/hash comparison; explicit TOOLS
+  documentation of authoritative typed truth versus the frozen historical trace
+  adapter; and an independent gate-authority review.
+
+#### 3R.2 Pin the execution-v6 recording codec
+
+Commit: `test(workflows): pin recording continuation codec`
+
+- **Findings:** F6 and S7's payload closed-set/contradiction gaps.
+- **Acceptance:** Pin literal sets of exactly three item reasons and five task
+  reasons independently of encoder/decoder enum iteration. Reject every unknown
+  raw execution-v6 reason and directly reject the redundant aggregate-versus-
+  attribution contradiction. Do not change a production codec in this test-
+  authority checkpoint unless a counterexample exposes a separate policy bug.
+- **Tests/review:** Focused payload tests, workflows department, exact raw-JSON
+  counterexamples, and independent closed-vocabulary review.
+
+#### 3R.3 Retain committed settlement across reliable-sink failure
+
+Commit: `fix: preserve committed settlement across sink failure`
+
+- **Findings:** S1.
+- **Acceptance:** Retain the complete pending typed settlement, including a
+  committed recorder receipt, before reliable emission without prematurely
+  marking continuation status settled. A one-shot sink rejection retries the
+  retained settlement through the backstop, never records twice, preserves the
+  successful filesystem and recording truth, and still propagates the original
+  sink failure. If the item sink rejects every attempt, journal retirement and
+  `ExecutionSet.status` remain pending because reliable delivery never
+  succeeded; no item enters the accepted-item accumulator or terminal result.
+  The durable recorder row/receipt remains immutable and ledger-observable, no
+  false failed/unrecorded replacement is emitted, and the task terminalizes as
+  failed by the original sink error using only accepted items. This preserves
+  receipt finality without inventing a new result or exception contract.
+- **Tests/review:** Exact one-shot and persistently rejecting COPY
+  counterexamples plus non-byte coverage where the shared path requires it;
+  assert the one-shot accepted item, persistent-case immutable ledger receipt,
+  pending execution status, absence of a contradictory replacement item, and
+  failed accepted-items-only terminal result; executor/workflows/dispatcher
+  departments; ordinary suite; three-run settlement oracle; and independent
+  journal/terminal-ordering review.
+
+#### 3R.4 Retain prerequisite recording cause through settlement
+
+Commit: `fix(executor): retain prerequisite recording cause`
+
+- **Findings:** F1, F4, F7, and S2.
+- **Acceptance:** Make `recording-prerequisite-failed` typed operation-local
+  retained state rather than a dynamic exception attribute. Preserve it across
+  retry, cleanup-error substitution, backstop exception choice, and durable-
+  effect reduction while keeping filesystem settlement precedence unchanged.
+  If the same operation also has a reducer-proven unrecorded durable mutation,
+  `unrecorded-mutation` takes precedence; otherwise the terminal prerequisite
+  refusal remains `recording-prerequisite-failed`. Centralize that precedence
+  and only then remove the reducer-disagreement branch made unreachable by the
+  closed two-reason composition.
+- **Tests/review:** The exact flush-refusal-plus-cleanup-failure and retained-
+  UPDATE-retry counterexamples, a combined prerequisite-plus-unrecorded-
+  mutation case, executor department, three-run oracle, updated EXECUTOR
+  documentation/bug record, and independent retry/reducer review.
+
+#### 3R.5 Contain recording-diagnostic failures
+
+Commit: `fix(executor): contain recording diagnostic failures`
+
+- **Findings:** S6.
+- **Acceptance:** Record the typed item/task cause before optional diagnostic
+  rendering. If `str(error)` or logical rendering fails, retain `detail=None`,
+  preserve the primary recorder/filesystem error, and never leave the recording
+  axis clean. Apply the same boundary in executor and workflow recording paths.
+- **Tests/review:** Hostile-`__str__` item/final-flush/open/finish/close cases as
+  applicable, executor/workflows departments, ordinary suite, three-run oracle,
+  owning docs and bug record, and independent exception-precedence review.
+
+#### 3R.6 Preserve recording truth on compound workflow failure
+
+Commit: `fix(workflows): preserve recording truth on compound failure`
+
+- **Findings:** F5, S4, and the behavior notes following F7.
+- **Acceptance:** An exclusion-item sink failure combined with recording-close
+  failure produces one terminal failed result derived from the live
+  continuation, including `recording-close-failed`, before terminal payload
+  scrubbing. Remove the circular guard that compares two projections of the
+  same `ExecutionSet.recording` value. Retain and document the three ratified
+  behavior notes: recording-open containment on an already-failing path,
+  verify-present close attribution, and unconditional exit-failure
+  preservation. Recheck the reported canceled-settlement assignment against
+  current dataflow and remove it only if no consumer remains.
+- **Tests/review:** Exact compound counterexample, workflow/core-session/
+  dispatcher neighborhood, ordinary suite, three-run oracle, owning docs and
+  bug record, and independent terminalization review.
+
+#### 3R.7 Normalize scalar and file-id boundaries
+
+Commit: `fix(core): normalize scalar identity boundaries`
+
+- **Findings:** F14.
+- **Acceptance:** Wrong runtime type raises `TypeError`; a grammar-invalid
+  string raises `ValueError`; `Scalar64` overflow raises `ScalarDomainError`;
+  and `FileIndex128` overflow raises `ValueError`. Replace the mathematically
+  guaranteed `FILE_ID_128` byte-range assertion with construction that needs no
+  optimization-sensitive guard.
+- **Tests/review:** Wrong-type, malformed-text, exact-bound, and plus-one cases;
+  optimized-mode file-id decoding; core, database, and workflows departments;
+  ordinary suite; owning docs and causal bug record; and independent scalar-
+  boundary review.
+
+#### 3R.8 Enforce exact event-v5 operation truth
+
+Commit: `fix(protocol): enforce exact v5 operation truth`
+
+- **Findings:** S10, S11, and the contradictory-recording/cancellation portion
+  of S18.
+- **Acceptance:** One filesystem-outcome/recording-reason matrix governs
+  `ItemOutcome`, Python envelope/view validation, and packaged JavaScript.
+  `TerminalSummary`, Python validators, JavaScript terminal/result validators,
+  and `OperationResult` enforce the same compound and execute-cancellation
+  invariants.
+- **Tests/review:** Complete valid/invalid axis matrix, both cancellation
+  counterexamples, required Node corpus, core, executor, workflows, database
+  (including history), and interfaces departments, ordinary suite, owning docs/
+  bug records, and independent Python/JavaScript differential review.
+
+#### 3R.9 Align timestamp and reliable-size boundaries
+
+Commit: `fix(protocol): align v5 timestamp and size boundaries`
+
+- **Findings:** S12, S17, F12's logical-byte corpus gap, and the timestamp/size/
+  logical-byte corpus portion of S18.
+- **Acceptance:** Freeze the service grammar to a four-digit calendar date,
+  literal `T`, two-digit hour/minute/second, either no fraction or exactly six
+  fractional ASCII digits, and the literal UTC suffix `+00:00`; calendar fields
+  must construct a real Python datetime, so basic/week/date-only/24:00 forms,
+  impossible dates, `Z`, and other offsets refuse. Apply that grammar identically
+  in Python and JavaScript. Python `SessionEventView` and JavaScript reliable-
+  event validation reconstruct the canonical persistence envelope and enforce
+  the 1,048,576-byte ceiling on reliable events before cursor, queue, reducer,
+  or callback mutation.
+- **Tests/review:** One shared timestamp corpus, exact-maximum and plus-one
+  public-view witnesses in Python and Node, logical-byte review facts in the
+  Node corpus, core, workflows, and interfaces departments, ordinary suite,
+  owning docs/bug records, and independent grammar/byte-accounting review.
+
+#### 3R.10 Validate exact task updates before custody release
+
+Commit: `fix(web): validate task updates before custody release`
+
+- **Findings:** F12's production Python-view boundary, S9, S13, and S18's
+  positive-v4 task-view fixtures.
+- **Acceptance:** Validate every offered, recovered, drained, and command-
+  returned task update through the exact v5 Python view contract before queue,
+  cursor, terminal-delivered, serialization, or release mutation. A terminal
+  record requires a non-null valid result whose terminal state agrees; a
+  result-free or malformed collaborator record never releases custody.
+  Packaged JavaScript applies the same terminal-record rule.
+- **Tests/review:** Replace positive v4 adapter fixtures, prove rejected batches
+  leave queue/cursor/custody unchanged, exercise result-bearing release and
+  result-free refusal, interfaces/workflows departments and ordinary suite,
+  owning docs/bug records, and independent custody/mutation-order review.
+
+#### 3R.11 Harden exact-v5 seam and source gates
+
+Commit: `fix(web): harden exact-v5 source gates`
+
+- **Findings:** F8, F9, F12's Python-to-JavaScript witness gap, and S18's legacy
+  Progress/vocabulary/live-route gate gaps.
+- **Acceptance:** Freeze the private legacy browser seam to literal version 4,
+  slice only the actual live validator in routing tests, inspect the active v5
+  Progress validator and complete v5 vocabulary, and run production Python
+  public witnesses through the packaged JavaScript consumer. The checkpoint is
+  gate/test hardening; it does not widen the private compatibility seam or
+  activate a new production route.
+- **Tests/review:** Static mutation-resistant source gates, production-view-to-
+  Node differential corpus, interfaces department, ordinary suite, matching
+  INTERFACES documentation, and independent gate review.
+
+#### 3R.12 Pin exact database topology authority
+
+Commit: `refactor(database): prepare exact schema topology validation`
+
+- **Findings:** S14's topology authority and direct-test portion.
+- **Acceptance:** Add one exact comparator for the complete current user
+  schema—tables, columns, constraints, indexes, triggers, and definitions—and
+  direct tests for marker-only, missing-object, extra/poisoned-object, and
+  definition drift. Only declared SQLite-owned statistics artifacts are exempt.
+  Keep the comparator dormant: no reader, initializer, repository, or pair gate
+  selects it yet, so this preparatory safe stop does not claim production S14
+  closure or change WAL behavior.
+- **Tests/review:** Direct complete-v4/v6 and malformed-topology matrices,
+  database department, proof that production callers remain unchanged, and
+  independent schema-canonicalization review.
+
+#### 3R.13 Activate complete WAL-aware database admission
+
+Commit: `fix(database): validate complete pairs without mutation`
+
+- **Findings:** S14's production boundary and S15.
+- **Acceptance:** Ledger/history readers and initializers select 3R.12's exact
+  topology authority before any `CREATE IF NOT EXISTS` repair. Sidecar-free
+  databases retain the direct immutable read. Any `-journal` presence refuses
+  before opening a source database; NamiSync neither guesses whether it is hot
+  nor performs rollback recovery during admission. A WAL-bearing database is
+  validated from a private recovery snapshot that sees committed marker and
+  topology truth without opening or creating source SHM authority. The
+  validator never mutates source main/WAL/SHM/journal artifacts; quiescent ready,
+  refusal, and error fixtures remain byte-for-byte identical. An injected or
+  concurrent source drift refuses closed, and the drift fixture attributes only
+  that external change with no additional validator mutation. Repository and
+  initializer entry points use the same preflight before an ordinary SQLite
+  open can mutate refused source artifacts. Do not invent a new database-size
+  acceptance wall.
+- **Tests/review:** Complete current reopen, marker-only/poisoned current files,
+  main-plus-journal and orphan-journal refusal, journal drift/no-validator-
+  mutation, wrong WAL marker, missing SHM, benign live WAL, WAL topology poison,
+  snapshot drift/failure, repository/initializer no-mutation cases, database
+  department and ordinary suite, updated DATABASE docs/bug records, and
+  independent schema/TOCTOU/temp-ownership review.
+
+#### 3R.14 Keep file identity textual in generic JSON
+
+Commit: `fix(identity): encode FileIndex128 as canonical JSON text`
+
+- **Findings:** F13 and S16.
+- **Acceptance:** Core plan serialization/fingerprinting and recorder
+  idempotency hashing recognize `FileIdentity` before generic dataclass descent
+  and emit canonical quoted `FileIndex128`; unrelated integers stay numeric.
+  Preserve and explicitly pin the existing low-32-bit uppercase volume-serial
+  normalization that makes `FILE_ID_INFO` evidence comparable with
+  `GetVolumeInformationW` `VolumeId`; it is separate from the full 128-bit file
+  index. Trace every persisted fingerprint/idempotency consumer and record an
+  explicit compatibility conclusion before implementation. If an existing
+  checkpoint-3.2 hash can be revalidated or replayed under the same current
+  markers with different semantics, stop for a coordinated epoch/reset
+  decision rather than silently changing that durable contract.
+- **Tests/review:** Exact maximum file index through nested plans/inventory/
+  evidence and recorder hashes, an ordinary nested-dataclass integer that must
+  remain a JSON number, deterministic fingerprint coverage, exact persisted-
+  consumer compatibility evidence, and an old-current-marker numeric-
+  fingerprint execution-v6 continuation decoded and re-fingerprinted by new
+  workflow code. Run core, planner, database, and workflows departments plus
+  the ordinary suite; update owning docs/bug record; and obtain independent
+  codec-compatibility review.
+
+#### 3R.15 Reconcile remediation evidence and active documentation
+
+Commit: `docs: reconcile independent checkpoint remediation`
+
+- **Findings:** F11, S8, and S18's active-document/status drift.
+- **Acceptance:** Reconcile M1_SHELL, M1_BRIDGE, DATABASE, ARCHITECTURE, CORE,
+  TESTS, component documents, README, CHANGELOG, BUGS, and HANDOFF with the
+  delivered behavior and exact safe stop. Remove stale active-v4/history-v5/
+  checkpoint status claims without rewriting historical evidence. Require and
+  record the user-approved S5 disposition before this row can complete; an
+  accepted deferral keeps an open causal BUGS entry, a DEFENSE residual/model-
+  reopen disposition, truthful noncategorical DISPATCHER wording, and exact
+  HANDOFF status. Migrate lasting causal dispositions and evidence from the raw
+  review reports into BUGS, CHANGELOG, and owning documents. A completed 3R.15
+  always replaces HANDOFF in full without the raw appendices; an intermediate
+  safe stop retains them only while 3R.15 remains incomplete. Keep checkpoint
+  3.3 unstarted and the private decoder seam intact.
+- **Tests/review:** All affected departments, ordinary suite with required
+  bundled Node, import architecture, three-run settlement oracle, exact source
+  scans, `git diff --check`, and final independent requirement/security review.
+
+**Design hold — not authorized by this sequence:** Reviewer S5 identifies a
+failed terminal store write that can leave an older continuation-bearing row in
+an arbitrary `SessionStore`. The current `put/load_all/drop` protocol cannot
+guarantee scrubbing after its mutator rejects the scrubbed record, and a best-
+effort `drop` would not make that guarantee true. Resolving it requires an
+explicit storage design: keep continuation bytes solely under dispatcher-owned
+process memory and persist only redacted records; add a stronger atomic storage
+contract; or introduce separately revocable protected continuation storage.
+Do not change this boundary without a user decision; absent that decision,
+3R.15 and checkpoint 3.3 remain blocked after all authorized fixes land.
+
 ### 4. Install task-centric lifecycle and compact artifacts
 
 Commits, in order:
