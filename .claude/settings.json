@@ -15,11 +15,7 @@
       "PowerShell(git status*)",
       "PowerShell(git diff*)",
       "PowerShell(git log*)",
-      "PowerShell(git show*)",
-      "Bash(git status*)",
-      "Bash(git diff*)",
-      "Bash(git log*)",
-      "Bash(git show*)"
+      "PowerShell(git show*)"
     ]
   }
 }
