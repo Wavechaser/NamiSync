@@ -166,6 +166,9 @@ Commit: `feat(web): retain multi-session task artifacts`
   exact publication and overlay invariants from `M1_BRIDGE.md`, and enforce the
   complete conservative pre-surface reservation floor from `DEFENSE.md` §1.3;
   checkpoint 11 calibrates and proves that already-active containment model.
+  Revise the production command mapping from nine to 12 unique rows: retain the
+  four bootstrap/cosmetic and two current Setup rows while replacing three
+  current task/session rows with the six checkpoint-4 task rows.
 - **Regression watch:** No task lock across facade, JSON, database, or filesystem work; non-atomic issue/retirement classification and lease acquisition; normal named publication advancing the task epoch; same-revision start/start, control/start, control/close, start/close, and release/successor races; claim-owner and attach/start compensation; terminal-event versus terminal-record race; stale drain/release; pinned-generation release or eviction; observer-thread and close-long-poll deadlock; receipts released before task close; references retaining full results; uncharged read/native/callback copies; capacity failure during release/close; mutation rows accidentally taking the lifecycle claim.
 - **Tests:** Dispatcher/interfaces/service neighborhood; competing starts and
   unpublished-task claims; control/start/close/release interleavings; atomic
@@ -176,8 +179,9 @@ Commit: `feat(web): retain multi-session task artifacts`
   diagnostic and artifact overlap; pinned-generation replacement/eviction;
   handler-saturation reconciliation; start/control/release/close replay and
   tombstones; byte-aware drain; reinjection; delayed terminal cleanup; and
-  shutdown during observation.
-- **Docs/review:** Update ARCHITECTURE, M1_BRIDGE, DESKTOP_UI, INTERFACES, and DISPATCHER. Review the complete ownership graph and initial BR-G-45 analytical model.
+  shutdown during observation. Python and JavaScript policy mirrors freeze the
+  exact 12-row mapping with no retained alias for a replaced task/session row.
+- **Docs/review:** Update ARCHITECTURE, M1_BRIDGE, DESKTOP_UI, INTERFACES, and DISPATCHER. Review the complete ownership graph and initial BR-G-45 analytical model; land the checkpoint-4 BR-G-46 command-map revision.
 
 ### 5. Unify probing, recents, and typed directory admission
 
@@ -194,10 +198,10 @@ Commit: `feat(workflows): unify location probing and recent locations`
 Commit: `feat(web): add frozen setup and serial task creation`
 
 - **Objective:** Deliver the initial Setup page and exact Setup bridge rows.
-- **Acceptance:** Render typed/picker fields, probed recents/pairs, all implemented semantic controls, disabled ADS, raw bounded inputs admitted to backend-canonical complete snapshots, immediate path invalidation, admission freeze, truthful slotless partial-pair refusal, standalone inventory-task creation, and serial best-effort pair creation. No Setup edit writes global defaults and JavaScript owns no filter normalization.
-- **Regression watch:** Default-settings race, hidden `null` fallback, filter amplification, stale slots, double click, command-ID reuse after edits, automatic retry with a new ID, partial pair activation, navigation/reinjection, and unsafe filesystem labels in the DOM.
-- **Tests:** Exact Python/JS command policy mirrors and key validators; filter bounds/canonicalization; mixed batch successes/refusals; exact `slot-claimed` busy guidance; one-slot and atomic two-slot `slot_capacity_full` under all/partially pinned capacity with no native probing or partial slot; `recent_unavailable`; lost response both before and after task publication, with post-publication lookup using the bounded route rather than expired/consumed slots; document replacement; admitted-task recovery; settings fingerprint/commitment; headed typed/paste/picker/recent flows and hostile text.
-- **Docs/review:** Update DESKTOP_UI, M1_BRIDGE, M1_SHELL, FEATURES, and INTERFACES. Close BR-G-47 only after headed evidence and parser review.
+- **Acceptance:** Render typed/picker fields, probed recents/pairs, all implemented semantic controls, disabled ADS, raw bounded inputs admitted to backend-canonical complete snapshots, immediate path invalidation, admission freeze, truthful slotless partial-pair refusal, standalone inventory-task creation, and serial best-effort pair creation. Add explicit Plan again through `activate_task_pair` followed by ordinary `start_plan`: resolve the retained plan's reviewed volume identities, publish two slots only when both accept, reuse its frozen Setup options, and create a new default-selection task without background replanning or authorization carry-forward. No Setup edit writes global defaults and JavaScript owns no filter normalization. Replace the two current Setup rows with the eight checkpoint-6 rows, producing 18 unique commands with the six checkpoint-4 and four retained bootstrap/cosmetic rows.
+- **Regression watch:** Default-settings race, hidden `null` fallback, filter amplification, stale slots, drive-letter reuse, task close or plan-generation change during reviewed-pair resolution, display text promoted to path authority, double click, command-ID reuse after edits, automatic retry with a new ID, background task creation, selection carry-forward, partial pair activation, navigation/reinjection, and unsafe filesystem labels in the DOM.
+- **Tests:** Exact 18-row Python/JS command policy mirrors and key validators; filter bounds/canonicalization; mixed batch successes/refusals; exact `slot-claimed` busy guidance; one-slot and atomic two-slot `slot_capacity_full` under all/partially pinned capacity with no native probing or partial slot; `recent_unavailable`; task-pair resolved/remounted/missing/offline/ambiguous identities; exact replay before and after task close; plan-generation and slot-expiry races; lost response both before and after task publication, with post-publication lookup using the bounded route rather than expired/consumed slots; document replacement; admitted-task recovery; settings fingerprint/commitment; headed typed/paste/picker/recent/Plan-again flows and hostile text.
+- **Docs/review:** Update DESKTOP_UI, M1_BRIDGE, M1_SHELL, FEATURES, and INTERFACES. Close BR-G-47 only after headed evidence and parser review, and close the reopened BR-G-46 command-map clause only after the exact checkpoint-6 revision passes.
 
 ### 7. Deliver bounded plan review and execution admission
 
@@ -212,31 +216,39 @@ Commit: `feat(web): add bounded plan review and selection`
   Review-time facts remain context; every committed nonempty current selection
   attaches and fresh-preflights after authority/confirmation checks. Publish a
   complete bounded plan and notice generation or no new artifact, preserving
-  the prior complete plan where the mapped replacement policy requires it.
-- **Regression watch:** Rebuilding trees per window, operation-scaled responses, client-derived hierarchy/domain status, filter-dependent selection, synthetic ancestors, move annotations, stale selection/view revisions, double execution, and failed admission leaving selection frozen.
+  the prior complete plan where the mapped replacement policy requires it. Keep
+  selection frozen while an attempt starts or runs; submission failure and a
+  terminal unrun result return it to reviewing with one revision advance, while
+  the first ran result freezes it permanently. A retry uses a fresh start command
+  and commitment; replay of the old command returns only its original attempt.
+- **Regression watch:** Rebuilding trees per window, operation-scaled responses, client-derived hierarchy/domain status, filter-dependent selection, synthetic ancestors, move annotations, stale selection/view revisions, double execution, failed or terminal-unrun admission leaving selection frozen, reopening without a revision advance, stale pre-commit mutation after reopening, replay creating a second authorization, and treating zero-byte ran work as unrun.
 - **Tests:** Planner/workflow/interface neighborhood and the exact BR-G plan
   fixtures/boundaries in `M1_BRIDGE.md`; first-excess/no-partial publication;
   review-header rehydration and revision guards; capacity fact availability;
   reviewed-versus-fresh preflight behavior; typed notice merge, omission, and
   action exclusion; same-target grouping and exactly-once operation projection;
-  folder/group selection and rollups; stale/replayed mutations; execution-
-  refusal retry; search/filter/facet/window/dependency boundaries; move-peer
+  folder/group selection and rollups; stale/replayed mutations; submission-
+  failure and terminal-unrun revision transitions; edited-subset execution-
+  refusal retry with a new commitment; permanent freeze at the first ran result;
+  search/filter/facet/window/dependency boundaries; move-peer
   positive and suppression cases; off-window follow; destructive confirmation;
   hostile DOM; latency/memory; and headed production witnesses.
-- **Docs/review:** Update PLANNER, WORKFLOWS, M1_BRIDGE, M1_SHELL, and DESKTOP_UI. Close BR-G-35, BR-G-37, plan BR-G-32, and the plan portion of BR-G-42 after adversarial selection review.
+- **Docs/review:** Update PLANNER, WORKFLOWS, M1_BRIDGE, M1_SHELL, and DESKTOP_UI. Close BR-G-15, BR-G-35, BR-G-37, plan BR-G-32, and the plan portion of BR-G-42 after adversarial selection/reopening review.
 
 ### 8. Deliver execution review and ledger-current evidence
 
 Commit: `feat(web): add execution review and ledger evidence`
 
 - **Objective:** Complete live execution, retained review, and trustworthy full-hash display.
-- **Acceptance:** Attach execution atomically; render v5 progress, pause/resume/cancel, indexed follow, terminal axes, item/task recording issues, and retained file-list windows whose plan rows carry an exact `ExecutionOverlay` while leaving the separate post-copy overlay untouched. Add one batched transactional operation/run/inventory evidence query and bounded per-item detail including the item omission witness.
+- **Acceptance:** Attach execution atomically; render v5 progress, pause/resume/cancel, indexed follow, terminal axes, item/task recording issues, and retained file-list windows whose plan rows carry an exact `ExecutionOverlay` while leaving the separate post-copy overlay untouched. Render `filesystem="refused"` plus `disposition="unrun"` as the generic “Execution did not start” review state with reopened selection controls; do not expose preflight terminology or infer a cause from those axes alone. Add one batched transactional operation/run/inventory evidence query and bounded per-item detail including the item omission witness.
 - **Regression watch:** Live-versus-terminal overlay disagreement, Gap loss, later task failure suppressing earlier evidence, unrecorded item borrowing another inventory hash, N+1 queries, canonical target collisions, latest-writer confusion, diagnostic amplification, and premature session release.
 - **Tests:** Executor/database/workflow/interface neighborhood; all filesystem/
   recording combinations; exact overlay invariants; separate omission axes;
   committed item followed by later task/audit failure; scope match/change/
   invalidation/missing; full digest and no plan hash; Gap-plus-terminal
-  reconciliation; navigate away/back; the bridge-owned maximum result overlay;
+  reconciliation; generic refused-filesystem/unrun messaging and reopened-
+  control revision;
+  navigate away/back; the bridge-owned maximum result overlay;
   and post-copy replacement leaving execution byte-identical.
 - **Docs/review:** Update EXECUTOR, RECORDER, DATABASE, WORKFLOWS, INTERFACES, M1_BRIDGE, and DESKTOP_UI. Close the execution portion of BR-G-36 and relevant BR-G-48 cases after executor and bridge reviews.
 
@@ -318,3 +330,72 @@ Commit: `docs(gui): close stage 6 surface verification`
 - Human-gesture provenance against compromised trusted JavaScript.
 - Desktop task survival across process closure/restart.
 - GUI Break 2 cohesion work, release packaging, BR-G-43/44, and SH-G-15.
+
+## Checkpoint 0 audit issue and resolution record
+
+This is the retained review record for the first ratification and
+reconciliation round. It is not a separate contract authority. “Accepted
+target” means the named implementation checkpoint has not activated the
+documented resolution.
+
+### Runtime and cross-contract findings
+
+| Issue or incompatibility | Resolution | State |
+| --- | --- | --- |
+| Execution preflight could observe selection or review facts that were not the exact committed review authority. | Commit the current nonempty revisioned selection, bind its digest and provenance, rederive it before execution admission, and publish any fresh refusal as execution-attempt truth without rewriting the reviewed plan. | Accepted target, checkpoints 7–8. |
+| Plan immutability, selection after an unrun attempt, and selection after consumed execution authority had been collapsed into one permanent freeze. | Keep the plan immutable; return selection to `reviewing` at a new revision after submission failure or a terminal unrun result; freeze selection permanently when the first attempt reports `disposition=ran`. | Accepted target, checkpoints 7–8. |
+| An unrun task could need a genuinely new plan, but it had no recent ledger run and its reviewed display path was unsafe to reuse after drive-letter reassignment. | Add identity-resolving `activate_task_pair`; explicit **Plan again** activates two fresh slots and starts a new task with the old frozen setup, default selection, and no copied authorization. | Accepted target, checkpoint 6. |
+| User deselection, dependency fallout, and safety exclusion could collapse into one omitted-operation meaning. | Retain canonical `user_deselected` provenance separately, dependency-close only that set, and derive typed excluded outcomes from the reviewed plan plus provenance. | Existing direction retained; desktop admission lands at checkpoint 7. |
+| Filesystem success and recording success were conflated, so a recorder failure could misstate durable mutation truth. | Keep filesystem, integrity, recording, and audit axes independent; add item-local recording degradation and ordered task-wide recording issues without rewriting committed filesystem outcomes. | Accepted target, checkpoints 1–3 and 8. |
+| Item-local recorder failure and task-wide open/flush/finish/close failure lacked a stable attribution boundary. | Pin the four-way settlement matrix in the oracle, then add sparse typed item attribution and centrally reduced task issues before changing the event wire. | Accepted target; checkpoint 1 is the next implementation step. |
+| Operation-time copy evidence was being treated as if it could become a durable task artifact. | Keep copy attestations transient inside the same live execution continuation; durable evidence comes only from committed ledger facts and never enters retained tasks or JavaScript. | Accepted target, checkpoint 2. |
+| Python’s additive v3/v4 compatibility decoder, exact live-v4 JavaScript validator, and canonical history projection accepted different shapes. | Make the current asymmetry explicit only until a coordinated exact event cut; then use one exact event schema and reset the database pair rather than retain a legacy decoder. | Accepted target, checkpoint 3. |
+| Ledger, history, event, and evidence epochs could be upgraded independently and leave a mixed readable-looking pair. | Advance them as one coordinated reset boundary; reject old, mixed, markerless, incomplete, or orphan-sidecar pairs before commands with archive/delete guidance and no automatic migration. | Accepted target, checkpoint 3. |
+| Byte counts and filesystem timestamps could cross Python, SQLite, JSON, and JavaScript with incompatible integer precision or coercion. | Use one nonnegative signed-64 arithmetic domain, checked accumulation, and canonical decimal bridge representation; keep opaque native file indexes as non-arithmetic text. | Accepted target; exact walls live only in Bridge/Defense. Reachability review remains open below. |
+| Reliable terminal transport could retain or send an unbounded full result collection. | Transport an item-free bounded terminal summary, update compact overlays before queueing, and retain the full terminal result only under dispatcher custody until reconciliation/release. | Accepted target, checkpoints 3–4. |
+| The existing one-session desktop model could not retain a reviewed plan and later results while sessions came and went. | Introduce process-live tasks with one current session and separately named bounded plan, execution, inventory, integrity, and post-copy result slots. | Accepted target, checkpoint 4. |
+| Concurrent control/start/release/close commands had no single effect owner, so identical retries and competing commands could both progress. | Use one task-operation owner claim with exact-intent replay/join, typed busy/conflict observations, and owner-only publication or compensation. | Accepted target, checkpoint 4. |
+| A review candidate could be staged, rejected, or throw after staging and leave partial overlays, indexes, charges, or stale browser state. | Use an exact staged-result matrix, precharged rejection latch, atomic generation publication, complete compensation to prior/null truth, and one sticky task publication issue with fixed recovery guidance. | Accepted target, checkpoint 4. |
+| Reads, replacement, projection eviction, and task close could race on mutable task or generation state. | Add checked task publication epochs, ordinary/cleanup leases, immutable generation pins, write-intent drain, and unpinned-only eviction with revision rechecks after outside work. | Accepted target, checkpoints 4 and 11. |
+| Terminal callbacks and close could lose reconciliation capacity or release a successor session. | Pre-reserve a terminal reconciler/callback lease, key release to exact task/session identity, and retain bounded release/close tombstones for retry authority. | Accepted target, checkpoint 4. |
+| Shutdown or busy close could strand long polls, observers, pins, or cleanup work while reporting the task closed. | Seal admission, wake/cancel long polls, cancel and reconcile the exact session, drain ordinary then cleanup leases, and only then remove the task and materialize its close tombstone. | Accepted target, checkpoints 4 and 11. |
+| Task artifacts, projections, receipts, slots, handlers, responses, and tombstones had incomplete or mutually inconsistent containment rules. | Enforce permanent/transient reservations before surface work, bounded task/projection/receipt/slot stores, non-evicting earned retry authority, and analytically charged response/handler copies. | Accepted target, checkpoints 4 and 11; exact walls live in Bridge/Defense. |
+| Picker-only slots, typed paths, remembered locations, and real work starts risked using different path grammars or cached root evidence. | Route every path source through one workflow-owned literal local-directory admission service, issue purpose-bound expiring slots, and freshly re-admit roots when work actually starts. | Accepted target, checkpoints 5–6. |
+| “Recent folders” could be inferred from typing/picking or persisted as cosmetic UI state, overstating prior successful use. | Derive recents only from eligible ledger activity, keep reachability separate from history, revalidate on activation, and never place recents in `ui-state.json`. | Accepted target, checkpoints 5–6. |
+| Mutable defaults or Setup edits could change an already reviewed plan, and multi-pair creation lacked partial-failure semantics. | Freeze the complete task-local option/filter snapshot into planning and commitment; create multiple pairs serially with independent success/refusal and no rollback of admitted tasks. | Accepted target, checkpoint 6. |
+| Manual post-copy verification could rescan, reuse stale hashes, overwrite execution truth, or attach evidence from another run. | Classify one ledger-current same-run snapshot by run token and operation identity, freshly admit the target, start only a ready subset, and publish into a separate replaceable post-copy result slot. | Accepted target, checkpoint 10. |
+| Large plan/inventory views could build partial artifacts, let the browser own complete lists, or erase the last complete view on a refused replacement. | Build complete bounded server-owned candidates, publish atomically, page/window only immutable projections, preserve a complete predecessor on replacement refusal, and return a typed no-partial initial refusal. | Accepted target, checkpoints 4, 7, and 9. |
+| Viewport rows, display paths, warnings, and coincidental hashes could be promoted into selection, action, or evidence authority. | Resolve opaque ids and recursive scopes server-side, keep warnings non-actionable, keep paths display-only, and label evidence provenance/currentness explicitly. | Accepted target, checkpoints 7–10. |
+
+### Ratification and publication defects found during review
+
+| Defect | Resolution applied during checkpoint 0 |
+| --- | --- |
+| Signed-64, terminal-summary, task-claim, epoch, and retention decisions were copied through many component documents, creating parallel truths. | Exact protocol shapes now live in `M1_BRIDGE.md`, exact defense walls in `DEFENSE.md`, and component documents carry only local consequences or pointers. |
+| The first enlarged Bridge section was disconnected from the DR-BR records and tried to win conflicts through a blanket precedence sentence. | The Bridge map now assigns every shared register area to explicit DR-BR owners and acts as the sole supersession inventory; unmapped decisions remain untouched and targets remain inactive until their checkpoints. |
+| `TESTS.md` duplicated checkpoint, module, command, and case catalogs despite the executable department manifest. | It was nearly reverted and now contains only generic accepted-target routing; `tests/_departments.py`, H2 checkpoint clauses, and owning BR-G gates remain the relevant authorities. |
+| `FEATURES.md` carried transport schemas, algorithms, limits, and lifecycle implementation detail instead of product behavior. | It now states user-visible active/unrealized behavior and points technical mechanics to Bridge, Defense, or the owning component document. |
+| The exact `mutate_selection` row returned only a revision while local DR prose also promised a selection digest. | The response promise was removed; the digest remains internal commitment authority. |
+| Publication-fault prose referred to a fixed “message above” that condensation had deleted. | The exact action-guiding close-and-retry message was restored at the publication contract. |
+| Register ownership omitted the history/data-epoch owner, over-assigned history pagination to unrelated result/command registers, and missed newly required BR-G traceability. | Map ownership was narrowed and enumerated; epoch ownership and DR-to-gate rows were reconciled, including recording, retention, location, and command gates. |
+| The Setup checkpoint required exact slot-claim guidance, but Bridge retained only the tagged busy result. | Exact wait/reselect renderer guidance was restored beside the `slot-claimed` result. |
+| Local DR prose repeated stale workflow/history version numbers and created current-versus-target ambiguity. | Local epoch numbers were replaced with shared-register pointers; remaining v4 statements are explicitly current-source or historical, while the target cut remains accepted but inactive. |
+| DR-BR-28 still listed future recents as typed cosmetic UI state, contradicting ledger-derived recents. | Recents were removed from the cosmetic-section list and are explicitly barred from UI state. |
+| `HISTORY.md` and `TESTS.md` still required a future mixed-v3/v4 browser-history validator and referenced Core’s removed decoder-debt section. | Current history-v5 compatibility guards are now labelled temporary; checkpoint 3 replaces them with the exact reset target and no legacy browser decoder. |
+| Retry and retention clauses allowed replacement of an unrun result, while DR-BR-03 permanently froze the committed selection that any retry needed to change. | Submission failure and terminal `disposition=unrun` now reopen selection at a new revision; the first `disposition=ran` is the authority-consumption boundary. |
+| A fresh plan from a refused task had no safe way to reconstruct reviewed roots after drive-letter reuse. | `activate_task_pair` resolves both reviewed volume identities afresh and publishes two slots only when both accept; **Plan again** then starts a new task with the frozen setup. |
+| Command arithmetic omitted retained bootstrap/cosmetic rows and had no explicit BR-G-46 revision boundary. | BR-G-46's command-map clause is reopened: checkpoint 4 has 12 unique production commands, checkpoint 6 has 18, and the final surface has 32 target rows plus four retained rows, 36 total. |
+
+### Still open for review before checkpoint 1
+
+- **Reachable versus unreachable scalar rigor:** classify every checked-
+  arithmetic clause. Keep genuinely reachable platform cases as hard walls;
+  demote impossible aggregate cases to assertions or remove them.
+- **Checkpoint-3 placement:** decide whether the exact event/database cut moves
+  immediately before checkpoint 8 so Setup and Plan can run on current v4 first.
+  If it stays early and atomic, predeclare its internal landing order and safe
+  failure stops.
+- **Bug ledger:** select a small set of causal entries from this inventory—such
+  as parallel contract authority, protocol-version boundary drift, publication
+  compensation gaps, and lifecycle ownership races—rather than copying every
+  audit observation into `BUGS.md`.

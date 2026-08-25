@@ -1036,9 +1036,15 @@ generations.
 
 Sync is a serial task interaction: Setup creates one immutable reviewed
 plan, the user chooses a dependency-closed selection, and Execute attaches to
-the same task only after commitment and fresh preflight of that set. Changed
-Setup creates a new task. There is no execute-anyway, auto-commit, or unattended
-path. Automatic linked verification stays in the execution session; manual
+the same task only after commitment and fresh preflight of that set. A terminal
+with `filesystem="refused"` and `disposition="unrun"` displays the generic
+“Execution did not start” state, returns selection controls at a new revision,
+and offers subset retry or explicit **Plan again**. Plan again freshly resolves
+the immutable reviewed volume pair, then creates a new task with the old frozen
+Setup and default selection; changed Setup also creates a new task. Neither path
+copies authorization. There is no background replan, execute-anyway,
+auto-commit, or unattended path. Automatic linked verification stays in the
+execution session; manual
 exact post-copy verification is a later session that never rewrites execution.
 When exact handoff is blocked, the UI explains why and offers only the clearly
 labelled ordinary **Verify current state** fallback.
@@ -1168,8 +1174,8 @@ Contrast and no-color-only signaling remain requirements in every theme.
   selection, process-local restart limits, and one-instance behavior.
 - Setup and task-review headed evidence covers editable typed/picker/recent
   admission, serial multi-pair behavior, immutable plan review, bounded
-  reinjection, stale-response suppression, and action-guiding refusal/close
-  states.
+  reinjection, stale-response suppression, unrun selection reopening, reviewed-
+  identity Plan again, and action-guiding refusal/close states.
 - Plan and inventory headed evidence proves server-owned hierarchy, accessible
   grouping, independent evidence/result axes, confirmation-gated rebaseline,
   exact-handoff fallback labeling, and no browser-retained full result.

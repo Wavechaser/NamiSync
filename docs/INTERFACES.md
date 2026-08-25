@@ -115,7 +115,12 @@ and advances that request's revision monotonically, even when deterministic
 operation ids repeat. Recognized selection command ids remain retry tombstones
 across that replacement, so a lost response cannot reapply old intent to the
 new artifact. The H2 desktop exposes no such in-task replacement: changed Setup
-or fresh planning creates a new task, while the old plan slot stays immutable.
+or explicit Plan again creates a new task, while the old plan slot stays
+immutable. Plan again asks the backend to resolve the retained plan's reviewed
+volume identities into fresh Setup slots; it never submits the old display path
+or copies selection state. A refused/unrun execution reopens only the old task's
+selection at a new revision, so subset retry remains a new commitment over the
+same plan rather than artifact replacement.
 Folder gestures expand only toggleable descendants; a
 safety-disabled row remains disabled without making selectable siblings inert.
 Only the execution registration supplies

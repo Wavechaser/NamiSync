@@ -115,7 +115,7 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
 later workflow surfaces and beta packaging remain future phases.
 
-#### Ratify the Stage 6 second-half reslice (2026-08-24)
+#### Ratify the Stage 6 second-half reslice (2026-08-24 – 2026-08-25)
 
 - Accepted the H2 checkpoint sequence for Slices 5–6 and early Slice 7 while
   keeping every target contract inactive until its implementation checkpoint;
@@ -130,6 +130,11 @@ later workflow surfaces and beta packaging remain future phases.
   case catalog. Independent authority, component, Bridge, and final integration
   reviews closed the discovered selection, publication, epoch, recents, and
   mixed-version contradictions before ratification.
+- Restored useful retry after an execution that did not run: the unchanged
+  plan's selection reopens at a new revision and a retry mints a fresh
+  commitment, while `disposition=ran` permanently consumes the authority.
+  Added identity-safe **Plan again** through `activate_task_pair`, and reopened
+  BR-G-46 with exact 12/18/36 command-map totals.
 
 #### Extract truthful per-item progress (2026-08-21 – 2026-08-23)
 

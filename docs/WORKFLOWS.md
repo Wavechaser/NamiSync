@@ -177,7 +177,11 @@ preflight. The service integration owns review revisions, lower-level direct-
 artifact replacement discard, and the reviewing/committing/committed
 transition; the client submits revisions and opaque ids but never becomes
 selection authority. The H2 desktop never replaces a published task plan in
-place: a fresh review creates a new task and default selection.
+place. A terminal unrun attempt returns the unchanged plan's selection to
+reviewing at a new revision so a fresh commitment may authorize another subset;
+the first ran result freezes it permanently. Explicit Plan again resolves the
+retained reviewed location identities and creates a new task with default
+selection rather than replacing the old artifact or carrying authorization.
 
 ### M0 implementation
 

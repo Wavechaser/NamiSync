@@ -1,9 +1,10 @@
 # Session Handoff
 
-Status (2026-08-24): Stage 6 second-half checkpoint 0 is ratified in five
-documentation commits. The accepted Bridge, scalar, retention, Setup, task,
-review, inventory, and integrity targets remain inactive until their named
-implementation checkpoints. Checkpoint 1 has not started.
+Status (2026-08-25): Stage 6 second-half checkpoint 0 is ratified and its
+unrun-execution retry contract is reconciled. The accepted Bridge, scalar,
+retention, Setup, task, review, inventory, and integrity targets remain
+inactive until their named implementation checkpoints. Checkpoint 1 has not
+started.
 
 ## Delivered
 
@@ -20,30 +21,37 @@ implementation checkpoints. Checkpoint 1 has not started.
 - Reduced component additions to local behavior, consequences, checkpoint
   coverage, and authority pointers. `FEATURES.md` contains product behavior;
   `TESTS.md` contains no parallel checkpoint, module, command, or case catalog.
-- Reconciled stale selection-digest returns, publication and slot-claim
-  guidance, DR-to-gate ownership, UI-state recents, and future mixed-version
-  decoder prose found during adversarial review. No runtime code changed.
+- Reconciled selection authority after an unrun attempt: submission failure or
+  terminal `disposition=unrun` reopens the unchanged plan at a new selection
+  revision, while the first `disposition=ran` permanently consumes that
+  selection authority. A retry creates a fresh commitment.
+- Added identity-safe **Plan again** behavior through `activate_task_pair` and
+  a new `start_plan`: reviewed volume identity is re-resolved server-side,
+  setup options are reused, and neither stale display paths nor prior selection
+  authority carry into the new task.
+- Reopened BR-G-46's command-map clause with exact checkpoint totals, retained
+  its completed cosmetic-state clause, and moved the checkpoint-0 findings
+  record from this session handoff to the bottom of `M1_SHELL_H2.md`.
 
 ## Verification
 
 - Independent component, authority/status, Bridge, and final integration
-  reviews completed; their actionable findings were corrected and rechecked.
-- Local Markdown validation resolved 102 links/anchors across 43 files; the
-  Bridge retains all 31 accepted Stage 6 command rows with unique headings and
-  valid internal anchors.
+  reviews completed during ratification; their actionable findings were
+  corrected and rechecked.
+- The Bridge retains 32 accepted Stage 6 target command rows. The command map
+  is 12 unique production commands after checkpoint 4, 18 after checkpoint 6,
+  and 36 after all target rows plus the four retained bootstrap/cosmetic rows
+  are active.
 - `tests/test_department_policy.py`: `16 passed`.
-- Repository collection: `2891/2919 tests collected`, `28 deselected`.
-- Cumulative and per-commit `git diff --check` passed. The ratification is
-  materially smaller than the discarded pass: 24 files at `+3288/-883` before
-  this changelog/handoff record, rather than roughly `+6600/-606`.
+- Repository collection during ratification: `2891/2919 tests collected`,
+  `28 deselected`.
+- Markdown consistency searches, exact command-row counts, and
+  `git diff --check` passed for the follow-up correction.
 
 ## Immediate Next Context
 
-Stop for the requested recap before checkpoint 1. Four decisions remain:
+Stop for the requested recap before checkpoint 1. Three decisions remain:
 
-- Close command arithmetic explicitly: state the post-checkpoint-6 unique
-  command total, account for the four bootstrap/cosmetic rows, reopen BR-G-46,
-  and add its revision bullets to checkpoints 4 and 6.
 - Classify each signed-64 and checked-arithmetic clause by reachability on the
   supported platform. Keep reachable filesystem-index cases as hard walls;
   demote or remove unreachable sums rather than presenting equal urgency.

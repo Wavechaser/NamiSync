@@ -108,7 +108,7 @@ target authority; it does not activate that target before its named checkpoint.
 | --- | --- | --- |
 | [DR-BR-01](#dr-br-01--user-selection-enters-the-facade-as-a-separate-set) | Selection workflow/service | Keep user deselection distinct from safety exclusions and retain its execution provenance. |
 | [DR-BR-02](#dr-br-02--reselection-closes-upward-over-the-user-set-only) | Selection workflow | Reselection closes dependencies only within the user-deselected set. |
-| [DR-BR-03](#dr-br-03--selection-is-revisioned-and-commitment-freezes-it) | Service selection state | Revision selection and freeze it through reviewing, committing, and committed states. |
+| [DR-BR-03](#dr-br-03--selection-is-revisioned-and-ran-authority-freezes-it) | Service selection state | Revision selection, reopen it after terminal unrun authority, and freeze it permanently at the first ran result. |
 | [DR-BR-04](#dr-br-04--direct-artifact-replacement-discards-selection) | Selection workflow/service | A lower-level direct artifact replacement clears deselection and advances its revision; desktop replanning creates a new immutable-plan task. |
 | [DR-BR-05](#dr-br-05--four-runtime-methods-reach-the-facade) | Service facade | Lift the four inventory acknowledgment/staleness reads as typed passthroughs. |
 | [DR-BR-06](#dr-br-06--location-commands-accept-opaque-ids) | Service, scanner, recorder | Resolve opaque row/folder ids server-side; freeze recursive scope and fresh location evidence under the shared command contract. |
@@ -312,6 +312,10 @@ absence. Free-form diagnostics are already bounded before construction.
   plan is one-shot; execution may replace unrun but freezes at first ran;
   inventory, ordinary integrity, and manual post-copy may replace only their own
   slots after full old/new reservation. History keeps each session identity.
+  The desktop renders `filesystem="refused"` plus `disposition="unrun"` as the
+  generic action state “Execution did not start. Review the selection or plan
+  again.” It does not expose preflight terminology or infer a more specific
+  cause from those axes alone.
 - `SessionEventView` = `{session_id:HexId,sequence:PositiveSafeInt,
   at:string,schema_version:5,body_type:string,body:object}`; `body_type` and
   `body` must be the exact v5 pair owned by `CORE.md`, not independently
@@ -403,8 +407,9 @@ absence. Free-form diagnostics are already bounded before construction.
   component evidence maps to `unavailable`/`unusable-volume-facts`; neither is
   mislabeled as a filesystem refusal. `CandidateView` adds the
   exact `slot_id:SlotId|null` key; accepted requires a non-null slot and every
-  other state requires null. A refused recent pair carries two slotless
-  assessments, while an accepted pair carries two slotted candidate views.
+  other state requires null. A refused recent- or task-pair activation carries
+  two slotless assessments, while an accepted pair carries two slotted candidate
+  views.
 - `SetupOptionIssue` = `{field:"filters",index:SafeInt|null,
   code:"empty"|"entry-too-large"|"total-too-large"|"absolute"|
   "device-qualified"|"nul"|"invalid-unicode"|"dot-component"}`. An options
@@ -996,7 +1001,7 @@ command id naming the tombstoned task idempotently returns the same exact
 creating another receipt or requiring nonexistent `TaskDetail`. After expiry,
 either form returns `task_unavailable`.
 
-Pre-task Setup mutations use a separate, charged 128-entry receipt table with a
+Setup-family mutations use a separate, charged 128-entry receipt table with a
 30-minute TTL. Receipts are never LRU-evicted before that TTL, and exact replays
 never repeat native/ledger work. An associated returned slot is pinned against
 slot LRU eviction for its first 60 seconds and is replayed while it remains
@@ -1004,6 +1009,16 @@ live; after that pin, an ordinarily evicted or expired slot makes replay return
 `slot_unavailable`. Changed intent returns `command_conflict`.
 When the table is full, a new mutation returns `receipt_capacity_full`; an
 existing receipt remains replayable.
+
+`activate_task_pair` uses that Setup receipt table even though its input names a
+retained task. First delivery takes an ordinary task lease and immutable plan-
+generation pin, snapshots the exact plan fingerprint and both reviewed location
+identities, reserves two slot placeholders, and releases the task lock before
+fresh native resolution. Before publishing either slot it rechecks the exact
+task object, plan generation, and publication epoch; a close, replacement, or
+loss of the retained plan returns `task_unavailable` and publishes no slot. The
+receipt binds the wire task id and captured immutable plan identity. Exact replay
+consults that receipt before rereading the task and never resolves a later plan.
 `start_plan`/`start_inventory` begin there while their task is unpublished. On
 successful publication the input slots are atomically consumed and the same
 receipt transfers into the new
@@ -1022,9 +1037,10 @@ or dispatcher work.
 Candidate intent slots have an independent 32-entry LRU capacity. Before a
 typed or picker result can begin native admission, the slot store atomically
 evicts enough unpinned entries and reserves one placeholder; recent activation
-first revalidates current membership, then does the same. Pair activation
-atomically reserves two placeholders or none after membership revalidation and
-before either native probe. A refusal or exception releases every placeholder,
+first revalidates current membership, then does the same. Recent-pair activation
+reserves after membership revalidation; task-pair activation reserves after the
+immutable plan snapshot. Either pair path atomically reserves two placeholders
+or none before native probing. A refusal or exception releases every placeholder,
 so partial pair admission creates no slot. If pinned or claimed entries leave
 insufficient room, the command returns fixed `slot_capacity_full` before native
 admission; a receipted command retains that error in its Setup receipt, while
@@ -1106,6 +1122,7 @@ named view type, `CandidateAssessment`, `HandoffAssessment`, and
 | `admit_typed_folder` (cp6) | `{command_id:HexId,purpose:"source"|"target"|"inventory",path:string}` | `CandidateView` | M; setup receipt, common workflow admission, purpose slot |
 | `activate_recent_location` (cp6) | `{command_id:HexId,recent_id:RecentId,purpose:"source"|"target"|"inventory"}` | `CandidateView` | M; setup receipt, current bounded recent membership, fresh common admission, purpose slot |
 | `activate_recent_pair` (cp6) | `{command_id:HexId,pair_id:PairId}` | `{disposition:"accepted",source:CandidateView,target:CandidateView}` or `{disposition:"refused",source:CandidateAssessment,target:CandidateAssessment}` | M; setup receipt, one current snapshot; two slots only when both accept |
+| `activate_task_pair` (cp6) | `{command_id:HexId,task_id:TaskId}` | `{disposition:"accepted",source:CandidateView,target:CandidateView}` or `{disposition:"refused",source:CandidateAssessment,target:CandidateAssessment}` | M; setup receipt, exact live sync task and immutable plan generation, reviewed volume identities, fresh common resolution/admission; two slots only when both accept |
 | `start_plan` (cp6) | `{command_id:HexId,source_id:SlotId,target_id:SlotId,options:PlanSetupInput}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`, `PlanStartRefusal`, or `{disposition:"busy",reason:"slot-claimed"}` | M; setup/published-start receipt route, native option canonicalization, slots, reserve, fresh pair admission, unpublished owner claim and attached plan start |
 | `start_inventory` (cp6) | `{command_id:HexId,inventory_id:SlotId}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`, `InventoryStartRefusal`, or `{disposition:"busy",reason:"slot-claimed"}` | M; setup/published-start receipt route, slot, reserve, fresh admission, unpublished owner claim and attached inventory start |
 | `open_plan_view` (cp7) | `{task_id:TaskId,expected_lifecycle_revision:SafeInt}` | `{disposition:"opened",view:PlanView}` or `{disposition:"conflict",lifecycle_revision:SafeInt}` | R; task/lifecycle, immutable plan memo |
@@ -1257,6 +1274,18 @@ not soft-deleted, then performs fresh resolution. A stale/top-five-evicted id is
 `recent_unavailable`; it never revives an inactive mapping. Receipt lookup still
 precedes this revalidation for exact lost-response replay.
 
+`activate_task_pair` does not use recent membership or feed stale `display` text
+back through typed-path admission. It requires a retained sync task with one
+complete immutable plan, reads the plan review header's source and target volume
+identities plus volume-relative paths, and resolves both through the same fresh
+candidate service as remembered locations. It returns two truthful slotless
+assessments on refusal and publishes two purpose-bound slots only when both
+accept. It creates no plan, task, run, recent, commitment, or selection state.
+The explicit **Plan again** gesture may orchestrate `activate_task_pair` followed
+by `start_plan` using the old task's immutable `TaskDetail.setup`; the new task
+has a new request identity and default selection. There is no background task
+creation, selection carry-forward, automatic commitment, or automatic execute.
+
 The execution-evidence repository uses one read transaction. It resolves
 `runs.run_token` from the retained execution id, joins
 `operations.run_id=runs.id`, matches the retained overlay `item_id` to
@@ -1404,7 +1433,7 @@ The user would watch a checkbox go grey the instant they clicked it.
 exclusion (DR-BR-01), so reselecting a child whose parent is genuinely
 blocked leaves the child excluded, correctly and visibly.
 
-### DR-BR-03 — Selection is revisioned, and commitment freezes it
+### DR-BR-03 — Selection is revisioned, and ran authority freezes it
 
 Selection is server-side state mutated by concurrent bridge handlers
 (DR-BR-17). A lock alone is insufficient: two toggle batches can acquire it in
@@ -1441,26 +1470,36 @@ committed transition, and user-confirmation policy.
   this view"; digest binds the actual selected set and is what `commit_plan`
   validates.
 
-**Commitment has three states, because admission can fail.** Freezing straight
-to `committed` strands the selection: `start_execution` calls `commit_plan`
-and *then* `Dispatcher.submit`, so a submit failure leaves no session while the
-selection stays frozen and Execute stays dead. The task becomes unusable with
-nothing to retry.
+**Commitment has three states, because admission or an attached attempt can
+finish without consuming execution authority.** Freezing straight to permanent
+`committed` strands a safe retry: submission may fail before a session exists,
+and fresh preflight may terminate an attached execution as `unrun`. Neither
+case changes the immutable plan or consumes its authorized operation set.
 
-The transition is `reviewing → committing → committed`:
+The transition is:
 
 1. Under the selection lock, validate the expected revision and snapshot the
    effective selection.
-2. Mark `committing`, release the lock, and submit.
-3. On success, mark `committed`.
-4. **On failure, return to `reviewing`** and leave Execute available. Nothing
-   ran, so nothing is bound.
+2. Mark `committing`, release the lock, construct the immutable commitment, and
+   submit.
+3. On successful attachment, mark `committed` and keep selection controls frozen
+   while that execution is live.
+4. On submission failure, atomically return to `reviewing`, advance
+   `selection_revision` once even though membership is unchanged, and leave
+   Execute available.
+5. On a terminal `disposition="unrun"`, atomically publish the complete result
+   and fresh-notice generation, clear the active commitment reference, return to
+   `reviewing`, and advance `selection_revision` once. The old immutable
+   commitment remains part of that session's history.
+6. On the first terminal `disposition="ran"`, freeze the selection permanently.
+   `ran` means execution authority was consumed, including an all-NOOP,
+   metadata-only, failed, partial, or canceled run; it does not require moved
+   bytes.
 
-**`committing` always resolves.** The transition to `committed` or back to
+**`committing` always resolves.** The transition to `committed` or revised
 `reviewing` sits in a `finally`, and *any* escaping exception takes the failure
-branch. A state that can be left occupied by an unexpected error is a task that
-can never be executed again and never says why — and `Dispatcher.submit` fails
-by raising, so this is the ordinary path, not a defensive one.
+branch. The revision advance invalidates a delayed pre-commit selection gesture
+instead of letting it arrive after reopening with a still-current revision.
 
 A concurrent Execute observing `committing` must not create a second session —
 it is a duplicate of work already in flight, not a new request. A double-click
@@ -1470,16 +1509,20 @@ an error, which the client renders as "already starting" rather than as a
 failure. "Exactly one session exists" is only half a contract; the other half is
 what the loser of the race sees.
 
-Mutations against a `committing` or `committed` selection are refused with a
-**distinct** response, not a revision conflict. A conflict tells the client to
-re-read and retry; committed means retrying is wrong. The client settles
-silently into the frozen selection with its controls disabled — a late click
-made before the freeze changed nothing and warrants no error.
+Mutations against a `committing` selection, a live `committed` attempt, or a
+selection permanently frozen by `ran` are refused with a **distinct** response,
+not a revision conflict. The client settles silently into the current frozen
+state. If that attempt later terminates `unrun`, the reopening revision makes
+every delayed pre-commit mutation stale; the client must read the new revision
+and use a fresh selection command id.
 
-An H2 desktop task's `committed` selection never returns to `reviewing`: a
-fresh plan creates a new task with a new default selection. The lower-level
-direct artifact-replacement guard in DR-BR-04 separately discards the replaced
-request's selection as defense in depth.
+A retry after `unrun` uses a fresh `start_execution.command_id` and mints a new
+immutable commitment with the current authoritative `selection_digest` and a
+new `committed_at`. Exact replay of the old start command returns its original
+attempt and never creates the new authorization. A genuinely fresh plan still
+creates a new task with a new request identity and default selection; the
+lower-level direct artifact-replacement guard in DR-BR-04 separately discards
+the replaced request's selection as defense in depth.
 
 **The client supplies a revision, never a digest.** JavaScript needs the
 revision for stale-view detection and nothing more. The service derives the
@@ -1575,8 +1618,11 @@ contain operations no human reviewed, and carrying the old set forward would
 let a checkbox state never applied to *this* plan participate in
 `selection_digest`.
 
-**Resolution:** any preflight rescan discrepancy invalidates execution and
-forces fresh review. The already-implemented lower-level service guard remains:
+**Resolution:** any fresh-preflight discrepancy invalidates that execution
+attempt and returns an unrun task to review. The plan artifact remains immutable:
+the user may deselect affected operations and retry the remaining reviewed
+subset under DR-BR-03, or explicitly create a new plan task when the changed
+world warrants a new artifact. The already-implemented lower-level service guard remains:
 if a direct facade/runtime caller mutatively replaces an artifact under the same
 request id, it discards that request's selection while advancing the request's
 revision monotonically. The service retains recognized
@@ -1586,8 +1632,11 @@ intent. A new command carrying the old revision conflicts, including an Execute
 or destructive acknowledgement formed against the superseded artifact. The UI
 never invokes that replacement path. The H2 desktop protocol exposes no in-task
 replan command and its task plan slot is immutable after its one complete or
-refused publication; changed Setup or a fresh review starts a new task with a
-new request identity and default selection. Required lower-level coverage still
+refused publication. Changed Setup starts a new task. The explicit **Plan again**
+gesture uses `activate_task_pair` to resolve the old plan's reviewed volume
+identities into two fresh Setup slots, then calls `start_plan` with the immutable
+old `TaskDetail.setup`; it creates a new request identity and default selection
+without copying operation ids or authorization. Required lower-level coverage still
 asserts discard, monotonic revision, retry behavior, and the mutation/artifact-
 replacement race, while desktop coverage proves an old task's receipts and
 selection cannot enter the new task.
@@ -3513,7 +3562,7 @@ artifact documents.
 | Discard late selection by request id | Rejected — revision conflict is the authoritative concurrency decision. |
 | Path-only node ids | Rejected — identical relative paths across scopes would collide. |
 | Inventory row-level SQL paging | Rejected — row order cannot express synthesized ancestry, rollups, or the post-filter visible sequence. |
-| Freeze selection directly to committed | Rejected — failed dispatcher admission would strand an uneditable task. |
+| Freeze selection permanently at commitment | Rejected — failed admission or a terminal unrun attempt would strand a safely editable reviewed subset; permanent freeze begins at ran authority consumption. |
 | Typed desktop confirmation phrase | Rejected — ordinary explicit confirmation supplies the intended irreversible-action friction. |
 | Stage 5.5 CLI acknowledgment commands | Rejected — ids were undiscoverable and a coherent CLI contract exceeded the facade-lift scope. |
 | Release every background projection | Rejected — it makes the LRU cap unreachable and defeats fast task switching. |
@@ -3783,13 +3832,23 @@ headings are organizational, not lane ownership.
 - **BR-G-14 — The revision protocol cannot diverge.** A mutation at a stale
   revision applies nothing and returns conflict with the current revision; a
   no-op batch still advances the revision; a deselect-then-reselect cycle
-  advances it while reproducing the prior digest. *Not satisfied by* comparing
-  digests, which cannot observe an applied no-op.
-- **BR-G-15 — Admission failure is recoverable.** Fault-inject
-  `Dispatcher.submit` to fail; assert the selection returns to `reviewing`,
-  Execute is available, and no session exists. Then assert a concurrent Execute
-  during `committing` yields exactly one session. *Not satisfied by* the happy
-  path, where the three states are indistinguishable from two.
+  advances it while reproducing the prior digest. Submission failure and a
+  terminal unrun result each advance it once while preserving membership, so a
+  delayed pre-commit gesture conflicts after reopening. *Not satisfied by*
+  comparing digests, which cannot observe an applied no-op or a reopened
+  authorization epoch.
+- **BR-G-15 — Unconsumed execution authority is recoverable.** Fault-inject
+  `Dispatcher.submit` to fail; assert the selection returns to `reviewing` at a
+  new revision, Execute is available, and no session exists. Then attach an
+  execution that terminates with `disposition="unrun"`, including the
+  `filesystem="refused"` execution-start-failure witness: publish its complete
+  result/notices,
+  return to `reviewing` at one new revision, edit the selection, and prove a
+  fresh start command mints a new commitment while replay of the old command
+  returns only the original attempt. A first ran result—including all-NOOP—must
+  freeze permanently. Also assert a concurrent Execute during `committing`
+  yields exactly one session. *Not satisfied by* the happy path, treating zero
+  bytes as unrun, or reopening without invalidating stale selection intent.
 - **BR-G-16 — Mutating commands are retry-safe.** A replayed gesture applies
   exactly once. Assert the actual disposition sequence rather than an equality:
   the first call reports `APPLIED` and the replay reports `NOOP`, because
@@ -4434,9 +4493,9 @@ headings are organizational, not lane ownership.
   *Not satisfied by* a task-count cap, measuring a summary-only result, omitting
   browser/native transients, clearing truth before retry ends, or selecting a
   ceiling after observing the fixture.
-- **BR-G-46 — Cosmetic state is typed, bounded, non-authoritative, and visually
-  coherent.** The exact nine-row native mapping and browser policy mirror
-  agree on both cosmetic rows, their `OPEN` phase, five-second deadline,
+- **BR-G-46 — Command-map revisions and cosmetic state remain exact, bounded,
+  and non-authoritative.** The current exact nine-row native mapping and browser
+  policy mirror agree on both cosmetic rows, their `OPEN` phase, five-second deadline,
   field requirements, read-only uncertainty replay, and replacement read-
   reconciliation policy.
   Focused tests prove the complete revision decision table, concurrent
@@ -4456,15 +4515,26 @@ headings are organizational, not lane ownership.
   high contrast temporarily wins, and accent/reduced-motion values stay
   system-owned. No bridge oracle or compositor sentinel is required: exact
   native policy/static tests, fault-directed material tests, and the installed
-  transport/gallery witnesses jointly own this gate. The typed owner, exact
-  two-row bridge channel, appearance consumer, and named headed selector
-  witness are active; **gate status: complete.** *Not
+  transport/gallery witnesses jointly own the cosmetic clause. The typed owner,
+  exact two-row bridge channel, appearance consumer, and named headed selector
+  witness are active; that clause remains complete.
+
+  The Stage 6 command-map clause is **REOPENED**. Checkpoint 4 replaces the three
+  current task/session rows with six task rows while retaining current
+  `pick_folder`/`start_plan` and the four bootstrap/cosmetic rows: 12 unique
+  production commands. Checkpoint 6 replaces those two current Setup rows with
+  eight accepted Setup rows, including `activate_task_pair`: 18 unique commands.
+  After all checkpoints, the 32 target rows plus the four retained bootstrap/
+  cosmetic rows make 36. Python/JavaScript policy mirrors must freeze each exact
+  intermediate set and prove removed rows are replacements, not aliases or
+  duplicates. **Gate status: open until the checkpoint-4 and checkpoint-6 map
+  revisions pass.** *Not
   satisfied by* changing page CSS alone, seeding gallery DOM state after window
   creation, persisting a
   permissive dictionary, retrying failed I/O on a timer, or proving only the
   happy-path file round trip.
 - **BR-G-47 — Setup admits one exact local-directory meaning.** Picker, typed
-  input, and remembered-location activation all pass through the same
+  input, remembered-location activation, and reviewed task-pair activation all pass through the same
   workflow-owned candidate service and produce purpose-bound, 30-minute,
   32-entry process-local slots; every plan or inventory start freshly re-admits
   the root. The whole-string parser accepts only ordinary absolute drive-rooted
@@ -4489,9 +4559,13 @@ headings are organizational, not lane ownership.
   only from opened ledger runs, exclude soft-deleted mappings from source,
   target, and pair lists, retain unresolved identity, and return deterministic
   five/five/five bounds. Process-secret deterministic HMAC ids require no
-  retained recent map; activation rechecks current top-five membership and
-  active mapping state. A refused pair returns two truthful slotless
-  assessments and creates no partial slot. Serial multi-pair creation reuses one frozen options
+  retained recent map; recent activation rechecks current top-five membership
+  and active mapping state. Task-pair activation instead pins one immutable plan
+  generation and resolves its reviewed volume identities without treating
+  `display` as a path. Either refused pair returns two truthful slotless
+  assessments and creates no partial slot. An explicit Plan-again gesture may
+  chain the resulting slots into a new default-selection task, but no background
+  replan or selection carry-forward exists. Serial multi-pair creation reuses one frozen options
   snapshot and stable per-row command ids, admits ordinary starts one at a time,
   never rolls back successes, and recovers admitted tasks after navigation.
   Exact Python/JavaScript schemas, hostile inert text, parser/TOCTOU review, and
@@ -4579,7 +4653,7 @@ its row and the applicable regression rows are green.
 | DR-BR-01 | BR-G-10–13, BR-G-20, BR-G-24, BR-G-37, BR-G-40 |
 | DR-BR-02 | BR-G-12, BR-G-24, BR-G-37 |
 | DR-BR-03 | BR-G-13–15, BR-G-17, BR-G-20, BR-G-21, BR-G-37 |
-| DR-BR-04 | BR-G-13 |
+| DR-BR-04 | BR-G-13, BR-G-46, BR-G-47 |
 | DR-BR-05 | BR-G-16, BR-G-18, BR-G-29 |
 | DR-BR-06 | BR-G-1, BR-G-4–9, BR-G-18, BR-G-25–29, BR-G-39, BR-G-47, BR-G-48 |
 | DR-BR-07 | BR-G-7, BR-G-47, and scanner hostile/completeness regression rows |
