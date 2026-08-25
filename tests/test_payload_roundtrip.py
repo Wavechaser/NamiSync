@@ -88,6 +88,23 @@ from namisync.workflows.sync import _commitment_error
 
 NOW = datetime(2026, 7, 19, 12, 30, tzinfo=timezone.utc)
 
+_EXECUTION_V6_ITEM_RECORDING_REASONS = frozenset(
+    {
+        "record-write-failed",
+        "unrecorded-mutation",
+        "recording-prerequisite-failed",
+    }
+)
+_EXECUTION_V6_TASK_RECORDING_ISSUE_REASONS = frozenset(
+    {
+        "recording-open-failed",
+        "final-flush-failed",
+        "finish-failed",
+        "recording-close-failed",
+        "post-settlement-state-diverged",
+    }
+)
+
 
 def test_plan_request_round_trips_latent_source_casing_policy() -> None:
     request = PlanRequest(
@@ -784,6 +801,70 @@ def test_execution_payload_v6_keeps_progress_and_recording_attribution() -> None
     assert (
         encode_execution_request(decode_execution_request(encoded)) == encoded
     )
+
+
+def test_execution_payload_v6_pins_closed_recording_reason_vocabularies() -> None:
+    assert len(_EXECUTION_V6_ITEM_RECORDING_REASONS) == 3
+    assert {
+        reason.value for reason in ItemRecordingReason
+    } == _EXECUTION_V6_ITEM_RECORDING_REASONS
+    assert len(_EXECUTION_V6_TASK_RECORDING_ISSUE_REASONS) == 5
+    assert {
+        reason.value for reason in TaskRecordingIssueReason
+    } == _EXECUTION_V6_TASK_RECORDING_ISSUE_REASONS
+
+
+def test_execution_payload_v6_rejects_unknown_raw_item_recording_reason() -> None:
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    move_update_id = str(_op_id(5))
+    value["execution_set"]["recording_reasons"][move_update_id] = (
+        "unknown-item-recording-reason"
+    )
+
+    with pytest.raises(ValueError, match="unknown-item-recording-reason"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_execution_payload_v6_rejects_unknown_raw_task_recording_reason() -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    value["execution_set"]["recording_issues"][0]["reason"] = (
+        "unknown-task-recording-reason"
+    )
+
+    with pytest.raises(ValueError, match="unknown-task-recording-reason"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_execution_payload_v6_rejects_aggregate_recording_contradictions() -> None:
+    task_attribution = json.loads(
+        encode_execution_request(_rich_execution_request())
+    )
+    task_attribution["execution_set"]["recording"] = "ok"
+    with pytest.raises(
+        ValueError,
+        match="aggregate recording contradicts its item/task attribution",
+    ):
+        decode_execution_request(json.dumps(task_attribution).encode("utf-8"))
+
+    item_attribution = json.loads(
+        encode_execution_request(_rich_verify_request())
+    )
+    item_attribution["execution_set"]["recording"] = "ok"
+    with pytest.raises(
+        ValueError,
+        match="aggregate recording contradicts its item/task attribution",
+    ):
+        decode_execution_request(json.dumps(item_attribution).encode("utf-8"))
+
+    no_attribution = json.loads(
+        encode_execution_request(_rich_execution_request())
+    )
+    no_attribution["execution_set"]["recording_issues"] = []
+    with pytest.raises(
+        ValueError,
+        match="aggregate recording contradicts its item/task attribution",
+    ):
+        decode_execution_request(json.dumps(no_attribution).encode("utf-8"))
 
 
 def test_task_recording_issues_retain_first_reason_in_observation_order() -> None:
