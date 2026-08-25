@@ -236,6 +236,15 @@ unchanged rows from the corrected monolith plus 12 independently reviewed
 post-refactor stabilization rows. `check` requires both the policy oracle and
 the committed trace to match; either can fail while the other passes.
 
+The in-code oracle also carries a typed pre-production recording projection for
+the seven checkpoint-1 rows named by `M1_SHELL_H2.md`. It keeps filesystem,
+item recording, task recording issues, and aggregate recording as separate
+axes, and rejects cross-axis combinations that could relabel a filesystem
+outcome or assign task degradation to an item. This projection participates in
+the independent oracle result but is intentionally absent from normalized
+reports and the JSON baseline, so it can pin the accepted producer target
+without changing the protected trace or current event contract.
+
 `snapshot` requires at least three byte-identical complete runs, refuses every
 oracle mismatch, writes atomically, and will not replace an existing baseline
 unless `--replace` is explicit. `--baseline PATH` redirects snapshot and diff;

@@ -9,7 +9,7 @@ continuation evidence for optional in-session readback. External writers remain
 outside NamiSync's volume-lock contract; the residual races are documented
 below rather than presented as closed.
 
-## Accepted Recording-Settlement Target (Not Active)
+## Recording-Settlement Target (Oracle Active; Production Not Active)
 
 The activation sequence and exact result/event shapes are owned by
 [M1_BRIDGE.md](M1_BRIDGE.md). Executor's local target is operation-local typed
@@ -30,6 +30,13 @@ traces, baseline, and semantic hash. Structural settlement work stays blocked
 until three identical runs and independent review pass. The oracle owns its
 scenario manifest, [M1_SHELL_H2.md](M1_SHELL_H2.md) owns checkpoint coverage,
 and [TESTS.md](TESTS.md) owns test-scope policy; none is duplicated here.
+
+Checkpoint 1 is active only in that oracle. Its immutable tool-local projection
+pins the four filesystem/recording combinations and the three ordering cases
+named by the H2 plan, including item-local prerequisite/write/mutation reasons,
+the final-flush task issue, and sticky aggregate degradation. It does not add a
+production result field, change the current event wire, or enter the retained
+normalized trace; those producer changes begin at checkpoints 2 and 3.
 
 ## Purpose
 

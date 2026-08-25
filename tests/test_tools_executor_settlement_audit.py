@@ -324,6 +324,160 @@ def test_manifest_is_complete_labeled_and_has_no_escape_state() -> None:
         assert all(expected.row for expected in scenario.expected)
 
 
+def test_preproduction_recording_projection_pins_the_seven_target_rows() -> None:
+    succeeded = audit._FilesystemSettlement.SUCCEEDED
+    failed = audit._FilesystemSettlement.FAILED
+    ok = audit.RecordingStatus.OK
+    degraded = audit.RecordingStatus.DEGRADED
+    record_write_failed = audit._ItemRecordingReason.RECORD_WRITE_FAILED
+    unrecorded_mutation = audit._ItemRecordingReason.UNRECORDED_MUTATION
+    prerequisite_failed = audit._ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    final_flush_failed = audit._TaskRecordingIssueReason.FINAL_FLUSH_FAILED
+
+    assert audit._RECORDING_PROJECTION_CASES == {
+        "success.all-nine": audit._RecordingProjectionCase(
+            item_indexes=(0,),
+            items=(audit._ItemRecordingProjection(succeeded, ok, None),),
+            aggregate=ok,
+            task_issues=(),
+        ),
+        "record.copy-failure": audit._RecordingProjectionCase(
+            item_indexes=(0,),
+            items=(
+                audit._ItemRecordingProjection(
+                    succeeded,
+                    degraded,
+                    record_write_failed,
+                ),
+            ),
+            aggregate=degraded,
+            task_issues=(),
+        ),
+        "failure.copy-prepublish-cleanup-ok": audit._RecordingProjectionCase(
+            item_indexes=(0,),
+            items=(audit._ItemRecordingProjection(failed, ok, None),),
+            aggregate=ok,
+            task_issues=(),
+        ),
+        "failure.byte-published.copy": audit._RecordingProjectionCase(
+            item_indexes=(0,),
+            items=(
+                audit._ItemRecordingProjection(
+                    failed,
+                    degraded,
+                    unrecorded_mutation,
+                ),
+            ),
+            aggregate=degraded,
+            task_issues=(),
+        ),
+        "recording.pre-destructive-flush-refusal": audit._RecordingProjectionCase(
+            item_indexes=(0,),
+            items=(
+                audit._ItemRecordingProjection(
+                    failed,
+                    degraded,
+                    prerequisite_failed,
+                ),
+            ),
+            aggregate=degraded,
+            task_issues=(),
+        ),
+        "recording.final-flush-degradation": audit._RecordingProjectionCase(
+            item_indexes=(0,),
+            items=(audit._ItemRecordingProjection(succeeded, ok, None),),
+            aggregate=degraded,
+            task_issues=(final_flush_failed,),
+        ),
+        "recording.sticky-aggregate-degradation": audit._RecordingProjectionCase(
+            item_indexes=(0, 1),
+            items=(
+                audit._ItemRecordingProjection(
+                    succeeded,
+                    degraded,
+                    record_write_failed,
+                ),
+                audit._ItemRecordingProjection(succeeded, ok, None),
+            ),
+            aggregate=degraded,
+            task_issues=(),
+        ),
+    }
+
+    scenario_ids = {
+        "success.all-nine",
+        "failure.copy-prepublish-cleanup-ok",
+        "failure.byte-published",
+        "recording.flush-and-sticky-matrix",
+        "record.copy-failure",
+    }
+    reports = {
+        report["row"]: report
+        for scenario_id in scenario_ids
+        for report in audit._run_in_sandbox(
+            audit._SCENARIO_BY_ID[scenario_id].runner
+        )
+    }
+
+    assert set(audit._RECORDING_PROJECTION_CASES) <= set(reports)
+    for row, expected in audit._RECORDING_PROJECTION_CASES.items():
+        actual = audit._recording_projection(reports[row])
+        assert audit._recording_projection_errors(expected, actual) == []
+
+
+def test_preproduction_recording_projection_rejects_cross_axis_drift() -> None:
+    succeeded = audit._FilesystemSettlement.SUCCEEDED
+    degraded = audit.RecordingStatus.DEGRADED
+
+    with pytest.raises(ValueError, match="requires an item reason"):
+        audit._ItemRecordingProjection(succeeded, degraded, None)
+    with pytest.raises(ValueError, match="cannot carry an item reason"):
+        audit._ItemRecordingProjection(
+            succeeded,
+            audit.RecordingStatus.OK,
+            audit._ItemRecordingReason.RECORD_WRITE_FAILED,
+        )
+    with pytest.raises(ValueError, match="aggregate must be degraded exactly"):
+        audit._RecordingProjection(
+            items=(
+                audit._ItemRecordingProjection(
+                    succeeded,
+                    audit.RecordingStatus.OK,
+                    None,
+                ),
+            ),
+            aggregate=degraded,
+            task_issues=(),
+        )
+
+
+def test_preproduction_recording_projection_rejects_contradictory_raw_facts() -> None:
+    flush_reports = audit._run_in_sandbox(
+        audit._SCENARIO_BY_ID["recording.flush-and-sticky-matrix"].runner
+    )
+    prerequisite = copy.deepcopy(
+        next(
+            report
+            for report in flush_reports
+            if report["row"] == "recording.pre-destructive-flush-refusal"
+        )
+    )
+    prerequisite["items"][0]["detail"]["recording"] = "ok"
+    with pytest.raises(audit.AuditError, match="contradictory prerequisite"):
+        audit._recording_projection(prerequisite)
+
+    final_flush = copy.deepcopy(
+        next(
+            report
+            for report in flush_reports
+            if report["row"] == "recording.final-flush-degradation"
+        )
+    )
+    final_flush["recorder"]["trace"][-1]["error"] = None
+    with pytest.raises(audit.AuditError, match="invalid final flush failure"):
+        audit._recording_projection(final_flush)
+
+
 def test_manifest_rejects_empty_duplicate_missing_and_extra_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

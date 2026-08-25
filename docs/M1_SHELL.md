@@ -39,8 +39,9 @@ foundation and Slice 4's presentation core/shell frame completed their audited
 realignment and were hardened and reverified on 2026-08-17. Second-half
 checkpoint 0 is complete after final documentation, three independent bounded
 reviews, link/anchor validation, manifest-backed test collection, stale-contract
-searches, and diff validation; checkpoint 1 settlement-oracle work is in
-progress. NamiSync remains version `0.1.0` until
+searches, and diff validation; checkpoint 1 settlement-oracle work is complete,
+and checkpoint 2 recording attribution is next. NamiSync remains version
+`0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
 
@@ -743,7 +744,7 @@ ratification; `M1_SHELL_H2.md` records the exact titles.
 | Checkpoint | Commit boundary | Objective | Status |
 | ---: | --- | --- | --- |
 | 0 | five documentation commits listed in `M1_SHELL_H2.md` | Ratify the corrected reslice without coupling independent documentation owners | complete |
-| 1 | `test(executor): pin typed recording settlement truth` | Extend the retained oracle before producer changes | in progress |
+| 1 | `test(executor): pin typed recording settlement truth` | Extend the retained oracle before producer changes | complete |
 | 2 | `refactor(executor): attribute recording degradation by scope` | Add sparse item/task attribution and advance only the execution continuation | pending |
 | 3 | three ordered protocol commits listed in `M1_SHELL_H2.md` | Switch the event/database protocol with dormant consumer, producer/reset, and legacy-removal stops | pending |
 | 4 | three ordered model, dormant-lifecycle, and activation commits listed in `M1_SHELL_H2.md` | Install the task lifecycle and containment foundation | pending |

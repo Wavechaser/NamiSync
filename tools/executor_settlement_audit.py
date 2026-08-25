@@ -13,6 +13,7 @@ import copy
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import UTC, datetime
+from enum import StrEnum
 import hashlib
 import itertools
 import json
@@ -91,6 +92,205 @@ _CLOCK_INCIDENTAL_TREE_TIMESTAMPS = {
 
 class AuditError(RuntimeError):
     """The audit could not produce trustworthy evidence."""
+
+
+class _FilesystemSettlement(StrEnum):
+    """Binary filesystem axis used only by the pre-production recording oracle."""
+
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+
+
+class _ItemRecordingReason(StrEnum):
+    """Accepted item-local reasons projected before the production cutover."""
+
+    RECORD_WRITE_FAILED = "record-write-failed"
+    UNRECORDED_MUTATION = "unrecorded-mutation"
+    RECORDING_PREREQUISITE_FAILED = "recording-prerequisite-failed"
+
+
+class _TaskRecordingIssueReason(StrEnum):
+    """Accepted task-wide reasons projected before the production cutover."""
+
+    RECORDING_OPEN_FAILED = "recording-open-failed"
+    FINAL_FLUSH_FAILED = "final-flush-failed"
+    FINISH_FAILED = "finish-failed"
+    RECORDING_CLOSE_FAILED = "recording-close-failed"
+    POST_SETTLEMENT_STATE_DIVERGED = "post-settlement-state-diverged"
+
+
+@dataclass(frozen=True, slots=True)
+class _ItemRecordingProjection:
+    filesystem: _FilesystemSettlement
+    recording: RecordingStatus
+    reason: _ItemRecordingReason | None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.filesystem, _FilesystemSettlement):
+            raise TypeError("projected filesystem settlement has the wrong type")
+        if not isinstance(self.recording, RecordingStatus):
+            raise TypeError("projected recording status has the wrong type")
+        if self.recording is RecordingStatus.OK and self.reason is not None:
+            raise ValueError("recording-ok projection cannot carry an item reason")
+        if self.recording is RecordingStatus.DEGRADED and not isinstance(
+            self.reason, _ItemRecordingReason
+        ):
+            raise ValueError("recording-degraded projection requires an item reason")
+        expected_filesystem = {
+            _ItemRecordingReason.RECORD_WRITE_FAILED: (
+                _FilesystemSettlement.SUCCEEDED
+            ),
+            _ItemRecordingReason.UNRECORDED_MUTATION: _FilesystemSettlement.FAILED,
+            _ItemRecordingReason.RECORDING_PREREQUISITE_FAILED: (
+                _FilesystemSettlement.FAILED
+            ),
+        }.get(self.reason)
+        if expected_filesystem is not None and self.filesystem is not expected_filesystem:
+            raise ValueError("projected item reason contradicts filesystem settlement")
+
+
+@dataclass(frozen=True, slots=True)
+class _RecordingProjection:
+    items: tuple[_ItemRecordingProjection, ...]
+    aggregate: RecordingStatus
+    task_issues: tuple[_TaskRecordingIssueReason, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.items, tuple) or not all(
+            isinstance(item, _ItemRecordingProjection) for item in self.items
+        ):
+            raise TypeError("projected recording items must be a typed tuple")
+        if not isinstance(self.aggregate, RecordingStatus):
+            raise TypeError("projected aggregate recording has the wrong type")
+        if not isinstance(self.task_issues, tuple) or not all(
+            isinstance(issue, _TaskRecordingIssueReason)
+            for issue in self.task_issues
+        ):
+            raise TypeError("projected task recording issues must be a typed tuple")
+        if len(self.task_issues) != len(set(self.task_issues)):
+            raise ValueError("projected task recording issues must be unique")
+        degraded = any(
+            item.recording is RecordingStatus.DEGRADED for item in self.items
+        ) or bool(self.task_issues)
+        if (self.aggregate is RecordingStatus.DEGRADED) is not degraded:
+            raise ValueError(
+                "projected aggregate must be degraded exactly when an item or "
+                "task issue is degraded"
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class _RecordingProjectionCase:
+    item_indexes: tuple[int, ...]
+    items: tuple[_ItemRecordingProjection, ...]
+    aggregate: RecordingStatus
+    task_issues: tuple[_TaskRecordingIssueReason, ...]
+
+    def __post_init__(self) -> None:
+        if (
+            not isinstance(self.item_indexes, tuple)
+            or not self.item_indexes
+            or any(type(index) is not int or index < 0 for index in self.item_indexes)
+        ):
+            raise ValueError("recording projection indexes must be nonnegative integers")
+        if tuple(sorted(set(self.item_indexes))) != self.item_indexes:
+            raise ValueError("recording projection indexes must be unique and ordered")
+        if len(self.item_indexes) != len(self.items):
+            raise ValueError("recording projection indexes and items must align")
+        _RecordingProjection(self.items, self.aggregate, self.task_issues)
+
+
+_RECORDING_PROJECTION_CASES = {
+    "success.all-nine": _RecordingProjectionCase(
+        item_indexes=(0,),
+        items=(
+            _ItemRecordingProjection(
+                _FilesystemSettlement.SUCCEEDED,
+                RecordingStatus.OK,
+                None,
+            ),
+        ),
+        aggregate=RecordingStatus.OK,
+        task_issues=(),
+    ),
+    "record.copy-failure": _RecordingProjectionCase(
+        item_indexes=(0,),
+        items=(
+            _ItemRecordingProjection(
+                _FilesystemSettlement.SUCCEEDED,
+                RecordingStatus.DEGRADED,
+                _ItemRecordingReason.RECORD_WRITE_FAILED,
+            ),
+        ),
+        aggregate=RecordingStatus.DEGRADED,
+        task_issues=(),
+    ),
+    "failure.copy-prepublish-cleanup-ok": _RecordingProjectionCase(
+        item_indexes=(0,),
+        items=(
+            _ItemRecordingProjection(
+                _FilesystemSettlement.FAILED,
+                RecordingStatus.OK,
+                None,
+            ),
+        ),
+        aggregate=RecordingStatus.OK,
+        task_issues=(),
+    ),
+    "failure.byte-published.copy": _RecordingProjectionCase(
+        item_indexes=(0,),
+        items=(
+            _ItemRecordingProjection(
+                _FilesystemSettlement.FAILED,
+                RecordingStatus.DEGRADED,
+                _ItemRecordingReason.UNRECORDED_MUTATION,
+            ),
+        ),
+        aggregate=RecordingStatus.DEGRADED,
+        task_issues=(),
+    ),
+    "recording.pre-destructive-flush-refusal": _RecordingProjectionCase(
+        item_indexes=(0,),
+        items=(
+            _ItemRecordingProjection(
+                _FilesystemSettlement.FAILED,
+                RecordingStatus.DEGRADED,
+                _ItemRecordingReason.RECORDING_PREREQUISITE_FAILED,
+            ),
+        ),
+        aggregate=RecordingStatus.DEGRADED,
+        task_issues=(),
+    ),
+    "recording.final-flush-degradation": _RecordingProjectionCase(
+        item_indexes=(0,),
+        items=(
+            _ItemRecordingProjection(
+                _FilesystemSettlement.SUCCEEDED,
+                RecordingStatus.OK,
+                None,
+            ),
+        ),
+        aggregate=RecordingStatus.DEGRADED,
+        task_issues=(_TaskRecordingIssueReason.FINAL_FLUSH_FAILED,),
+    ),
+    "recording.sticky-aggregate-degradation": _RecordingProjectionCase(
+        item_indexes=(0, 1),
+        items=(
+            _ItemRecordingProjection(
+                _FilesystemSettlement.SUCCEEDED,
+                RecordingStatus.DEGRADED,
+                _ItemRecordingReason.RECORD_WRITE_FAILED,
+            ),
+            _ItemRecordingProjection(
+                _FilesystemSettlement.SUCCEEDED,
+                RecordingStatus.OK,
+                None,
+            ),
+        ),
+        aggregate=RecordingStatus.DEGRADED,
+        task_issues=(),
+    ),
+}
 
 
 @dataclass(slots=True)
@@ -713,6 +913,20 @@ class ExpectedSettlement:
         difference = _first_strict_difference(expected_policy, observed_policy)
         if difference is not None:
             errors.append(f"exact policy projection: {difference}")
+        recording_case = _RECORDING_PROJECTION_CASES.get(self.row)
+        if recording_case is not None:
+            try:
+                recording_projection = _recording_projection(report)
+            except AuditError as error:
+                errors.append(f"typed recording projection: {error}")
+            else:
+                errors.extend(
+                    f"typed recording projection: {error}"
+                    for error in _recording_projection_errors(
+                        recording_case,
+                        recording_projection,
+                    )
+                )
         _expect(errors, "row", report.get("row"), self.row)
         termination = _mapping(report.get("termination"), "termination", errors)
         _expect(errors, "termination.returned", termination.get("returned"), self.returned)
@@ -883,6 +1097,102 @@ def _first_strict_difference(expected: object, observed: object, path: str = "$"
     if expected != observed:
         return f"{path}: expected {expected!r}, observed {observed!r}"
     return None
+
+
+def _recording_projection(report: Mapping[str, object]) -> _RecordingProjection:
+    """Adapt current oracle facts into the accepted future recording axes."""
+
+    row = report.get("row")
+    if not isinstance(row, str) or row not in _RECORDING_PROJECTION_CASES:
+        raise AuditError("report row has no typed recording projection case")
+    case = _RECORDING_PROJECTION_CASES[row]
+
+    raw_items = report.get("items")
+    if not isinstance(raw_items, list):
+        raise AuditError("report items are not a list")
+    projected_items: list[_ItemRecordingProjection] = []
+    for index in case.item_indexes:
+        if index >= len(raw_items) or not isinstance(raw_items[index], Mapping):
+            raise AuditError(f"report item {index} is missing or malformed")
+        item = raw_items[index]
+        raw_outcome = item.get("outcome")
+        try:
+            filesystem = _FilesystemSettlement(raw_outcome)
+        except (TypeError, ValueError):
+            raise AuditError(
+                f"report item {index} has non-binary filesystem outcome {raw_outcome!r}"
+            ) from None
+
+        detail = item.get("detail")
+        if not isinstance(detail, Mapping):
+            raise AuditError(f"report item {index} detail is not a mapping")
+        if item.get("reason") == "recorder-failed":
+            if "recording" in detail or "recording_error" in detail:
+                raise AuditError(
+                    f"report item {index} has contradictory prerequisite "
+                    "recording detail"
+                )
+            recording = RecordingStatus.DEGRADED
+            reason = _ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+        elif "recording" not in detail:
+            recording = RecordingStatus.OK
+            reason = None
+        elif detail.get("recording") == RecordingStatus.DEGRADED.value:
+            recording = RecordingStatus.DEGRADED
+            reason = (
+                _ItemRecordingReason.RECORD_WRITE_FAILED
+                if filesystem is _FilesystemSettlement.SUCCEEDED
+                else _ItemRecordingReason.UNRECORDED_MUTATION
+            )
+        else:
+            raise AuditError(
+                f"report item {index} has unsupported recording detail "
+                f"{detail.get('recording')!r}"
+            )
+        projected_items.append(
+            _ItemRecordingProjection(filesystem, recording, reason)
+        )
+
+    xset = report.get("execution_set")
+    if not isinstance(xset, Mapping):
+        raise AuditError("report execution set is not a mapping")
+    try:
+        aggregate = RecordingStatus(xset.get("recording"))
+    except (TypeError, ValueError):
+        raise AuditError("report aggregate recording status is invalid") from None
+
+    task_issues: tuple[_TaskRecordingIssueReason, ...] = ()
+    recorder = report.get("recorder")
+    if not isinstance(recorder, Mapping):
+        raise AuditError("report recorder is not a mapping")
+    trace = recorder.get("trace")
+    if not isinstance(trace, list):
+        raise AuditError("report recorder trace is not a list")
+    if trace:
+        final_call = trace[-1]
+        if not isinstance(final_call, Mapping):
+            raise AuditError("report final recorder call is malformed")
+        if final_call.get("command") == "flush" and "error" in final_call:
+            error_name = final_call.get("error")
+            if not isinstance(error_name, str) or not error_name:
+                raise AuditError("report has invalid final flush failure evidence")
+            task_issues = (_TaskRecordingIssueReason.FINAL_FLUSH_FAILED,)
+
+    try:
+        return _RecordingProjection(tuple(projected_items), aggregate, task_issues)
+    except (TypeError, ValueError) as error:
+        raise AuditError(f"report recording axes are inconsistent: {error}") from error
+
+
+def _recording_projection_errors(
+    expected: _RecordingProjectionCase,
+    actual: _RecordingProjection,
+) -> list[str]:
+    errors: list[str] = []
+    _expect(errors, "items", actual.items, expected.items)
+    _expect(errors, "aggregate", actual.aggregate, expected.aggregate)
+    _expect(errors, "task issues", actual.task_issues, expected.task_issues)
+    return errors
 
 
 def _profile(*, hardlinks: bool = True) -> CapabilityProfile:
