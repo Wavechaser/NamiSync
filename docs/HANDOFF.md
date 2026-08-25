@@ -1,10 +1,9 @@
 # Session Handoff
 
-Status (2026-08-25): Stage 6 second-half checkpoint 0 is ratified and its
-unrun-execution retry contract is reconciled. The accepted Bridge, scalar,
-retention, Setup, task, review, inventory, and integrity targets remain
-inactive until their named implementation checkpoints. Checkpoint 1 has not
-started.
+Status (2026-08-25): Stage 6 second-half checkpoint 0 and its pre-checkpoint-1
+adversarial follow-up are complete. The accepted Bridge, scalar, retention,
+Setup, task, review, inventory, and integrity targets remain inactive until
+their named implementation checkpoints. Checkpoint 1 has not started.
 
 ## Delivered
 
@@ -32,6 +31,24 @@ started.
 - Reopened BR-G-46's command-map clause with exact checkpoint totals, retained
   its completed cosmetic-state clause, and moved the checkpoint-0 findings
   record from this session handoff to the bottom of `M1_SHELL_H2.md`.
+- Re-audited the retained findings against their DR-BRs, exact rows, checkpoint
+  dependencies, and gates. No additional authority loop required redesign; the
+  pass did expose and reconcile native file-identity narrowing plus missing
+  typed outcomes for reachable scalar failures.
+- Classified scalar guards by supported-platform reachability in `DEFENSE.md`:
+  full-width file identity, timestamp, and aggregate-logical-byte boundaries
+  remain reachable, while single-volume capacity and post-admission arithmetic
+  are assertions rather than user-facing overflow states.
+- Kept arithmetic in the signed-64 domain while defining opaque Windows file
+  identity separately as canonical 128-bit text from one complete native
+  adapter. Added exact plan logical-byte refusal and scanner timestamp-warning
+  outcomes; later probes reuse their existing unavailable/unreadable states.
+- Kept the event-v5 cut before checkpoint 4 because task results already depend
+  on it, and split checkpoint 3 internally into consumer preparation, atomic
+  producer/database reset, and legacy-removal commits with runnable safe stops.
+- Added only four distinct causal records to `BUGS.md`; existing entries already
+  cover split protocol authority, publication compensation, retention, and
+  lifecycle ownership classes.
 
 ## Verification
 
@@ -47,19 +64,14 @@ started.
   `28 deselected`.
 - Markdown consistency searches, exact command-row counts, and
   `git diff --check` passed for the follow-up correction.
+- The second adversarial pass revalidated the retained authority findings,
+  corrected the scalar/file-identity contract where it did not survive runtime
+  comparison, checked checkpoint-3 dependency direction, and deduplicated the
+  causal bug ledger.
 
 ## Immediate Next Context
 
-Stop for the requested recap before checkpoint 1. Three decisions remain:
-
-- Classify each signed-64 and checked-arithmetic clause by reachability on the
-  supported platform. Keep reachable filesystem-index cases as hard walls;
-  demote or remove unreachable sums rather than presenting equal urgency.
-- Reconsider checkpoint 3 immediately before checkpoint 8. If it stays atomic
-  in its current position, predeclare an internal landing order and safe stop
-  points.
-- Add concise cause-based `BUGS.md` entries for substantive findings from this
-  audit; the defect ledger was intentionally not expanded during ratification.
-
-After that recap, checkpoint 1 is the settlement-oracle extension for typed
-recording attribution. Do not start protocol or task implementation first.
+The pre-checkpoint decisions are closed. Checkpoint 1 is next: extend only the
+settlement oracle's pre-production typed projection and focused tests for item-
+versus-task recording attribution, then require three identical complete runs.
+Do not start protocol or task implementation first.

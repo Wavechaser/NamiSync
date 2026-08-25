@@ -238,6 +238,11 @@ The initial schema reserves the expensive identity/evidence bones:
   independent of plan or interface view state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
+At the accepted checkpoint-3 reset, file-index columns and repository binds use
+canonical `FileIndex128` text rather than SQLite numeric affinity. The exact
+identity domain and native-source rule remain owned by `M1_BRIDGE.md` and
+`DEFENSE.md` §1.3.
+
 Successful byte-producing operation transactions return the persisted target
 inventory row identity, target location, run scope token, and canonical path
 key as one tuple. Idempotent replay returns the identical tuple. Compound

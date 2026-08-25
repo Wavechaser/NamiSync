@@ -620,6 +620,24 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-25). Execution-authority state conflation. The
+  accepted desktop design permanently froze a committed selection even when
+  submission failed or the attached attempt terminated `unrun`, making its
+  documented subset-retry and result-replacement path unusable. Cause: immutable
+  plan evidence, mutable selection authorization, and consumed execution
+  authority shared one terminal meaning. Fixed by reopening the unchanged
+  plan's selection at a new revision after submission failure or `unrun`,
+  minting a fresh commitment for retry, and freezing permanently only at the
+  first `ran` result.
+- MODERATE - FIXED (2026-08-25). Display-path reactivation authority. A new
+  plan requested from an unrun task had no ledger-derived recent pair and could
+  only reuse `ReviewedLocation.display`; after drive-letter reassignment that
+  spelling could identify a different volume. Cause: presentation text was the
+  only proposed bridge from retained review evidence back to Setup admission.
+  Fixed with `activate_task_pair`, which resolves both reviewed volume
+  identities and relative paths afresh, publishes two slots only when both
+  accept, and creates a separate default-selection task without carrying old
+  authorization.
 - MODERATE - FIXED (2026-08-22). Post-Gap phase-authority lock. After a Gap,
   the first self-described Progress established only lossy phase context, but
   the reducer treated it like reliable `PhaseChanged` authority and rejected a
@@ -1199,6 +1217,22 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-08-25). Native file-identity narrowing. Scanner and
+  preflight could observe Windows/Python file indexes wider than 64 bits while
+  executor and verifier reconstructed only legacy high/low 64-bit fields and
+  the ledger stored signed SQLite integers. The same file could therefore
+  compare differently across safety boundaries or fail persistence. Cause:
+  three consumers owned incompatible native and storage representations.
+  Checkpoint 3 replaces them with one complete `FILE_ID_128` adapter and
+  canonical text through core codecs and the reset ledger.
+- MINOR - OPEN (2026-08-25). Cross-consumer schema acceptance drift. The core
+  decoder retains exact v3 history compatibility beside v4 while the live
+  browser validator and canonical history projection accept different version-
+  specific populations; later reuse can therefore make a shape valid in one
+  boundary and unusable in another. Cause: compatibility was added at individual
+  consumers without one event/data epoch and removal point. Checkpoint 3 now
+  stages strict v5 consumers first, performs one producer/database reset cut,
+  and then deletes all positive v3/v4 compatibility before the gate can close.
 - MODERATE - FIXED (2026-08-22). Lossy-progress authority conflation. Forced
   control snapshots combined aggregates from an earlier throttled emission with
   live item-attempt state, producing internally contradictory pause/cancel views;

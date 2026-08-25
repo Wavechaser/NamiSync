@@ -82,12 +82,37 @@ documents point here instead of reproducing these limits.
   checked SQLite `INTEGER`; bridge values use canonical unsigned-decimal text.
   Sequence numbers, bounded counts, offsets, and revisions remain
   JavaScript-safe integers. Native file indices are an opaque exception: their
-  unsigned-64 value is canonical decimal `TEXT`, never an arithmetic scalar.
-- Out-of-domain stat evidence is rejected before ledger construction.
-  Unavailable or overflowing capacity observations follow preflight's existing
-  typed unavailable path; mutation budgets and admission-known aggregates use
-  checked arithmetic and refuse before session admission or mutation. Values
-  are never clamped or wrapped.
+  full Windows 128-bit value is canonical unsigned-decimal `TEXT`, never an
+  arithmetic scalar or JSON number.
+- Reachability determines whether the signed-domain guard is a product branch
+  or an assertion; the two are not presented as equivalent risks:
+
+  | Value or calculation | Reachability on supported NTFS/ReFS | Required treatment |
+  | --- | --- | --- |
+  | Native file index | Reachable through the full unsigned 128-bit Windows/Python domain | Keep canonical unsigned-decimal `TEXT` from one complete `FILE_ID_128` adapter and compare only as opaque identity; when the complete identifier is unavailable, record no identity rather than coerce it into `Scalar64`, a JSON number, legacy 64-bit handle fields, or SQLite arithmetic. |
+  | Filesystem timestamp converted to Unix nanoseconds | Reachable | Reject the stat before ledger construction when it is negative or above the signed domain; never clamp a preservable timestamp. |
+  | One file size, volume capacity, free-space observation, or `free + reclaimable` | Unreachable under the supported filesystem maxima | Validate at the native boundary and assertion-check the sum. Unavailable probes remain typed unavailable, but scalar overflow is not a user-facing capacity state or dedicated preflight refusal. |
+  | Aggregate logical bytes across admitted rows | Reachable because sparse or cloned files can make apparent-size totals exceed physical volume capacity | Use checked accumulation. Refuse an unrepresentable plan before publication with the plan/domain `logical-bytes` review-limit witness; expose the inventory rollup's existing null-plus-overflow witness. |
+  | Post-admission byte counters, bounded counts, and retention-budget arithmetic | Unreachable after their owning aggregate/capacity admission | Keep checked assertions that fail closed as an internal invariant violation; do not add ordinary overflow UX or a second refusal vocabulary. |
+  | Bridge or persistence scalar supplied by an untrusted/corrupt producer | Reachable at the trust boundary | Strictly reject Boolean, signed, noncanonical, or above-domain values before state, cursor, queue, or ledger mutation. |
+
+  The platform basis is explicit: Microsoft's [ReFS limits and feature
+  table](https://learn.microsoft.com/en-us/windows-server/storage/refs/refs-overview)
+  caps one file and one volume at 35 PB while supporting sparse files and block
+  cloning; Windows [`FILETIME`](https://learn.microsoft.com/en-us/windows/win32/sysinfo/file-times)
+  is a 64-bit 100-nanosecond value, and
+  [`SYSTEMTIME`](https://learn.microsoft.com/en-us/windows/win32/api/minwinbase/ns-minwinbase-systemtime)
+  accepts years through 30827. Python 3.13 documents that Windows
+  [`st_ino` may reach 128 bits](https://docs.python.org/3.13/library/os.html#os.stat_result).
+  CPython 3.13 derives that integer from the low/high halves of Windows
+  [`FILE_ID_128`](https://github.com/python/cpython/blob/3.13/Python/fileutils.c#L1014-L1049),
+  and Windows defines the file identifier plus volume serial as the comparison
+  identity in
+  [`FILE_ID_INFO`](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info).
+  Therefore individual size/capacity overflow is not reachable, aggregate
+  apparent-size overflow is, timestamp conversion can exceed signed Unix
+  nanoseconds, and file identity must stay outside the scalar domain. Values are
+  never clamped, wrapped, or narrowed.
 - A plan or inventory tree admits at most 120,000 domain rows plus 120,000
   informational rows. The complete retained-graph ceilings are 128 MiB for a
   plan domain and 192 MiB independently for an inventory domain and either

@@ -39,8 +39,9 @@ decision record, not by treating this prose as a second authority.
 ### Protocol and persistence scope
 
 - Checkpoint 2 changes only the process-local execution continuation.
-  Checkpoint 3 is the atomic core-event, terminal-summary, bridge-validator,
-  ledger, history, CLI, and compatibility cutover.
+  Checkpoint 3 is the coordinated core-event, terminal-summary, bridge-
+  validator, ledger, history, CLI, and compatibility cutover with three
+  runnable landing stops.
 - The exact `TerminalSummary`, refusal fact, recording fields, database epoch,
   scalar codec, checked-arithmetic policy, and reset posture are owned by the
   mapped bridge decisions and `DEFENSE.md` §1.3.
@@ -138,20 +139,65 @@ Commit: `refactor(executor): attribute recording degradation by scope`
 - **Tests:** Executor plus workflow/dispatcher neighborhood; first-row-fails/second-commits, committed-copy/later-item-fails, prepublication failure, apply-raised-but-state-matches, rowless immediate linked verify, pause/resume, paused→resumed→terminal payload scrubbing on success/failure/cancel and delayed release, and event-sink rejection. Repeat the settlement oracle three times.
 - **Docs/review:** Update EXECUTOR, RECORDER, and WORKFLOWS. Adversarially compare filesystem/recorder traces before and after.
 
-### 3. Cut over atomically to event v5
+### 3. Stage the exact event-v5 cutover
 
-Commit: `feat(protocol): cut over to exact core event v5`
+Commits, in order:
+
+1. `test(protocol): prepare exact event v5 consumers`
+2. `feat(protocol): publish exact core event v5`
+3. `refactor(protocol): remove legacy event compatibility`
 
 - **Objective:** Publish the new truth contract across every producer and consumer and remove legacy machinery.
+- **Position and safe stops:** Keep this checkpoint before checkpoint 4.
+  Checkpoint 4's retained task/result model already consumes the exact v5
+  `TerminalSummary`, recording axes, and database epoch; moving the cut behind
+  checkpoint 7 would build checkpoints 4–7 against a disposable v4 task
+  contract. The first commit adds strict, version-dispatched v5 consumers and
+  validators while current producers remain v4, so its safe stop changes no
+  emitted or persisted behavior. The second commit switches every producer and
+  performs the coordinated database epoch/reset cut; its safe stop is a fully
+  working v5 runtime with the now-read-only v3/v4 consumer branches still
+  present. The third deletes those branches and positive fixtures, freezes the
+  one exact version, and closes the checkpoint. Never land a producer switch
+  before its consumers or delete compatibility before the v5 runtime passes.
 - **Acceptance:** Implement the mapped recording, reliable-event,
-  terminal-summary, review-limit, scalar-codec, and persistence decisions from
-  `M1_BRIDGE.md` and `DEFENSE.md` §1.3 across core producers, JavaScript,
-  dispatcher views, history, CLI, and service. Preserve the checkpoint-2
-  continuation boundary, keep bridge-only presentation omissions separate,
-  perform the coordinated database epoch/reset cut, and delete all positive
-  compatibility paths for superseded core-event versions.
-- **Regression watch:** Whole-batch malformed-event rejection, cursor immutability, Gap recovery, Progress identity/monotonicity, terminal precedence, history audit degradation, Boolean-as-integer mistakes, unsafe-number leakage, and stale development databases.
-- **Tests:** Core, executor, verifier, database, workflows, dispatcher, and interfaces departments; strict codec/payload round trips and wrong-version refusal; every detail/reason/review-limit population/axis variant, key, nullability, cardinality, and signed-64 bound; exact refused/unrun review-limit invariants, TerminalSummary copy, history all-null-or-exact group, terminal hash/repeated-finalization/reconstruction/CLI parity, and absence of presentation omissions from history; arbitrary-object/raw-int rejection; diagnostic omission without truncation and checked core-versus-presentation witness separation; exact maximum reliable envelope accepted plus one structurally over-limit rejection before sequence/queue mutation; maximum head drained alone under the bridge ceiling; duplicate-key and scalar corpora; startup/CLI reset guidance; required Node validator/reducer; ordinary suite; current-source v5 event/custody drift runs. Frozen old measurement artifacts remain untouched historical evidence.
+  terminal-summary, review-limit, scalar-codec, file-identity, and persistence
+  decisions from `M1_BRIDGE.md` and `DEFENSE.md` §1.3 across core producers,
+  JavaScript, dispatcher views, history, CLI, and service. Store full-width
+  Windows file indexes as canonical `FileIndex128` text, obtain native identity
+  through the core-owned complete `FILE_ID_128` adapter, and remove the legacy
+  64-bit handle projection and numeric SQLite representation. Preserve the
+  checkpoint-2 continuation boundary, keep bridge-only presentation omissions
+  separate, perform the coordinated database epoch/reset cut, and delete all
+  positive compatibility paths for superseded core-event versions.
+- **Regression watch:** Whole-batch malformed-event rejection, cursor
+  immutability, Gap recovery, Progress identity/monotonicity, terminal
+  precedence, history audit degradation, Boolean-as-integer mistakes, unsafe-
+  number or narrowed-file-identity leakage, reachable logical-byte/timestamp
+  refusal, and stale development databases.
+- **Tests:** At the first stop, prove current v4 behavior unchanged and exact
+  v5 consumer/validator acceptance and rejection. At the second, run Core,
+  executor, verifier, database, workflows, dispatcher, and interfaces
+  departments; strict codec/payload round trips and wrong-version refusal;
+  every detail/reason/review-limit population/axis variant, key, nullability,
+  cardinality, and signed-64 bound; plan logical-byte refusal and scanner
+  scalar-warning behavior; full-width `FileIndex128` codec/database round trips;
+  shared native-identity adapter use by scanner, preflight, executor, and
+  verifier; NTFS/ReFS equivalence witnesses for any retained `st_ino` fast path;
+  values above signed 64-bit and unsigned 64-bit in test doubles; absence of
+  legacy high/low narrowing and numeric file-index storage; exact refused/unrun
+  review-limit invariants, `TerminalSummary` copy, history all-null-or-exact
+  group, terminal hash/repeated-finalization/reconstruction/CLI parity, and
+  absence of presentation omissions from history; arbitrary-object/raw-int
+  rejection; diagnostic omission without truncation and checked core-versus-
+  presentation witness separation; exact maximum reliable envelope accepted
+  plus one structurally over-limit rejection before sequence/queue mutation;
+  maximum head drained alone under the bridge ceiling; duplicate-key and scalar
+  corpora; startup/CLI reset guidance; required Node validator/reducer;
+  ordinary suite; current-source v5 event/custody drift runs. At the final stop,
+  prove source/fixtures contain no positive v3/v4 compatibility and repeat the
+  ordinary suite plus the settlement oracle. Frozen old measurement artifacts
+  remain untouched historical evidence.
 - **Docs/review:** Mark v5 active in CORE, DATABASE, HISTORY, TESTS, M1_BRIDGE, INTERFACES, and README. Repeat the settlement oracle three times and independently inspect removal completeness.
 
 ### 4. Install task-centric lifecycle and compact artifacts
@@ -351,7 +397,9 @@ documented resolution.
 | Operation-time copy evidence was being treated as if it could become a durable task artifact. | Keep copy attestations transient inside the same live execution continuation; durable evidence comes only from committed ledger facts and never enters retained tasks or JavaScript. | Accepted target, checkpoint 2. |
 | Python’s additive v3/v4 compatibility decoder, exact live-v4 JavaScript validator, and canonical history projection accepted different shapes. | Make the current asymmetry explicit only until a coordinated exact event cut; then use one exact event schema and reset the database pair rather than retain a legacy decoder. | Accepted target, checkpoint 3. |
 | Ledger, history, event, and evidence epochs could be upgraded independently and leave a mixed readable-looking pair. | Advance them as one coordinated reset boundary; reject old, mixed, markerless, incomplete, or orphan-sidecar pairs before commands with archive/delete guidance and no automatic migration. | Accepted target, checkpoint 3. |
-| Byte counts and filesystem timestamps could cross Python, SQLite, JSON, and JavaScript with incompatible integer precision or coercion. | Use one nonnegative signed-64 arithmetic domain, checked accumulation, and canonical decimal bridge representation; keep opaque native file indexes as non-arithmetic text. | Accepted target; exact walls live only in Bridge/Defense. Reachability review remains open below. |
+| Byte counts and filesystem timestamps could cross Python, SQLite, JSON, and JavaScript with incompatible integer precision or coercion. | Use one nonnegative signed-64 arithmetic domain, checked accumulation, and canonical decimal bridge representation; keep opaque native file indexes as non-arithmetic text. | Accepted target; exact walls and the reachable-versus-assertion classification live only in Bridge/Defense. |
+| Native identity had three incompatible widths: Python `st_ino` could carry 128 bits, executor/verifier handle probes narrowed to 64, and SQLite stored a signed integer. | Use the complete Windows `FILE_ID_128` through one core-owned adapter and canonical `FileIndex128` text in codecs and the reset ledger; retain a stat fast path only behind executable NTFS/ReFS equivalence evidence. | Accepted target, checkpoint 3; exact domain lives in Bridge/Defense. |
+| Reachable timestamp and aggregate-logical-byte failures had arithmetic walls but no exact scanner or pre-publication outcome. | Add the path-local scalar scanner warning and the plan/domain `logical-bytes` review-limit witness; reuse existing typed unavailable/unreadable outcomes at later native probes. | Accepted target, checkpoint 3; exact outcomes live in Bridge. |
 | Reliable terminal transport could retain or send an unbounded full result collection. | Transport an item-free bounded terminal summary, update compact overlays before queueing, and retain the full terminal result only under dispatcher custody until reconciliation/release. | Accepted target, checkpoints 3–4. |
 | The existing one-session desktop model could not retain a reviewed plan and later results while sessions came and went. | Introduce process-live tasks with one current session and separately named bounded plan, execution, inventory, integrity, and post-copy result slots. | Accepted target, checkpoint 4. |
 | Concurrent control/start/release/close commands had no single effect owner, so identical retries and competing commands could both progress. | Use one task-operation owner claim with exact-intent replay/join, typed busy/conflict observations, and owner-only publication or compensation. | Accepted target, checkpoint 4. |
@@ -386,16 +434,35 @@ documented resolution.
 | A fresh plan from a refused task had no safe way to reconstruct reviewed roots after drive-letter reuse. | `activate_task_pair` resolves both reviewed volume identities afresh and publishes two slots only when both accept; **Plan again** then starts a new task with the frozen setup. |
 | Command arithmetic omitted retained bootstrap/cosmetic rows and had no explicit BR-G-46 revision boundary. | BR-G-46's command-map clause is reopened: checkpoint 4 has 12 unique production commands, checkpoint 6 has 18, and the final surface has 32 target rows plus four retained rows, 36 total. |
 
-### Still open for review before checkpoint 1
+### Pre-checkpoint 1 resolution
 
-- **Reachable versus unreachable scalar rigor:** classify every checked-
-  arithmetic clause. Keep genuinely reachable platform cases as hard walls;
-  demote impossible aggregate cases to assertions or remove them.
-- **Checkpoint-3 placement:** decide whether the exact event/database cut moves
-  immediately before checkpoint 8 so Setup and Plan can run on current v4 first.
-  If it stays early and atomic, predeclare its internal landing order and safe
-  failure stops.
-- **Bug ledger:** select a small set of causal entries from this inventory—such
-  as parallel contract authority, protocol-version boundary drift, publication
-  compensation gaps, and lifecycle ownership races—rather than copying every
-  audit observation into `BUGS.md`.
+The follow-up adversarial pass rechecked the retained findings against their
+owning DR-BRs, exact register rows, checkpoint dependencies, and BR-G gates. It
+found no second closed retry loop or authority-consumption error. It did expose
+two coupled scalar-contract defects—native file-identity narrowing and missing
+typed outcomes for reachable timestamp/aggregate failures—which are resolved in
+the accepted checkpoint-3 target. The recording/evidence axes retain one-way
+settlement authority; task publication, compensation, leases, receipts, and
+close keep one effect owner; location and Setup flows never promote display
+text or cached probes; and projection windows remain detached from selection,
+filesystem, and evidence authority. Four preparatory items are resolved:
+
+- **Command arithmetic:** confirmed from the exact register rather than prose:
+  checkpoint row counts are 6/8/8/1/6/3 for checkpoints 4/6/7/8/9/10, 32
+  target rows total. The four retained bootstrap/cosmetic rows produce 12 after
+  checkpoint 4, 18 after checkpoint 6, and 36 finally. BR-G-46 remains reopened
+  only for the two implementation revisions.
+- **Scalar reachability:** `DEFENSE.md` §1.3 now distinguishes reachable native
+  file-index/timestamp and aggregate-logical-byte cases from impossible single-
+  volume capacity and post-admission counter overflow. Reachable boundaries
+  use full-width opaque file identity, the path-local scanner warning, and the
+  plan/domain logical-byte refusal; impossible cases are assertions, not
+  ordinary user-facing failure states.
+- **Checkpoint 3:** keep it before checkpoint 4 because the task/result
+  foundation consumes v5 terminal, recording, and epoch shapes. Its three
+  ordered commits now provide runnable consumer-preparation, producer/reset,
+  and legacy-removal stops instead of one indivisible landing.
+- **Bug ledger:** record only the newly distinct authorization, location-
+  reactivation, file-identity-width, and cross-consumer protocol causal classes.
+  Existing split-authority, publication-compensation, retention, and lifecycle
+  entries already cover the other reusable classes and are not duplicated.

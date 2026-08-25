@@ -135,6 +135,12 @@ later workflow surfaces and beta packaging remain future phases.
   commitment, while `disposition=ran` permanently consumes the authority.
   Added identity-safe **Plan again** through `activate_task_pair`, and reopened
   BR-G-46 with exact 12/18/36 command-map totals.
+- Re-audited the retained findings; separated reachable timestamp/aggregate
+  scalar walls from assertion-only capacity and post-admission arithmetic,
+  corrected native file identity to full-width canonical text from one shared
+  adapter, and assigned reachable plan/timestamp failures exact typed outcomes.
+  Retained checkpoint 3 before its v5-dependent task foundation with three
+  runnable landing stops and added four nonduplicative causal bug records.
 
 #### Extract truthful per-item progress (2026-08-21 – 2026-08-23)
 

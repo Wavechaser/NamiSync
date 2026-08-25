@@ -98,7 +98,7 @@ target authority; it does not activate that target before its named checkpoint.
 
 | Shared exact register | Owning DR-BR records | Authority centralized there |
 | --- | --- | --- |
-| [Epochs, scalars, and recording](#exact-epochs-scalar-classes-and-recording-views) | DR-BR-14, DR-BR-16, DR-BR-16.2, DR-BR-21, DR-BR-24, DR-BR-27 | Protocol and persistence epochs, numeric grammars, event-v5 recording truth, and production tree/diagnostic walls. |
+| [Epochs, scalars, and recording](#exact-epochs-scalar-classes-and-recording-views) | DR-BR-07, DR-BR-14, DR-BR-16, DR-BR-16.2, DR-BR-21, DR-BR-24, DR-BR-27 | Protocol and persistence epochs, numeric and native-identity grammars, scanner scalar outcomes, event-v5 recording truth, and production tree/diagnostic walls. |
 | [Result and presentation shapes](#exact-shared-result-shapes) | DR-BR-03, DR-BR-06, DR-BR-08, DR-BR-09, DR-BR-11, DR-BR-12, DR-BR-13, DR-BR-14, DR-BR-15, DR-BR-16, DR-BR-16.1, DR-BR-17, DR-BR-18, DR-BR-19, DR-BR-20, DR-BR-21, DR-BR-22, DR-BR-24, DR-BR-27 | Exact DTOs, tree rows, overlays, limits, view revisions, and publication-stage matrix shared by those decisions. |
 | [Task and authority ordering](#task-and-authority-ordering) | DR-BR-03, DR-BR-16.1, DR-BR-17, DR-BR-21, DR-BR-22, DR-BR-24, DR-BR-27 | Task/session ownership, claims, receipts, leases, epochs, pins, publication faults, retention, and close barriers. |
 | [Command and retry rows](#exact-command-and-retry-rows) | DR-BR-03, DR-BR-05, DR-BR-06, DR-BR-15, DR-BR-16, DR-BR-16.1, DR-BR-17, DR-BR-18, DR-BR-19, DR-BR-20, DR-BR-21, DR-BR-22, DR-BR-24, DR-BR-27 | The Stage 6 exact command rows, payload/result variants, revision order, retry class, and error vocabulary. |
@@ -112,7 +112,7 @@ target authority; it does not activate that target before its named checkpoint.
 | [DR-BR-04](#dr-br-04--direct-artifact-replacement-discards-selection) | Selection workflow/service | A lower-level direct artifact replacement clears deselection and advances its revision; desktop replanning creates a new immutable-plan task. |
 | [DR-BR-05](#dr-br-05--four-runtime-methods-reach-the-facade) | Service facade | Lift the four inventory acknowledgment/staleness reads as typed passthroughs. |
 | [DR-BR-06](#dr-br-06--location-commands-accept-opaque-ids) | Service, scanner, recorder | Resolve opaque row/folder ids server-side; freeze recursive scope and fresh location evidence under the shared command contract. |
-| [DR-BR-07](#dr-br-07--scanner-ignore-contract-narrowed) | Scanner | Remove unused ignore snapshots while retaining the known filter-visibility gap. |
+| [DR-BR-07](#dr-br-07--scanner-ignore-contract-narrowed) | Scanner | Remove unused ignore snapshots, retain the known filter-visibility gap, and bind future scalar/native-identity observations to the shared register. |
 | [DR-BR-08](#dr-br-08--the-ui-never-computes-means-authority) | Cross-cutting UI | Keep decisions authoritative on the backend while permitting cosmetic client computation. |
 | [DR-BR-09](#dr-br-09--node-trees-are-built-in-workflows-not-interfaces) | Workflow node tree | Build shared hierarchy in workflows, below presentation adapters. |
 | [DR-BR-10](#dr-br-10--path-helpers-promote-to-corepathingpy) | Core pathing | Promote shared lexical path helpers unchanged into core. |
@@ -156,9 +156,10 @@ packaging are outside this reslice.
 
 ### Exact epochs, scalar classes, and recording views
 
-**Decision ownership:** DR-BR-14 owns event identity and reporter meaning;
-DR-BR-16 owns production serialization and retention walls; DR-BR-16.2 owns
-history and data-epoch persistence; and DR-BR-21, DR-BR-24, and DR-BR-27 own
+**Decision ownership:** DR-BR-07 owns scanner scalar/native-identity observation;
+DR-BR-14 owns event identity and reporter meaning; DR-BR-16 owns production
+serialization and retention walls; DR-BR-16.2 owns history, file-identity
+storage, and data-epoch persistence; and DR-BR-21, DR-BR-24, and DR-BR-27 own
 terminal custody, concurrent transport, and exact wire/retry projection
 respectively.
 
@@ -181,6 +182,7 @@ The following primitive grammars are exact:
 | `SafeInt` | a non-Boolean JSON integer in `0..9_007_199_254_740_991` |
 | `PositiveSafeInt` | `SafeInt` greater than zero |
 | `Scalar64` | JSON string matching `0|[1-9][0-9]*` whose `BigInt` value is at most `9_223_372_036_854_775_807` |
+| `FileIndex128` | canonical unsigned-decimal `TEXT` matching `0|[1-9][0-9]*` whose value is at most `340_282_366_920_938_463_463_374_607_431_768_211_455`; it is opaque identity, not JSON arithmetic |
 | `Digest128` | 32 lowercase hexadecimal characters |
 | `Digest256` | 64 lowercase hexadecimal characters |
 | `PlanFilter` | `copy`, `update`, `move`, `move_update`, `recase`, `mkdir`, `trash`, `delete`, `noop`, `blocked`, or `unsupported` |
@@ -221,8 +223,25 @@ Sequences, bounded counts, offsets, count limits, and revisions use `SafeInt`.
 Every byte, size, capacity, work, and filesystem-nanosecond value uses internal
 checked `0..2^63-1` arithmetic and external `Scalar64`; Python recursively
 rejects unsafe native returns and JavaScript validates canonical decimal before
-`BigInt`. Opaque row identities remain strings and ledger-v4 file-identity
-indexes use canonical unsigned-decimal text.
+`BigInt`. `DEFENSE.md` §1.3 classifies which guards are reachable product
+branches and which remain fail-closed assertions after an earlier platform or
+aggregate bound. Opaque row identities remain strings and ledger-v4 file-
+identity indexes use `FileIndex128` text.
+
+At checkpoint 3, `FileIdentity.file_index` admits the full Windows 128-bit
+file-id domain internally and every workflow/persistence codec emits
+`FileIndex128`; no file identity crosses JSON or SQLite as a numeric value. One
+core-owned Windows adapter canonicalizes CPython 3.13 `st_ino` and the complete
+`FILE_ID_128` returned by `GetFileInformationByHandleEx(FileIdInfo)` to the same
+decimal text. Native components that already hold the final object handle use
+the handle form. Scanner/preflight path-stat use may remain only if executable
+NTFS/ReFS witnesses prove identical canonicalization; otherwise they open and
+probe through the same adapter. If a complete identifier cannot be obtained,
+identity is unavailable; no consumer falls back to the legacy 64-bit projection.
+Legacy `nFileIndexHigh/Low` and signed SQLite `INTEGER` identity storage are
+removed in the coordinated database reset. Identity equality always includes
+the already-normalized volume identity and never performs ordering or
+arithmetic on the file index.
 
 Ledger v4 and history v6 share `data_epoch=5`, contract ids
 `m1-ledger-v4-event-v5-evidence-v1` and
@@ -293,19 +312,26 @@ absence. Free-form diagnostics are already bounded before construction.
   has exactly `{reason:TaskRecordingIssueReason,detail:string|null}`.
 - `ReviewFactLimitExceeded` has exactly
   `{reason:"review_fact_limit_exceeded",tree_kind:"plan"|"inventory",
-  population:"domain"|"informational",axis:"rows"|"retained-bytes",
+  population:"domain"|"informational",axis:"rows"|"retained-bytes"|"logical-bytes",
   row_limit:SafeInt|null,byte_limit:Scalar64|null}`. Rows use only
   `row_limit=120000`; retained bytes use only `byte_limit`, equal to
-  `"134217728"` for plan/domain and `"201326592"` otherwise. Prospective
+  `"134217728"` for plan/domain and `"201326592"` otherwise. `logical-bytes`
+  is valid only for plan/domain, requires null `row_limit`, and carries
+  `byte_limit="9223372036854775807"`; it covers every non-null plan rollup and
+  the default effective selection's conservative `required_bytes`. Prospective
   complete-graph collection stops before the first excess with precedence
-  domain rows, domain bytes, informational rows, informational bytes; the frozen
-  sizer and independent validator charge shared objects once. Initial refusal
+  domain rows, logical bytes for a plan, domain retained bytes, informational
+  rows, informational retained bytes; the frozen sizer and independent
+  validator charge shared objects once. Initial refusal
   publishes no partial artifact/view, while inventory refresh or fresh-
   execution refusal preserves the complete predecessor and replaces only its
   named summary. The limit changes neither omission axis. Its summary is
   refused/unrun, recording-ok, audit-ok-or-degraded, uncanceled, zero-byte/item/
   omission, with null error and empty phases/issues; every other summary has
-  `review_refusal=null`.
+  `review_refusal=null`. The plan/domain logical-byte renderer says exactly
+  `This plan contains more file data than NamiSync can represent safely. Narrow
+  the folders or filters, then plan again.` It never calls the condition a
+  free-space shortage or suggests Execute/retry on the same plan.
 - `TaskResults` = `{plan:ResultSummary|null,execution:ResultSummary|null,
   inventory:ResultSummary|null,integrity:ResultSummary|null,
   post_copy_verify:ResultSummary|null}`. A session changes only its named slot:
@@ -465,11 +491,24 @@ absence. Free-form diagnostics are already bounded before construction.
   notice_count:SafeInt,presentation_omitted_detail_count:SafeInt}`.
   Roots/fingerprint and reviewed capacity/verdict are immutable initial-review
   truth; digest/required bytes are the current selection. Unavailable capacity
-  is null, checked sums never clamp, and an overflowing sum makes preflight
-  unavailable. Notice and presentation-omission counts describe the current
-  reviewed-plus-last-complete-fresh notice generation, independent of view or
-  attempt history.
+  is null. The supported-platform `free_bytes + reclaimable_temp_bytes` sum is
+  assertion-checked and cannot overflow the signed domain; it never creates a
+  separate user-facing capacity state. An unrepresentable aggregate
+  `required_bytes` returns the plan/domain `logical-bytes`
+  `ReviewFactLimitExceeded` before plan publication. No value clamps. Notice
+  and presentation-omission counts describe the current reviewed-
+  plus-last-complete-fresh notice generation, independent of view or attempt
+  history.
 - `ReviewedStat` = `{kind:EntryKind,size:Scalar64,mtime_ns:Scalar64}`.
+  Checkpoint 3 adds core `ScanWarningCode.SCALAR_UNREPRESENTABLE =
+  "scalar_unrepresentable"`. A scanner stat whose timestamp cannot enter the
+  accepted scalar domain contributes that path-local warning, no
+  authoritative record, and incomplete-scan truth; it is never rewritten as a
+  path or capacity problem. A fresh preflight observation of the same condition
+  uses its existing typed `observation_unavailable` refusal. A later
+  executor/verifier stat uses that component's existing typed unavailable or
+  unreadable outcome without constructing numeric evidence. Only byte-counter
+  overflow after aggregate admission is an internal invariant failure.
 - `PlanFilterCounts` has exactly `{all:SafeInt,copy:SafeInt,
   update:SafeInt,move:SafeInt,move_update:SafeInt,recase:SafeInt,
   mkdir:SafeInt,trash:SafeInt,delete:SafeInt,noop:SafeInt,
@@ -656,8 +695,9 @@ absence. Free-form diagnostics are already bounded before construction.
   refused summary atomically at one revision after charging full old/new and
   provisional overlap. Each row names that session. Row/byte overflow instead
   publishes typed `review_fact_limit`, preserves the prior complete state, and
-  exposes no partial causes. The first ran terminal clears the fresh set and
-  freezes execution. Reviewed preflight facts set only the initial selection;
+  exposes no partial causes. Plan/domain logical-byte overflow uses the same
+  typed refusal before any plan exists. The first ran terminal clears the fresh
+  set and freezes execution. Reviewed preflight facts set only the initial selection;
   execution fresh-preflights the exact committed current selection after its
   revision/scope/confirmation/retention/claim gates, so the only immediate
   `ExecutionStartReason` is `scope-empty`.
@@ -1783,6 +1823,12 @@ and therefore has no row. "Why isn't this file being copied?" is currently
 unanswerable for filters. Recorded here; resolution belongs with the filter
 discussion, not with Stage 6.
 
+**Exact target binding:** the shared [epoch, scalar, and recording
+register](#exact-epochs-scalar-classes-and-recording-views) owns checkpoint-3
+scanner scalar warnings, full-width native file-identity canonicalization, and
+the no-legacy-fallback rule. This record retains scanner ownership without
+copying those exact grammars or outcomes.
+
 ---
 
 ## 2. Compute Ownership
@@ -1982,11 +2028,12 @@ reproject or recount any witness.
 
 The bounded collection and publication boundary is exact. Before attachment,
 the task service reserves overlap and snapshots a workflow-owned immutable
-`ReviewPublicationContext`: tree kind, the frozen domain/informational sizers
-and limits, the remaining presentation-diagnostic allowance after charging the
-still-retained replaceable slot, and any immutable baseline population retained
-from the accepted artifact. The workflow-owned collector consumes domain facts
-first and informational facts second and returns either one immutable complete
+`ReviewPublicationContext`: tree kind; the frozen domain/informational sizers
+and limits; the checked plan logical-byte accumulator; the remaining
+presentation-diagnostic allowance after charging the still-retained replaceable
+slot; and any immutable baseline population retained from the accepted artifact.
+The workflow-owned collector consumes domain facts first and informational facts
+second and returns either one immutable complete
 candidate—rows, ids, indexes, rollups, exact charges, and presentation-omission
 occurrence identities together—or one `ReviewFactLimitExceeded`. It never
 returns or stages a partial candidate. Scanner/planner/inventory production
@@ -2020,7 +2067,7 @@ with its omission identities. It first consumes the tuple's latch;
 
 | session / result | required sink state and publication |
 | --- | --- |
-| plan or inventory `review_fact_limit` | no stage; canonical refusal; tuple exactly `(sync-plan,plan,plan)` or `(inventory,inventory,inventory)` with either population |
+| plan or inventory `review_fact_limit` | no stage; canonical refusal; tuple exactly `(sync-plan,plan,plan)` or `(inventory,inventory,inventory)`; plan/domain additionally admits the logical-byte axis |
 | completed plan/inventory | one complete stage, installed atomically |
 | other failed/canceled/refused plan/inventory before completion | no stage; actual summary; initial availability stays false or refresh preserves predecessor |
 | execution `review_fact_limit` | no stage; tuple exactly `(sync-execution,plan,plan)` and informational population |
@@ -2227,11 +2274,13 @@ may exist without an attempt before stream entry or for non-byte work. An
 attempt without byte counters is the active indeterminate shape. Each
 byte-pipeline entry mints a fresh opaque attempt id; retry or reconstructed
 resume may restart at zero only under that new id, while retained post-byte
-continuations do not mint another. If raw work would exceed the admitted
-signed-64 item or aggregate total, admission refuses before execution rather
-than permitting a later overshoot. Aggregate executor bytes retain their
-monotonic high-water; verifier aggregates count all admitted physical read
-work.
+continuations do not mint another. If aggregate logical work would exceed the
+signed-64 domain, admission refuses before execution rather than permitting a
+later overshoot. One file cannot reach that boundary on the supported
+filesystems, and post-admission counter increments are assertion-checked
+consequences of the already bounded aggregate rather than a second user-facing
+overflow branch. Aggregate executor bytes retain their monotonic high-water;
+verifier aggregates count all admitted physical read work.
 
 A settled item is named by its reliable outcome, not by later lossy progress:
 later snapshots clear item, attempt, and item-byte fields. `current_path`
