@@ -20,9 +20,12 @@ post-settlement restoration divergence retain ordered task issues. The
 and task issues, so one recorder failure cannot label another operation
 degraded or convert filesystem success into filesystem failure.
 
-A reliable item outcome is accepted by the event sink before its status,
-publication evidence, and recording reason enter continuation state. Sink
-rejection therefore cannot create a continuation-only settlement. Publication
+A valid reliable item outcome is constructed and its complete typed settlement
+is retained in the operation journal before the event sink is called. Only sink
+acceptance moves status, publication evidence, and recording reason into
+continuation state. A one-shot rejection is retried from that exact retained
+settlement, including any committed recorder receipt; persistent rejection
+leaves both journal retirement and continuation settlement pending. Publication
 and non-byte mutation reducers attach `unrecorded-mutation` centrally, and a
 pre-destructive flush refusal attaches `recording-prerequisite-failed` only to
 the refused operation.
@@ -197,13 +200,15 @@ and-swap guarantee.
     returns that same tuple. A recorder failure preserves the filesystem
     outcome, leaves the published evidence rowless, and degrades
     `RecordingStatus` instead of relabeling the copy as failed.
-13. Emit exactly one reliable `ItemOutcome`, then store its operation status and
-    any `PublishedCopyEvidence` in `ExecutionSet`. Continuation state therefore
-    cannot claim a settled item whose reliable outcome failed to publish. Only
-    COPY/UPDATE/MOVE_UPDATE produce published evidence; failed, no-op,
-    metadata-only, and unreached operations never do. If reliable delivery
-    itself fails after an effect, the exception backstop cleans and retires the
-    process-local effect without manufacturing continuation settlement.
+13. Construct the reliable `ItemOutcome`, retain the complete pending typed
+    settlement in the operation journal, and offer the event. Only after the
+    sink accepts it, store operation status and any `PublishedCopyEvidence` in
+    `ExecutionSet`, advance progress, and retire the journal entry. A one-shot
+    delivery failure is retried from the retained settlement without another
+    recorder call or filesystem reclassification; persistent rejection leaves
+    the entry and continuation status pending while the original sink error
+    remains primary. Only COPY/UPDATE/MOVE_UPDATE produce published evidence;
+    failed, no-op, metadata-only, and unreached operations never do.
 
 Temps use `<name>.synctmp-<run-id>-<op-id>` with validated fixed-format ids.
 Once per successfully preflighted execution, recovery enumerates only direct
@@ -427,9 +432,12 @@ exact-name temp for fresh-run recovery; these unwind semantics are outside the
 terminal settlement reducer rather than being converted into an item result.
 An ordinary `Exception` escaping a failure policy, retry/control callback,
 event sink, or other collaborator is different: before propagating it, runtime
-settles every active journal effect from the original operation failure,
-finalizes pending directories, and retires already-recorded effects without
-replaying their filesystem or recorder actions.
+classifies every active journal effect from the original operation failure and
+finalizes pending directories without replaying their filesystem or recorder
+actions. A retained settlement is offered once through the exception backstop;
+accepted delivery advances continuation state and retires the entry, while
+persistent reliable rejection leaves both pending under the original sink
+error.
 
 The same durable-state rule applies when a confirmed publish is followed by a
 non-cancellation failure such as metadata repair exhaustion. The item remains
@@ -472,11 +480,13 @@ suppresses that subordinate marker even when the retained backup is reported.
 Runtime now stores those process-local facts in one private typed effect journal
 entry per operation. The entry independently holds a COPY/UPDATE/MOVE_UPDATE
 byte continuation, a non-byte mutation marker, the last retry error, and an
-optional owned temporary path. Failure and cancellation take one immutable
-snapshot before cleanup; owned-temp cleanup releases the claim before deletion,
-and terminal item settlement completes before the entry is retired. A retry
-error or temporary claim alone is not a durable effect and therefore does not
-latch pause. Runtime observers now perform the failure-only filesystem probes
+optional owned temporary path. After a valid terminal item is constructed, the
+same entry also retains its complete pending `_Settled` value until reliable
+acceptance permits retirement. Failure and cancellation take one immutable
+effect snapshot before cleanup; owned-temp cleanup releases the claim before
+deletion. A retry error, temporary claim, or pending settlement alone is not a
+durable effect and therefore does not latch pause. Runtime observers now perform
+the failure-only filesystem probes
 and return typed publication and mutation verdicts. One pure reducer consumes
 those verdicts plus an ordinary-failure or cancellation cause; it alone selects
 precedence, outcome/reason vocabulary, detail composition, and recording

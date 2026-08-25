@@ -95,6 +95,29 @@ def completed(context):
     return OperationResult(SessionState.COMPLETED)
 
 
+@pytest.mark.parametrize("accept_item", [False, True])
+def test_failed_work_result_contains_only_accepted_items(accept_item: bool) -> None:
+    item = ItemOutcome("e" * 32, "copy", "file.bin", Outcome.SUCCEEDED)
+    original = OSError("reliable outcome sink failed")
+
+    def run(context):
+        if accept_item:
+            context.emit(item)
+        raise original
+
+    dispatcher = Dispatcher({"sync": registration(lambda _payload: run)})
+    session_id = dispatcher.submit("sync", b"payload")
+    record = wait_for(dispatcher, session_id, SessionState.FAILED)
+
+    assert record.result is not None
+    assert record.result.status is SessionState.FAILED
+    assert record.result.items == ((item,) if accept_item else ())
+    assert record.result.error is not None
+    assert record.result.error.type_name == "OSError"
+    assert record.result.error.message == str(original)
+    assert dispatcher.shutdown().complete
+
+
 class GatedAcquireProvider:
     def __init__(self, gated_attempt: int = 1) -> None:
         self._gated_attempt = gated_attempt

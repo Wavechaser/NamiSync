@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 from xxhash import xxh3_128
 
+import namisync.modules.executor.runtime as executor_runtime
 from namisync.core.events import (
     ItemOutcome,
     PhaseChanged,
@@ -2406,6 +2407,189 @@ def test_execute_failure_returns_emitted_item_truth(
     assert [item.item_id for item in result_items] == [str(operation.op_id)]
     assert result_items[0].outcome is Outcome.SUCCEEDED
     assert len(result.phases) == int(verify_after_execute)
+
+
+@pytest.mark.parametrize("reject_persistently", [False, True])
+def test_committed_copy_receipt_survives_reliable_sink_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reject_persistently: bool,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    content = b"payload"
+    (source / "file.bin").write_bytes(content)
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    original_executor = runtime._deps.executor
+    execution_sets: list[ExecutionSet] = []
+
+    def observed_executor(execution_set, context, recorder, policies, fs):
+        execution_sets.append(execution_set)
+        return original_executor(execution_set, context, recorder, policies, fs)
+
+    runtime._deps = replace(
+        runtime._deps,
+        executor=observed_executor,
+        executor_policies=replace(
+            runtime._deps.executor_policies,
+            progress_interval_seconds=0,
+        ),
+    )
+    retained: list[
+        tuple[executor_runtime._EffectJournal, executor_runtime._Settled]
+    ] = []
+    original_retain = executor_runtime._EffectJournal.retain_pending_settlement
+
+    def tracked_retain(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+        settled: executor_runtime._Settled,
+    ) -> executor_runtime._Settled:
+        value = original_retain(journal, op_id, settled)
+        retained.append((journal, value))
+        return value
+
+    monkeypatch.setattr(
+        executor_runtime._EffectJournal,
+        "retain_pending_settlement",
+        tracked_retain,
+    )
+    attempted_items: list[ItemOutcome] = []
+    accepted: list[object] = []
+    published_results: list[OperationResult] = []
+    original = OSError("reliable outcome sink failed")
+    secondary = OSError("reliable outcome sink still failed")
+
+    def emit(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            attempted_items.append(body)
+            if len(attempted_items) == 1:
+                raise original
+            if reject_persistently:
+                raise secondary
+        accepted.append(body)
+
+    try:
+        plan_request = PlanRequest(
+            request_id="c" * 32,
+            source_path=str(source),
+            target_path=str(target),
+        )
+        plan_result = runtime.open_plan(
+            runtime.prepare_plan(plan_request).payload
+        ).run(RunContext(lambda _body: None, lambda: None))
+        assert plan_result.status is SessionState.COMPLETED
+        execution = runtime.commit_plan(
+            plan_request.request_id,
+            run_id="d" * 32,
+            committed_at=NOW,
+            verify_after_execute=False,
+        )
+        invocation = runtime.open_execution(
+            runtime.prepare_execution(execution).payload
+        )
+        session = run_session(
+            invocation.run,
+            emit=emit,
+            checkpoint=lambda: None,
+            settle=lambda _state, _result: None,
+            finalize_audit=lambda _result: RecordingStatus.OK,
+            publish_result=published_results.append,
+        )
+    finally:
+        runtime.close()
+
+    assert len(execution_sets) == 1
+    xset = execution_sets[0]
+    operation = xset.plan.operations[0]
+    assert len(attempted_items) == 2
+    assert all(item.outcome is Outcome.SUCCEEDED for item in attempted_items)
+    assert all(item.recording is RecordingStatus.OK for item in attempted_items)
+    assert len(retained) == 2
+    journal, pending = retained[0]
+    retry_journal, retry_pending = retained[1]
+    assert retry_journal is journal
+    assert retry_pending is pending
+    assert pending.outcome is Outcome.SUCCEEDED
+    assert pending.recording_reason is None
+    assert pending.published_evidence is not None
+    receipt = pending.published_evidence.recorded_identity
+    assert receipt is not None
+
+    assert session.result is not None
+    result = session.result
+    assert published_results == [result]
+    assert result.status is SessionState.FAILED
+    assert result.error is not None
+    assert result.error.type_name == "OSError"
+    assert result.error.message == str(original)
+    assert (result.bytes_done, result.bytes_total) == (len(content), len(content))
+    accepted_items = tuple(
+        body for body in accepted if isinstance(body, ItemOutcome)
+    )
+    assert result.items == accepted_items
+    assert len(accepted_items) == (0 if reject_persistently else 1)
+    terminal = next(body for body in accepted if isinstance(body, Terminal))
+    assert terminal.result.status is SessionState.FAILED
+    assert terminal.result.recording_degraded_items == 0
+    final_progress = next(
+        body for body in reversed(accepted) if isinstance(body, Progress)
+    )
+    assert (
+        final_progress.items_done,
+        final_progress.items_total,
+        final_progress.bytes_done,
+        final_progress.bytes_total,
+    ) == (
+        0 if reject_persistently else 1,
+        1,
+        len(content),
+        len(content),
+    )
+
+    if reject_persistently:
+        assert xset.status == {}
+        assert xset.published_evidence == {}
+        assert journal.has_active_entry(operation.op_id)
+        assert journal.pending_settlement(operation.op_id) is pending
+    else:
+        assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
+        assert xset.published_evidence[operation.op_id].recorded_identity == receipt
+        assert not journal.has_active_entry(operation.op_id)
+    assert xset.recording_reasons == {}
+    assert (target / "file.bin").read_bytes() == content
+
+    connection = connect_ledger_reader(tmp_path / "ledger.db")
+    try:
+        operations = connection.execute(
+            """SELECT operations.op_token, operations.kind, operations.outcome
+                 FROM operations
+                 JOIN runs ON runs.id = operations.run_id
+                WHERE runs.run_token = ?""",
+            ("d" * 32,),
+        ).fetchall()
+        row = connection.execute(
+            """SELECT id, location_id, scope_token, rel_path_key
+                 FROM inventory WHERE id = ?""",
+            (receipt.row_id,),
+        ).fetchone()
+    finally:
+        connection.close()
+
+    assert [
+        (value["op_token"], value["kind"], value["outcome"])
+        for value in operations
+    ] == [(str(operation.op_id), OperationKind.COPY.value, Outcome.SUCCEEDED.value)]
+    assert row is not None
+    assert str(row["id"]) == receipt.row_id
+    assert str(row["location_id"]) == receipt.location_id
+    assert row["scope_token"] == receipt.scope_token
+    assert row["rel_path_key"] == receipt.rel_path_key
 
 
 def test_real_runtime_copy_readback_uses_one_finished_run(

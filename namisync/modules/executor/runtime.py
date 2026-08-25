@@ -436,6 +436,7 @@ class _EffectJournalEntry:
     mutation: _MutationAttempt | None = None
     retry_error: Exception | None = None
     temporary_path: Path | None = None
+    pending_settlement: _Settled | None = None
     settled: bool = False
 
 
@@ -491,6 +492,26 @@ class _EffectJournal:
         if not isinstance(error, Exception):
             raise TypeError("executor retry error must be an exception")
         self._active_entry(op_id).retry_error = error
+
+    def retain_pending_settlement(
+        self,
+        op_id: OpId,
+        settled: _Settled,
+    ) -> _Settled:
+        if not isinstance(settled, _Settled):
+            raise TypeError("executor pending settlement has an unsupported type")
+        entry = self._active_entry(op_id)
+        existing = entry.pending_settlement
+        if existing is None:
+            entry.pending_settlement = settled
+            return settled
+        if existing != settled:
+            raise RuntimeError("executor pending settlement changed before delivery")
+        return existing
+
+    def pending_settlement(self, op_id: OpId) -> _Settled | None:
+        entry = self._entries.get(op_id)
+        return None if entry is None else entry.pending_settlement
 
     def has_retained_effect(self, op_id: OpId) -> bool:
         entry = self._entries.get(op_id)
@@ -1232,12 +1253,14 @@ def _unexpected_exception_backstop(
     current: PlanOperation | None,
     escaped: Exception,
 ) -> None:
+    backstopped: set[OpId] = set()
     if (
         current is not None
         and state.effects.has_active_entry(current.op_id)
         and current.op_id not in xset.status
         and current.op_id not in state.ready_directories
     ):
+        backstopped.add(current.op_id)
         _backstop_operation(
             xset,
             ctx,
@@ -1260,6 +1283,8 @@ def _unexpected_exception_backstop(
 
     operations = {operation.op_id: operation for operation in xset.plan.operations}
     for op_id in state.effects.active_op_ids():
+        if op_id in backstopped:
+            continue
         operation = operations.get(op_id)
         if operation is None:
             escaped.add_note(
@@ -1315,6 +1340,17 @@ def _backstop_operation(
             state.effects.settle(operation.op_id)
             state.effects.retire(operation.op_id)
             return
+        pending = state.effects.pending_settlement(operation.op_id)
+        if pending is not None:
+            _settle(
+                xset,
+                state,
+                progress,
+                ctx,
+                operation,
+                pending,
+            )
+            return
         snapshot = state.effects.snapshot(operation.op_id)
         _settle_ordinary_failure(
             xset,
@@ -1332,6 +1368,11 @@ def _backstop_operation(
             f"{logical_error_text(settlement_error)}"
         )
         if state.effects.has_active_entry(operation.op_id):
+            if (
+                operation.op_id not in xset.status
+                and state.effects.pending_settlement(operation.op_id) is not None
+            ):
+                return
             cleanup_error = _cleanup_inflight(state, fs, operation.op_id)
             if cleanup_error is not None:
                 escaped.add_note(
@@ -2918,74 +2959,70 @@ def _finalize_directories(
     state.pending_directories.clear()
     for operation in pending:
         try:
-            intended = operation.intended or operation.source_expected
-            if intended is None or intended.kind is not EntryKind.DIRECTORY:
-                raise OperationFailure(
-                    ExecutionReason.WRONG_TYPE,
-                    "mkdir operation lacks intended directory metadata",
+            try:
+                intended = operation.intended or operation.source_expected
+                if intended is None or intended.kind is not EntryKind.DIRECTORY:
+                    raise OperationFailure(
+                        ExecutionReason.WRONG_TYPE,
+                        "mkdir operation lacks intended directory metadata",
+                    )
+                target = target_root.joinpath(
+                    *PureWindowsPath(operation.target_rel_path).parts
                 )
-            target = target_root.joinpath(
-                *PureWindowsPath(operation.target_rel_path).parts
-            )
-            target = _resolve_target_path(
-                fs,
-                xset,
-                target_root,
-                target,
-                must_exist=True,
-            )
-            fs.apply_metadata(
-                target,
-                intended,
-                preserve_created=xset.plan.preservation.preserve_created,
-                apply_readonly=True,
-            )
-            detail = _durability_detail(fs, target.parent)
-            actual = _profiled_stat(
-                _require_target_stat(fs, xset, target_root, target),
-                xset.plan.target_profile.stable_file_identity,
-            )
-            record_observation = _record(
-                detail,
-                lambda operation=operation, actual=actual: recorder.record_mkdir(
-                    operation.op_id, actual
-                ),
-            )
+                target = _resolve_target_path(
+                    fs,
+                    xset,
+                    target_root,
+                    target,
+                    must_exist=True,
+                )
+                fs.apply_metadata(
+                    target,
+                    intended,
+                    preserve_created=xset.plan.preservation.preserve_created,
+                    apply_readonly=True,
+                )
+                detail = _durability_detail(fs, target.parent)
+                actual = _profiled_stat(
+                    _require_target_stat(fs, xset, target_root, target),
+                    xset.plan.target_profile.stable_file_identity,
+                )
+                record_observation = _record(
+                    detail,
+                    lambda operation=operation, actual=actual: recorder.record_mkdir(
+                        operation.op_id, actual
+                    ),
+                )
+                settled = _Settled(
+                    Outcome.SUCCEEDED,
+                    detail=detail,
+                    recording_reason=record_observation.recording_reason,
+                    recording_detail=record_observation.recording_detail,
+                )
+            except (Canceled, PauseRequested):
+                raise
+            except Exception as error:
+                mutation_failure = _failed_durable_settlement(
+                    operation,
+                    error,
+                    fs,
+                    target_root,
+                    state,
+                    state.effects.snapshot(operation.op_id),
+                )
+                settled = (
+                    _failure_settlement(error)
+                    if mutation_failure is None
+                    else mutation_failure
+                )
             _settle(
                 xset,
                 state,
                 progress,
                 ctx,
                 operation,
-                _Settled(
-                    Outcome.SUCCEEDED,
-                    detail=detail,
-                    recording_reason=record_observation.recording_reason,
-                    recording_detail=record_observation.recording_detail,
-                ),
+                settled,
             )
-        except (Canceled, PauseRequested):
-            raise
-        except Exception as error:
-            mutation_failure = _failed_durable_settlement(
-                operation,
-                error,
-                fs,
-                target_root,
-                state,
-                state.effects.snapshot(operation.op_id),
-            )
-            if mutation_failure is None:
-                _settle_failure(xset, state, progress, ctx, operation, error)
-            else:
-                _settle(
-                    xset,
-                    state,
-                    progress,
-                    ctx,
-                    operation,
-                    mutation_failure,
-                )
         finally:
             state.ready_directories.discard(operation.op_id)
 
@@ -3136,6 +3173,10 @@ def _settle(
         recording_reason=settled.recording_reason,
         recording_detail=settled.recording_detail,
     )
+    settled = state.effects.retain_pending_settlement(
+        operation.op_id,
+        settled,
+    )
     ctx.emit(event)
     if settled.published_evidence is not None:
         xset.published_evidence[operation.op_id] = settled.published_evidence
@@ -3159,6 +3200,17 @@ def _settle_failure(
     operation: PlanOperation,
     error: Exception,
 ) -> None:
+    _settle(
+        xset,
+        state,
+        progress,
+        ctx,
+        operation,
+        _failure_settlement(error),
+    )
+
+
+def _failure_settlement(error: Exception) -> _Settled:
     reason, detail = _failure_reason_and_message(error)
     recording_reason = (
         getattr(error, "_recording_reason", None)
@@ -3170,19 +3222,12 @@ def _settle_failure(
         if recording_reason is not None
         else None
     )
-    _settle(
-        xset,
-        state,
-        progress,
-        ctx,
-        operation,
-        _Settled(
-            Outcome.FAILED,
-            reason,
-            {"error_type": type(error).__name__, "message": detail},
-            recording_reason=recording_reason,
-            recording_detail=recording_detail,
-        ),
+    return _Settled(
+        Outcome.FAILED,
+        reason,
+        {"error_type": type(error).__name__, "message": detail},
+        recording_reason=recording_reason,
+        recording_detail=recording_detail,
     )
 
 

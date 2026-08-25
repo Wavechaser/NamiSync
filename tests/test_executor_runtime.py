@@ -317,30 +317,27 @@ def test_xv_1_published_evidence_cardinality_and_atomic_emission_for_all_byte_ki
     )
 
 
-def test_failed_reliable_outcome_emit_does_not_settle_continuation_or_progress(
+def test_one_shot_reliable_outcome_failure_replays_committed_copy_settlement(
     tmp_path: Path,
 ) -> None:
     source, target = _roots(tmp_path)
-    content = b"same"
-    (source / "noop.bin").write_bytes(content)
-    (target / "noop.bin").write_bytes(content)
+    content = b"payload"
+    (source / "copy.bin").write_bytes(content)
     fs = NativeFileSystem()
-    source_stat = fs.stat(source, "noop.bin")
-    target_stat = fs.stat(target, "noop.bin")
+    source_stat = fs.stat(source, "copy.bin")
     assert source_stat is not None
-    assert target_stat is not None
     operation = _operation(
         1,
-        OperationKind.NOOP,
-        source_rel_path="noop.bin",
-        target_rel_path="noop.bin",
+        OperationKind.COPY,
+        source_rel_path="copy.bin",
+        target_rel_path="copy.bin",
         source_expected=source_stat,
-        target_expected=target_stat,
-        intended=target_stat,
-        reason=OperationReason.METADATA_MATCH,
+        target_expected=None,
+        intended=source_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
-    progress: list[Progress] = []
+    recorder = FakeRecorder()
+    accepted: list[ItemOutcome] = []
     outcome_attempts = 0
     original = OSError("reliable outcome sink failed")
 
@@ -350,77 +347,89 @@ def test_failed_reliable_outcome_emit_does_not_settle_continuation_or_progress(
             outcome_attempts += 1
             if outcome_attempts == 1:
                 raise original
-            raise OSError("reliable outcome sink still failed")
-        if isinstance(body, Progress):
-            progress.append(body)
+            accepted.append(body)
 
     with pytest.raises(OSError) as raised:
         execute(
             xset,
             RunContext(emit, lambda: None),
-            FakeRecorder(fail="noop"),
+            recorder,
             _policies(),
             fs,
         )
 
     assert raised.value is original
-    assert outcome_attempts >= 1
-    assert xset.status == {}
-    assert xset.published_evidence == {}
+    assert outcome_attempts == 2
+    assert len(accepted) == 1
+    assert accepted[0].outcome is Outcome.SUCCEEDED
+    assert accepted[0].recording is RecordingStatus.OK
+    assert accepted[0].recording_reason is None
+    assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
+    published = xset.published_evidence[operation.op_id]
+    assert published.recorded_identity == recorder._copy_identity(operation.op_id)
     assert xset.recording_reasons == {}
     assert xset.recording_issues == ()
-    assert progress
-    final = progress[-1]
-    assert (final.items_done, final.items_total) == (0, 1)
-    assert (
-        final.current_path,
-        final.item_id,
-        final.item_type,
-        final.item_attempt_id,
-        final.item_bytes_done,
-        final.item_bytes_total,
-    ) == (None, None, None, None, None, None)
+    assert _recorder_names(recorder) == ["copied"]
+    assert (target / "copy.bin").read_bytes() == content
 
 
 def test_run_session_excludes_executor_outcomes_rejected_by_sink(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source, target = _roots(tmp_path)
-    content = b"same"
-    (source / "noop.bin").write_bytes(content)
-    (target / "noop.bin").write_bytes(content)
+    content = b"payload"
+    (source / "copy.bin").write_bytes(content)
     fs = NativeFileSystem()
-    source_stat = fs.stat(source, "noop.bin")
-    target_stat = fs.stat(target, "noop.bin")
+    source_stat = fs.stat(source, "copy.bin")
     assert source_stat is not None
-    assert target_stat is not None
     operation = _operation(
         1,
-        OperationKind.NOOP,
-        source_rel_path="noop.bin",
-        target_rel_path="noop.bin",
+        OperationKind.COPY,
+        source_rel_path="copy.bin",
+        target_rel_path="copy.bin",
         source_expected=source_stat,
-        target_expected=target_stat,
-        intended=target_stat,
-        reason=OperationReason.METADATA_MATCH,
+        target_expected=None,
+        intended=source_stat,
     )
     xset = _xset(_plan(source, target, (operation,)))
+    recorder = FakeRecorder()
     accepted: list[object] = []
+    retained: list[
+        tuple[executor_runtime._EffectJournal, executor_runtime._Settled]
+    ] = []
+    original_retain = executor_runtime._EffectJournal.retain_pending_settlement
+
+    def tracked_retain(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+        settled: executor_runtime._Settled,
+    ) -> executor_runtime._Settled:
+        value = original_retain(journal, op_id, settled)
+        retained.append((journal, value))
+        return value
+
+    monkeypatch.setattr(
+        executor_runtime._EffectJournal,
+        "retain_pending_settlement",
+        tracked_retain,
+    )
     outcome_attempts = 0
     original = OSError("reliable outcome sink failed")
+    secondary = OSError("reliable outcome sink still failed")
 
     def emit(body: object) -> None:
         nonlocal outcome_attempts
         if isinstance(body, ItemOutcome):
             outcome_attempts += 1
-            raise original
+            raise original if outcome_attempts == 1 else secondary
         accepted.append(body)
 
     session_outcome = run_session(
         lambda ctx: execute(
             xset,
             ctx,
-            FakeRecorder(),
+            recorder,
             _policies(),
             fs,
         ),
@@ -431,17 +440,48 @@ def test_run_session_excludes_executor_outcomes_rejected_by_sink(
         publish_result=lambda _result: None,
     )
 
-    assert outcome_attempts >= 1
+    assert outcome_attempts == 2
     assert xset.status == {}
+    assert xset.published_evidence == {}
+    assert xset.recording_reasons == {}
+    assert len(retained) == 2
+    journal, pending = retained[0]
+    retry_journal, retry_pending = retained[1]
+    assert retry_journal is journal
+    assert retry_pending is pending
+    assert journal.has_active_entry(operation.op_id)
+    assert journal.pending_settlement(operation.op_id) is pending
+    assert pending.outcome is Outcome.SUCCEEDED
+    assert pending.recording_reason is None
+    assert pending.published_evidence is not None
+    assert (
+        pending.published_evidence.recorded_identity
+        == recorder._copy_identity(operation.op_id)
+    )
+    assert _recorder_names(recorder) == ["copied"]
+    assert (target / "copy.bin").read_bytes() == content
     assert session_outcome.result is not None
     assert session_outcome.result.status is SessionState.FAILED
     assert session_outcome.result.items == ()
+    assert session_outcome.result.error is not None
+    assert session_outcome.result.error.type_name == "OSError"
+    assert session_outcome.result.error.message == str(original)
+    assert (
+        session_outcome.result.bytes_done,
+        session_outcome.result.bytes_total,
+    ) == (len(content), len(content))
     terminal = next(body for body in accepted if isinstance(body, Terminal))
+    assert terminal.result.status is SessionState.FAILED
     assert terminal.result.recording_degraded_items == 0
     final_progress = next(
         body for body in reversed(accepted) if isinstance(body, Progress)
     )
-    assert (final_progress.items_done, final_progress.items_total) == (0, 1)
+    assert (
+        final_progress.items_done,
+        final_progress.items_total,
+        final_progress.bytes_done,
+        final_progress.bytes_total,
+    ) == (0, 1, len(content), len(content))
 
 
 class SizingCopyBackend:

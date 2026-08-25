@@ -3805,7 +3805,111 @@ def test_checkpoint_exception_finalizes_pending_mkdir_before_propagating(
     assert (target / "later.bin").read_bytes() == b"later"
 
 
-def test_item_event_exception_retires_effect_without_false_settlement(
+@pytest.mark.parametrize("reject_persistently", [False, True])
+def test_deferred_mkdir_replays_success_after_reliable_sink_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    reject_persistently: bool,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MKDIR)
+    xset = _xset(_plan(source, target, (operation,)))
+    recorder = FakeRecorder()
+    retained: list[
+        tuple[executor_runtime._EffectJournal, executor_runtime._Settled]
+    ] = []
+    retired: list[OpId] = []
+    original_retain = executor_runtime._EffectJournal.retain_pending_settlement
+    original_retire = executor_runtime._EffectJournal.retire
+
+    def tracked_retain(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+        settled: executor_runtime._Settled,
+    ) -> executor_runtime._Settled:
+        value = original_retain(journal, op_id, settled)
+        retained.append((journal, value))
+        return value
+
+    def tracked_retire(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+    ) -> None:
+        original_retire(journal, op_id)
+        retired.append(op_id)
+
+    monkeypatch.setattr(
+        executor_runtime._EffectJournal,
+        "retain_pending_settlement",
+        tracked_retain,
+    )
+    monkeypatch.setattr(executor_runtime._EffectJournal, "retire", tracked_retire)
+    attempted_items: list[ItemOutcome] = []
+    accepted_items: list[ItemOutcome] = []
+    progress: list[Progress] = []
+    original = OSError("reliable mkdir outcome sink failed")
+    secondary = OSError("reliable mkdir outcome sink still failed")
+
+    def emit(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            attempted_items.append(body)
+            if len(attempted_items) == 1:
+                raise original
+            if reject_persistently:
+                raise secondary
+            accepted_items.append(body)
+        elif isinstance(body, Progress):
+            progress.append(body)
+
+    with pytest.raises(OSError) as raised:
+        execute(
+            xset,
+            RunContext(emit, lambda: None),
+            recorder,
+            _policies(),
+            fs,
+        )
+
+    assert raised.value is original
+    assert len(attempted_items) == 2
+    assert attempted_items[1] == attempted_items[0]
+    assert attempted_items[0].outcome is Outcome.SUCCEEDED
+    assert attempted_items[0].recording is RecordingStatus.OK
+    assert attempted_items[0].recording_reason is None
+    assert len(retained) == 2
+    journal, pending = retained[0]
+    retry_journal, retry_pending = retained[1]
+    assert retry_journal is journal
+    assert retry_pending is pending
+    assert pending.outcome is Outcome.SUCCEEDED
+    assert pending.recording_reason is None
+    assert pending.published_evidence is None
+    assert _recorder_names(recorder) == ["mkdir"]
+    assert (target / "folder").is_dir()
+    assert xset.published_evidence == {}
+    assert xset.recording_reasons == {}
+
+    if reject_persistently:
+        assert accepted_items == []
+        assert xset.status == {}
+        assert retired == []
+        assert journal.has_active_entry(operation.op_id)
+        assert journal.pending_settlement(operation.op_id) is pending
+    else:
+        assert accepted_items == [attempted_items[1]]
+        assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
+        assert retired == [operation.op_id]
+        assert not journal.has_active_entry(operation.op_id)
+    assert progress
+    assert (progress[-1].items_done, progress[-1].items_total) == (
+        0 if reject_persistently else 1,
+        1,
+    )
+    assert progress[-1].item_id is None
+
+
+def test_persistent_item_event_failure_retains_nonbyte_settlement(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -3814,20 +3918,42 @@ def test_item_event_exception_retires_effect_without_false_settlement(
     operation = _nonbyte_mutation_operation(source, target, fs, OperationKind.MOVE)
     xset = _xset(_plan(source, target, (operation,)))
     recorder = FakeRecorder()
-    retired: list[tuple[executor_runtime._EffectJournal, OpId]] = []
+    retained: list[
+        tuple[executor_runtime._EffectJournal, executor_runtime._Settled]
+    ] = []
+    retired: list[OpId] = []
+    original_retain = executor_runtime._EffectJournal.retain_pending_settlement
     original_retire = executor_runtime._EffectJournal.retire
+
+    def tracked_retain(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+        settled: executor_runtime._Settled,
+    ) -> executor_runtime._Settled:
+        value = original_retain(journal, op_id, settled)
+        retained.append((journal, value))
+        return value
 
     def tracked_retire(
         journal: executor_runtime._EffectJournal,
         op_id: OpId,
     ) -> None:
         original_retire(journal, op_id)
-        retired.append((journal, op_id))
+        retired.append(op_id)
 
+    monkeypatch.setattr(
+        executor_runtime._EffectJournal,
+        "retain_pending_settlement",
+        tracked_retain,
+    )
     monkeypatch.setattr(executor_runtime._EffectJournal, "retire", tracked_retire)
 
+    attempts = 0
+
     def emit(event: object) -> None:
+        nonlocal attempts
         if isinstance(event, ItemOutcome):
+            attempts += 1
             raise RuntimeError("injected item-event escape")
 
     with pytest.raises(RuntimeError, match="item-event escape"):
@@ -3840,12 +3966,21 @@ def test_item_event_exception_retires_effect_without_false_settlement(
         )
 
     assert xset.status == {}
+    assert attempts == 2
     assert _recorder_names(recorder) == ["moved"]
     assert recorder.flushes == 2
-    assert len(retired) == 1
-    journal, op_id = retired[0]
-    assert op_id == operation.op_id
-    assert not journal.has_active_entry(op_id)
+    assert retired == []
+    assert len(retained) == 2
+    journal, pending = retained[0]
+    retry_journal, retry_pending = retained[1]
+    assert retry_journal is journal
+    assert retry_pending is pending
+    assert journal.has_active_entry(operation.op_id)
+    assert journal.pending_settlement(operation.op_id) is pending
+    assert pending.outcome is Outcome.SUCCEEDED
+    assert pending.published_evidence is None
+    assert not (target / "old.bin").exists()
+    assert (target / "new.bin").read_bytes() == b"reviewed"
 
 
 def test_cancel_during_nonbyte_retry_settles_committed_mutation(
@@ -5128,6 +5263,35 @@ def test_effect_journal_reuses_only_the_same_mutation_attempt(tmp_path: Path) ->
     journal.retire(op_id)
 
 
+def test_effect_journal_rejects_pending_settlement_replacement() -> None:
+    op_id = OpId("5" * 32)
+    journal = executor_runtime._EffectJournal()
+    pending = executor_runtime._Settled(
+        Outcome.SUCCEEDED,
+        detail={"message": "committed"},
+    )
+
+    assert journal.retain_pending_settlement(op_id, pending) is pending
+    equivalent = executor_runtime._Settled(
+        Outcome.SUCCEEDED,
+        detail={"message": "committed"},
+    )
+    assert journal.retain_pending_settlement(op_id, equivalent) is pending
+    assert journal.pending_settlement(op_id) is pending
+
+    with pytest.raises(RuntimeError, match="changed before delivery"):
+        journal.retain_pending_settlement(
+            op_id,
+            executor_runtime._Settled(Outcome.FAILED),
+        )
+    with pytest.raises(RuntimeError, match="not settled"):
+        journal.retire(op_id)
+
+    journal.settle(op_id)
+    journal.retire(op_id)
+    assert journal.pending_settlement(op_id) is None
+
+
 def test_effect_journal_retires_after_terminal_item_and_progress(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -5149,8 +5313,17 @@ def test_effect_journal_retires_after_terminal_item_and_progress(
     xset = _xset(_plan(source, target, (operation,)))
     timeline: list[str] = []
     retired_journals: list[executor_runtime._EffectJournal] = []
+    original_retain = executor_runtime._EffectJournal.retain_pending_settlement
     original_settle = executor_runtime._EffectJournal.settle
     original_retire = executor_runtime._EffectJournal.retire
+
+    def tracked_retain(
+        journal: executor_runtime._EffectJournal,
+        op_id: OpId,
+        settled: executor_runtime._Settled,
+    ) -> executor_runtime._Settled:
+        timeline.append("retain")
+        return original_retain(journal, op_id, settled)
 
     def tracked_settle(
         journal: executor_runtime._EffectJournal,
@@ -5170,6 +5343,11 @@ def test_effect_journal_retires_after_terminal_item_and_progress(
         retired_journals.append(journal)
         original_retire(journal, op_id)
 
+    monkeypatch.setattr(
+        executor_runtime._EffectJournal,
+        "retain_pending_settlement",
+        tracked_retain,
+    )
     monkeypatch.setattr(executor_runtime._EffectJournal, "settle", tracked_settle)
     monkeypatch.setattr(executor_runtime._EffectJournal, "retire", tracked_retire)
 
@@ -5188,6 +5366,6 @@ def test_effect_journal_retires_after_terminal_item_and_progress(
     )
 
     assert result.status is SessionState.COMPLETED
-    assert timeline[:4] == ["item", "progress", "settle", "retire"]
+    assert timeline[:5] == ["retain", "item", "progress", "settle", "retire"]
     assert len(retired_journals) == 1
     assert operation.op_id not in retired_journals[0]._entries

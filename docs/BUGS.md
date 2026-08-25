@@ -116,6 +116,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-26). Reliable-sink settlement receipt loss. A
+  successful recorder transaction lived only in a transient settlement while
+  its item outcome was offered, so sink rejection sent the exception backstop
+  through filesystem re-observation without the committed receipt. An accepted
+  retry could then contradict durable success as failed and unrecorded. Fixed
+  by retaining the complete typed settlement in the operation journal before
+  emission and replaying that exact value once. Only accepted delivery advances
+  continuation state or retires the journal; persistent rejection remains
+  pending and terminalizes from accepted items under the original sink error.
 - MODERATE - FIXED (2026-08-22). Deferred-settlement activity conflation. A
   successful directory create remained the active Progress item until later
   descendant and metadata finalization, so the next operation replaced its
