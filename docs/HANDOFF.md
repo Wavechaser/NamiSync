@@ -1,8 +1,8 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.9 is committed as `04d5fb8`. Checkpoint
-3R.10's implementation, verification, and pre-commit reviews are complete.
-After its named commit, start only 3R.11.
+Status (2026-08-26): checkpoint 3R.10 is committed as `e4fd539`. Checkpoint
+3R.11's implementation, verification, and pre-commit reviews are complete.
+After its named commit, start only 3R.12.
 The checkpoint 3.2 shell boundary remains active; 3.3 has not started.
 S5 and 3R.14's coordinated epoch/reset remain
 design holds. The pre-existing installed-wheel event diagnostic migration is
@@ -10,45 +10,37 @@ also unassigned; do not silently widen another checkpoint to repair it.
 
 ## Delivered This Checkpoint
 
-- Exact primitive result/record validators reuse the terminal summary's
-  existing phase, scalar, recording, cancellation, and review-limit predicates;
-  flattened errors and presentation omissions remain representation-specific.
-- Workflow validators explicitly project exact dataclasses and bounded tuple
-  children. Existing frozen body mappings remain supported; no generic new
-  serializer, fake event, or recomputed item-free headline was introduced.
-- Task offer, recovery, candidate drain, command return, and serialization now
-  select those validators. Whole-candidate validation precedes queue pops,
-  pending-terminal clearing, and the terminal-delivered receipt.
-- Python and JavaScript task records require a non-null valid matching result.
-  Generic active and terminal-in-transition result-free snapshots remain valid
-  but do not earn a delivery receipt. Release preserves an already-earned
-  receipt even when explicit replay has cleared the transient terminal cache.
-- Replaced positive v4/malformed task fixtures with exact production v5 views.
-  Added malformed offer/record/result, post-admission and post-command mutation,
-  invalid pending cache, Terminal-event-only, and browser atomic refusal/replay
-  coverage. The existing stale failed-recovery release race is retained.
-- Updated CORE, WORKFLOWS, INTERFACES, the bridge record-arm contract, and causal
-  BUGS. Raw reviewer reports remain the detailed finding source below.
+- Pinned the private, uncalled browser legacy validator to literal version 4
+  and removed its shared live-version constant. Live task events still route
+  only to the existing exact v5 validator; no new runtime route or export.
+- Both routing gates now isolate the actual live function. Active v5 Progress
+  shape/scalar checks and complete reason/detail vocabularies replace legacy
+  source witnesses; 38 in-memory mutations exercise the gate boundaries.
+- Required Node coverage consumes real Python projection/primitive-codec output
+  for all seven event families and relevant public-view witnesses. Existing
+  operation/cancellation, reliable-size, and logical-byte cases use that codec
+  too; independent literals and negative post-projection mutations remain.
+- Updated INTERFACES and causal BUGS. Raw reviewer reports remain the detailed
+  finding source below; installed-wheel diagnostic migration is not included.
 
 ## Verification
 
-- Tests-first Python boundary subset against untouched production:
-  `67 failed, 10 passed, 287 deselected`. Required Node separately reproduced
-  two delivered callbacks for a result-free terminal batch where zero was
-  required.
-- After the patch-access interruption, the first resumed focused run had
-  `3 failed, 363 passed`: two multi-session fixture IDs and the new Node
-  asynchronous request-index capture. Corrected those test fixtures.
-- Three focused adapter/browser files: `366 passed`.
-- Core/workflows/interfaces neighborhood:
-  `2666 passed, 1 skipped, 1311 deselected`.
+- Tests-first narrow selection against untouched browser production:
+  `3 failed, 2 passed, 54 deselected`. The private seam rejected valid numeric
+  v4 and accepted the same v5-stamped body; both strengthened source gates
+  rejected its shared version authority.
+- Progress/vocabulary mutation selection before the runtime edit:
+  `34 passed, 45 deselected`.
+- Focused browser/static files with required bundled Node: `93 passed`.
+  Independent rerun: `93 passed`.
+- Interfaces department: `1275 passed, 2743 deselected`.
+- Independent code/test and owning-document working reviews: `CLEAN`.
+  The raw reviewer suffix is byte-identical to the prior committed handoff.
 - Ordinary suite with required bundled Node:
-  `3946 passed, 4 skipped, 28 deselected`.
+  `3986 passed, 4 skipped, 28 deselected`.
 - Unchanged protected oracle: `30 scenarios x 3 runs`.
-- Independent final code/test and owning-document working reviews: `CLEAN`.
-  Independent boundary/Node selection: `82 passed, 304 deselected`.
-  Exact staged review: `CLEAN`; the final status/evidence-only delta is checked
-  independently before the named commit.
+- Exact staged-tree review: `CLEAN`; the final status/evidence-only delta is
+  checked independently before the named commit.
 - Protected settlement oracle, baseline, and prior assertions are unchanged.
   Tool/baseline blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
   `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
@@ -99,11 +91,12 @@ Retained ignored artifacts and conventions are under
 ## Safe Stop And Holds
 
 Rebuilt 3R.4 is `1e794e7`; 3R.5 `8f6d8f8`; 3R.6 `f15a82d`;
-3R.7 `bd05ff7`; 3R.8 `f96804b`; 3R.9 `04d5fb8`. The discarded 3R.4 attempt remains
-recoverable under ignored `build/r34-restart-20260826/`.
+3R.7 `bd05ff7`; 3R.8 `f96804b`; 3R.9 `04d5fb8`; 3R.10 `e4fd539`.
+The discarded 3R.4 attempt remains recoverable under ignored
+`build/r34-restart-20260826/`.
 
-No 3R.11 legacy/source-gate, fingerprint, identity codec,
-epoch, or database topology/admission changes are present.
+No fingerprint, identity codec, epoch, or database topology/admission changes
+are present.
 
 S5 still requires an explicit storage design or accepted residual. A read-only
 3R.14 audit found textual FileIndex128 changes all non-null identity-bearing
@@ -126,13 +119,14 @@ The earlier blocked patch context remains under ignored
 
 ## Immediate Next Context
 
-All current tracked edits belong to 3R.10. After the final status-only review,
-commit only
-`fix(web): validate task updates before custody release`.
-After that clean stop, start 3R.11, `fix(web): harden exact-v5 source gates`.
-Keep its private v4 seam/source and Python-to-packaged-JavaScript gates separate
-from unassigned installed-wheel diagnostic migration. Do not alter frozen
-settlement or transport measurement authority or begin database rows early.
+All current tracked edits belong to 3R.11. After the final status-only review,
+commit only `fix(web): harden exact-v5 source gates`.
+After that clean stop, start 3R.12,
+`refactor(database): prepare exact schema topology validation`.
+Keep its exact topology comparator dormant; reader/initializer/repository/pair
+activation and WAL-aware nonmutating admission belong to the separate 3R.13.
+Do not alter frozen settlement or transport measurement authority, widen into
+unassigned diagnostic migration, or start identity/epoch work without a decision.
 
 ## Reviewer O.
 

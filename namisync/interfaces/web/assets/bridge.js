@@ -1,5 +1,4 @@
 const BRIDGE_SCHEMA_VERSION = 1;
-const LIVE_CORE_EVENT_SCHEMA_VERSION = 5;
 const DORMANT_CORE_EVENT_SCHEMA_VERSION = 5;
 const MAX_RELIABLE_EVENT_CANONICAL_BYTES = 1_048_576;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
@@ -1531,7 +1530,7 @@ function validateLegacySessionEvent(event, sessionId) {
     !Number.isSafeInteger(event.sequence) ||
     event.sequence < 1 ||
     !isUtcTimestamp(event.at) ||
-    event.schema_version !== LIVE_CORE_EVENT_SCHEMA_VERSION ||
+    event.schema_version !== 4 ||
     !isPlainJsonObject(event.body)
   ) {
     return false;

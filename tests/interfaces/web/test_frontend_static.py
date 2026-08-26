@@ -19,6 +19,13 @@ from _tree_window_fixture import (
 )
 
 from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core import event_v5, events
+from namisync.core.execution import (
+    ExecutionReason,
+    ItemRecordingReason,
+    TaskRecordingIssueReason,
+)
+from namisync.core.planning import BlockedReason, OperationKind
 from namisync.core.integrity import (
     IntegrityMode,
     IntegrityReason,
@@ -34,8 +41,11 @@ from namisync.core.session import (
 )
 from namisync.interfaces.web.commands import production_command_specs
 from namisync.workflows.views import ResultCategory
+from namisync.workflows.selection import ExclusionReason
 
-from _frontend_test_support import ASSET_ROOT, INITIAL_ASSETS, _node_executable
+from _frontend_test_support import (
+    ASSET_ROOT, INITIAL_ASSETS, _assert_exact_v5_event_routes, _node_executable,
+)
 
 
 CSP = (
@@ -1087,7 +1097,10 @@ def test_br_g_33_browser_event_vocabulary_matches_python_owners() -> None:
         / "assets"
         / "bridge.js"
     ).read_text(encoding="utf-8")
+    _assert_v5_vocabulary(source)
 
+
+def _assert_v5_vocabulary(source: str) -> None:
     expected = {
         "SESSION_STATES": tuple(item.value for item in SessionState),
         "TERMINAL_STATES": tuple(item.value for item in TERMINAL_STATES),
@@ -1112,12 +1125,105 @@ def test_br_g_33_browser_event_vocabulary_matches_python_owners() -> None:
             "baselined",
             "verified",
         ),
+        "DORMANT_OPERATION_KINDS_V5": tuple(item.value for item in OperationKind),
+        "DORMANT_OPERATION_REASONS_V5": frozenset(
+            item.value for item in (*ExecutionReason, *BlockedReason, *ExclusionReason)
+        ),
+        "DORMANT_ITEM_RECORDING_REASONS_V5": tuple(
+            item.value for item in ItemRecordingReason
+        ),
+        "DORMANT_TASK_RECORDING_REASONS_V5": tuple(
+            item.value for item in TaskRecordingIssueReason
+        ),
+        "DORMANT_DETAIL_TEXT_KEYS_V5": events._DETAIL_TEXT_KEYS,
+        "DORMANT_DETAIL_PATH_KEYS_V5": events._DETAIL_PATH_KEYS,
+        "DORMANT_DETAIL_ARRAY_KEYS_V5": (
+            events._DETAIL_TEXT_ARRAY_KEYS
+            | events._DETAIL_SIDE_ARRAY_KEYS
+            | events._DETAIL_ID_ARRAY_KEYS
+        ),
     }
 
     for name, values in expected.items():
         actual = _javascript_frozen_array(source, name)
         assert len(actual) == len(values)
         assert set(actual) == set(values)
+
+    detail_groups = [
+        getattr(events, name) for name in (
+            "_DETAIL_TEXT_KEYS", "_DETAIL_PATH_KEYS", "_DETAIL_BOOLEAN_KEYS",
+            "_DETAIL_TEXT_ARRAY_KEYS", "_DETAIL_SIDE_ARRAY_KEYS", "_DETAIL_ID_ARRAY_KEYS",
+        )
+    ]
+    assert sum(map(len, detail_groups)) == len(set().union(*detail_groups))
+    for name in (
+        "_DETAIL_TEXT_KEYS", "_DETAIL_PATH_KEYS", "_DETAIL_BOOLEAN_KEYS",
+        "_DETAIL_TEXT_ARRAY_KEYS", "_DETAIL_SIDE_ARRAY_KEYS", "_DETAIL_ID_ARRAY_KEYS",
+    ):
+        assert getattr(events, name) == getattr(event_v5, name)
+    assert events._DETAIL_BOOLEAN_KEYS == {"continued"}
+    detail = source.split("function validateDormantDetailProjectionV5(value) {", 1)[1]
+    detail = detail.split("function isScalar64(value) {", 1)[0]
+    assert detail.lstrip().startswith("if (")
+    assert re.search(
+        r'else if \(key === "continued"\) {\s*if \(typeof item !== "boolean"\)',
+        detail,
+    )
+    for check in (
+        'key === "incomplete_sides" &&',
+        '["source", "target"].includes(member)',
+        'key === "excluded_dependencies" &&',
+        'typeof member === "string" && ID_PATTERN.test(member)',
+        'key === "durability_warnings" &&',
+        'isBoundedV5Text(member, false)',
+    ):
+        assert check in detail
+
+
+@pytest.mark.parametrize("name", [
+    "DORMANT_OPERATION_KINDS_V5",
+    "DORMANT_OPERATION_REASONS_V5",
+    "DORMANT_ITEM_RECORDING_REASONS_V5",
+    "DORMANT_TASK_RECORDING_REASONS_V5",
+    "DORMANT_DETAIL_TEXT_KEYS_V5",
+    "DORMANT_DETAIL_PATH_KEYS_V5",
+    "DORMANT_DETAIL_ARRAY_KEYS_V5",
+])
+@pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate"])
+def test_v5_vocabulary_gate_rejects_changed_sets(name: str, mutation: str) -> None:
+    source = (PROJECT_ROOT / ASSET_ROOT / "bridge.js").read_text(encoding="utf-8")
+    _assert_v5_vocabulary(source)
+    values = list(_javascript_frozen_array(source, name))
+    changed = (
+        values[1:] if mutation == "missing"
+        else values + ["unknown" if mutation == "extra" else values[0]]
+    )
+    anchor = f"const {name} = Object.freeze("
+    prefix, declaration = source.split(anchor, 1)
+    _, suffix = declaration.split(");", 1)
+    with pytest.raises(AssertionError):
+        _assert_v5_vocabulary(prefix + anchor + json.dumps(changed) + ");" + suffix)
+
+
+@pytest.mark.parametrize("before,after", [
+    ("if (!isPlainJsonObject(value))", "return true; if (!isPlainJsonObject(value))"),
+    ('typeof item !== "boolean"', 'typeof item !== "string"'),
+    ('["source", "target"].includes(member)', 'typeof member === "string"'),
+    ('typeof member === "string" && ID_PATTERN.test(member)', 'ID_PATTERN.test(member)'),
+    ('isBoundedV5Text(member, false)', 'typeof member === "string"'),
+])
+def test_v5_vocabulary_gate_rejects_changed_detail_classes(before, after) -> None:
+    source = (PROJECT_ROOT / ASSET_ROOT / "bridge.js").read_text(encoding="utf-8")
+    _assert_v5_vocabulary(source)
+    start = "function validateDormantDetailProjectionV5(value) {"
+    end = "function isScalar64(value) {"
+    prefix, rest = source.split(start, 1)
+    validator, suffix = rest.split(end, 1)
+    assert validator.count(before) == 1
+    with pytest.raises(AssertionError):
+        _assert_v5_vocabulary(
+            prefix + start + validator.replace(before, after) + end + suffix
+        )
 
 
 def test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape() -> None:
@@ -1129,11 +1235,19 @@ def test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape() -> N
         / "assets"
         / "bridge.js"
     ).read_text(encoding="utf-8")
-    validator = source.split("function validateProgress(value) {", 1)[1].split(
-        "function validateOperationItem(value) {", 1
-    )[0]
+    _assert_v5_progress(source)
 
-    for field_name in (
+
+def _assert_v5_progress(source: str) -> None:
+    validator = source.split("function validateDormantProgressV5(value) {", 1)[1].split(
+        "const DORMANT_OPERATION_REASONS_V5", 1
+    )[0]
+    assert validator.lstrip().startswith("if (")
+    keys = re.findall(
+        r'"([a-z_]+)"',
+        validator.split("!isExactObject(value, [", 1)[1].split("])", 1)[0],
+    )
+    assert keys == [
         "phase",
         "items_done",
         "items_total",
@@ -1145,18 +1259,47 @@ def test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape() -> N
         "item_attempt_id",
         "item_bytes_done",
         "item_bytes_total",
-    ):
-        assert validator.count(f'"{field_name}"') >= 1
+    ]
     assert 'value.item_type === "operation"' in validator
     assert 'value.item_type === "integrity"' in validator
-    assert "isValidNonemptyText(value.phase)" in validator
-    assert "isValidNonemptyText(value.item_id)" in validator
+    assert "isBoundedV5Text(value.phase, true)" in validator
+    assert "isBoundedV5Text(value.item_id, true)" in validator
+    assert "isV5Path(value.current_path)" in validator
+    assert "isNonnegativeInteger(value.items_done)" in validator
+    assert "isNullableNonnegativeInteger(value.items_total)" in validator
+    for field in ("bytes_done", "bytes_total", "item_bytes_done", "item_bytes_total"):
+        assert f"isScalar64(value.{field})" in validator
     assert "identityPresent &&" in validator
     assert "ID_PATTERN.test(value.item_attempt_id)" in validator
     assert "value.items_done >= value.items_total" in validator
-    assert "value.item_bytes_done <= value.item_bytes_total" in validator
-    assert "value.item_bytes_done <= value.bytes_done" in validator
-    assert "value.item_bytes_total <= value.bytes_total" in validator
+    assert "BigInt(value.bytes_done) > BigInt(value.bytes_total)" in validator
+    assert "BigInt(value.item_bytes_done) <= BigInt(value.item_bytes_total)" in validator
+    assert "BigInt(value.item_bytes_done) <= BigInt(value.bytes_done)" in validator
+    assert "BigInt(value.item_bytes_total) <= BigInt(value.bytes_total)" in validator
+
+
+@pytest.mark.parametrize("before,after", [
+    ("  if (", "  return true; if ("),
+    ('      "item_attempt_id",\n', ""),
+    ('      "item_attempt_id",\n', '      "item_attempt_id", "item_attempt_id",\n'),
+    ("isScalar64(value.bytes_done)", "isNonnegativeInteger(value.bytes_done)"),
+    ("isScalar64(value.item_bytes_total)", "isNonnegativeInteger(value.item_bytes_total)"),
+    ("value.items_done >= value.items_total", "value.items_done > value.items_total"),
+    ("BigInt(value.bytes_done) > BigInt(value.bytes_total)", "value.bytes_done > value.bytes_total"),
+    ("BigInt(value.item_bytes_done) <= BigInt(value.bytes_done)", "true"),
+])
+def test_v5_progress_gate_rejects_in_memory_active_validator_mutations(before, after) -> None:
+    source = (PROJECT_ROOT / ASSET_ROOT / "bridge.js").read_text(encoding="utf-8")
+    _assert_v5_progress(source)
+    start = "function validateDormantProgressV5(value) {"
+    end = "const DORMANT_OPERATION_REASONS_V5"
+    prefix, rest = source.split(start, 1)
+    validator, suffix = rest.split(end, 1)
+    assert before in validator
+    with pytest.raises(AssertionError):
+        _assert_v5_progress(
+            prefix + start + validator.replace(before, after, 1) + end + suffix
+        )
 
 
 def test_br_g_36_live_event_validator_is_current_only_and_not_for_history() -> None:
@@ -1168,20 +1311,11 @@ def test_br_g_36_live_event_validator_is_current_only_and_not_for_history() -> N
         / "assets"
         / "bridge.js"
     ).read_text(encoding="utf-8")
-    validator = source.split(
-        "function validateLiveSessionEvent(event, sessionId) {", 1
-    )[1].split("function validateLegacySessionEvent(event, sessionId) {", 1)[0]
-
+    _assert_exact_v5_event_routes(source)
     assert "const BRIDGE_SCHEMA_VERSION = 1;" in source
-    assert "const LIVE_CORE_EVENT_SCHEMA_VERSION = 5;" in source
     assert "const SCHEMA_VERSION" not in source
-    assert source.count("LIVE_CORE_EVENT_SCHEMA_VERSION") == 2
     assert "schema_version: BRIDGE_SCHEMA_VERSION" in source
     assert "response.schema_version !== BRIDGE_SCHEMA_VERSION" in source
-    assert validator.count('"schema_version"') == 0
-    assert "return validateDormantSessionEventV5(event, sessionId);" in validator
-    assert source.count("validateLiveSessionEvent(") == 2
-    assert "return validateLiveSessionEvent(update.event, sessionId);" in source
 
 
 def test_ready_transition_cannot_overwrite_a_native_close_status(

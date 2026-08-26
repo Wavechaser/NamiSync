@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import asdict
 from datetime import datetime
 import json
 from pathlib import Path
@@ -17,6 +16,7 @@ from _event_v5_fixtures import (
     UTC_TIMESTAMP_CASES,
     UNICODE_TEXT_CASES,
     bodies,
+    envelope,
     cancellation_terminal_cases,
     maximum_non_ascii_reliable_envelope,
     maximum_reliable_envelope,
@@ -25,7 +25,7 @@ from _event_v5_fixtures import (
     session_event_view,
     terminal_summary,
 )
-from _frontend_test_support import _node_executable
+from _frontend_test_support import _assert_exact_v5_event_routes, _node_executable
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.events import (
     Envelope, ItemOutcome, PhaseChanged, Terminal, TerminalSummary, envelope_from_dict,
@@ -41,10 +41,14 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.interfaces.web import bridge as bridge_module
+from namisync.interfaces.web.bridge import to_primitive_view
 from namisync.workflows.views import (
+    OperationResultView,
+    SessionEventView,
     operation_result_view,
     session_event_view as project_session_event,
 )
+from tests.interfaces.web._public_view_witnesses import iter_public_view_witnesses
 
 
 BRIDGE_JS = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
@@ -52,21 +56,35 @@ BRIDGE_JS = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
 def test_second_protocol_stop_routes_the_live_browser_through_exact_v5() -> None:
     source = BRIDGE_JS.read_text(encoding="utf-8")
-    live = source.split(
-        "function validateLiveSessionEvent(event, sessionId) {", 1
-    )[1].split("function validateSessionRecord(record, sessionId) {", 1)[0]
-
-    assert "const LIVE_CORE_EVENT_SCHEMA_VERSION = 5;" in source
-    assert "const DORMANT_CORE_EVENT_SCHEMA_VERSION = 5;" in source
-    assert (
-        "event.schema_version !== LIVE_CORE_EVENT_SCHEMA_VERSION" in live
-    )
-    assert "return validateDormantSessionEventV5(event, sessionId);" in live
+    _assert_exact_v5_event_routes(source)
     assert source.count("validateDormantSessionEventV5(") == 2
     assert (
         "export function validateDormantSessionEventV5(event, sessionId)"
         in source
     )
+
+
+@pytest.mark.parametrize("before,after", [
+    (
+        "return validateDormantSessionEventV5(event, sessionId);",
+        "return true; return validateDormantSessionEventV5(event, sessionId);",
+    ),
+    (
+        "return validateDormantSessionEventV5(event, sessionId);",
+        "return validateLegacySessionEvent(event, sessionId);",
+    ),
+    ("event.schema_version !== 4", "event.schema_version !== 5"),
+    (
+        "return validateLiveSessionEvent(update.event, sessionId);",
+        "return validateLegacySessionEvent(update.event, sessionId);",
+    ),
+])
+def test_event_route_gate_rejects_in_memory_source_mutations(before, after) -> None:
+    source = BRIDGE_JS.read_text(encoding="utf-8")
+    _assert_exact_v5_event_routes(source)
+    assert source.count(before) == 1
+    with pytest.raises(AssertionError):
+        _assert_exact_v5_event_routes(source.replace(before, after))
 
 
 @pytest.mark.supplemental_node
@@ -202,7 +220,7 @@ for (const item of corpus.cases) {
 
 
 def _project_public_event(body: object) -> dict[str, object]:
-    return asdict(
+    return to_primitive_view(
         project_session_event(
             Envelope(SessionId(SESSION_ID), 3, datetime.fromisoformat(AT), 5, body)
         )
@@ -216,18 +234,21 @@ def _assert_v5_node_cases(cases: list[dict[str, object]]) -> None:
     script = """
 import { readFileSync } from "node:fs";
 globalThis.window = { addEventListener() {} };
-// Expose the private result validator only in this in-memory test module.
+// Expose private entry points only in this in-memory test module.
 const source = readFileSync(process.argv[1], "utf8") +
-  "\\nexport { validateOperationResultView };";
+  "\\nexport { validateOperationResultView, validateTaskUpdate, validateLegacySessionEvent };";
 const bridge = await import(
   "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 );
 const corpus = JSON.parse(readFileSync(0, "utf8"));
 const mismatches = [];
 for (const item of corpus.cases) {
+  const sessionId = item.session_id ?? corpus.session_id;
   const actual = item.kind === "event"
-    ? bridge.validateDormantSessionEventV5(item.value, corpus.session_id)
-    : bridge.validateOperationResultView(item.value);
+    ? bridge.validateTaskUpdate({ update_type: "event", event: item.value }, sessionId)
+    : item.kind === "legacy"
+      ? bridge.validateLegacySessionEvent(item.value, sessionId)
+      : bridge.validateOperationResultView(item.value);
   if (actual !== item.expected) {
     mismatches.push(item.name + ": expected " + item.expected + ", got " + actual);
   }
@@ -243,6 +264,59 @@ if (mismatches.length) throw new Error(mismatches.join("\\n"));
         timeout=30,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_required_node_consumes_real_python_public_view_codec() -> None:
+    cases = []
+    for body_type in bodies():
+        value = to_primitive_view(
+            project_session_event(envelope_from_dict(envelope(body_type)))
+        )
+        assert value == session_event_view(body_type)
+        cases.append({
+            "name": body_type, "kind": "event", "expected": True, "value": value,
+        })
+    assert len(cases) == 7
+    witnessed = set()
+    for witness in iter_public_view_witnesses():
+        if type(witness.value) not in {SessionEventView, OperationResultView}:
+            continue
+        value = to_primitive_view(witness.value)
+        assert value == witness.expected
+        kind = "event" if type(witness.value) is SessionEventView else "result"
+        witnessed.add(kind)
+        cases.append({
+            "name": witness.label, "kind": kind, "expected": True,
+            "value": value, "session_id": value.get("session_id", SESSION_ID),
+        })
+    assert witnessed == {"event", "result"}
+    _assert_v5_node_cases(cases)
+
+
+def test_required_node_private_legacy_seam_is_v4_only() -> None:
+    numeric = session_event_view("Progress")
+    numeric["body"].update(bytes_done="7", bytes_total="20")
+    for field in ("bytes_done", "bytes_total", "item_bytes_done", "item_bytes_total"):
+        if numeric["body"][field] is not None:
+            numeric["body"][field] = int(numeric["body"][field])
+    cases = []
+    for version in (3, 4, 5, 6):
+        value = deepcopy(numeric)
+        value["schema_version"] = version
+        cases.extend([
+            {"name": f"private-v{version}-numeric", "kind": "legacy",
+             "expected": version == 4, "value": value},
+            {"name": f"live-v{version}-numeric", "kind": "event",
+             "expected": False, "value": value},
+        ])
+    canonical = session_event_view("Progress")
+    cases.extend([
+        {"name": "live-v5-text", "kind": "event", "expected": True,
+         "value": canonical},
+        {"name": "private-v5-text", "kind": "legacy", "expected": False,
+         "value": canonical},
+    ])
+    _assert_v5_node_cases(cases)
 
 
 def test_required_node_operation_truth_matches_public_python_projections() -> None:
@@ -296,7 +370,7 @@ def test_required_node_operation_truth_matches_public_python_projections() -> No
             else OperationResult(SessionState.COMPLETED)
         )
         event = _project_public_event(Terminal(TerminalSummary.from_result(result)))
-        result_view = asdict(operation_result_view(result))
+        result_view = to_primitive_view(operation_result_view(result))
         if not accepted:
             event["body"]["result"].update(summary)
             result_view.update(
@@ -334,7 +408,7 @@ def test_required_node_uses_the_shared_timestamp_grammar_and_calendar() -> None:
 def test_required_node_reliable_ceiling_uses_the_public_envelope_bytes(factory) -> None:
     raw = factory()
     assert len(json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")) == 1_048_576
-    view = asdict(project_session_event(envelope_from_dict(raw)))
+    view = to_primitive_view(project_session_event(envelope_from_dict(raw)))
     assert view["sequence"] == raw["seq"]
     assert view["body"] == raw["body"]
     oversized = deepcopy(view)
@@ -354,7 +428,7 @@ def test_required_node_preserves_logical_byte_review_facts() -> None:
         review_fact_limit=ReviewFactLimitExceeded.plan_logical_bytes(),
     )
     event = _project_public_event(Terminal(TerminalSummary.from_result(result)))
-    result_view = asdict(operation_result_view(result))
+    result_view = to_primitive_view(operation_result_view(result))
     cases = [
         {
             "name": "literal-logical-byte-fact",

@@ -661,6 +661,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MINOR - FIXED (2026-08-26). Cross-version gate aliasing. The unreachable
+  private browser seam accepted v5-stamped numeric-v4 bodies and rejected v4,
+  while source gates could find legacy text instead of the live route or active
+  Progress validator. Cause: a shared version constant and overbroad source
+  slices conflated retained and current contracts. Fixed with literal v4 at the
+  private seam, exact live-function isolation, active-v5 shape/vocabulary checks,
+  and mutation regressions. No production legacy route was added.
+- MINOR - FIXED (2026-08-26). Unbound producer fixtures. Separate Python public
+  view witnesses and browser literals could stay green while the real codec
+  drifted away from JavaScript. Cause: no differential check passed the actual
+  Python primitive projection to the packaged consumer. Fixed by binding all
+  seven event families and relevant public-view witnesses through that codec
+  and the live event arm, retaining independent literal expectations and
+  post-projection negative mutations.
 - MODERATE - FIXED (2026-08-26). Shallow view admission. Exact dataclass wrappers
   could carry old-version events, malformed nested results, or result-free
   terminal records through Python task drains and bridge serialization. Queue

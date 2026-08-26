@@ -153,6 +153,15 @@ cancellation rules as the core result; their exact meanings remain in
 Python boundaries and the required Node gate, with valid production view
 projections and independently mutated negative cases.
 
+The browser's unreachable private legacy validator is pinned to literal event
+version 4; live task events delegate only to the exact v5 validator. Source
+gates isolate that live function and the active v5 Progress shape, compare the
+complete v5 vocabularies and detail classes with their Python owners, and
+reject in-memory route, shape, scalar, and vocabulary mutations. Required Node
+coverage sends all seven event families and the relevant public-view witnesses
+through the real Python projection/primitive codec into the packaged browser
+consumer. Private test exports do not add a production compatibility route.
+
 Event and record timestamps use CORE's exact UTC service grammar. Python's
 event-view validator and the packaged browser enforce the reliable-event byte
 ceiling on the reconstructed persistence envelope, not the longer public-view
