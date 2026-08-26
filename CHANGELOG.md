@@ -115,6 +115,17 @@ Shared root authority, stable executor/verifier package boundaries, an oracle-
 guarded typed settlement reducer, and layered test operations made internal
 ownership explicit without changing public or persisted contracts.
 
+#### Separate historical criteria from active contracts (2026-08-27)
+
+- Reconstructed a retrospective M0 plan from the final pre-M1 documentation
+  snapshot, preserving historical qualifications and verification notes without
+  treating them as current acceptance evidence.
+- Removed 13 inherited component checklists after checking their later contract
+  prose; retained the few unique current rules and measurement-fixture details
+  in their owning documents. Newer prose prevails over stale criteria.
+- Kept current M1 gates and explicitly deferred ingest criteria separate;
+  updated references to the archived M0 source without changing runtime policy.
+
 #### Establish layered test operations (2026-08-16)
 
 - Added focused, department, cross-department, ordinary, and complete/headed

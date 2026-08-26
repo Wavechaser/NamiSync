@@ -1151,7 +1151,8 @@ not satisfy its gate, and reviewers reject it. Concretely:
 
 #### A. Preserved executor and verifier contracts (re-proven against the refactored path)
 
-These already pass for M0 (`EXECUTOR.md`, `VERIFIER.md` acceptance). The gate is
+These already pass for M0 (the former `EXECUTOR.md` and `VERIFIER.md`
+acceptance sections, now archived in [M0_PLAN.md](M0_PLAN.md)). The gate is
 that they still pass *through the new pipeline, single-handle finalization, and
 XXH3 hasher* — the refactor is the reason each is now at risk.
 

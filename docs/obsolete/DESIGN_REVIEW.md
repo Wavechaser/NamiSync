@@ -678,7 +678,7 @@ anyone (ejection is announced by `Gap`), and "axis-separated truth."
 
 Every substantive entry in `PoC_import/BUGS.md` was routed to an owning draft
 and a regression-oriented acceptance criterion. This table is the review index;
-the module files contain the detailed criteria.
+the inherited M0 criteria are now archived in [M0_PLAN.md](M0_PLAN.md).
 
 | PoC section | Owning drafts | Hardened themes |
 | --- | --- | --- |

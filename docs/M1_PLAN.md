@@ -1180,8 +1180,9 @@ independently open; the 2026-08-13 whole-Job delta closes none of them.
 
 ## 5. Acceptance Notes
 
-Each stage's work should land with the same standard the M0 module docs use:
-a named failure-injection or regression test per behavior, not just "tested."
+Each stage's work should land with a named failure-injection or regression
+test per behavior, not just "tested." The [archived M0 criteria](obsolete/M0_PLAN.md)
+provide historical context only.
 The following are milestone gates because they are easy to skip:
 
 **Implementation checkpoints (2026-07-24/25).** Stage 2 satisfies the Track 2

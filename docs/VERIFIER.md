@@ -64,6 +64,10 @@ vocabulary and is not parsed to recover integrity meaning.
 independent aggregate recording axis. A conditional recorder refusal or error
 degrades recording without rewriting a truthful content verdict.
 
+Verification remains single-stream with no worker-count setting. Any future
+parallel verifier design requires workload evidence and must preserve one
+outcome/write per row plus per-volume safety.
+
 ## Per-File Algorithm
 
 1. Checkpoint and validate root-relative path/containment.
@@ -361,6 +365,27 @@ fails, the settlement error replaces the control unwind, passes through the
 same forced inactive failure boundary, and remains primary if that Progress
 sink also fails.
 
+Progress emission is throttled under fast-disk simulation and aggregate
+physical-read work remains monotonic. The frozen-clock source fixture set
+covers 20 standalone streamed and 20 nonstreamed items
+(`test_fast_items_have_constant_progress_boundaries`), 20 streamed post-copy
+candidates (`test_fast_post_copy_items_have_constant_progress_boundaries`),
+empty standalone and post-copy selections
+(`test_empty_successful_selection_has_two_inactive_progress_boundaries`), and
+one 100-byte item delivered as 100 one-byte chunks
+(`test_fast_chunk_flood_has_two_fixed_progress_boundaries`). Every successful
+profile passes exactly two forced `Progress` snapshots to the injected
+emitter: the initial and final inactive phase boundaries.
+Item/stream/settlement transitions use the ordinary throttle path; a pause or
+cancellation adds exactly one forced control-boundary snapshot instead of a
+successful final boundary. Downstream progress remains lossy and coalescible,
+so this fixed source-emission cost is not a promise of two browser callbacks.
+This is a deterministic source-enforced lifecycle invariant, not an empirical
+latency SLO: item and chunk counts are scaling axes only for ordinary
+throttle attempts, no measurement artifact is retained, and the set reruns
+whenever reporter force sites, the 100 ms throttle, or phase-boundary handling
+changes.
+
 ## Expectations Of Other Modules
 
 - Core supplies `IntegrityOutcome`, integrity/result/event evidence types, and
@@ -447,67 +472,3 @@ imports inside the verifier.
 - Inventory-before-verify and scoped refresh fix no-inventory failures and
   100k-file selected-verify full walks.
 - Result scope prevents the GUI from marking whole directories/noops verified.
-
-## Acceptance Criteria
-
-- Stat-changed content is `modified`; only stat-stable digest divergence is
-  `mismatched` across a full classification matrix.
-- Null-hash verify is `baselined`, stores verify provenance, and does not claim a
-  prior verification match.
-- Repeat baseline hashes/writes only missing evidence; rebaseline excludes
-  missing-evidence rows; verify continues to baseline them and reports
-  verification-incomplete.
-- Copy-stream-only evidence never sets or renders `last_verified_at`.
-- Missing, unsupported, canceled, and read/error paths each emit one item result
-  and no unsafe write.
-- Drift between pre-stat, hash, post-stat, and recorder call causes the
-  conditional write to affect zero rows.
-- Reappeared first-baseline clears `reappeared_at` atomically; rollback leaves
-  both old states intact.
-- Selected casing/separator variants resolve by canonical key and never target a
-  row from another location.
-- Selected refresh observes only selected paths and cannot mark others missing.
-- Post-execution scope includes only successful eligible operation ids; manual
-  verify cannot mark plan noops executed/verified.
-- Cache-honest integration tests prove the declared Windows read strategy or
-  produce a disclosed unsupported/deferred outcome.
-- Progress emission is throttled under fast-disk simulation and aggregate
-  physical-read work remains monotonic. The frozen-clock source fixture set
-  covers 20 standalone streamed and 20 nonstreamed items
-  (`test_fast_items_have_constant_progress_boundaries`), 20 streamed post-copy
-  candidates (`test_fast_post_copy_items_have_constant_progress_boundaries`),
-  empty standalone and post-copy selections
-  (`test_empty_successful_selection_has_two_inactive_progress_boundaries`), and
-  one 100-byte item delivered as 100 one-byte chunks
-  (`test_fast_chunk_flood_has_two_fixed_progress_boundaries`). Every successful
-  profile passes exactly two forced `Progress` snapshots to the injected
-  emitter: the initial and final inactive phase boundaries.
-  Item/stream/settlement transitions use the ordinary throttle path; a pause or
-  cancellation adds exactly one forced control-boundary snapshot instead of a
-  successful final boundary. Downstream progress remains lossy and coalescible,
-  so this fixed source-emission cost is not a promise of two browser callbacks.
-  This is a deterministic source-enforced lifecycle invariant, not an empirical
-  latency SLO: item and chunk counts are scaling axes only for ordinary
-  throttle attempts, no measurement artifact is retained, and the set reruns
-  whenever reporter force sites, the 100 ms throttle, or phase-boundary handling
-  changes.
-- Verification remains single-stream with no worker-count setting. Any future
-  parallel verifier design requires workload evidence and must preserve one
-  outcome/write per row plus per-volume safety.
-- Unexpected SQLite/OS errors still produce an audited activity envelope and a
-  truthful terminal.
-- Pause after any item count preserves exactly those outcomes/writes, releases
-  custody with no terminal, and resume neither repeats outcomes nor skips an
-  unreached selected row.
-- Cancellation after any item count emits exactly one result for every selected
-  row, including in-flight and unreached canceled rows, before runner unwind.
-- Unexpected failures in standalone and post-copy verification force a live
-  inactive Progress boundary; a failing Progress sink remains secondary to the
-  original exception, and emitted-outcome counts remain coherent even if
-  continuation bookkeeping then fails.
-- Import-linter proves verifier imports core but no sibling module.
-
-Stage 6 checkpoint coverage is maintained in
-[M1_SHELL_H2.md](M1_SHELL_H2.md), while [TESTS.md](TESTS.md) owns test-scope
-policy; verifier criteria here cover classification, guarded reads, recording,
-and pause/cancel behavior.

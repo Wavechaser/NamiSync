@@ -150,6 +150,10 @@ Calls return typed applied/no-op/stale/conflict results or raise a typed
 recording error. They never return ambiguous booleans and never swallow
 SQLite/OS errors.
 
+Corrupt joined-location context and a malformed paired no-op without its
+required source path raise typed recording errors and leave the command
+transaction unchanged.
+
 ## Ordering And Truth
 
 User-data mutation or observation happens before its corresponding ledger
@@ -266,50 +270,3 @@ Hardlink group recording remains nullable until preservation semantics exist.
 - Pre-indexed snapshots fix O(operations × scan) lock holds.
 - Paired no-op correspondence preserves later move evidence.
 - Guarded path normalization errors cannot roll back unrelated earned records.
-
-## Acceptance Criteria
-
-The M0-owned criteria below are covered by focused schema, sync, inventory,
-integrity, concurrency, repository, and verifier-recorder integration tests.
-Workflow result aggregation and executor flush placement are verified by their
-own layer tests; bounded multi-operation batching remains latent because M0
-commits every command eagerly.
-
-- Static/import tests prove no production ledger write occurs outside recorder
-  and schema/migration ownership.
-- Every mutation command is preceded by a successful matching filesystem result
-  in integration traces; fault injection cannot commit future intent.
-- Conditional writes under every drift dimension affect zero rows and return
-  `stale` without altering prior evidence.
-- Repeating identical run/op commands is a no-op; token reuse with different
-  payload is rejected.
-- Corrupt joined-location context and a malformed no-op without its required
-  source path raise typed recording errors and leave the command transaction
-  unchanged.
-- Two disjoint-volume sessions record completely through one serialized writer
-  under stress; cross-process contention retries within bound and surfaces final
-  failure.
-- Primary and extended SQLite `BUSY`/`LOCKED` codes retry, while misleading
-  non-contention message text does not consume the retry budget.
-- A late verifier failure preserves earlier committed per-file evidence.
-- Flush occurs before each destructive operation, on pause drain, and before
-  terminal delivery; crash loses at most the declared batch window.
-- Recorder failure preserves the original filesystem `ExecResult` and produces
-  `RecordingStatus.DEGRADED` without changing the filesystem terminal.
-- Complete inventory over 33k entries and large path selections use bounded
-  batches with no SQL parameter overflow.
-- Completed subtree reconciliation marks only absent `present`/`unsupported`
-  rows inside its exact-path/root union, preserves every other row, and uses
-  `inventory_location_presence_idx` for the literal descendant range even when
-  roots contain `%`, `_`, or `]`; incomplete subtree scans infer nothing
-  missing.
-- Inventory receipt replay with changed subtree roots raises a token conflict;
-  identical scope replay remains idempotent.
-- Move onto a retained missing row reconciles that row and keeps unrelated run
-  writes; location mismatch is rejected by schema.
-- No-op recording requires matching source/target snapshots and persists source
-  identity correspondence needed for later rename detection.
-- Copy-attested digest stores correct provenance and never advances true
-  verification time.
-- One shared UTC/host runtime produces identical representations across ledger
-  and history boundaries.

@@ -53,6 +53,15 @@ A new scan can rebuild current observations, not the discarded historical
 baselines, attestations, receipts, or audit trail.
 No application startup or reader performs this destructive reset automatically.
 
+Captured epoch-5 markers in `tests/assets/identity_epoch5_vectors.json` seed
+synthetic old-pair fixtures against the unchanged ledger-v4/history-v6 shapes.
+Repeated probes, pair admission, initializers, and repositories refuse both
+old databases, each mixed 5/6 direction, and epoch 6 with the old ledger id.
+WAL-only old markers refuse with or without source SHM; source main/WAL/SHM/
+journal membership and bytes remain unchanged. Existing epoch-4 and journal
+presence negatives remain independent controls, and fresh epoch-6 pairs reopen
+with unchanged schema versions and history id. These tests never reset user data.
+
 Ledger v4 stores complete file identities as canonical `FileIndex128` text and
 strengthens pair, canonical-domain, and attestation checks. It does not add an
 operation digest. The execution-evidence join and indexed recent-location
@@ -537,6 +546,12 @@ volume/location correspondence.
 
 ## Data Protection
 
+Retention and backup/protection workflows are unimplemented future requirements.
+Detail retention must use a writable connection and canonical time comparison,
+preserve summaries when pruning detail, and remain idempotent. Backup snapshots
+must pass integrity check, and rotation must never delete the newest sole good
+backup.
+
 Quick-check and backup run as ordinary dispatcher maintenance sessions. Use the
 SQLite backup API or equivalent consistent snapshot to a temp destination,
 fsync/flush according to platform guarantee, then atomically publish the dated
@@ -572,84 +587,3 @@ move/missing unique collision, readonly retention, baseline stat overwrite,
 unread integrity detail, stale skipped-move rows, O(n²) transaction work,
 casefold over-merge, lost path guards, missing paired-noop evidence, excessive
 round trips, and duplicated time/host formatting.
-
-## Acceptance Criteria
-
-Fresh-schema, pragma, read-only, cross-location trigger, canonical path,
-volume/rebind, 33k reconciliation, bounded repository query, WAL concurrency,
-independent history round-trip, old-schema refusal, coordinated development
-reset, and settings concurrency are covered. Criteria for retention, general
-migrations, backups, exports, and cloud-provider discovery remain future gates
-rather than current implementation claims.
-
-- Fresh schemas contain every freeze field, version stamp, index, uniqueness,
-  and foreign-key/trigger constraint required above.
-- `PRAGMA foreign_keys`, WAL, and busy timeout are verified on every connection
-  type; readonly connections reject writes by construction.
-- Serialized-writer tests prove primary and extended `BUSY`/`LOCKED` codes
-  retry within one deadline, while misleading message text on another SQLite
-  error fails immediately.
-- Schema rejects cross-location mapping correspondence despite valid row ids.
-- Windows path-key corpus stores NTFS-distinct names separately and ordinary
-  case/separator variants as one key.
-- Volume mount-letter/label changes preserve location identity; a changed
-  filesystem type requires rebind, and simultaneous duplicate identities require
-  explicit user choice.
-- Full/exact/subtree/offline inventory reconciliation obeys `INVENTORY.md`,
-  seeks subtree descendants through the declared presence/key index, preserves
-  hostile names literally, and scales beyond 33k rows without variable
-  overflow.
-- Large mapping/inventory selections use bounded query counts demonstrated by
-  instrumentation benchmarks.
-- Every history window is atomically visible or absent; its event/item
-  watermark, receipt-chain hash, rolling outcome/receipt counts, and typed rows
-  advance together.
-  Failed finalization preserves earlier windows and exposes the run only as
-  incomplete.
-- History integrity detail, sync operations, subject-only activities, reliable
-  lifecycle/phase events, exact duplicate receipts, and hash-only oversized
-  rejection receipts round-trip through bounded typed pages.
-  Terminal axes, cancellation, `Disposition`, and compound phases appear only
-  with the terminal payload marker. Integrity and headline are reconstructed
-  from typed primitive aggregates through the same classifier as live results;
-  they are not additional database columns.
-- Summary reads use a fixed query count and no event JSON decoding. Item and
-  event pages reject limits outside 1..256, concatenate without overlap, and
-  retain a stable captured watermark while newer windows commit. Event pages
-  decode at most the requested limit, use one indexed lookahead row across
-  legitimate sequence gaps, and reject an official durable maximum that does
-  not match its event rows.
-- Ledger v1-v3, history v1-v5, and current-number transitional schemas lacking the
-  exact final M1 contract marker are refused before writer/WAL/schema mutation
-  with an actionable instruction to recreate both local databases.
-- The explicit coordinated development reset recreates ledger v4/history v6
-  with shared data epoch 6;
-  normal startup never deletes either database.
-- Captured epoch-5 markers in `tests/assets/identity_epoch5_vectors.json` seed
-  synthetic old-pair fixtures against the unchanged ledger-v4/history-v6 shapes.
-  Repeated probes, pair admission, initializers, and repositories refuse both
-  old databases, each mixed 5/6 direction, and epoch 6 with the old ledger id.
-  WAL-only old markers refuse with or without source SHM; source main/WAL/SHM/
-  journal membership and bytes remain unchanged. Existing epoch-4 and journal
-  presence negatives remain independent controls, and fresh epoch-6 pairs reopen
-  with unchanged schema versions and history id. These tests never reset user data.
-- Pair preflight returns fresh only when both mains and every SQLite sidecar are
-  absent; ready requires both role-specific contracts. Every other combination
-  is refused without changing an existing byte. Mutating service admissions
-  initialize a fresh pair before audit observation; standalone history reads
-  remain deliberately exempt.
-- Concurrent semantic-settings patches preserve unrelated fields because the
-  read-modify-replace cycle is serialized across processes.
-- Runtime/service settings reads expose the complete semantic snapshot, an
-  all-optional patch preserves untouched keys, and an explicit ledger path
-  resolves its sibling settings file unless `settings_path` is supplied.
-- Retention uses a writable connection, canonical time comparison, preserves
-  summaries when pruning detail, and is idempotent.
-- Concurrent recorder/repository/history access does not lose committed evidence
-  or return partial transactions.
-- Migration fault injection at backup, each step, validation, and publish leaves
-  either the old valid database or new valid database, never a half migration.
-- Backup snapshots pass integrity check and rotation never deletes the newest
-  sole good backup.
-- Databases/settings/backups are refused inside managed/cloud-synced roots unless
-  an explicit safe external location policy says otherwise.
