@@ -302,8 +302,9 @@ which fields happen to exist. `interfaces/service.py` adds the primitive
 **DR-M1-08 — Does plan review survive app closure, as `ARCHITECTURE.md` §4.9
 promises ("the app may even close")?**
 Plans currently live in a process-local dict (`self._plans` on
-`LocalWorkflowRuntime`). True durability is `SqliteSessionStore`, which is
-scheduled M2.
+`LocalWorkflowRuntime`). Durable plans and session metadata are scheduled M2.
+Resumable continuations also require the separate protected recovery contract
+in `DISPATCHER.md`; a SQLite metadata store alone cannot recover workflow state.
 **Resolution:** ship M1 without plan persistence.
 
 **Amended per review finding 9.** The original entry proposed a `PlanStore`
@@ -1160,9 +1161,10 @@ independently open; the 2026-08-13 whole-Job delta closes none of them.
 
 - General, versioned migration module — stays past M3 (DR-M1-09); M1 refuses
   every stale ledger/history version and resets both databases
-- Durable plan/session persistence (`SqliteSessionStore`) — M2; M1 ships the
-  named runtime/facade access seams only, with no storage abstraction
-  (DR-M1-08)
+- Durable plans and session metadata — M2; restartable continuations additionally
+  require a separate protected recovery contract, not only a SQLite metadata
+  store. M1 ships named runtime/facade plan access seams without a plan-store
+  abstraction (DR-M1-08)
 - Cross-process task visibility in the GUI — depends on the same M2 durable
   session store
 - History retention and scheduled/daemon-driven maintenance — deferred until a

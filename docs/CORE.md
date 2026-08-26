@@ -175,8 +175,8 @@ validated aggregate byte high-water so one resumed task cannot report progress
 regression. Verify and baseline add an item-status and physical-read
 continuation in M1. Scan and plan refuse pause cleanly
 and remain cancelable. A pause unwinds, forces recorder flush where applicable,
-persists the workflow-owned continuation, releases custody, and emits no
-terminal.
+retains the workflow-owned continuation in process memory, releases custody,
+and emits no terminal.
 
 `Canceled` and `PauseRequested` remain payload-free. The runner consumes them
 and aggregates RELIABLE item outcomes only after the downstream emitter returns
@@ -197,13 +197,23 @@ The runner accepts a dispatcher-owned item accumulator. It is retained across
 pause attempts and cleared only after terminal settlement, so a resumed session
 that later cancels or fails includes reliable outcomes earned before the pause.
 The registry adapter snapshots continuation bytes before `PAUSED`; the
-dispatcher stores those bytes without decoding them and opens a fresh adapter
-invocation on resume.
+dispatcher retains those bytes in the live session record without decoding them
+and opens a fresh adapter invocation on resume.
 
 `SessionRecord.payload` is opaque bytes only while a session is nonterminal.
-Every terminal record requires null, and dispatcher clears the reference in the
-same transition before storing or publishing the terminal state. The later
-result-bearing replacement remains payload-free.
+Every terminal record requires null, and dispatcher clears the current live
+reference in the same transition before publishing the terminal state. The
+later result-bearing replacement remains payload-free.
+
+`StoredSessionRecord` is a separate frozen, slotted metadata/result contract,
+not a live record with a relaxed payload invariant. It has no payload field or
+live-record backreference and preserves the same metadata and result/lifecycle
+checks. `SessionStore` accepts and returns only its exact concrete shape.
+Dispatcher explicitly projects every write, retaining the full result by
+identity, including a null result during terminal audit finalization. Live
+continuations never cross this metadata-store boundary; the mechanism,
+retention scope, and separate M2 recovery requirement live in
+[DISPATCHER.md](DISPATCHER.md#session-store).
 
 ## Event Contract
 

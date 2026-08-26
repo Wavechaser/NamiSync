@@ -84,6 +84,7 @@ from namisync.core.session import (
     PhaseStatus,
     RunContext,
     SessionState,
+    StoredSessionRecord,
     run_session,
 )
 from namisync.db.connections import connect_ledger_reader
@@ -1416,7 +1417,18 @@ def test_dispatcher_compound_exclusion_close_failure_survives_payload_scrub(
         runtime.close()
 
     assert shutdown.complete
-    assert stored == record
+    assert type(stored) is StoredSessionRecord
+    assert not hasattr(stored, "payload")
+    assert stored.session_id == record.session_id
+    assert stored.kind == record.kind
+    assert stored.state is record.state
+    assert stored.resources == record.resources
+    assert stored.supports_pause is record.supports_pause
+    assert stored.admission_order == record.admission_order
+    assert stored.created_at == record.created_at
+    assert stored.started_at == record.started_at
+    assert stored.ended_at == record.ended_at
+    assert stored.result is record.result
     assert record.payload is None
     result = record.result
     assert result is not None

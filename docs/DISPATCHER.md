@@ -148,18 +148,19 @@ emit them twice. If cancel reaches a resumed attempt's RUNNING checkpoint before
 cancellation settlement before publishing the terminal; it cannot substitute a
 generic canceled result that strands workflow custody.
 
-`SessionRecord.payload: bytes | None` is opaque continuation
+`SessionRecord.payload: bytes | None` is process-local opaque continuation
 state only while nonterminal. Every edge into `COMPLETED`, `FAILED`, `CANCELED`,
-or `REFUSED` atomically replaces that payload with null before storing or
-publishing the terminal `SessionRecord`; the state-before-result settlement
-record and the later record with its result are both payload-free. Dispatcher
-does not inspect, decode, or
-select fields from the value. It may pass the bytes to a registered cancellation
-settler before the transition, but never retains those bytes after the
-transition. This applies equally to ordinary return/failure, cooperative
-cancel, queued discard, admission refusal, paused cancellation, and
-resume-to-pending cancellation, so execution-v6 attestations cannot survive in
-a terminal store record.
+or `REFUSED` atomically clears the current live record's payload before
+publishing the terminal state; the state-before-result settlement record and
+the later record with its result are both payload-free. Dispatcher does not
+inspect or decode the bytes. It may pass them to a registered cancellation
+settler before the transition. Ordinary return/failure, cooperative cancel,
+queued discard, workflow refusal, paused cancellation, and resume-to-pending
+cancellation all retain this live-record invariant. Separately, admission and
+every later store write project metadata without any payload field. A store
+that accepts one of these values and rejects an update can retain stale
+metadata, not that session's continuation. This is not a claim that all earlier
+Python references have been erased.
 
 ## Admission And Volume Scheduling
 
@@ -322,22 +323,79 @@ join allowance.
 
 ## Session Store
 
-`SessionStore` retains generic `SessionRecord` with an opaque workflow blob only
-while the record is nonterminal. Dispatcher may serialize the blob but never
-deserializes domain content; the registry/workflow adapter does that after
-selection. Exact continuation and event/database checkpoint versions are owned
-by [M1_BRIDGE.md](M1_BRIDGE.md).
+`SessionStore` accepts exact `StoredSessionRecord` values: a separate frozen,
+slotted core metadata/result contract with neither a payload field nor a
+live-record backreference. Its exact shape lives in `core/session.py`.
+Dispatcher explicitly projects that value before admission's `put()` and every
+later `put()`, including pause snapshots and the terminal record before audit
+finalization supplies its result. This does not weaken `SessionRecord`:
+nonterminal live records still require opaque bytes, and terminal live records
+require null. The projection retains the full `OperationResult` by identity,
+including independent filesystem/recording/audit/cancellation axes, item and
+phase detail, errors, recording issues, omission counts, and review-limit
+witnesses; it does not substitute a terminal summary. `result=None` remains
+valid during state-before-result settlement.
 
-M0 `InMemorySessionStore` provides process-local session state and no restart
-reconciliation. It retains current-process records for `get()`/`list()` while
-deliberately returning `()` from `load_all()`, so it cannot accidentally claim
-restart durability. M2 `SqliteSessionStore` adds reload, durable pending queue,
-single queue-owner lock, and `RUNNING`→`INTERRUPTED` reconciliation when owner
-process/custody is dead. Terminal records stay in the live session table until
-an exact dispatcher `close(session_id)` succeeds. The web adapter may invoke
-that release after terminal presentation while retaining its process-live task,
-or as part of task close; dispatcher knows neither case. History remains the
-durable trail.
+The protocol's `load_all()` returns stored metadata, not live records.
+Implementations must reject live records, lookalikes, and subclasses with extra
+state; `InMemorySessionStore.put()` enforces the exact concrete type before
+changing its table. The active M0/M1 store is process-local and exposes its
+accepted metadata through diagnostic `snapshot()`, while `load_all()` returns
+`()`. Dispatcher `get()`/`list()`, queued work, resume, and paused cancellation
+use the authoritative live table, never a stored row. A later failed write can
+therefore leave stale metadata but cannot select an old continuation. An
+admission write that accepts and then raises is still unadmitted: rollback/drop
+are attempted, and failed cleanup retains ownership for retry without
+publication or scheduling.
+
+Terminal live records and stored metadata remain until an exact dispatcher
+`close(session_id)` succeeds; successful shutdown alone does not drop the store
+rows. The web adapter may invoke close after terminal presentation while
+retaining its process-live task, or as part of task close; dispatcher knows
+neither case. History remains the durable trail. M1 has no durable session rows
+to migrate, and reopening still loses process-live sessions and requires fresh
+work. A custom/legacy backend with old payload-bearing rows must separately
+verify their retirement or migration before claiming that its existing contents
+meet the new contract. Projecting new writes cannot retroactively scrub such
+rows or make a failed `drop()` an erasure guarantee.
+
+M2 restart recovery is not enabled by swapping in a SQLite metadata store.
+It requires a separately designed protected continuation/recovery-store
+contract, explicit recovery and retention rules, unique durable queue ownership,
+and fresh workflow authority/custody reconciliation before pending re-admission
+or `RUNNING`→`INTERRUPTED` recovery. The current execution-v6 continuation and
+its transient attestations are not a durable recovery format. Exact active
+continuation and event/database checkpoint versions remain owned by
+[M1_BRIDGE.md](M1_BRIDGE.md); none changes for this metadata boundary.
+
+### Stored-record retention classification
+
+Under [DEFENSE.md](DEFENSE.md) §7, the changed representation is classified as
+follows, separately from transport-memory measurement authority:
+
+- `session_id`, `kind`, `state`, `supports_pause`, `admission_order`,
+  `created_at`, `started_at`, and `ended_at` are metadata references/values with
+  the live record's lifecycle nullability. `InMemorySessionStore._records` maps
+  each session id to its latest accepted stored wrapper; replacement retires
+  that mapping's previous value, and successful close drops it. No new
+  retained-session-count or byte ceiling is claimed.
+- `resources` shares the live record's immutable sorted resource tuple.
+  `result` is null or shares the existing full result graph by identity, without
+  a second detail graph. Its result contract is unchanged.
+- Continuation bytes and a live-record backreference are structurally absent.
+  The separate `Dispatcher._records` map remains the live continuation owner;
+  its representation has not changed.
+
+The stored wrappers and store table are outside the frozen SH-G-8 transport roots
+(replay, subscribers, and adapter queues); their validators, corpus, and byte
+ceiling are unchanged. Field-shape and fault tests establish the store handoff
+contract, not a total-memory reduction or a new measured acceptance ceiling.
+The shared full result remains a subject-scaled terminal artifact, separately
+observed through live dispatcher result roots. The terminal-artifact and whole-
+runtime gates (BR-G-45 and SH-G-15) remain open; this change claims neither bound.
+Callers, audit observers, and retained exception tracebacks may still reference
+earlier live records. This boundary neither sanitizes those references nor
+promises whole-process or secure-memory erasure.
 
 Queued execution carries the exact core `Commitment` defined by
 [M1_BRIDGE.md](M1_BRIDGE.md). Workflow admission validates it and freshly
@@ -437,12 +495,14 @@ duplicate terminal paths from being reinvented by each interface.
   prefix, and observer cleanup runs exactly once without rewriting successful
   finalization.
 - Late subscription returns current state/tail and exposes sequence gaps.
-- Nonterminal opaque blobs round-trip through store without dispatcher
-  deserialization; terminal records require null.
+- Only exact payload-free stored metadata crosses the store boundary, at
+  admission and every later write. Nonterminal live continuation bytes remain
+  opaque and process-local; every terminal live record requires null.
 - M0 process restart loses in-memory sessions honestly and requires rescan.
-- **M2 gate:** simulated kill marks only orphan running records interrupted and
-  safely re-admits pending work; the queue owner is unique across processes and
-  remains independent from volume locks.
+- **M2 gate:** a separately protected continuation/recovery contract is required
+  before simulated kill can recover work. It marks only orphan running records
+  interrupted and safely re-admits pending work with fresh authority/custody;
+  the queue owner is unique across processes and independent from volume locks.
 - Orderly teardown completes without UI-thread deadlock and reports any session
   that could not drain within policy.
 - Terminal records survive until explicit session close; terminal presentation
@@ -451,8 +511,12 @@ duplicate terminal paths from being reinvented by each interface.
   timeout before the hub gate leaves subscriptions available. Queued discard is observed as
   `CANCELED+UNRUN` before `drop()` and never requires a dispatcher-to-history
   import or string parsing.
-- Terminal-edge tests prove that every terminal store view is payload-free
-  without dispatcher parsing; pause/resume remains the only continuation use.
+- Accept-first/reject-later store tests inspect every attempted and retained
+  value after terminal/shutdown. Successive pause snapshots still resume or
+  settle cancellation from the latest live bytes; full result identity and the
+  intermediate terminal `result=None` survive projection. Admission
+  accept-then-raise plus failed drop retains cleanup ownership and the original
+  error without publishing or scheduling work.
 
 Current verification covers the non-M2 criteria with named regression/fault tests:
 focused core/dispatcher tests exercise the transition/control matrices,

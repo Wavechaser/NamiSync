@@ -17,14 +17,23 @@ from namisync.core.events import (
     TerminalSummary,
 )
 from namisync.core.evidence import Outcome
+from namisync.core.execution import (
+    ItemRecordingReason,
+    TaskRecordingIssue,
+    TaskRecordingIssueReason,
+)
+from namisync.core.review import ReviewFactLimitExceeded
 from namisync.core.session import (
     Canceled,
     Disposition,
+    FailureDetail,
     OperationResult,
     PhaseResult,
     PhaseStatus,
     ResourceId,
+    SessionRecord,
     SessionState,
+    StoredSessionRecord,
 )
 from namisync.dispatcher import (
     AdmissionClosed,
@@ -93,6 +102,33 @@ def registration(
 
 def completed(context):
     return OperationResult(SessionState.COMPLETED)
+
+
+class RecordingSessionStore(InMemorySessionStore):
+    def __init__(self) -> None:
+        super().__init__()
+        self.attempted: list[StoredSessionRecord] = []
+
+    def put(self, record: StoredSessionRecord) -> None:
+        self.attempted.append(record)
+        super().put(record)
+
+
+def assert_stored_record_matches(
+    stored: StoredSessionRecord, live: SessionRecord
+) -> None:
+    assert type(stored) is StoredSessionRecord
+    assert not hasattr(stored, "payload")
+    assert stored.session_id == live.session_id
+    assert stored.kind == live.kind
+    assert stored.state is live.state
+    assert stored.resources is live.resources
+    assert stored.supports_pause is live.supports_pause
+    assert stored.admission_order == live.admission_order
+    assert stored.created_at == live.created_at
+    assert stored.started_at == live.started_at
+    assert stored.ended_at == live.ended_at
+    assert stored.result is live.result
 
 
 @pytest.mark.parametrize("accept_item", [False, True])
@@ -368,7 +404,7 @@ def test_paused_resumed_terminal_paths_scrub_continuation_payload(
     terminal_state: SessionState,
 ) -> None:
     entered = Event()
-    store = InMemorySessionStore()
+    store = RecordingSessionStore()
 
     def run_for(payload):
         if payload == b"continued":
@@ -399,12 +435,15 @@ def test_paused_resumed_terminal_paths_scrub_continuation_payload(
     assert dispatcher.pause(session_id).accepted
     paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
     assert paused.payload == b"continued"
+    assert_stored_record_matches(store.snapshot()[0], paused)
     assert dispatcher.resume(session_id).accepted
 
     terminal = wait_for(dispatcher, session_id, terminal_state)
 
     assert terminal.payload is None
-    assert store.snapshot()[0].payload is None
+    assert_stored_record_matches(store.snapshot()[0], terminal)
+    assert all(type(record) is StoredSessionRecord for record in store.attempted)
+    assert all(not hasattr(record, "payload") for record in store.attempted)
     assert dispatcher.shutdown().complete
 
 
@@ -1193,6 +1232,7 @@ def test_cancel_resumed_pending_uses_started_settlement_once() -> None:
     release_blocker = Event()
     settled: list[tuple[bytes, Disposition]] = []
     resource = ResourceId("volume", "shared")
+    store = RecordingSessionStore()
 
     def compound_for(payload):
         def run(context):
@@ -1246,6 +1286,7 @@ def test_cancel_resumed_pending_uses_started_settlement_once() -> None:
                 resources=(resource,),
             ),
         },
+        store=store,
         lock_provider=InProcessResourceLockProvider(),
     )
     session_id = dispatcher.submit("compound", b"initial")
@@ -1261,6 +1302,16 @@ def test_cancel_resumed_pending_uses_started_settlement_once() -> None:
     record = wait_for(dispatcher, session_id, SessionState.CANCELED)
 
     assert settled == [(b"continued", Disposition.RAN)]
+    stored = next(row for row in store.snapshot() if row.session_id == session_id)
+    assert_stored_record_matches(stored, record)
+    assert any(
+        row.session_id == session_id
+        and row.state is SessionState.PENDING
+        and row.started_at is not None
+        for row in store.attempted
+    )
+    assert all(type(row) is StoredSessionRecord for row in store.attempted)
+    assert all(not hasattr(row, "payload") for row in store.attempted)
     assert record.result is not None
     assert record.result.status is SessionState.COMPLETED
     assert dispatcher.cancel(session_id).code is ControlCode.ILLEGAL_STATE
@@ -2070,7 +2121,7 @@ def test_control_matrix_is_exhaustive_and_state_preserving_on_rejection() -> Non
             )
 
 
-def test_payload_is_passed_to_adapter_and_store_without_dispatcher_decoding() -> None:
+def test_payload_is_passed_to_adapter_without_dispatcher_decoding() -> None:
     opaque = b"\x80not-a-valid-domain-encoding\x00"
     opened: list[bytes] = []
 
@@ -2095,7 +2146,8 @@ def test_in_memory_store_is_honest_about_absent_restart_state() -> None:
     dispatcher = Dispatcher({"opaque": registration(lambda payload: completed)}, store=store)
     session_id = dispatcher.submit("opaque", b"payload")
     wait_for(dispatcher, session_id, SessionState.COMPLETED)
-    assert store.snapshot()[0].payload is None
+    assert type(store.snapshot()[0]) is StoredSessionRecord
+    assert not hasattr(store.snapshot()[0], "payload")
     assert store.load_all() == ()
     assert dispatcher.shutdown().complete
 
@@ -2134,6 +2186,312 @@ def test_later_store_failure_does_not_leak_custody_or_duplicate_terminal() -> No
             terminals.append(event.body)
     assert len(terminals) == 1
     assert dispatcher.shutdown().custody_released
+
+
+def test_failed_terminal_store_write_does_not_retain_workflow_payload() -> None:
+    class FailingStore(InMemorySessionStore):
+        def __init__(self):
+            super().__init__()
+            self.attempted = []
+
+        def put(self, record):
+            self.attempted.append(record)
+            if len(self.attempted) > 1:
+                raise OSError("store unavailable")
+            super().put(record)
+
+    store = FailingStore()
+    dispatcher = Dispatcher(
+        {
+            "stored": registration(
+                lambda payload: completed,
+                resources=(ResourceId("volume", "store-payload"),),
+            )
+        },
+        store=store,
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        session_id = dispatcher.submit("stored", b"private workflow continuation")
+        stream = dispatcher.subscribe(session_id)
+        record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+        terminals = []
+        while True:
+            try:
+                event = stream.next(0.05)
+            except (TimeoutError, StopIteration):
+                break
+            if isinstance(event.body, Terminal):
+                terminals.append(event.body)
+        assert len(terminals) == 1
+    finally:
+        shutdown = dispatcher.shutdown()
+
+    assert shutdown.complete
+    assert shutdown.custody_released
+    assert record.payload is None
+    assert len(store.attempted) > 1
+    (retained,) = store.snapshot()
+    assert retained is store.attempted[0]
+    assert retained.session_id == session_id
+    assert retained.state is SessionState.PENDING
+    assert getattr(retained, "payload", None) is None
+    assert all(getattr(attempt, "payload", None) is None for attempt in store.attempted)
+    assert all(type(attempt) is StoredSessionRecord for attempt in store.attempted)
+
+
+@pytest.mark.parametrize("final_action", ["resume", "cancel"])
+@pytest.mark.parametrize("filesystem_status", [SessionState.COMPLETED, SessionState.FAILED])
+def test_store_failures_keep_latest_successive_pause_for_resume_or_cancel(
+    final_action: str, filesystem_status: SessionState
+) -> None:
+    class FailingStore(RecordingSessionStore):
+        def put(self, record):
+            if self.attempted:
+                self.attempted.append(record)
+                raise OSError("store unavailable")
+            super().put(record)
+
+    store = FailingStore()
+    entered = (Event(), Event())
+    opened: list[bytes] = []
+    settled: list[tuple[bytes, Disposition]] = []
+    earned = (
+        ItemOutcome("1" * 32, "copy", "first.bin", Outcome.SUCCEEDED),
+        ItemOutcome("2" * 32, "copy", "second.bin", Outcome.SUCCEEDED),
+    )
+    execute_status = (
+        PhaseStatus.COMPLETED
+        if filesystem_status is SessionState.COMPLETED
+        else PhaseStatus.FAILED
+    )
+    result = OperationResult(
+        filesystem_status,
+        canceled=final_action == "cancel",
+        phases=(
+            PhaseResult("execute", execute_status, 2, 2, 7, 7),
+            PhaseResult(
+                "verify",
+                PhaseStatus.CANCELED if final_action == "cancel" else PhaseStatus.COMPLETED,
+                0 if final_action == "cancel" else 2, 2,
+                0 if final_action == "cancel" else 7, 7,
+            ),
+        ),
+        bytes_done=7,
+        bytes_total=7,
+    )
+
+    def open_payload(payload):
+        opened.append(payload)
+        if payload == b"pause-2":
+            return Invocation(lambda context: result)
+        attempt = {b"initial": 0, b"pause-1": 1}[payload]
+
+        def pauseable(context):
+            context.emit(earned[attempt])
+            entered[attempt].set()
+            while True:
+                context.checkpoint()
+                sleep(0.005)
+
+        return Invocation(pauseable, (b"pause-1", b"pause-2")[attempt])
+
+    def settle_canceled(payload, disposition):
+        settled.append((payload, disposition))
+        return result
+
+    resource = ResourceId("volume", "successive-pause")
+    dispatcher = Dispatcher(
+        {
+            "pausable": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(request, frozenset({resource})),
+                open=open_payload,
+                supports_pause=True,
+                settle_canceled=settle_canceled,
+            )
+        },
+        store=store,
+        lock_provider=InProcessResourceLockProvider(),
+    )
+    try:
+        session_id = dispatcher.submit("pausable", b"initial")
+        stream = dispatcher.subscribe(session_id)
+        for attempt, snapshot in enumerate((b"pause-1", b"pause-2")):
+            assert entered[attempt].wait(2)
+            assert dispatcher.pause(session_id).accepted
+            paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
+            assert paused.payload == snapshot
+            assert dispatcher._leases == {}
+            assert dispatcher._reserved == {}
+            assert store.snapshot()[0].state is SessionState.PENDING
+            if attempt == 0:
+                assert dispatcher.resume(session_id).accepted
+
+        if final_action == "resume":
+            assert dispatcher.resume(session_id).accepted
+            terminal_state = filesystem_status
+        else:
+            assert dispatcher.cancel(session_id).accepted
+            terminal_state = SessionState.CANCELED
+        terminal = wait_for(dispatcher, session_id, terminal_state)
+        terminals = []
+        while True:
+            try:
+                envelope = stream.next(0.05)
+            except (TimeoutError, StopIteration):
+                break
+            if isinstance(envelope.body, Terminal):
+                terminals.append(envelope.body)
+        assert len(terminals) == 1
+        assert terminal.result is not None
+        assert terminals[0].result == TerminalSummary.from_result(terminal.result)
+    finally:
+        shutdown = dispatcher.shutdown()
+
+    assert shutdown.complete
+    assert shutdown.custody_released
+    assert opened == (
+        [b"initial", b"pause-1", b"pause-2"]
+        if final_action == "resume" else [b"initial", b"pause-1"]
+    )
+    assert settled == ([(b"pause-2", Disposition.RAN)] if final_action == "cancel" else [])
+    assert terminal.payload is None
+    assert terminal.result.status is filesystem_status
+    assert terminal.result.canceled is (final_action == "cancel")
+    assert terminal.result.disposition is Disposition.RAN
+    assert terminal.result.items == earned
+    assert terminal.result.phases is result.phases
+    assert terminal.result.bytes_done == terminal.result.bytes_total == 7
+    assert sum(row.state is SessionState.PAUSED for row in store.attempted) == 2
+    assert all(type(row) is StoredSessionRecord for row in store.attempted)
+    assert all(not hasattr(row, "payload") for row in store.attempted)
+    assert store.snapshot() == (store.attempted[0],)
+    assert store.snapshot()[0].result is None
+    assert_stored_record_matches(store.attempted[-1], terminal)
+
+
+@pytest.mark.parametrize("filesystem_status", [SessionState.COMPLETED, SessionState.FAILED])
+def test_stored_record_preserves_full_compound_result_axes_and_identity(
+    filesystem_status: SessionState,
+) -> None:
+    store = RecordingSessionStore()
+    item = ItemOutcome(
+        "3" * 32, "copy", "file.bin", Outcome.SUCCEEDED,
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+        detail_omitted_count=2,
+    )
+    issues = (TaskRecordingIssue(TaskRecordingIssueReason.FINAL_FLUSH_FAILED, "flush"),)
+    error = (
+        FailureDetail("OSError", "execution failed")
+        if filesystem_status is SessionState.FAILED else None
+    )
+    phases = (
+        PhaseResult(
+            "execute",
+            PhaseStatus.FAILED if error is not None else PhaseStatus.COMPLETED,
+            1, 1, 7, 7,
+            error="execution failed" if error is not None else None,
+        ),
+        PhaseResult("verify", PhaseStatus.CANCELED, 0, 1, 0, 7),
+    )
+
+    def run(context):
+        context.emit(item)
+        return OperationResult(
+            filesystem_status,
+            canceled=True,
+            phases=phases,
+            bytes_done=7,
+            bytes_total=7,
+            error=error,
+            recording_issues=issues,
+            omitted_detail_count=3,
+        )
+
+    class DegradedAudit:
+        def on_event(self, envelope):
+            return RecordingStatus.OK
+
+        def flush(self):
+            pass
+
+        def finalize(self, result):
+            return RecordingStatus.DEGRADED
+
+        def close(self):
+            pass
+
+    dispatcher = Dispatcher(
+        {"compound": registration(lambda payload: run, supports_pause=True)},
+        store=store,
+        audit_observer_factory=lambda record: DegradedAudit(),
+    )
+    try:
+        session_id = dispatcher.submit("compound", b"private continuation")
+        terminal = wait_for(dispatcher, session_id, SessionState.CANCELED)
+        stored = store.snapshot()[0]
+    finally:
+        shutdown = dispatcher.shutdown()
+
+    assert shutdown.complete
+    assert_stored_record_matches(stored, terminal)
+    result = stored.result
+    assert result == OperationResult(
+        filesystem_status,
+        recording=RecordingStatus.DEGRADED,
+        audit=RecordingStatus.DEGRADED,
+        disposition=Disposition.RAN,
+        canceled=True,
+        items=(item,),
+        phases=phases,
+        bytes_done=7,
+        bytes_total=7,
+        error=error,
+        recording_issues=issues,
+        omitted_detail_count=3,
+        review_fact_limit=None,
+    )
+    assert result.items[0] is item
+    assert result.phases is phases
+    assert result.error is error
+    assert result.recording_issues is issues
+    assert all(type(row) is StoredSessionRecord for row in store.attempted)
+    assert all(not hasattr(row, "payload") for row in store.attempted)
+
+
+def test_stored_record_preserves_review_limit_refusal_witness_and_identity() -> None:
+    store = RecordingSessionStore()
+    witness = ReviewFactLimitExceeded.plan_logical_bytes()
+
+    def refuse(context):
+        return OperationResult(
+            SessionState.REFUSED,
+            disposition=Disposition.UNRUN,
+            review_fact_limit=witness,
+        )
+
+    dispatcher = Dispatcher(
+        {"bounded": registration(lambda payload: refuse)},
+        store=store,
+    )
+    try:
+        session_id = dispatcher.submit("bounded", b"private continuation")
+        terminal = wait_for(dispatcher, session_id, SessionState.REFUSED)
+    finally:
+        shutdown = dispatcher.shutdown()
+
+    assert shutdown.complete
+    assert_stored_record_matches(store.snapshot()[0], terminal)
+    result = terminal.result
+    assert result == OperationResult(
+        SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+        review_fact_limit=witness,
+    )
+    assert result.review_fact_limit is witness
+    assert all(type(row) is StoredSessionRecord for row in store.attempted)
+    assert all(not hasattr(row, "payload") for row in store.attempted)
 
 
 def test_lock_acquisition_failure_is_failed_unrun_terminal() -> None:
@@ -2257,6 +2615,114 @@ def test_admission_failures_leave_no_live_session() -> None:
         dispatcher.submit("broken", object())
     assert dispatcher.list() == ()
     assert dispatcher.shutdown().complete
+
+
+def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only() -> None:
+    original = OSError("admission write accepted then failed")
+
+    class FailingStore(RecordingSessionStore):
+        def __init__(self):
+            super().__init__()
+            self.allow_drop = False
+            self.drop_calls = 0
+
+        def put(self, record):
+            super().put(record)
+            raise original
+
+        def drop(self, session_id):
+            self.drop_calls += 1
+            if not self.allow_drop:
+                raise OSError("drop unavailable")
+            super().drop(session_id)
+
+    store = FailingStore()
+    published = []
+    finalized: list[OperationResult] = []
+    attached = []
+    opened = []
+    observer_closed = Event()
+
+    class Audit:
+        def on_event(self, envelope):
+            published.append(envelope.body)
+            return RecordingStatus.OK
+
+        def flush(self):
+            pass
+
+        def finalize(self, result):
+            finalized.append(result)
+            return RecordingStatus.OK
+
+        def close(self):
+            observer_closed.set()
+
+    def open_payload(payload):
+        opened.append(payload)
+        return Invocation(completed)
+
+    def attach(session_id, stream):
+        attached.append(session_id)
+        return stream.close
+
+    dispatcher = Dispatcher(
+        {
+            "rejected": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(
+                    request, frozenset({ResourceId("volume", "admission-fault")})
+                ),
+                open=open_payload,
+            )
+        },
+        store=store,
+        lock_provider=InProcessResourceLockProvider(),
+        audit_observer_factory=lambda record: Audit(),
+    )
+    try:
+        with pytest.raises(OSError) as caught:
+            dispatcher.submit("rejected", b"private continuation", attach=attach)
+
+        assert caught.value is original
+        assert len(store.attempted) == 1
+        (retained,) = store.snapshot()
+        assert retained is store.attempted[0]
+        assert type(retained) is StoredSessionRecord
+        assert not hasattr(retained, "payload")
+        assert retained.state is SessionState.PENDING
+        assert retained.result is None
+        session_id = retained.session_id
+        assert published == attached == opened == []
+        assert observer_closed.is_set()
+        assert dispatcher.list() == ()
+        assert dispatcher._hubs == {}
+        assert dispatcher._controls == {}
+        assert dispatcher._workers == {}
+        assert dispatcher._leases == {}
+        assert dispatcher._reserved == {}
+        assert not dispatcher._pending
+        assert set(dispatcher._admission_cleanups) == {session_id}
+        cleanup = dispatcher._admission_cleanups[session_id]
+
+        incomplete = dispatcher.shutdown(timeout=1)
+
+        assert not incomplete.complete
+        assert incomplete.custody_released
+        assert incomplete.unfinished == (session_id,)
+        assert dispatcher._admission_cleanups[session_id] is cleanup
+        assert store.snapshot() == (retained,)
+        assert store.drop_calls == 2
+        assert published == attached == opened == []
+    finally:
+        store.allow_drop = True
+        shutdown = dispatcher.shutdown(timeout=2)
+
+    assert shutdown.complete
+    assert shutdown.custody_released
+    assert store.snapshot() == ()
+    assert dispatcher._admission_cleanups == {}
+    assert finalized == []
+    assert not dispatcher._scheduler.is_alive()
 
 
 def test_observed_admission_emits_pending_before_workflow_can_enter() -> None:
@@ -2633,6 +3099,7 @@ def test_observer_factory_failure_degrades_audit_without_aborting_admission() ->
 def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
     finalize_entered = Event()
     release_finalize = Event()
+    store = RecordingSessionStore()
 
     class DelayedObserver:
         def on_event(self, envelope) -> RecordingStatus:
@@ -2651,6 +3118,7 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
 
     dispatcher = Dispatcher(
         {"observed": registration(lambda payload: completed)},
+        store=store,
         audit_observer_factory=lambda record: DelayedObserver(),
         audit_timeout=1,
     )
@@ -2660,6 +3128,7 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
     assert provisional.state is SessionState.COMPLETED
     assert provisional.result is None
     assert provisional.payload is None
+    assert_stored_record_matches(store.snapshot()[0], provisional)
     with pytest.raises(SessionNotTerminal):
         dispatcher.close(session_id)
     release_finalize.set()
@@ -2667,7 +3136,15 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
     assert final.payload is None
     assert final.result is not None
     assert final.result.audit is RecordingStatus.OK
+    assert_stored_record_matches(store.snapshot()[0], final)
+    assert any(
+        row.state is SessionState.COMPLETED and row.result is None
+        for row in store.attempted
+    )
+    assert all(type(row) is StoredSessionRecord for row in store.attempted)
+    assert all(not hasattr(row, "payload") for row in store.attempted)
     dispatcher.close(session_id)
+    assert store.snapshot() == ()
     assert dispatcher.shutdown().complete
 
 

@@ -23,6 +23,7 @@ from namisync.core.session import (
     SessionRecord,
     SessionState,
     SessionStore,
+    StoredSessionRecord,
     is_terminal,
     require_transition,
     result_terminal_state,
@@ -60,6 +61,21 @@ from namisync.dispatcher.store import InMemorySessionStore
 
 _AdmissionRollback = Callable[[], None]
 _AdmissionAttach = Callable[[SessionId, EventStream], _AdmissionRollback]
+
+
+def _stored_record(record: SessionRecord) -> StoredSessionRecord:
+    return StoredSessionRecord(
+        session_id=record.session_id,
+        kind=record.kind,
+        state=record.state,
+        resources=record.resources,
+        supports_pause=record.supports_pause,
+        admission_order=record.admission_order,
+        created_at=record.created_at,
+        started_at=record.started_at,
+        ended_at=record.ended_at,
+        result=record.result,
+    )
 
 
 class _Control:
@@ -283,7 +299,7 @@ class Dispatcher:
         publication_lock = Lock()
         try:
             store_touched = True
-            self._store.put(record)
+            self._store.put(_stored_record(record))
             if attach is not None:
                 stream = hub.subscribe()
                 attached_rollback = attach(session_id, stream)
@@ -1217,7 +1233,7 @@ class Dispatcher:
 
     def _persist_locked(self, record: SessionRecord) -> None:
         try:
-            self._store.put(record)
+            self._store.put(_stored_record(record))
         except BaseException as error:
             self._store_failures.append(error)
 

@@ -339,7 +339,10 @@ the already-settled filesystem/recording truth.
 Phase is explicit; it is never inferred from past events. The workflow alone
 translates executor-owned publication evidence into verifier-owned candidates,
 so executor and verifier remain independent modules. Process-local resume is
-active; durable restart recovery is a later milestone.
+active. Live session records hold continuation bytes; the separate stored
+metadata/result contract has no continuation or live-record reference. Durable
+restart recovery requires a separate protected continuation/recovery contract
+and fresh authority/custody reconciliation in a later milestone.
 
 ### 2.6 Result truth
 
@@ -374,7 +377,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 
 | Contract family | Canonical source |
 | --- | --- |
-| Sessions, phase/run results, and `SessionStore` | `namisync/core/session.py` |
+| Live/stored session records, phase/run results, and `SessionStore` | `namisync/core/session.py` |
 | Event bodies, envelopes, delivery classes, codec, and exact-v5 validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
 | Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
 | Safe integer, signed-64, canonical scalar/file-index codecs, and typed review-limit facts | `namisync/core/scalars.py`, `namisync/core/review.py` |
@@ -503,8 +506,11 @@ The core declares narrow protocols for infrastructure and replaceable policy:
   without importing it into core.
 - `CopyBackend` owns byte transfer, not publication, retry, or recording.
 - `DestinationPolicy` assigns target paths for a batch before diffing.
-- `SessionStore` retains generic lifecycle plus opaque workflow payloads; its
-  durable implementation is unrealized until M2.
+- `SessionStore` retains exact `StoredSessionRecord` metadata and full results,
+  without continuation bytes or a live-record backreference. `SessionRecord`
+  retains the separate live lifecycle/payload invariant. Durable metadata and
+  protected continuation recovery are unrealized M2 contracts, not one
+  interchangeable store implementation.
 
 Incremental `ChangeSource` and ingest `MetadataExtractor` seams are accepted
 but unrealized directions, not standardized core protocols. Their exact shapes
@@ -664,9 +670,11 @@ custody, cross-process mutation exclusion, lifecycle control, event sequencing,
 bounded replay, and orderly teardown. Workflow kinds and pause capability are
 registry data; the dispatcher never interprets domain payloads.
 
-The active store is process-local. Durable queue ownership, persisted sessions,
-startup reconciliation, and cross-process task visibility belong to M2 behind
-the existing `SessionStore` seam.
+The active store is process-local metadata; dispatcher reads its live records
+for session state and continuation. Durable queue ownership, startup
+reconciliation, and cross-process task visibility belong to M2. A durable
+`SessionStore` implementation alone cannot supply restart: protected
+continuation recovery needs its own contract and fresh authority/custody checks.
 
 See `DISPATCHER.md`.
 
@@ -845,11 +853,13 @@ delivery slices, gates, and current status live in `M1_PLAN.md`,
 
 **Status:** Unrealized
 
-Replaces the process-local `SessionStore` with durable storage, adds exclusive
-queue ownership, startup reconciliation and the first production use of
-`INTERRUPTED`, durable committed plans/continuations, launch policy, and
-cross-process task visibility. These changes stay behind the existing generic
-dispatcher and workflow payload contracts.
+Adds durable session metadata, exclusive queue ownership, startup reconciliation
+and the first production use of `INTERRUPTED`, durable committed plans, launch
+policy, and cross-process task visibility. Restartable continuations require a
+separate protected recovery-store contract with explicit retention and fresh
+workflow authority/custody reconciliation; persisting current process-local
+payloads through the metadata store is not that design. Coordination remains
+domain-blind and workflow-owned continuation meaning remains outside dispatcher.
 
 ### M3+ — maintenance, scale, and new workflows
 

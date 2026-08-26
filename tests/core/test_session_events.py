@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from dataclasses import FrozenInstanceError, dataclass, fields, replace
+from datetime import datetime, timedelta, timezone
 import subprocess
 import sys
 
@@ -56,9 +57,11 @@ from namisync.core.session import (
     PauseRequested,
     PhaseResult,
     PhaseStatus,
+    ResourceId,
     SessionId,
     SessionRecord,
     SessionState,
+    StoredSessionRecord,
     is_terminal,
     require_transition,
     result_terminal_state,
@@ -511,6 +514,162 @@ def test_session_record_payload_exists_only_while_nonterminal() -> None:
         )
 
 
+def _stored_record() -> StoredSessionRecord:
+    return StoredSessionRecord(
+        session_id=SessionId("stored-session"),
+        kind="opaque-workflow",
+        state=SessionState.PENDING,
+        resources=(ResourceId("volume", "a"), ResourceId("volume", "b")),
+        supports_pause=True,
+        admission_order=2,
+        created_at=datetime(2026, 8, 26, tzinfo=timezone.utc),
+    )
+
+
+def test_stored_session_record_has_exact_frozen_metadata_shape() -> None:
+    record = _stored_record()
+
+    assert tuple(field.name for field in fields(record)) == (
+        "session_id",
+        "kind",
+        "state",
+        "resources",
+        "supports_pause",
+        "admission_order",
+        "created_at",
+        "started_at",
+        "ended_at",
+        "result",
+    )
+    assert not hasattr(record, "__dict__")
+    assert not hasattr(record, "payload")
+    with pytest.raises(FrozenInstanceError):
+        record.kind = "changed"  # type: ignore[misc]
+
+
+@pytest.mark.parametrize("field_name", ["payload", "live_record"])
+def test_stored_session_record_rejects_payload_and_live_reference_fields(
+    field_name: str,
+) -> None:
+    with pytest.raises(TypeError, match="unexpected keyword"):
+        replace(_stored_record(), **{field_name: b"private continuation"})
+
+
+@pytest.mark.parametrize("state", tuple(SessionState))
+def test_stored_session_record_can_represent_every_lifecycle_without_payload(
+    state: SessionState,
+) -> None:
+    record = _stored_record()
+    stored = replace(
+        record,
+        state=state,
+        ended_at=record.created_at if is_terminal(state) else None,
+    )
+
+    assert stored.state is state
+    assert stored.result is None
+    assert not hasattr(stored, "payload")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"session_id": SessionId("")},
+        {"kind": ""},
+        {"resources": (ResourceId("volume", "a"), ResourceId("volume", "a"))},
+        {"resources": (ResourceId("volume", "b"), ResourceId("volume", "a"))},
+        {"admission_order": -1},
+        {"state": SessionState.COMPLETED},
+        {"ended_at": datetime(2026, 8, 26, tzinfo=timezone.utc)},
+        {"result": OperationResult(SessionState.COMPLETED)},
+        {
+            "state": SessionState.FAILED,
+            "ended_at": datetime(2026, 8, 26, tzinfo=timezone.utc),
+            "result": OperationResult(SessionState.COMPLETED),
+        },
+    ],
+)
+def test_stored_session_record_preserves_metadata_invariants(
+    changes: dict[str, object],
+) -> None:
+    with pytest.raises(ValueError):
+        replace(_stored_record(), **changes)
+
+
+@pytest.mark.parametrize("field_name", ["created_at", "started_at", "ended_at"])
+@pytest.mark.parametrize(
+    "invalid_time",
+    [
+        datetime(2026, 8, 26),
+        datetime(2026, 8, 26, tzinfo=timezone(timedelta(hours=2))),
+    ],
+)
+def test_stored_session_record_requires_utc_metadata(
+    field_name: str, invalid_time: datetime
+) -> None:
+    record = _stored_record()
+    terminal = replace(
+        record,
+        state=SessionState.COMPLETED,
+        started_at=record.created_at,
+        ended_at=record.created_at,
+    )
+    with pytest.raises(ValueError, match=field_name):
+        replace(terminal, **{field_name: invalid_time})
+
+
+@pytest.mark.parametrize("record_kind", ["live", "lookalike", "subclass"])
+def test_in_memory_store_rejects_nonexact_records_before_replacing_metadata(
+    record_kind: str,
+) -> None:
+    stored = _stored_record()
+
+    @dataclass(frozen=True, slots=True)
+    class PayloadRecord(StoredSessionRecord):
+        payload: bytes = b"smuggled continuation"
+
+    class Lookalike:
+        session_id = stored.session_id
+        payload = b"smuggled continuation"
+
+    if record_kind == "live":
+        invalid = SessionRecord(
+            stored.session_id, stored.kind, stored.state, stored.resources,
+            b"private continuation", stored.supports_pause, stored.admission_order,
+            stored.created_at,
+        )
+    elif record_kind == "subclass":
+        invalid = PayloadRecord(
+            stored.session_id, stored.kind, stored.state, stored.resources,
+            stored.supports_pause, stored.admission_order, stored.created_at,
+        )
+    else:
+        invalid = Lookalike()
+    store = InMemorySessionStore()
+    store.put(stored)
+
+    with pytest.raises(TypeError, match="exact StoredSessionRecord"):
+        store.put(invalid)  # type: ignore[arg-type]
+
+    assert store.snapshot() == (stored,)
+    assert store.snapshot()[0] is stored
+
+
+def test_in_memory_metadata_snapshot_order_does_not_claim_restart_recovery() -> None:
+    later = _stored_record()
+    earlier = replace(later, session_id=SessionId("earlier"), admission_order=1)
+    store = InMemorySessionStore()
+    store.put(later)
+    store.put(earlier)
+
+    assert store.snapshot() == (earlier, later)
+    assert store.snapshot()[0] is earlier
+    assert store.snapshot()[1] is later
+    assert store.load_all() == ()
+    store.drop(earlier.session_id)
+    assert store.snapshot() == (later,)
+
+
 def test_compound_cancel_rejects_inconsistent_execute_or_verify_phase() -> None:
     execute = PhaseResult(
         "execute", PhaseStatus.COMPLETED, 1, 1, 7, 7
@@ -640,10 +799,24 @@ def test_verify_cancellation_round_trips_terminal_event_and_session_record(
     assert record.result.status is filesystem_status
     assert record.result.canceled
     assert result_terminal_state(record.result) is SessionState.CANCELED
+    stored = StoredSessionRecord(
+        session_id=record.session_id,
+        kind=record.kind,
+        state=record.state,
+        resources=record.resources,
+        supports_pause=record.supports_pause,
+        admission_order=record.admission_order,
+        created_at=record.created_at,
+        started_at=record.started_at,
+        ended_at=record.ended_at,
+        result=record.result,
+    )
     store = InMemorySessionStore()
-    store.put(record)
+    store.put(stored)
     restored = store.snapshot()[0]
-    assert restored == record
+    assert restored is stored
+    assert restored.result is record.result
+    assert not hasattr(restored, "payload")
     assert restored.result is not None
     assert restored.result.status is filesystem_status
     assert restored.result.canceled

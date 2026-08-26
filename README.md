@@ -52,7 +52,10 @@ the product surfaces and task lifecycle remain checkpoint targets.
 
 M1 state remains process-local: queued sessions and unexecuted plans do not
 survive an application restart, and committed nonterminal history returns only
-as `incomplete`. The active database boundary is ledger v4 plus history v6 at
+as `incomplete`. Continuations stay in live session records; the session store
+receives a separate metadata/result projection without a continuation field.
+A durable metadata store alone cannot provide restart/resume. The active
+database boundary is ledger v4 plus history v6 at
 shared data epoch 5. Older, one-present, markerless, transitional, mismatched,
 incomplete/poisoned, or orphan-sidecar pairs are refused. Admission checks
 WAL-visible markers and schema without changing source artifacts; any journal

@@ -1,12 +1,12 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.13c is verified for delivery after the
-`544f249` runtime-reader checkpoint. The next implementation checkpoint is 3R.S5.
-The remaining storage/identity decisions below are ratified, not implemented.
+Status (2026-08-26): checkpoint 3R.S5 is verified for delivery after `6cdfd08`.
+Next is the guarded epoch-5 baseline capture, then revised 3R.14 implementation.
+The remaining identity/epoch decisions below are ratified, not implemented.
 Checkpoint 3.3 remains unstarted and the private legacy decoder remains intact.
 
-`M1_SHELL_H2.md` owns the revised order and full acceptance criteria:
-3R.13a, 3R.13b, 3R.13c, 3R.S5, revised 3R.14, 3R.15a, then 3R.15.
+`M1_SHELL_H2.md` owns the revised order and full acceptance criteria. Remaining
+delivery is revised 3R.14, 3R.15a, then 3R.15.
 Completed causal findings belong in `BUGS.md`, not this handoff. The original
 O/S reports and prior verification receipts remain in Git at
 `d7673b7:docs/HANDOFF.md`; no separate report archive is needed.
@@ -16,23 +16,6 @@ O/S reports and prior verification receipts remain in Git at
 The JavaScript follow-ups below
 come from the user's post-3R.13 review and inspection at `d7673b7`.
 F/S identifiers refer to the original independent reports preserved in Git.
-
-### 3R.S5 — Separate payload-free stored records
-
-Original S5 remains open: an accept-first/reject-later store can retain the
-admission continuation after live terminal scrubbing. The user approved a
-separate frozen stored-record type with no payload field or live-record
-reference, explicitly projected at admission and every later write.
-Keep live `SessionRecord` and current-process pause/resume, cancellation,
-custody, complete result axes, and result-free intermediate terminal records.
-Terminal live scrubbing remains required. This is implementation work, not a
-remaining design hold or an accepted residual.
-
-For M2, metadata storage is not recovery storage: durable restart/resume needs
-a separate protected continuation/recovery contract plus fresh authority and
-custody reconciliation. A SQLite replacement alone is insufficient. S5 does
-not add M2 recovery, cryptography, all-reference erasure, or an epoch change;
-new projections cannot retroactively scrub incompatible old stores.
 
 ### Revised 3R.14 — Closed hash projections and coordinated epoch 6
 
@@ -94,16 +77,19 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-3R.13c verification: the tests-first run recorded 4 placement failures and
-14 passing controls. Final focused run: 18 passed. Database department:
-280 passed. Ordinary suite with required Node: 4,284 passed, 4 expected
-privilege skips, 28 headed tests deselected (214.44 s). Independent temporary-
-ownership review found no actionable issue. The one-line placement change
-preserves hashing, source-artifact guards, and cleanup/error precedence;
-protected settlement files are unchanged. `BUGS.md` and `DATABASE.md` retain
-the causal disposition and operating requirements, not this remaining-work list.
+S5 verification: the tests-first reproducer retained the admission payload
+after completed shutdown and failed at that assertion. Final focused run:
+338 passed. Core/dispatcher/workflows/database/interfaces neighborhood:
+3,330 passed, 1 skipped. Independent review corrected a swallowed callback
+assertion; the focused rerun and final ordinary suite include that correction.
+Ordinary suite with required Node: 4,325 passed, 4 expected skips, 28 headed
+tests deselected (219.46 s). Import architecture: all 11 rules kept. Independent
+source, lifecycle/fault-test, and owning-document review found no remaining
+actionable issue. Protected settlement and transport-authority files are
+unchanged. `BUGS.md` and `DISPATCHER.md` own the causal disposition and storage
+contract; this handoff no longer lists S5 as an open finding.
 
-Ignored `build/r314-baseline/` contains a reviewed-scope capture script and
+Ignored `build/r314-baseline/` contains an independently reviewed capture script and
 fixed synthetic fixtures prepared for 3R.14. No capture has run. After S5's
 clean commit, inspect/run that guarded one-shot helper before changing any hash
 encoder; its README owns artifact conventions and the no-overwrite rule.

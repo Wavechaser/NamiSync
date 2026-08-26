@@ -357,10 +357,48 @@ class SessionRecord:
             )
 
 
-class SessionStore(Protocol):
-    def put(self, record: SessionRecord) -> None: ...
+@dataclass(frozen=True, slots=True)
+class StoredSessionRecord:
+    """Session metadata/result without a continuation or live-record reference."""
 
-    def load_all(self) -> Sequence[SessionRecord]: ...
+    session_id: SessionId
+    kind: str
+    state: SessionState
+    resources: tuple[ResourceId, ...]
+    supports_pause: bool
+    admission_order: int
+    created_at: datetime
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    result: OperationResult | None = None
+
+    def __post_init__(self) -> None:
+        if not self.session_id or not self.kind:
+            raise ValueError("session id and kind must be non-empty")
+        if tuple(sorted(set(self.resources))) != self.resources:
+            raise ValueError("resources must be unique and deterministically sorted")
+        if self.admission_order < 0:
+            raise ValueError("admission order cannot be negative")
+        _require_utc(self.created_at, "created_at")
+        _require_utc(self.started_at, "started_at")
+        _require_utc(self.ended_at, "ended_at")
+        if is_terminal(self.state) != (self.ended_at is not None):
+            raise ValueError("terminal state and ended_at must agree")
+        if (
+            self.result is not None
+            and result_terminal_state(self.result) is not self.state
+        ):
+            raise ValueError(
+                "record result terminal projection must agree with session state"
+            )
+
+
+class SessionStore(Protocol):
+    """Metadata storage accepting exact StoredSessionRecord values only."""
+
+    def put(self, record: StoredSessionRecord) -> None: ...
+
+    def load_all(self) -> Sequence[StoredSessionRecord]: ...
 
     def drop(self, session_id: SessionId) -> None: ...
 

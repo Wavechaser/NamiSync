@@ -459,6 +459,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Live/store record aliasing. A store accepting
+  admission but rejecting later updates retained the original continuation,
+  including execution attestations, after successful terminal live scrubbing.
+  Cause: the persistence boundary accepted the same payload-bearing type as
+  the live session table. Fixed by explicitly projecting every store write to
+  a separate frozen metadata/result type with no continuation field or live-
+  record reference, and rejecting live records in the in-memory store. Current-
+  process pause/resume and full terminal result axes remain intact. Terminal
+  live scrubbing stays required; this does not erase other live references or
+  turn metadata persistence into restart recovery.
 - MINOR - FIXED (2026-08-19). Audit-barrier observation race. The paused-
   verification integration regression could read retained history before its
   `PAUSED` event reached the durable-audit attempt, intermittently producing a

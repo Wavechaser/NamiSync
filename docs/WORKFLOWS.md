@@ -29,10 +29,13 @@ carries sparse operation recording reasons, ordered task issues, aggregate byte
 high-water, and transient publication evidence needed for same-session
 pause/resume or automatic linked verification; payload v5 is refused. The plan
 codec remains exact v5. Transient evidence never becomes history, ledger,
-desktop artifact, or JavaScript state, and dispatcher terminal settlement
-clears the only retained opaque reference. Manual exact post-copy verification
-remains a later checkpoint and instead classifies current durable evidence in
-the original execution scope.
+desktop artifact, or JavaScript state. Dispatcher terminal settlement clears
+the current live record's opaque reference, and its separate metadata-store
+projection never forwards continuation bytes at admission or later writes.
+This is not whole-process reference erasure; the scope and M2 protected
+recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store).
+Manual exact post-copy verification remains a later checkpoint and instead
+classifies current durable evidence in the original execution scope.
 
 Workflow aggregation preserves operation-local recording truth and the
 first observation of each task issue in order: later failure cannot rewrite an
@@ -340,8 +343,8 @@ exclusion delivery fails. That result preserves accepted items, continuation
 byte counters, and the first sink error (with guarded optional rendering);
 ordinary sink failure takes precedence over cancellation. A secondary recording
 close failure is then attached before the generic runner publishes terminal
-and dispatcher scrubs the continuation. This needs no domain-specific generic
-runner hook or change to dispatcher custody.
+and dispatcher clears its live continuation reference. This needs no
+domain-specific generic runner hook or change to dispatcher custody.
 Fresh commitment or preflight failure/cancellation does the same before the
 executor or run recording opens, retaining `UNRUN` disposition and the
 phase-free result shape while still reporting the reviewed byte budget.
@@ -444,8 +447,8 @@ current workflow kinds, and the CLI reaches each through the shared service.
 After integrity selection, running cancellation or ordinary failure derives
 terminal item and byte counters from that live continuation rather than the
 latest lossy Progress snapshot. Canceling a paused baseline, verify, or
-rebaseline session decodes and settles the exact stored continuation without
-reopening the workflow. Its strict v2 payload persists `processed_bytes`, the
+rebaseline session decodes and settles the latest in-memory continuation without
+reopening the workflow. Its strict v2 payload carries `processed_bytes`, the
 nondecreasing physical-read `bytes_total_high_water`, and one-way aggregate
 `recording`; a resumed invocation or paused cancellation cannot regress those
 axes. The byte pair measures attempted physical work rather than durable
@@ -561,8 +564,10 @@ for inventory/plan/import are typed control rejections with no lifecycle
 mutation.
 
 The continuation is process-local custody state, not a durable recovery
-format. `InMemorySessionStore.load_all()` deliberately returns no sessions;
-closing the process offers no execute/verify resume. Exact active/accepted
+format. Session storage contains metadata/results only, and
+`InMemorySessionStore.load_all()` deliberately returns no sessions; closing
+the process offers no execute/verify resume. A future durable metadata store
+alone cannot restore that capability. Exact active/accepted
 payload versions are centralized in [M1_BRIDGE.md](M1_BRIDGE.md).
 Splitting standalone-integrity continuation payloads is deferred: its exact v2
 candidate/completed/authority payload remains until a named late-run pause
