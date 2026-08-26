@@ -54,6 +54,7 @@ from namisync.core.integrity import (
 from namisync.core.models import EntryKind, FileStat, MetadataSnapshot
 from namisync.core.session import (
     LEGAL_TRANSITIONS,
+    MAX_SESSION_RESULT_ITEMS,
     Canceled,
     Disposition,
     FailureDetail,
@@ -994,6 +995,241 @@ def test_runner_success_merges_prior_pause_and_new_items_in_emission_order() -> 
 
     assert outcome.result is not None
     assert outcome.result.items == (prior, current)
+
+
+def test_runner_rejects_an_excess_resume_accumulator_before_work() -> None:
+    item = ItemOutcome("4" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
+    prior = [item] * (MAX_SESSION_RESULT_ITEMS + 1)
+    calls: list[str] = []
+    emitted: list[object] = []
+    settled: list[tuple[SessionState, OperationResult | None]] = []
+    audited: list[OperationResult] = []
+    published: list[OperationResult] = []
+
+    outcome = run_session(
+        lambda context: calls.append("work")
+        or OperationResult(SessionState.COMPLETED),
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda state, result: settled.append((state, result)),
+        finalize_audit=lambda result: audited.append(result) or RecordingStatus.OK,
+        publish_result=published.append,
+        item_accumulator=prior,
+    )
+
+    assert calls == []
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.items == ()
+    assert outcome.result.error == FailureDetail(
+        "ValueError",
+        "session result items exceed their session bound",
+    )
+    assert settled == [(SessionState.FAILED, audited[0])]
+    assert published == [outcome.result]
+    assert emitted == [Terminal(TerminalSummary.from_result(outcome.result))]
+    assert len(prior) == MAX_SESSION_RESULT_ITEMS + 1
+
+
+def test_runner_checks_the_next_item_before_event_or_accumulator_mutation() -> None:
+    prior_item = ItemOutcome("4" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
+    excess_item = ItemOutcome("5" * 32, "copy", "excess.txt", Outcome.SUCCEEDED)
+    prior = [prior_item] * MAX_SESSION_RESULT_ITEMS
+    emitted: list[object] = []
+
+    def work(context):
+        context.emit(excess_item)
+        raise AssertionError("item-limit failure did not stop workflow")
+
+    outcome = run_session(
+        work,
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+        item_accumulator=prior,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert len(outcome.result.items) == MAX_SESSION_RESULT_ITEMS
+    assert outcome.result.error == FailureDetail(
+        "RuntimeError",
+        "session result items exceed their session bound",
+    )
+    assert excess_item not in emitted
+    assert prior == [prior_item] * MAX_SESSION_RESULT_ITEMS
+
+
+def test_runner_allows_the_last_item_and_refuses_only_the_first_excess() -> None:
+    prior_item = ItemOutcome("4" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
+    last_item = ItemOutcome("5" * 32, "copy", "last.txt", Outcome.SUCCEEDED)
+    excess_item = ItemOutcome("6" * 32, "copy", "excess.txt", Outcome.SUCCEEDED)
+    prior = [prior_item] * (MAX_SESSION_RESULT_ITEMS - 1)
+    emitted: list[object] = []
+
+    def work(context):
+        context.emit(last_item)
+        context.emit(excess_item)
+        raise AssertionError("item-limit failure did not stop workflow")
+
+    outcome = run_session(
+        work,
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+        item_accumulator=prior,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert len(outcome.result.items) == MAX_SESSION_RESULT_ITEMS
+    assert outcome.result.error == FailureDetail(
+        "RuntimeError",
+        "session result items exceed their session bound",
+    )
+    assert last_item in emitted
+    assert excess_item not in emitted
+    assert prior[-1] is last_item
+
+
+@pytest.mark.parametrize(
+    ("caught", "response"),
+    [
+        pytest.param(Exception, "return", id="exception-return"),
+        pytest.param(BaseException, "return", id="base-exception-return"),
+        pytest.param(Exception, "pause", id="exception-pause"),
+        pytest.param(BaseException, "cancel", id="base-exception-cancel"),
+    ],
+)
+def test_runner_owns_item_limit_failure_after_workflow_interception(
+    caught: type[BaseException], response: str
+) -> None:
+    prior_item = ItemOutcome("4" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
+    excess_item = ItemOutcome("5" * 32, "copy", "excess.txt", Outcome.SUCCEEDED)
+    prior = [prior_item] * MAX_SESSION_RESULT_ITEMS
+    emitted: list[object] = []
+    settled: list[tuple[SessionState, OperationResult | None]] = []
+
+    def work(context):
+        try:
+            context.emit(excess_item)
+        except caught:
+            if response == "pause":
+                raise PauseRequested()
+            if response == "cancel":
+                raise Canceled()
+            return OperationResult(SessionState.COMPLETED)
+        raise AssertionError("item-limit failure was not raised")
+
+    outcome = run_session(
+        work,
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda state, result: settled.append((state, result)),
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+        item_accumulator=prior,
+    )
+
+    assert outcome.paused is False
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.canceled is False
+    assert outcome.result.error == FailureDetail(
+        "RuntimeError",
+        "session result items exceed their session bound",
+    )
+    assert settled == [(SessionState.FAILED, outcome.result)]
+    assert excess_item not in emitted
+    assert len(prior) == MAX_SESSION_RESULT_ITEMS
+
+
+def test_runner_repairs_emitter_alias_append_and_owns_the_failure() -> None:
+    prior_item = ItemOutcome("4" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
+    accepted_item = ItemOutcome("5" * 32, "copy", "accepted.txt", Outcome.SUCCEEDED)
+    injected_item = ItemOutcome("6" * 32, "copy", "injected.txt", Outcome.SUCCEEDED)
+    prior = [prior_item] * (MAX_SESSION_RESULT_ITEMS - 1)
+    emitted: list[object] = []
+
+    def emit(body: object) -> None:
+        emitted.append(body)
+        if body is accepted_item:
+            prior.append(injected_item)
+
+    outcome = run_session(
+        lambda context: context.emit(accepted_item)
+        or OperationResult(SessionState.COMPLETED),
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+        item_accumulator=prior,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.error == FailureDetail(
+        "RuntimeError",
+        "session result item accumulator changed during emission",
+    )
+    assert len(outcome.result.items) == MAX_SESSION_RESULT_ITEMS
+    assert prior[-1] is accepted_item
+    assert injected_item not in prior
+    assert emitted[0] is accepted_item
+
+
+def test_runner_normalizes_a_nonexact_accumulator_before_work() -> None:
+    class MisleadingList(list):
+        pass
+
+    calls: list[str] = []
+    outcome = run_session(
+        lambda context: calls.append("work")
+        or OperationResult(SessionState.COMPLETED),
+        emit=lambda body: None,
+        checkpoint=lambda: None,
+        settle=lambda state, result: calls.append("settle"),
+        finalize_audit=lambda result: calls.append("audit") or RecordingStatus.OK,
+        publish_result=lambda result: calls.append("publish"),
+        item_accumulator=MisleadingList(),
+    )
+
+    assert calls == ["settle", "audit", "publish"]
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.items == ()
+    assert outcome.result.error == FailureDetail(
+        "TypeError",
+        "item accumulator must be an exact list",
+    )
+
+
+def test_runner_normalizes_invalid_accumulator_content_before_work() -> None:
+    calls: list[str] = []
+    outcome = run_session(
+        lambda context: calls.append("work")
+        or OperationResult(SessionState.COMPLETED),
+        emit=lambda body: None,
+        checkpoint=lambda: None,
+        settle=lambda state, result: calls.append("settle"),
+        finalize_audit=lambda result: calls.append("audit") or RecordingStatus.OK,
+        publish_result=lambda result: calls.append("publish"),
+        item_accumulator=[object()],  # type: ignore[list-item]
+    )
+
+    assert calls == ["settle", "audit", "publish"]
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.items == ()
+    assert outcome.result.error == FailureDetail(
+        "TypeError",
+        "item accumulator must contain only ResultItem values",
+    )
 
 
 def test_operation_result_rejects_non_nominal_items() -> None:

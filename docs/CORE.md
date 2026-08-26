@@ -206,6 +206,24 @@ pending for resume.
 The runner accepts a dispatcher-owned item accumulator. It is retained across
 pause attempts and cleared only after terminal settlement, so a resumed session
 that later cancels or fails includes reliable outcomes earned before the pause.
+The accumulator is an exact list and admits at most 240,000 ordered occurrences
+over that complete paused/resumed lifetime. This is the closed maximum of one
+120,000-operation execution plus its 120,000 linked-integrity outcomes. The
+runner turns a nonexact, invalid-content, or already-excess accumulator into an
+ordinary internal `FAILED` settlement before workflow entry; its exact failure
+is respectively `TypeError` plus `item accumulator must be an exact list`,
+`TypeError` plus `item accumulator must contain only ResultItem values`, or
+`ValueError` plus `session result items exceed their session bound`, and no
+untrusted accumulator items enter the result. During work, a separate admitted-
+occurrence counter checks the next nominal item before downstream emission and
+verifies the exact list's length again before appending. An emitter-side alias
+append is removed, the accepted event is retained once within the wall, and the
+runner owns `RuntimeError: session result item accumulator changed during
+emission`. The first producer excess similarly becomes runner-owned
+`RuntimeError: session result items exceed their session bound`. These sticky
+internal failures override an intercepted return, pause, or cancellation; they
+do not truncate or relabel prior admitted ran work, nor publish the excess
+occurrence.
 Before settlement, audit finalization, or result publication, the runner applies
 the terminal summary's existing whole-value diagnostic rules to the full result
 header too. An oversized or invalid-Unicode phase error becomes null; an invalid

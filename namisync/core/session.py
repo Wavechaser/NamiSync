@@ -17,6 +17,19 @@ from namisync.core.scalars import (
 )
 
 SessionId = NewType("SessionId", str)
+MAX_SESSION_RESULT_ITEMS = 240_000
+
+_RESULT_ITEM_ACCUMULATOR_TYPE = "TypeError"
+_RESULT_ITEM_EXACT_LIST_MESSAGE = "item accumulator must be an exact list"
+_RESULT_ITEM_CONTENT_MESSAGE = (
+    "item accumulator must contain only ResultItem values"
+)
+_RESULT_ITEM_LIMIT_TYPE = "RuntimeError"
+_RESULT_ITEM_LIMIT_MESSAGE = "session result items exceed their session bound"
+_RESULT_ITEM_MUTATION_TYPE = "RuntimeError"
+_RESULT_ITEM_MUTATION_MESSAGE = (
+    "session result item accumulator changed during emission"
+)
 
 
 class SessionState(StrEnum):
@@ -471,74 +484,189 @@ def run_session(
 
     from namisync.core.events import Progress, Terminal, TerminalSummary
 
-    if item_accumulator is not None and any(
-        not isinstance(item, ResultItem) for item in item_accumulator
-    ):
-        raise TypeError("item accumulator must contain only ResultItem values")
-    items = item_accumulator if item_accumulator is not None else []
+    boundary_failure_type: str | None = None
+    boundary_failure_message: str | None = None
+    if item_accumulator is None:
+        items: list[ResultItem] = []
+    elif type(item_accumulator) is not list:
+        items = []
+        boundary_failure_type = _RESULT_ITEM_ACCUMULATOR_TYPE
+        boundary_failure_message = _RESULT_ITEM_EXACT_LIST_MESSAGE
+    elif len(item_accumulator) > MAX_SESSION_RESULT_ITEMS:
+        items = []
+        boundary_failure_type = "ValueError"
+        boundary_failure_message = _RESULT_ITEM_LIMIT_MESSAGE
+    elif any(not isinstance(item, ResultItem) for item in item_accumulator):
+        items = []
+        boundary_failure_type = _RESULT_ITEM_ACCUMULATOR_TYPE
+        boundary_failure_message = _RESULT_ITEM_CONTENT_MESSAGE
+    else:
+        items = item_accumulator
+    admitted_item_count = len(items)
     latest_progress: Progress | None = None
 
+    def set_boundary_failure(type_name: str, message: str) -> None:
+        nonlocal boundary_failure_type, boundary_failure_message
+        if boundary_failure_type is None:
+            boundary_failure_type = type_name
+            boundary_failure_message = message
+
+    def repair_accumulator_length(expected: int) -> None:
+        if len(items) > expected:
+            del items[expected:]
+
+    def detect_accumulator_mutation() -> bool:
+        if len(items) == admitted_item_count:
+            return False
+        set_boundary_failure(
+            _RESULT_ITEM_MUTATION_TYPE,
+            _RESULT_ITEM_MUTATION_MESSAGE,
+        )
+        repair_accumulator_length(admitted_item_count)
+        return True
+
     def observed_emit(body: object) -> None:
-        nonlocal latest_progress
+        nonlocal admitted_item_count, latest_progress
+        if boundary_failure_type is not None:
+            raise RuntimeError(boundary_failure_message)
+        if detect_accumulator_mutation():
+            raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE)
         if isinstance(body, Terminal):
             raise ValueError("workflow code cannot emit Terminal")
-        emit(body)
         if isinstance(body, ResultItem):
+            if admitted_item_count >= MAX_SESSION_RESULT_ITEMS:
+                set_boundary_failure(
+                    _RESULT_ITEM_LIMIT_TYPE,
+                    _RESULT_ITEM_LIMIT_MESSAGE,
+                )
+                raise RuntimeError(_RESULT_ITEM_LIMIT_MESSAGE)
+            expected_length = admitted_item_count
+            try:
+                emit(body)
+            except BaseException:
+                if len(items) != expected_length:
+                    set_boundary_failure(
+                        _RESULT_ITEM_MUTATION_TYPE,
+                        _RESULT_ITEM_MUTATION_MESSAGE,
+                    )
+                    repair_accumulator_length(expected_length)
+                    raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE) from None
+                raise
+            if len(items) != expected_length:
+                set_boundary_failure(
+                    _RESULT_ITEM_MUTATION_TYPE,
+                    _RESULT_ITEM_MUTATION_MESSAGE,
+                )
+                repair_accumulator_length(expected_length)
+                items.append(body)
+                admitted_item_count += 1
+                raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE)
             items.append(body)
+            admitted_item_count += 1
         elif isinstance(body, Progress):
+            emit(body)
             latest_progress = body
+        else:
+            emit(body)
 
-    context = RunContext(emit=observed_emit, checkpoint=checkpoint)
-    try:
-        result = work(context)
-        if not isinstance(result, OperationResult):
-            raise TypeError("workflow must return OperationResult")
-        result = replace(result, items=tuple(items))
-    except PauseRequested:
-        settle(SessionState.PAUSED, None)
-        return RunOutcome(paused=True, result=None)
-    except Canceled:
+    def boundary_failure_result() -> OperationResult:
+        assert boundary_failure_type is not None
+        assert boundary_failure_message is not None
         bytes_done = latest_progress.bytes_done if latest_progress else 0
         bytes_total = (
             latest_progress.bytes_total
             if latest_progress and latest_progress.bytes_total is not None
             else bytes_done
         )
-        result = OperationResult(
-            status=SessionState.CANCELED,
-            disposition=disposition,
-            canceled=True,
-            items=tuple(items),
-            bytes_done=bytes_done,
-            bytes_total=bytes_total,
-        )
-    except Exception as error:
-        bytes_done = latest_progress.bytes_done if latest_progress else 0
-        bytes_total = (
-            latest_progress.bytes_total
-            if latest_progress and latest_progress.bytes_total is not None
-            else bytes_done
-        )
-        try:
-            detail = _bounded_failure_detail(
-                FailureDetail(type(error).__name__, str(error))
-            )
-        except Exception:
-            detail = None
-        result = OperationResult(
+        return OperationResult(
             status=SessionState.FAILED,
             disposition=disposition,
             items=tuple(items),
             bytes_done=bytes_done,
             bytes_total=bytes_total,
-            error=detail,
-            omitted_detail_count=1 if detail is None else 0,
+            error=FailureDetail(
+                boundary_failure_type,
+                boundary_failure_message,
+            ),
         )
+
+    context = RunContext(emit=observed_emit, checkpoint=checkpoint)
+    if boundary_failure_type is not None:
+        result = boundary_failure_result()
+    else:
+        try:
+            returned = work(context)
+            detect_accumulator_mutation()
+            if boundary_failure_type is not None:
+                result = boundary_failure_result()
+            else:
+                if not isinstance(returned, OperationResult):
+                    raise TypeError("workflow must return OperationResult")
+                result = replace(returned, items=tuple(items))
+        except PauseRequested:
+            detect_accumulator_mutation()
+            if boundary_failure_type is None:
+                settle(SessionState.PAUSED, None)
+                return RunOutcome(paused=True, result=None)
+            result = boundary_failure_result()
+        except Canceled:
+            detect_accumulator_mutation()
+            if boundary_failure_type is not None:
+                result = boundary_failure_result()
+            else:
+                bytes_done = latest_progress.bytes_done if latest_progress else 0
+                bytes_total = (
+                    latest_progress.bytes_total
+                    if latest_progress and latest_progress.bytes_total is not None
+                    else bytes_done
+                )
+                result = OperationResult(
+                    status=SessionState.CANCELED,
+                    disposition=disposition,
+                    canceled=True,
+                    items=tuple(items),
+                    bytes_done=bytes_done,
+                    bytes_total=bytes_total,
+                )
+        except Exception as error:
+            detect_accumulator_mutation()
+            if boundary_failure_type is not None:
+                result = boundary_failure_result()
+            else:
+                bytes_done = latest_progress.bytes_done if latest_progress else 0
+                bytes_total = (
+                    latest_progress.bytes_total
+                    if latest_progress and latest_progress.bytes_total is not None
+                    else bytes_done
+                )
+                try:
+                    detail = _bounded_failure_detail(
+                        FailureDetail(type(error).__name__, str(error))
+                    )
+                except Exception:
+                    detail = None
+                result = OperationResult(
+                    status=SessionState.FAILED,
+                    disposition=disposition,
+                    items=tuple(items),
+                    bytes_done=bytes_done,
+                    bytes_total=bytes_total,
+                    error=detail,
+                    omitted_detail_count=1 if detail is None else 0,
+                )
+        except BaseException:
+            detect_accumulator_mutation()
+            if boundary_failure_type is None:
+                raise
+            result = boundary_failure_result()
 
     recording = (
         RecordingStatus.DEGRADED
         if result.recording_issues
-        or any(item.recording is RecordingStatus.DEGRADED for item in items)
+        or any(
+            item.recording is RecordingStatus.DEGRADED
+            for item in result.items
+        )
         else RecordingStatus.OK
     )
     result = normalize_result_diagnostics(replace(result, recording=recording))
