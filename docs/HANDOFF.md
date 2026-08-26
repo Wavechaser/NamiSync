@@ -1,53 +1,63 @@
 # Session Handoff
 
-Status (2026-08-26): independent review remediation checkpoint 3R.5 is complete
+Status (2026-08-26): independent review remediation checkpoint 3R.6 is complete
 in `M1_SHELL_H2.md`. The checkpoint 3.2 shell boundary remains active with
-remediation through 3R.5; checkpoint 3.3 has not started, and checkpoint 3R.6
+remediation through 3R.6; checkpoint 3.3 has not started, and checkpoint 3R.7
 is the only authorized next delivery. S5 and 3R.14's coordinated epoch/reset
 remain design holds; neither may be implemented without the recorded user
 disposition.
 
 ## Delivered
 
-- Completed 3R.5 tests-first from S6. The 24 new executor/workflow cases all
-  failed against untouched checkpoint `1e794e7`, then passed after the fix.
-  They cover hostile `__str__` and logical-filename rendering, item recording,
-  destructive prerequisites, final flush, open/factory/finish/close, canceled
-  finalization, fallback finishing, and secondary emission/capture diagnostics.
-- Established typed recording causes before best-effort diagnostic rendering.
-  Executor's prerequisite cause is journal-retained before rendering; item
-  observations and task issues are typed before rendering and use the existing
-  settlement/attribution owners. An ordinary renderer failure produces
-  `detail=None`, never a substitute recording reason or clean recording axis.
-- Kept committed filesystem/recorder truth and primary exception identity.
-  Required workflow result messages and exception notes use a fixed
-  diagnostic-unavailable fallback with the original error type. Successfully
-  rendered text still uses existing complete-detail bounds, omission accounting,
-  and first-task-issue semantics. No new core API or alternate authority.
-- Updated EXECUTOR, WORKFLOWS, and the causal BUGS entry. The raw independent
-  reviewer reports below remain the detailed finding source until 3R.15.
+- Reproduced S4 tests-first through the public session runner and real
+  LocalWorkflowRuntime/registry/Dispatcher/InMemorySessionStore route. Baseline:
+  14 failing compound cases and three passing ratified-behavior checks.
+- Kept opened-execution exclusion acceptance local to workflow. The accepted
+  prefix advances only after reliable emission returns. Its first ordinary
+  rejection is retained without reoffering that item or replaying accepted
+  siblings; only accepted exclusions enter result projection.
+- Reused the existing continuation-derived failed execute projection through a
+  local helper for ordinary failure and cancellation's failed exclusion delivery.
+  It finishes once, keeps the first sink error and authoritative byte counters,
+  then returns normally so recording-close attribution reaches the terminal
+  result before dispatcher scrubbing. No generic-runner or dispatcher hook.
+- Added hostile-primary-diagnostic variants before guarding that projection:
+  12 additional failures became passes by reusing 3R.5's safe FailureDetail
+  projection. Primary error type and optional diagnostic fallback remain exact.
+- Removed F5's self-confirming recording guard. Documented and pinned the
+  already-ratified recording-open containment on an already-failing path,
+  verify-present close attribution, and unconditional exit-failure capture.
+  Retained the reported canceled-settlement assignment: its degraded value
+  is passed to fallback finishing before reassignment, now covered directly.
+- Updated WORKFLOWS and the causal BUGS entry. Raw independent reviewer reports
+  below remain the detailed finding source until 3R.15.
 
 ## Safe Stop
 
-The checkpoint changes only private executor/workflow diagnostic handling,
-additive regressions, owning docs, and this handoff. It does not change public
-result/wire/database/layering contracts, 3R.4 prerequisite precedence or
-accepted-journal retention, or 3R.3 receipt finality. The 3R.6 circular guard,
-compound terminal reconstruction, and canceled-settlement dataflow are
-deliberately unchanged. No later checkpoint implementation is present.
+The checkpoint changes only workflow-local opened-execution failure handling,
+additive workflow/integration regressions, owning docs, and this handoff.
+Core/session, dispatcher/store, executor, public payload versions, and protected
+settlement authority are unchanged. Cooperative and process-fatal exceptions
+retain their separate handling. No later checkpoint implementation is present.
 
 The tree is expected to be clean after
-`fix(executor): contain recording diagnostic failures`. The discarded 3R.4
-attempt is still recoverable under ignored `build/r34-restart-20260826/`;
-the reviewed replacement was committed as `1e794e7`. The protected oracle
-source, baseline, oracle tests, and existing settlement assertions are unchanged.
+`fix(workflows): preserve recording truth on compound failure`.
+Rebuilt 3R.4 is `1e794e7`; 3R.5 is `8f6d8f8`. The discarded 3R.4 attempt
+remains recoverable under ignored `build/r34-restart-20260826/`.
 
 A read-only 3R.14 compatibility audit found that textual `FileIndex128` changes
 all non-null identity-bearing durable hashes under current ledger-v4/history-v6
 epoch-5 markers. The recommended coordinated reset keeps schema shapes and
 payload versions, bumps the shared data epoch to 6 and the ledger contract ID,
-and keeps the history contract ID unchanged. Implementation still waits for
-user ratification.
+and keeps the history contract ID unchanged. Implementation waits for user
+ratification. S5 still requires an explicit storage design or accepted residual.
+
+Independent review also noted an adjacent, pre-existing boundary outside this
+row: `_settle_execute_resume_failure` can return all exclusions after the
+pre-entry/resume sink rejects one, and its emission-error rendering is unguarded.
+This is an inspection-only follow-up, not a separately reproduced or assigned
+remediation checkpoint. Do not silently expand the opened-execution guarantee
+or an existing row to cover it; carry it to the user for disposition.
 
 The restarted native sandbox fails read setup with
 `helper_unknown_error: apply deny-read ACLs`. Approved shell reads/tests work.
@@ -57,34 +67,38 @@ installation settings were changed.
 
 ## Verification
 
-- Tests-first: `24 failed` against untouched `1e794e7`; rebuilt focused set:
-  `24 passed, 202 deselected`, independently rerun with the same result.
-- Executor/workflows neighborhood: `724 passed, 2514 deselected`.
+- Initial tests-first run against untouched `8f6d8f8`: `14 failed, 3 passed`.
+  Later hostile-sink projection check: `12 failed, 12 passed` before guarding.
+  Final focused set: `29 passed, 77 deselected`, independently rerun identically.
+- Workflow/core/dispatcher neighborhood:
+  `913 passed, 1 skipped, 2353 deselected`.
 - Ordinary suite with required bundled Node:
-  `3206 passed, 4 skipped, 28 deselected`.
+  `3235 passed, 4 skipped, 28 deselected`.
 - Unchanged protected oracle: `30 scenarios x 3 runs`. Audit-tool and baseline
   blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
   `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
 - Independent code/test, owning-document, and exact staged reviews: `CLEAN`.
   The final review-status-only staged update is checked before the named commit.
-- `git diff --check` passes. Both test diffs are additions only. The raw
-  reviewer-report tail remains byte-identical to the preceding checkpoint.
+- `git diff --check` passes. The test diff is additions only; protected oracle
+  files, prior settlement assertions, and raw reviewer-report tail are unchanged.
 
 ## Immediate Next Context
 
-Start only checkpoint 3R.6,
-`fix(workflows): preserve recording truth on compound failure`.
-Use the saved S4 counterexample: exclusion-item sink failure plus recording-close
-failure must return one failed result from live continuation truth before
-terminal payload scrubbing. Cover ordinary failure, successful execute, and
-cancellation entering exclusion emission, including partial acceptance and
-first external-error precedence. Keep controls and process-fatal causes distinct.
-Remove F5's circular recording guard, document the three ratified behavior
-notes, and retain the reported canceled-settlement assignment: direct inspection
-shows its value is passed to fallback finishing before reassignment.
-Run the declared workflow/core-session/dispatcher neighborhood, ordinary suite,
-and unchanged three-run oracle; obtain independent working/staged reviews,
-refresh this handoff, and commit before starting 3R.7.
+Start only checkpoint 3R.7,
+`fix(core): normalize scalar identity boundaries`.
+Write exact exception-family tests before changing the shared text decoders:
+wrong type -> TypeError; malformed string -> ValueError; Scalar64 overflow ->
+ScalarDomainError; FileIndex128 overflow -> ValueError. The active event-v5
+scalar validator duplicates the old logic and must use the same boundary;
+include the public route and canonical decimal overflow beyond Python's
+integer-string conversion limit. Keep native 16-byte normalization before its
+length check, then use unsigned construction without a redundant assertion;
+pin optimized-mode behavior and non-buffer rejection without changing valid
+native identity or volume normalization. Generic JSON/fingerprint changes and
+all epoch/reset choices remain exclusively 3R.14.
+Run the declared core/database/workflows neighborhood and ordinary suite;
+obtain independent working/staged reviews, update owning docs and this handoff,
+and commit before starting 3R.8.
 
 ## Reviewer O.
 

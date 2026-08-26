@@ -600,6 +600,58 @@ def _run_execution(
 
         if isinstance(current, ExecuteContinuation):
             verify_after_execute = current.verify_after_execute
+            accepted_exclusions: list[ItemOutcome] = []
+            exclusion_error: Exception | None = None
+
+            def emit_exclusions() -> None:
+                nonlocal exclusion_error
+                if exclusion_error is not None:
+                    raise exclusion_error
+                for item in exclusion_items[len(accepted_exclusions):]:
+                    try:
+                        ctx.emit(item)
+                    except (PauseRequested, Canceled):
+                        raise
+                    except Exception as error:
+                        # Failed projection retains the first sink error without
+                        # replaying accepted siblings or re-offering this failure.
+                        exclusion_error = error
+                        raise
+                    accepted_exclusions.append(item)
+
+            def failed_execution_result(error: Exception) -> OperationResult:
+                recording_status = finish_once(
+                    SessionState.FAILED,
+                    xset.recording,
+                )
+                try:
+                    emit_exclusions()
+                except (PauseRequested, Canceled):
+                    raise
+                except Exception as emission_error:
+                    error = emission_error
+                execution_items = _merge_operation_results(
+                    xset.plan,
+                    tuple(emitted_execution_items),
+                    tuple(accepted_exclusions),
+                )
+                failure = _recording_failure_detail(error)
+                phase = _execute_continuation_phase(
+                    xset,
+                    PhaseStatus.FAILED,
+                    f"{failure.type_name}: {failure.message}",
+                )
+                return OperationResult(
+                    status=SessionState.FAILED,
+                    recording=recording_status,
+                    disposition=Disposition.RAN,
+                    items=execution_items,
+                    phases=(phase,) if verify_after_execute else (),
+                    bytes_done=phase.bytes_done,
+                    bytes_total=phase.bytes_total or phase.bytes_done,
+                    error=failure,
+                )
+
             try:
                 deps.executor_fs.remove_orphaned_temps(
                     Path(xset.plan.target_root.path),
@@ -613,11 +665,11 @@ def _run_execution(
                     deps.executor_policies,
                     deps.executor_fs,
                 )
-                _emit_items(ctx, exclusion_items)
+                emit_exclusions()
                 result = replace(
                     result,
                     items=_merge_operation_results(
-                        xset.plan, result.items, exclusion_items
+                        xset.plan, result.items, tuple(accepted_exclusions)
                     ),
                 )
                 execution_items = result.items
@@ -625,13 +677,6 @@ def _run_execution(
                     xset.recording,
                     result.recording,
                 )
-                if (
-                    result.recording is RecordingStatus.DEGRADED
-                    and xset.recording is RecordingStatus.OK
-                ):
-                    raise RuntimeError(
-                        "executor returned unattributed recording degradation"
-                    )
                 result = replace(result, recording=execution_recording)
                 if not verify_after_execute:
                     recording_status = finish_once(
@@ -663,11 +708,16 @@ def _run_execution(
             except PauseRequested:
                 raise
             except Canceled:
-                _emit_items(ctx, exclusion_items)
+                try:
+                    emit_exclusions()
+                except (PauseRequested, Canceled):
+                    raise
+                except Exception as error:
+                    return failed_execution_result(error)
                 execution_items = _merge_operation_results(
                     xset.plan,
                     tuple(emitted_execution_items),
-                    exclusion_items,
+                    tuple(accepted_exclusions),
                 )
                 recording_status = finish_once(
                     SessionState.CANCELED,
@@ -689,36 +739,7 @@ def _run_execution(
                     bytes_total=phase.bytes_total or phase.bytes_done,
                 )
             except Exception as error:
-                recording_status = finish_once(
-                    SessionState.FAILED,
-                    xset.recording,
-                )
-                _emit_items(ctx, exclusion_items)
-                execution_items = _merge_operation_results(
-                    xset.plan,
-                    tuple(emitted_execution_items),
-                    exclusion_items,
-                )
-                phase = _execute_continuation_phase(
-                    xset,
-                    PhaseStatus.FAILED,
-                    (
-                        f"{type(error).__name__}: "
-                        f"{logical_error_text(error)}"
-                    ),
-                )
-                return OperationResult(
-                    status=SessionState.FAILED,
-                    recording=recording_status,
-                    disposition=Disposition.RAN,
-                    items=execution_items,
-                    phases=(phase,) if verify_after_execute else (),
-                    bytes_done=phase.bytes_done,
-                    bytes_total=phase.bytes_total or phase.bytes_done,
-                    error=FailureDetail(
-                        type(error).__name__, logical_error_text(error)
-                    ),
-                )
+                return failed_execution_result(error)
 
         observed_recording = [current.recording]
         verification_items: list[IntegrityOutcome] = []

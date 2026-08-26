@@ -1334,6 +1334,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Exceptional terminal attribution loss.
+  Exclusion-outcome rejection followed by recording-close failure could publish
+  and store a failed terminal with clean recording, then scrub the only exact
+  close witness. Cause: exclusion emission escaped workflow failure projection;
+  the generic runner could only reconstruct accepted item truth. Fixed with
+  one continuation-derived failed projection for ordinary and cancellation
+  exits, accepted-only exclusions, and retained first sink-error precedence.
+  Close attribution now reaches terminal before scrubbing; public runner and
+  real runtime/dispatcher/store regressions cover partial acceptance as well.
+
 - MODERATE - FIXED (2026-08-06). Cleanup-failure suppression. CLI terminal
   cleanup and final shutdown could fail without any visible indication. Cause:
   `_close_terminal` swallowed every exception and all three command paths

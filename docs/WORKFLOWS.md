@@ -312,6 +312,17 @@ An escaping ordinary execute exception follows the same authority rule. The
 workflow constructs its failed result from the `ExecutionSet`'s settled-item
 state, fixed reviewed byte budget, and aggregate byte high-water rather than
 asking the generic runner to reinterpret the latest lossy Progress snapshot.
+Within the opened execute recording, exclusion delivery retains only the prefix
+accepted by the reliable sink. Its first ordinary rejection is terminal for
+that delivery attempt: neither accepted siblings nor the rejected item are
+re-offered by failure projection. Successful execution, cancellation, and an
+already-failing execute path all use the same failed-result projection if
+exclusion delivery fails. That result preserves accepted items, continuation
+byte counters, and the first sink error (with guarded optional rendering);
+ordinary sink failure takes precedence over cancellation. A secondary recording
+close failure is then attached before the generic runner publishes terminal
+and dispatcher scrubs the continuation. This needs no domain-specific generic
+runner hook or change to dispatcher custody.
 Fresh commitment or preflight failure/cancellation does the same before the
 executor or run recording opens, retaining `UNRUN` disposition and the
 phase-free result shape while still reporting the reviewed byte budget.
@@ -324,6 +335,10 @@ degrades recording without replacing that truth. Cooperative control and
 without replacing them. If that happens while pausing, the active execute or
 verify continuation is first degraded and recaptured, so paused cancellation
 or resume cannot recover an `OK` aggregate from the failed recording owner.
+Exit-failure capture is unconditional, including an execute continuation whose
+aggregate already reflects the newly recorded issue. With verification present,
+close failure still belongs to the execution set's task issues as well as the
+combined recording result; it does not rewrite settled filesystem status.
 Recording-open, finish, and close attribution establishes a typed task cause
 before optional logical diagnostics. If rendering raises an ordinary exception,
 the issue retains `detail=None`; it cannot turn a recording failure into clean
@@ -343,7 +358,11 @@ continuation-only settlement. Candidate completion follows the same ordering.
 Fresh preflight still runs on every resume. If an already-started execute
 continuation is refused or faults there, workflow reopens the same run only to
 finish it as `FAILED+RAN`, with settled execute counters preserved; it never
-claims a fresh `REFUSED+UNRUN`. A verify-resume preflight refusal preserves the
+claims a fresh `REFUSED+UNRUN`. If recording cannot be reopened while finalizing
+an already-failed execute or verify continuation, that open failure is attributed
+without replacing the existing failure result. Canceled open failure likewise
+passes the newly degraded axis to fallback finishing before taking its returned
+aggregate. A verify-resume preflight refusal preserves the
 settled execute filesystem status and adds a zero-work incomplete verify phase.
 All terminal paths after recorder entry share one finish-once boundary.
 `PauseRequested`, `KeyboardInterrupt`, `SystemExit`, and other

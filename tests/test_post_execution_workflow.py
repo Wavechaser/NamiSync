@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 from xxhash import xxh3_128
 
+import namisync.dispatcher.event_bus as dispatcher_event_bus
 import namisync.modules.executor.runtime as executor_runtime
 from namisync.core.events import (
     ItemOutcome,
@@ -88,6 +89,7 @@ from namisync.core.session import (
 from namisync.db.connections import connect_ledger_reader
 from namisync.dispatcher import (
     Dispatcher,
+    InMemorySessionStore,
     InProcessResourceLockProvider,
 )
 from namisync.interfaces.service import _workflow_registry
@@ -1226,6 +1228,302 @@ def test_noncompound_execute_exception_uses_execution_continuation_bytes() -> No
     assert recordings[0].finishes == [
         (SessionState.FAILED, RecordingStatus.OK)
     ]
+
+
+@pytest.mark.parametrize("hostile_sink", [False, True])
+@pytest.mark.parametrize("execution_exit", ["failed", "completed", "canceled"])
+@pytest.mark.parametrize("accepted_exclusions", [0, 1])
+@pytest.mark.parametrize("verify_after_execute", [False, True])
+def test_compound_exclusion_close_failure_retains_terminal_truth(
+    execution_exit: str, accepted_exclusions: int, verify_after_execute: bool,
+    hostile_sink: bool,
+) -> None:
+    first, second = _operation(63, 5), _operation(64, 7)
+    excluded = (_operation(65, 2), _operation(66, 3))
+    initial = _execution_set(first, second, *excluded)
+    selection = frozenset({first.op_id, second.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        commitment=Commitment(initial.plan.fingerprint, selection_digest(selection), NOW),
+        user_deselected=frozenset(operation.op_id for operation in excluded),
+    )
+    recording = _Recording(exit_fails=True)
+    events: list[object] = []
+    published: list[OperationResult] = []
+    rejected = excluded[accepted_exclusions]
+    primary = (
+        _UnrenderableRecordingError() if hostile_sink
+        else RuntimeError("first exclusion sink failure")
+    )
+    rejected_calls = 0
+
+    def executor(execution_set, context, *args):
+        first_item = _settle(execution_set, context, first, evidence=_evidence(first))
+        execution_set.note_bytes_done(6 if execution_exit != "completed" else 12)
+        if execution_exit == "failed":
+            raise OSError("execution failed before exclusions")
+        if execution_exit == "canceled":
+            raise Canceled()
+        second_item = _settle(execution_set, context, second, evidence=_evidence(second))
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(first_item, second_item),
+            bytes_done=12,
+            bytes_total=12,
+        )
+
+    def emit(body):
+        nonlocal rejected_calls
+        if isinstance(body, ItemOutcome) and body.item_id == str(rejected.op_id):
+            rejected_calls += 1
+            if rejected_calls == 1:
+                raise primary
+            raise RuntimeError("later exclusion sink failure")
+        events.append(body)
+
+    deps = _deps(
+        executor=executor,
+        verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+        recordings=[],
+    )
+    deps.open_recording = lambda execution_set: recording
+    outcome = run_session(
+        lambda context: run_execution(
+            ExecuteContinuation(xset, verify_after_execute=verify_after_execute),
+            context,
+            deps,
+        ),
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=published.append,
+    )
+
+    result = outcome.result
+    assert result is not None
+    assert result.status is SessionState.FAILED
+    assert not result.canceled
+    assert result.recording is xset.recording is RecordingStatus.DEGRADED
+    assert result.recording_issues == xset.recording_issues
+    assert tuple(issue.reason for issue in result.recording_issues) == (
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+    )
+    assert result.error is not None
+    assert result.error.type_name == type(primary).__name__
+    assert result.error.message == (
+        "recording diagnostic unavailable" if hostile_sink
+        else "first exclusion sink failure"
+    )
+    assert rejected_calls == 1
+    assert result.bytes_done == (12 if execution_exit == "completed" else 6)
+    assert result.bytes_total == 12
+    assert len(result.phases) == int(verify_after_execute)
+    if verify_after_execute:
+        assert result.phases[0].status is PhaseStatus.FAILED
+        assert result.phases[0].bytes_done == result.bytes_done
+    expected_ids = [str(first.op_id)]
+    if execution_exit == "completed":
+        expected_ids.append(str(second.op_id))
+    expected_ids.extend(str(op.op_id) for op in excluded[:accepted_exclusions])
+    assert [item.item_id for item in result.items] == expected_ids
+    assert [
+        event.item_id for event in events if isinstance(event, ItemOutcome)
+    ] == expected_ids
+    terminals = [event for event in events if isinstance(event, Terminal)]
+    assert len(terminals) == 1
+    assert terminals[0].result == TerminalSummary.from_result(result)
+    assert published == [result]
+    assert recording.finishes == [(SessionState.FAILED, RecordingStatus.OK)]
+
+
+@pytest.mark.parametrize("verify_after_execute", [False, True])
+def test_dispatcher_compound_exclusion_close_failure_survives_payload_scrub(
+    tmp_path: Path, monkeypatch, verify_after_execute: bool
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    for name in ("a.bin", "b.bin", "c.bin"):
+        (source / name).write_bytes(b"reviewed")
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    store = InMemorySessionStore()
+    finishes: list[tuple[SessionState, RecordingStatus]] = []
+    observed_xsets: list[ExecutionSet] = []
+    emitted: list[object] = []
+    original_emit = dispatcher_event_bus.EventHub.emit
+    original_open = runtime._deps.open_recording
+
+    def fail_executor(execution_set, *args):
+        execution_set.note_bytes_done(3)
+        observed_xsets.append(execution_set)
+        raise OSError("execution failed before exclusions")
+
+    @contextmanager
+    def close_failed_recording(execution_set):
+        try:
+            with original_open(execution_set) as recording:
+                def finish(status, recording_status):
+                    finishes.append((status, recording_status))
+                    recording.finish(status, recording_status)
+
+                yield SimpleNamespace(recorder=recording.recorder, finish=finish)
+        finally:
+            raise OSError("recording close failed")
+
+    def reject_exclusion(hub, body, **kwargs):
+        if isinstance(body, ItemOutcome) and body.path == "c.bin":
+            raise RuntimeError("exclusion sink failure")
+        envelope = original_emit(hub, body, **kwargs)
+        emitted.append(body)
+        return envelope
+
+    runtime._deps = replace(
+        runtime._deps, executor=fail_executor, open_recording=close_failed_recording
+    )
+    monkeypatch.setattr(dispatcher_event_bus.EventHub, "emit", reject_exclusion)
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        store=store,
+        lock_provider=InProcessResourceLockProvider(),
+        clock=runtime.clock,
+        audit_observer_factory=runtime.audit_observer,
+    )
+    try:
+        request = PlanRequest(
+            request_id="5" * 32, source_path=str(source), target_path=str(target)
+        )
+        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+            RunContext(lambda body: None, lambda: None)
+        )
+        plan = runtime.get_plan(request.request_id).plan
+        execution = runtime.commit_plan(
+            request.request_id,
+            run_id="6" * 32,
+            committed_at=NOW,
+            verify_after_execute=verify_after_execute,
+            user_deselected=frozenset(
+                str(operation.op_id) for operation in plan.operations
+                if operation.target_rel_path in {"b.bin", "c.bin"}
+            ),
+        )
+        session_id = dispatcher.submit(EXECUTION_KIND, execution)
+        record = _wait_for_session(dispatcher, session_id, SessionState.FAILED)
+        stored = next(row for row in store.snapshot() if row.session_id == session_id)
+    finally:
+        shutdown = dispatcher.shutdown()
+        runtime.close()
+
+    assert shutdown.complete
+    assert stored == record
+    assert record.payload is None
+    result = record.result
+    assert result is not None
+    assert result.recording is RecordingStatus.DEGRADED
+    assert result.recording_issues == observed_xsets[0].recording_issues
+    assert tuple(issue.reason for issue in result.recording_issues) == (
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+    )
+    assert result.error is not None
+    assert result.error.message == "exclusion sink failure"
+    assert result.bytes_done == 3
+    assert result.bytes_total == len(b"reviewed")
+    assert [item.path for item in result.items] == ["b.bin"]
+    assert [event.path for event in emitted if isinstance(event, ItemOutcome)] == ["b.bin"]
+    terminals = [event for event in emitted if isinstance(event, Terminal)]
+    assert len(terminals) == 1
+    assert terminals[0].result == TerminalSummary.from_result(result)
+    assert finishes == [(SessionState.FAILED, RecordingStatus.OK)]
+
+
+def test_recording_open_failure_preserves_already_failed_resume_projection() -> None:
+    xset = _execution_set(_operation(65))
+    open_calls = 0
+
+    def fail_preflight(*args):
+        raise OSError("preflight failure")
+
+    def fail_open(*args):
+        nonlocal open_calls
+        open_calls += 1
+        raise RuntimeError("recording open failure")
+
+    deps = _deps(executor=lambda *args: None, verifier=lambda *args: None, recordings=[])
+    deps.observer = fail_preflight
+    deps.open_recording = fail_open
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+        resumed=True,
+    )
+
+    assert open_calls == 1
+    assert result.status is SessionState.FAILED
+    assert result.error is not None
+    assert result.error.message == "preflight failure"
+    assert result.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in result.recording_issues) == (
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+    )
+
+
+def test_verify_present_close_failure_retains_execution_task_issue() -> None:
+    operation = _operation(65)
+    xset = _execution_set(operation)
+    recording = _Recording(exit_fails=True)
+
+    def executor(execution_set, context, *args):
+        item = _settle(execution_set, context, operation, evidence=_evidence(operation))
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    deps = _deps(executor=executor, verifier=_verify_all, recordings=[])
+    deps.open_recording = lambda execution_set: recording
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert len(result.phases) == 2
+    assert result.recording is xset.recording is RecordingStatus.DEGRADED
+    assert result.recording_issues == xset.recording_issues
+    assert tuple(issue.reason for issue in result.recording_issues) == (
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+    )
+
+
+def test_canceled_open_failure_passes_degraded_axis_to_fallback_finisher() -> None:
+    xset = _execution_set(_operation(65))
+    finished: list[tuple[SessionState, RecordingStatus]] = []
+
+    def fail_open(*args):
+        raise OSError("recording open failure")
+
+    result = settle_canceled_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        Disposition.RAN,
+        SimpleNamespace(
+            open_recording=fail_open,
+            finish_existing_recording=lambda execution_set, status, recording: (
+                finished.append((status, recording))
+            ),
+        ),
+    )
+
+    assert result.status is SessionState.CANCELED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert finished == [(SessionState.CANCELED, RecordingStatus.DEGRADED)]
+    assert tuple(issue.reason for issue in result.recording_issues) == (
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+    )
 
 
 @pytest.mark.parametrize("boundary", ["enter", "exit"])
