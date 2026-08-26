@@ -691,6 +691,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-27). Observation stream accumulation. Repeated
+  Gap recovery retained every closed stream until the session observation was
+  removed, so valid long-running sessions grew with recovery count. Cause: a
+  cleanup history doubled as stream ownership. Fixed by retaining only the
+  current stream, synchronizing stop and replacement adoption, and closing
+  retired/rejected streams outside the observer lock. Weak-reference churn and
+  both stop/adopt orderings preserve close-before-join and retry behavior.
 - MODERATE - FIXED (2026-08-27). Premature return-custody retirement. The
   admitted-handler ceiling released positions before pywebview serialized and
   delivered replies, permitting accumulated return graphs and shutdown before

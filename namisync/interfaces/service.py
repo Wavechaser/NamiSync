@@ -242,7 +242,6 @@ class _Observation:
     sink: SessionSink
     stream: EventStream
     from_sequence: int = 1
-    streams: list[EventStream] = field(default_factory=list)
     stop: Event = field(default_factory=Event)
     done: Event = field(default_factory=Event)
     thread: Thread | None = None
@@ -325,7 +324,6 @@ class SessionObserver:
             sink=sink,
             stream=stream,
             from_sequence=from_sequence,
-            streams=[stream],
         )
         thread = Thread(
             target=self._run,
@@ -350,7 +348,8 @@ class SessionObserver:
                         self._observations.pop(session_id, None)
                     raise
         except BaseException:
-            observation.stop.set()
+            with self._lock:
+                observation.stop.set()
             stream.close()
             raise
 
@@ -402,7 +401,8 @@ class SessionObserver:
         self._rollback(observation)
 
     def _rollback(self, observation: _Observation) -> None:
-        observation.stop.set()
+        with self._lock:
+            observation.stop.set()
         self._close_streams((observation,))
         self._join_threads((observation,))
         with self._lock:
@@ -435,8 +435,8 @@ class SessionObserver:
                 return
             self._closed = True
             observations = tuple(self._observations.values())
-        for observation in observations:
-            observation.stop.set()
+            for observation in observations:
+                observation.stop.set()
         self._close_streams(observations)
         try:
             self._join_threads(observations)
@@ -478,16 +478,17 @@ class SessionObserver:
                         observation.session_id, next_sequence
                     )
                     with self._lock:
-                        if (
+                        rejected = (
                             self._closed
                             or observation.stop.is_set()
                             or self._observations.get(observation.session_id)
                             is not observation
-                        ):
-                            replacement.close()
-                            return
-                        observation.streams.append(replacement)
-                        observation.stream = replacement
+                        )
+                        if not rejected:
+                            observation.stream = replacement
+                    if rejected:
+                        replacement.close()
+                        return
                     stream.close()
                     stream = replacement
                     continue
@@ -510,8 +511,7 @@ class SessionObserver:
         except Exception as error:
             observation.failure = error
         finally:
-            for opened in observation.streams:
-                opened.close()
+            self._close_streams((observation,))
             observation.done.set()
 
     @staticmethod
@@ -523,11 +523,11 @@ class SessionObserver:
         ):
             raise ValueError("from_sequence must be a positive integer")
 
-    @staticmethod
-    def _close_streams(observations: tuple[_Observation, ...]) -> None:
-        for observation in observations:
-            for stream in observation.streams:
-                stream.close()
+    def _close_streams(self, observations: tuple[_Observation, ...]) -> None:
+        with self._lock:
+            streams = tuple(observation.stream for observation in observations)
+        for stream in streams:
+            stream.close()
 
     def _join_threads(self, observations: tuple[_Observation, ...]) -> None:
         deadline = monotonic() + self._join_timeout

@@ -390,13 +390,19 @@ get-before-subscribe check, returns an already-terminal view without opening a
 stream, and otherwise forwards only primitive session event/record views to the
 sink. Its worker blocks on `EventStream.next()` without polling, recovers an
 ejected stream from the first undelivered sequence, and never exposes the raw
-stream. Slice 3 adds an explicit positive-first-desired-sequence resubscribe
+stream. Each observation retains only its current stream; recovery temporarily
+owns the previous stream and its replacement, then closes and releases the
+retired stream without accumulating a history. Stop, observation identity, and
+replacement adoption share the observer lock. Cleanup snapshots current streams
+under that same lock, while every stream close and worker join runs outside it.
+Slice 3 adds an explicit positive-first-desired-sequence resubscribe
 seam. The currently implemented plan start may transactionally adopt a
 preopened stream before `PENDING` and schedulable publication. The accepted
 target makes that path mandatory for every desktop session start. In both forms
 the sink is excluded from receipt identity, and attach failure or a shutdown
 race rolls back the unpublished session and starts no work. Unsubscribe closes
-every stream before joining its worker. Service
+the current stream before joining its worker; a racing replacement is either
+included in that cleanup or rejected and closed by the worker. Service
 shutdown closes all observer streams and joins all observer threads before
 dispatcher shutdown, then closes the workflow runtime last so audit finalization
 cannot reach a closed history store. A join timeout retains the unjoined

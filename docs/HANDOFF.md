@@ -14,7 +14,11 @@ calibrated, or accepted.
 - `ff23af9` replaces unbounded dispatcher store/custody exception collections
   with sticky failure flags. Weak-reference regressions prove contained error
   graphs retire across repeated session completion/close cycles.
-- The native-return prerequisite retains each admitted pywebview call's
+- The observation-stream prerequisite removes closed-stream history. Stop and
+  replacement adoption share one lock; cleanup snapshots the current stream,
+  while closes and joins run outside that lock. Independent review cleared
+  the weak-reference churn and both stop/adopt race directions.
+- `32d7dac` retains each admitted pywebview call's
   position until its exact worker exits, including serialization and native
   delivery. Shutdown joins outside the bridge lock; a timeout keeps ownership
   for retry. Direct Python calls still release on return.
@@ -39,6 +43,9 @@ calibrated, or accepted.
   parity. Full details remain in `092b628:docs/HANDOFF.md`.
 - Dispatcher prerequisite: both new retention regressions failed before the
   fix; core/dispatcher/workflows then passed **1,905 tests, 1 privilege skip**.
+- Observation prerequisite: **3 expected failures, 2 passes** before the fix;
+  **55 service tests** and the required-Node interfaces department's **1,299
+  tests** pass afterward. Independent review found no remaining issue.
 - Native prerequisite: six new lifetime/callback witnesses failed before the
   fix. After correction, focused bridge/host tests passed **121 tests**; shared
   host-fixture repair passed **161 tests**.
@@ -56,8 +63,8 @@ Follow checkpoint 4's three ordered stops in
 model/validator first, dormant machinery second, coherent 12-row activation
 third. No size constant may be selected or retuned from measurement.
 
-The remaining source-derived prerequisites include bounded observation-stream
-ownership, full-result header normalization under the existing omission rules,
+The remaining source-derived prerequisites include full-result header
+normalization under the existing omission rules,
 canonical typed-detail admission, and a sound worker-retirement witness.
 Dispatcher close currently does not prove its exact worker has exited; do not
 use successful close as that proof until the ownership fix lands.
@@ -69,11 +76,13 @@ Path caches, and native/browser copies. The frozen transport sizer is not a
 complete task-graph validator. Standalone integrity's row reload also needs its
 own admission bound; an inventory-tree limit does not constrain it today.
 
-All files at this safe stop belong to the native prerequisite, its exact-v5
-verification fixtures, and checkpoint status documentation. No unrelated dirty
-work was present. Next: implement the observation-stream fix with failing-first
-retention/race tests, then the other prerequisites in separately reviewed
-commits before freezing the model.
+The native prerequisite is committed; the observation prerequisite is delivered
+at this safe stop. Remaining dirty core/session/event/scalar files and their
+tests/docs belong to full-result diagnostic normalization; dirty dispatcher
+files and their tests/docs belong to exact worker retirement. Neither is yet a
+committed model or activation. No unrelated dirty work was present. Next:
+finish independent review and verification of those fixes, then canonical
+typed-detail admission, before freezing the model.
 
 Protected settlement scenarios/baseline/hash/assertions, frozen transport
 authority, and the epoch-5 witness remain unchanged. The witness SHA-256 is

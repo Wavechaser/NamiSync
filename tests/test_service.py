@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from threading import Event, Lock, Thread
 from unittest.mock import Mock
+from weakref import ref
 
 import pytest
 
@@ -892,6 +893,142 @@ def test_gap_recovery_resubscribes_from_first_undelivered_sequence() -> None:
         for item in events
         if item.body_type == "PhaseChanged"
     ] == ["one", "two"]
+
+
+def test_gap_recovery_releases_retired_streams_while_observation_is_live() -> None:
+    session_id = "7" * 32
+    current = _BlockingStream("current")
+    retired_refs = []
+    retired_closed = []
+
+    class RetiredStream(_SequenceStream):
+        def __init__(self, index: int) -> None:
+            super().__init__(
+                _envelope(session_id, index + 1, Gap(first_missed_seq=index + 1))
+            )
+            self.index = index
+
+        def close(self) -> None:
+            if not self.closed:
+                retired_closed.append(self.index)
+            super().close()
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            if len(retired_refs) == 32:
+                return current
+            stream = RetiredStream(len(retired_refs))
+            retired_refs.append(ref(stream))
+            return stream
+
+    observer = SessionObserver(Dispatcher())
+    observer.observe(session_id, lambda _update: None)
+    try:
+        assert current.entered.wait(0.5)
+        assert retired_closed == list(range(32))
+        assert all(reference() is None for reference in retired_refs)
+        assert observer._observations[session_id].stream is current
+        assert not current.closed
+    finally:
+        observer.close()
+
+
+@pytest.mark.parametrize("stop_method", ("unsubscribe", "close"))
+@pytest.mark.parametrize("blocked_stage", ("subscribe", "retire"))
+def test_gap_recovery_stop_closes_racing_replacement_outside_observer_lock(
+    stop_method: str,
+    blocked_stage: str,
+) -> None:
+    session_id = "7" * 32
+    subscribed = Event()
+    first_closed = Event()
+    replacement_closed = Event()
+    release = Event()
+    stopped = Event()
+    close_outside_lock = []
+    close_errors = []
+    subscribe_count = 0
+
+    class FirstStream(_SequenceStream):
+        def close(self) -> None:
+            if self.closed:
+                return
+            super().close()
+            first_closed.set()
+            if blocked_stage == "retire":
+                assert release.wait(2)
+
+    class ReplacementStream(_BlockingStream):
+        def close(self) -> None:
+            if self.closed:
+                return
+            acquired = observer._lock.acquire(timeout=0.5)
+            close_outside_lock.append(acquired)
+            if acquired:
+                observer._lock.release()
+            super().close()
+            replacement_closed.set()
+
+    first = FirstStream()
+    replacement = ReplacementStream("replacement")
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            nonlocal subscribe_count
+            subscribe_count += 1
+            if subscribe_count == 1:
+                return first
+            assert subscribe_count == 2
+            subscribed.set()
+            if blocked_stage == "subscribe":
+                assert release.wait(2)
+            return replacement
+
+    observer = SessionObserver(Dispatcher())
+
+    def stop() -> None:
+        try:
+            if stop_method == "unsubscribe":
+                observer.unsubscribe(session_id)
+            else:
+                observer.close()
+        except Exception as error:
+            close_errors.append(error)
+        finally:
+            stopped.set()
+
+    closer = Thread(target=stop)
+    observer.observe(session_id, lambda _update: None)
+    observation = observer._observations[session_id]
+    try:
+        assert subscribed.wait(0.5)
+        if blocked_stage == "retire":
+            assert first_closed.wait(0.5)
+            assert observation.stream is replacement
+        closer.start()
+        assert first_closed.wait(0.5)
+        if blocked_stage == "retire":
+            assert replacement_closed.wait(0.5)
+        assert not stopped.is_set()
+    finally:
+        release.set()
+        if closer.ident is not None:
+            closer.join(2)
+        observer.close()
+
+    assert stopped.is_set()
+    assert close_errors == []
+    assert first.closed and replacement.closed
+    assert close_outside_lock == [True]
+    assert observation.done.is_set()
+    assert observation.failure is None
+    assert observer._observations == {}
 
 
 def test_sink_exception_closes_stream_and_does_not_block_shutdown() -> None:
