@@ -129,6 +129,26 @@ independently. Inventory and integrity details retain the scanner's typed
 warnings; an incomplete refresh therefore preserves the warning code, relative
 path, and detail rather than reporting only `complete=False`.
 
+Before either v2 encoder constructs dictionaries or lists, a typed walk
+re-admits the binding and every serialized occurrence and computes its exact
+canonical byte length. Inventory derives its maximum from the combined 120,000
+`ScanScope` entries, 27 expected mounts, and the request, path, and volume text
+walls. Integrity independently derives its maximum from 120,000 selected paths,
+120,000 database-derived item ids, at most 120,000 completions, five recording
+issues, and the same binding/scalar walls. Item ids retain their existing
+protocol spelling but are bounded to the enclosing two signed-64 database ids
+plus separator, 39 UTF-8 bytes. Repeated paths or ids are charged per wire
+occurrence rather than identity-deduplicated.
+
+Using the shared predeclared JSON coefficient catalog and its conservative
+two-times canonical-byte proof gives raw ceilings of 118,024,959,994 bytes for
+inventory and 118,241,513,170 bytes for integrity. Exact `bytes` and raw length
+are checked before UTF-8 decoding or `json.loads`; encoding rejects any final
+length different from the typed count. These theoretical source maxima are not
+task-retention allowances. Later custody admission must reserve each task's
+actual occurrence charge, and reducing the large duplicated-path ceiling would
+require a versioned continuation-schema change.
+
 Those details are process-local terminal readback artifacts, not durable
 inventory. Each admitted inventory or integrity session owns its exact request
 id through the service relation. The artifact remains readable after terminal

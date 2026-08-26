@@ -6,7 +6,7 @@ import json
 import os
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Iterator, Mapping, Protocol
@@ -32,6 +32,7 @@ from namisync.core.integrity import (
     VerifierContext,
 )
 from namisync.core.models import (
+    MAX_VOLUME_TEXT_UTF16_UNITS,
     CapabilityProfile,
     IgnoreSet,
     Root,
@@ -68,13 +69,16 @@ from namisync.core.root_authority import (
 )
 from namisync.core.scalars import (
     MAX_DIAGNOSTIC_UTF8_BYTES,
+    MAX_PATH_UTF16_UNITS,
     MAX_REQUEST_ID_UTF8_BYTES,
+    MAX_SIGNED_64,
     bounded_utf8_text,
     checked_add_signed_64,
     require_json_unicode,
     require_safe_int,
     require_signed_64,
     require_utf16_path,
+    require_utf16_text,
     require_utf8_text,
 )
 from namisync.core.session import (
@@ -98,6 +102,18 @@ from namisync.modules.scanner import (
     validate_volume_snapshot,
 )
 
+from ._json_envelope import (
+    JSON_SCALAR_CHARGE,
+    JsonEnvelopeCounter,
+    canonical_byte_ceiling,
+    encode_canonical_json,
+    model_array_charge,
+    model_object_charge,
+    model_text_charge,
+    object_layout,
+    require_payload_bytes,
+)
+
 
 _MAX_LOGICAL_DRIVE_ROOTS = 26
 _MAX_PERSISTED_MOUNT_HINTS = 1
@@ -114,6 +130,115 @@ MAX_VOLUME_RESOLUTION_CANDIDATES = (
 # The zero-buffer GetLogicalDriveStringsW result includes the final MULTI_SZ
 # terminator: 26 drive roots at four characters each, plus one trailing NUL.
 _MAX_LOGICAL_DRIVE_STRING_CHARS = _MAX_LOGICAL_DRIVE_ROOTS * 4 + 1
+
+_PATH_UTF8_LIMIT = MAX_PATH_UTF16_UNITS * 3
+_VOLUME_TEXT_UTF8_LIMIT = MAX_VOLUME_TEXT_UTF16_UNITS * 3
+_TIMESTAMP_UTF8_LIMIT = len(
+    datetime.max.replace(tzinfo=timezone.utc).isoformat()
+)
+_INTEGRITY_ITEM_ID_UTF8_LIMIT = 2 * len(str(MAX_SIGNED_64)) + 1
+_INTEGRITY_RECORDING_ISSUE_LIMIT = 5
+
+_VOLUME_ID_LAYOUT = object_layout("serial", "fs_type")
+_LOCATION_BINDING_LAYOUT = object_layout(
+    "volume",
+    "volume_relative_path",
+    "selected_mount",
+    "expected_mounts",
+    "explicit_ambiguity_choice",
+    "location_id",
+)
+_INVENTORY_PAYLOAD_LAYOUT = object_layout(
+    "version",
+    "kind",
+    "request_id",
+    "binding",
+    "selected_paths",
+    "subtree_roots",
+)
+_INTEGRITY_PAYLOAD_LAYOUT = object_layout(
+    "version",
+    "kind",
+    "request_id",
+    "binding",
+    "mode",
+    "selected_paths",
+    "stale_before",
+    "selection_item_ids",
+    "completed_bytes",
+    "processed_bytes",
+    "bytes_total_high_water",
+    "recording",
+    "recording_issues",
+    "omitted_detail_count",
+    "refresh_generation",
+)
+_INTEGRITY_COMPLETION_LAYOUT = model_array_charge(2)
+_INTEGRITY_ISSUE_LAYOUT = object_layout("reason", "detail")
+
+
+def _enum_utf8_limit(enum_type: type[StrEnum]) -> int:
+    return max(len(item.value.encode("utf-8")) for item in enum_type)
+
+
+_LOCATION_BINDING_MAX_OCCURRENCE_CHARGE = (
+    model_object_charge(_LOCATION_BINDING_LAYOUT)
+    + model_object_charge(_VOLUME_ID_LAYOUT)
+    + 2 * model_text_charge(_VOLUME_TEXT_UTF8_LIMIT)
+    + 2 * model_text_charge(_PATH_UTF8_LIMIT)
+    + model_array_charge(MAX_MOUNT_CANDIDATES)
+    + MAX_MOUNT_CANDIDATES * model_text_charge(_PATH_UTF8_LIMIT)
+    + 2 * JSON_SCALAR_CHARGE
+)
+_INVENTORY_MAX_OCCURRENCE_CHARGE = (
+    model_object_charge(_INVENTORY_PAYLOAD_LAYOUT)
+    + JSON_SCALAR_CHARGE
+    + model_text_charge(len("inventory"))
+    + model_text_charge(MAX_REQUEST_ID_UTF8_BYTES)
+    + _LOCATION_BINDING_MAX_OCCURRENCE_CHARGE
+    + model_array_charge(SCAN_SCOPE_ENTRY_LIMIT)
+    + model_array_charge(0)
+    + SCAN_SCOPE_ENTRY_LIMIT * model_text_charge(_PATH_UTF8_LIMIT)
+)
+_INTEGRITY_COMPLETION_MAX_OCCURRENCE_CHARGE = (
+    _INTEGRITY_COMPLETION_LAYOUT
+    + model_text_charge(_INTEGRITY_ITEM_ID_UTF8_LIMIT)
+    + JSON_SCALAR_CHARGE
+)
+_INTEGRITY_ISSUE_MAX_OCCURRENCE_CHARGE = (
+    model_object_charge(_INTEGRITY_ISSUE_LAYOUT)
+    + model_text_charge(_enum_utf8_limit(TaskRecordingIssueReason))
+    + max(JSON_SCALAR_CHARGE, model_text_charge(MAX_DIAGNOSTIC_UTF8_BYTES))
+)
+_INTEGRITY_MAX_OCCURRENCE_CHARGE = (
+    model_object_charge(_INTEGRITY_PAYLOAD_LAYOUT)
+    + JSON_SCALAR_CHARGE
+    + model_text_charge(len("integrity"))
+    + model_text_charge(MAX_REQUEST_ID_UTF8_BYTES)
+    + _LOCATION_BINDING_MAX_OCCURRENCE_CHARGE
+    + model_text_charge(_enum_utf8_limit(IntegrityMode))
+    + model_array_charge(INTEGRITY_CANDIDATE_ROW_LIMIT)
+    + INTEGRITY_CANDIDATE_ROW_LIMIT * model_text_charge(_PATH_UTF8_LIMIT)
+    + max(JSON_SCALAR_CHARGE, model_text_charge(_TIMESTAMP_UTF8_LIMIT))
+    + model_array_charge(INTEGRITY_CANDIDATE_ROW_LIMIT)
+    + INTEGRITY_CANDIDATE_ROW_LIMIT
+    * model_text_charge(_INTEGRITY_ITEM_ID_UTF8_LIMIT)
+    + model_array_charge(INTEGRITY_CANDIDATE_ROW_LIMIT)
+    + INTEGRITY_CANDIDATE_ROW_LIMIT
+    * _INTEGRITY_COMPLETION_MAX_OCCURRENCE_CHARGE
+    + 4 * JSON_SCALAR_CHARGE
+    + model_text_charge(_enum_utf8_limit(RecordingStatus))
+    + model_array_charge(_INTEGRITY_RECORDING_ISSUE_LIMIT)
+    + _INTEGRITY_RECORDING_ISSUE_LIMIT
+    * _INTEGRITY_ISSUE_MAX_OCCURRENCE_CHARGE
+)
+
+INVENTORY_PAYLOAD_BYTE_LIMIT = canonical_byte_ceiling(
+    _INVENTORY_MAX_OCCURRENCE_CHARGE
+)
+INTEGRITY_PAYLOAD_BYTE_LIMIT = canonical_byte_ceiling(
+    _INTEGRITY_MAX_OCCURRENCE_CHARGE
+)
 
 
 class VolumeResolutionState(StrEnum):
@@ -440,8 +565,10 @@ class IntegrityWorkflowRequest:
             )
         selection_positions: dict[str, int] = {}
         for index, item_id in enumerate(self.selection_item_ids):
-            if not isinstance(item_id, str) or not item_id:
-                raise ValueError("integrity selection item ids are required")
+            _require_integrity_item_id(
+                item_id,
+                "integrity selection item id",
+            )
             if item_id in selection_positions:
                 raise ValueError("integrity selection item ids must be unique")
             selection_positions[item_id] = index
@@ -454,8 +581,10 @@ class IntegrityWorkflowRequest:
                     "integrity completed_bytes entries must be two-item tuples"
                 )
             item_id, size = entry
-            if not isinstance(item_id, str) or not item_id:
-                raise ValueError("completed integrity item ids are required")
+            _require_integrity_item_id(
+                item_id,
+                "completed integrity item id",
+            )
             if item_id in completed_ids:
                 raise ValueError("completed integrity item ids must be unique")
             completed_ids.add(item_id)
@@ -518,6 +647,15 @@ class IntegrityWorkflowRequest:
             self.refresh_generation,
             "inventory refresh generation",
         )
+
+
+def _require_integrity_item_id(value: object, context: str) -> str:
+    return require_utf8_text(
+        value,
+        context,
+        minimum_bytes=1,
+        maximum_bytes=_INTEGRITY_ITEM_ID_UTF8_LIMIT,
+    )
 
 
 def _exact_inventory_request(value: object) -> InventoryRequest:
@@ -1377,22 +1515,372 @@ def change_inventory_visibility(
         )
 
 
+def _charge_inventory_enum(
+    counter: JsonEnvelopeCounter,
+    value: object,
+    enum_type: type[StrEnum],
+    context: str,
+) -> None:
+    if type(value) is not enum_type:
+        raise TypeError(f"{context} has the wrong enum type")
+    counter.text(
+        value.value,
+        context,
+        maximum_utf8_bytes=_enum_utf8_limit(enum_type),
+    )
+
+
+def _charge_inventory_path(
+    counter: JsonEnvelopeCounter,
+    value: object,
+    context: str,
+    *,
+    allow_root: bool = False,
+) -> None:
+    canonical = validate_relative_path(value, allow_root=allow_root)
+    if canonical != value:
+        raise ValueError(f"{context} is not canonical")
+    counter.text(
+        value,
+        context,
+        maximum_utf8_bytes=_PATH_UTF8_LIMIT,
+    )
+
+
+def _charge_location_binding(
+    counter: JsonEnvelopeCounter,
+    value: object,
+    context: str,
+) -> None:
+    if type(value) is not LocationBinding:
+        raise TypeError(f"{context} must be LocationBinding")
+    if type(value.volume_id) is not VolumeId:
+        raise TypeError(f"{context}.volume_id must be VolumeId")
+    require_utf16_text(
+        value.volume_id.serial,
+        f"{context}.volume.serial",
+        maximum_units=MAX_VOLUME_TEXT_UTF16_UNITS,
+        allow_empty=False,
+    )
+    require_utf16_text(
+        value.volume_id.fs_type,
+        f"{context}.volume.fs_type",
+        maximum_units=MAX_VOLUME_TEXT_UTF16_UNITS,
+        allow_empty=False,
+    )
+    if type(value.expected_mounts) is not tuple:
+        raise TypeError(f"{context}.expected_mounts must be a tuple")
+    if not value.expected_mounts:
+        raise ValueError(f"{context}.expected_mounts cannot be empty")
+    if len(value.expected_mounts) > MAX_MOUNT_CANDIDATES:
+        raise ValueError(f"{context}.expected_mounts exceed the source limit")
+
+    counter.object(_LOCATION_BINDING_LAYOUT)
+    counter.object(_VOLUME_ID_LAYOUT)
+    counter.text(
+        value.volume_id.serial,
+        f"{context}.volume.serial",
+        maximum_utf8_bytes=_VOLUME_TEXT_UTF8_LIMIT,
+        minimum_utf8_bytes=1,
+    )
+    counter.text(
+        value.volume_id.fs_type,
+        f"{context}.volume.fs_type",
+        maximum_utf8_bytes=_VOLUME_TEXT_UTF8_LIMIT,
+        minimum_utf8_bytes=1,
+    )
+    _charge_inventory_path(
+        counter,
+        value.volume_relative_path,
+        f"{context}.volume_relative_path",
+        allow_root=True,
+    )
+    require_utf16_path(value.selected_mount, f"{context}.selected_mount")
+    if not value.selected_mount:
+        raise ValueError(f"{context}.selected_mount cannot be empty")
+    counter.text(
+        value.selected_mount,
+        f"{context}.selected_mount",
+        maximum_utf8_bytes=_PATH_UTF8_LIMIT,
+        minimum_utf8_bytes=1,
+    )
+    counter.array(len(value.expected_mounts))
+    selected_key = _path_key(value.selected_mount)
+    selected_seen = False
+    for index, path in enumerate(value.expected_mounts):
+        require_utf16_path(path, f"{context}.expected_mounts[{index}]")
+        if not path:
+            raise ValueError(f"{context}.expected_mounts cannot contain empty paths")
+        path_key = _path_key(path)
+        if any(
+            _path_key(value.expected_mounts[prior_index]) == path_key
+            for prior_index in range(index)
+        ):
+            raise ValueError(f"{context}.expected_mounts contain duplicates")
+        selected_seen = selected_seen or path_key == selected_key
+        counter.text(
+            path,
+            f"{context}.expected_mounts[{index}]",
+            maximum_utf8_bytes=_PATH_UTF8_LIMIT,
+            minimum_utf8_bytes=1,
+        )
+    if not selected_seen:
+        raise ValueError(f"{context}.selected_mount is not an expected mount")
+    counter.boolean(
+        value.explicit_ambiguity_choice,
+        f"{context}.explicit_ambiguity_choice",
+    )
+    if value.explicit_ambiguity_choice and len(value.expected_mounts) < 2:
+        raise ValueError(f"{context}.explicit_ambiguity_choice requires ambiguity")
+    if value.location_id is None:
+        counter.null()
+    else:
+        require_safe_int(value.location_id, f"{context}.location_id")
+        if value.location_id < 1:
+            raise ValueError(f"{context}.location_id must be positive")
+        counter.integer(value.location_id, f"{context}.location_id")
+
+
+def _charge_inventory_paths(
+    counter: JsonEnvelopeCounter,
+    values: object,
+    context: str,
+    *,
+    limit: int,
+    allow_root: bool = False,
+) -> None:
+    if type(values) is not tuple:
+        raise TypeError(f"{context} must be a tuple")
+    if len(values) > limit:
+        raise ValueError(f"{context} exceeds its source limit")
+    counter.array(len(values))
+    for index, path in enumerate(values):
+        _charge_inventory_path(
+            counter,
+            path,
+            f"{context}[{index}]",
+            allow_root=allow_root,
+        )
+
+
+def _charge_inventory_workflow_request(
+    request: object,
+) -> JsonEnvelopeCounter:
+    if type(request) is not InventoryWorkflowRequest:
+        raise TypeError("inventory payload requires InventoryWorkflowRequest")
+    if type(request.selected_paths) is not tuple:
+        raise TypeError("inventory selected_paths must be a tuple")
+    if type(request.subtree_roots) is not tuple:
+        raise TypeError("inventory subtree_roots must be a tuple")
+    if len(request.selected_paths) > SCAN_SCOPE_ENTRY_LIMIT - len(
+        request.subtree_roots
+    ):
+        raise ValueError("inventory payload exceeds the scan-scope item limit")
+    require_utf8_text(
+        request.request_id,
+        "inventory request id",
+        minimum_bytes=1,
+        maximum_bytes=MAX_REQUEST_ID_UTF8_BYTES,
+    )
+    counter = JsonEnvelopeCounter()
+    counter.object(_INVENTORY_PAYLOAD_LAYOUT)
+    counter.integer(2, "inventory version")
+    counter.text("inventory", "inventory kind", maximum_utf8_bytes=len("inventory"))
+    counter.text(
+        request.request_id,
+        "inventory request id",
+        maximum_utf8_bytes=MAX_REQUEST_ID_UTF8_BYTES,
+        minimum_utf8_bytes=1,
+    )
+    _charge_location_binding(counter, request.binding, "inventory.binding")
+    _charge_inventory_paths(
+        counter,
+        request.selected_paths,
+        "inventory.selected_paths",
+        limit=SCAN_SCOPE_ENTRY_LIMIT,
+    )
+    _charge_inventory_paths(
+        counter,
+        request.subtree_roots,
+        "inventory.subtree_roots",
+        limit=SCAN_SCOPE_ENTRY_LIMIT,
+        allow_root=True,
+    )
+    counter.require_within(
+        _INVENTORY_MAX_OCCURRENCE_CHARGE,
+        "inventory payload",
+    )
+    return counter
+
+
+def _charge_integrity_item_id(
+    counter: JsonEnvelopeCounter,
+    value: object,
+    context: str,
+) -> None:
+    _require_integrity_item_id(value, context)
+    counter.text(
+        value,
+        context,
+        maximum_utf8_bytes=_INTEGRITY_ITEM_ID_UTF8_LIMIT,
+        minimum_utf8_bytes=1,
+    )
+
+
+def _charge_integrity_workflow_request(
+    request: object,
+) -> JsonEnvelopeCounter:
+    if type(request) is not IntegrityWorkflowRequest:
+        raise TypeError("integrity payload requires IntegrityWorkflowRequest")
+    for field_name in ("selected_paths", "selection_item_ids", "completed_bytes"):
+        population = getattr(request, field_name)
+        if type(population) is not tuple:
+            raise TypeError(f"integrity {field_name} must be a tuple")
+        if len(population) > INTEGRITY_CANDIDATE_ROW_LIMIT:
+            raise ValueError(f"integrity {field_name} exceeds its source limit")
+    if len(request.completed_bytes) > len(request.selection_item_ids):
+        raise ValueError("integrity completed_bytes exceed the saved selection")
+    if type(request.recording_issues) is not tuple:
+        raise TypeError("integrity recording_issues must be a tuple")
+    if len(request.recording_issues) > _INTEGRITY_RECORDING_ISSUE_LIMIT:
+        raise ValueError("integrity recording_issues exceed their source limit")
+    require_utf8_text(
+        request.request_id,
+        "integrity request id",
+        minimum_bytes=1,
+        maximum_bytes=MAX_REQUEST_ID_UTF8_BYTES,
+    )
+
+    counter = JsonEnvelopeCounter()
+    counter.object(_INTEGRITY_PAYLOAD_LAYOUT)
+    counter.integer(2, "integrity version")
+    counter.text("integrity", "integrity kind", maximum_utf8_bytes=len("integrity"))
+    counter.text(
+        request.request_id,
+        "integrity request id",
+        maximum_utf8_bytes=MAX_REQUEST_ID_UTF8_BYTES,
+        minimum_utf8_bytes=1,
+    )
+    _charge_location_binding(counter, request.binding, "integrity.binding")
+    _charge_inventory_enum(counter, request.mode, IntegrityMode, "integrity.mode")
+    _charge_inventory_paths(
+        counter,
+        request.selected_paths,
+        "integrity.selected_paths",
+        limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+    )
+    if request.stale_before is None:
+        counter.null()
+    else:
+        if type(request.stale_before) is not datetime:
+            raise TypeError("integrity.stale_before must be datetime or None")
+        _require_utc(request.stale_before, "integrity.stale_before")
+        counter.text(
+            request.stale_before.isoformat(),
+            "integrity.stale_before",
+            maximum_utf8_bytes=_TIMESTAMP_UTF8_LIMIT,
+        )
+    counter.array(len(request.selection_item_ids))
+    for index, item_id in enumerate(request.selection_item_ids):
+        _charge_integrity_item_id(
+            counter,
+            item_id,
+            f"integrity.selection_item_ids[{index}]",
+        )
+    counter.array(len(request.completed_bytes))
+    for index, entry in enumerate(request.completed_bytes):
+        if type(entry) is not tuple or len(entry) != 2:
+            raise TypeError("integrity completed_bytes entries must be pairs")
+        item_id, size = entry
+        counter.array(2)
+        _charge_integrity_item_id(
+            counter,
+            item_id,
+            f"integrity.completed_bytes[{index}].item_id",
+        )
+        require_signed_64(size, f"integrity.completed_bytes[{index}].bytes")
+        counter.integer(size, f"integrity.completed_bytes[{index}].bytes")
+    require_signed_64(request.processed_bytes, "integrity.processed_bytes")
+    require_signed_64(
+        request.bytes_total_high_water,
+        "integrity.bytes_total_high_water",
+    )
+    counter.integer(request.processed_bytes, "integrity.processed_bytes")
+    counter.integer(
+        request.bytes_total_high_water,
+        "integrity.bytes_total_high_water",
+    )
+    _charge_inventory_enum(
+        counter,
+        request.recording,
+        RecordingStatus,
+        "integrity.recording",
+    )
+    counter.array(len(request.recording_issues))
+    for index, issue in enumerate(request.recording_issues):
+        if type(issue) is not TaskRecordingIssue:
+            raise TypeError("integrity recording_issues contain an invalid value")
+        counter.object(_INTEGRITY_ISSUE_LAYOUT)
+        _charge_inventory_enum(
+            counter,
+            issue.reason,
+            TaskRecordingIssueReason,
+            f"integrity.recording_issues[{index}].reason",
+        )
+        counter.optional_text(
+            issue.detail,
+            f"integrity.recording_issues[{index}].detail",
+            maximum_utf8_bytes=MAX_DIAGNOSTIC_UTF8_BYTES,
+        )
+    require_safe_int(
+        request.omitted_detail_count,
+        "integrity.omitted_detail_count",
+    )
+    require_safe_int(
+        request.refresh_generation,
+        "integrity.refresh_generation",
+    )
+    counter.integer(
+        request.omitted_detail_count,
+        "integrity.omitted_detail_count",
+    )
+    counter.integer(request.refresh_generation, "integrity.refresh_generation")
+    counter.require_within(
+        _INTEGRITY_MAX_OCCURRENCE_CHARGE,
+        "integrity payload",
+    )
+    return counter
+
+
 def encode_inventory_request(request: InventoryWorkflowRequest) -> bytes:
-    request = _exact_inventory_workflow_request(request)
-    return _json_bytes(
-        {
+    admission = _charge_inventory_workflow_request(request)
+    admitted = _exact_inventory_workflow_request(request)
+    if admitted != request:
+        raise ValueError("inventory workflow request is not canonical")
+    projection = {
             "version": 2,
             "kind": "inventory",
-            "request_id": request.request_id,
-            "binding": _binding_dict(request.binding),
-            "selected_paths": list(request.selected_paths),
-            "subtree_roots": list(request.subtree_roots),
+            "request_id": admitted.request_id,
+            "binding": _binding_dict(admitted.binding),
+            "selected_paths": list(admitted.selected_paths),
+            "subtree_roots": list(admitted.subtree_roots),
         }
+    return encode_canonical_json(
+        projection,
+        expected_bytes=admission.canonical_bytes,
+        byte_ceiling=INVENTORY_PAYLOAD_BYTE_LIMIT,
+        encoder=_json_bytes,
+        context="inventory workflow payload",
     )
 
 
 def decode_inventory_request(payload: bytes) -> InventoryWorkflowRequest:
-    value = _payload(payload, "inventory", 2)
+    value = _payload(
+        payload,
+        "inventory",
+        2,
+        byte_ceiling=INVENTORY_PAYLOAD_BYTE_LIMIT,
+    )
     _expect_keys(
         value,
         {
@@ -1424,37 +1912,50 @@ def decode_inventory_request(payload: bytes) -> InventoryWorkflowRequest:
 
 
 def encode_integrity_request(request: IntegrityWorkflowRequest) -> bytes:
-    request = _exact_integrity_workflow_request(request)
-    return _json_bytes(
-        {
+    admission = _charge_integrity_workflow_request(request)
+    admitted = _exact_integrity_workflow_request(request)
+    if admitted != request:
+        raise ValueError("integrity workflow request is not canonical")
+    projection = {
             "version": 2,
             "kind": "integrity",
-            "request_id": request.request_id,
-            "binding": _binding_dict(request.binding),
-            "mode": request.mode.value,
-            "selected_paths": list(request.selected_paths),
+            "request_id": admitted.request_id,
+            "binding": _binding_dict(admitted.binding),
+            "mode": admitted.mode.value,
+            "selected_paths": list(admitted.selected_paths),
             "stale_before": (
                 None
-                if request.stale_before is None
-                else request.stale_before.isoformat()
+                if admitted.stale_before is None
+                else admitted.stale_before.isoformat()
             ),
-            "selection_item_ids": list(request.selection_item_ids),
-            "completed_bytes": [list(item) for item in request.completed_bytes],
-            "processed_bytes": request.processed_bytes,
-            "bytes_total_high_water": request.bytes_total_high_water,
-            "recording": request.recording.value,
+            "selection_item_ids": list(admitted.selection_item_ids),
+            "completed_bytes": [list(item) for item in admitted.completed_bytes],
+            "processed_bytes": admitted.processed_bytes,
+            "bytes_total_high_water": admitted.bytes_total_high_water,
+            "recording": admitted.recording.value,
             "recording_issues": [
                 {"reason": issue.reason.value, "detail": issue.detail}
-                for issue in request.recording_issues
+                for issue in admitted.recording_issues
             ],
-            "omitted_detail_count": request.omitted_detail_count,
-            "refresh_generation": request.refresh_generation,
+            "omitted_detail_count": admitted.omitted_detail_count,
+            "refresh_generation": admitted.refresh_generation,
         }
+    return encode_canonical_json(
+        projection,
+        expected_bytes=admission.canonical_bytes,
+        byte_ceiling=INTEGRITY_PAYLOAD_BYTE_LIMIT,
+        encoder=_json_bytes,
+        context="integrity workflow payload",
     )
 
 
 def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
-    value = _payload(payload, "integrity", 2)
+    value = _payload(
+        payload,
+        "integrity",
+        2,
+        byte_ceiling=INTEGRITY_PAYLOAD_BYTE_LIMIT,
+    )
     _expect_keys(
         value,
         {
@@ -1949,7 +2450,14 @@ def _payload(
     payload: bytes,
     expected_kind: str,
     expected_version: int,
+    *,
+    byte_ceiling: int,
 ) -> Mapping[str, object]:
+    payload = require_payload_bytes(
+        payload,
+        byte_ceiling=byte_ceiling,
+        context=f"{expected_kind} workflow payload",
+    )
     try:
         value = json.loads(
             payload.decode("utf-8"),

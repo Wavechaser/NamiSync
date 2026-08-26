@@ -304,7 +304,7 @@ def _empty_plan() -> Plan:
         filter_snapshot=FilterSet(),
         deletion_policy=DeletionPolicy.TRASH,
         trash_on_update=True,
-        policy_fingerprint="p" * 64,
+        policy_fingerprint="a" * 64,
         required_volumes=frozenset(),
         required_bytes=0,
         fingerprint=PlanFingerprint("0" * 64),

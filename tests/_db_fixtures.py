@@ -146,7 +146,7 @@ def plan(operations: tuple[PlanOperation, ...]) -> Plan:
         filter_snapshot=FilterSet(),
         deletion_policy=DeletionPolicy.TRASH,
         trash_on_update=True,
-        policy_fingerprint="p" * 64,
+        policy_fingerprint="a" * 64,
         required_volumes=frozenset({source_volume, target_volume}),
         required_bytes=sum(item.content_bytes for item in operations),
         fingerprint=PlanFingerprint("f" * 64),

@@ -173,7 +173,7 @@ def _plan(*operations: PlanOperation) -> Plan:
         filter_snapshot=FilterSet(),
         deletion_policy=DeletionPolicy.TRASH,
         trash_on_update=True,
-        policy_fingerprint="p" * 64,
+        policy_fingerprint="a" * 64,
         required_volumes=frozenset(),
         required_bytes=sum(operation.content_bytes for operation in operations),
         fingerprint=PlanFingerprint("0" * 64),
@@ -214,8 +214,8 @@ def _evidence(
     )
     identity = (
         RecordedCopyIdentity(
-            row_id=f"row-{operation.op_id}",
-            location_id="target-location",
+            row_id=str(int(str(operation.op_id), 16)),
+            location_id="9",
             scope_token="a" * 32,
             rel_path_key=normalize_relative_path(operation.target_rel_path),
         )

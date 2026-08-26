@@ -47,6 +47,7 @@ from namisync.core.models import (
     EntryKind,
     FileIdentity,
     FileStat,
+    MAX_ROOT_ID_UTF8_BYTES,
     MetadataSnapshot,
     Root,
     VolumeEvidence,
@@ -120,6 +121,18 @@ def test_plan_request_round_trips_latent_source_casing_policy() -> None:
     assert decoded.options.propagate_source_casing
 
 
+def test_plan_request_decode_rejects_n_plus_one_filters() -> None:
+    value = json.loads(
+        encode_plan_request(
+            PlanRequest("request", r"C:\source", r"D:\target")
+        )
+    )
+    value["options"]["filters"] = [str(index) for index in range(65)]
+
+    with pytest.raises(ValueError, match="pattern limit"):
+        decode_plan_request(json.dumps(value).encode("utf-8"))
+
+
 def test_plan_request_requires_fingerprinted_source_casing_policy() -> None:
     encoded = encode_plan_request(
         PlanRequest("request", r"C:\source", r"D:\target")
@@ -186,7 +199,7 @@ def test_plan_request_encoding_rejects_surrogate_code_units(text: str) -> None:
     hostile = "request_" + text
     request = PlanRequest(hostile, r"C:\source", r"D:\target")
 
-    with pytest.raises(UnicodeEncodeError):
+    with pytest.raises(ValueError, match="valid Unicode"):
         encode_plan_request(request)
 
 
@@ -451,7 +464,7 @@ def _rich_plan(*, identity_index: int = 4242) -> Plan:
         filter_snapshot=FilterSet(("*.tmp", "sub\\*")),
         deletion_policy=DeletionPolicy.ADDITIVE,
         trash_on_update=True,
-        policy_fingerprint="p" * 64,
+        policy_fingerprint="a" * 64,
         required_volumes=frozenset(
             {VolumeId("A1B2C3D4", "NTFS"), VolumeId("99887766", "EXFAT")}
         ),
@@ -483,8 +496,8 @@ def _copy_identity(
     run_id: str,
 ) -> RecordedCopyIdentity:
     return RecordedCopyIdentity(
-        row_id=f"row-{operation.op_id}",
-        location_id="location-9",
+        row_id=str(int(str(operation.op_id), 16)),
+        location_id="9",
         scope_token=run_id,
         rel_path_key=normalize_relative_path(operation.target_rel_path),
     )
@@ -1252,7 +1265,7 @@ def test_verify_continuation_rejects_a_forged_phase_instance() -> None:
     ):
         object.__setattr__(forged, name, value)
 
-    with pytest.raises(ValueError, match="phase items_done"):
+    with pytest.raises(ValueError, match="items_done"):
         replace(continuation, execute_phase=forged)
 
 
@@ -1261,7 +1274,7 @@ def test_execution_encoder_revalidates_mutated_verify_phase() -> None:
     assert isinstance(continuation, VerifyContinuation)
     object.__setattr__(continuation.execute_phase, "items_done", -1)
 
-    with pytest.raises(ValueError, match="phase items_done"):
+    with pytest.raises(ValueError, match="items_done"):
         encode_execution_request(ExecutionRequest(continuation, NOW))
 
 
@@ -1405,6 +1418,19 @@ def test_execution_set_rejects_recorded_identities_from_multiple_locations() -> 
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
+def test_execution_encoder_revalidates_forged_source_primitives() -> None:
+    request = _rich_execution_request()
+    root = request.execution_set.plan.source_root
+    object.__setattr__(
+        root,
+        "root_id",
+        "r" * (MAX_ROOT_ID_UTF8_BYTES + 1),
+    )
+
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        encode_execution_request(request)
+
+
 @pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
 def test_root_contract_rejects_surrogate_code_units(text: str) -> None:
     original = _rich_execution_request()
@@ -1458,6 +1484,206 @@ def test_decoded_plan_recomputes_the_same_fingerprint() -> None:
     decoded = decode_execution_request(encode_execution_request(original))
 
     assert plan_fingerprint(decoded.execution_set.plan) == original.execution_set.plan.fingerprint
+
+
+@pytest.mark.parametrize(
+    ("request_factory", "encoder", "decoder", "limit_name"),
+    (
+        (
+            lambda: PlanRequest("bounded-plan", r"C:\source", r"D:\target"),
+            encode_plan_request,
+            decode_plan_request,
+            "PLAN_REQUEST_PAYLOAD_BYTE_LIMIT",
+        ),
+        (
+            _rich_execution_request,
+            encode_execution_request,
+            decode_execution_request,
+            "EXECUTION_REQUEST_PAYLOAD_BYTE_LIMIT",
+        ),
+    ),
+)
+def test_workflow_payload_raw_ceiling_precedes_decode_and_json_parse(
+    monkeypatch: pytest.MonkeyPatch,
+    request_factory,
+    encoder,
+    decoder,
+    limit_name: str,
+) -> None:
+    request = request_factory()
+    payload = encoder(request)
+    monkeypatch.setattr(payload_module, limit_name, len(payload))
+
+    assert decoder(payload) == request
+
+    def forbidden_loads(*_args, **_kwargs):
+        raise AssertionError("oversize payload reached json.loads")
+
+    monkeypatch.setattr(payload_module.json, "loads", forbidden_loads)
+    with pytest.raises(ValueError, match="byte ceiling"):
+        decoder(payload + b" ")
+    with pytest.raises(TypeError, match="exact bytes"):
+        decoder(bytearray(payload))
+
+
+def test_plan_occurrence_ceiling_precedes_json_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = PlanRequest("bounded-plan", r"C:\source", r"D:\target")
+    charge = payload_module._charge_plan_request(request).occurrence_charge
+    monkeypatch.setattr(payload_module, "_PLAN_REQUEST_MAX_OCCURRENCE_CHARGE", charge)
+    encode_plan_request(request)
+    monkeypatch.setattr(
+        payload_module,
+        "_PLAN_REQUEST_MAX_OCCURRENCE_CHARGE",
+        charge - 1,
+    )
+
+    def forbidden_json(*_args, **_kwargs):
+        raise AssertionError("over-budget request reached JSON projection")
+
+    monkeypatch.setattr(payload_module, "_json_bytes", forbidden_json)
+    with pytest.raises(ValueError, match="occurrence bound"):
+        encode_plan_request(request)
+
+
+def test_execution_occurrence_ceiling_precedes_projection_without_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _rich_execution_request()
+    charge = payload_module._charge_execution_request(request).occurrence_charge
+    status_before = dict(request.execution_set.status)
+    evidence_before = dict(request.execution_set.published_evidence)
+    monkeypatch.setattr(payload_module, "_EXECUTE_MAX_OCCURRENCE_CHARGE", charge)
+    encode_execution_request(request)
+    monkeypatch.setattr(payload_module, "_EXECUTE_MAX_OCCURRENCE_CHARGE", charge - 1)
+
+    def forbidden_projection(*_args, **_kwargs):
+        raise AssertionError("over-budget continuation reached projection")
+
+    monkeypatch.setattr(payload_module, "_execution_set", forbidden_projection)
+    with pytest.raises(ValueError, match="occurrence bound"):
+        encode_execution_request(request)
+    assert request.execution_set.status == status_before
+    assert request.execution_set.published_evidence == evidence_before
+
+
+def test_execution_preprojection_readmits_nested_operation_paths(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _rich_execution_request()
+    operation = request.execution_set.plan.operations[1]
+    object.__setattr__(operation, "target_rel_path", "x" * 32_768)
+
+    def forbidden_projection(*_args, **_kwargs):
+        raise AssertionError("invalid operation reached projection")
+
+    monkeypatch.setattr(payload_module, "_execution_set", forbidden_projection)
+    with pytest.raises(ValueError, match="path bound"):
+        encode_execution_request(request)
+    assert operation.target_rel_path == "x" * 32_768
+
+
+def test_execution_preprojection_readmits_nested_file_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _rich_execution_request()
+    source_expected = request.execution_set.plan.operations[1].source_expected
+    assert source_expected is not None
+    identity = source_expected.file_identity
+    assert identity is not None
+    object.__setattr__(identity, "volume_serial", "v" * 261)
+
+    def forbidden_projection(*_args, **_kwargs):
+        raise AssertionError("invalid identity reached projection")
+
+    monkeypatch.setattr(payload_module, "_execution_set", forbidden_projection)
+    with pytest.raises(ValueError, match="UTF-16 text bound"):
+        encode_execution_request(request)
+    assert identity.volume_serial == "v" * 261
+
+
+def test_plan_preprojection_readmits_forged_filter_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = PlanRequest(
+        "bounded-plan",
+        r"C:\source",
+        r"D:\target",
+        SyncOptions(filters=FilterSet(())),
+    )
+    object.__setattr__(request.options.filters, "patterns", ("x" * 1_025,))
+
+    def forbidden_json(*_args, **_kwargs):
+        raise AssertionError("invalid options reached JSON projection")
+
+    monkeypatch.setattr(payload_module, "_json_bytes", forbidden_json)
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        encode_plan_request(request)
+
+
+@pytest.mark.parametrize(
+    ("payload_request", "encoder"),
+    (
+        (PlanRequest("stable-plan", r"C:\source", r"D:\target"), encode_plan_request),
+        (_rich_verify_request(), encode_execution_request),
+    ),
+)
+def test_workflow_encoder_rechecks_exact_final_byte_length(
+    monkeypatch: pytest.MonkeyPatch,
+    payload_request: object,
+    encoder,
+) -> None:
+    original_json_bytes = payload_module._json_bytes
+    monkeypatch.setattr(
+        payload_module,
+        "_json_bytes",
+        lambda value: original_json_bytes(value) + b" ",
+    )
+
+    with pytest.raises(RuntimeError, match="changed after JSON admission"):
+        encoder(payload_request)
+
+
+def test_verify_candidate_walk_charges_every_repeated_root_occurrence() -> None:
+    request = _rich_verify_request()
+    continuation = request.continuation
+    assert isinstance(continuation, VerifyContinuation)
+    candidate = continuation.candidates.candidates[0]
+    one = payload_module.JsonEnvelopeCounter()
+    payload_module._charge_post_copy_candidate(one, candidate, "candidate")
+    repeated = payload_module.JsonEnvelopeCounter()
+    for index in range(payload_module.MAX_PLAN_REVIEW_ROWS):
+        payload_module._charge_post_copy_candidate(
+            repeated,
+            candidate,
+            f"candidates[{index}]",
+        )
+
+    assert repeated.occurrence_charge == (
+        payload_module.MAX_PLAN_REVIEW_ROWS * one.occurrence_charge
+    )
+    assert repeated.canonical_bytes == (
+        payload_module.MAX_PLAN_REVIEW_ROWS * one.canonical_bytes
+    )
+
+
+def test_object_layout_charges_each_schema_key_string_occurrence() -> None:
+    short = payload_module.object_layout("x")
+    long = payload_module.object_layout("x" * 65)
+    expected_delta = (
+        payload_module.model_text_charge(65)
+        - payload_module.model_text_charge(1)
+    )
+
+    assert payload_module.model_object_charge(long) == (
+        payload_module.model_object_charge(short) + expected_delta
+    )
+    assert payload_module.canonical_byte_ceiling(
+        payload_module.model_object_charge(long)
+    ) > payload_module.canonical_byte_ceiling(
+        payload_module.model_object_charge(short)
+    )
 
 
 def test_round_tripped_committed_set_would_not_refuse() -> None:

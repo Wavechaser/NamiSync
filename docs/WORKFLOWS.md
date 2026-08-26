@@ -37,6 +37,34 @@ recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store)
 Manual exact post-copy verification remains a later checkpoint and instead
 classifies current durable evidence in the original execution scope.
 
+Both opaque codecs admit the complete typed graph before building their JSON
+object/list projection. The walk rechecks nested operations, stats, metadata,
+file/record identities, assignments, evidence, candidates, and mutable
+continuation invariants while counting the canonical byte length and every
+serialization occurrence; repeated references are charged each time they
+appear on the wire. Plan operations and assignment items each use the 120,000
+row source wall. Execute/verify status, evidence, candidate, completion, and
+missing-id populations use their corresponding 120,000 source walls, while the
+dependency term is the dependency-ordered maximum `N*(N-1)/2`. Text terms come
+from their owning path, volume, request-id, diagnostic, filter, and database-id
+bounds. The predeclared analytical JSON coefficients price text as
+`128 + 5*UTF8`, scalars as 64, lists as `128 + 16*slots`, and objects as
+`256 + 160*entries`, with every fixed or dynamic object key also charged as a
+text occurrence; this codec use does not freeze or validate BR-G-45.
+
+The raw decoder wall is twice that source-maximum occurrence charge: the text
+term covers the six-byte canonical escape of a one-byte control scalar and the
+remaining coefficients dominate scalar and container spelling. This yields
+2,818,330 bytes for plan v5 and 327,820,141,609,094 bytes for execution v6.
+Exact `bytes` and raw length are checked before UTF-8 decoding or `json.loads`;
+encoding rechecks the counted canonical length after serialization. The very
+large execution maximum is an honest consequence of the current duplicated
+graph schema, especially per-assignment annotation fields and dependency
+occurrences. It is not a four-task custody allowance. Later task admission must
+reserve the actual prewalk occurrence charge and may refuse an individually
+valid continuation for retention capacity; materially reducing the theoretical
+wire wall requires a versioned schema that removes duplication.
+
 Workflow aggregation preserves operation-local recording truth and the
 first observation of each task issue in order: later failure cannot rewrite an
 emitted item or revoke committed evidence. Exact event v5 now carries the item

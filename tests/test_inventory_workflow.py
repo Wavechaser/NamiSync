@@ -2424,7 +2424,7 @@ def test_inventory_decode_counts_combined_scope_before_text_projection(
     monkeypatch.setattr(
         inventory_workflow,
         "_payload",
-        lambda *_args: value,
+        lambda *_args, **_kwargs: value,
     )
 
     def forbidden_string(*_args):
@@ -2859,3 +2859,196 @@ def test_integrity_codec_rejects_progress_without_saved_selection() -> None:
         decode_integrity_request(
             json.dumps(payload, separators=(",", ":")).encode("utf-8")
         )
+
+
+@pytest.mark.parametrize(
+    ("payload_request", "encoder", "decoder", "limit_name"),
+    (
+        (
+            InventoryWorkflowRequest(
+                "bounded-inventory",
+                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
+            ),
+            encode_inventory_request,
+            decode_inventory_request,
+            "INVENTORY_PAYLOAD_BYTE_LIMIT",
+        ),
+        (
+            IntegrityWorkflowRequest(
+                "bounded-integrity",
+                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
+                IntegrityMode.VERIFY,
+            ),
+            encode_integrity_request,
+            decode_integrity_request,
+            "INTEGRITY_PAYLOAD_BYTE_LIMIT",
+        ),
+    ),
+)
+def test_inventory_codec_raw_ceiling_precedes_decode_and_json_parse(
+    monkeypatch: pytest.MonkeyPatch,
+    payload_request: object,
+    encoder,
+    decoder,
+    limit_name: str,
+) -> None:
+    payload = encoder(payload_request)
+    monkeypatch.setattr(inventory_workflow, limit_name, len(payload))
+
+    assert decoder(payload) == payload_request
+
+    def forbidden_loads(*_args, **_kwargs):
+        raise AssertionError("oversize payload reached json.loads")
+
+    monkeypatch.setattr(inventory_workflow.json, "loads", forbidden_loads)
+    with pytest.raises(ValueError, match="byte ceiling"):
+        decoder(payload + b" ")
+    with pytest.raises(TypeError, match="exact bytes"):
+        decoder(bytearray(payload))
+
+
+@pytest.mark.parametrize(
+    ("payload_request", "encoder", "charge_name", "limit_name"),
+    (
+        (
+            InventoryWorkflowRequest(
+                "bounded-inventory",
+                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
+            ),
+            encode_inventory_request,
+            "_charge_inventory_workflow_request",
+            "_INVENTORY_MAX_OCCURRENCE_CHARGE",
+        ),
+        (
+            IntegrityWorkflowRequest(
+                "bounded-integrity",
+                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
+                IntegrityMode.VERIFY,
+            ),
+            encode_integrity_request,
+            "_charge_integrity_workflow_request",
+            "_INTEGRITY_MAX_OCCURRENCE_CHARGE",
+        ),
+    ),
+)
+def test_inventory_codec_occurrence_ceiling_precedes_projection_without_mutation(
+    monkeypatch: pytest.MonkeyPatch,
+    payload_request: object,
+    encoder,
+    charge_name: str,
+    limit_name: str,
+) -> None:
+    charge = getattr(inventory_workflow, charge_name)(payload_request).occurrence_charge
+    monkeypatch.setattr(inventory_workflow, limit_name, charge)
+    encoder(payload_request)
+    monkeypatch.setattr(inventory_workflow, limit_name, charge - 1)
+
+    def forbidden_projection(*_args, **_kwargs):
+        raise AssertionError("over-budget request reached projection")
+
+    monkeypatch.setattr(inventory_workflow, "_binding_dict", forbidden_projection)
+    with pytest.raises(ValueError, match="occurrence bound"):
+        encoder(payload_request)
+
+
+def test_inventory_preprojection_rejects_combined_scope_n_plus_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = InventoryWorkflowRequest(
+        "inventory-scope",
+        LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
+    )
+    object.__setattr__(request, "selected_paths", ("a",) * 60_000)
+    object.__setattr__(request, "subtree_roots", ("b",) * 60_001)
+
+    def forbidden_projection(*_args, **_kwargs):
+        raise AssertionError("oversize scope reached projection")
+
+    monkeypatch.setattr(inventory_workflow, "_binding_dict", forbidden_projection)
+    with pytest.raises(ValueError, match="scan-scope item limit"):
+        encode_inventory_request(request)
+    assert len(request.selected_paths) + len(request.subtree_roots) == 120_001
+
+
+def test_integrity_preprojection_rejects_population_n_plus_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = IntegrityWorkflowRequest(
+        "integrity-selection",
+        LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
+        IntegrityMode.VERIFY,
+    )
+    object.__setattr__(
+        request,
+        "selection_item_ids",
+        ("1:a",) * (INTEGRITY_CANDIDATE_ROW_LIMIT + 1),
+    )
+
+    def forbidden_projection(*_args, **_kwargs):
+        raise AssertionError("oversize selection reached projection")
+
+    monkeypatch.setattr(inventory_workflow, "_binding_dict", forbidden_projection)
+    with pytest.raises(ValueError, match="selection_item_ids exceeds"):
+        encode_integrity_request(request)
+    assert len(request.selection_item_ids) == INTEGRITY_CANDIDATE_ROW_LIMIT + 1
+
+
+def test_inventory_preprojection_readmits_nested_volume_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = InventoryWorkflowRequest(
+        "inventory-volume",
+        LocationBinding(
+            VolumeId("forged-volume", "NTFS"),
+            "managed",
+            "M:\\",
+            ("M:\\",),
+            False,
+            7,
+        ),
+    )
+    object.__setattr__(request.binding.volume_id, "serial", "v" * 261)
+
+    def forbidden_projection(*_args, **_kwargs):
+        raise AssertionError("invalid binding reached projection")
+
+    monkeypatch.setattr(inventory_workflow, "_binding_dict", forbidden_projection)
+    with pytest.raises(ValueError, match="UTF-16 text bound"):
+        encode_inventory_request(request)
+    assert request.binding.volume_id.serial == "v" * 261
+
+
+@pytest.mark.parametrize(
+    ("payload_request", "encoder"),
+    (
+        (
+            InventoryWorkflowRequest(
+                "stable-inventory",
+                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
+            ),
+            encode_inventory_request,
+        ),
+        (
+            IntegrityWorkflowRequest(
+                "stable-integrity",
+                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
+                IntegrityMode.VERIFY,
+            ),
+            encode_integrity_request,
+        ),
+    ),
+)
+def test_inventory_codec_rechecks_exact_final_byte_length(
+    monkeypatch: pytest.MonkeyPatch,
+    payload_request: object,
+    encoder,
+) -> None:
+    original_json_bytes = inventory_workflow._json_bytes
+    monkeypatch.setattr(
+        inventory_workflow,
+        "_json_bytes",
+        lambda value: original_json_bytes(value) + b" ",
+    )
+
+    with pytest.raises(RuntimeError, match="changed after JSON admission"):
+        encoder(payload_request)
