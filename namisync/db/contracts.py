@@ -192,7 +192,7 @@ def _validate_file_contract(path: Path, validator: _ContractValidator) -> Databa
         _require_no_journal(path)
         _validate_connection(path, validator, immutable=True)
     else:
-        temporary = TemporaryDirectory(prefix="namisync-db-contract-")
+        temporary = TemporaryDirectory(prefix="namisync-db-contract-", dir=path.parent)
         with _cleanup_on_exit(
             temporary.cleanup, f"private database snapshot cleanup was incomplete: {temporary.name}",
         ):

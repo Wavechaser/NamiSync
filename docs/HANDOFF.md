@@ -1,7 +1,7 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.13b is verified for delivery after the
-`76d897b` cancellation checkpoint. The next implementation checkpoint is 3R.13c.
+Status (2026-08-26): checkpoint 3R.13c is verified for delivery after the
+`544f249` runtime-reader checkpoint. The next implementation checkpoint is 3R.S5.
 The remaining storage/identity decisions below are ratified, not implemented.
 Checkpoint 3.3 remains unstarted and the private legacy decoder remains intact.
 
@@ -13,19 +13,9 @@ O/S reports and prior verification receipts remain in Git at
 
 ## Authorized Work Still To Deliver
 
-The temp-placement and JavaScript follow-ups below
+The JavaScript follow-ups below
 come from the user's post-3R.13 review and inspection at `d7673b7`.
 F/S identifiers refer to the original independent reports preserved in Git.
-
-### 3R.13c — Place private copies beside the local database
-
-Validation currently copies full main/WAL contents into an ambient,
-environment-selected system temporary directory. Use an owned temporary child
-of the database directory, inheriting the required local/non-cloud placement;
-refuse creation failure. Document writable-parent requirements, logical I/O,
-full-copy scratch cost, cleanup, and possible crash leftovers. Preserve source
-main/WAL/SHM/journal no-mutation guarantees; do not claim the parent directory
-is unchanged or introduce a new database-size acceptance wall.
 
 ### 3R.S5 — Separate payload-free stored records
 
@@ -104,12 +94,16 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-3R.13b verification: the tests-first run recorded 29 failures and 6 passing
-controls. Independent review strengthened queued-before-close and in-progress
-constructor coverage. Final focused run: 43 passed. Database/workflows/
-interfaces neighborhood: 2,124 passed. Ordinary suite with required Node:
-4,273 passed, 4 expected privilege skips, 28 headed tests deselected (218.09 s).
-Independent lifetime/TOCTOU review found no remaining actionable issue.
-Standalone admission and protected settlement files are unchanged. The causal
-disposition is in `BUGS.md`; `DATABASE.md` owns the exact reader lifetime and
-cost diagnostics, so the completed finding is absent from the list above.
+3R.13c verification: the tests-first run recorded 4 placement failures and
+14 passing controls. Final focused run: 18 passed. Database department:
+280 passed. Ordinary suite with required Node: 4,284 passed, 4 expected
+privilege skips, 28 headed tests deselected (214.44 s). Independent temporary-
+ownership review found no actionable issue. The one-line placement change
+preserves hashing, source-artifact guards, and cleanup/error precedence;
+protected settlement files are unchanged. `BUGS.md` and `DATABASE.md` retain
+the causal disposition and operating requirements, not this remaining-work list.
+
+Ignored `build/r314-baseline/` contains a reviewed-scope capture script and
+fixed synthetic fixtures prepared for 3R.14. No capture has run. After S5's
+clean commit, inspect/run that guarded one-shot helper before changing any hash
+encoder; its README owns artifact conventions and the no-overwrite rule.

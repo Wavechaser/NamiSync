@@ -1179,6 +1179,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Ambient snapshot placement. File admission
+  copied complete database/WAL contents into an environment-selected temporary
+  directory, which could place private validation data outside the required
+  local, non-cloud-synced database storage. Fixed by creating the owned child
+  beside its database and refusing creation failure without fallback. Both
+  roles retain source-artifact no-mutation and cleanup-error behavior; the
+  immutable no-sidecar path still needs no scratch space. DATABASE records
+  writable-parent and full-copy costs, directory side effects, and crash leftovers.
 - MODERATE - FIXED (2026-08-26). Reader-lifetime admission amplification.
   Repeated inventory and history requests opened a new repository each time,
   rehashing complete main/WAL artifacts even for small result pages. Fixed by

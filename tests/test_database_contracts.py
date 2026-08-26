@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
+import tempfile
 import traceback
 
 import pytest
@@ -399,6 +400,59 @@ def private_snapshots(monkeypatch: pytest.MonkeyPatch) -> list[Path]:
     return created
 
 
+@pytest.mark.parametrize("history_role", [False, True], ids=["ledger", "history"])
+def test_private_snapshot_stays_beside_database_despite_ambient_temp(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, private_snapshots: list[Path],
+    history_role: bool,
+) -> None:
+    candidate = _wal_candidate(tmp_path, history=history_role)
+    before = _snapshot(candidate)
+    ambient = tmp_path / "ambient-temp"
+    ambient.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(ambient))
+    validate = file_contracts._validate_connection
+    copied = []
+
+    def inspect_private_copy(path: Path, validator, *, immutable: bool) -> None:
+        assert not immutable
+        assert path.read_bytes() == before[candidate]
+        assert Path(f"{path}-wal").read_bytes() == before[Path(f"{candidate}-wal")]
+        assert not Path(f"{path}-shm").exists()
+        copied.append(path)
+        validate(path, validator, immutable=immutable)
+
+    monkeypatch.setattr(file_contracts, "_validate_connection", inspect_private_copy)
+    evidence = file_contracts.require_database_file_contract(candidate, history=history_role)
+
+    assert evidence.path == candidate
+    assert len(private_snapshots) == 1
+    directory = private_snapshots[0]
+    assert directory.parent == candidate.parent
+    assert directory.name.startswith("namisync-db-contract-")
+    assert copied == [directory / "database.db"]
+    assert not directory.exists()
+    assert list(ambient.iterdir()) == []
+    assert _snapshot(candidate) == before
+
+
+@pytest.mark.parametrize("history_role", [False, True], ids=["ledger", "history"])
+def test_immutable_database_validation_needs_no_private_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, history_role: bool,
+) -> None:
+    initialize = initialize_history if history_role else initialize_ledger
+    candidate = initialize(tmp_path / "candidate.db")
+    before = _snapshot(candidate)
+
+    def forbidden_directory(*args, **kwargs):
+        raise AssertionError("sidecar-free validation attempted scratch creation")
+
+    monkeypatch.setattr(file_contracts, "TemporaryDirectory", forbidden_directory)
+    evidence = file_contracts.require_database_file_contract(candidate, history=history_role)
+
+    assert evidence.path == candidate
+    assert _snapshot(candidate) == before
+
+
 @pytest.mark.parametrize("suffix", ["", "-wal"], ids=["main", "wal"])
 def test_snapshot_copy_refuses_changed_artifact_before_reading_or_copying(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, suffix: str,
@@ -662,12 +716,14 @@ def test_snapshot_failure_closes_handles_cleans_private_files_and_preserves_caus
     assert _snapshot(candidate) == before
 
 
+@pytest.mark.parametrize("history_role", [False, True], ids=["ledger", "history"])
 @pytest.mark.parametrize("primary_kind", ["none", "ordinary", "interrupt"])
 @pytest.mark.parametrize("cleanup_kind", ["ordinary", "interrupt"])
 def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, primary_kind: str, cleanup_kind: str,
+    history_role: bool,
 ) -> None:
-    candidate = _wal_candidate(tmp_path)
+    candidate = _wal_candidate(tmp_path, history=history_role)
     before = _snapshot(candidate)
     primary = (
         None if primary_kind == "none" else OSError("validation failed")
@@ -675,7 +731,8 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
     )
     cleanup_error = OSError("cleanup failed") if cleanup_kind == "ordinary" else SystemExit(23)
     temporary_directory = file_contracts.TemporaryDirectory
-    validate = file_contracts.validate_ledger_reader_contract
+    validator_name = "validate_history_reader_contract" if history_role else "validate_ledger_reader_contract"
+    validate = getattr(file_contracts, validator_name)
     owned = []
 
     def fail_cleanup():
@@ -693,13 +750,13 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
         validate(connection)
 
     monkeypatch.setattr(file_contracts, "TemporaryDirectory", temporary_with_failed_cleanup)
-    monkeypatch.setattr(file_contracts, "validate_ledger_reader_contract", validate_or_fail)
+    monkeypatch.setattr(file_contracts, validator_name, validate_or_fail)
     expected = primary if primary is not None and (
         not isinstance(primary, Exception) or isinstance(cleanup_error, Exception)
     ) else cleanup_error
     try:
         with pytest.raises(SchemaResetRequired if isinstance(expected, Exception) else type(expected)) as raised:
-            file_contracts.require_database_file_contract(candidate, history=False)
+            file_contracts.require_database_file_contract(candidate, history=history_role)
         assert (raised.value.__cause__ if isinstance(expected, Exception) else raised.value) is expected
         assert len(owned) == 1
         directory, _cleanup = owned[0]
@@ -815,21 +872,28 @@ def test_snapshot_handle_close_preserves_error_and_control_precedence(
     assert _snapshot(candidate) == before
 
 
+@pytest.mark.parametrize("history_role", [False, True], ids=["ledger", "history"])
 def test_snapshot_directory_creation_failure_leaves_source_unchanged(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, history_role: bool,
 ) -> None:
-    candidate = _wal_candidate(tmp_path)
+    candidate = _wal_candidate(tmp_path, history=history_role)
     before = _snapshot(candidate)
     failure = OSError("cannot create private snapshot")
+    create_temporary = file_contracts.TemporaryDirectory
+    attempts = []
 
     def unavailable(*args, **kwargs):
-        raise failure
+        attempts.append((args, kwargs))
+        if len(attempts) == 1:
+            raise failure
+        return create_temporary(*args, **kwargs)
 
     monkeypatch.setattr(file_contracts, "TemporaryDirectory", unavailable)
     with pytest.raises(SchemaResetRequired) as raised:
-        file_contracts.require_database_file_contract(candidate, history=False)
+        file_contracts.require_database_file_contract(candidate, history=history_role)
 
     assert raised.value.__cause__ is failure
+    assert attempts == [((), {"prefix": "namisync-db-contract-", "dir": candidate.parent})]
     assert _snapshot(candidate) == before
 
 

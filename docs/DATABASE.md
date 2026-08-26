@@ -75,11 +75,27 @@ hotness or performs rollback recovery on source artifacts.
 
 With no WAL or SHM, the validator keeps the direct `mode=ro&immutable=1`
 source read. Otherwise it copies only main and existing WAL bytes to an owned
-temporary directory and validates through ordinary read-only SQLite there.
+`namisync-db-contract-*` temporary child of the database directory and validates
+through ordinary read-only SQLite there.
 SQLite sees committed WAL markers/topology and builds its own private SHM;
 source SHM is drift evidence only, never copied or opened as recovery authority.
 This also covers a missing source SHM. There is no SQLite backup call, source
 checkpoint, custom WAL parser, or new database-size acceptance limit.
+
+The private copy contains full database and WAL contents, not redacted schema
+metadata. Placing it beside the database inherits the required local,
+non-cloud-synced placement instead of trusting ambient `TEMP`/`TMP` selection;
+this is not a new cloud-folder detector. The private-copy branch requires
+permission to create and remove a child in that directory and scratch space
+for main plus WAL plus SQLite's private SHM. Failure to create the child refuses
+admission without falling back elsewhere; restore the required permissions or
+use an appropriate local database location before retrying. The sidecar-free
+immutable branch needs no scratch directory. Normal completion or refusal
+removes the owned child; cleanup failures refuse admission, and a process crash
+can leave private copies for explicit inspection/cleanup. There is no automatic
+or broad directory scavenging. Validation never writes, recovers, or removes
+source main/WAL/SHM/journal artifacts, but creating/removing the private child
+can change its parent directory's entries and timestamps.
 
 Each main/WAL/SHM observation binds regular-file identity, size, modification
 time, and SHA-256 content. Stream reads are bounded by the observed length and
@@ -165,6 +181,12 @@ runtime ownership, repository transactions, schema/connection factories, file
 admission, or SQLite/Python behavior. The I/O algebra must also be re-derived when
 the admission stream/copy sequence changes. Quantitative classification remains
 owned by `DEFENSE.md` §7.
+
+`tests/test_database_contracts.py` separately exercises both roles with a
+redirected ambient temp directory, exact private main/WAL bytes, absent copied
+SHM, failed child creation without fallback, cleanup faults, and an immutable
+no-scratch control. These functional placement and no-mutation witnesses do not
+measure physical disk allocation, cleanup latency, or a maximum database size.
 
 ### Atomic execution-evidence read
 
