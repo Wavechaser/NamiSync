@@ -290,9 +290,8 @@ active core event envelope is exact v5; the desktop bridge command/response
 envelope remains v1, plan continuation remains v5, execution continuation is
 v6, and the persistence cut is ledger v4/history v6 at data epoch 6. The exact
 browser-facing `SessionEventView` carries nested core version 5, and current
-history cannot contain another event version. Checkpoint 3.2 retains only a
-private unreachable read-only v3/v4 source branch for checkpoint 3.3 deletion;
-it is not part of the architectural runtime contract.
+history cannot contain another event version. No private compatibility decoder
+or positive older-version fixture remains.
 
 Protocol evidence is intentionally layered:
 

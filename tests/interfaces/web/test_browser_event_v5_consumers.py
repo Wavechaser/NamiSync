@@ -54,7 +54,7 @@ from tests.interfaces.web._public_view_witnesses import iter_public_view_witness
 BRIDGE_JS = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
 
-def test_second_protocol_stop_routes_the_live_browser_through_exact_v5() -> None:
+def test_final_protocol_stop_routes_the_live_browser_through_exact_v5() -> None:
     source = BRIDGE_JS.read_text(encoding="utf-8")
     _assert_exact_v5_event_routes(source)
     assert source.count("validateSessionEventV5(") == 2
@@ -73,7 +73,19 @@ def test_second_protocol_stop_routes_the_live_browser_through_exact_v5() -> None
         "return validateSessionEventV5(event, sessionId);",
         "return validateLegacySessionEvent(event, sessionId);",
     ),
-    ("event.schema_version !== 4", "event.schema_version !== 5"),
+    (
+        "event.schema_version !== CORE_EVENT_SCHEMA_VERSION",
+        "![4, CORE_EVENT_SCHEMA_VERSION].includes(event.schema_version)",
+    ),
+    (
+        "const CORE_EVENT_SCHEMA_VERSION = 5;",
+        "const CORE_EVENT_SCHEMA_VERSION = 4;",
+    ),
+    (
+        "export function validateSessionEventV5(event, sessionId) {",
+        "function validateProgress(value) { return true; }\n"
+        "export function validateSessionEventV5(event, sessionId) {",
+    ),
     (
         "return validateLiveSessionEvent(update.event, sessionId);",
         "return validateLegacySessionEvent(update.event, sessionId);",
@@ -244,7 +256,7 @@ import { readFileSync } from "node:fs";
 globalThis.window = { addEventListener() {} };
 // Expose private entry points only in this in-memory test module.
 const source = readFileSync(process.argv[1], "utf8") +
-  "\\nexport { validateOperationResultView, validateTaskUpdate, validateLegacySessionEvent };";
+  "\\nexport { validateOperationResultView, validateTaskUpdate };";
 const bridge = await import(
   "data:text/javascript;base64," + Buffer.from(source).toString("base64")
 );
@@ -254,9 +266,7 @@ for (const item of corpus.cases) {
   const sessionId = item.session_id ?? corpus.session_id;
   const actual = item.kind === "event"
     ? bridge.validateTaskUpdate({ update_type: "event", event: item.value }, sessionId)
-    : item.kind === "legacy"
-      ? bridge.validateLegacySessionEvent(item.value, sessionId)
-      : bridge.validateOperationResultView(item.value);
+    : bridge.validateOperationResultView(item.value);
   if (actual !== item.expected) {
     mismatches.push(item.name + ": expected " + item.expected + ", got " + actual);
   }
@@ -301,7 +311,7 @@ def test_required_node_consumes_real_python_public_view_codec() -> None:
     _assert_v5_node_cases(cases)
 
 
-def test_required_node_private_legacy_seam_is_v4_only() -> None:
+def test_required_node_live_events_accept_only_v5_and_canonical_scalars() -> None:
     numeric = session_event_view("Progress")
     numeric["body"].update(bytes_done="7", bytes_total="20")
     for field in ("bytes_done", "bytes_total", "item_bytes_done", "item_bytes_total"):
@@ -311,19 +321,17 @@ def test_required_node_private_legacy_seam_is_v4_only() -> None:
     for version in (3, 4, 5, 6):
         value = deepcopy(numeric)
         value["schema_version"] = version
-        cases.extend([
-            {"name": f"private-v{version}-numeric", "kind": "legacy",
-             "expected": version == 4, "value": value},
+        cases.append(
             {"name": f"live-v{version}-numeric", "kind": "event",
              "expected": False, "value": value},
-        ])
-    canonical = session_event_view("Progress")
-    cases.extend([
-        {"name": "live-v5-text", "kind": "event", "expected": True,
-         "value": canonical},
-        {"name": "private-v5-text", "kind": "legacy", "expected": False,
-         "value": canonical},
-    ])
+        )
+        for body_type in bodies():
+            value = session_event_view(body_type)
+            value["schema_version"] = version
+            cases.append({
+                "name": f"live-v{version}-{body_type}", "kind": "event",
+                "expected": version == 5, "value": value,
+            })
     _assert_v5_node_cases(cases)
 
 

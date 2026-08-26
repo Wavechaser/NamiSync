@@ -25,6 +25,7 @@ from _event_v5_fixtures import (
     session_event_view,
     terminal_summary,
 )
+from namisync.core import events as events_module
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.event_v5 import (
     EVENT_V5_SCHEMA_VERSION,
@@ -467,9 +468,14 @@ def test_dormant_v5_session_view_rejects_another_session() -> None:
         )
 
 
-def test_second_protocol_stop_switches_every_live_python_route_to_v5() -> None:
+def test_final_protocol_stop_keeps_only_exact_v5_python_routes() -> None:
     assert EVENT_V5_SCHEMA_VERSION == 5
     assert CORE_EVENT_SCHEMA_VERSION == 5
+    for name in (
+        "_LEGACY_CORE_EVENT_SCHEMA_VERSIONS", "_LegacyEnvelope",
+        "_legacy_envelope_from_dict", "_PROGRESS_BODY_FIELDS", "_require_exact_keys",
+    ):
+        assert not hasattr(events_module, name)
     expected = Envelope(
         SessionId(SESSION_ID),
         3,
@@ -481,8 +487,11 @@ def test_second_protocol_stop_switches_every_live_python_route_to_v5() -> None:
 
 
 @pytest.mark.parametrize("version", (3, 4, 6, True))
-def test_live_python_route_refuses_every_non_v5_epoch(version: object) -> None:
-    value = envelope("PhaseChanged")
+@pytest.mark.parametrize("body_type", tuple(bodies()))
+def test_live_python_route_refuses_every_non_v5_epoch(
+    version: object, body_type: str,
+) -> None:
+    value = envelope(body_type)
     value["schema_version"] = version
     with pytest.raises((TypeError, ValueError), match="schema version|exactly 5"):
         envelope_from_dict(value)

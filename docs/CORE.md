@@ -17,7 +17,8 @@ The remaining accepted-but-inactive Stage 6 second-half contract is mapped in
 payload cleanup remain active below. Checkpoint 3.2 switched every live
 producer and consumer to event v5 and data epoch 5. Checkpoint 3R.14 advances
 the shared data epoch to 6 for the corrected ledger/plan identity hash contract;
-checkpoint 3.3 still removes the now-unreachable read-only v3/v4 source branches.
+Checkpoint 3.3 removes the private v3/v4 decoders and their positive fixtures;
+only the exact v5 source path remains.
 Component docs point to
 those authorities rather than copy task authority or retention shapes owned by
 later checkpoints.
@@ -348,11 +349,10 @@ epoch. The live bridge validator and durable projection consume the same
 admitted immutable core snapshot without treating either representation as the
 other's decoder.
 
-Checkpoint 3.2 deliberately leaves a private read-only v3/v4 decoder branch in
-`core/events.py` as unreachable source. No current constant, dispatcher,
-history reader, service route, browser route, or fixture selects it. Checkpoint
-3.3 deletes that branch and its source-only compatibility evidence; it is not a
-supported runtime mode during this safe stop.
+No private v3/v4 decoder, legacy-only helper, or positive compatibility fixture
+remains. Source-removal guards and live decoder/browser negative cases pin the
+exact v5 boundary. Protected historical measurement and settlement artifacts
+remain historical evidence, not compatibility routes.
 
 Core event versioning is independent of bridge-envelope, continuation,
 database, UI-state, shell, and page versions. The bridge envelope remains

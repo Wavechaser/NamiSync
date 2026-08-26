@@ -153,8 +153,8 @@ cancellation rules as the core result; their exact meanings remain in
 Python boundaries and the required Node gate, with valid production view
 projections and independently mutated negative cases.
 
-The browser's unreachable private legacy validator is pinned to literal event
-version 4; live task events delegate only to `validateSessionEventV5` and its
+The browser has no private legacy event validator; live task events delegate
+only to `validateSessionEventV5` and its
 `CORE_EVENT_SCHEMA_VERSION` constant. Its validator helpers and vocabulary
 constants use active v5 names, not the former `Dormant` prefix. Source gates
 pin that constant's definition
@@ -163,7 +163,9 @@ complete v5 vocabularies and detail classes with their Python owners, and
 reject in-memory route, shape, scalar, and vocabulary mutations. Required Node
 coverage sends all seven event families and the relevant public-view witnesses
 through the real Python projection/primitive codec into the packaged browser
-consumer. Private test exports do not add a production compatibility route.
+consumer. Source-removal guards reject reintroduced legacy helpers, and live
+task events reject retired versions for every event family. The drain probe
+also rejects both v3 and v4 batches without advancing the cursor.
 
 Event and record timestamps use CORE's exact UTC service grammar. Python's
 event-view validator and the packaged browser enforce the reliable-event byte

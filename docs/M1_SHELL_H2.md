@@ -5,9 +5,9 @@
 > sequence; this file is the newest checkpoint reslice and owns the detailed
 > acceptance, review, and test boundary for checkpoints 0-12.
 
-Delivery status (2026-08-27): checkpoints 0–3.2 and the independently reviewed
-3R remediation are complete. Checkpoint 3.3 remains a separate, unstarted
-legacy-source removal; checkpoints 4–12 remain pending.
+Delivery status (2026-08-27): checkpoints 0–3 and the independently reviewed
+3R remediation are complete, including the separately reviewed checkpoint-3.3
+legacy-source removal. Checkpoints 4–12 remain pending.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
@@ -199,6 +199,17 @@ Commits, in order:
 2. `feat(protocol): publish exact core event v5`
 3. `refactor(protocol): remove legacy event compatibility`
 
+**Complete (2026-08-27).** Checkpoint 3.3 removes the private older-version
+decoders, their exclusive helpers, and positive fixtures. Independent review
+closed two test-quality findings before acceptance: the reintroduction witness
+now isolates the source-removal guard, and retired-version batches include a
+valid prefix. Core/interfaces passed 2,428 tests with one privilege skip; the
+required-Node ordinary suite passed 4,524 with four privilege skips and 28
+headed deselections. All 11 import rules held, and the protected settlement
+oracle passed 30 scenarios three times with identical traces and baseline
+parity. Frozen measurement and epoch-5 artifacts were unchanged. Later
+product/follow/retention gates remain open.
+
 - **Objective:** Publish the new truth contract across every producer and consumer and remove legacy machinery.
 - **Position and safe stops:** Keep this checkpoint before checkpoint 4.
   Checkpoint 4's retained task/result model already consumes the exact v5
@@ -264,7 +275,7 @@ Commits, in order:
 **Complete (2026-08-27).** All accepted findings from the independent review of
 checkpoints 1–3.2 and its follow-ups are closed in 24 separately reviewed
 planning, repair, and closure commits (`989617a` through `bba64ec`).
-The temporary 3R hold is lifted; checkpoint 3.3 remains unstarted.
+The temporary 3R hold was lifted before checkpoint 3.3 began.
 
 | Checkpoint | Delivered issue or boundary | Commit |
 | --- | --- | --- |
@@ -300,8 +311,8 @@ remain in `d7673b7:docs/HANDOFF.md`. Do not recreate those reports here.
 The closing ordinary run passed 4,498 tests with four Windows privilege skips
 and 28 headed deselections; required Node ran, all 11 import rules held, and
 the settlement oracle passed 30 scenarios three times with identical traces.
-This closes 3R, not later product/headed/resource gates or the private legacy
-source seam reserved for checkpoint 3.3. [HANDOFF.md](HANDOFF.md) carries the
+That receipt closed 3R, not later product/headed/resource gates or the private
+legacy source seam subsequently removed in checkpoint 3.3. [HANDOFF.md](HANDOFF.md) carries the
 restart boundary and separately deferred context.
 
 Protected settlement traces/baseline/semantic hash, frozen epoch-5 witnesses,

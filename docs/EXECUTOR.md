@@ -64,7 +64,8 @@ filesystem/recording combinations and three ordering cases named by the H2
 plan. Checkpoint 2 implements the corresponding internal production
 attribution. Checkpoint 3.2 now projects that truth through exact event-v5 item
 fields and the item-free terminal summary without changing the retained oracle
-trace; checkpoint 3.3 removes only unreachable legacy decoder source.
+trace. Checkpoint 3.3 removes the unreachable legacy decoder source and positive
+fixtures; the oracle's historical trace adapters remain unchanged.
 
 ## Purpose
 

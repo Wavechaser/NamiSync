@@ -90,9 +90,10 @@ the live `event` drain arm, service/history projections, and packaged
 JavaScript. Duplicate-key, wrong-version, noncanonical `Scalar64`, Boolean-as-
 integer, cross-field, and reliable-envelope-bound corpora must fail before
 cursor or queue mutation; the exact maximum event is drained alone. History-v6
-pages cannot carry a prior event version. Checkpoint 3.2 leaves only an
-unreachable private read-only v3/v4 source seam for checkpoint 3.3 to delete;
-it is not a positive runtime fixture or supported compatibility surface.
+pages cannot carry a prior event version. Source-removal guards pin the absence
+of private v3/v4 decoders and their exclusive helpers. Live decoder and browser
+tests reject retired versions across every event family, including whole-batch
+v3/v4 drain rejection with an unchanged cursor and clean replay.
 
 ```powershell
 $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'

@@ -1516,58 +1516,6 @@ function validateLiveSessionEvent(event, sessionId) {
   return validateSessionEventV5(event, sessionId);
 }
 
-function validateLegacySessionEvent(event, sessionId) {
-  if (
-    !isExactObject(event, [
-      "session_id",
-      "sequence",
-      "at",
-      "schema_version",
-      "body_type",
-      "body",
-    ]) ||
-    event.session_id !== sessionId ||
-    !Number.isSafeInteger(event.sequence) ||
-    event.sequence < 1 ||
-    !isUtcTimestamp(event.at) ||
-    event.schema_version !== 4 ||
-    !isPlainJsonObject(event.body)
-  ) {
-    return false;
-  }
-  switch (event.body_type) {
-    case "StateChanged":
-      return (
-        isExactObject(event.body, ["state"]) &&
-        isOneOf(event.body.state, SESSION_STATES)
-      );
-    case "PhaseChanged":
-      return (
-        isExactObject(event.body, ["phase"]) &&
-        isValidNonemptyText(event.body.phase)
-      );
-    case "Progress":
-      return validateProgress(event.body);
-    case "ItemOutcome":
-      return validateOperationItem(event.body);
-    case "IntegrityOutcome":
-      return validateIntegrityItem(event.body);
-    case "Gap":
-      return (
-        isExactObject(event.body, ["first_missed_seq"]) &&
-        Number.isSafeInteger(event.body.first_missed_seq) &&
-        event.body.first_missed_seq > 0
-      );
-    case "Terminal":
-      return (
-        isExactObject(event.body, ["result"]) &&
-        validateCoreOperationResult(event.body.result)
-      );
-    default:
-      return false;
-  }
-}
-
 function validateSessionRecord(record, sessionId) {
   return (
     isExactObject(record, [
@@ -1590,191 +1538,6 @@ function validateSessionRecord(record, sessionId) {
     validateOperationResultView(record.result) &&
     record.state ===
       (record.result.canceled ? "canceled" : record.result.filesystem)
-  );
-}
-
-function validateProgress(value) {
-  if (
-    !(
-      isExactObject(value, [
-        "phase",
-        "items_done",
-        "items_total",
-        "bytes_done",
-        "bytes_total",
-        "current_path",
-        "item_id",
-        "item_type",
-        "item_attempt_id",
-        "item_bytes_done",
-        "item_bytes_total",
-      ]) &&
-      isValidNonemptyText(value.phase) &&
-      isNonnegativeInteger(value.items_done) &&
-      isNullableNonnegativeInteger(value.items_total) &&
-      isNonnegativeInteger(value.bytes_done) &&
-      isNullableNonnegativeInteger(value.bytes_total) &&
-      (value.items_total === null || value.items_done <= value.items_total) &&
-      (value.bytes_total === null || value.bytes_done <= value.bytes_total) &&
-      isNullableText(value.current_path)
-    )
-  ) {
-    return false;
-  }
-  const identityAbsent = value.item_id === null && value.item_type === null;
-  const identityPresent =
-    isValidNonemptyText(value.item_id) &&
-    (value.item_type === "operation" || value.item_type === "integrity");
-  if (!identityAbsent && !identityPresent) {
-    return false;
-  }
-  if (
-    identityPresent &&
-    value.items_total !== null &&
-    value.items_done >= value.items_total
-  ) {
-    return false;
-  }
-  const attemptAbsent = value.item_attempt_id === null;
-  const attemptPresent =
-    identityPresent &&
-    typeof value.item_attempt_id === "string" &&
-    ID_PATTERN.test(value.item_attempt_id);
-  if (!attemptAbsent && !attemptPresent) {
-    return false;
-  }
-  const itemBytesAbsent =
-    value.item_bytes_done === null && value.item_bytes_total === null;
-  const itemBytesPresent =
-    attemptPresent &&
-    isNonnegativeInteger(value.item_bytes_done) &&
-    isNonnegativeInteger(value.item_bytes_total) &&
-    value.item_bytes_done <= value.item_bytes_total &&
-    value.item_bytes_done <= value.bytes_done &&
-    (value.bytes_total === null ||
-      value.item_bytes_total <= value.bytes_total);
-  return (
-    (attemptAbsent && itemBytesAbsent) ||
-    (attemptPresent && (itemBytesAbsent || itemBytesPresent))
-  );
-}
-
-function validateOperationItem(value) {
-  return (
-    isExactObject(value, [
-      "item_type",
-      "phase",
-      "item_id",
-      "kind",
-      "path",
-      "result",
-      "reason",
-      "detail",
-    ]) &&
-    value.item_type === "operation" &&
-    value.phase === "execute" &&
-    isValidNonemptyText(value.item_id) &&
-    isValidNonemptyText(value.kind) &&
-    isValidText(value.path) &&
-    isOneOf(value.result, OPERATION_OUTCOMES) &&
-    isNullableText(value.reason) &&
-    isPlainJsonObject(value.detail) &&
-    isJsonValue(value.detail)
-  );
-}
-
-function validateIntegrityItem(value) {
-  return (
-    isExactObject(value, [
-      "item_type",
-      "phase",
-      "item_id",
-      "row_id",
-      "location_id",
-      "kind",
-      "path",
-      "result",
-      "reason",
-      "detail",
-      "read_strategy",
-      "recording",
-      "record_disposition",
-    ]) &&
-    value.item_type === "integrity" &&
-    isOneOf(value.phase, INTEGRITY_MODES) &&
-    isValidNonemptyText(value.item_id) &&
-    ((value.row_id === null && value.location_id === null) ||
-      (isValidNonemptyText(value.row_id) &&
-        isValidNonemptyText(value.location_id))) &&
-    value.kind === "integrity" &&
-    isValidNonemptyText(value.path) &&
-    isOneOf(value.result, INTEGRITY_RESULTS) &&
-    (value.reason === null || isOneOf(value.reason, INTEGRITY_REASONS)) &&
-    isNullableText(value.detail) &&
-    (value.read_strategy === null ||
-      isOneOf(value.read_strategy, READ_STRATEGIES)) &&
-    isOneOf(value.recording, RECORDING_STATES) &&
-    (value.record_disposition === null ||
-      isOneOf(value.record_disposition, RECORD_DISPOSITIONS))
-  );
-}
-
-function validatePhaseResult(value) {
-  return (
-    isExactObject(value, [
-      "phase",
-      "status",
-      "items_done",
-      "items_total",
-      "bytes_done",
-      "bytes_total",
-      "error",
-    ]) &&
-    isValidNonemptyText(value.phase) &&
-    isOneOf(value.status, PHASE_STATES) &&
-    isNonnegativeInteger(value.items_done) &&
-    isNullableNonnegativeInteger(value.items_total) &&
-    isNonnegativeInteger(value.bytes_done) &&
-    isNullableNonnegativeInteger(value.bytes_total) &&
-    (value.items_total === null || value.items_done <= value.items_total) &&
-    (value.bytes_total === null || value.bytes_done <= value.bytes_total) &&
-    isNullableText(value.error)
-  );
-}
-
-function validateCoreOperationResult(value) {
-  return (
-    isExactObject(value, [
-      "status",
-      "recording",
-      "audit",
-      "disposition",
-      "canceled",
-      "items",
-      "phases",
-      "bytes_done",
-      "bytes_total",
-      "error",
-    ]) &&
-    isOneOf(value.status, TERMINAL_STATES) &&
-    isOneOf(value.recording, RECORDING_STATES) &&
-    isOneOf(value.audit, RECORDING_STATES) &&
-    isOneOf(value.disposition, DISPOSITIONS) &&
-    typeof value.canceled === "boolean" &&
-    Array.isArray(value.items) &&
-    value.items.every(validateResultItem) &&
-    Array.isArray(value.phases) &&
-    value.phases.every(validatePhaseResult) &&
-    isNonnegativeInteger(value.bytes_done) &&
-    isNonnegativeInteger(value.bytes_total) &&
-    value.bytes_done <= value.bytes_total &&
-    (value.status !== "canceled" || value.canceled) &&
-    !(value.status === "refused" && value.canceled) &&
-    (value.status !== "refused" || value.disposition === "unrun") &&
-    (value.error === null ||
-      (isExactObject(value.error, ["type_name", "message"]) &&
-        isValidText(value.error.type_name) &&
-        isValidText(value.error.message)))
   );
 }
 
@@ -1876,17 +1639,6 @@ function validateOperationResultView(value) {
   );
 }
 
-function validateResultItem(value) {
-  if (!isPlainJsonObject(value)) {
-    return false;
-  }
-  return value.item_type === "operation"
-    ? validateOperationItem(value)
-    : value.item_type === "integrity" && validateIntegrityItem(value);
-}
-
-// Direct checkpoint-3 seam retained through the v5 safe stop. Production now
-// routes through this exact validator; the legacy branch above is read-only.
 export function validateSessionEventV5(event, sessionId) {
   if (
     !isExactObject(event, [
@@ -2457,18 +2209,6 @@ function isNullableNonnegativeInteger(value) {
   return value === null || isNonnegativeInteger(value);
 }
 
-function isValidText(value) {
-  return typeof value === "string" && isValidUnicode(value);
-}
-
-function isNullableText(value) {
-  return value === null || isValidText(value);
-}
-
-function isValidNonemptyText(value) {
-  return isValidText(value) && value.length > 0;
-}
-
 function isOneOf(value, choices) {
   return typeof value === "string" && choices.includes(value);
 }
@@ -2499,27 +2239,6 @@ function isPlainJsonObject(value) {
     typeof value === "object" &&
     !Array.isArray(value) &&
     Object.getPrototypeOf(value) === Object.prototype
-  );
-}
-
-function isJsonValue(value) {
-  if (value === null || typeof value === "boolean") {
-    return true;
-  }
-  if (typeof value === "string") {
-    return isValidUnicode(value);
-  }
-  if (typeof value === "number") {
-    return Number.isFinite(value);
-  }
-  if (Array.isArray(value)) {
-    return value.every(isJsonValue);
-  }
-  if (!isPlainJsonObject(value)) {
-    return false;
-  }
-  return Object.entries(value).every(
-    ([key, item]) => isValidUnicode(key) && isJsonValue(item),
   );
 }
 

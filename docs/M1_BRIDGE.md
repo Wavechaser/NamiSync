@@ -144,11 +144,11 @@ target authority; it does not activate that target before its named checkpoint.
 
 ## Shared exact Stage 6 target register
 
-**Status (2026-08-25): checkpoint 3.2 protocol subset active.** This section is
+**Status (2026-08-27): checkpoint 3 protocol subset complete.** This section is
 the newest target register for Slices 5-6 and early Slice 7. The exact epoch,
 scalar, recording, and persistence subsection is production-active; every
-remaining row becomes active only in its named checkpoint. Checkpoint 3.3 still
-removes the unreachable private legacy event source seam. This is not a second decision layer and is not a blanket
+remaining row becomes active only in its named checkpoint. The private legacy
+event source seam and positive fixtures are removed. This is not a second decision layer and is not a blanket
 precedence rule. It consolidates and supersedes only repeated exact type, wire,
 command, lifetime, and ordering fragments assigned by the map above. Those
 records continue to own rationale, module placement, user interaction, and any
@@ -176,10 +176,8 @@ respectively.
 population-retention, and product-surface shapes in this register remain
 accepted targets until their named checkpoints.
 
-Production core events now use exact v5 with no public legacy constant or
-reachable v3/v4 decoder. Checkpoint 3.2 retains one private, read-only legacy
-branch that no current dispatcher, history, service, or browser route can
-select; checkpoint 3.3 deletes it. The bridge envelope remains v1 and every live `SessionEventView`
+Production core events use exact v5 with no legacy constant, private decoder,
+or positive v3/v4 compatibility fixture. The bridge envelope remains v1 and every live `SessionEventView`
 requires nested `schema_version=5`. The process-local sync-execution payload
 is exact v6; the sync-plan payload remains exact v5, and inventory and
 standalone-integrity payloads remain exact v2. Its transient copy
@@ -2294,9 +2292,8 @@ browser never derives a peer from paths.
 ### DR-BR-14 — Progress carries item identity, never a display path
 
 The accepted Stage 6 target and active source-backed runtime use exact core
-event v5. Checkpoint 3.2 has made older compatibility unreachable; checkpoint
-3.3 deletes the remaining private read-only source branch rather than exposing
-it as a legacy desktop mode. Shared field
+event v5. The final protocol stop removes the private older-version decoders
+and positive compatibility fixtures. Shared field
 meanings, reporter transitions, authority order, and Gap behavior are owned by
 `ARCHITECTURE.md` §§2.3 and 2.7.
 

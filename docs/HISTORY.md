@@ -269,9 +269,8 @@ duplicate rows authenticate and decode the exact canonical envelope; rejected
 receipts instead expose `body=None`. The coordinated reset makes a mixed-version
 page unrepresentable: old, mixed, markerless, or incomplete database pairs
 refuse before mutating commands. The payload hash remains the identity of the
-retained envelope. Checkpoint 3.2 still carries an unreachable private legacy
-decoder in core source, but no history-v6 row or repository route can select it;
-checkpoint 3.3 removes it.
+retained envelope. Core source contains only the exact v5 decoder; no
+history-v6 row or repository route can select an older event decoder.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including

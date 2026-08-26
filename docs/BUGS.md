@@ -1400,14 +1400,14 @@ defect, and move implementation-level test choreography out of the log.
   Fixed with one complete core-owned `FILE_ID_128` adapter, witnessed NTFS/ReFS
   stat equivalence, canonical full-width text through codecs and ledger v4,
   and removal of legacy high/low handle projection and numeric storage.
-- MINOR - OPEN (2026-08-25). Cross-consumer schema acceptance drift. The core
+- MINOR - FIXED (2026-08-27). Cross-consumer schema acceptance drift. The core
   decoder previously retained v3 history compatibility beside v4 while the live
   browser and canonical history projection accepted different populations.
   Cause: consumer-local compatibility lacked one event/data epoch and removal
-  point. Production is now exact-v5-only at data epoch 6; no active mixed-version
-  route remains. The unreachable private read-only v3/v4 source branch still
-  risks accidental reuse, so this entry remains open until checkpoint 3.3
-  removes that source seam and its private compatibility fixtures.
+  point. Production is exact-v5-only at data epoch 6. Checkpoint 3.3 removes the
+  private v3/v4 decoders, exclusive helpers, and positive compatibility fixtures.
+  Removal guards and all-family negative cases pin the source boundary;
+  co-batched retired-version events preserve the drain cursor and replay.
 - MODERATE - FIXED (2026-08-22). Lossy-progress authority conflation. Forced
   control snapshots combined aggregates from an earlier throttled emission with
   live item-attempt state, producing internally contradictory pause/cancel views;

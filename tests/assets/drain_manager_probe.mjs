@@ -536,10 +536,17 @@ const invalidVersionedEvents = [
     { ...validVersionedEvent, event: eventWithoutVersion },
   ],
   [
-    "legacy nested event version",
+    "retired v3 nested event version",
     {
       ...validVersionedEvent,
       event: { ...validVersionedEvent.event, schema_version: 3 },
+    },
+  ],
+  [
+    "retired v4 nested event version",
+    {
+      ...validVersionedEvent,
+      event: { ...validVersionedEvent.event, schema_version: 4 },
     },
   ],
   [
@@ -588,7 +595,10 @@ for (const [label, invalidEvent] of invalidVersionedEvents) {
   const malformed = await nextRequest(eventVersionRequestIndex);
   eventVersionRequestIndex += 1;
   assert.equal(malformed.request.payload.replay_from, null, label);
-  success(malformed, [invalidEvent]);
+  success(malformed, [
+    validVersionedEvent,
+    { ...invalidEvent, event: { ...invalidEvent.event, sequence: 2 } },
+  ]);
 
   const recovery = await nextRequest(eventVersionRequestIndex);
   eventVersionRequestIndex += 1;

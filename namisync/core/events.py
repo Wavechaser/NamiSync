@@ -61,26 +61,7 @@ from namisync.core.session import (
 
 CORE_EVENT_SCHEMA_VERSION = EVENT_V5_SCHEMA_VERSION
 
-# Kept private and unreachable for the checkpoint-3.2 safe stop. The final
-# checkpoint-3 commit removes these read-only branches and their fixtures.
-_LEGACY_CORE_EVENT_SCHEMA_VERSIONS = frozenset({3, 4})
-
 _HEX_ID = re.compile(r"[0-9a-f]{32}\Z")
-_PROGRESS_BODY_FIELDS = frozenset(
-    {
-        "phase",
-        "items_done",
-        "items_total",
-        "bytes_done",
-        "bytes_total",
-        "current_path",
-        "item_id",
-        "item_type",
-        "item_attempt_id",
-        "item_bytes_done",
-        "item_bytes_total",
-    }
-)
 _DETAIL_TEXT_KEYS = frozenset(
     {
         "backup",
@@ -942,54 +923,6 @@ def _review_fact_from_dict(data: Mapping[str, object]) -> ReviewFactLimitExceede
     )
 
 
-# Unreachable read-only v3/v4 decoder retained only until checkpoint 3.3.
-@dataclass(frozen=True, slots=True)
-class _LegacyEnvelope:
-    session_id: SessionId
-    seq: int
-    at: datetime
-    schema_version: int
-    body: object
-
-
-def _legacy_envelope_from_dict(data: Mapping[str, object]) -> _LegacyEnvelope:
-    version = _int(data["schema_version"], "legacy event schema version")
-    if version not in _LEGACY_CORE_EVENT_SCHEMA_VERSIONS:
-        raise ValueError(f"unsupported legacy event schema version: {version}")
-    raw = _plain_object(data["body"], "legacy event body")
-    body_type = _text(data["body_type"], "legacy event body type")
-    if body_type == "StateChanged":
-        body: object = StateChanged(SessionState(_text(raw["state"], "legacy state")))
-    elif body_type == "PhaseChanged":
-        body = PhaseChanged(_text(raw["phase"], "legacy phase"))
-    elif body_type == "Progress" and version == 4:
-        _require_exact_keys(raw, _PROGRESS_BODY_FIELDS, "legacy progress body")
-        body = Progress(
-            phase=_text(raw["phase"], "legacy progress phase"),
-            items_done=_int(raw["items_done"], "legacy progress items_done"),
-            items_total=_optional_int(raw["items_total"], "legacy progress items_total"),
-            bytes_done=_int(raw["bytes_done"], "legacy progress bytes_done"),
-            bytes_total=_optional_int(raw["bytes_total"], "legacy progress bytes_total"),
-            current_path=_optional_text(raw["current_path"], "legacy progress path"),
-            item_id=_optional_text(raw["item_id"], "legacy progress item_id"),
-            item_type=_optional_text(raw["item_type"], "legacy progress item_type"),
-            item_attempt_id=_optional_text(raw["item_attempt_id"], "legacy progress attempt"),
-            item_bytes_done=_optional_int(raw["item_bytes_done"], "legacy progress item bytes"),
-            item_bytes_total=_optional_int(raw["item_bytes_total"], "legacy progress item total"),
-        )
-    elif body_type == "Gap":
-        body = Gap(_int(raw["first_missed_seq"], "legacy first_missed_seq"))
-    else:
-        raise ValueError(f"unsupported legacy event body type: {body_type}")
-    return _LegacyEnvelope(
-        SessionId(_text(data["session_id"], "legacy session_id")),
-        _int(data["seq"], "legacy sequence"),
-        _datetime(data["at"], "legacy timestamp"),
-        version,
-        body,
-    )
-
-
 def _require_nonempty_text(value: object, context: str) -> str:
     result = _text(value, context)
     if not result:
@@ -1053,16 +986,3 @@ def _plain_list(value: object, context: str) -> list[object]:
     if type(value) is not list:
         raise TypeError(f"{context} must be an array")
     return value
-
-
-def _require_exact_keys(
-    value: Mapping[str, object],
-    expected: frozenset[str],
-    context: str,
-) -> None:
-    actual = frozenset(value)
-    if actual != expected:
-        raise ValueError(
-            f"{context} has an invalid exact shape; "
-            f"missing={sorted(expected - actual)}, extra={sorted(actual - expected)}"
-        )
