@@ -1383,6 +1383,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Typed detail canonicality bypass. A directly
+  constructed or subclassed `DetailProjection` could retain duplicate keys,
+  mutable or oversized values, hidden graphs, or excess leaves while its wire
+  dictionary collapsed to apparently valid last-key truth. Custom mapping item
+  streams could create the same first-value/last-wire contradiction. Cause: the
+  typed fast path skipped all validation and raw admission did not track seen
+  keys. Fixed with exact constructor validation, source-independent base
+  snapshots, serialization revalidation, duplicate refusal before omission,
+  exact primitive/container checks, and bounded-before-encode key/path refusal.
+  Raw diagnostic omission semantics are preserved.
 - MODERATE - FIXED (2026-08-27). Full-result diagnostic divergence. Terminal
   summaries omitted oversized or invalid phase/failure diagnostics, while the
   retained `OperationResult` behind them kept the original values through

@@ -37,9 +37,19 @@ from namisync.core.scalars import (
     file_index_128_to_text,
     require_safe_int,
     require_signed_64,
+    require_utf16_path,
     scalar_64_from_text,
     scalar_64_to_text,
 )
+
+
+def test_utf16_path_accepts_exact_unit_boundary_and_rejects_next_unit() -> None:
+    exact = ("\U0001f600" * 16_383) + "x"
+    over = "\U0001f600" * 16_384
+
+    assert require_utf16_path(exact, "path") is exact
+    with pytest.raises(ValueError, match="UTF-16 path bound"):
+        require_utf16_path(over, "path")
 
 
 @pytest.mark.parametrize("value", (0, MAX_SAFE_INTEGER))

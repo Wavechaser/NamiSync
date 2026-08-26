@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import FrozenInstanceError, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
 import subprocess
@@ -22,6 +23,7 @@ from namisync.core.evidence import (
 )
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
+    DetailProjection,
     Envelope,
     Gap,
     ItemOutcome,
@@ -32,6 +34,8 @@ from namisync.core.events import (
     TerminalSummary,
     envelope_from_dict,
     envelope_to_dict,
+    project_detail,
+    result_item_to_dict,
     terminal_summary_to_dict,
 )
 from namisync.core.execution import (
@@ -1079,6 +1083,188 @@ def test_item_diagnostics_are_omitted_whole_without_truncation() -> None:
     assert integrity.detail_omitted_count == 1
     assert oversized[:512] not in repr(operation)
     assert oversized[:512] not in repr(integrity)
+
+
+def test_detail_projection_accepts_only_its_exact_canonical_shape() -> None:
+    projection = DetailProjection(
+        (
+            ("message", "copy complete"),
+            ("published_path", "target/file.bin"),
+            ("continued", True),
+            ("durability_warnings", ("directory flush unavailable",)),
+            ("incomplete_sides", ("source", "target")),
+            ("excluded_dependencies", ("1" * 32,)),
+        )
+    )
+
+    admitted, omitted = project_detail(projection)
+
+    assert admitted is not projection
+    assert admitted.entries == projection.entries
+    assert omitted == 0
+    assert admitted.to_wire() == {
+        "message": "copy complete",
+        "published_path": "target/file.bin",
+        "continued": True,
+        "durability_warnings": ["directory flush unavailable"],
+        "incomplete_sides": ["source", "target"],
+        "excluded_dependencies": ["1" * 32],
+    }
+
+
+class _DetailText(str):
+    pass
+
+
+@pytest.mark.parametrize(
+    "entries",
+    (
+        [],
+        (["message", "text"],),
+        (("message",),),
+        ((_DetailText("message"), "text"),),
+        (("méssage", "text"),),
+        (("unknown", "text"),),
+        (("message", "first"), ("message", "second")),
+        (("message", _DetailText("text")),),
+        (("message", "é" * 513),),
+        (("message", "\ud800"),),
+        (("published_path", True),),
+        (("published_path", "bad\x00path"),),
+        (("published_path", "x" * 32_768),),
+        (("published_path", "\ud800"),),
+        (("continued", 1),),
+        (("durability_warnings", ["warning"]),),
+        (("durability_warnings", (_DetailText("warning"),)),),
+        (("durability_warnings", ("é" * 513,)),),
+        (("incomplete_sides", (_DetailText("source"),)),),
+        (("incomplete_sides", ("neither",)),),
+        (("excluded_dependencies", (_DetailText("1" * 32),)),),
+        (("excluded_dependencies", ("not-an-id",)),),
+        (("durability_warnings", tuple("warning" for _ in range(33))),),
+        (
+            ("durability_warnings", tuple("warning" for _ in range(32))),
+            ("continued", True),
+        ),
+    ),
+)
+def test_detail_projection_rejects_noncanonical_entries(entries: object) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        DetailProjection(entries)  # type: ignore[arg-type]
+
+
+def test_detail_projection_bounds_invalid_text_before_encoding() -> None:
+    overlong_key = "x" * 65
+    with pytest.raises(ValueError, match="ASCII bound") as key_error:
+        DetailProjection(((overlong_key, "text"),))
+    assert overlong_key not in str(key_error.value)
+
+    overlong_invalid_path = "\ud800" + ("x" * 32_767)
+    with pytest.raises(ValueError, match="UTF-16 path bound"):
+        DetailProjection((("published_path", overlong_invalid_path),))
+
+
+def test_detail_projection_revalidates_forged_exact_instances() -> None:
+    missing_entries = object.__new__(DetailProjection)
+    projection = object.__new__(DetailProjection)
+    object.__setattr__(
+        projection,
+        "entries",
+        (("message", "first"), ("message", "second")),
+    )
+
+    with pytest.raises(TypeError, match="exact tuple"):
+        project_detail(missing_entries)
+    with pytest.raises(ValueError, match="duplicate"):
+        project_detail(projection)
+
+
+def test_detail_projection_subclass_is_copied_to_exact_base_shape() -> None:
+    class ProjectionSubclass(DetailProjection):
+        def to_wire(self) -> dict[str, object]:
+            return {"message": object()}
+
+    projection = ProjectionSubclass((("message", "copy complete"),))
+    object.__setattr__(projection, "hidden_graph", object())
+
+    admitted, omitted = project_detail(projection)
+
+    assert type(admitted) is DetailProjection
+    assert admitted is not projection
+    assert admitted.entries == (("message", "copy complete"),)
+    assert omitted == 0
+
+
+def test_item_detail_snapshot_does_not_retain_the_callers_projection() -> None:
+    source = DetailProjection((("message", "copy complete"),))
+    item = ItemOutcome(
+        item_id="1" * 32,
+        kind="copy",
+        path="file.bin",
+        outcome=Outcome.SUCCEEDED,
+        detail=source,
+    )
+
+    object.__setattr__(source, "entries", (("message", object()),))
+
+    assert item.detail is not source
+    assert item.detail.entries == (("message", "copy complete"),)
+
+
+def test_result_item_serialization_revalidates_owned_detail() -> None:
+    item = ItemOutcome(
+        item_id="1" * 32,
+        kind="copy",
+        path="file.bin",
+        outcome=Outcome.SUCCEEDED,
+        detail={"message": "copy complete"},
+    )
+    assert isinstance(item.detail, DetailProjection)
+    object.__setattr__(item.detail, "entries", (("message", object()),))
+
+    with pytest.raises(TypeError, match="message must be text"):
+        item.detail.to_wire()
+    with pytest.raises(TypeError, match="message must be text"):
+        result_item_to_dict(item)
+
+
+def test_detail_projection_rejects_duplicate_custom_mapping_items_before_omission() -> None:
+    class DuplicateDetail(Mapping[str, object]):
+        def __getitem__(self, key: str) -> object:
+            if key != "message":
+                raise KeyError(key)
+            return "first"
+
+        def __iter__(self):
+            return iter(("message",))
+
+        def __len__(self) -> int:
+            return 1
+
+        def items(self):
+            return (
+                ("message", "é" * 513),
+                ("message", "second"),
+            )
+
+    with pytest.raises(ValueError, match="duplicate"):
+        project_detail(DuplicateDetail())
+
+
+def test_raw_detail_projection_preserves_bounded_omission_and_canonicalization() -> None:
+    projection, omitted = project_detail(
+        {
+            "message": "é" * 513,
+            "durability_warnings": ["flush unavailable"],
+        }
+    )
+
+    assert projection.entries == (
+        ("durability_warnings", ("flush unavailable",)),
+    )
+    assert omitted == 1
+    with pytest.raises(TypeError):
+        project_detail({"incomplete_sides": [_DetailText("source")]})
 
 
 @pytest.mark.parametrize(

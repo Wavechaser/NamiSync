@@ -142,6 +142,8 @@ def require_utf16_path(
         raise TypeError(f"{field_name} must be text")
     if "\x00" in value:
         raise ValueError(f"{field_name} cannot contain NUL")
+    if len(value) > maximum_units:
+        raise ValueError(f"{field_name} exceeds the UTF-16 path bound")
     try:
         units = len(value.encode("utf-16-le")) // 2
     except UnicodeEncodeError as error:

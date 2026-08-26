@@ -14,6 +14,9 @@ calibrated, or accepted.
 - `ff23af9` replaces unbounded dispatcher store/custody exception collections
   with sticky failure flags. Weak-reference regressions prove contained error
   graphs retire across repeated session completion/close cycles.
+- `fec8825` keeps exact dispatcher worker ownership through real thread exit,
+  makes close join under one bounded deadline outside dispatcher locks, and
+  releases scheduler/audit-factory exception graphs without weakening custody.
 - The observation-stream prerequisite removes closed-stream history. Stop and
   replacement adoption share one lock; cleanup snapshots the current stream,
   while closes and joins run outside that lock. Independent review cleared
@@ -45,6 +48,12 @@ calibrated, or accepted.
   death, including a running exception hook; timeout and self-close keep all
   ownership intact for retry. The scheduler also drops its temporary selected
   record and the degraded-audit sentinel discards factory exception graphs.
+- Canonical operation detail now validates exact tuple/key/value variants at
+  construction, snapshots every admitted source into a fresh exact base value,
+  rejects duplicates before omission, and revalidates direct wire projection.
+  Invalid key/path size refuses before encoding. Raw mapping diagnostics retain
+  the existing whole-value omission count; projection subclasses and caller
+  aliases cannot rewrite or hide state in a retained result.
 
 ## Verification
 
@@ -65,15 +74,20 @@ calibrated, or accepted.
   the focused matrix now passes **15 tests**, and expanded core/scalar/v5/history
   coverage passes **1,146 tests**. Independent mutation review's identity,
   input-immutability, overflow, and wording findings are resolved.
+- Canonical detail admission: **28 expected failures, 1 pass** initially;
+  independent review then exposed **3 additional alias/serialization failures**.
+  The final focused matrix passes **33 tests**, expanded core event/scalar
+  coverage passes **1,058 tests**, and the settlement oracle remains clean at
+  **30 scenarios × 3** with baseline parity.
 - Native prerequisite: six new lifetime/callback witnesses failed before the
   fix. After correction, focused bridge/host tests passed **121 tests**; shared
   host-fixture repair passed **161 tests**.
 - Transport migration: two failing-first fixture cases, then **148 focused
   tests passed, 6 headed deselected**. Installed-wheel transport/native-host
   run: **8 passed, 32 deselected** (55.17 s).
-- Final ordinary required-Node suite after all fixture corrections:
-  **4,567 passed, 4 privilege skips, 28 headed deselected** (198.13 s),
-  including the exact worker-retirement change.
+- Final ordinary required-Node suite after all current prerequisite corrections:
+  **4,600 passed, 4 privilege skips, 28 headed deselected** (189.96 s),
+  including exact worker retirement and canonical detail admission.
   No required Node gate skipped. Whitespace validation passed.
 
 ## Next work and preserved boundaries
@@ -83,9 +97,9 @@ Follow checkpoint 4's three ordered stops in
 model/validator first, dormant machinery second, coherent 12-row activation
 third. No size constant may be selected or retuned from measurement.
 
-The next source-derived prerequisite is canonical typed-detail admission.
-Dispatcher close now provides the exact worker-retirement witness required by
-the ownership model; do not weaken its registered-thread fence or bounded join.
+Canonical typed-detail admission and dispatcher worker retirement now provide
+their required ownership witnesses; do not weaken the fresh detail snapshot,
+validated wire projection, registered-thread fence, or bounded join.
 
 The model must separately account for full serialization occurrences (including
 shared dependency expansion), old/new generations, full result/audit owners,
@@ -94,11 +108,13 @@ Path caches, and native/browser copies. The frozen transport sizer is not a
 complete task-graph validator. Standalone integrity's row reload also needs its
 own admission bound; an inventory-tree limit does not constrain it today.
 
-The native, observation, and full-result diagnostic prerequisites are
-committed. Exact dispatcher worker retirement is verified and ready as the next
-separate prerequisite commit. It is not a model or activation, and no unrelated
-dirty work is present. Next: close canonical typed-detail admission before
-freezing the model.
+The next source-derived blockers are the independently bounded standalone-
+integrity population, pre-custody continuation diagnostics, pre-projection and
+pre-parse continuation ceilings, source-backed primitive/mount admission, and
+exact `_inventory_details` retirement. None is supplied by the inventory-tree
+wall or the bridge's 65,536-byte external command ceiling. Ratify policy before
+implementation; keep the production command map at nine until all model and
+dormant-machinery gates pass.
 
 Protected settlement scenarios/baseline/hash/assertions, frozen transport
 authority, and the epoch-5 witness remain unchanged. The witness SHA-256 is

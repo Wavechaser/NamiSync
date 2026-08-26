@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -211,6 +211,14 @@ class DetailProjection(Mapping[str, DetailValue]):
 
     entries: tuple[tuple[str, DetailValue], ...] = ()
 
+    def __post_init__(self) -> None:
+        entries = getattr(self, "entries", None)
+        if type(entries) is not tuple:
+            raise TypeError(
+                "canonical operation detail entries must be an exact tuple"
+            )
+        _project_detail_entries(entries, canonical=True)
+
     def __iter__(self) -> Iterator[str]:
         return (key for key, _value in self.entries)
 
@@ -224,9 +232,20 @@ class DetailProjection(Mapping[str, DetailValue]):
         raise KeyError(key)
 
     def to_wire(self) -> dict[str, object]:
+        source_entries = getattr(self, "entries", None)
+        if type(source_entries) is not tuple:
+            raise TypeError(
+                "canonical operation detail entries must be an exact tuple"
+            )
+        entries, omitted = _project_detail_entries(
+            source_entries,
+            canonical=True,
+        )
+        if omitted:
+            raise ValueError("canonical operation detail cannot omit values")
         return {
             key: list(value) if isinstance(value, tuple) else value
-            for key, value in self.entries
+            for key, value in entries
         }
 
 
@@ -468,28 +487,71 @@ def project_detail(
 ) -> tuple[DetailProjection, int]:
     """Snapshot one declared detail map and omit only oversized diagnostics."""
 
-    if isinstance(value, DetailProjection):
-        return value, 0
+    if type(value) is DetailProjection:
+        source_entries = getattr(value, "entries", None)
+        if type(source_entries) is not tuple:
+            raise TypeError(
+                "canonical operation detail entries must be an exact tuple"
+            )
+        entries, omitted = _project_detail_entries(
+            source_entries,
+            canonical=True,
+        )
+        return DetailProjection(entries), omitted
     if not isinstance(value, Mapping):
         raise TypeError("operation detail must be a mapping")
+    entries, omitted = _project_detail_entries(value.items(), canonical=False)
+    return DetailProjection(entries), omitted
+
+
+def _project_detail_entries(
+    items: Iterable[object],
+    *,
+    canonical: bool,
+) -> tuple[tuple[tuple[str, DetailValue], ...], int]:
     entries: list[tuple[str, DetailValue]] = []
+    seen: set[str] = set()
     leaves = 0
     path_leaves = 0
     omitted = 0
-    for key, raw in value.items():
+    for item in items:
+        if canonical:
+            if type(item) is not tuple:
+                raise TypeError(
+                    "canonical operation detail entries must be exact tuples"
+                )
+            if len(item) != 2:
+                raise ValueError(
+                    "canonical operation detail entries must contain two values"
+                )
+        try:
+            key, raw = item
+        except (TypeError, ValueError) as error:
+            raise TypeError(
+                "operation detail items must contain key/value pairs"
+            ) from error
         if type(key) is not str:
             raise TypeError("operation detail keys must be strings")
+        if not key or len(key) > 64:
+            raise ValueError("operation detail key exceeds its ASCII bound")
         try:
-            encoded_key = key.encode("ascii")
+            key.encode("ascii")
         except UnicodeEncodeError as error:
             raise ValueError("operation detail keys must be ASCII") from error
-        if not encoded_key or len(encoded_key) > 64 or key not in _DETAIL_KEYS:
+        if key not in _DETAIL_KEYS:
             raise ValueError(f"operation detail key is undeclared: {key!r}")
+        if key in seen:
+            raise ValueError(f"operation detail contains duplicate key: {key!r}")
+        seen.add(key)
         if key in _DETAIL_TEXT_KEYS:
             if type(raw) is not str:
                 raise TypeError(f"operation detail {key} must be text")
             bounded = bounded_utf8_text(raw, f"operation detail {key}")
             if bounded is None:
+                if canonical:
+                    raise ValueError(
+                        f"canonical operation detail {key} exceeds its text bound"
+                    )
                 omitted += 1
                 continue
             projected: DetailValue = bounded
@@ -504,14 +566,25 @@ def project_detail(
             projected = raw
             leaves += 1
         else:
-            if type(raw) not in {list, tuple}:
+            raw_type = type(raw)
+            valid_array = (
+                raw_type is tuple
+                if canonical
+                else raw_type is list or raw_type is tuple
+            )
+            if not valid_array:
                 raise TypeError(f"operation detail {key} must be a bounded array")
-            if len(raw) > 32:
+            raw_members = tuple(raw[:33]) if raw_type is list else raw
+            if len(raw_members) > 32:
                 raise ValueError(f"operation detail {key} exceeds its array bound")
             members: list[str] = []
             omit_array = False
-            for member in raw:
+            for member in raw_members:
                 if key in _DETAIL_SIDE_ARRAY_KEYS:
+                    if type(member) is not str:
+                        raise TypeError(
+                            f"operation detail {key} members must be text"
+                        )
                     if member not in {"source", "target"}:
                         raise ValueError(f"operation detail {key} has an invalid side")
                     members.append(member)
@@ -526,6 +599,11 @@ def project_detail(
                         )
                     bounded = bounded_utf8_text(member, f"operation detail {key}")
                     if bounded is None:
+                        if canonical:
+                            raise ValueError(
+                                f"canonical operation detail {key} member "
+                                "exceeds its text bound"
+                            )
                         omit_array = True
                         break
                     members.append(bounded)
@@ -539,7 +617,7 @@ def project_detail(
         if path_leaves > MAX_DETAIL_PATH_LEAVES:
             raise ValueError("operation detail exceeds its path-leaf bound")
         entries.append((key, projected))
-    return DetailProjection(tuple(entries)), omitted
+    return tuple(entries), omitted
 
 
 def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
@@ -638,7 +716,7 @@ def result_item_to_dict(item: ResultItem) -> dict[str, object]:
 
     if isinstance(item, ItemOutcome):
         detail = item.detail
-        if not isinstance(detail, DetailProjection):
+        if type(detail) is not DetailProjection:
             raise TypeError("operation detail was not projected")
         kind = item.kind
         if not isinstance(kind, OperationKind):

@@ -238,6 +238,20 @@ reliable; progress is a replaceable snapshot. Event details must be typed or
 schema-versioned—consumers must not infer semantics by parsing user-facing
 strings.
 
+Emitter-side `DetailProjection` is one canonical exact base value: an exact
+tuple of exact two-element tuples with unique declared ASCII string keys and
+the exact primitive variant for each key. Arrays are exact tuples with exact
+string members. Construction validates the full shape; every typed admission
+copies the validated entries into a fresh base projection, so caller aliases,
+subclasses, and raw mappings cannot rewrite retained state or carry hidden
+graphs. Serialization revalidates the owned projection. Diagnostic, path,
+array, total-leaf, and path-leaf bounds apply before retaining the snapshot;
+invalid key/path size refuses before encoding, and duplicate mapping items
+refuse before omission or wire projection. Oversized optional diagnostics from
+raw mappings are still omitted whole with their existing count, while a
+purportedly canonical projection must already fit and therefore refuses instead
+of manufacturing an unwitnessed omission.
+
 History is attached at admission as the distinguished reliable audit
 subscriber. Its bounded queue may apply producer backpressure only at a safe
 checkpoint boundary and only until an injected generous timeout. Drain within

@@ -272,13 +272,19 @@ omission witness. `ok` requires null reason/detail; `degraded` requires an
 detail}` per reason under the same bound; aggregate recording is degraded iff
 an item is degraded or the tuple is nonempty.
 
-`DetailProjection` is an emitter-owned immutable snapshot with at most 32
-declared primitive leaves, eight complete path leaves, 64-byte ASCII keys,
-bounded tuples/strings, `SafeInt` counts, and signed-64 quantities; arbitrary or
-nested objects, `Path`, nonfinite/arbitrary integers, undeclared keys, and
-unbounded arrays are invalid. Outer and detail paths are complete valid Unicode
-of at most 32,767 UTF-16 units. Over-limit diagnostics become null and increment
-the checked omission witness, never truncate.
+`DetailProjection` is an emitter-owned canonical exact-base snapshot: its outer
+container and key/value pairs are exact tuples, keys are unique declared exact
+ASCII strings, and each value uses its exact closed primitive variant. It has at
+most 32 declared primitive leaves, eight complete path leaves, 64-byte ASCII
+keys, and bounded tuple/string values; arbitrary or nested objects, subclasses,
+`Path`, nonfinite/arbitrary integers, duplicate or undeclared keys, and unbounded
+arrays are never retained. Typed construction and admission revalidate the
+complete shape. Raw mappings and projection subclasses are copied to the base
+shape;
+over-limit raw diagnostics are omitted whole and increment the checked omission
+witness, never truncate, while an invalid exact-base prebuilt projection
+refuses. Outer and detail paths are complete valid Unicode of at most 32,767
+UTF-16 units.
 
 Event v5 uses an item-free `TerminalSummary` with
 `recording_degraded_items`, `omitted_detail_count`, and the exact copied nullable
