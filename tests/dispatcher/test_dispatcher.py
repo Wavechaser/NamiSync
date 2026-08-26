@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import gc
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Event, Lock, Thread, get_ident
@@ -524,8 +525,9 @@ def test_pause_settlement_and_live_event_wait_for_durable_audit_attempt() -> Non
     assert dispatcher.shutdown().complete
 
 
+@pytest.mark.parametrize("after_handoff", [False, True])
 def test_immediate_resume_waits_for_paused_generation_retirement(
-    monkeypatch,
+    monkeypatch, after_handoff: bool,
 ) -> None:
     first_entered = Event()
     retire_entered = Event()
@@ -571,8 +573,12 @@ def test_immediate_resume_waits_for_paused_generation_retirement(
             and key.session_id == session_ids[0]
             and not retire_entered.is_set()
         ):
+            if after_handoff:
+                original_worker_done(key)
             retire_entered.set()
             assert release_retirement.wait(2)
+            if after_handoff:
+                return
         return original_worker_done(key)
 
     monkeypatch.setattr(dispatcher, "_worker_done", gated_worker_done)
@@ -582,10 +588,10 @@ def test_immediate_resume_waits_for_paused_generation_retirement(
     assert dispatcher.pause(session_id).accepted
     wait_for(dispatcher, session_id, SessionState.PAUSED)
     assert retire_entered.wait(2)
-    with dispatcher._condition:
-        old_key = dispatcher._current_workers[session_id]
 
     try:
+        with dispatcher._condition:
+            old_key = dispatcher._current_workers[session_id]
         assert dispatcher.resume(session_id).accepted
         probe = dispatcher.submit("probe", b"probe")
         wait_for(dispatcher, probe, SessionState.COMPLETED)
@@ -604,8 +610,9 @@ def test_immediate_resume_waits_for_paused_generation_retirement(
     assert dispatcher.shutdown().complete
 
 
+@pytest.mark.parametrize("after_handoff", [False, True])
 def test_cancel_visible_paused_before_retirement_hands_off_once(
-    monkeypatch,
+    monkeypatch, after_handoff: bool,
 ) -> None:
     first_entered = Event()
     retire_entered = Event()
@@ -653,8 +660,12 @@ def test_cancel_visible_paused_before_retirement_hands_off_once(
             and key.session_id == session_ids[0]
             and not retire_entered.is_set()
         ):
+            if after_handoff:
+                original_worker_done(key)
             retire_entered.set()
             assert release_retirement.wait(2)
+            if after_handoff:
+                return
         return original_worker_done(key)
 
     monkeypatch.setattr(dispatcher, "_worker_done", gated_worker_done)
@@ -684,6 +695,188 @@ def test_cancel_visible_paused_before_retirement_hands_off_once(
     assert canceled.result.disposition is Disposition.RAN
     assert settled == [(b"continued", Disposition.RAN)]
     assert dispatcher.shutdown().complete
+
+
+@pytest.mark.parametrize("exception_hook", [False, True])
+def test_terminal_close_waits_for_actual_worker_exit(
+    monkeypatch, exception_hook: bool,
+) -> None:
+    entered = Event()
+    release_work = Event()
+    retiring = Event()
+    release_retirement = Event()
+    invocation_refs = []
+    session_ids = []
+    hook_types = []
+    store = InMemorySessionStore()
+
+    class WorkerExit(BaseException):
+        pass
+
+    def run(context):
+        entered.set()
+        assert release_work.wait(2)
+        return OperationResult(SessionState.COMPLETED)
+
+    def open_invocation(payload):
+        invocation = Invocation(run, payload)
+        invocation_refs.append(ref(invocation))
+        return invocation
+
+    dispatcher = Dispatcher(
+        {
+            "held": WorkflowRegistration(
+                lambda payload: PreparedSession(payload, frozenset()),
+                open_invocation,
+            ),
+            "probe": registration(lambda _payload: completed),
+        },
+        store=store,
+        audit_timeout=0.05,
+    )
+    original_worker_done = dispatcher._worker_done
+
+    def gated_worker_done(key):
+        original_worker_done(key)
+        if key.session_id == session_ids[0]:
+            if exception_hook:
+                raise WorkerExit()
+            retiring.set()
+            assert release_retirement.wait(2)
+
+    def hook(args):
+        hook_types.append(args.exc_type)
+        retiring.set()
+        assert release_retirement.wait(2)
+
+    monkeypatch.setattr(dispatcher, "_worker_done", gated_worker_done)
+    if exception_hook:
+        monkeypatch.setattr(threading, "excepthook", hook)
+    try:
+        session_id = dispatcher.submit("held", b"private invocation payload")
+        session_ids.append(session_id)
+        assert entered.wait(2)
+        release_work.set()
+        wait_for(dispatcher, session_id, SessionState.COMPLETED)
+        assert retiring.wait(2)
+        assert invocation_refs[0]() is not None
+
+        probe = dispatcher.submit("probe", b"probe")
+        wait_for(dispatcher, probe, SessionState.COMPLETED)
+        with pytest.raises(TimeoutError, match="worker.*retir"):
+            dispatcher.close(session_id)
+        assert dispatcher.get(session_id).result is not None
+        assert any(row.session_id == session_id for row in store.snapshot())
+        assert session_id not in dispatcher._closing
+        assert session_id not in dispatcher._cleanup_irreversible
+        stream = dispatcher.subscribe(session_id)
+        stream.close()
+
+        shutdown = dispatcher.shutdown(0.03)
+        assert not shutdown.complete
+        assert session_id in shutdown.unfinished
+        assert shutdown.custody_released
+    finally:
+        release_work.set()
+        release_retirement.set()
+        assert dispatcher.shutdown().complete
+
+    dispatcher.close(session_id)
+    with pytest.raises(SessionNotFound):
+        dispatcher.get(session_id)
+    gc.collect()
+    assert invocation_refs[0]() is None
+    assert hook_types == ([WorkerExit] if exception_hook else [])
+
+
+def test_worker_self_close_is_retryable_without_dropping_session(monkeypatch) -> None:
+    attempted = Event()
+    close_outcomes = []
+    dispatcher = Dispatcher({"work": registration(lambda _payload: completed)})
+    original_worker_done = dispatcher._worker_done
+
+    def close_from_worker(key):
+        original_worker_done(key)
+        try:
+            dispatcher.close(key.session_id)
+        except TimeoutError as error:
+            close_outcomes.append(str(error))
+        else:
+            close_outcomes.append("closed")
+        attempted.set()
+
+    monkeypatch.setattr(dispatcher, "_worker_done", close_from_worker)
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        assert attempted.wait(2)
+        assert len(close_outcomes) == 1
+        assert "own worker" in close_outcomes[0]
+        assert dispatcher.get(session_id).result is not None
+        dispatcher.close(session_id)
+    finally:
+        assert dispatcher.shutdown().complete
+
+
+def test_terminal_close_releases_payload_while_scheduler_stays_alive() -> None:
+    payload_refs = []
+
+    class Payload(bytes):
+        pass
+
+    class PrivateGraph:
+        pass
+
+    def prepare(_request):
+        payload = Payload(b"private continuation")
+        payload.graph = PrivateGraph()
+        payload_refs.append(ref(payload.graph))
+        return PreparedSession(payload)
+
+    dispatcher = Dispatcher(
+        {"work": WorkflowRegistration(prepare, lambda _payload: Invocation(completed))}
+    )
+    try:
+        session_id = dispatcher.submit("work", None)
+        wait_for(dispatcher, session_id, SessionState.COMPLETED)
+        dispatcher.close(session_id)
+        assert dispatcher._scheduler.is_alive()
+        gc.collect()
+        assert payload_refs[0]() is None
+    finally:
+        assert dispatcher.shutdown().complete
+
+
+def test_registered_unstarted_worker_is_not_reaped(monkeypatch) -> None:
+    start_entered = Event()
+    release_start = Event()
+    original_start = Thread.start
+
+    def gated_start(thread):
+        if thread.name.startswith("namisync-session-"):
+            start_entered.set()
+            assert release_start.wait(2)
+        original_start(thread)
+
+    monkeypatch.setattr(Thread, "start", gated_start)
+    dispatcher = Dispatcher({"work": registration(lambda _payload: completed)})
+    try:
+        session_id = dispatcher.submit("work", b"payload")
+        assert start_entered.wait(2)
+        with dispatcher._condition:
+            key = dispatcher._current_workers[session_id]
+            attempt = dispatcher._workers[key]
+        assert attempt.thread.ident is None
+        assert not attempt.thread.is_alive()
+
+        shutdown = dispatcher.shutdown(0.03)
+        assert not shutdown.complete
+        assert session_id in shutdown.unfinished
+        with dispatcher._condition:
+            assert dispatcher._current_workers[session_id] == key
+            assert dispatcher._workers[key] is attempt
+    finally:
+        release_start.set()
+        assert dispatcher.shutdown().complete
 
 
 def test_state_change_publication_cannot_fall_behind_a_later_transition(
@@ -3137,20 +3330,44 @@ def test_late_history_after_caller_timeout_matches_live_degraded_axis() -> None:
 
 
 def test_observer_factory_failure_degrades_audit_without_aborting_admission() -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+    entered = Event()
+    release = Event()
+
     def unavailable_history(record):
-        raise OSError("history database cannot be opened")
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        error = OSError("history database cannot be opened")
+        error.private_graph = graph
+        raise error
+
+    def run(context):
+        entered.set()
+        assert release.wait(2)
+        return OperationResult(SessionState.COMPLETED)
 
     dispatcher = Dispatcher(
-        {"observed": registration(lambda payload: completed)},
+        {"observed": registration(lambda payload: run)},
         audit_observer_factory=unavailable_history,
     )
-    session_id = dispatcher.submit("observed", b"payload")
-    record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    try:
+        session_id = dispatcher.submit("observed", b"payload")
+        assert entered.wait(2)
+        gc.collect()
+        assert len(retained) == 1
+        assert retained[0]() is None
+        release.set()
+        record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
 
-    assert record.result is not None
-    assert record.result.status is SessionState.COMPLETED
-    assert record.result.audit is RecordingStatus.DEGRADED
-    assert dispatcher.shutdown().complete
+        assert record.result is not None
+        assert record.result.status is SessionState.COMPLETED
+        assert record.result.audit is RecordingStatus.DEGRADED
+    finally:
+        release.set()
+        assert dispatcher.shutdown().complete
 
 
 def test_terminal_record_never_exposes_provisional_audit_ok() -> None:

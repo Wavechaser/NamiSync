@@ -39,6 +39,12 @@ calibrated, or accepted.
   shared host fixture, and v5 transport migration. The first installed run's
   five failures were traced to the stale fixture and reproduced separately
   before correction; all eight installed witnesses then passed.
+- Dispatcher close now waits for its exact worker thread to exit before any
+  session cleanup, under one bounded deadline and outside dispatcher locks.
+  Current-generation fencing survives retirement handoff through actual thread
+  death, including a running exception hook; timeout and self-close keep all
+  ownership intact for retry. The scheduler also drops its temporary selected
+  record and the degraded-audit sentinel discards factory exception graphs.
 
 ## Verification
 
@@ -48,6 +54,10 @@ calibrated, or accepted.
   parity. Full details remain in `092b628:docs/HANDOFF.md`.
 - Dispatcher prerequisite: both new retention regressions failed before the
   fix; core/dispatcher/workflows then passed **1,905 tests, 1 privilege skip**.
+- Exact worker-retirement prerequisite: **6 expected failures, 3 passes**
+  before the fix; the focused matrix now passes **10 tests** and the complete
+  dispatcher file passes **81 tests**. Independent adversarial review found no
+  remaining worker, close, shutdown, lock-order, or sentinel-lifetime defect.
 - Observation prerequisite: **3 expected failures, 2 passes** before the fix;
   **55 service tests** and the required-Node interfaces department's **1,299
   tests** pass afterward. Independent review found no remaining issue.
@@ -62,7 +72,8 @@ calibrated, or accepted.
   tests passed, 6 headed deselected**. Installed-wheel transport/native-host
   run: **8 passed, 32 deselected** (55.17 s).
 - Final ordinary required-Node suite after all fixture corrections:
-  **4,541 passed, 4 privilege skips, 28 headed deselected** (191.24 s).
+  **4,567 passed, 4 privilege skips, 28 headed deselected** (198.13 s),
+  including the exact worker-retirement change.
   No required Node gate skipped. Whitespace validation passed.
 
 ## Next work and preserved boundaries
@@ -72,10 +83,9 @@ Follow checkpoint 4's three ordered stops in
 model/validator first, dormant machinery second, coherent 12-row activation
 third. No size constant may be selected or retuned from measurement.
 
-The remaining source-derived prerequisites include canonical typed-detail
-admission and a sound worker-retirement witness.
-Dispatcher close currently does not prove its exact worker has exited; do not
-use successful close as that proof until the ownership fix lands.
+The next source-derived prerequisite is canonical typed-detail admission.
+Dispatcher close now provides the exact worker-retirement witness required by
+the ownership model; do not weaken its registered-thread fence or bounded join.
 
 The model must separately account for full serialization occurrences (including
 shared dependency expansion), old/new generations, full result/audit owners,
@@ -84,12 +94,11 @@ Path caches, and native/browser copies. The frozen transport sizer is not a
 complete task-graph validator. Standalone integrity's row reload also needs its
 own admission bound; an inventory-tree limit does not constrain it today.
 
-The native and observation prerequisites are committed; full-result diagnostic
-normalization is delivered at this safe stop. Remaining dirty dispatcher files
-and their tests/docs belong to exact worker retirement. Neither that fix nor
-this normalization is a committed model or activation. No unrelated dirty work
-was present. Next: finish independent review and verification of worker
-retirement, then canonical typed-detail admission, before freezing the model.
+The native, observation, and full-result diagnostic prerequisites are
+committed. Exact dispatcher worker retirement is verified and ready as the next
+separate prerequisite commit. It is not a model or activation, and no unrelated
+dirty work is present. Next: close canonical typed-detail admission before
+freezing the model.
 
 Protected settlement scenarios/baseline/hash/assertions, frozen transport
 authority, and the epoch-5 witness remain unchanged. The witness SHA-256 is

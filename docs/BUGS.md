@@ -459,6 +459,22 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Worker retirement ownership gap. Terminal
+  publication and retirement handoff could expose a session as closable while
+  its exact worker, invocation frame, or exception hook was still live. Cause:
+  `_worker_done` removed the attempt before the thread exited. Fixed by keeping
+  the current-generation fence and thread registration through actual death,
+  reaping only started marked attempts, and making close join the exact worker
+  outside dispatcher locks under its existing bounded deadline. Timeout and
+  self-close leave all cleanup ownership retryable; failing-first regressions
+  cover ordinary exit, exception-hook exit, successor fencing, and shutdown.
+- MODERATE - FIXED (2026-08-27). Audit factory exception retention. A failed
+  observer factory kept its original exception, traceback, and any attached
+  private graph in the degraded observer for the session lifetime. Cause: the
+  sentinel stored the caught exception only to chain later fixed failures.
+  Fixed by discarding it at the boundary and raising fresh fixed errors from no
+  cause, while preserving degraded audit and failed-prefix behavior. A weak-
+  reference regression proves the factory graph retires during the live run.
 - MODERATE - FIXED (2026-08-27). Exception graph retention. Contained
   store-write and custody-release failures could retain earlier session,
   continuation, or result graphs after close, accumulating across sessions.

@@ -76,8 +76,14 @@ generic canceled result. A callback failure is an explicit adapter failure and
 terminals `FAILED`; it is never masked as clean cancellation.
 
 `close()` is distinct from cancellation: it accepts only an already-terminal
-record, blocks new subscriptions, and waits for audit/subscriber cleanup before
-dropping the session-store row or any in-memory ownership. Hub cleanup reports
+record and first waits for that session's exact worker thread to exit, outside
+both dispatcher locks. Worker retirement and subsequent publication/audit
+cleanup share one bounded deadline. A worker cannot close its own session;
+self-close and a retirement timeout are explicit retryable refusals that leave
+the session and its subscriptions intact. Successful close therefore includes
+worker-frame retirement, not merely terminal publication. It then blocks new
+subscriptions and waits for audit/subscriber cleanup before dropping the
+session-store row or any in-memory ownership. Hub cleanup reports
 whether it completed, timed out before acquiring the hub publication gate, or
 closed subscriptions but still has audit cleanup pending. A pre-gate timeout
 changes no hub state, removes the temporary close claim, and allows subscription
@@ -171,10 +177,22 @@ reacquires and revalidates volumes.
 
 Scheduler selection installs the current generation, its worker registration,
 and all reservations atomically before removing the pending entry or starting
-the thread. `CANCELING` never creates a second worker while an acquisition or
-pause generation is current. Worker retirement identity-checks again under the
-session publication lock, enqueues any surviving PENDING/CANCELING handoff, and
-only then exposes the session for a successor generation.
+the thread. The selection loop releases its temporary record reference before
+launching or waiting, so an idle scheduler cannot retain an earlier payload
+after the session closes. `CANCELING` never creates a second worker while an
+acquisition or pause generation is current. Worker retirement identity-checks
+again under the session publication lock and enqueues any surviving
+PENDING/CANCELING handoff.
+That worker then marks its exact attempt as retiring; the current-generation
+fence and thread ownership remain until the thread is no longer alive. The
+scheduler reaps only started, marked attempts and uses a short bounded wait
+only while retirement is pending. A registered thread that has not started is
+never mistaken for a finished attempt. This includes the remaining worker and
+handoff frames and a still-running thread exception hook. Shutdown reports a
+still-live retiring worker as unfinished even when its terminal result is
+already visible. Core `BaseException` propagation is unchanged; an external
+exception hook that saves an exception after returning remains a separate
+caller-owned reference, not a dispatcher retirement guarantee.
 
 Cross-process physical-volume exclusion is required before any M0 mutation,
 using a named OS mutex or lock file keyed deterministically by volume serial
@@ -398,7 +416,10 @@ Boolean failure markers. The dispatcher does not retain the exception, its
 arguments, attributes, cause, context, or traceback: any of those can keep an
 earlier live record or full workflow graph reachable after session close.
 The markers do not change filesystem outcomes, store fallback, release order,
-or the existing shutdown result. Caller-owned exceptions and audit observers
+or the existing shutdown result. A failed audit-observer factory also retains
+no initiating exception: its sentinel raises only a fresh fixed error, keeping
+the existing failed-prefix audit behavior without retaining factory frames.
+Caller-owned exceptions and audit observers
 may still reference earlier records; this boundary does not promise
 whole-process or secure-memory erasure. BR-G-45 remains open.
 

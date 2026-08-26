@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from threading import Condition, Lock, Thread
+from threading import Condition, Lock, Thread, current_thread
 from time import monotonic
 from typing import Callable
 from uuid import uuid4
@@ -61,6 +61,7 @@ from namisync.dispatcher.store import InMemorySessionStore
 
 _AdmissionRollback = Callable[[], None]
 _AdmissionAttach = Callable[[SessionId, EventStream], _AdmissionRollback]
+_WORKER_RETIRE_POLL_SECONDS = 0.01
 
 
 def _stored_record(record: SessionRecord) -> StoredSessionRecord:
@@ -114,17 +115,14 @@ class _Control:
 class _DegradedAuditObserver:
     """Sentinel that projects observer-construction failure onto audit status."""
 
-    def __init__(self, failure: BaseException) -> None:
-        self._failure = failure
-
     def on_event(self, envelope) -> RecordingStatus:
-        raise RuntimeError("audit observer is unavailable") from self._failure
+        raise RuntimeError("audit observer is unavailable") from None
 
     def flush(self) -> None:
         pass
 
     def finalize(self, result: OperationResult) -> RecordingStatus:
-        raise RuntimeError("audit observer is unavailable") from self._failure
+        raise RuntimeError("audit observer is unavailable") from None
 
     def close(self) -> None:
         pass
@@ -217,6 +215,7 @@ class Dispatcher:
         self._leases: dict[_WorkerKey, ResourceLease] = {}
         self._workers: dict[_WorkerKey, _WorkerAttempt] = {}
         self._current_workers: dict[SessionId, _WorkerKey] = {}
+        self._retiring_workers: set[_WorkerKey] = set()
         self._admitting = 0
         self._admission_order = 0
         self._accepting = True
@@ -279,8 +278,8 @@ class Dispatcher:
         )
         try:
             observer = self._audit_factory(record)
-        except BaseException as error:
-            observer = _DegradedAuditObserver(error)
+        except BaseException:
+            observer = _DegradedAuditObserver()
         hub = EventHub(
             session_id=session_id,
             initial_state=record.state,
@@ -668,11 +667,48 @@ class Dispatcher:
                 hub._release_publication()
 
     def close(self, session_id: SessionId) -> None:
-        publication_lock = self._publication_lock_for(session_id)
-        if publication_lock is None:
-            raise SessionNotFound(str(session_id))
-        with publication_lock:
-            with self._condition:
+        deadline = monotonic() + self._audit_timeout
+        if not self._condition.acquire(timeout=max(0.0, deadline - monotonic())):
+            raise TimeoutError(
+                "dispatcher state did not quiesce; "
+                f"cleanup did not start: {session_id}"
+            )
+        try:
+            record = self._records.get(session_id)
+            if record is None:
+                raise SessionNotFound(str(session_id))
+            if not self._is_settled(record):
+                raise SessionNotTerminal(str(session_id))
+            key = self._current_workers.get(session_id)
+            attempt = self._workers.get(key) if key is not None else None
+            publication_lock = self._state_publication_locks[session_id]
+        finally:
+            self._condition.release()
+        if attempt is not None:
+            if attempt.thread is current_thread():
+                raise TimeoutError(
+                    "session cannot close from its own worker; "
+                    f"retry after retirement: {session_id}"
+                )
+            if attempt.thread.ident is not None:
+                attempt.thread.join(max(0.0, deadline - monotonic()))
+            if attempt.thread.ident is None or attempt.thread.is_alive():
+                raise TimeoutError(
+                    "session worker retirement is pending; "
+                    f"cleanup did not start: {session_id}"
+                )
+        if not publication_lock.acquire(timeout=max(0.0, deadline - monotonic())):
+            raise TimeoutError(
+                f"session publication did not quiesce; cleanup did not start: {session_id}"
+            )
+        try:
+            if not self._condition.acquire(timeout=max(0.0, deadline - monotonic())):
+                raise TimeoutError(
+                    "dispatcher state did not quiesce; "
+                    f"cleanup did not start: {session_id}"
+                )
+            try:
+                self._reap_retired_workers_locked()
                 record = self._records.get(session_id)
                 if record is None:
                     raise SessionNotFound(str(session_id))
@@ -680,7 +716,9 @@ class Dispatcher:
                     raise SessionNotTerminal(str(session_id))
                 self._closing.add(session_id)
                 hub = self._hubs[session_id]
-            close_status = hub.close(self._audit_timeout)
+            finally:
+                self._condition.release()
+            close_status = hub.close(max(0.0, deadline - monotonic()))
             if close_status is EventHubCloseStatus.PUBLICATION_TIMEOUT:
                 with self._condition:
                     # Shutdown owns its close claim once admission stops.
@@ -714,6 +752,8 @@ class Dispatcher:
                 self._cleanup_irreversible.discard(session_id)
                 self._item_events.pop(session_id, None)
                 self._condition.notify_all()
+        finally:
+            publication_lock.release()
 
     def shutdown(self, timeout: float = 10.0) -> ShutdownResult:
         if timeout < 0:
@@ -903,6 +943,7 @@ class Dispatcher:
             launches: list[_WorkerAttempt] = []
             with self._condition:
                 while not launches:
+                    self._reap_retired_workers_locked()
                     selected: list[SessionId] = []
                     waiting_resources: set[ResourceId] = set()
                     for session_id in tuple(self._pending):
@@ -934,6 +975,7 @@ class Dispatcher:
                             self._register_attempt_locked(record, reserve=True)
                         )
                         selected.append(session_id)
+                    record = None
                     if selected:
                         selected_set = set(selected)
                         self._pending = deque(
@@ -944,7 +986,10 @@ class Dispatcher:
                     if not self._accepting and not self._pending and not self._workers:
                         return
                     if not selected:
-                        self._condition.wait()
+                        self._condition.wait(
+                            _WORKER_RETIRE_POLL_SECONDS
+                            if self._retiring_workers else None
+                        )
             for attempt in launches:
                 attempt.thread.start()
 
@@ -1262,9 +1307,8 @@ class Dispatcher:
         publication_lock = self._publication_lock_for(session_id)
         if publication_lock is None:
             with self._condition:
-                self._workers.pop(key, None)
-                if self._current_workers.get(session_id) == key:
-                    self._current_workers.pop(session_id, None)
+                if key in self._workers:
+                    self._retiring_workers.add(key)
                 self._condition.notify_all()
             return
         transition: tuple[SessionRecord, EventHub] | None = None
@@ -1272,8 +1316,6 @@ class Dispatcher:
             try:
                 with self._condition:
                     if not self._is_current_worker_locked(key):
-                        self._workers.pop(key, None)
-                        self._condition.notify_all()
                         return
                     record = self._records.get(session_id)
                     control = self._controls.get(session_id)
@@ -1298,10 +1340,21 @@ class Dispatcher:
                     hub.emit(StateChanged(updated.state))
             finally:
                 with self._condition:
-                    if self._current_workers.get(session_id) == key:
-                        self._current_workers.pop(session_id, None)
-                    self._workers.pop(key, None)
+                    if key in self._workers:
+                        self._retiring_workers.add(key)
                     self._condition.notify_all()
+
+    def _reap_retired_workers_locked(self) -> None:
+        for key in tuple(self._retiring_workers):
+            attempt = self._workers[key]
+            # Registered-but-unstarted threads also report not alive.
+            if attempt.thread.ident is None or attempt.thread.is_alive():
+                continue
+            if self._current_workers.get(key.session_id) == key:
+                self._current_workers.pop(key.session_id)
+            self._workers.pop(key)
+            self._retiring_workers.remove(key)
+            self._condition.notify_all()
 
     def _publication_lock_for(self, session_id: SessionId):
         # Never wait for a publication lock while holding ``_condition``.

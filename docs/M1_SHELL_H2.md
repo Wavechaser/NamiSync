@@ -348,10 +348,11 @@ the following before accepting the first model commit:
   absolute roots can become distinct lists, strings, and decoded objects.
   Keep this future-copy liability separate from the identity-deduplicated
   retained-domain walls; a constant multiple of those walls alone is unsound.
-- Original history-observer payloads, delayed audit finalization, worker
-  retirement, callback retry, observation stream history, and exception
-  tracebacks are real owners.
-  Each needs an explicit finite charge and retirement condition, or structural
+- Original history-observer payloads, delayed audit finalization, callback
+  retry, and remaining exception tracebacks are real owners. Observation-stream
+  history and dispatcher worker frames now have explicit release witnesses;
+  exact worker retirement remains fenced through thread exit. Every remaining
+  owner needs an explicit finite charge and retirement condition, or structural
   elimination, before a completion reservation may be released.
 - The complete-graph validator must classify non-slotted instance dictionaries,
   mapping-proxy backing stores, mutable-container high-water capacity, `Path`
