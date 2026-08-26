@@ -169,6 +169,13 @@ error cannot rewrite persisted or live terminal truth.
 
 ## Admission, Idempotency, And Hashes
 
+History JSON/hash encoding requires Unicode scalar strings and keys and uses
+strict UTF-8; valid-Unicode bytes remain unchanged. Malformed required context
+refuses before observation or persistence. Optional item diagnostics already
+omit invalid Unicode and count the omission before serialization; strict
+encoding does not turn those omissions into lost result items. Event and
+recording-issue readback retains its existing typed Unicode validation.
+
 Only hashes for the current window are retained in memory. The observer keeps
 one scalar highest accepted sequence. A sequence within the pending window is
 verified from that bounded map; an older sequence is resolved with an indexed

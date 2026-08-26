@@ -4,6 +4,7 @@ from contextlib import closing, contextmanager
 import sqlite3
 from dataclasses import replace
 from datetime import timedelta
+import json
 from pathlib import Path
 
 import pytest
@@ -2498,6 +2499,36 @@ def test_history_sequence_admission_does_not_scan_prior_hashes(tmp_path: Path) -
         for sequence in range(1, 101):
             observer.on_event(_envelope(record, sequence, _item(sequence)))
         assert observer._highest_event_seq == 100
+
+
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+@pytest.mark.parametrize("position", ("key", "value"))
+def test_history_json_rejects_nested_surrogate_code_units(text: str, position: str) -> None:
+    nested = {text: "scalar"} if position == "key" else {"scalar": text}
+    with pytest.raises(UnicodeEncodeError):
+        history_module._json_bytes({"nested": [nested]})
+
+
+def test_history_json_preserves_valid_unicode_bytes() -> None:
+    value = {"nested": [{"\u00e9": "\U0001f600", "literal": r"\ud800"}]}
+    expected = json.dumps(
+        value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")
+    assert history_module._json_bytes(value) == expected
+    assert json.loads(expected) == value
+
+
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+def test_history_rejects_malformed_required_context_before_writing(
+    tmp_path: Path, text: str,
+) -> None:
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        with closing(connect_history_reader(store.path)) as connection:
+            before = tuple(connection.iterdump())
+        with pytest.raises(UnicodeEncodeError):
+            store.observer(_record(), HistoryContext("run-1", "host-" + text))
+        with closing(connect_history_reader(store.path)) as connection:
+            assert tuple(connection.iterdump()) == before
 
 
 def test_unpaired_surrogate_diagnostic_is_omitted_before_history_json(

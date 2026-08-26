@@ -33,10 +33,15 @@ numeric file-index preimages. Recorder and plan hashes now project declared
 contract fields explicitly and quote canonical `FileIndex128` text; ordinary
 integers remain JSON numbers. SQLite column shapes and the history contract id
 do not change. This fixes canonical consistency and latent portability risk,
-not demonstrated Python integer-precision loss. Identityless hash bytes and the
-existing lossless surrogate-escaping rule remain unchanged: JSON escapes literal
-backslashes before UTF-8 encoding, so the reported raw-surrogate collision did
-not occur in these hashes. Diagnostic text is not discarded under that rationale.
+not demonstrated Python integer-precision loss. Valid-Unicode identityless hash
+bytes remain unchanged. A later boundary hardening requires Unicode scalar
+strings/keys and strict UTF-8 without another epoch or schema change. JSON had
+already distinguished surrogate escapes from literal backslashes; this is a
+malformed-input/round-trip fix, not a demonstrated hash collision. Optional scan
+warning detail is omitted at construction if malformed; its old captured
+receipt consequently conflicts without mutation even when identityless. Valid
+observations are still recorded. [CORE.md](CORE.md) and [RECORDER.md](RECORDER.md)
+own that input policy and replay behavior; frozen old bytes remain immutable.
 
 Both old epoch-5 databases, either mixed 5/6 direction, and epoch 6 carrying the
 old ledger contract id are refused, including when the old markers are committed

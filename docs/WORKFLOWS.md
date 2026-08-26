@@ -274,9 +274,14 @@ The interface-facing `PlanOperationView` retains `prior_target_path` separately
 from source and planned target paths. Review adapters use it as the displayed
 origin for recase, move, and move-update rows, so the target-side rename is not
 lost while translating the immutable core plan into a presentation model.
-Workflow JSON keeps valid-Unicode bytes stable and backslash-escapes an
-unpaired surrogate defensively, matching plan, ledger-hash, and history
-serialization without weakening path validation. Decoding rejects duplicate
+Workflow JSON keeps valid-Unicode bytes stable and uses strict UTF-8, matching
+plan, ledger-hash, and history serialization. Python surrogate code units,
+including an explicit high/low pair, are refused rather than changing meaning
+on round trip. Both payload decoders validate every decoded string and key
+before domain construction, including nested continuation fields. JSON escaped
+pairs that decode to one valid supplementary character remain accepted, as does
+literal backslash text. This changes neither wire versions nor valid committed
+plan fingerprints. Decoding also rejects duplicate
 object keys and the nonstandard numeric constants `NaN`, `Infinity`, and
 `-Infinity`; no payload may acquire a non-finite value through Python's
 otherwise-permissive JSON parser.

@@ -27,6 +27,9 @@ retry/pause/cancel failures; recorder and SQLite contention; malformed stored
 or interface data; and dispatcher custody/lifecycle races. When safety evidence
 is missing or contradictory, NamiSync refuses or defers the affected work and
 reports the residual truth instead of guessing.
+Canonical hash inputs and workflow payloads require valid Unicode. Malformed
+optional scan-warning detail is omitted without losing the warning or valid
+observations; required text is refused rather than silently rewritten.
 
 The full data-preservation guarantee assumes managed roots are not being
 changed by other software while NamiSync is mutating them. Observable drift is

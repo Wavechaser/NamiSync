@@ -78,10 +78,15 @@ uses the same row/correspondence reconciliation while requiring the explicit
 `recase` operation kind; it updates only stored target spelling and observed
 stat, preserving content evidence with the same file identity.
 
-Idempotency payload hashes encode valid Unicode exactly as before and
-backslash-escape an unpaired surrogate rather than raising. Validated relative
-paths still reject such code units upstream; the encoding rule is defensive for
-free-form evidence and for future contract changes.
+Idempotency payload hashes preserve valid-Unicode bytes and use strict UTF-8;
+malformed required evidence is refused before a command transaction, not escaped
+into an identity. Optional `ScanWarning.detail` is checked at construction:
+malformed Unicode becomes the existing empty detail, while code, path, valid
+detail, and scan observations remain intact. The hash covers this constructed
+command without a recorder-specific fallback. An old receipt containing the
+previously tolerated malformed detail conflicts without mutation on replay;
+valid-Unicode receipts are unchanged by this policy, so no new epoch/reset is
+required.
 
 Workflow exclusions do not call the main-ledger recorder: blocked intent and
 deferred quarantine/withholding are audit-history facts, not durable filesystem

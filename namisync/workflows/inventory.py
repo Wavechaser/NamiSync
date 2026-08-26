@@ -62,6 +62,7 @@ from namisync.core.root_authority import (
 )
 from namisync.core.scalars import (
     checked_add_signed_64,
+    require_json_unicode,
     require_safe_int,
     require_signed_64,
 )
@@ -1683,6 +1684,7 @@ def _payload(
         raise ValueError(
             "inventory workflow payload is not valid UTF-8 JSON"
         ) from error
+    require_json_unicode(value)
     data = _mapping(value)
     version = data.get("version")
     if (
@@ -1700,7 +1702,7 @@ def _json_bytes(value: object) -> bytes:
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8", errors="backslashreplace")
+    ).encode("utf-8", errors="strict")
 
 
 def _mapping(value: object) -> Mapping[str, object]:

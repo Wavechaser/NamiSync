@@ -92,6 +92,23 @@ def file_index_128_from_text(value: object, field_name: str = "file index") -> i
     return int(value)
 
 
+def require_json_unicode(value: object) -> None:
+    """Refuse surrogate code units in a decoded JSON tree's strings and keys."""
+
+    if isinstance(value, str):
+        try:
+            value.encode("utf-8", errors="strict")
+        except UnicodeEncodeError as error:
+            raise ValueError("JSON text must be valid Unicode") from error
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            require_json_unicode(key)
+            require_json_unicode(item)
+    elif isinstance(value, list):
+        for item in value:
+            require_json_unicode(item)
+
+
 def bounded_utf8_text(
     value: object,
     field_name: str,

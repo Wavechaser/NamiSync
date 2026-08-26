@@ -23,7 +23,7 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Remediate independent H2 checkpoint reviews (2026-08-26)
+#### Remediate independent H2 checkpoint reviews (2026-08-26 – 2026-08-27)
 
 - Restored settlement-gate authority and pinned continuation invariants before
   repairing retained receipts, cancellation, prerequisite recording causes,
@@ -45,8 +45,10 @@ claims explicit, independently reviewable, and regression-backed.
 - Replaced inferred dataclass hash forms with closed, explicit projections and
   frozen old-byte compatibility witnesses. Canonical full-width file identity
   advances the shared data epoch to 6 with explicit paired reset guidance;
-  schema numbers and execution-v6 wire shape stay unchanged, and lossless
-  Unicode behavior remains pinned.
+  schema numbers and execution-v6 wire shape stay unchanged. A follow-up makes
+  the four JSON/UTF-8 boundaries and workflow decoders strict about Unicode
+  scalar text, preserving valid bytes and omitting malformed optional warning
+  detail before it can suppress inventory observations; no further reset.
 - Delivered small independently reviewed commits, reconciled active versus
   historical documentation, and removed completed findings from HANDOFF.
   Parent checkpoint 3.3 remains unstarted; its private legacy decoder, the two

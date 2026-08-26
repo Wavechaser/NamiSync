@@ -325,9 +325,10 @@ rows. The installed-wheel event-diagnostic fixture migration and the separately
 noted pre-entry workflow emission issue remain unassigned, not hidden inside
 the two small browser cleanups.
 
-The next authorized follow-ups are 3R.15b, then 3R.14a, each with its own
-tests, independent review, and commit. These do not start checkpoint 3.3 or
-change integrity selection, baseline, rebaseline, or verification policy.
+The authorized follow-ups 3R.15b and 3R.14a are delivered in that order, each
+with its own tests, independent review, and commit. These do not start
+checkpoint 3.3 or change integrity selection, baseline, rebaseline, or
+verification policy, which remains held for user consideration.
 
 #### 3R.0 Ratify the remediation sequence
 
@@ -671,11 +672,11 @@ Commit: `fix(identity): hash explicit canonical projections`
   never delete user databases automatically. Execution-v6 keeps its wire shape;
   old identity-bearing commitments fail re-fingerprinting, not a blanket version
   ban. Reset discards app receipts/evidence/history, not source or target files.
-  Keep the explicit lossless surrogate-escaping rule: JSON escapes a literal
+  At this checkpoint, retain surrogate escaping: JSON escapes a literal
   backslash before UTF-8 encoding, so the reported raw-encoding collision does
-  not occur in these hashes. Pin that distinction in recorder tests and retain
-  diagnostic tolerance; do not turn malformed diagnostic text into lost scan
-  observations under a nonexistent collision rationale.
+  not occur in these hashes. Pin that distinction and preserve scan observations.
+  The later 3R.14a checkpoint supersedes this malformed-input acceptance rule
+  with strict Unicode-scalar boundaries and explicit optional-detail omission.
 - **Tests/review:** Exact maximum file index through nested plans/inventory/
   evidence and recorder hashes, ordinary integers in known projected types,
   refusal of unknown nested dataclasses/types and coercive keys, projection

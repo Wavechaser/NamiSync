@@ -340,9 +340,8 @@ def _require_json_tree(value: object) -> None:
 def canonical_json_bytes(value: object) -> bytes:
     """Encode an explicitly projected, closed JSON tree without coercion.
 
-    ``backslashreplace`` affects only malformed surrogate code units, which
-    JSON can represent with a ``\\uXXXX`` escape. Valid Unicode retains the
-    established UTF-8 encoding and therefore its existing fingerprints.
+    Strings and keys must contain Unicode scalar values, not surrogate code
+    units. Strict UTF-8 preserves established bytes for every accepted string.
     """
 
     _require_json_tree(value)
@@ -352,7 +351,7 @@ def canonical_json_bytes(value: object) -> bytes:
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8", errors="backslashreplace")
+    ).encode("utf-8", errors="strict")
 
 
 def _preservation_projection(value: PreservationPolicy) -> dict[str, object]:

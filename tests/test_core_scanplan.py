@@ -224,8 +224,8 @@ def test_native_conversion_refuses_ambiguous_ordinary_absolute_components(
         to_extended_length_path(path)
 
 
-def test_canonical_json_preserves_valid_unicode_and_safely_escapes_lone_surrogates() -> None:
-    valid = {"path": "caf\u00e9.txt"}
+def test_canonical_json_preserves_valid_unicode_bytes() -> None:
+    valid = {"path": "caf\u00e9-\U0001f600.txt", "literal": r"\ud800"}
     assert canonical_json_bytes(valid) == json.dumps(
         valid,
         ensure_ascii=False,
@@ -233,11 +233,36 @@ def test_canonical_json_preserves_valid_unicode_and_safely_escapes_lone_surrogat
         separators=(",", ":"),
     ).encode("utf-8")
 
-    hostile = {"path": "bad_" + chr(0xDCFF) + ".txt"}
-    encoded = canonical_json_bytes(hostile)
-    assert b"bad_\\udcff.txt" in encoded
-    assert json.loads(encoded.decode("utf-8")) == hostile
-    assert encoded != canonical_json_bytes({"path": r"bad_\udcff.txt"})
+
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+@pytest.mark.parametrize("position", ("key", "value"))
+def test_canonical_json_rejects_surrogate_code_units(text: str, position: str) -> None:
+    value = {text: "scalar"} if position == "key" else {"scalar": text}
+    with pytest.raises(UnicodeEncodeError):
+        canonical_json_bytes({"nested": [value]})
+
+
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+def test_scan_warning_omits_only_malformed_optional_unicode(text: str) -> None:
+    warning = model_contracts.ScanWarning(
+        model_contracts.ScanWarningCode.PATH_UNREPRESENTABLE, None, "bad-" + text,
+    )
+    assert warning.code is model_contracts.ScanWarningCode.PATH_UNREPRESENTABLE
+    assert warning.rel_path is None
+    assert warning.detail == ""
+
+
+def test_scan_warning_retains_complete_valid_detail_and_rejects_nontext() -> None:
+    detail = "\u00e9\U0001f600" * 2_000 + r"\ud800"
+    warning = model_contracts.ScanWarning(
+        model_contracts.ScanWarningCode.ACCESS_DENIED, "folder", detail,
+    )
+    assert warning.rel_path == "folder"
+    assert warning.detail == detail
+    with pytest.raises(TypeError):
+        model_contracts.ScanWarning(
+            model_contracts.ScanWarningCode.ACCESS_DENIED, "folder", 7,
+        )
 
 
 @dataclass(frozen=True)
@@ -432,12 +457,18 @@ def test_plan_projection_preserves_sequence_and_historical_volume_set_order() ->
     (
         ("primitives", {"none": None, "bool": True, "integer": (1 << 63) - 1,
                         "finite_float": 1.5, "list": ["é", "源", 0]}),
-        ("surrogate", {"text": "bad-\udcff"}),
         ("literal_escape", {"text": r"bad-\udcff"}),
     ),
 )
 def test_canonical_json_preserves_frozen_control_bytes(name: str, value: object) -> None:
     assert canonical_json_bytes(value) == frozen_vector(f"core/{name}")
+
+
+def test_frozen_surrogate_preimage_is_historical_not_current_input() -> None:
+    value = json.loads(frozen_vector("core/surrogate"))
+    assert value == {"text": "bad-\udcff"}
+    with pytest.raises(UnicodeEncodeError):
+        canonical_json_bytes(value)
 
 
 def test_operation_id_and_selection_digest_preserve_frozen_control_hashes() -> None:

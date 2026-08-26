@@ -225,6 +225,13 @@ class ScanWarning:
     def __post_init__(self) -> None:
         if self.rel_path is not None:
             validate_relative_path(self.rel_path, allow_root=True)
+        if not isinstance(self.detail, str):
+            raise TypeError("scan warning detail must be a string")
+        try:
+            self.detail.encode("utf-8", errors="strict")
+        except UnicodeEncodeError:
+            # Optional diagnostics cannot prevent recording valid observations.
+            object.__setattr__(self, "detail", "")
 
 
 class ScanScopeKind(StrEnum):

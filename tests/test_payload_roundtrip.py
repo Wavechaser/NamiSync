@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+import namisync.workflows.payloads as payload_module
 from namisync.core.evidence import (
     Attestation,
     ContentEvidence,
@@ -180,14 +181,44 @@ def test_plan_v5_and_execution_v6_are_independent_exact_payloads() -> None:
         )
 
 
-def test_plan_request_encoding_escapes_unpaired_surrogates_defensively() -> None:
-    hostile = "request_\udcff"
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+def test_plan_request_encoding_rejects_surrogate_code_units(text: str) -> None:
+    hostile = "request_" + text
     request = PlanRequest(hostile, r"C:\source", r"D:\target")
 
-    encoded = encode_plan_request(request)
+    with pytest.raises(UnicodeEncodeError):
+        encode_plan_request(request)
 
-    assert b"request_\\udcff" in encoded
-    assert decode_plan_request(encoded).request_id == hostile
+
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+@pytest.mark.parametrize("position", ("key", "value"))
+def test_workflow_json_rejects_nested_surrogate_code_units(text: str, position: str) -> None:
+    nested = {text: "scalar"} if position == "key" else {"scalar": text}
+    with pytest.raises(UnicodeEncodeError):
+        payload_module._json_bytes({"nested": [nested]})
+
+
+@pytest.mark.parametrize("text", ("\ud800", "\udcff"))
+@pytest.mark.parametrize("position", ("key", "value"))
+def test_plan_request_decoding_rejects_escaped_surrogates(text: str, position: str) -> None:
+    value = json.loads(encode_plan_request(PlanRequest("request", r"C:\source", r"D:\target")))
+    if position == "key":
+        value["options"][text] = "unexpected"
+    else:
+        value["request_id"] = text
+    with pytest.raises(ValueError, match="valid Unicode"):
+        decode_plan_request(json.dumps(value).encode("utf-8"))
+
+
+def test_plan_request_preserves_scalar_unicode_and_literal_escapes() -> None:
+    request = PlanRequest("caf\u00e9-\U0001f600-" + r"\ud800", r"C:\source", r"D:\target")
+    encoded = encode_plan_request(request)
+    assert b"caf\xc3\xa9-\xf0\x9f\x98\x80-\\\\ud800" in encoded
+    assert decode_plan_request(encoded) == request
+    # A valid JSON escaped pair denotes one scalar, not two Python code units.
+    escaped = json.dumps(json.loads(encoded)).encode("utf-8")
+    assert b"\\ud83d\\ude00" in escaped
+    assert decode_plan_request(escaped) == request
 
 
 @pytest.mark.parametrize("constant", [b"NaN", b"Infinity", b"-Infinity"])
@@ -1216,30 +1247,55 @@ def test_execution_set_rejects_recorded_identities_from_multiple_locations() -> 
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
-def test_execution_payload_escapes_unpaired_surrogates_defensively() -> None:
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+def test_execution_payload_rejects_surrogate_code_units(text: str) -> None:
     original = _rich_execution_request()
-    hostile = "source_\udcff"
     changed_plan = replace(
         original.execution_set.plan,
-        source_root=Root(r"C:\source_" + "\udcff", hostile),
+        source_root=replace(original.execution_set.plan.source_root, root_id="source_" + text),
+    )
+    changed_set = replace(original.execution_set, plan=changed_plan)
+
+    # Do not re-fingerprint first: the encoder itself must refuse this value.
+    with pytest.raises(UnicodeEncodeError):
+        encode_execution_request(ExecutionRequest(changed_set, NOW))
+
+
+@pytest.mark.parametrize("text", ("\ud800", "\udcff"))
+@pytest.mark.parametrize("position", ("key", "value"))
+def test_execution_payload_decoding_rejects_escaped_surrogates(text: str, position: str) -> None:
+    value = json.loads(encode_execution_request(_rich_execution_request()))
+    root = value["execution_set"]["plan"]["source_root"]
+    root[text if position == "key" else "root_id"] = "unexpected" if position == "key" else text
+    with pytest.raises(ValueError, match="valid Unicode"):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
+def test_execution_payload_preserves_scalar_unicode_and_commitment() -> None:
+    original = _rich_execution_request()
+    changed_plan = replace(
+        original.execution_set.plan,
+        source_root=replace(
+            original.execution_set.plan.source_root,
+            root_id="source_\u00e9\U0001f600-" + r"\ud800",
+        ),
         fingerprint=PlanFingerprint("0" * 64),
     )
     changed_plan = replace(changed_plan, fingerprint=plan_fingerprint(changed_plan))
     changed_set = replace(
         original.execution_set,
         plan=changed_plan,
-        commitment=Commitment(
-            changed_plan.fingerprint,
-            selection_digest(original.execution_set.selection),
-            NOW,
-        ),
+        commitment=replace(original.execution_set.commitment, plan_fingerprint=changed_plan.fingerprint),
     )
-
-    encoded = encode_execution_request(ExecutionRequest(changed_set, NOW))
+    request = ExecutionRequest(changed_set, NOW)
+    encoded = encode_execution_request(request)
+    assert b"source_\xc3\xa9\xf0\x9f\x98\x80-\\\\ud800" in encoded
     decoded = decode_execution_request(encoded)
-
-    assert b"source_\\udcff" in encoded
-    assert decoded.execution_set.plan.source_root.root_id == hostile
+    assert decoded == request
+    assert _commitment_error(decoded.execution_set) is None
+    escaped = json.dumps(json.loads(encoded)).encode("utf-8")
+    assert b"\\ud83d\\ude00" in escaped
+    assert decode_execution_request(escaped) == request
 
 
 def test_decoded_plan_recomputes_the_same_fingerprint() -> None:

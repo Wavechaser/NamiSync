@@ -141,8 +141,10 @@ def _seed_verified_target(setup, sync_plan, path: str, stat):
     return row_id, verified
 
 
-def test_recorder_payload_hash_escapes_unpaired_surrogates_defensively() -> None:
-    assert len(_payload_hash({"detail": "bad_\udcff"})) == 32
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+def test_recorder_payload_hash_rejects_surrogate_code_units(text: str) -> None:
+    with pytest.raises(UnicodeEncodeError):
+        _payload_hash({"detail": text})
 
 
 @dataclass(frozen=True)
@@ -169,7 +171,7 @@ def test_recorder_hash_refuses_unprojected_values(value: object) -> None:
         _payload_hash(value)
 
 
-def test_recorder_json_surrogate_and_literal_escape_remain_distinct() -> None:
+def test_historical_surrogate_hash_is_distinct_but_no_longer_accepted() -> None:
     surrogate = {"text": "bad-\udcff"}
     literal = {"text": r"bad-\udcff"}
     surrogate_bytes = frozen_vector("recorder/surrogate")
@@ -178,9 +180,10 @@ def test_recorder_json_surrogate_and_literal_escape_remain_distinct() -> None:
     assert json.loads(surrogate_bytes) == surrogate
     assert json.loads(literal_bytes) == literal
     assert surrogate_bytes != literal_bytes
-    assert _payload_hash(surrogate) == hashlib.sha256(surrogate_bytes).digest()
+    assert hashlib.sha256(surrogate_bytes).digest() != hashlib.sha256(literal_bytes).digest()
+    with pytest.raises(UnicodeEncodeError):
+        _payload_hash(surrogate)
     assert _payload_hash(literal) == hashlib.sha256(literal_bytes).digest()
-    assert _payload_hash(surrogate) != _payload_hash(literal)
 
 
 def test_inventory_receipt_hash_uses_explicit_identity_text(tmp_path: Path) -> None:
@@ -191,9 +194,14 @@ def test_inventory_receipt_hash_uses_explicit_identity_text(tmp_path: Path) -> N
     for record in (*expected["scan"]["files"], *expected["scan"]["directories"]):
         identity = record["file_identity"]
         identity["file_index"] = str(identity["file_index"])
+    # The immutable old capture retains invalid diagnostic text. Derive only
+    # its explicitly omitted current detail; do not regenerate historical bytes.
+    assert expected["scan"]["warnings"][1]["detail"] == "bad-\udcff"
+    expected["scan"]["warnings"][1]["detail"] = ""
+    assert command.scan.warnings[1].detail == ""
     canonical = json.dumps(
         expected, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
-    ).encode("utf-8", errors="backslashreplace")
+    ).encode("utf-8")
     try:
         assert setup.source_location_id == command.location_id == 1
         assert setup.host_id == command.host_id == 1
@@ -228,6 +236,10 @@ def test_recorder_command_projections_match_frozen_fields_and_encodings(
     for name, project, command in commands:
         old_bytes = frozen_vector(f"recorder/{name}/{suffix}")
         expected = json.loads(old_bytes)
+        if name == "inventory":
+            assert expected["scan"]["warnings"][1]["detail"] == "bad-\udcff"
+            expected["scan"]["warnings"][1]["detail"] = ""
+            assert command.scan.warnings[1].detail == ""
         if with_identity:
             # Only these explicit fields of the fixed captured DTOs carry IDs.
             if name == "start":
@@ -257,11 +269,11 @@ def test_recorder_command_projections_match_frozen_fields_and_encodings(
                 expected["plan"]["fingerprint"] = hashlib.sha256(plan_bytes).hexdigest()
         expected_bytes = json.dumps(
             expected, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
-        ).encode("utf-8", errors="backslashreplace")
+        ).encode("utf-8")
         actual = canonical_json_bytes(project(command))
         assert actual == expected_bytes, name
         assert _payload_hash(project(command)) == hashlib.sha256(expected_bytes).digest(), name
-        if not with_identity or name in {"finish", "visibility"}:
+        if name != "inventory" and (not with_identity or name in {"finish", "visibility"}):
             assert actual == old_bytes, name
         else:
             assert actual != old_bytes, name
@@ -470,7 +482,9 @@ def test_applied_command_receipts_replay_or_refuse_the_frozen_epoch5_hash(
             setup.recorder.path, key, f"recorder/{name}/{suffix}",
         )
         before = _ledger_state(setup.recorder.path)
-        if with_identity:
+        if with_identity or name == "inventory":
+            # Even identityless inventory now omits the captured malformed
+            # optional detail. Its old receipt must conflict without mutation.
             with pytest.raises(TokenConflictError):
                 record(command)
         else:
@@ -539,17 +553,22 @@ def test_applied_visibility_receipt_replays_and_rejects_changed_input(tmp_path: 
 
 
 @pytest.mark.parametrize(
-    "detail",
-    (_UnprojectedHashValue(), object(), {1: "not-a-string-key"}, float("nan")),
-    ids=("dataclass", "unknown-type", "non-string-key", "nonfinite"),
+    "value",
+    (
+        _UnprojectedHashValue(), object(), {1: "not-a-string-key"}, float("nan"),
+        "\ud800", "\udcff", "\ud83d\ude00",
+    ),
+    ids=("dataclass", "unknown-type", "non-string-key", "nonfinite", "high", "low", "pair"),
 )
 def test_inventory_rejects_unprojected_nested_input_before_mutation(
-    tmp_path: Path, detail: object,
+    tmp_path: Path, value: object,
 ) -> None:
     plans, inputs = hash_fixtures(False)
     command = inputs["inventory"]
-    warning = replace(command.scan.warnings[0], detail=detail)
-    malformed = replace(command, scan=replace(command.scan, warnings=(warning,)))
+    # Warning detail is checked at construction. This unvalidated evidence
+    # field still reaches the recorder's independent closed hash boundary.
+    evidence = replace(command.scan.volume_evidence, label=value)
+    malformed = replace(command, scan=replace(command.scan, volume_evidence=evidence))
     setup = setup_recorder(tmp_path / "ledger.db", plans["two_copy"])
     try:
         before = _ledger_state(setup.recorder.path)

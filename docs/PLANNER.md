@@ -104,12 +104,12 @@ refingerprinting rejects an old numeric-identity fingerprint before execution,
 while unchanged identityless fingerprints remain compatible; database reset
 does not silently rewrite old commitments.
 
-Valid Unicode strings retain their established UTF-8 encoding. A malformed
-surrogate code unit in free-form input is escaped defensively during JSON
-serialization and remains distinct from literal backslash text. The scanner
-rejects such code units before a path record exists; serializer hardening
-prevents unrelated free-form data from turning a review into a raw encoding
-failure.
+Valid Unicode strings retain their established UTF-8 encoding, including
+supplementary characters and literal backslash text. Malformed surrogate code
+units in any hash input or key refuse at strict serialization; they are not
+silently rewritten into a different decoded value. Scanner path validation and
+optional warning-detail omission remain separate admission rules described in
+[CORE.md](CORE.md).
 
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
 status. Its optional `Commitment` binds both the plan fingerprint and a

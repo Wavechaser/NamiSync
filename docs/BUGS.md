@@ -1335,6 +1335,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-27). Unicode-scalar boundary omission. Free-form
+  request/evidence text could contain Python surrogate code units; an explicit
+  high/low pair encoded successfully but decoded as one character, violating
+  payload identity. Fixed with strict UTF-8 at all four JSON encoders and
+  decoded string/key validation before workflow construction. Valid Unicode
+  and literal backslashes keep their bytes; the reported raw-encoding collision
+  was not a JSON/hash collision. Malformed optional scan-warning detail is
+  omitted at construction without dropping code, path, or observations. Frozen
+  malformed receipt replay conflicts without writes; no new epoch/reset.
 - MINOR - FIXED (2026-08-26). Implicit domain hash projection. Plan and
   recorder hashers descended through arbitrary dataclasses and coerced mapping
   keys, allowing undeclared forms to acquire idempotency identity silently.
@@ -1343,8 +1352,8 @@ defect, and move implementation-level test choreography out of the log.
   Fixed with explicit owner projections, closed JSON validation, and full-width
   quoted indexes. Epoch 6 separates changed receipts through explicit pair reset;
   old identity-bearing v6 commitments fail re-fingerprinting before execution.
-  Identityless bytes remain stable, and surrogate text stays distinct from a
-  literal backslash escape without discarding diagnostic observations.
+  Valid-Unicode identityless bytes remain stable; frozen malformed vectors stay
+  historical evidence under the later strict Unicode-scalar boundary above.
 - MODERATE - FIXED (2026-08-26). Projection byte-boundary omission. A
   structurally valid reliable event above 1,048,576 canonical bytes could pass
   Python's public-view validator and the browser, then advance browser state
@@ -1677,16 +1686,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M0 integration
 
-- MINOR - FIXED (2026-07-21). Inconsistent Unicode-encoding boundary. Path
-  validation prevented unpaired surrogates from reaching ledger/history
-  records, but ledger idempotency hashing, history hashing/detail storage, and
-  opaque workflow payload encoding would still raise if a malformed code unit
-  arrived through free-form detail or a future relaxed boundary. Cause: only
-  canonical plan JSON used the defensive final UTF-8 encoding rule; fixed by
-  applying the same valid-Unicode-compatible backslash escaping at all three
-  encoder boundaries. Current typed item diagnostics omit invalid Unicode and
-  count it before history JSON; required event/history text may refuse it.
-  Serializer tolerance is not a claim that hostile history detail round-trips.
+- MINOR - FIXED (2026-07-21; superseded 2026-08-27). Inconsistent Unicode-
+  encoding boundary. Free-form malformed diagnostic text could fail ledger,
+  history, or workflow JSON encoding despite path validation. M0 aligned the
+  encoders with the then-tolerant plan encoder. The later Unicode-scalar fix
+  replaces that fallback with strict encoding and symmetric payload admission:
+  optional scan-warning detail is omitted at construction, typed item detail
+  retains its counted omission, and required text refuses. Valid observations
+  remain recordable without claiming malformed identity text round-trips.
 - SEVERE - FIXED (2026-07-20). Pre-validation name normalization. One NTFS, SMB,
   archive, or WSL-originated name outside NamiSync's relative-path contract
   could abort planning; an unpaired surrogate could later crash ID or fingerprint

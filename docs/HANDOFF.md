@@ -1,12 +1,11 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.15b completes the live v5 validator-family
-and vocabulary rename after the earlier remediation closure at `0886c17`.
-The next behavior checkpoint is 3R.14a's strict Unicode-scalar boundary. After
-that, audit and archive the M0 criteria, then relocate `PoC_import` into
-`obsolete`, as separately reviewed documentation checkpoints. Integrity policy
-is held for user consideration; do not change it. Checkpoint 3.3 remains
-unstarted and the private legacy decoder remains intact.
+Status (2026-08-27): checkpoint 3R.14a completes the strict Unicode-scalar
+boundary after 3R.15b's live v5 naming cleanup (`1c2ca16`). Both hanging fixes
+are delivered. Next, audit and archive the M0 criteria, then relocate
+`PoC_import` into `obsolete`, as separately reviewed documentation checkpoints.
+Integrity policy is held for user consideration; do not change it. Checkpoint
+3.3 remains unstarted and the private legacy decoder remains intact.
 
 `M1_SHELL_H2.md` owns the checkpoint boundaries and full acceptance criteria.
 The safe stop is before checkpoint 3.3; do not fold the two unassigned findings
@@ -40,17 +39,23 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-3R.15b verification with required Node: the source gate first rejected the old
-function names, then the old vocabulary names. The initial interfaces run
-caught a remaining caller in the drain probe; that identifier was corrected.
-Focused browser/static/drain checks passed 96 tests (4.41 s); the final
-interfaces run passed 1,277 tests, with 3,183 deselected (43.59 s). Independent
-review confirmed the production diff is exactly 37 identifier substitutions
-across 17 names, with no validator-body changes, name collisions, missed callers,
-or weakened gates. Source scans and diff checks passed.
+3R.14a tests-first Unicode/warning regressions failed 64 cases against the old
+runtime, with five controls passing. Strict encoding/decoding and warning
+construction made the focused checks pass. The complete five-module run then
+passed 426 tests with one reparse-privilege skip (9.17 s); its initial four
+setup failures were corrected by moving the existing malformed-value injection
+from the now-validated warning constructor to an unvalidated evidence field,
+preserving the recorder's independent refusal/no-write assertions.
 
-The last ordinary/import/three-run settlement integration receipt remains in
-`0886c17:docs/HANDOFF.md`; rerun integration after the Unicode behavior fix.
+With required Node, the six affected departments passed 3,511 tests with one
+skip and 1,018 deselected (85.45 s). The ordinary suite passed 4,498 tests with
+four skips and 28 headed tests deselected (194.81 s). All skips are unavailable
+Windows symlink/reparse privileges (`WinError 1314`), not skipped Node gates.
+Import architecture kept all 11 rules. The protected settlement check passed
+30 scenarios three times with identical normalized traces and baseline parity.
+Independent source/test review found no actionable issue; documentation review
+caught stale planner/features wording, corrected before final review.
+The naming checkpoint's own receipt remains in `1c2ca16:docs/HANDOFF.md`.
 
 Protected settlement and frozen transport-authority files are unchanged, as is
 the frozen identity artifact below. No new headed acceptance is claimed;
@@ -63,7 +68,11 @@ contract id, and plan-v5/execution-v6 wire shapes remain unchanged.
 The captured MOVE vector is an isolated old-hash replay-gate witness,
 not proof of a valid historical first write; a separate valid producer control
 and stale/no-write assertion preserve that distinction. `BUGS.md` and owning
-component docs now hold the completed identity-hash and S5 dispositions.
+component docs now hold the completed identity-hash, Unicode, and S5 dispositions.
+The Unicode refinement adds no reset: valid-Unicode bytes are unchanged.
+Captured surrogate preimages remain historical refusal witnesses; the two old
+inventory vectors contain malformed optional warning detail, now omitted at
+construction, so even their identityless old receipt conflicts without writes.
 
 Ignored `build/r314-baseline/` contains the independently reviewed one-shot
 capture helper and fixed synthetic fixtures. Capture succeeded once at clean

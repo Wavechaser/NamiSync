@@ -406,6 +406,39 @@ def test_incomplete_inventory_retains_typed_scan_warnings(
     assert details[-1].warnings == (warning,)
 
 
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+def test_incomplete_inventory_omits_malformed_warning_detail_but_records_observations(
+    tmp_path: Path, text: str,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    warning = ScanWarning(ScanWarningCode.PATH_UNREPRESENTABLE, None, "bad-" + text)
+    scanner = _Scanner(records=(_file(),), warnings=(warning,))
+    scanner.complete = False
+    details: list[InventoryDetails] = []
+    result = run_inventory(
+        bind_inventory_request(
+            InventoryRequest("malformed-warning", root_path=str(root)),
+            ledger_path=ledger_path,
+            backend=_Backend(root, mount),
+            resolver=_Resolver(mount),
+        ),
+        _context(),
+        _dependencies(ledger_path, scanner, _Resolver(mount), details),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert result.recording is RecordingStatus.OK
+    assert not details[-1].complete
+    assert details[-1].observed_count == 1
+    assert details[-1].warnings == (ScanWarning(ScanWarningCode.PATH_UNREPRESENTABLE, None),)
+    with LedgerRepository(ledger_path) as repository:
+        rows = repository.get_inventory(details[-1].location_id or 0)
+    assert tuple(row.rel_path for row in rows) == ("file.txt",)
+
+
 def test_ambiguity_is_resolved_before_submission(tmp_path: Path) -> None:
     mount = tmp_path / "mount"
     clone = tmp_path / "clone"
@@ -1752,6 +1785,70 @@ def test_stale_integrity_selection_preserves_mode_filtering(
     )
 
     assert tuple(row.rel_path for row in selected) == (expected_path,)
+
+
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+@pytest.mark.parametrize("position", ("key", "value"))
+def test_inventory_json_rejects_nested_surrogate_code_units(text: str, position: str) -> None:
+    nested = {text: "scalar"} if position == "key" else {"scalar": text}
+    with pytest.raises(UnicodeEncodeError):
+        inventory_workflow._json_bytes({"nested": [nested]})
+
+
+@pytest.mark.parametrize("kind", ("inventory", "integrity"))
+@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
+def test_inventory_payload_encoding_rejects_surrogate_code_units(kind: str, text: str) -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    if kind == "inventory":
+        request = InventoryWorkflowRequest("request-" + text, binding)
+        encode = encode_inventory_request
+    else:
+        request = IntegrityWorkflowRequest("request-" + text, binding, IntegrityMode.VERIFY)
+        encode = encode_integrity_request
+    with pytest.raises(UnicodeEncodeError):
+        encode(request)
+
+
+@pytest.mark.parametrize("kind", ("inventory", "integrity"))
+@pytest.mark.parametrize("text", ("\ud800", "\udcff"))
+@pytest.mark.parametrize("position", ("key", "value"))
+def test_inventory_payload_decoding_rejects_escaped_surrogates(
+    kind: str, text: str, position: str,
+) -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    if kind == "inventory":
+        encoded = encode_inventory_request(InventoryWorkflowRequest("request", binding))
+        decode = decode_inventory_request
+    else:
+        encoded = encode_integrity_request(
+            IntegrityWorkflowRequest("request", binding, IntegrityMode.VERIFY)
+        )
+        decode = decode_integrity_request
+    value = json.loads(encoded)
+    if position == "key":
+        value["binding"][text] = "unexpected"
+    else:
+        value["request_id"] = text
+    with pytest.raises(ValueError, match="valid Unicode"):
+        decode(json.dumps(value).encode("utf-8"))
+
+
+@pytest.mark.parametrize("kind", ("inventory", "integrity"))
+def test_inventory_payload_preserves_scalar_unicode_and_literal_escapes(kind: str) -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    request_id = "caf\u00e9-\U0001f600-" + r"\ud800"
+    if kind == "inventory":
+        request = InventoryWorkflowRequest(request_id, binding)
+        encode, decode = encode_inventory_request, decode_inventory_request
+    else:
+        request = IntegrityWorkflowRequest(request_id, binding, IntegrityMode.VERIFY)
+        encode, decode = encode_integrity_request, decode_integrity_request
+    encoded = encode(request)
+    assert b"caf\xc3\xa9-\xf0\x9f\x98\x80-\\\\ud800" in encoded
+    assert decode(encoded) == request
+    escaped = json.dumps(json.loads(encoded)).encode("utf-8")
+    assert b"\\ud83d\\ude00" in escaped
+    assert decode(escaped) == request
 
 
 def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:

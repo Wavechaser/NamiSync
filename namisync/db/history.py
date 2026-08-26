@@ -336,7 +336,7 @@ def _json_bytes(value: object) -> bytes:
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8", errors="backslashreplace")
+    ).encode("utf-8", errors="strict")
 
 
 def _hash(value: object) -> bytes:

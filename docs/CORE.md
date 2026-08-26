@@ -430,17 +430,21 @@ character-suffix match.
 Filesystem enumeration may observe names outside this lexical contract. Those
 names never enter `FileRecord`, `DirRecord`, `UnsupportedRecord`, or operation
 paths: the scanner retains an escaped typed warning at the nearest valid parent
-and marks the scan incomplete. Canonical plan JSON preserves established UTF-8
-bytes for valid Unicode and defensively emits JSON surrogate escapes for any
-malformed free-form string that reaches serialization.
+and marks the scan incomplete. `ScanWarning` retains its code and valid parent
+path even if optional detail contains malformed Unicode: construction omits
+that whole detail to the existing empty-string representation. Valid detail is
+kept complete, without a new size limit; nontext detail is a type error.
 
-Ledger command hashing, history's JSON/hash encoder, and opaque workflow
-payload encoding retain the same defensive final UTF-8 rule. This is an
-encoder fallback, not permission for malformed text to cross typed boundaries:
-bounded optional item diagnostics omit invalid Unicode and count the omission
-before history serialization, while required event/history text can refuse it.
-Path validation still rejects malformed filenames. Valid Unicode bytes and
-lossless JSON escaping at the hash boundary remain unchanged.
+Canonical plan/ledger hashes, history JSON, and opaque workflow payloads use
+strict UTF-8. Strings and dictionary keys must contain Unicode scalar values;
+even an explicit high/low surrogate pair in a Python string is refused rather
+than silently becoming one character on JSON decode. Valid supplementary
+characters and literal backslash text keep their established bytes. Workflow
+decoders check every decoded string and key before constructing domain values;
+a valid JSON escaped pair already denotes one scalar and remains accepted.
+Bounded optional item diagnostics still omit invalid Unicode and count the
+omission before history serialization. These optional-detail policies do not
+relax required identity text or malformed-filename refusal.
 
 `VolumeId(serial, fs_type)` is the stable key. Label and other mutable mount
 facts live in `VolumeEvidence`: relabeling is only noted, a matching serial with
@@ -474,7 +478,8 @@ included field; there is no generic dataclass descent or type registry. The
 shared `canonical_json_bytes()` formatter accepts only a closed JSON tree:
 exact string-keyed dictionaries, lists, null, exact strings/Booleans/integers,
 and finite floats. Unknown objects, unprojected dataclasses, non-string keys,
-and nonfinite numbers fail instead of acquiring a guessed wire form. Owners
+nonfinite numbers, and surrogate code units fail instead of acquiring a guessed
+wire form. Owners
 explicitly encode enums, byte digests, timestamps, and collection ordering.
 
 Every non-null `FileIdentity.file_index` in these projections is canonical
@@ -482,10 +487,11 @@ quoted `FileIndex128` text; other integer fields keep their established numeric
 representation. The former Python JSON integers retained all 128 bits, so this
 corrects a representation inconsistency and latent cross-runtime portability
 risk, not demonstrated Python precision loss. Frozen pre-cutover bytes pin the
-unchanged identityless projections, policy name/version semantics, operation
-ids, selection digests, and string encoding. Surrogate-containing free-form
-hash input remains accepted; JSON escaping keeps it distinct from a literal
-backslash escape.
+unchanged valid-Unicode identityless projections, policy name/version semantics, operation
+ids, selection digests, and valid-Unicode string encoding. The frozen malformed-
+text vectors remain historical evidence, not accepted current input. Their JSON
+bytes distinguish a surrogate escape from literal backslash text; the former
+raw-encoding collision claim was not a collision in these JSON hashes.
 
 Identity-bearing durable hashes change at the coordinated epoch-6 boundary.
 The ledger contract id changes, but ledger/history schema versions, the history
@@ -610,7 +616,7 @@ logic; no scanner role or inventory representation is added.
   canonical, segment-aware, and reject malformed direct construction.
 - UTC/DST boundary tests prove all core timestamps are aware UTC values.
 - Explicit hash projections cover every declared input field, preserve frozen
-  identityless bytes and established collection order, quote full-width file
+  valid-Unicode identityless bytes and established collection order, quote full-width file
   identities, and refuse unsupported values without coercion. Native identity
   tests distinguish low-32-bit volume normalization from the full file index.
 - Attestations cannot be constructed without algorithm, digest, provenance,

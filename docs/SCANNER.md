@@ -77,6 +77,11 @@ valid parent, and makes the scan incomplete; safe siblings remain reviewable.
 Valid Unicode filenames are retained byte-for-code-point as observed. Scanner
 does not normalize NFC/NFD spelling; planner may annotate a one-to-one
 canonically equivalent source/target pair without changing either name.
+`ScanWarning` also prevents malformed optional exception detail from blocking
+otherwise valid inventory observations: it omits that entire detail to the
+existing empty string, retaining the warning code and valid parent path. This
+does not remove a warning or make an incomplete scan complete. Already escaped
+display spellings and every valid-Unicode detail remain unchanged.
 
 ## Walking Rules
 

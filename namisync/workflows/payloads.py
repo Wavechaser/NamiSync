@@ -59,6 +59,7 @@ from namisync.core.session import PhaseResult, PhaseStatus, SessionState
 from namisync.core.scalars import (
     file_index_128_from_text,
     file_index_128_to_text,
+    require_json_unicode,
     require_safe_int,
 )
 
@@ -80,7 +81,7 @@ def _json_bytes(value: object) -> bytes:
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
-    ).encode("utf-8", errors="backslashreplace")
+    ).encode("utf-8", errors="strict")
 
 
 def _volume(value: VolumeId | None) -> object:
@@ -1335,6 +1336,7 @@ def _payload(
         )
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise ValueError("workflow payload is not valid UTF-8 JSON") from error
+    require_json_unicode(value)
     item = _mapping(value)
     schema_version = item.get("schema_version")
     if (

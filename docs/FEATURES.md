@@ -1,6 +1,6 @@
 # Features
 
-Status note (updated 2026-08-26): the headless sync, inventory, integrity,
+Status note (updated 2026-08-27): the headless sync, inventory, integrity,
 history, selection, and CLI capabilities are active. The secured desktop host,
 transport, and shared presentation foundation are active; its product plan,
 inventory, history, and lifecycle surfaces remain unrealized. Exact M1 delivery
@@ -25,7 +25,7 @@ document's rules.
 - **Thin Desktop Adapter**. The desktop UI presents workflow state and delegates sync decisions to headless layers; it owns disposable task/presentation state but never sync policy, authoritative selection, inventory reconciliation, or path interpretation.
 - **Defense Policy**. `DEFENSE.md` owns the supported environment, trusted boundaries, hard walls, tolerance classes, and residual-risk dispositions that qualify every feature claim; a feature or defect residual is not accepted merely because this document describes it.
 - **Typed Core Contracts**. Explicit dataclasses carry scan, plan, execution, progress, verification, and result data across layers.
-- **Defensive JSON Boundaries**. Valid Unicode remains lossless. Malformed filenames and required protocol text refuse at typed boundaries; invalid optional item diagnostics are omitted and counted before history storage. Defensive hash/payload encoders retain lossless JSON escaping without weakening those admission rules. Workflow decoding rejects duplicate keys and nonstandard `NaN`/±`Infinity` constants.
+- **Defensive JSON Boundaries**. Hash/payload encoders require Unicode scalar text and preserve its established UTF-8 bytes; workflow decoders reject malformed strings and keys before constructing requests. Malformed filenames and required text refuse, optional scan-warning detail is omitted without dropping observations, and invalid optional item diagnostics are omitted and counted before history storage. Workflow decoding also rejects duplicate keys and nonstandard `NaN`/±`Infinity` constants.
 - **Separate State Stores**. The working ledger and append-oriented audit history use independent local SQLite databases.
 - **Session-Typed Operations**. Every long-running activity (scan, plan, execute, verify, baseline, import) runs inside one typed session contract: a shared state machine, a tagged-union event stream, and a cooperative checkpoint that pause and cancellation both resolve through, so no module invents its own lifecycle or terminal shape.
 - **Workflow-Sequenced Pipelines**. Modules never call each other directly; an application workflow function sequences scan, plan, preflight, and execute by passing typed data forward, so coordination stays readable top to bottom instead of emergent from signals or callbacks.
