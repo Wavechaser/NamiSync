@@ -234,6 +234,15 @@ test exercises the codec over every operation kind and optional field, so a
 dropped or renormalized field fails the build instead of silently refusing every
 execution.
 
+The identity-hash correction does not change execution-v6's wire shape. An old
+identity-bearing v6 continuation still decodes structurally, but its numeric-era
+fingerprint fails recomputation before observer, preflight, or executor entry.
+A resumed run settles as failed/ran with its prior operation state and byte
+high-water retained; decoding the payload alone does not reconstruct previously
+delivered item history. Identityless v6 commitments remain compatible rather
+than being rejected by a blanket version ban. This adds no process-restart
+recovery; the live continuation and store boundary remain as described above.
+
 Stage 1 advanced the opaque plan/execution codec to version 2 and removed
 `worker_count` from `SyncOptions`, `Plan`, fingerprints, and both payloads
 without adding a replacement execution setting. Stage 4 advances the global

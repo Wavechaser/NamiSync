@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, fields, make_dataclass, replace
+import hashlib
 import json
 import os
 from pathlib import Path
 
 import pytest
 
+import namisync.core.models as model_contracts
+import namisync.core.planning as planning_contracts
 from namisync.core.models import IgnoreSet
 from namisync.core.pathing import (
     PathValidationError,
@@ -19,7 +23,20 @@ from namisync.core.pathing import (
     to_extended_length_path,
     validate_relative_path,
 )
-from namisync.core.planning import canonical_json_bytes
+from namisync.core.planning import (
+    canonical_json_bytes,
+    plan_fingerprint,
+    policy_fingerprint,
+    serialize_plan,
+)
+
+from _identity_epoch5 import frozen_vector
+from _identity_hash_fixtures import (
+    MAX_FILE_INDEX,
+    custom_options,
+    hash_fixtures,
+    two_copy_plan,
+)
 
 
 @pytest.mark.parametrize(
@@ -221,6 +238,218 @@ def test_canonical_json_preserves_valid_unicode_and_safely_escapes_lone_surrogat
     assert b"bad_\\udcff.txt" in encoded
     assert json.loads(encoded.decode("utf-8")) == hostile
     assert encoded != canonical_json_bytes({"path": r"bad_\udcff.txt"})
+
+
+@dataclass(frozen=True)
+class _UnprojectedHashValue:
+    file_index: int = MAX_FILE_INDEX
+
+
+class _StringKey(str):
+    pass
+
+
+class _JsonList(list):
+    pass
+
+
+class _JsonDict(dict):
+    pass
+
+
+@pytest.mark.parametrize(
+    "value",
+    (
+        pytest.param(_UnprojectedHashValue(), id="dataclass"),
+        pytest.param({"nested": [_UnprojectedHashValue()]}, id="nested-dataclass"),
+        pytest.param({"nested": object()}, id="unknown-type"),
+        pytest.param({1: "value"}, id="integer-key"),
+        pytest.param({"nested": {False: "value"}}, id="nested-boolean-key"),
+        pytest.param({_StringKey("field"): "value"}, id="string-subclass-key"),
+        pytest.param({"nested": _StringKey("value")}, id="string-subclass-value"),
+        pytest.param({"nested": _JsonList([1])}, id="list-subclass"),
+        pytest.param({"nested": _JsonDict(field=1)}, id="dict-subclass"),
+        pytest.param({"nested": (1, 2)}, id="unprojected-tuple"),
+        pytest.param({"nested": frozenset({1, 2})}, id="unprojected-set"),
+        pytest.param({"nested": b"digest"}, id="unprojected-bytes"),
+        pytest.param({"nested": planning_contracts.OperationKind.COPY}, id="unprojected-enum"),
+        pytest.param({"number": float("nan")}, id="nan"),
+        pytest.param({"number": float("inf")}, id="infinity"),
+        pytest.param({"number": -float("inf")}, id="negative-infinity"),
+    ),
+)
+def test_canonical_json_refuses_unprojected_values(value: object) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        canonical_json_bytes(value)
+
+
+@dataclass(frozen=True)
+class _UnprojectedRoot:
+    path: str
+    root_id: str
+
+
+@pytest.mark.parametrize("encode", (plan_fingerprint, serialize_plan))
+def test_plan_hash_boundary_refuses_an_unknown_nested_dataclass(encode) -> None:
+    reviewed = two_copy_plan(False)
+    unknown = _UnprojectedRoot(reviewed.source_root.path, reviewed.source_root.root_id)
+    malformed = replace(reviewed, source_root=unknown)
+
+    with pytest.raises(TypeError):
+        encode(malformed)
+
+
+def test_serialized_plan_quotes_identity_without_stringifying_known_integers() -> None:
+    plans, _ = hash_fixtures(True)
+    encoded = json.loads(serialize_plan(plans["all_fields"]))
+    operation = encoded["operations"][1]
+
+    assert operation["source_expected"]["file_identity"]["file_index"] == str(MAX_FILE_INDEX)
+    assert operation["intended"]["file_identity"]["file_index"] == str(MAX_FILE_INDEX)
+    assert operation["target_expected"]["file_identity"]["file_index"] == "0"
+    assert operation["prior_target_expected"]["file_identity"]["file_index"] == "0"
+    assert type(operation["content_bytes"]) is int
+    assert operation["content_bytes"] == (1 << 53) + 7
+    assert type(operation["source_expected"]["mtime_ns"]) is int
+    assert operation["source_expected"]["mtime_ns"] == (1 << 53) + 11
+
+
+@pytest.mark.parametrize("name", ("two_copy", "all_fields"))
+def test_plan_fingerprint_uses_explicit_identity_text(name: str) -> None:
+    plans, _ = hash_fixtures(True)
+    expected = json.loads(frozen_vector(f"plan/{name}/full128/fingerprint"))
+    # Transform only the named identity fields of the frozen plan shape.
+    for operation in expected["operations"]:
+        for field in ("source_expected", "target_expected", "intended", "prior_target_expected"):
+            stat = operation[field]
+            if stat is not None and stat["file_identity"] is not None:
+                identity = stat["file_identity"]
+                identity["file_index"] = str(identity["file_index"])
+    canonical = json.dumps(
+        expected, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")
+
+    expected_fingerprint = hashlib.sha256(canonical).hexdigest()
+    assert plan_fingerprint(plans[name]) == expected_fingerprint
+    expected["fingerprint"] = expected_fingerprint
+    assert serialize_plan(plans[name]) == json.dumps(
+        expected, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ).encode("utf-8")
+
+
+@pytest.mark.parametrize("name", ("two_copy", "all_fields"))
+def test_identityless_plan_bytes_preserve_the_epoch5_capture(name: str) -> None:
+    plans, _ = hash_fixtures(False)
+    reviewed = plans[name]
+
+    assert serialize_plan(reviewed) == frozen_vector(f"plan/{name}/identityless/serialize")
+    assert plan_fingerprint(reviewed) == hashlib.sha256(
+        frozen_vector(f"plan/{name}/identityless/fingerprint")
+    ).hexdigest()
+
+
+def test_custom_policy_hash_keeps_only_name_and_version_semantics() -> None:
+    options = custom_options()
+    expected = hashlib.sha256(
+        frozen_vector("policy/custom_name_version")
+    ).hexdigest()
+    assert policy_fingerprint(options) == expected
+    options.destination_policy.ignored_state = {"unprojected": object()}
+    assert policy_fingerprint(options) == expected
+    assert policy_fingerprint(replace(options, internal_mirror_authorized=True)) == expected
+    options.destination_policy.name = "changed-policy"
+    assert policy_fingerprint(options) != expected
+
+
+def test_policy_field_coverage_names_its_one_nonsemantic_authorization_field() -> None:
+    hashed_fields = set(json.loads(frozen_vector("policy/custom_name_version")))
+    assert {field.name for field in fields(planning_contracts.SyncOptions)} == (
+        hashed_fields | {"internal_mirror_authorized"}
+    )
+
+
+def test_core_hash_projections_cover_exact_known_dataclasses() -> None:
+    plans, _ = hash_fixtures(True)
+    reviewed = plans["all_fields"]
+    operation = reviewed.operations[1]
+    cases = (
+        (model_contracts.file_identity_projection, operation.source_expected.file_identity),
+        (model_contracts.metadata_projection, operation.metadata),
+        (model_contracts.file_stat_projection, operation.source_expected),
+        (model_contracts.root_projection, reviewed.source_root),
+        (model_contracts.volume_id_projection, reviewed.source_volume_id),
+        (model_contracts.volume_evidence_projection, reviewed.source_volume_evidence),
+        (model_contracts.capability_profile_projection, reviewed.source_profile),
+        (planning_contracts._preservation_projection, reviewed.preservation),
+        (planning_contracts._filter_projection, reviewed.filter_snapshot),
+        (planning_contracts._destination_assignment_projection, reviewed.assignment.items[1]),
+        (planning_contracts._assignment_projection, reviewed.assignment),
+        (planning_contracts.operation_projection, operation),
+        (planning_contracts.plan_projection, reviewed),
+    )
+    for project, value in cases:
+        # Reflection is a test-only completeness alarm, never a wire encoder.
+        declared = {field.name for field in fields(value)}
+        assert set(project(value)) == declared, type(value).__name__
+        lookalike_type = make_dataclass("Unprojected" + type(value).__name__, sorted(declared))
+        lookalike = lookalike_type(**{name: getattr(value, name) for name in declared})
+        with pytest.raises(TypeError):
+            project(lookalike)
+        subclass_type = make_dataclass(
+            "Extended" + type(value).__name__,
+            [("future_file_index", int, MAX_FILE_INDEX)],
+            bases=(type(value),), frozen=True,
+        )
+        extended = subclass_type(**{name: getattr(value, name) for name in declared})
+        with pytest.raises(TypeError):
+            project(extended)
+
+
+def test_plan_projection_preserves_sequence_and_historical_volume_set_order() -> None:
+    plans, _ = hash_fixtures(False)
+    reviewed = plans["all_fields"]
+    encoded = json.loads(serialize_plan(reviewed))
+    assert encoded["required_volumes"] == [
+        {"fs_type": "NTFS", "serial": "FFFFFFFF"},
+        {"fs_type": "REFS", "serial": "00000001"},
+    ]
+    assert [volume.serial for volume in sorted(reviewed.required_volumes)] == [
+        "00000001", "FFFFFFFF",
+    ]
+    assert [operation["op_id"] for operation in encoded["operations"]] == [
+        str(operation.op_id) for operation in reviewed.operations
+    ]
+    assert encoded["operations"][1]["dependencies"] == [str(reviewed.operations[0].op_id)]
+    assert encoded["assignment"]["items"][0]["source_rel_path"] == "b.txt"
+    operation = replace(reviewed.operations[1], dependencies=("f" * 32, "0" * 32))
+    assert planning_contracts.operation_projection(operation)["dependencies"] == [
+        "f" * 32, "0" * 32,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    (
+        ("primitives", {"none": None, "bool": True, "integer": (1 << 63) - 1,
+                        "finite_float": 1.5, "list": ["é", "源", 0]}),
+        ("surrogate", {"text": "bad-\udcff"}),
+        ("literal_escape", {"text": r"bad-\udcff"}),
+    ),
+)
+def test_canonical_json_preserves_frozen_control_bytes(name: str, value: object) -> None:
+    assert canonical_json_bytes(value) == frozen_vector(f"core/{name}")
+
+
+def test_operation_id_and_selection_digest_preserve_frozen_control_hashes() -> None:
+    operation_id = planning_contracts.deterministic_operation_id(
+        planning_contracts.OperationKind.MOVE_UPDATE,
+        "é.txt", r"folder\é.txt", "old.txt",
+        planning_contracts.OperationReason.IDENTITY_RENAME_CHANGED,
+    )
+    assert operation_id == hashlib.sha256(frozen_vector("operation_id/intent")).hexdigest()[:32]
+    expected_selection = hashlib.sha256(frozen_vector("selection/sorted")).digest()
+    assert planning_contracts.selection_digest(("f" * 32, "0" * 32)) == expected_selection
+    assert planning_contracts.selection_digest(frozenset({"0" * 32, "f" * 32})) == expected_selection
 
 
 def test_ignore_set_matches_only_built_in_shapes() -> None:

@@ -1335,6 +1335,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-26). Implicit domain hash projection. Plan and
+  recorder hashers descended through arbitrary dataclasses and coerced mapping
+  keys, allowing undeclared forms to acquire idempotency identity silently.
+  File indexes consequently used numeric rather than canonical text preimages;
+  this was a consistency/latent portability defect, not Python precision loss.
+  Fixed with explicit owner projections, closed JSON validation, and full-width
+  quoted indexes. Epoch 6 separates changed receipts through explicit pair reset;
+  old identity-bearing v6 commitments fail re-fingerprinting before execution.
+  Identityless bytes remain stable, and surrogate text stays distinct from a
+  literal backslash escape without discarding diagnostic observations.
 - MODERATE - FIXED (2026-08-26). Projection byte-boundary omission. A
   structurally valid reliable event above 1,048,576 canonical bytes could pass
   Python's public-view validator and the browser, then advance browser state
@@ -1386,9 +1396,10 @@ defect, and move implementation-level test choreography out of the log.
   browser validator and canonical history projection accept different version-
   specific populations; later reuse can therefore make a shape valid in one
   boundary and unusable in another. Cause: compatibility was added at individual
-  consumers without one event/data epoch and removal point. Checkpoint 3.2 now
-  makes production exact-v5-only at data epoch 5. The finding remains open only
-  until checkpoint 3.3 deletes the unreachable private read-only v3/v4 source
+  consumers without one event/data epoch and removal point. Checkpoint 3.2 made
+  production exact-v5-only; the identity-hash cut advances data epoch to 6.
+  The finding remains open only until checkpoint 3.3 deletes the unreachable
+  private read-only v3/v4 source
   branch and its positive compatibility fixtures.
 - MODERATE - FIXED (2026-08-22). Lossy-progress authority conflation. Forced
   control snapshots combined aggregates from an earlier throttled emission with

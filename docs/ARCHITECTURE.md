@@ -288,7 +288,7 @@ retained Progress.
 Version numbers are boundary-specific, not one global product number. The
 active core event envelope is exact v5; the desktop bridge command/response
 envelope remains v1, plan continuation remains v5, execution continuation is
-v6, and the persistence cut is ledger v4/history v6 at data epoch 5. The exact
+v6, and the persistence cut is ledger v4/history v6 at data epoch 6. The exact
 browser-facing `SessionEventView` carries nested core version 5, and current
 history cannot contain another event version. Checkpoint 3.2 retains only a
 private unreachable read-only v3/v4 source branch for checkpoint 3.3 deletion;
@@ -492,6 +492,15 @@ Copy evidence describes the published target, never the source identity.
 Plan fingerprints, custody keys, history identities, and other small
 non-content hashes use SHA-256. Repositories retain the algorithm identifier so
 stored evidence remains self-describing.
+
+Plan and recorder hash inputs are explicit, producer-owned projections of the
+declared contract fields. The canonical encoder accepts only its closed set of
+primitive forms; unknown domain objects, coercive mapping keys, and non-finite
+numbers refuse instead of acquiring a wire form through dataclass reflection.
+File identities use canonical file-index text in these projections, while
+ordinary integer fields remain numeric. A domain contract change therefore
+requires an explicit projection and compatibility decision; it cannot silently
+change idempotency identity by adding a dataclass field.
 
 ### 3.7 Protocol seams
 

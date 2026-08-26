@@ -66,8 +66,10 @@ ledger, not this aggregate byte pair, own settlement and publication truth.
 
 The current exact marker is
 `contract_id=m1-history-v6-event-v5-recording-v1` with
-`HISTORY_SCHEMA_VERSION = 6` and `data_epoch=5`. NamiSync refuses history
-v1-v5 and a v6 database with a missing or mismatched marker through a read-only connection. Refusal
+`HISTORY_SCHEMA_VERSION = 6` and `data_epoch=6`. The coordinated identity-hash
+cut advances the shared epoch without changing this schema or contract id.
+NamiSync refuses history v1-v5 and a v6 database with a missing or mismatched
+marker through a read-only connection. Refusal
 must not alter the database or its WAL, SHM, or journal sidecars. This remains
 a pre-release reset-only boundary: close every NamiSync process and reset the
 ledger and history databases together. Startup never deletes either file and

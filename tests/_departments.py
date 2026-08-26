@@ -39,6 +39,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/test_db_write_boundary.py",
         "tests/test_db_writer.py",
         "tests/test_recorder_concurrency.py",
+        "tests/test_recorder_identity_receipts.py",
         "tests/test_recorder_inventory_integrity.py",
         "tests/test_recorder_setup_and_move.py",
         "tests/test_recorder_sync.py",

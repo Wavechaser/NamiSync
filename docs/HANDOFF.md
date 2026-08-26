@@ -1,12 +1,11 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.S5 is verified for delivery after `6cdfd08`.
-Next is the guarded epoch-5 baseline capture, then revised 3R.14 implementation.
-The remaining identity/epoch decisions below are ratified, not implemented.
+Status (2026-08-26): checkpoint 3R.14 is verified for delivery after `3a1b409`.
+Closed hash projections and the coordinated epoch-6 cut are implemented.
 Checkpoint 3.3 remains unstarted and the private legacy decoder remains intact.
 
 `M1_SHELL_H2.md` owns the revised order and full acceptance criteria. Remaining
-delivery is revised 3R.14, 3R.15a, then 3R.15.
+delivery is 3R.15a, then 3R.15. No design decisions remain open.
 Completed causal findings belong in `BUGS.md`, not this handoff. The original
 O/S reports and prior verification receipts remain in Git at
 `d7673b7:docs/HANDOFF.md`; no separate report archive is needed.
@@ -16,24 +15,6 @@ O/S reports and prior verification receipts remain in Git at
 The JavaScript follow-ups below
 come from the user's post-3R.13 review and inspection at `d7673b7`.
 F/S identifiers refer to the original independent reports preserved in Git.
-
-### Revised 3R.14 — Closed hash projections and coordinated epoch 6
-
-Original F13/S16 remain open. Replace generic dataclass descent in plan and
-recorder hashing with explicit owner-defined projections and a closed encoder.
-Emit `FileIndex128` as canonical quoted decimal while preserving ordinary
-numeric integers, declared hash inputs/encodings, identityless hash bytes, and
-the deliberate low-32-bit uppercase volume-serial normalization.
-The user approved shared data epoch 5→6 and a changed ledger contract id;
-keep ledger-v4/history-v6 shapes, history contract id, and execution-v6 wire
-shape. Old pairs require explicit archive/reset, never automatic deletion.
-Reset discards app receipts/evidence/history, not source or target files.
-
-The claimed surrogate hash collision was disproved: JSON escapes a literal
-backslash before UTF-8 encoding. Preserve the lossless surrogate-escaping rule
-and diagnostic tolerance; add the distinguishing regression, not a new strict
-surrogate policy that loses scan observations. These choices are ratified but
-not yet implemented.
 
 ### 3R.15a — Narrow JavaScript comment/name cleanup
 
@@ -77,19 +58,33 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-S5 verification: the tests-first reproducer retained the admission payload
-after completed shutdown and failed at that assertion. Final focused run:
-338 passed. Core/dispatcher/workflows/database/interfaces neighborhood:
-3,330 passed, 1 skipped. Independent review corrected a swallowed callback
-assertion; the focused rerun and final ordinary suite include that correction.
-Ordinary suite with required Node: 4,325 passed, 4 expected skips, 28 headed
-tests deselected (219.46 s). Import architecture: all 11 rules kept. Independent
-source, lifecycle/fault-test, and owning-document review found no remaining
-actionable issue. Protected settlement and transport-authority files are
-unchanged. `BUGS.md` and `DISPATCHER.md` own the causal disposition and storage
-contract; this handoff no longer lists S5 as an open finding.
+3R.14 verification: the tests-first codec gate failed 21 cases with six positive
+controls passing; the two epoch-cut cases also failed before implementation.
+Initial focused green: 350 passed. Expanded core/command/native files: 254
+passed, one expected skip; all 28 projection subclass/lookalike guards passed
+their focused rerun. Operation receipt tests: 20 passed. Existing recorder/
+planner/package controls: 70 passed; full workflow file: 27 passed.
+Core/planner/database/workflows neighborhood: 2,081 passed, one expected skip.
+Final ordinary suite with required Node: 4,426 passed, four expected skips,
+28 headed tests deselected (220.30 s). Import architecture: all 11 rules kept.
+Protected settlement check: all 30 scenarios passed three times with identical
+normalized traces and baseline parity. Independent source, compatibility-test,
+and documentation review found no remaining actionable issue; protected
+settlement and frozen transport-authority files are unchanged.
 
-Ignored `build/r314-baseline/` contains an independently reviewed capture script and
-fixed synthetic fixtures prepared for 3R.14. No capture has run. After S5's
-clean commit, inspect/run that guarded one-shot helper before changing any hash
-encoder; its README owns artifact conventions and the no-overwrite rule.
+Old epoch-5 pairs now require the documented explicit archive/reset; no user
+databases were deleted or reset. Ledger-v4/history-v6 schemas, the history
+contract id, and plan-v5/execution-v6 wire shapes remain unchanged.
+The captured MOVE vector is an isolated old-hash replay-gate witness,
+not proof of a valid historical first write; a separate valid producer control
+and stale/no-write assertion preserve that distinction. `BUGS.md` and owning
+component docs now hold the completed identity-hash and S5 dispositions.
+
+Ignored `build/r314-baseline/` contains the independently reviewed one-shot
+capture helper and fixed synthetic fixtures. Capture succeeded once at clean
+commit `3a1b409`, before any hash changes: 39 byte vectors and two valid
+execution-v6 continuations. Its frozen `epoch5-vectors.json` was copied without
+replacement to `tests/assets/identity_epoch5_vectors.json`; both have SHA-256
+`52f80f8539b863da0a357ba4a47c20a32cb77a5a14db9194d5adf98e31c538d9`.
+Never regenerate these old expectations with the new encoder. The ignored
+directory README owns capture conventions; no databases were opened or reset.

@@ -13,7 +13,12 @@ from .pathing import (
     relative_path_parent,
     validate_relative_path,
 )
-from .scalars import MAX_FILE_INDEX_128, require_safe_int, require_signed_64
+from .scalars import (
+    MAX_FILE_INDEX_128,
+    file_index_128_to_text,
+    require_safe_int,
+    require_signed_64,
+)
 
 
 # Windows attributes that execution deliberately propagates from source to target.
@@ -432,3 +437,77 @@ class ScanResult:
     @property
     def is_full_scan(self) -> bool:
         return self.scope.kind is ScanScopeKind.FULL
+
+
+def file_identity_projection(value: FileIdentity | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if type(value) is not FileIdentity:
+        raise TypeError("file identity projection requires FileIdentity")
+    return {
+        "volume_serial": value.volume_serial,
+        "file_index": file_index_128_to_text(value.file_index),
+    }
+
+
+def metadata_projection(value: MetadataSnapshot | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if type(value) is not MetadataSnapshot:
+        raise TypeError("metadata projection requires MetadataSnapshot")
+    return {"attributes": value.attributes, "created_ns": value.created_ns}
+
+
+def file_stat_projection(value: FileStat | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if type(value) is not FileStat or type(value.kind) is not EntryKind:
+        raise TypeError("stat projection requires FileStat with EntryKind")
+    return {
+        "kind": value.kind.value,
+        "size": value.size,
+        "mtime_ns": value.mtime_ns,
+        "file_identity": file_identity_projection(value.file_identity),
+        "nlink": value.nlink,
+        "metadata": metadata_projection(value.metadata),
+    }
+
+
+def root_projection(value: Root) -> dict[str, object]:
+    if type(value) is not Root:
+        raise TypeError("root projection requires Root")
+    return {"path": value.path, "root_id": value.root_id}
+
+
+def volume_id_projection(value: VolumeId | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if type(value) is not VolumeId:
+        raise TypeError("volume projection requires VolumeId")
+    return {"serial": value.serial, "fs_type": value.fs_type}
+
+
+def volume_evidence_projection(value: VolumeEvidence | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if type(value) is not VolumeEvidence:
+        raise TypeError("volume evidence projection requires VolumeEvidence")
+    return {
+        "label": value.label,
+        "device_id": value.device_id,
+        "clone_ambiguous": value.clone_ambiguous,
+    }
+
+
+def capability_profile_projection(value: CapabilityProfile) -> dict[str, object]:
+    if type(value) is not CapabilityProfile:
+        raise TypeError("capability projection requires CapabilityProfile")
+    return {
+        "fs_type": value.fs_type,
+        "mtime_granularity_ns": value.mtime_granularity_ns,
+        "stable_file_identity": value.stable_file_identity,
+        "incurs_seek_penalty": value.incurs_seek_penalty,
+        "max_path": value.max_path,
+        "supports_ads": value.supports_ads,
+        "supports_hardlinks": value.supports_hardlinks,
+    }

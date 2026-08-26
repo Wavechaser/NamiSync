@@ -87,11 +87,29 @@ paths or destination policy. Expected/intended metadata uses
 `MetadataSnapshot` (attributes and creation time) under the snapshotted
 preservation policy. No stream manifest enters a plan.
 
-Canonical JSON remains byte-compatible for valid Unicode paths and escapes a
-malformed surrogate code unit defensively instead of raising during operation-id
-or plan-fingerprint construction. The scanner rejects such code units before a
-path record exists; serializer hardening prevents unrelated free-form data from
-turning a review into a raw encoding failure.
+Plan and operation hashes use explicit complete field projections rather than
+generic dataclass traversal. `plan_fingerprint()` omits only the plan's own
+fingerprint; public `serialize_plan()` includes it. Non-null file indices use
+canonical quoted `FileIndex128` text, while sizes, timestamps, and other integer
+fields retain their numeric form. Sequence order and the established canonical
+JSON ordering of required-volume sets remain unchanged. Policy hashing keeps
+the destination policy's intentional name/version projection, not its private
+implementation state. Unsupported objects or keys and nonfinite numbers refuse
+at the shared closed JSON boundary described in [CORE.md](CORE.md).
+
+Checkpoint 3R.14 changes identity-bearing hashes under the shared epoch-6
+cutover; frozen identityless plan bytes remain identical. Plan-v5 and
+execution-v6 workflow wire shapes are unchanged. Existing workflow
+refingerprinting rejects an old numeric-identity fingerprint before execution,
+while unchanged identityless fingerprints remain compatible; database reset
+does not silently rewrite old commitments.
+
+Valid Unicode strings retain their established UTF-8 encoding. A malformed
+surrogate code unit in free-form input is escaped defensively during JSON
+serialization and remains distinct from literal backslash text. The scanner
+rejects such code units before a path record exists; serializer hardening
+prevents unrelated free-form data from turning a review into a raw encoding
+failure.
 
 `ExecutionSet` selects a dependency-closed subset and carries per-operation
 status. Its optional `Commitment` binds both the plan fingerprint and a
@@ -261,6 +279,11 @@ work. M1 has no ADS-enabled mapping or per-operation ADS state.
 
 - Repeated serialization of identical inputs is byte-identical, including ids,
   ordering, reasons, summaries, and assignment.
+- Frozen identityless projections preserve their pre-cutover bytes; full-width
+  file indices become quoted text without changing ordinary numeric fields,
+  policy name/version semantics, sequence order, or required-volume ordering.
+  Field-coverage checks make new plan/evidence fields an explicit hash-contract
+  decision rather than silently omitting or generically serializing them.
 - Randomized input ordering produces the same plan.
 - Nested empty directory fixtures create every level parent-first and an
   immediate rescan/replan converges to no mutations.

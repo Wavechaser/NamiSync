@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import closing
+import json
 import os
 from pathlib import Path
 import sqlite3
@@ -208,6 +209,181 @@ def test_matching_database_pair_is_ready_and_read_only(tmp_path: Path) -> None:
     assert result.reset_direction is None
     assert _snapshot(ledger, history) == before
     service.close()
+
+
+def test_fresh_identity_epoch_six_pair_reopens_with_exact_current_markers(
+    tmp_path: Path,
+) -> None:
+    service, ledger, history = _service(tmp_path)
+    try:
+        assert service.initialize_database_contracts().state == "ready"
+        assert service.validate_database_contracts().state == "ready"
+        for path, version, contract_id in (
+            (ledger, "4", "m1-ledger-v4-event-v5-evidence-v2"),
+            (history, "6", "m1-history-v6-event-v5-recording-v1"),
+        ):
+            with closing(sqlite3.connect(
+                path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True,
+            )) as connection:
+                markers = dict(connection.execute("SELECT key, value FROM schema_metadata"))
+            assert markers == {
+                "schema_version": version,
+                "data_epoch": "6",
+                "contract_id": contract_id,
+            }
+        before = _snapshot(ledger, history)
+        assert initialize_ledger(ledger) == ledger
+        assert initialize_history(history) == history
+        assert _snapshot(ledger, history) == before
+        with LedgerRepository(ledger) as repository:
+            assert repository.get_inventory(1) == ()
+        with HistoryRepository(history) as repository:
+            assert repository.list_summaries() == ()
+        assert service.validate_database_contracts().state == "ready"
+    finally:
+        service.close()
+
+
+def _captured_epoch_five_markers(role: str) -> dict[str, str]:
+    captured = json.loads(
+        (Path(__file__).parent / "assets" / "identity_epoch5_vectors.json").read_text(
+            encoding="utf-8"
+        )
+    )["markers"]
+    assert captured == {
+        "data_epoch": 5,
+        "execution_payload_version": 6,
+        "history_contract_id": "m1-history-v6-event-v5-recording-v1",
+        "history_schema_version": 6,
+        "ledger_contract_id": "m1-ledger-v4-event-v5-evidence-v1",
+        "ledger_schema_version": 4,
+        "plan_payload_version": 5,
+    }
+    return {
+        "schema_version": str(captured[f"{role}_schema_version"]),
+        "data_epoch": str(captured["data_epoch"]),
+        "contract_id": captured[f"{role}_contract_id"],
+    }
+
+
+def _write_markers(connection: sqlite3.Connection, markers: dict[str, str]) -> None:
+    connection.executemany(
+        "UPDATE schema_metadata SET value = ? WHERE key = ?",
+        ((value, key) for key, value in markers.items()),
+    )
+
+
+def _assert_epoch_pair_refused_without_mutation(
+    ledger: Path, history: Path, refused_roles: tuple[str, ...],
+) -> None:
+    before = _snapshot(ledger, history)
+    for role in refused_roles:
+        selected = ledger if role == "ledger" else history
+        probe = (
+            file_contracts.ledger_file_contract_matches if role == "ledger"
+            else file_contracts.history_file_contract_matches
+        )
+        for _ in range(2):
+            assert not probe(selected)
+            assert _snapshot(ledger, history) == before
+        for consumer in (
+            initialize_ledger if role == "ledger" else initialize_history,
+            LedgerRepository if role == "ledger" else HistoryRepository,
+        ):
+            with pytest.raises(
+                SchemaResetRequired,
+                match="data epoch 6.*archive or delete both database main files",
+            ) as raised:
+                consumer(selected)
+            assert "Close every NamiSync process" in str(raised.value)
+            assert all(suffix in str(raised.value) for suffix in _SIDECAR_SUFFIXES)
+            assert _snapshot(ledger, history) == before
+
+    expected_reason = "ledger-contract" if "ledger" in refused_roles else "history-contract"
+    first = database_pair.validate_database_pair(ledger, history)
+    assert first.state == "refused"
+    assert first.reason == expected_reason
+    assert first.reset_direction == database_pair.DATABASE_RESET_DIRECTION
+    assert _snapshot(ledger, history) == before
+    assert database_pair.validate_database_pair(ledger, history) == first
+    assert _snapshot(ledger, history) == before
+    assert database_pair.initialize_database_pair(ledger, history) == first
+    assert _snapshot(ledger, history) == before
+    with NamiSyncService(ledger, history) as service:
+        assert service.validate_database_contracts().state == "refused"
+        assert service.initialize_database_contracts().state == "refused"
+    assert _snapshot(ledger, history) == before
+
+
+@pytest.mark.parametrize(
+    "shape",
+    ["both-captured-five", "ledger-five-history-six", "ledger-six-history-five", "six-old-ledger-id"],
+)
+def test_identity_epoch_cut_refuses_old_and_mixed_pairs_without_repair(
+    tmp_path: Path, shape: str,
+) -> None:
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    refused_roles = (
+        ("ledger", "history") if shape == "both-captured-five"
+        else ("history",) if shape == "ledger-six-history-five" else ("ledger",)
+    )
+    for role in refused_roles:
+        selected = ledger if role == "ledger" else history
+        markers = _captured_epoch_five_markers(role)
+        if shape == "six-old-ledger-id":
+            markers["data_epoch"] = "6"
+        with closing(sqlite3.connect(selected)) as connection:
+            with connection:
+                _write_markers(connection, markers)
+            assert dict(connection.execute("SELECT key, value FROM schema_metadata")) == markers
+
+    _assert_epoch_pair_refused_without_mutation(ledger, history, refused_roles)
+
+
+@pytest.mark.parametrize(
+    ("role", "old_marker"),
+    [("ledger", "epoch-five"), ("history", "epoch-five"), ("ledger", "contract-id")],
+)
+@pytest.mark.parametrize("include_shm", [False, True], ids=["missing-shm", "present-shm"])
+def test_identity_epoch_cut_sees_old_markers_committed_only_in_wal(
+    tmp_path: Path, role: str, old_marker: str, include_shm: bool,
+) -> None:
+    ledger, history = tmp_path / "ledger.db", tmp_path / "history.db"
+    selected = ledger if role == "ledger" else history
+    (initialize_history if role == "ledger" else initialize_ledger)(
+        history if role == "ledger" else ledger
+    )
+    initialize = initialize_ledger if role == "ledger" else initialize_history
+    connect = connect_ledger_writer if role == "ledger" else connect_history_writer
+    producer = initialize(tmp_path / "producer.db")
+    markers = _captured_epoch_five_markers(role)
+    if old_marker == "contract-id":
+        markers["data_epoch"] = "6"
+    with closing(connect(producer)) as writer:
+        writer.execute("PRAGMA wal_autocheckpoint = 0")
+        writer.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        main_before = producer.read_bytes()
+        with closing(sqlite3.connect(
+            producer.as_uri() + "?mode=ro&immutable=1", uri=True,
+        )) as main_reader:
+            current_markers = dict(main_reader.execute("SELECT key, value FROM schema_metadata"))
+        assert current_markers == {
+            "schema_version": "4" if role == "ledger" else "6",
+            "data_epoch": "6",
+            "contract_id": (
+                "m1-ledger-v4-event-v5-evidence-v2" if role == "ledger"
+                else "m1-history-v6-event-v5-recording-v1"
+            ),
+        }
+        _write_markers(writer, markers)
+        assert producer.read_bytes() == main_before
+        assert dict(writer.execute("SELECT key, value FROM schema_metadata")) == markers
+        for suffix in ("", "-wal", "-shm") if include_shm else ("", "-wal"):
+            Path(f"{selected}{suffix}").write_bytes(Path(f"{producer}{suffix}").read_bytes())
+        assert Path(f"{selected}-wal").stat().st_size > 0
+        assert Path(f"{selected}-shm").exists() is include_shm
+        _assert_epoch_pair_refused_without_mutation(ledger, history, (role,))
 
 
 @pytest.mark.parametrize("role", ["ledger", "history"])

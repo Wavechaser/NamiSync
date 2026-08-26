@@ -22,6 +22,7 @@ from namisync.db.connections import (
 from namisync.db.history import HistoryRepository
 from namisync.db.repositories import LedgerRepository
 from namisync.db.schema import (
+    DATA_EPOCH,
     HISTORY_CONTRACT_ID,
     HISTORY_SCHEMA_VERSION,
     LEDGER_CONTRACT_ID,
@@ -35,6 +36,22 @@ from namisync.db.schema import (
 
 def _pragma(connection: sqlite3.Connection, name: str):
     return connection.execute(f"PRAGMA {name}").fetchone()[0]
+
+
+def test_identity_hash_cut_requires_epoch_six_without_schema_or_history_id_changes() -> None:
+    assert (
+        DATA_EPOCH,
+        LEDGER_SCHEMA_VERSION,
+        HISTORY_SCHEMA_VERSION,
+        LEDGER_CONTRACT_ID,
+        HISTORY_CONTRACT_ID,
+    ) == (
+        6,
+        4,
+        6,
+        "m1-ledger-v4-event-v5-evidence-v2",
+        "m1-history-v6-event-v5-recording-v1",
+    )
 
 
 def test_ledger_connections_enforce_safety_pragmas_and_readonly(tmp_path: Path) -> None:
@@ -389,7 +406,7 @@ def test_superseded_ledger_versions_are_refused_without_mutation(
 
     with pytest.raises(
         SchemaResetRequired,
-        match="ledger v4 and history v6 at data epoch 5.*archive or delete",
+        match="ledger v4 and history v6 at data epoch 6.*archive or delete",
     ):
         initialize_ledger(path)
 
@@ -483,11 +500,11 @@ def test_event_v5_coordinated_reset_recreates_exact_database_epoch(
 
     assert ledger_version == LEDGER_SCHEMA_VERSION == 4
     assert history_version == HISTORY_SCHEMA_VERSION == 6
-    assert ledger_epoch == history_epoch == "5"
+    assert ledger_epoch == history_epoch == "6"
     assert (
         ledger_contract
         == LEDGER_CONTRACT_ID
-        == "m1-ledger-v4-event-v5-evidence-v1"
+        == "m1-ledger-v4-event-v5-evidence-v2"
     )
     assert (
         history_contract

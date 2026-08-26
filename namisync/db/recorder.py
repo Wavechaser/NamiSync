@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, fields, is_dataclass
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
 from typing import Protocol
 
-from namisync.core.evidence import Attestation, Provenance
+from namisync.core.evidence import Attestation, ContentEvidence, Provenance, RecordingStatus
 from namisync.core.execution import RecordedCopyIdentity
 from namisync.core.integrity import (
+    IntegrityMode,
     IntegrityRecordCommand,
     InventoryState,
     RecordDisposition,
@@ -26,12 +25,33 @@ from namisync.core.models import (
     DirRecord,
     EntryKind,
     FileIdentity,
+    FileRecord,
     FileStat,
+    ScanResult,
+    ScanScope,
     ScanScopeKind,
+    ScanWarning,
+    ScanWarningCode,
+    UnsupportedReason,
+    UnsupportedRecord,
     VolumeId,
+    capability_profile_projection,
+    file_identity_projection,
+    file_stat_projection,
+    metadata_projection,
+    root_projection,
+    volume_evidence_projection,
+    volume_id_projection,
 )
 from namisync.core.pathing import normalize_relative_path, validate_relative_path
-from namisync.core.planning import OpId, OperationKind, PlanOperation
+from namisync.core.planning import (
+    OpId,
+    OperationKind,
+    PlanOperation,
+    canonical_json_bytes,
+    operation_projection,
+    plan_projection,
+)
 from namisync.core.scalars import file_index_128_to_text
 from namisync.core.recording import (
     FinishRunCommand,
@@ -44,6 +64,7 @@ from namisync.core.recording import (
     SyncRunCommand,
     VolumeCommand,
 )
+from namisync.core.session import SessionState
 
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_writer
 from .schema import initialize_ledger
@@ -109,38 +130,231 @@ _OBSERVATION_MATCHES_ATTESTATION = """(
 )"""
 
 
-def _primitive(value: object) -> object:
-    if isinstance(value, bytes):
-        return {"$bytes": value.hex()}
-    if isinstance(value, datetime):
-        return encode_utc(value)
-    if isinstance(value, Path):
-        return str(value)
-    if isinstance(value, Enum):
-        return value.value
-    if is_dataclass(value):
-        return {field.name: _primitive(getattr(value, field.name)) for field in fields(value)}
-    if isinstance(value, Mapping):
-        return {
-            str(key): _primitive(item)
-            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
-        }
-    if isinstance(value, (tuple, list)):
-        return [_primitive(item) for item in value]
-    if isinstance(value, (set, frozenset)):
-        items = [_primitive(item) for item in value]
-        return sorted(items, key=lambda item: json.dumps(item, sort_keys=True))
-    return value
-
-
 def _payload_hash(value: object) -> bytes:
-    encoded = json.dumps(
-        _primitive(value),
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8", errors="backslashreplace")
-    return hashlib.sha256(encoded).digest()
+    return hashlib.sha256(canonical_json_bytes(value)).digest()
+
+
+def _bytes_projection(value: bytes) -> dict[str, str]:
+    if type(value) is not bytes:
+        raise TypeError("digest projection requires bytes")
+    return {"$bytes": value.hex()}
+
+
+def _file_record_projection(value: FileRecord) -> dict[str, object]:
+    if type(value) is not FileRecord:
+        raise TypeError("file record projection requires FileRecord")
+    return {
+        "rel_path": value.rel_path,
+        "rel_path_key": value.rel_path_key,
+        "size": value.size,
+        "mtime_ns": value.mtime_ns,
+        "file_identity": file_identity_projection(value.file_identity),
+        "nlink": value.nlink,
+        "metadata": metadata_projection(value.metadata),
+    }
+
+
+def _directory_record_projection(value: DirRecord) -> dict[str, object]:
+    if type(value) is not DirRecord:
+        raise TypeError("directory projection requires DirRecord")
+    return {
+        "rel_path": value.rel_path,
+        "rel_path_key": value.rel_path_key,
+        "mtime_ns": value.mtime_ns,
+        "metadata": metadata_projection(value.metadata),
+        "file_identity": file_identity_projection(value.file_identity),
+        "nlink": value.nlink,
+    }
+
+
+def _unsupported_record_projection(value: UnsupportedRecord) -> dict[str, object]:
+    if (
+        type(value) is not UnsupportedRecord
+        or type(value.reason) is not UnsupportedReason
+        or (value.kind is not None and type(value.kind) is not EntryKind)
+    ):
+        raise TypeError("unsupported record projection requires typed record and reasons")
+    return {
+        "rel_path": value.rel_path,
+        "rel_path_key": value.rel_path_key,
+        "reason": value.reason.value,
+        "kind": None if value.kind is None else value.kind.value,
+    }
+
+
+def _scan_warning_projection(value: ScanWarning) -> dict[str, object]:
+    if type(value) is not ScanWarning or type(value.code) is not ScanWarningCode:
+        raise TypeError("warning projection requires ScanWarning with ScanWarningCode")
+    return {"code": value.code.value, "rel_path": value.rel_path, "detail": value.detail}
+
+
+def _scan_scope_projection(value: ScanScope) -> dict[str, object]:
+    if (
+        type(value) is not ScanScope
+        or type(value.kind) is not ScanScopeKind
+        or type(value.selected_paths) is not tuple
+        or type(value.subtree_roots) is not tuple
+    ):
+        raise TypeError("scope projection requires ScanScope with typed kind and paths")
+    return {
+        "kind": value.kind.value,
+        "selected_paths": list(value.selected_paths),
+        "subtree_roots": list(value.subtree_roots),
+    }
+
+
+def _scan_projection(value: ScanResult) -> dict[str, object]:
+    if type(value) is not ScanResult:
+        raise TypeError("scan projection requires ScanResult")
+    if any(type(items) is not tuple for items in (
+        value.files, value.directories, value.unsupported, value.warnings,
+    )):
+        raise TypeError("scan projection requires tuple observations")
+    return {
+        "root": root_projection(value.root),
+        "volume_id": volume_id_projection(value.volume_id),
+        "volume_evidence": volume_evidence_projection(value.volume_evidence),
+        "profile": capability_profile_projection(value.profile),
+        "files": [_file_record_projection(item) for item in value.files],
+        "directories": [_directory_record_projection(item) for item in value.directories],
+        "unsupported": [_unsupported_record_projection(item) for item in value.unsupported],
+        "warnings": [_scan_warning_projection(item) for item in value.warnings],
+        "scope": _scan_scope_projection(value.scope),
+        "complete": value.complete,
+    }
+
+
+def _content_projection(value: ContentEvidence) -> dict[str, object]:
+    if type(value) is not ContentEvidence or type(value.provenance) is not Provenance:
+        raise TypeError("content projection requires ContentEvidence with Provenance")
+    return {
+        "algorithm": value.algorithm,
+        "digest": _bytes_projection(value.digest),
+        "size": value.size,
+        "provenance": value.provenance.value,
+        "observed_at": encode_utc(value.observed_at),
+    }
+
+
+def _attestation_projection(value: Attestation | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if type(value) is not Attestation:
+        raise TypeError("attestation projection requires Attestation")
+    return {
+        "content": _content_projection(value.content),
+        "subject": file_stat_projection(value.subject),
+    }
+
+
+def _invalidation_projection(value: VerificationInvalidation | None) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if type(value) is not VerificationInvalidation or type(value.reason) is not VerificationInvalidationReason:
+        raise TypeError("invalidation projection requires typed invalidation and reason")
+    return {"at": encode_utc(value.at), "reason": value.reason.value}
+
+
+def _sync_run_projection(value: SyncRunCommand) -> dict[str, object]:
+    if type(value) is not SyncRunCommand or type(value.selection) is not frozenset:
+        raise TypeError("run projection requires SyncRunCommand with frozen selection")
+    return {
+        "run_token": value.run_token,
+        "host_id": value.host_id,
+        "mapping_id": value.mapping_id,
+        "source_location_id": value.source_location_id,
+        "target_location_id": value.target_location_id,
+        "plan": plan_projection(value.plan),
+        "selection": sorted(value.selection),
+        "selection_digest": _bytes_projection(value.selection_digest),
+        "started_at": encode_utc(value.started_at),
+    }
+
+
+def _finish_run_projection(value: FinishRunCommand) -> dict[str, object]:
+    if (
+        type(value) is not FinishRunCommand
+        or type(value.status) is not SessionState
+        or type(value.recording) is not RecordingStatus
+    ):
+        raise TypeError("finish projection requires typed command and statuses")
+    return {
+        "run_token": value.run_token,
+        "status": value.status.value,
+        "recording": value.recording.value,
+        "ended_at": encode_utc(value.ended_at),
+    }
+
+
+def _inventory_projection(value: InventoryCommand) -> dict[str, object]:
+    if type(value) is not InventoryCommand:
+        raise TypeError("inventory projection requires InventoryCommand")
+    return {
+        "location_id": value.location_id,
+        "host_id": value.host_id,
+        "scan": _scan_projection(value.scan),
+        "scope_token": value.scope_token,
+        "observed_at": encode_utc(value.observed_at),
+        "online": value.online,
+    }
+
+
+def _visibility_projection(value: InventoryVisibilityCommand) -> dict[str, object]:
+    if type(value) is not InventoryVisibilityCommand or type(value.action) is not InventoryVisibilityAction:
+        raise TypeError("visibility projection requires typed command and action")
+    return {
+        "command_id": value.command_id,
+        "location_id": value.location_id,
+        "row_id": value.row_id,
+        "action": value.action.value,
+        "changed_at": encode_utc(value.changed_at),
+    }
+
+
+def _integrity_projection(value: IntegrityRecordCommand) -> dict[str, object]:
+    if (
+        type(value) is not IntegrityRecordCommand
+        or type(value.mode) is not IntegrityMode
+        or type(value.expected_state) is not InventoryState
+    ):
+        raise TypeError("integrity projection requires typed command, mode, and state")
+    return {
+        "mode": value.mode.value,
+        "item_id": value.item_id,
+        "row_id": value.row_id,
+        "location_id": value.location_id,
+        "rel_path_key": value.rel_path_key,
+        "scope_token": value.scope_token,
+        "expected_state": value.expected_state.value,
+        "expected_stat": file_stat_projection(value.expected_stat),
+        "expected_baseline": _attestation_projection(value.expected_baseline),
+        "attestation": _attestation_projection(value.attestation),
+        "advances_last_verified": value.advances_last_verified,
+        "clear_reappeared": value.clear_reappeared,
+        "expected_invalidation": _invalidation_projection(value.expected_invalidation),
+    }
+
+
+def _verification_invalidation_projection(value: VerificationInvalidationCommand) -> dict[str, object]:
+    if (
+        type(value) is not VerificationInvalidationCommand
+        or type(value.expected_state) is not InventoryState
+        or type(value.reason) is not VerificationInvalidationReason
+    ):
+        raise TypeError("invalidation command projection requires typed command, state, and reason")
+    return {
+        "item_id": value.item_id,
+        "row_id": value.row_id,
+        "location_id": value.location_id,
+        "rel_path_key": value.rel_path_key,
+        "scope_token": value.scope_token,
+        "expected_state": value.expected_state.value,
+        "expected_stat": file_stat_projection(value.expected_stat),
+        "expected_baseline": _attestation_projection(value.expected_baseline),
+        "expected_invalidation": _invalidation_projection(value.expected_invalidation),
+        "reason": value.reason.value,
+        "invalidated_at": encode_utc(value.invalidated_at),
+    }
 
 
 def _identity_values(identity: FileIdentity | None) -> tuple[str | None, str | None]:
@@ -333,19 +547,7 @@ class LedgerRecorder:
         return self._writer.transact(apply)
 
     def begin_sync_run(self, command: SyncRunCommand) -> SyncRunRecorder:
-        start_hash = _payload_hash(
-            {
-                "run_token": command.run_token,
-                "host_id": command.host_id,
-                "mapping_id": command.mapping_id,
-                "source_location_id": command.source_location_id,
-                "target_location_id": command.target_location_id,
-                "plan": command.plan,
-                "selection": command.selection,
-                "selection_digest": command.selection_digest,
-                "started_at": command.started_at,
-            }
-        )
+        start_hash = _payload_hash(_sync_run_projection(command))
         started = encode_utc(command.started_at)
 
         def apply(connection: sqlite3.Connection) -> int:
@@ -415,7 +617,7 @@ class LedgerRecorder:
             raise MappingValidationError("plan target volume does not match the location")
 
     def finish_run(self, command: FinishRunCommand) -> RecordDisposition:
-        finish_hash = _payload_hash(command)
+        finish_hash = _payload_hash(_finish_run_projection(command))
         ended = encode_utc(command.ended_at)
 
         def apply(connection: sqlite3.Connection) -> RecordDisposition:
@@ -452,7 +654,7 @@ class LedgerRecorder:
     def record_inventory(self, command: InventoryCommand) -> InventoryReconcileResult:
         if not command.online:
             return InventoryReconcileResult(RecordDisposition.NOOP, 0, 0)
-        payload_hash = _payload_hash(command)
+        payload_hash = _payload_hash(_inventory_projection(command))
         command_key = f"inventory:{command.location_id}:{command.scope_token}"
 
         def apply(connection: sqlite3.Connection) -> InventoryReconcileResult:
@@ -478,7 +680,7 @@ class LedgerRecorder:
     def change_inventory_visibility(
         self, command: InventoryVisibilityCommand
     ) -> RecordDisposition:
-        payload_hash = _payload_hash(command)
+        payload_hash = _payload_hash(_visibility_projection(command))
         command_key = f"inventory-visibility:{command.command_id}"
 
         def apply(connection: sqlite3.Connection) -> RecordDisposition:
@@ -844,7 +1046,7 @@ class LedgerRecorder:
 
     def record_integrity(self, command: IntegrityRecordCommand) -> RecordDisposition:
         command_key = f"integrity:{command.scope_token}:{command.item_id}"
-        payload_hash = _payload_hash(command)
+        payload_hash = _payload_hash(_integrity_projection(command))
 
         def apply(connection: sqlite3.Connection) -> RecordDisposition:
             prior = self._command_receipt(connection, command_key, payload_hash)
@@ -869,7 +1071,7 @@ class LedgerRecorder:
         command_key = (
             f"verification-invalidation:{command.scope_token}:{command.item_id}"
         )
-        payload_hash = _payload_hash(command)
+        payload_hash = _payload_hash(_verification_invalidation_projection(command))
 
         def apply(connection: sqlite3.Connection) -> RecordDisposition:
             prior = self._command_receipt(connection, command_key, payload_hash)
@@ -1231,7 +1433,7 @@ class SyncRunRecorder:
         identity = self._record(
             op,
             OperationKind.COPY,
-            {"attestation": attestation},
+            {"attestation": _attestation_projection(attestation)},
             lambda connection, plan_op, at: self._record_copy_like(
                 connection, plan_op, attestation, at
             ),
@@ -1247,7 +1449,7 @@ class SyncRunRecorder:
         identity = self._record(
             op,
             OperationKind.UPDATE,
-            {"attestation": attestation},
+            {"attestation": _attestation_projection(attestation)},
             lambda connection, plan_op, at: self._record_copy_like(
                 connection, plan_op, attestation, at
             ),
@@ -1258,10 +1460,10 @@ class SyncRunRecorder:
         return identity
 
     def record_moved(self, op: OpId, target: FileStat) -> None:
-        self._record(op, OperationKind.MOVE, {"target": target}, lambda connection, plan_op, at: self._record_move(connection, plan_op, target, at, None))
+        self._record(op, OperationKind.MOVE, {"target": file_stat_projection(target)}, lambda connection, plan_op, at: self._record_move(connection, plan_op, target, at, None))
 
     def record_recased(self, op: OpId, target: FileStat) -> None:
-        self._record(op, OperationKind.RECASE, {"target": target}, lambda connection, plan_op, at: self._record_move(connection, plan_op, target, at, None))
+        self._record(op, OperationKind.RECASE, {"target": file_stat_projection(target)}, lambda connection, plan_op, at: self._record_move(connection, plan_op, target, at, None))
 
     def record_move_updated(
         self, op: OpId, attestation: Attestation
@@ -1269,7 +1471,7 @@ class SyncRunRecorder:
         identity = self._record(
             op,
             OperationKind.MOVE_UPDATE,
-            {"attestation": attestation},
+            {"attestation": _attestation_projection(attestation)},
             lambda connection, plan_op, at: self._record_move(
                 connection, plan_op, attestation.subject, at, attestation
             ),
@@ -1301,14 +1503,14 @@ class SyncRunRecorder:
                 raise StaleRecordingError("mkdir result is not a directory")
             self._owner._upsert_observation(connection, self._command.target_location_id, self._command.host_id, self._command.run_token, plan_op.target_rel_path, target, at)
 
-        self._record(op, OperationKind.MKDIR, {"target": target}, apply)
+        self._record(op, OperationKind.MKDIR, {"target": file_stat_projection(target)}, apply)
 
     def record_trashed(self, op: OpId, trash_relative_path: str, target: FileStat) -> None:
         validate_relative_path(trash_relative_path)
-        self._record(op, OperationKind.TRASH, {"trash": trash_relative_path, "target": target}, lambda connection, plan_op, at: self._record_absent(connection, plan_op, target, at), trash_relative_path)
+        self._record(op, OperationKind.TRASH, {"trash": trash_relative_path, "target": file_stat_projection(target)}, lambda connection, plan_op, at: self._record_absent(connection, plan_op, target, at), trash_relative_path)
 
     def record_deleted(self, op: OpId, prior: FileStat) -> None:
-        self._record(op, OperationKind.DELETE, {"prior": prior}, lambda connection, plan_op, at: self._record_absent(connection, plan_op, prior, at))
+        self._record(op, OperationKind.DELETE, {"prior": file_stat_projection(prior)}, lambda connection, plan_op, at: self._record_absent(connection, plan_op, prior, at))
 
     def record_noop(self, op: OpId, source: FileStat, target: FileStat) -> None:
         def apply(connection: sqlite3.Connection, plan_op: PlanOperation, at: str) -> None:
@@ -1320,7 +1522,7 @@ class SyncRunRecorder:
             target_id = self._owner._upsert_observation(connection, self._command.target_location_id, self._command.host_id, self._command.run_token, plan_op.target_rel_path, target, at)
             self._record_correspondence(connection, plan_op, source_id, target_id, source, target, at)
 
-        self._record(op, OperationKind.NOOP, {"source": source, "target": target}, apply)
+        self._record(op, OperationKind.NOOP, {"source": file_stat_projection(source), "target": file_stat_projection(target)}, apply)
 
     def _record(
         self,
@@ -1340,7 +1542,7 @@ class SyncRunRecorder:
         payload_hash = _payload_hash(
             {
                 "run_token": self._command.run_token,
-                "operation": operation,
+                "operation": operation_projection(operation),
                 "evidence": evidence,
                 "trash_relative_path": trash_relative_path,
             }

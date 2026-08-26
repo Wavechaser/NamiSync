@@ -1,8 +1,8 @@
 # M1 Plan
 
-Supersession note (updated 2026-08-25): ledger-v2/history-v3 and later
+Supersession note (updated 2026-08-26): ledger-v2/history-v3 and later
 ledger-v3/history-v5 references below record earlier milestone design. The
-implemented reset-only ledger v4/history v6 data-epoch-5 boundary in
+implemented reset-only ledger v4/history v6 data-epoch-6 boundary in
 `DATABASE.md` and `ARCHITECTURE.md` now governs. No compatibility migration or
 unbounded history getter remains.
 

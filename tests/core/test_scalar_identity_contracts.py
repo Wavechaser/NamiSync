@@ -304,7 +304,17 @@ def test_zero_file_id_is_equivalent_across_stat_and_handle_adapters() -> None:
     )
 
 
-def test_handle_adapter_requests_file_id_info_and_keeps_all_128_bits() -> None:
+@pytest.mark.parametrize(
+    ("volume_serial", "expected_serial"),
+    (
+        (0x11223344, "11223344"),
+        (0x55667788000000AB, "000000AB"),
+        (0xFFFFFFFFFFFFFFFF, "FFFFFFFF"),
+    ),
+)
+def test_handle_adapter_requests_file_id_info_and_keeps_all_128_bits(
+    volume_serial: int, expected_serial: str,
+) -> None:
     raw = bytes.fromhex("ffeeddccbbaa99887766554433221100")
     calls: list[tuple[int, int, int]] = []
 
@@ -319,7 +329,7 @@ def test_handle_adapter_requests_file_id_info_and_keeps_all_128_bits() -> None:
             pointer,
             ctypes.POINTER(identity_module._FileIdInfo),
         ).contents
-        info.volume_serial_number = 0x11223344
+        info.volume_serial_number = volume_serial
         for index, value in enumerate(raw):
             info.file_id.identifier[index] = value
         return 1
@@ -327,9 +337,20 @@ def test_handle_adapter_requests_file_id_info_and_keeps_all_128_bits() -> None:
     identity = file_identity_from_windows_handle(73, get_file_information)
 
     assert calls == [(73, FILE_ID_INFO_CLASS, ctypes.sizeof(identity_module._FileIdInfo))]
-    assert identity.volume_serial == "11223344"
+    assert identity.volume_serial == expected_serial
     assert identity.file_index == int.from_bytes(raw, "little")
     assert identity.file_index > (1 << 64) - 1
+
+
+@pytest.mark.parametrize("file_index", (0, 1 << 64, MAX_FILE_INDEX_128))
+def test_volume_low32_normalization_is_separate_from_full128_file_index(
+    file_index: int,
+) -> None:
+    raw = file_index.to_bytes(16, "little")
+    identity = file_identity_from_windows_parts(0x123456780000000A, raw)
+    assert identity == FileIdentity("0000000A", file_index)
+    assert identity == file_identity_from_windows_parts(0x0000000A, raw)
+    assert identity == file_identity_from_stat("0000000A", "NTFS", file_index)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="requires native Windows handles")

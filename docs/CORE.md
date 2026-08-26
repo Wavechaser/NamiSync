@@ -14,9 +14,11 @@ recursive inventory scope an explicit core contract.
 The remaining accepted-but-inactive Stage 6 second-half contract is mapped in
 `M1_BRIDGE.md`; its scalar and retention hard walls are owned by
 `DEFENSE.md` §1.3. Checkpoint 2's scoped recording continuation and terminal
-payload cleanup remain active below. Checkpoint 3.2 has switched every live
-producer and consumer to event v5 and data epoch 5; checkpoint 3.3 still removes
-the now-unreachable read-only v3/v4 source branches. Component docs point to
+payload cleanup remain active below. Checkpoint 3.2 switched every live
+producer and consumer to event v5 and data epoch 5. Checkpoint 3R.14 advances
+the shared data epoch to 6 for the corrected ledger/plan identity hash contract;
+checkpoint 3.3 still removes the now-unreachable read-only v3/v4 source branches.
+Component docs point to
 those authorities rather than copy task authority or retention shapes owned by
 later checkpoints.
 
@@ -457,7 +459,39 @@ memoryview, normalizes to bytes before requiring exactly 16, and constructs an
 unsigned little-endian integer; its domain is guaranteed without an assertion
 and is identical under optimized Python. Other runtime types raise `TypeError`;
 wrong byte length raises `ValueError`. Identity equality always includes the
-normalized volume serial.
+normalized volume serial. The Windows adapter deliberately takes the volume
+serial's low 32 bits and formats eight uppercase hexadecimal digits, matching
+the `GetVolumeInformationW` volume key. This normalization does not truncate
+the separate 128-bit file index.
+
+## Canonical Hash Projections
+
+`core.models` explicitly projects shared filesystem evidence, `core.planning`
+projects plans, operations, assignments, and policy inputs, and `db.recorder`
+projects its commands and observation/evidence inputs. Each owner names every
+included field; there is no generic dataclass descent or type registry. The
+shared `canonical_json_bytes()` formatter accepts only a closed JSON tree:
+exact string-keyed dictionaries, lists, null, exact strings/Booleans/integers,
+and finite floats. Unknown objects, unprojected dataclasses, non-string keys,
+and nonfinite numbers fail instead of acquiring a guessed wire form. Owners
+explicitly encode enums, byte digests, timestamps, and collection ordering.
+
+Every non-null `FileIdentity.file_index` in these projections is canonical
+quoted `FileIndex128` text; other integer fields keep their established numeric
+representation. The former Python JSON integers retained all 128 bits, so this
+corrects a representation inconsistency and latent cross-runtime portability
+risk, not demonstrated Python precision loss. Frozen pre-cutover bytes pin the
+unchanged identityless projections, policy name/version semantics, operation
+ids, selection digests, and string encoding. Surrogate-containing free-form
+hash input remains accepted; JSON escaping keeps it distinct from a literal
+backslash escape.
+
+Identity-bearing durable hashes change at the coordinated epoch-6 boundary.
+The ledger contract id changes, but ledger/history schema versions, the history
+contract id, and plan-v5/execution-v6 wire shapes do not. Database admission and
+the explicit reset boundary are owned by [DATABASE.md](DATABASE.md); existing
+workflow commitment/refingerprint checks, not a blanket execution-v6 ban,
+govern old continuation compatibility in [WORKFLOWS.md](WORKFLOWS.md).
 
 ## Time And Evidence
 
@@ -574,6 +608,10 @@ logic; no scanner role or inventory representation is added.
 - Scan-scope tests prove exact-only, recursive-subtree, and full shapes are
   canonical, segment-aware, and reject malformed direct construction.
 - UTC/DST boundary tests prove all core timestamps are aware UTC values.
+- Explicit hash projections cover every declared input field, preserve frozen
+  identityless bytes and established collection order, quote full-width file
+  identities, and refuse unsupported values without coercion. Native identity
+  tests distinguish low-32-bit volume normalization from the full file index.
 - Attestations cannot be constructed without algorithm, digest, provenance,
   subject stat evidence, and observation time.
 - A changed selection invalidates a `Commitment` even when the plan fingerprint

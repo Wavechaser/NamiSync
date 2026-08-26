@@ -2,19 +2,20 @@
 
 Status: schema bones, safe connection factories, the M0 ledger/repositories,
 inventory reconciliation, bounded receipt-journal history, and M1's
-ledger-v4/history-v6 data-epoch-5 reset boundary and semantic settings store are
+ledger-v4/history-v6 data-epoch-6 reset boundary and semantic settings store are
 implemented. General migrations, retention, and backup/protection workflows
 remain later work.
 
 ## Active V4/V6 Persistence Boundary
 
-Status: active from Stage 6 checkpoint 3.2. This was a coordinated pre-release
-reset, not an in-place migration.
+Status: ledger-v4/history-v6 shapes are active from Stage 6 checkpoint 3.2;
+remediation checkpoint 3R.14 advances the shared data epoch and ledger contract
+id. This is a coordinated pre-release reset, not an in-place migration.
 
 | Database | Schema | `data_epoch` | `contract_id` |
 | --- | ---: | ---: | --- |
-| ledger | 4 | 5 | `m1-ledger-v4-event-v5-evidence-v1` |
-| history | 6 | 5 | `m1-history-v6-event-v5-recording-v1` |
+| ledger | 4 | 6 | `m1-ledger-v4-event-v5-evidence-v2` |
+| history | 6 | 6 | `m1-history-v6-event-v5-recording-v1` |
 
 Version, contract id, and epoch values are mandatory. Two absent main files
 with no sidecars remain the only fresh state. Any old or mixed pair,
@@ -26,6 +27,26 @@ not migrate, repair, or delete them. A standalone read-only history command may
 open one exact history-v6 database without creating or requiring its ledger
 peer; it still validates the history role, version, contract id, epoch, and
 complete topology through the shared nonmutating file preflight.
+
+Epoch 6 separates the corrected identity-bearing hash preimages from epoch 5's
+numeric file-index preimages. Recorder and plan hashes now project declared
+contract fields explicitly and quote canonical `FileIndex128` text; ordinary
+integers remain JSON numbers. SQLite column shapes and the history contract id
+do not change. This fixes canonical consistency and latent portability risk,
+not demonstrated Python integer-precision loss. Identityless hash bytes and the
+existing lossless surrogate-escaping rule remain unchanged: JSON escapes literal
+backslashes before UTF-8 encoding, so the reported raw-surrogate collision did
+not occur in these hashes. Diagnostic text is not discarded under that rationale.
+
+Both old epoch-5 databases, either mixed 5/6 direction, and epoch 6 carrying the
+old ledger contract id are refused, including when the old markers are committed
+only in WAL. Recreating the pair discards the active app inventory, baselines,
+attestations, mappings, receipts, and audit history; archived files may be kept
+for separate inspection but are not migrated into the new pair. It does not
+delete or modify source files, target files, semantic settings, or sync trash.
+A new scan can rebuild current observations, not the discarded historical
+baselines, attestations, receipts, or audit trail.
+No application startup or reader performs this destructive reset automatically.
 
 Ledger v4 stores complete file identities as canonical `FileIndex128` text and
 strengthens pair, canonical-domain, and attestation checks. It does not add an
@@ -322,18 +343,19 @@ readable as `incomplete` after restart and is not classified as interrupted or
 resumable without future durable custody.
 
 The current schemas carry exact whole-contract metadata: ledger
-`contract_id=m1-ledger-v4-event-v5-evidence-v1`, history
-`contract_id=m1-history-v6-event-v5-recording-v1`, and shared `data_epoch=5`.
+`contract_id=m1-ledger-v4-event-v5-evidence-v2`, history
+`contract_id=m1-history-v6-event-v5-recording-v1`, and shared `data_epoch=6`.
 Opening ledger v1-v3, history v1-v5, or a current database with a
 missing/mismatched marker raises the same actionable
 `SchemaResetRequired` family without altering the old tables or version stamp.
 During this pre-release window the user must close NamiSync and manually delete
 or archive both local database files and their sidecars before restarting.
-There is no migration into this coordinated event-v5/evidence epoch because an
-older pair lacks facts required by the exact contracts.
+There is no migration into this coordinated event-v5/evidence epoch: older
+pairs either lack required facts or retain the superseded identity-bearing hash
+convention. Advancing the epoch does not reinterpret their stored receipts.
 `reset_databases()` is an explicit
 development/test helper that validates both exact paths before deleting their
-database/WAL/SHM artifacts and recreates both current schemas; normal startup
+database/WAL/SHM/journal artifacts and recreates both current schemas; normal startup
 never calls it. The reset is intentionally destructive and non-transactional:
 all NamiSync and SQLite handles must already be closed, and a locked sidecar can
 make a later delete fail after an earlier artifact was removed. The caller must
@@ -596,8 +618,16 @@ rather than current implementation claims.
   exact final M1 contract marker are refused before writer/WAL/schema mutation
   with an actionable instruction to recreate both local databases.
 - The explicit coordinated development reset recreates ledger v4/history v6
-  with shared data epoch 5;
+  with shared data epoch 6;
   normal startup never deletes either database.
+- Captured epoch-5 markers in `tests/assets/identity_epoch5_vectors.json` seed
+  synthetic old-pair fixtures against the unchanged ledger-v4/history-v6 shapes.
+  Repeated probes, pair admission, initializers, and repositories refuse both
+  old databases, each mixed 5/6 direction, and epoch 6 with the old ledger id.
+  WAL-only old markers refuse with or without source SHM; source main/WAL/SHM/
+  journal membership and bytes remain unchanged. Existing epoch-4 and journal
+  presence negatives remain independent controls, and fresh epoch-6 pairs reopen
+  with unchanged schema versions and history id. These tests never reset user data.
 - Pair preflight returns fresh only when both mains and every SQLite sidecar are
   absent; ready requires both role-specific contracts. Every other combination
   is refused without changing an existing byte. Mutating service admissions

@@ -5,7 +5,7 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import json
-from dataclasses import asdict, dataclass, fields, is_dataclass
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import PureWindowsPath
 from typing import Mapping, NewType, Protocol, Sequence
@@ -20,6 +20,12 @@ from .models import (
     ScanResult,
     VolumeEvidence,
     VolumeId,
+    capability_profile_projection,
+    file_stat_projection,
+    metadata_projection,
+    root_projection,
+    volume_evidence_projection,
+    volume_id_projection,
 )
 from .pathing import normalize_relative_path, validate_relative_path
 from .review import ReviewFactLimitError, ReviewFactLimitExceeded
@@ -315,34 +321,141 @@ def re_fullmatch_op_id(value: str) -> bool:
     return len(value) == 32 and all(character in "0123456789abcdef" for character in value)
 
 
-def _primitive(value: object) -> object:
-    if isinstance(value, StrEnum):
-        return value.value
-    if is_dataclass(value):
-        return {field.name: _primitive(getattr(value, field.name)) for field in fields(value)}
-    if isinstance(value, Mapping):
-        return {str(key): _primitive(item) for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
-    if isinstance(value, (tuple, list)):
-        return [_primitive(item) for item in value]
-    if isinstance(value, (set, frozenset)):
-        return sorted((_primitive(item) for item in value), key=lambda item: json.dumps(item, sort_keys=True))
-    return value
+def _require_json_tree(value: object) -> None:
+    if value is None or type(value) in (str, bool, int, float):
+        return
+    if type(value) is list:
+        for item in value:
+            _require_json_tree(item)
+        return
+    if type(value) is dict:
+        for key, item in value.items():
+            if type(key) is not str:
+                raise TypeError("canonical JSON keys must be plain strings")
+            _require_json_tree(item)
+        return
+    raise TypeError(f"unsupported canonical JSON value: {type(value).__name__}")
 
 
 def canonical_json_bytes(value: object) -> bytes:
-    """Return canonical JSON while preserving existing valid-Unicode bytes.
+    """Encode an explicitly projected, closed JSON tree without coercion.
 
     ``backslashreplace`` affects only malformed surrogate code units, which
     JSON can represent with a ``\\uXXXX`` escape. Valid Unicode retains the
     established UTF-8 encoding and therefore its existing fingerprints.
     """
 
+    _require_json_tree(value)
     return json.dumps(
-        _primitive(value),
+        value,
+        allow_nan=False,
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8", errors="backslashreplace")
+
+
+def _preservation_projection(value: PreservationPolicy) -> dict[str, object]:
+    if type(value) is not PreservationPolicy:
+        raise TypeError("preservation projection requires PreservationPolicy")
+    return {
+        "preserve_ads": value.preserve_ads,
+        "preserve_created": value.preserve_created,
+        "preserve_acl": value.preserve_acl,
+    }
+
+
+def _filter_projection(value: FilterSet) -> dict[str, object]:
+    if type(value) is not FilterSet or type(value.patterns) is not tuple:
+        raise TypeError("filter projection requires FilterSet with tuple patterns")
+    return {"patterns": list(value.patterns)}
+
+
+def _destination_assignment_projection(value: DestinationAssignment) -> dict[str, object]:
+    if type(value) is not DestinationAssignment:
+        raise TypeError("destination projection requires DestinationAssignment")
+    return {
+        "source_rel_path": value.source_rel_path,
+        "source_rel_path_key": value.source_rel_path_key,
+        "target_rel_path": value.target_rel_path,
+        "target_rel_path_key": value.target_rel_path_key,
+        "group_id": value.group_id,
+        "conflict": value.conflict,
+    }
+
+
+def _assignment_projection(value: Assignment) -> dict[str, object]:
+    if type(value) is not Assignment or type(value.items) is not tuple:
+        raise TypeError("assignment projection requires Assignment with tuple items")
+    return {
+        "policy_name": value.policy_name,
+        "policy_version": value.policy_version,
+        "items": [_destination_assignment_projection(item) for item in value.items],
+    }
+
+
+def operation_projection(value: PlanOperation) -> dict[str, object]:
+    if type(value) is not PlanOperation:
+        raise TypeError("operation projection requires PlanOperation")
+    if (
+        type(value.kind) is not OperationKind
+        or type(value.reason) is not OperationReason
+        or (value.blocked_reason is not None and type(value.blocked_reason) is not BlockedReason)
+        or type(value.dependencies) is not tuple
+    ):
+        raise TypeError("operation projection requires typed reasons and tuple dependencies")
+    return {
+        "op_id": value.op_id,
+        "kind": value.kind.value,
+        "source_rel_path": value.source_rel_path,
+        "target_rel_path": value.target_rel_path,
+        "source_expected": file_stat_projection(value.source_expected),
+        "target_expected": file_stat_projection(value.target_expected),
+        "intended": file_stat_projection(value.intended),
+        "prior_target_rel_path": value.prior_target_rel_path,
+        "prior_target_expected": file_stat_projection(value.prior_target_expected),
+        "metadata": metadata_projection(value.metadata),
+        "content_bytes": value.content_bytes,
+        "dependencies": list(value.dependencies),
+        "reason": value.reason.value,
+        "blocked_reason": None if value.blocked_reason is None else value.blocked_reason.value,
+    }
+
+
+def plan_projection(value: Plan) -> dict[str, object]:
+    if type(value) is not Plan:
+        raise TypeError("plan projection requires Plan")
+    if (
+        type(value.deletion_policy) is not DeletionPolicy
+        or type(value.operations) is not tuple
+        or type(value.required_volumes) is not frozenset
+    ):
+        raise TypeError("plan projection requires typed policy, operations, and volumes")
+    volumes = [volume_id_projection(volume) for volume in value.required_volumes]
+    # Retain the existing JSON sort key, not VolumeId's dataclass ordering.
+    volumes.sort(key=lambda item: json.dumps(item, sort_keys=True))
+    return {
+        "source_root": root_projection(value.source_root),
+        "target_root": root_projection(value.target_root),
+        "source_volume_id": volume_id_projection(value.source_volume_id),
+        "target_volume_id": volume_id_projection(value.target_volume_id),
+        "source_volume_evidence": volume_evidence_projection(value.source_volume_evidence),
+        "target_volume_evidence": volume_evidence_projection(value.target_volume_evidence),
+        "source_profile": capability_profile_projection(value.source_profile),
+        "target_profile": capability_profile_projection(value.target_profile),
+        "source_complete": value.source_complete,
+        "target_complete": value.target_complete,
+        "operations": [operation_projection(operation) for operation in value.operations],
+        "assignment": _assignment_projection(value.assignment),
+        "preservation": _preservation_projection(value.preservation),
+        "filter_snapshot": _filter_projection(value.filter_snapshot),
+        "deletion_policy": value.deletion_policy.value,
+        "trash_on_update": value.trash_on_update,
+        "policy_fingerprint": value.policy_fingerprint,
+        "required_volumes": volumes,
+        "required_bytes": value.required_bytes,
+        "fingerprint": value.fingerprint,
+    }
 
 
 def deterministic_operation_id(
@@ -352,6 +465,8 @@ def deterministic_operation_id(
     prior_target_rel_path: str | None,
     reason: OperationReason,
 ) -> OpId:
+    if type(kind) is not OperationKind or type(reason) is not OperationReason:
+        raise TypeError("operation intent requires typed kind and reason")
     intent = {
         "kind": kind.value,
         "source": source_rel_path,
@@ -409,10 +524,12 @@ def calculate_required_bytes(
 
 
 def policy_fingerprint(options: SyncOptions) -> str:
+    if type(options) is not SyncOptions or type(options.deletion_policy) is not DeletionPolicy:
+        raise TypeError("policy fingerprint requires SyncOptions with DeletionPolicy")
     payload = {
         "deletion_policy": options.deletion_policy.value,
-        "preservation": options.preservation,
-        "filters": options.filters,
+        "preservation": _preservation_projection(options.preservation),
+        "filters": _filter_projection(options.filters),
         "destination_policy": {
             "name": options.destination_policy.name,
             "version": options.destination_policy.version,
@@ -424,17 +541,17 @@ def policy_fingerprint(options: SyncOptions) -> str:
 
 
 def plan_fingerprint(plan: Plan) -> PlanFingerprint:
-    payload = asdict(plan)
-    payload.pop("fingerprint", None)
+    payload = plan_projection(plan)
+    del payload["fingerprint"]
     return PlanFingerprint(hashlib.sha256(canonical_json_bytes(payload)).hexdigest())
 
 
 def serialize_plan(plan: Plan) -> bytes:
-    return canonical_json_bytes(plan)
+    return canonical_json_bytes(plan_projection(plan))
 
 
 def selection_digest(selection: Sequence[OpId] | frozenset[OpId]) -> bytes:
-    return hashlib.sha256(canonical_json_bytes(sorted(str(item) for item in selection))).digest()
+    return hashlib.sha256(canonical_json_bytes(sorted(selection))).digest()
 
 
 def quarantined_operation_ids(

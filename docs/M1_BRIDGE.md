@@ -249,11 +249,13 @@ removed in the coordinated database reset. Identity equality always includes
 the already-normalized volume identity and never performs ordering or
 arithmetic on the file index.
 
-Ledger v4 and history v6 share `data_epoch=5`, contract ids
-`m1-ledger-v4-event-v5-evidence-v1` and
+Ledger v4 and history v6 share `data_epoch=6`, contract ids
+`m1-ledger-v4-event-v5-evidence-v2` and
 `m1-history-v6-event-v5-recording-v1`, and history event schema 5. Any old,
 mixed, one-present, markerless, or orphan-sidecar pair refuses before commands
 with coordinated archive/delete guidance; there is no migration or deletion.
+Checkpoint 3R.14 advances these markers for explicit identity-bearing hash
+projections without changing either schema shape or the history contract id.
 
 Event-v5 item outcomes add `recording`, `recording_reason`,
 `recording_detail`, and `detail_omitted_count`; integrity outcomes share the

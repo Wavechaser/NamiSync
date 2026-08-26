@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from _identity_epoch5 import frozen_execution
+
 import namisync.workflows.sync as sync_workflow
 from namisync.core.events import ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
@@ -52,6 +54,7 @@ from namisync.workflows.models import (
     VerifyContinuation,
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
+from namisync.workflows.payloads import decode_execution_request
 
 
 NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
@@ -939,6 +942,148 @@ def test_execution_refuses_plan_content_that_no_longer_matches_fingerprint() -> 
     assert result.status is SessionState.REFUSED
     assert result.disposition is Disposition.UNRUN
     assert "plan content" in saved[0].commitment_error
+
+
+@pytest.mark.parametrize(
+    "with_identity", [True, False], ids=["identity-bearing", "identityless"]
+)
+def test_frozen_execution_v6_resume_checks_current_identity_hash(
+    with_identity: bool,
+) -> None:
+    # Decode the pre-cut bytes; never replace their reviewed fingerprint with
+    # one calculated by the current implementation.
+    request = decode_execution_request(frozen_execution(with_identity))
+    continuation = request.continuation
+    assert isinstance(continuation, ExecuteContinuation)
+    assert continuation.verify_after_execute is False
+    assert request.started_at is not None
+    xset = continuation.execution_set
+    first, second = xset.plan.operations
+    assert (first.kind, second.kind) == (OperationKind.COPY, OperationKind.COPY)
+    assert (first.content_bytes, second.content_bytes) == (7, 5)
+    assert xset.selection == frozenset({first.op_id, second.op_id})
+    assert xset.status == {first.op_id: Outcome.SUCCEEDED}
+    assert xset.bytes_done_high_water == 7
+    assert set(xset.published_evidence) == {first.op_id}
+    evidence = xset.published_evidence[first.op_id]
+    assert evidence.copy_recorded
+    assert evidence.attestation.content.digest == bytes(range(16))
+    assert evidence.attestation.subject.size == 7
+    assert first.source_expected is not None
+    assert (first.source_expected.file_identity is not None) is with_identity
+    assert (evidence.attestation.subject.file_identity is not None) is with_identity
+    assert xset.commitment is not None
+    assert xset.commitment.plan_fingerprint == xset.plan.fingerprint
+    prior_plan = xset.plan
+    prior_commitment = xset.commitment
+    prior_status = dict(xset.status)
+    prior_evidence = dict(xset.published_evidence)
+    calls = []
+    saved = []
+    finished = []
+    events = []
+    observation_fs = object()
+    world = SimpleNamespace(paths={})
+
+    def observer(execution_set, filesystem):
+        calls.append("observer")
+        if with_identity:
+            raise AssertionError("identity-bearing old commitment reached observation")
+        assert execution_set is xset
+        assert filesystem is observation_fs
+        return world
+
+    def preflight(execution_set, observed):
+        calls.append("preflight")
+        if with_identity:
+            raise AssertionError("identity-bearing old commitment reached preflight")
+        assert execution_set is xset
+        assert observed is world
+        return Verdict(
+            False,
+            (
+                Refusal(
+                    RefusalCode.OBSERVATION_UNAVAILABLE,
+                    detail="frozen identityless control stops before execution",
+                ),
+            ),
+            observed,
+        )
+
+    def executor(*_args):
+        calls.append("executor")
+        raise AssertionError("frozen continuation must not perform file execution")
+
+    def open_recording(*_args):
+        calls.append("open-recording")
+        raise AssertionError("existing-run finisher must not open a new recording")
+
+    def save_details(details):
+        calls.append("save-details")
+        saved.append(details)
+
+    def finish_existing_recording(execution_set, status, recording):
+        calls.append("finish")
+        finished.append((execution_set, status, recording))
+
+    result = run_execution(
+        continuation,
+        RunContext(events.append, lambda: None),
+        SimpleNamespace(
+            observer=observer,
+            observation_fs=observation_fs,
+            preflight=preflight,
+            executor=executor,
+            executor_policies=object(),
+            executor_fs=object(),
+            open_recording=open_recording,
+            finish_existing_recording=finish_existing_recording,
+            save_execution_details=save_details,
+        ),
+        resumed=True,
+    )
+
+    assert calls == (
+        ["save-details", "finish"]
+        if with_identity else ["observer", "preflight", "save-details", "finish"]
+    )
+    assert len(saved) == 1
+    assert saved[0].run_id == str(xset.run_id)
+    assert result.error is not None
+    if with_identity:
+        assert saved[0].commitment_error == (
+            "reviewed plan content does not match its fingerprint"
+        )
+        assert saved[0].refusals == ()
+        assert result.error.type_name == "ExecutionResumeCommitmentInvalid"
+        assert result.error.message == saved[0].commitment_error
+    else:
+        assert saved[0].commitment_error is None
+        assert len(saved[0].refusals) == 1
+        assert saved[0].refusals[0].code == RefusalCode.OBSERVATION_UNAVAILABLE.value
+        assert result.error.type_name == "ExecutionResumePreflightRefused"
+        assert "frozen identityless control stops before execution" in result.error.message
+    assert len(finished) == 1
+    assert finished[0][0] is xset
+    assert finished[0][1:] == (SessionState.FAILED, RecordingStatus.OK)
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.canceled is False
+    assert result.recording is RecordingStatus.OK
+    assert result.recording_issues == ()
+    assert (result.bytes_done, result.bytes_total) == (7, 12)
+    assert result.phases == ()
+    # This boundary does not reconstruct the already-accepted ItemOutcome
+    # stream from continuation status/evidence, or re-emit its successful copy.
+    assert result.items == ()
+    assert not any(isinstance(event, ItemOutcome) for event in events)
+    assert xset.plan is prior_plan
+    assert xset.commitment is prior_commitment
+    assert xset.status == prior_status
+    assert xset.published_evidence == prior_evidence
+    assert xset.published_evidence[first.op_id] is evidence
+    assert second.op_id not in xset.status
+    assert xset.bytes_done_high_water == 7
 
 
 def _selection_mismatch_fixture() -> tuple[ExecutionSet, PlanOperation]:

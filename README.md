@@ -56,11 +56,13 @@ as `incomplete`. Continuations stay in live session records; the session store
 receives a separate metadata/result projection without a continuation field.
 A durable metadata store alone cannot provide restart/resume. The active
 database boundary is ledger v4 plus history v6 at
-shared data epoch 5. Older, one-present, markerless, transitional, mismatched,
+shared data epoch 6. This includes a reset from epoch 5 despite unchanged schema
+numbers. Older, one-present, markerless, transitional, mismatched,
 incomplete/poisoned, or orphan-sidecar pairs are refused. Admission checks
 WAL-visible markers and schema without changing source artifacts; any journal
 entry refuses. Both local database mains and their SQLite sidecars must be
-archived or deleted together before creating a fresh pair.
+archived or deleted together before creating a fresh pair. Startup never does
+this automatically; resetting loses app evidence and history, not managed files.
 
 ## Compatibility
 
@@ -238,7 +240,7 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, dormant sync/integrity file-list row
 renderers, and a persisted native/page theme override over the refrozen
 cosmetic-state channel. The second-half workflow/protocol contracts are now
-ratified for checkpoint delivery, and the exact event-v5/data-epoch-5 protocol
+ratified for checkpoint delivery, and the exact event-v5/data-epoch-6 protocol
 cut is active. Product surfaces and beta packaging remain open.
 
 ### M1 Features

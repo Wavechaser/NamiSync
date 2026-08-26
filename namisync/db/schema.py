@@ -16,8 +16,8 @@ from .connections import (
 
 LEDGER_SCHEMA_VERSION = 4
 HISTORY_SCHEMA_VERSION = 6
-DATA_EPOCH = 5
-LEDGER_CONTRACT_ID = "m1-ledger-v4-event-v5-evidence-v1"
+DATA_EPOCH = 6
+LEDGER_CONTRACT_ID = "m1-ledger-v4-event-v5-evidence-v2"
 HISTORY_CONTRACT_ID = "m1-history-v6-event-v5-recording-v1"
 MAX_HISTORY_PHASE_NAME_BYTES = 1_024
 MAX_HISTORY_ERROR_TYPE_BYTES = 1_024
@@ -1144,7 +1144,7 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
     database = "history" if history else "ledger"
     raise SchemaResetRequired(
         f"unsupported {database} schema version {version}; "
-        "NamiSync M1 requires ledger v4 and history v6 at data epoch 5. "
+        "NamiSync M1 requires ledger v4 and history v6 at data epoch 6. "
         "Close every NamiSync process, then archive or delete both database "
         "main files and all of their -wal, -shm, and -journal sidecars "
         "together before restarting."
@@ -1164,7 +1164,7 @@ def _require_contract_id(
         value = "missing" if actual is None else actual
         raise SchemaResetRequired(
             f"unsupported {database} schema contract {value}; "
-            "NamiSync M1 requires ledger v4 and history v6 at data epoch 5. "
+            "NamiSync M1 requires ledger v4 and history v6 at data epoch 6. "
             "Close every NamiSync process, then archive or delete both database "
             "main files and all of their -wal, -shm, and -journal sidecars "
             "together before restarting."
@@ -1178,7 +1178,7 @@ def _require_contract_id(
         value = "missing" if epoch is None else epoch
         raise SchemaResetRequired(
             f"unsupported {database} data epoch {value}; "
-            "NamiSync M1 requires ledger v4 and history v6 at data epoch 5. "
+            "NamiSync M1 requires ledger v4 and history v6 at data epoch 6. "
             "Close every NamiSync process, then archive or delete both database "
             "main files and all of their -wal, -shm, and -journal sidecars "
             "together before restarting."
