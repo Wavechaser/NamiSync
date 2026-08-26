@@ -156,7 +156,7 @@ class _BrowserGateControl:
         if role == "main":
             _deliver_initial_events(sink, session_id)
         elif role == "busy":
-            sink(_terminal_record(session_id, self.hostile))
+            sink(_terminal_record(session_id))
         return role, request_id, session_id
 
     def note_task(self, task_id: str, session_id: str) -> None:
@@ -235,8 +235,8 @@ def _deliver_initial_events(sink: object, session_id: str) -> None:
                 "phase": "execute",
                 "items_done": 1,
                 "items_total": 1,
-                "bytes_done": 7,
-                "bytes_total": 7,
+                "bytes_done": "7",
+                "bytes_total": "7",
                 "current_path": "numeric-hole-海.txt",
                 "item_id": None,
                 "item_type": None,
@@ -264,11 +264,59 @@ def _nonterminal_record(session_id: str):
     )
 
 
-def _terminal_record(session_id: str, hostile: str):
+def _deliver_result_items(sink: object, session_id: str, hostile: str) -> None:
+    sink(
+        _event(
+            session_id,
+            6,
+            "ItemOutcome",
+            {
+                "item_type": "operation",
+                "phase": "execute",
+                "item_id": "1" * 32,
+                "kind": "copy",
+                "path": hostile,
+                "result": "succeeded",
+                "reason": None,
+                "detail": {
+                    "message": hostile,
+                    "durability_warnings": ["海", "é", "U0001f30a"],
+                },
+                "recording": "ok",
+                "recording_reason": None,
+                "recording_detail": None,
+                "detail_omitted_count": 0,
+            },
+        )
+    )
+    sink(
+        _event(
+            session_id,
+            7,
+            "IntegrityOutcome",
+            {
+                "item_type": "integrity",
+                "phase": "verify",
+                "item_id": "integrity-hostile",
+                "row_id": "row-hostile",
+                "location_id": "location-hostile",
+                "kind": "integrity",
+                "path": hostile,
+                "result": "verified",
+                "reason": None,
+                "detail": hostile,
+                "read_strategy": "windows-unbuffered",
+                "recording": "ok",
+                "record_disposition": "applied",
+                "detail_omitted_count": 0,
+            },
+        )
+    )
+
+
+def _terminal_record(session_id: str):
     from namisync.workflows import PLAN_KIND
     from namisync.workflows.views import (
-        IntegrityOutcomeView,
-        OperationItemView,
         OperationResultView,
         PhaseResultView,
         SessionRecordView,
@@ -282,43 +330,18 @@ def _terminal_record(session_id: str, hostile: str):
         audit="ok",
         disposition="ran",
         canceled=False,
-        items=(
-            OperationItemView(
-                "operation",
-                "execute",
-                "copy-hostile",
-                "copy",
-                hostile,
-                "succeeded",
-                None,
-                {
-                    "hostile": hostile,
-                    "nested": {"values": ["海", "é", "U0001f30a"]},
-                },
-            ),
-            IntegrityOutcomeView(
-                "integrity",
-                "verify",
-                "integrity-hostile",
-                "row-hostile",
-                "location-hostile",
-                "integrity",
-                hostile,
-                "verified",
-                None,
-                hostile,
-                "windows-unbuffered",
-                "ok",
-                "applied",
-            ),
-        ),
         phases=(
-            PhaseResultView("execute", "completed", 1, 1, 7, 7, None),
-            PhaseResultView("verify", "completed", 1, 1, 7, 7, None),
+            PhaseResultView("execute", "completed", 1, 1, "7", "7", None),
+            PhaseResultView("verify", "completed", 1, 1, "7", "7", None),
         ),
-        bytes_done=7,
-        bytes_total=7,
+        bytes_done="7",
+        bytes_total="7",
         error=None,
+        recording_degraded_items=0,
+        recording_issues=(),
+        omitted_detail_count=0,
+        presentation_omitted_detail_count=0,
+        review_refusal=None,
     )
     return SessionRecordView(
         session_id,
@@ -564,6 +587,7 @@ def _valid_browser_report(value: object) -> bool:
         "interactive_refusal",
         "malformed_refusal",
         "nested_dom",
+        "nested_items",
         "nested_record",
         "replacement_registration",
     }:
@@ -580,6 +604,9 @@ def _valid_browser_report(value: object) -> bool:
         and type(value["busy_refusals"]) is list
         and type(value["interactive_refusal"]) is dict
         and type(value["malformed_refusal"]) is dict
+        and type(value["nested_items"]) is list
+        and len(value["nested_items"]) == 2
+        and all(type(item) is dict for item in value["nested_items"])
         and type(value["nested_record"]) is dict
         and value["replacement_registration"] is True
         and type(cleanup) is dict
@@ -625,7 +652,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     recorder.set("off_origin_handler_calls", [])
     original_expose_bridge = host._expose_bridge_api
     original_task_registry = host._task_registry
-    original_dispatch = bridge.BridgeDispatcher.dispatch
+    original_dispatch = bridge.BridgeDispatcher._dispatch_native
     original_start_plan = NamiSyncService.start_plan
     original_reobserve = NamiSyncService.reobserve
     original_unsubscribe = NamiSyncService.unsubscribe
@@ -960,7 +987,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         )[1]:
             if from_sequence != 1:
                 raise RuntimeError("unexpected busy browser gate replay cursor")
-            return _terminal_record(session_id, browser_gate.hostile)
+            return _terminal_record(session_id)
         if browser_gate is not None and session_id == browser_gate.controlled_session(
             "main"
         )[1]:
@@ -979,7 +1006,8 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                         {"phase": "retained-海"},
                     )
                 )
-                return _terminal_record(session_id, browser_gate.hostile)
+                _deliver_result_items(sink, session_id, browser_gate.hostile)
+                return _terminal_record(session_id)
             raise RuntimeError("unexpected main browser gate replay cursor")
         return original_reobserve(service, session_id, sink, from_sequence)
 
@@ -1055,7 +1083,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             patch.object(host, "_expose_bridge_api", expose_bridge)
         )
         stack.enter_context(
-            patch.object(bridge.BridgeDispatcher, "dispatch", observed_dispatch)
+            patch.object(bridge.BridgeDispatcher, "_dispatch_native", observed_dispatch)
         )
         stack.enter_context(
             patch.object(bridge.NativeDocumentState, "_record", record_document)

@@ -6,6 +6,7 @@ import json
 import re
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from threading import Thread
 from types import MappingProxyType
 from unittest.mock import patch
 
@@ -72,17 +73,32 @@ def _dispatch(
     command: str,
     payload: Mapping[str, object],
 ) -> object:
-    return dispatch(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "request_id": request_id,
-                "command": command,
-                "payload": dict(payload),
-            },
-            separators=(",", ":"),
-        )
+    command_json = json.dumps(
+        {
+            "schema_version": 1,
+            "request_id": request_id,
+            "command": command,
+            "payload": dict(payload),
+        },
+        separators=(",", ":"),
     )
+    replies: list[object] = []
+    errors: list[BaseException] = []
+
+    def invoke() -> None:
+        try:
+            replies.append(dispatch(command_json))
+        except BaseException as error:
+            errors.append(error)
+
+    worker = Thread(target=invoke, name="namisync-test-bridge", daemon=True)
+    worker.start()
+    worker.join(5.0)
+    if worker.is_alive():
+        raise AssertionError("test native bridge worker did not exit")
+    if errors:
+        raise errors[0]
+    return replies[0]
 
 
 def drive_startup_handshake(window: object) -> None:

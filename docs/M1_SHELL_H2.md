@@ -7,7 +7,8 @@
 
 Delivery status (2026-08-27): checkpoints 0–3 and the independently reviewed
 3R remediation are complete, including the separately reviewed checkpoint-3.3
-legacy-source removal. Checkpoints 4–12 remain pending.
+legacy-source removal. Checkpoint 4 is in its pre-model ownership audit;
+checkpoints 5–12 remain pending. No checkpoint-4 command or control is active.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
@@ -328,6 +329,37 @@ Commits, in order:
 1. `test(web): pin task artifact reservation model`
 2. `feat(web): install dormant task lifecycle`
 3. `feat(web): retain multi-session task artifacts`
+
+**In progress (2026-08-27), before the first mandatory commit.** Independent
+source audits found that the current complete graph cannot yet justify a
+frozen reservation floor. The dispatcher exception-retention prerequisite
+is fixed separately in `ff23af9`; the native reply lifetime prerequisite now
+passes all eight installed transport/native-host witnesses. Neither change
+freezes a model or closes BR-G-45. Resolve
+the following before accepting the first model commit:
+
+- Linked execution can retain both 120,000 operation and 120,000 integrity
+  outcomes, plus the dispatcher accumulator and shallow audit/store wrappers.
+  A bounded `TerminalSummary` does not bound the raw `OperationResult`
+  failure/phase diagnostics retained behind it.
+- Serialization expands the complete schema occurrence graph, not just path
+  strings: shared dependency tuples, metadata/evidence, and per-candidate
+  absolute roots can become distinct lists, strings, and decoded objects.
+  Keep this future-copy liability separate from the identity-deduplicated
+  retained-domain walls; a constant multiple of those walls alone is unsound.
+- Original history-observer payloads, delayed audit finalization, worker
+  retirement, callback retry, observation stream history, and exception
+  tracebacks are real owners.
+  Each needs an explicit finite charge and retirement condition, or structural
+  elimination, before a completion reservation may be released.
+- The complete-graph validator must classify non-slotted instance dictionaries,
+  mapping-proxy backing stores, mutable-container high-water capacity, `Path`
+  caches, all declared detail entries, and native/browser serialization copies.
+  The frozen transport instrument is not that validator and remains untouched.
+
+These are source-derived counterexamples and enforcement prerequisites, not
+memory measurements or a substitute maximum fixture. No numerical model,
+fixture, or acceptance evidence has been frozen or calibrated yet.
 
 - **Objective:** Remove the one-session assumption before adding production surfaces.
 - **Position and safe stops:** The first commit freezes the complete analytical

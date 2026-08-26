@@ -304,6 +304,37 @@ def test_transport_recorder_publishes_startup_error_as_failure(
     reader.assert_consistent(require_final=False)
 
 
+@pytest.mark.parametrize("fixture", ("initial", "items", "terminal"))
+def test_transport_gate_live_fixtures_match_exact_v5_contract(fixture: str) -> None:
+    from namisync.workflows.views import (
+        validate_session_event_view,
+        validate_session_record_view,
+    )
+
+    session_id = "d" * 32
+    if fixture == "initial":
+        transport_gate_child._deliver_initial_events(
+            validate_session_event_view,
+            session_id,
+        )
+    elif fixture == "items":
+        events = []
+        transport_gate_child._deliver_result_items(
+            events.append,
+            session_id,
+            "hostile-海",
+        )
+        assert [event.body_type for event in events] == [
+            "ItemOutcome", "IntegrityOutcome",
+        ]
+        for event in events:
+            validate_session_event_view(event)
+    else:
+        validate_session_record_view(
+            transport_gate_child._terminal_record(session_id)
+        )
+
+
 def test_transport_final_merge_rejects_a_boolean_exit_code() -> None:
     with pytest.raises(AssertionError):
         _merge_final_evidence(
@@ -1185,9 +1216,11 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
         "Gap",
         "Gap",
         "PhaseChanged",
+        "ItemOutcome",
+        "IntegrityOutcome",
         "record",
     ]
-    assert browser["accepted_sequences"] == [1, 3, 4, 4, 5]
+    assert browser["accepted_sequences"] == [1, 3, 4, 4, 5, 6, 7]
     assert browser["busy_refusals"] == []
     assert browser["malformed_refusal"] == {
         "name": "BridgeTransportError"
@@ -1204,12 +1237,44 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     assert nested["session_id"] == "d" * 32
     assert nested["kind"] == "sync-plan"
     assert nested["state"] == "completed"
-    assert nested["result"]["items"][0]["path"] == evidence.corpus
-    assert nested["result"]["items"][0]["detail"] == {
-        "hostile": evidence.corpus,
-        "nested": {"values": ["海", "é", "U0001f30a"]},
-    }
-    assert nested["result"]["items"][1]["detail"] == evidence.corpus
+    assert "items" not in nested["result"]
+    assert nested["result"]["bytes_done"] == "7"
+    assert nested["result"]["bytes_total"] == "7"
+    assert browser["nested_items"] == [
+        {
+            "item_type": "operation",
+            "phase": "execute",
+            "item_id": "1" * 32,
+            "kind": "copy",
+            "path": evidence.corpus,
+            "result": "succeeded",
+            "reason": None,
+            "detail": {
+                "message": evidence.corpus,
+                "durability_warnings": ["海", "é", "U0001f30a"],
+            },
+            "recording": "ok",
+            "recording_reason": None,
+            "recording_detail": None,
+            "detail_omitted_count": 0,
+        },
+        {
+            "item_type": "integrity",
+            "phase": "verify",
+            "item_id": "integrity-hostile",
+            "row_id": "row-hostile",
+            "location_id": "location-hostile",
+            "kind": "integrity",
+            "path": evidence.corpus,
+            "result": "verified",
+            "reason": None,
+            "detail": evidence.corpus,
+            "read_strategy": "windows-unbuffered",
+            "recording": "ok",
+            "record_disposition": "applied",
+            "detail_omitted_count": 0,
+        },
+    ]
     assert [phase["phase"] for phase in nested["result"]["phases"]] == [
         "execute",
         "verify",

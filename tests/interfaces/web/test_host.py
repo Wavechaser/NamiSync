@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import ast
+import inspect
 import json
 from pathlib import Path
+from textwrap import dedent
 from threading import Event, Lock, Thread, current_thread
 from time import monotonic
 from types import MappingProxyType, SimpleNamespace
@@ -62,6 +64,7 @@ class _Hook:
 class _Window:
     def __init__(self) -> None:
         self.real_url = "http://127.0.0.1:41700/assets/index.html"
+        self._callbacks: dict[str, object] = {}
         self.events = SimpleNamespace(
             before_load=_Hook(),
             closing=_Hook(),
@@ -273,6 +276,32 @@ def test_shared_host_handshake_channel_rejects_nonreadiness_and_extra_posts() ->
             completion=lambda _error: pytest.fail("unexpected completion"),
         )
     assert channel.take()["challenge"] == "a" * 32
+
+
+def test_shared_host_rpc_driver_uses_fresh_workers_and_propagates_errors() -> None:
+    from _startup_test_support import _dispatch
+
+    workers = []
+
+    def dispatch(command_json):
+        workers.append(current_thread())
+        return json.loads(command_json)["command"]
+
+    for command in ("shell_ready", "readiness_echo"):
+        assert _dispatch(
+            dispatch, request_id="a" * 32, command=command, payload={}
+        ) == command
+    assert len(set(workers)) == 2
+    assert all(type(worker) is Thread and not worker.is_alive() for worker in workers)
+
+    original = RuntimeError("fixture failure")
+
+    def fail(_command_json):
+        raise original
+
+    with pytest.raises(RuntimeError) as caught:
+        _dispatch(fail, request_id="b" * 32, command="shell_ready", payload={})
+    assert caught.value is original
 
 
 def test_shared_headed_composition_preserves_specs_gate_and_immutability() -> None:
@@ -905,6 +934,7 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
     window = SimpleNamespace(
         _js_api=None,
         _functions={},
+        _callbacks={},
         expose=lambda *functions: window._functions.update(
             {function.__name__: function for function in functions}
         ),
@@ -914,8 +944,73 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
 
     assert window._js_api is None
     assert tuple(window._functions) == ("dispatch",)
-    assert window._functions["dispatch"]("{}") == dispatcher.dispatch("{}")
+    responses = []
+    worker = Thread(
+        target=lambda: responses.append(window._functions["dispatch"]("{}"))
+    )
+    worker.start()
+    worker.join(1.0)
+    assert not worker.is_alive()
+    assert responses == [dispatcher.dispatch("{}")]
     assert set(window._functions) == {"dispatch"}
+
+
+def test_pywebview_synchronous_callback_cells_are_not_retained() -> None:
+    from webview.util import js_bridge_call
+    from webview.window import Window
+
+    window = SimpleNamespace(
+        _callbacks={},
+        _functions={},
+        _js_api=None,
+        gui=SimpleNamespace(renderer="edgechromium", evaluate_js=lambda *_args: None),
+        uid="callback-test",
+        expose=lambda *_functions: None,
+    )
+    host._expose_bridge_api(window, object())
+    evaluate = inspect.unwrap(Window.evaluate_js)
+
+    for _ in range(128):
+        assert evaluate(window, "null") is None
+    assert window._callbacks == {}
+
+    observed = []
+    assert evaluate(window, "Promise.resolve(null)", callback=observed.append) is None
+    assert len(window._callbacks) == 1
+    callback_id = next(iter(window._callbacks))
+    js_bridge_call(window, "pywebviewAsyncCallback", '{"value":1}', callback_id)
+    assert observed == [{"value": 1}]
+    assert window._callbacks == {}
+
+    def failed_evaluation(*_args) -> None:
+        raise RuntimeError("native evaluation failed")
+
+    window.gui.evaluate_js = failed_evaluation
+    with pytest.raises(RuntimeError, match="native evaluation failed"):
+        evaluate(window, "null")
+    assert window._callbacks == {}
+
+
+def test_pinned_pywebview_none_callback_has_no_async_reader() -> None:
+    from webview.util import js_bridge_call
+    from webview.window import Window
+
+    evaluate = ast.parse(dedent(inspect.getsource(Window.evaluate_js))).body[0]
+    statements = [ast.unparse(node) for node in evaluate.body]
+    assert "self._callbacks[unique_id] = callback" in statements
+    async_branch = next(
+        node for node in evaluate.body
+        if isinstance(node, ast.If) and ast.unparse(node.test) == "callback"
+    )
+    assert "pywebview._asyncCallback" in ast.unparse(async_branch.body)
+    assert "pywebview._asyncCallback" not in ast.unparse(async_branch.orelse)
+    receiver = ast.parse(inspect.getsource(js_bridge_call)).body[0]
+    callback_branch = next(
+        node for node in receiver.body
+        if isinstance(node, ast.If)
+        and ast.unparse(node.test) == "func_name == 'pywebviewAsyncCallback'"
+    )
+    assert "del window._callbacks[value_id]" in ast.unparse(callback_branch)
 
 
 def test_host_admission_uses_the_final_composed_command_mapping() -> None:
@@ -1967,7 +2062,7 @@ def test_loaded_refusal_closes_authority_before_destroy_fallback_and_unblocks_lo
         def wait_for_handlers(self) -> None:
             order.append("wait_handlers")
 
-        def dispatch(self, _body: str) -> str:
+        def _dispatch_native(self, _body: str) -> str:
             return "bridge_unavailable" if self.closed else "accepted"
 
     def make_dispatcher(

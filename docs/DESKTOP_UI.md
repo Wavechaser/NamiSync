@@ -738,8 +738,9 @@ affordance, runs the ordered teardown off the UI thread, and closes the window
 programmatically when the `ShutdownView` returns. An incomplete shutdown stays
 visible rather than being swallowed by window destruction. The implemented
 controller rejects new bridge admission, closes the task registry to wake
-drains and capacity-blocked sinks, waits for admitted calls, unsubscribes task
-observations, then calls the service. A complete result permits one recursive-safe
+drains and capacity-blocked sinks, waits for admitted native call workers to
+finish their return path and exit, unsubscribes task observations, then calls the
+service. A complete result permits one recursive-safe
 programmatic destroy only after window-owned appearance observation closes
 exactly once. An incomplete result or exception keeps the window open with
 appearance observation still active,
@@ -791,10 +792,15 @@ NamiSync-owned code never constructs JavaScript or calls `evaluate_js`,
 `run_js`, or `Window.state` as an application-data channel. Pinned pywebview
 6.2.1 internally constructs JavaScript to return exposed-function results, so
 its serializer/escaper and the real-browser hostile-name round trip remain part
-of the security boundary. The exact pythonnet 3.1.0 pin is equally part of that
-boundary because native delegate subscription, WinForms thread affinity, and
-`CoreWebView2` access pass through it. Browserless/Node probes are supplemental;
-the exception is the ordinary, non-skippable drain-manager Progress
+of the security boundary. The host retains each admitted call's handler position
+until that exact worker exits; a browser timeout or completed domain handler
+does not release native-return custody. It also discards the pinned runtime's
+unused synchronous callback-registry entries without changing the return
+channel. [INTERFACES.md](INTERFACES.md) owns those compatibility mechanisms and
+their remaining containment boundary. The exact pythonnet 3.1.0 pin is equally
+part of that boundary because native delegate subscription, WinForms thread
+affinity, and `CoreWebView2` access pass through it. Browserless/Node probes are
+supplemental; the exception is the ordinary, non-skippable drain-manager Progress
 validator/replay gate, which resolves Node.js from `NAMISYNC_TEST_NODE` before
 `PATH` and proves atomic rejection before cursor or reliable-sibling delivery.
 The installed real-WebView2 witnesses own the remaining named

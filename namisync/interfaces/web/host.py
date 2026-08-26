@@ -1113,11 +1113,23 @@ def _bridge_dispatcher(
     )
 
 
+class _PywebviewCallbackRegistry(dict):
+    """Keep asynchronous callbacks without unused synchronous sentinel cells."""
+
+    def __setitem__(self, key: str, callback: object) -> None:
+        if callback is not None:
+            super().__setitem__(key, callback)
+
+
 def _expose_bridge_api(window: object, dispatcher: object) -> None:
     """Expose only the exact RPC function through pywebview's function table."""
 
+    if type(window._callbacks) is not dict or window._callbacks:
+        raise RuntimeError("native callback registry is not empty before exposure")
+    window._callbacks = _PywebviewCallbackRegistry()
+
     def dispatch(command_json: str) -> object:
-        return dispatcher.dispatch(command_json)
+        return dispatcher._dispatch_native(command_json)
 
     window.expose(dispatch)
 

@@ -691,6 +691,21 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-27). Premature return-custody retirement. The
+  admitted-handler ceiling released positions before pywebview serialized and
+  delivered replies, permitting accumulated return graphs and shutdown before
+  those workers finished. Cause: domain-call completion stood in for native
+  worker completion. Fixed by retaining each native position against its exact
+  thread until exit and joining outside the bridge lock with one retryable
+  deadline. Direct Python calls retain call-return semantics; pre-admission
+  threads and renderer allocations remain outside this bound.
+- MODERATE - FIXED (2026-08-27). Unused callback retention. Every synchronous
+  pywebview return left a new UUID-to-None entry in the window's callback
+  registry, so completed calls caused lifetime growth. Cause: the pinned
+  runtime stored synchronous placeholders that no return path consumed. Fixed
+  with a window-local registry that discards only None writes while preserving
+  asynchronous callback lookup and deletion. Pinned-source and actual-runtime
+  tests guard that dependency assumption; a runtime upgrade must revalidate it.
 - MINOR - FIXED (2026-08-26). Cross-version gate aliasing. The unreachable
   private browser seam accepted v5-stamped numeric-v4 bodies and rejected v4,
   while source gates could find legacy text instead of the live route or active

@@ -11,7 +11,7 @@ from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from threading import Condition, Lock
+from threading import Condition, Lock, Thread, current_thread
 from time import monotonic
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import SplitResult, urlsplit
@@ -544,11 +544,28 @@ class BridgeDispatcher:
         self._handler_condition = Condition(Lock())
         self._accepting = True
         self._admitted = 0
+        self._native_return_owners: set[Thread] = set()
 
     def dispatch(self, command_json: str) -> dict[str, object]:
         """Return one exact response envelope; never export a Python failure."""
 
-        refusal = self._reserve_handler()
+        return self._dispatch(command_json, native_owner=None)
+
+    def _dispatch_native(self, command_json: str) -> dict[str, object]:
+        """Retain admitted return custody until the dedicated worker exits."""
+
+        owner = current_thread()
+        if type(owner) is not Thread:
+            return self._failure(None, None, "internal_error")
+        return self._dispatch(command_json, native_owner=owner)
+
+    def _dispatch(
+        self,
+        command_json: str,
+        *,
+        native_owner: Thread | None,
+    ) -> dict[str, object]:
+        refusal = self._reserve_handler(native_owner)
         if refusal is not None:
             return self._failure(None, None, refusal)
         try:
@@ -674,7 +691,7 @@ class BridgeDispatcher:
         except BaseException:
             return self._failure(None, None, "internal_error")
         finally:
-            self._release_handler()
+            self._release_handler(native_owner)
 
     def _failure(
         self,
@@ -701,20 +718,33 @@ class BridgeDispatcher:
             },
         }
 
-    def _reserve_handler(self) -> str | None:
+    def _reserve_handler(self, native_owner: Thread | None) -> str | None:
         with self._handler_condition:
+            self._reap_native_returns_locked()
             if not self._accepting:
                 return "bridge_unavailable"
-            if self._admitted >= _MAX_ADMITTED_HANDLERS:
+            if (
+                self._admitted >= _MAX_ADMITTED_HANDLERS
+                or native_owner in self._native_return_owners
+            ):
                 return "bridge_busy"
             self._admitted += 1
+            if native_owner is not None:
+                self._native_return_owners.add(native_owner)
             return None
 
-    def _release_handler(self) -> None:
+    def _release_handler(self, native_owner: Thread | None) -> None:
         with self._handler_condition:
-            self._admitted -= 1
-            if self._admitted == 0:
-                self._handler_condition.notify_all()
+            if native_owner is None:
+                self._admitted -= 1
+            self._handler_condition.notify_all()
+
+    def _reap_native_returns_locked(self) -> None:
+        finished = {
+            owner for owner in self._native_return_owners if not owner.is_alive()
+        }
+        self._native_return_owners.difference_update(finished)
+        self._admitted -= len(finished)
 
     def begin_close(self) -> None:
         """Reject every later dispatch while admitted handlers settle."""
@@ -733,14 +763,22 @@ class BridgeDispatcher:
         if timeout <= 0:
             raise ValueError("bridge handler wait timeout must be positive")
         deadline = monotonic() + timeout
-        with self._handler_condition:
-            while self._admitted:
+        while True:
+            with self._handler_condition:
+                self._reap_native_returns_locked()
+                if not self._admitted:
+                    return
                 remaining = deadline - monotonic()
                 if remaining <= 0:
                     raise TimeoutError(
                         "bridge handlers did not quiesce before the deadline"
                     )
-                self._handler_condition.wait(remaining)
+                owners = tuple(self._native_return_owners)
+                if not owners:
+                    self._handler_condition.wait(remaining)
+                    continue
+            for owner in owners:
+                owner.join(max(0.0, deadline - monotonic()))
 
 
 def to_primitive_view(value: object) -> object:

@@ -208,16 +208,25 @@ async function proveBrowserGate(sourceId, targetId) {
   const mainAccepted = [];
   const mainRefusals = [];
   const callbackReleaseOrder = [];
+  const nestedItems = [];
   let nestedRecord;
   const stopMain = startTaskDrain(
     mainPlan.task_id,
     mainPlan.session_id,
     (update) => {
       mainAccepted.push(update);
+      if (
+        update.update_type === "event" &&
+        ["ItemOutcome", "IntegrityOutcome"].includes(update.event.body_type)
+      ) {
+        nestedItems.push(update.event.body);
+        if (update.event.body_type === "ItemOutcome") {
+          renderText(nestedTarget, update.event.body.path);
+        }
+      }
       if (update.update_type === "record") {
         callbackReleaseOrder.push("record");
         nestedRecord = update.record;
-        renderText(nestedTarget, update.record.result.items[0].path);
       }
     },
     (error) => mainRefusals.push(error),
@@ -346,6 +355,7 @@ async function proveBrowserGate(sourceId, targetId) {
       image_count: nestedTarget.querySelectorAll("img").length,
       hostile_marker_defined: globalThis.__namiHostileMarker !== undefined,
     },
+    nested_items: nestedItems,
     nested_record: nestedRecord,
     replacement_registration: replacementRegistration,
   };

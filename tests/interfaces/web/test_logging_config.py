@@ -131,6 +131,7 @@ class Hook:
 class Window:
     def __init__(self):
         self.real_url = "http://127.0.0.1:41700/assets/index.html"
+        self._callbacks = {}
         self.events = SimpleNamespace(
             before_load=Hook(),
             closing=Hook(),

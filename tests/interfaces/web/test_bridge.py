@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import ast
 import inspect
 import json
 from pathlib import Path
-from threading import Event, Thread
+from threading import Event, Lock, Thread
 from types import SimpleNamespace
 
 import pytest
@@ -1102,6 +1103,7 @@ def test_pinned_pywebview_raw_receiver_cannot_traverse_bridge_state() -> None:
         def __init__(self) -> None:
             self._js_api = None
             self._functions: dict[str, object] = {}
+            self._callbacks: dict[str, object] = {}
 
         def expose(self, *functions: object) -> None:
             self._functions.update(
@@ -1188,6 +1190,189 @@ def test_bridge_close_gate_rejects_new_and_waits_for_admitted_handler() -> None:
     assert not dispatch_thread.is_alive()
     assert not waiter.is_alive()
     assert finished.is_set()
+
+
+@pytest.mark.parametrize("blocked_stage", ["serialization", "evaluation"])
+@pytest.mark.parametrize("failure_stage", [None, "serialization", "evaluation"])
+def test_br_g_32_native_return_retains_handler_capacity_until_worker_exit(
+    monkeypatch: pytest.MonkeyPatch,
+    blocked_stage: str,
+    failure_stage: str | None,
+) -> None:
+    import webview.util
+
+    from namisync.interfaces.web import host
+
+    bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {"value": "native return"},
+    })
+    entered = Event()
+    release = Event()
+    guard = Lock()
+    blocked = 0
+    workers: list[Thread] = []
+    failures: list[type[Exception]] = []
+    return_scripts: list[str] = []
+    close_errors: list[type[Exception]] = []
+    close_done = Event()
+    closer: Thread | None = None
+
+    def hold_return() -> None:
+        nonlocal blocked
+        with guard:
+            blocked += 1
+            if blocked == 64:
+                entered.set()
+        assert release.wait(5.0)
+
+    def dumps(value: object) -> str:
+        if isinstance(value, dict) and "schema_version" in value:
+            if blocked_stage == "serialization":
+                hold_return()
+            if failure_stage == "serialization":
+                raise ValueError("native serialization failed")
+        return json.dumps(value)
+
+    def evaluate(script: str) -> None:
+        return_scripts.append(script)
+        if blocked_stage == "evaluation":
+            hold_return()
+        if failure_stage == "evaluation":
+            raise RuntimeError("native evaluation failed")
+
+    def worker(*, target) -> Thread:
+        def run() -> None:
+            try:
+                target()
+            except Exception as error:
+                failures.append(type(error))
+
+        result = Thread(target=run)
+        workers.append(result)
+        return result
+
+    def wait_for_close() -> None:
+        try:
+            bridge.wait_for_handlers(timeout=1.0)
+        except Exception as error:
+            close_errors.append(type(error))
+        finally:
+            close_done.set()
+
+    window = SimpleNamespace(
+        _js_api=None,
+        _functions={},
+        _callbacks={},
+        expose=lambda *functions: window._functions.update(
+            {function.__name__: function for function in functions}
+        ),
+        evaluate_js=evaluate,
+    )
+    host._expose_bridge_api(window, bridge)
+    monkeypatch.setattr(webview.util, "Thread", worker)
+    monkeypatch.setattr(webview.util, "json", SimpleNamespace(dumps=dumps))
+
+    try:
+        for index in range(64):
+            webview.util.js_bridge_call(window, "dispatch", [command], str(index))
+        assert entered.wait(3.0)
+        assert bridge.dispatch(command)["error"]["code"] == "bridge_busy"
+        bridge.begin_close()
+        with pytest.raises(TimeoutError, match="did not quiesce"):
+            bridge.wait_for_handlers(timeout=0.02)
+        assert bridge._admitted == 64
+        closer = Thread(target=wait_for_close)
+        closer.start()
+        assert not close_done.wait(0.02)
+    finally:
+        release.set()
+        for thread in workers:
+            thread.join(2.0)
+        if closer is not None:
+            closer.join(2.0)
+
+    assert all(not thread.is_alive() for thread in workers)
+    assert failures == ([RuntimeError] * 64 if failure_stage == "evaluation" else [])
+    assert len(return_scripts) == 64
+    assert all(
+        ("isError: true" in script) is (failure_stage == "serialization")
+        for script in return_scripts
+    )
+    if failure_stage == "serialization":
+        assert all("native serialization failed" in script for script in return_scripts)
+    assert close_done.is_set()
+    assert close_errors == []
+    assert bridge._admitted == 0
+
+
+def test_br_g_32_native_return_is_reaped_on_admission_only_after_owner_exit() -> None:
+    bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {},
+    })
+    responses = []
+
+    def run() -> None:
+        responses.append(bridge._dispatch_native(command))
+        responses.append(bridge._dispatch_native(command))
+
+    owner = Thread(target=run)
+    owner.start()
+    owner.join(1.0)
+
+    assert not owner.is_alive()
+    assert responses[0]["ok"] is True
+    assert responses[1]["error"]["code"] == "bridge_busy"
+    assert bridge._admitted == 1
+    assert bridge.dispatch(command)["ok"] is True
+    assert bridge._admitted == 0
+
+
+def test_br_g_32_direct_dispatch_does_not_reserve_native_worker_lifetime() -> None:
+    bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {},
+    })
+
+    for _ in range(65):
+        assert bridge.dispatch(command)["ok"] is True
+    assert bridge._admitted == 0
+    assert bridge._dispatch_native(command)["error"]["code"] == "internal_error"
+    assert bridge._admitted == 0
+
+
+def test_pinned_pywebview_keeps_serialization_and_return_on_one_worker() -> None:
+    from webview.util import js_bridge_call
+
+    function = ast.parse(inspect.getsource(js_bridge_call)).body[0]
+    worker = next(
+        node for node in function.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_call"
+    )
+    assert len(worker.body) == 2
+    dispatch_and_serialization, native_return = worker.body
+    assert isinstance(dispatch_and_serialization, ast.Try)
+    assert ast.unparse(dispatch_and_serialization.body[0]) == (
+        "result = func(*func_params)"
+    )
+    assert "json.dumps(result)" in ast.unparse(dispatch_and_serialization.body[1])
+    assert isinstance(native_return, ast.Expr)
+    assert ast.unparse(native_return.value.func) == "window.evaluate_js"
+    assert any(
+        isinstance(node, ast.Assign)
+        and ast.unparse(node) == "thread = Thread(target=_call)"
+        for node in ast.walk(function)
+    )
 
 
 def test_namisync_bridge_module_constructs_no_javascript() -> None:

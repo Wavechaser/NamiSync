@@ -2930,10 +2930,15 @@ same-principal security boundary.
 
 The pinned host creates one thread per exposed-function call before NamiSync
 admission. The bridge admits at most 64 handlers past that gate and returns the
-fixed `bridge_busy` refusal at saturation. This bounds admitted domain work and
-teardown ownership, not raw WebMessage thread creation. The same admission
-condition closes the race between admitted handler entry and teardown; no
-bridge-global lock spans a command handler.
+fixed `bridge_busy` refusal at saturation. An admitted native call keeps its
+position until that exact worker exits, including serialization and native
+return delivery after the domain handler returns. Direct Python calls retain
+their ordinary call-return lifetime. This bounds admitted domain work, return
+custody, and teardown ownership, not raw WebMessage thread creation or renderer
+allocation. The same admission condition closes the race between admitted
+handler entry and teardown; no bridge-global lock spans a command handler.
+[INTERFACES.md](INTERFACES.md) owns the pinned-runtime lifetime and unused
+synchronous callback-registry compatibility mechanisms.
 
 **Exact target binding:** [task and authority
 ordering](#task-and-authority-ordering) owns atomic live-task lookup,
@@ -3021,14 +3026,16 @@ is protected only for what it already owns (`_plans` is lock-guarded).
 - **Shutdown ordering** — stop accepting dispatches, close the task/drain
   registry and wake every outstanding drain **and every reliable producer
   waiting for bridge capacity**, wait for every handler already past that gate
-  to return, close every observation, then close the service. Wrong order hangs
+  and its native return worker to exit, close every observation, then close the
+  service. Wrong order hangs
   exit, the same failure XV-18 catches one layer down. The quiesce barrier is
   the part an accept-flag alone misses: a dispatch
   that passed the gate a microsecond earlier can still be mid-`start_execution`
   when the service closes, admitting work nobody observes and then cancelling it
   half-applied. The dispatcher already has the pattern to copy — it waits on an
   in-flight admission count before closing — and the bridge needs the same
-  counter over its handlers. The wait uses one finite monotonic deadline;
+  counter over its handlers. Native workers are joined outside that condition.
+  The wait uses one finite monotonic deadline;
   failure leaves service, logging, app-path leases, and the instance mutex
   owned for retry. Only complete service shutdown permits native owner release.
 - **Native document authority** — `CoreWebView2` remains owned by the WinForms
