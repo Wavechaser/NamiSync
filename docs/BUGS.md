@@ -459,6 +459,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Exception graph retention. Contained
+  store-write and custody-release failures could retain earlier session,
+  continuation, or result graphs after close, accumulating across sessions.
+  Cause: two dispatcher-lifetime lists kept original exceptions and their
+  traceback, cause, context, and custom attributes without any consumer.
+  Fixed by retaining only separate sticky failure flags, preserving the
+  existing store fallback, resource-release ordering, and terminal truth.
+  Failing-first weak-reference regressions cover both dependency boundaries
+  through real admission, session close, and shutdown. This does not claim
+  whole-process erasure or close the complete task-retention gate.
 - MODERATE - FIXED (2026-08-26). Live/store record aliasing. A store accepting
   admission but rejecting later updates retained the original continuation,
   including execution attestations, after successful terminal live scrubbing.

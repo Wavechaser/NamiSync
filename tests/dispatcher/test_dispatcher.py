@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import gc
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from threading import Event, Lock, Thread, get_ident
 from time import monotonic, sleep
+from weakref import ref
 
 import pytest
 
@@ -2186,6 +2188,61 @@ def test_later_store_failure_does_not_leak_custody_or_duplicate_terminal() -> No
             terminals.append(event.body)
     assert len(terminals) == 1
     assert dispatcher.shutdown().custody_released
+
+
+@pytest.mark.parametrize("failure_owner", ("store", "custody"))
+def test_contained_failure_does_not_retain_exception_owned_graph_after_close(
+    failure_owner: str,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+
+    def fail() -> None:
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        error = OSError("contained dependency failure")
+        error.private_graph = graph
+        raise error
+
+    class FailingStore(InMemorySessionStore):
+        def put(self, record):
+            if failure_owner == "store" and record.state is not SessionState.PENDING:
+                fail()
+            super().put(record)
+
+    class LockProvider:
+        def __init__(self):
+            self.delegate = InProcessResourceLockProvider()
+
+        def acquire(self, resources, canceled):
+            lease = self.delegate.acquire(resources, canceled)
+
+            class Lease:
+                def release(self):
+                    lease.release()
+                    if failure_owner == "custody":
+                        fail()
+
+            return Lease()
+
+    dispatcher = Dispatcher(
+        {"stored": registration(lambda _payload: completed)},
+        store=FailingStore(),
+        lock_provider=LockProvider(),
+    )
+    try:
+        for _ in range(3):
+            session_id = dispatcher.submit("stored", b"private continuation")
+            wait_for(dispatcher, session_id, SessionState.COMPLETED)
+            dispatcher.close(session_id)
+    finally:
+        assert dispatcher.shutdown().complete
+
+    assert retained
+    gc.collect()
+    assert all(graph() is None for graph in retained)
 
 
 def test_failed_terminal_store_write_does_not_retain_workflow_payload() -> None:

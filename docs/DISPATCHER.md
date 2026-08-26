@@ -393,9 +393,14 @@ contract, not a total-memory reduction or a new measured acceptance ceiling.
 The shared full result remains a subject-scaled terminal artifact, separately
 observed through live dispatcher result roots. The terminal-artifact and whole-
 runtime gates (BR-G-45 and SH-G-15) remain open; this change claims neither bound.
-Callers, audit observers, and retained exception tracebacks may still reference
-earlier live records. This boundary neither sanitizes those references nor
-promises whole-process or secure-memory erasure.
+Contained store-write and custody-release failures retain only separate sticky
+Boolean failure markers. The dispatcher does not retain the exception, its
+arguments, attributes, cause, context, or traceback: any of those can keep an
+earlier live record or full workflow graph reachable after session close.
+The markers do not change filesystem outcomes, store fallback, release order,
+or the existing shutdown result. Caller-owned exceptions and audit observers
+may still reference earlier records; this boundary does not promise
+whole-process or secure-memory erasure. BR-G-45 remains open.
 
 Queued execution carries the exact core `Commitment` defined by
 [M1_BRIDGE.md](M1_BRIDGE.md). Workflow admission validates it and freshly

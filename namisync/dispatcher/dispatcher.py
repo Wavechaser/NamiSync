@@ -221,8 +221,8 @@ class Dispatcher:
         self._admission_order = 0
         self._accepting = True
         self._admission_cleanups: dict[SessionId, _AdmissionCleanup] = {}
-        self._store_failures: list[BaseException] = []
-        self._custody_failures: list[BaseException] = []
+        self._store_failed = False
+        self._custody_failed = False
         self._scheduler = Thread(
             target=self._schedule,
             name="namisync-dispatcher",
@@ -993,9 +993,9 @@ class Dispatcher:
             if stale:
                 try:
                     lease.release()
-                except BaseException as error:
+                except BaseException:
                     with self._condition:
-                        self._custody_failures.append(error)
+                        self._custody_failed = True
                 return
             assert current is not None
             if current.state is SessionState.CANCELING:
@@ -1234,8 +1234,8 @@ class Dispatcher:
     def _persist_locked(self, record: SessionRecord) -> None:
         try:
             self._store.put(_stored_record(record))
-        except BaseException as error:
-            self._store_failures.append(error)
+        except BaseException:
+            self._store_failed = True
 
     def _release_custody(
         self,
@@ -1247,9 +1247,9 @@ class Dispatcher:
         try:
             if lease is not None:
                 lease.release()
-        except BaseException as error:
+        except BaseException:
             with self._condition:
-                self._custody_failures.append(error)
+                self._custody_failed = True
         finally:
             with self._condition:
                 for resource in resources:
