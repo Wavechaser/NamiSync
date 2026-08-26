@@ -1033,6 +1033,53 @@ COMMIT;
 """
 
 
+_SchemaObject = tuple[str, str, str, str | None]
+_SQLITE_STATISTICS_TOPOLOGY: tuple[_SchemaObject, ...] = (
+    ("table", "sqlite_stat1", "sqlite_stat1", "CREATE TABLE sqlite_stat1(tbl,idx,stat)"),
+    ("table", "sqlite_stat4", "sqlite_stat4",
+     "CREATE TABLE sqlite_stat4(tbl,idx,neq,nlt,ndlt,sample)"),
+)
+
+
+def _schema_topology(connection: sqlite3.Connection) -> list[_SchemaObject]:
+    # Retain SQLite's stored SQL verbatim, including literal text and NULL SQL
+    # for automatic indexes. Physical root pages are not schema definitions.
+    return [
+        tuple(row)
+        for row in connection.execute(
+            "SELECT type, name, tbl_name, sql FROM main.sqlite_schema "
+            "ORDER BY type, name, tbl_name, sql"
+        )
+    ]
+
+
+def _validate_schema_topology(
+    connection: sqlite3.Connection, *, history: bool,
+) -> None:
+    """Compare complete definitions without writing to the candidate connection."""
+
+    reference = sqlite3.connect(":memory:")
+    try:
+        reference.executescript(_HISTORY_SCHEMA if history else _LEDGER_SCHEMA)
+        expected = _schema_topology(reference)
+    finally:
+        reference.close()
+    actual = _schema_topology(connection)
+    for statistic in _SQLITE_STATISTICS_TOPOLOGY:
+        if statistic in actual:
+            # Each exact SQLite-owned table is optional once, not a wildcard
+            # exemption for duplicate, poisoned, or additional catalog rows.
+            actual.remove(statistic)
+    if actual != expected:
+        database = "history" if history else "ledger"
+        raise SchemaResetRequired(
+            f"unsupported {database} schema topology. "
+            "Close every NamiSync process, then archive or delete both database "
+            "main files and all of their -wal, -shm, and -journal sidecars "
+            "together before restarting."
+        )
+
+
 def _initialize(
     path: str | Path,
     schema: str,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 import os
 import sqlite3
 from pathlib import Path
@@ -8,6 +9,7 @@ import pytest
 
 import namisync.db.history as history_module
 import namisync.db.repositories as repositories_module
+import namisync.db.schema as schema_module
 from namisync.core.pathing import to_extended_length_path
 from namisync.db.connections import (
     DatabaseLocationError,
@@ -679,6 +681,282 @@ def test_reopening_complete_contract_is_schema_noop(tmp_path: Path) -> None:
         finally:
             connection.close()
     assert after == before
+
+
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("layout", ["fresh", "populated", "relocated"])
+def test_exact_schema_topology_accepts_complete_definitions_without_writes(
+    history: bool, layout: str,
+) -> None:
+    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
+    with closing(sqlite3.connect(":memory:")) as connection:
+        if layout == "relocated":
+            connection.execute("CREATE TABLE padding (value BLOB)")
+            connection.execute("INSERT INTO padding VALUES (zeroblob(32768))")
+        connection.executescript(script)
+        if layout == "populated":
+            connection.execute("INSERT INTO schema_metadata VALUES ('fixture', 'preserve')")
+        elif layout == "relocated":
+            connection.execute("DROP TABLE padding")
+        connection.commit()
+        before = connection.serialize()
+        connection.row_factory = sqlite3.Row
+        connection.set_authorizer(
+            lambda action, *_: (
+                sqlite3.SQLITE_OK
+                if action in {sqlite3.SQLITE_SELECT, sqlite3.SQLITE_READ}
+                else sqlite3.SQLITE_DENY
+            )
+        )
+        assert schema_module._validate_schema_topology(connection, history=history) is None
+        connection.set_authorizer(None)
+        assert connection.serialize() == before
+        assert not connection.in_transaction
+        if layout == "relocated":
+            pages = tuple(connection.execute("SELECT rootpage FROM sqlite_schema"))
+            connection.execute("VACUUM")
+            assert tuple(connection.execute("SELECT rootpage FROM sqlite_schema")) != pages
+            schema_module._validate_schema_topology(connection, history=history)
+
+
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+def test_exact_schema_topology_is_main_only_and_preserves_caller_transaction(history: bool) -> None:
+    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.executescript(script)
+        connection.execute("ATTACH DATABASE ':memory:' AS unrelated")
+        connection.execute("CREATE TABLE unrelated.untrusted (value TEXT)")
+        connection.execute("CREATE TEMP TABLE untrusted (value TEXT)")
+        connection.execute("BEGIN")
+        connection.execute("INSERT INTO schema_metadata VALUES ('fixture', 'uncommitted')")
+        before = connection.serialize()
+        schema_module._validate_schema_topology(connection, history=history)
+        assert connection.in_transaction
+        assert connection.serialize() == before
+        connection.rollback()
+        assert connection.execute(
+            "SELECT value FROM schema_metadata WHERE key = 'fixture'"
+        ).fetchone() is None
+
+
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("shape", [
+    "empty", "marker-only", "missing-table", "missing-index", "missing-trigger",
+    "missing-autoindex", "poisoned-table", "extra-table", "extra-view",
+    "extra-index", "extra-trigger", "sqlite-wildcard-lookalike",
+])
+def test_exact_schema_topology_refuses_incomplete_or_extra_objects(
+    history: bool, shape: str,
+) -> None:
+    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
+    if shape == "marker-only":
+        first_table = "history_runs" if history else "hosts"
+        script = script.split(f"CREATE TABLE IF NOT EXISTS {first_table}", 1)[0] + "COMMIT;"
+    with closing(sqlite3.connect(":memory:")) as connection:
+        if shape != "empty":
+            connection.executescript(script)
+        if shape == "missing-table":
+            connection.execute("DROP TABLE " + ("history_phases" if history else "annotations"))
+        elif shape in {"missing-index", "missing-trigger"}:
+            kind = shape.removeprefix("missing-")
+            name = connection.execute(
+                "SELECT name FROM sqlite_schema WHERE type = ? AND sql IS NOT NULL LIMIT 1",
+                (kind,),
+            ).fetchone()[0]
+            connection.execute(f'DROP {kind} "{name}"')
+        elif shape == "missing-autoindex":
+            connection.execute("PRAGMA writable_schema = ON")
+            connection.execute(
+                "DELETE FROM sqlite_schema WHERE name = 'sqlite_autoindex_schema_metadata_1'"
+            )
+        elif shape == "poisoned-table":
+            connection.execute("ALTER TABLE schema_metadata ADD COLUMN untrusted TEXT")
+        elif shape.startswith("extra-") or shape == "sqlite-wildcard-lookalike":
+            connection.executescript({
+                "extra-table": "CREATE TABLE untrusted (value TEXT)",
+                "extra-view": "CREATE VIEW untrusted AS SELECT * FROM schema_metadata",
+                "extra-index": "CREATE INDEX untrusted ON schema_metadata(value)",
+                "extra-trigger": (
+                    "CREATE TRIGGER untrusted AFTER INSERT ON schema_metadata "
+                    "BEGIN SELECT 1; END"
+                ),
+                "sqlite-wildcard-lookalike": "CREATE TABLE sqliteXextra (value TEXT)",
+            }[shape])
+        connection.commit()
+        before = connection.serialize() if shape != "empty" else None
+        with pytest.raises(SchemaResetRequired, match="schema topology"):
+            schema_module._validate_schema_topology(connection, history=history)
+        if before is not None:
+            assert connection.serialize() == before
+
+
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("change", [
+    "type", "nullability", "unique", "default", "strict", "check", "foreign-key",
+    "index-expression", "index-order", "index-predicate", "trigger-body", "literal-case",
+    "literal-whitespace",
+])
+def test_exact_schema_topology_refuses_definition_drift(history: bool, change: str) -> None:
+    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
+    literal = "finalized history runs are immutable" if history else "correspondence location mismatch"
+    before, after = {
+        "type": ("value TEXT NOT NULL", "value ANY NOT NULL"),
+        "nullability": ("value TEXT NOT NULL", "value TEXT"),
+        "unique": (
+            ("run_token TEXT NOT NULL UNIQUE", "run_token TEXT NOT NULL")
+            if history else ("host_key TEXT NOT NULL UNIQUE", "host_key TEXT NOT NULL")
+        ),
+        "default": ("DEFAULT 0", "DEFAULT 1"),
+        "strict": (") STRICT;", ");"),
+        "check": (
+            ("last_committed_seq BETWEEN 0 AND 9007199254740991", "last_committed_seq >= 0")
+            if history else ("CHECK(source_location_id <> target_location_id)", "CHECK(1)")
+        ),
+        "foreign-key": (
+            ("REFERENCES history_runs(id) ON DELETE CASCADE", "REFERENCES history_runs(id)")
+            if history else ("REFERENCES volumes(id)", "REFERENCES volumes(id) ON DELETE CASCADE")
+        ),
+        "index-expression": (
+            ("COALESCE(started_at, created_at)", "COALESCE(created_at, started_at)")
+            if history else ("ON volumes(serial)", "ON volumes(lower(serial))")
+        ),
+        "index-order": (
+            ("created_at) DESC, id DESC", "created_at) ASC, id DESC")
+            if history else ("ON operations(run_id, id)", "ON operations(id, run_id)")
+        ),
+        "index-predicate": (
+            ("WHERE item_order IS NOT NULL;", "WHERE item_order > 0;")
+            if history else ("WHERE deleted_at IS NULL;", "WHERE deleted_at IS NOT NULL;")
+        ),
+        "trigger-body": (f"RAISE(ABORT, '{literal}')", "RAISE(IGNORE)"),
+        "literal-case": (literal, literal.upper()),
+        "literal-whitespace": (literal, literal.replace(" ", "  ")),
+    }[change]
+    assert before in script
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.executescript(script.replace(before, after, 1))
+        with pytest.raises(SchemaResetRequired, match="schema topology"):
+            schema_module._validate_schema_topology(connection, history=history)
+
+
+def test_exact_schema_topology_refuses_loss_of_without_rowid() -> None:
+    script = schema_module._HISTORY_SCHEMA
+    assert script.count("STRICT, WITHOUT ROWID") == 1
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.executescript(script.replace("STRICT, WITHOUT ROWID", "STRICT"))
+        with pytest.raises(SchemaResetRequired, match="schema topology"):
+            schema_module._validate_schema_topology(connection, history=True)
+
+
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("statistics", ["analyze", "stat4"])
+def test_exact_schema_topology_allows_only_declared_statistics_tables(
+    history: bool, statistics: str,
+) -> None:
+    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.executescript(script)
+        if statistics == "analyze":
+            connection.execute("ANALYZE")
+            assert connection.execute(
+                "SELECT sql FROM sqlite_schema WHERE name = 'sqlite_stat1'"
+            ).fetchone() == ("CREATE TABLE sqlite_stat1(tbl,idx,stat)",)
+        else:
+            # Pin optional STAT4's catalog shape even on builds without STAT4.
+            connection.execute("PRAGMA writable_schema = ON")
+            connection.execute(
+                "INSERT INTO sqlite_schema(type,name,tbl_name,rootpage,sql) VALUES(?,?,?,?,?)",
+                ("table", "sqlite_stat4", "sqlite_stat4", 0,
+                 "CREATE TABLE sqlite_stat4(tbl,idx,neq,nlt,ndlt,sample)"),
+            )
+        connection.commit()
+        before = connection.serialize()
+        schema_module._validate_schema_topology(connection, history=history)
+        assert connection.serialize() == before
+
+
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("poison", [
+    "type", "owner", "definition", "duplicate", "undeclared-table", "index", "trigger",
+])
+def test_exact_schema_topology_refuses_statistics_spoofing(history: bool, poison: str) -> None:
+    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.executescript(script)
+        connection.execute("ANALYZE")
+        row = connection.execute(
+            "SELECT type,name,tbl_name,rootpage,sql FROM sqlite_schema WHERE name = 'sqlite_stat1'"
+        ).fetchone()
+        connection.execute("PRAGMA writable_schema = ON")
+        if poison in {"type", "owner", "definition"}:
+            column, value = {
+                "type": ("type", "view"),
+                "owner": ("tbl_name", "schema_metadata"),
+                "definition": ("sql", "CREATE TABLE sqlite_stat1(tbl,idx,stat,untrusted)"),
+            }[poison]
+            connection.execute(
+                f"UPDATE sqlite_schema SET {column} = ? WHERE name = 'sqlite_stat1'", (value,)
+            )
+        else:
+            added = {
+                "duplicate": row,
+                "undeclared-table": (
+                    "table", "sqlite_stat3", "sqlite_stat3", 0,
+                    "CREATE TABLE sqlite_stat3(tbl,idx,neq,nlt,ndlt,sample)",
+                ),
+                "index": ("index", "untrusted", "sqlite_stat1", 0,
+                          "CREATE INDEX untrusted ON sqlite_stat1(tbl)"),
+                "trigger": ("trigger", "untrusted", "sqlite_stat1", 0,
+                            "CREATE TRIGGER untrusted AFTER INSERT ON sqlite_stat1 BEGIN SELECT 1; END"),
+            }[poison]
+            connection.execute(
+                "INSERT INTO sqlite_schema(type,name,tbl_name,rootpage,sql) VALUES(?,?,?,?,?)", added,
+            )
+        connection.commit()
+        before = connection.serialize()
+        with pytest.raises(SchemaResetRequired, match="schema topology"):
+            schema_module._validate_schema_topology(connection, history=history)
+        assert connection.serialize() == before
+
+
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+def test_exact_schema_topology_does_not_replace_marker_value_validation(history: bool) -> None:
+    script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
+    validate = (
+        schema_module.validate_history_reader_contract
+        if history else schema_module.validate_ledger_reader_contract
+    )
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.executescript(script)
+        connection.execute("UPDATE schema_metadata SET value = 'wrong' WHERE key = 'contract_id'")
+        schema_module._validate_schema_topology(connection, history=history)
+        with pytest.raises(SchemaResetRequired, match="schema contract wrong"):
+            validate(connection)
+
+
+def test_exact_schema_topology_is_not_selected_by_production_callers_yet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from namisync.db.contracts import history_file_contract_matches, ledger_file_contract_matches
+    from namisync.workflows.database_pair import validate_database_pair
+
+    def unexpected(*args, **kwargs):
+        pytest.fail("the preparatory topology authority must remain dormant")
+
+    monkeypatch.setattr(schema_module, "_validate_schema_topology", unexpected, raising=False)
+    ledger = initialize_ledger(tmp_path / "ledger.db")
+    history = initialize_history(tmp_path / "history.db")
+    initialize_ledger(ledger)
+    initialize_history(history)
+    with closing(connect_ledger_reader(ledger)) as connection:
+        schema_module.validate_ledger_reader_contract(connection)
+    with closing(connect_history_reader(history)) as connection:
+        schema_module.validate_history_reader_contract(connection)
+    LedgerRepository(ledger).close()
+    HistoryRepository(history).close()
+    assert ledger_file_contract_matches(ledger)
+    assert history_file_contract_matches(history)
+    assert validate_database_pair(ledger, history).state == "ready"
 
 
 def _sqlite_artifact_snapshot(path: Path) -> dict[str, bytes | None]:

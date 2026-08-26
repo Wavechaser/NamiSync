@@ -41,6 +41,28 @@ all-or-complete review-limit terminal group. `HISTORY.md` owns its durable
 observer/finalization consequences; `M1_BRIDGE.md` owns the exact shared shape.
 Presentation-only omission state is never stored.
 
+### Exact topology authority
+
+Status: prepared but dormant at remediation checkpoint 3R.12. Reader,
+initializer, repository, and pair admission still select metadata checks only;
+production closure of the incomplete/poisoned-schema finding belongs to 3R.13.
+
+`schema.py` compares the complete ordered `main.sqlite_schema` projection
+`(type, name, tbl_name, sql)` with a private in-memory reference created from the
+shipped role schema. SQLite's stored SQL is compared verbatim: there is no
+case folding, whitespace removal, literal rewriting, or object-prefix filter.
+Automatic indexes retain their null SQL. Physical root pages are excluded;
+data and marker values remain outside this definition comparator.
+
+Only these SQLite-owned table definitions are optional, at most once each:
+`CREATE TABLE sqlite_stat1(tbl,idx,stat)` and
+`CREATE TABLE sqlite_stat4(tbl,idx,neq,nlt,ndlt,sample)`. Their type, name, owner,
+and SQL must match exactly. Undeclared statistics objects, duplicate rows, and
+indexes/triggers attached to statistics tables are not exempt. The candidate
+receives only a catalog read; DDL is restricted to the private reference, which
+is always closed. This is not a physical database-integrity scan, a metadata
+value validator, or a change to WAL admission.
+
 ### Atomic execution-evidence read
 
 Status: accepted for the later execution-review checkpoint; not active in

@@ -1169,6 +1169,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-08-26). Metadata self-certification. Exact schema
+  markers can admit databases with missing or poisoned objects; later queries
+  fail, and initialization may silently add missing tables while preserving
+  hostile same-name definitions. Cause: role admission trusts metadata without
+  comparing topology. A dormant exact catalog comparator and direct drift/
+  spoofing regressions are prepared, but production callers remain unchanged.
+  Closure requires the separately reviewed WAL-aware admission checkpoint.
 - MODERATE - FIXED (2026-08-10). Message-based error classification. The
   serialized writer retried any `OperationalError` whose message contained
   "busy" or "locked", delaying unrelated failures and reporting them as lock

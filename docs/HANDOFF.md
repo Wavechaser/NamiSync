@@ -1,8 +1,9 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.10 is committed as `e4fd539`. Checkpoint
-3R.11's implementation, verification, and pre-commit reviews are complete.
-After its named commit, start only 3R.12.
+Status (2026-08-26): checkpoint 3R.11 is committed as `ec4e9c8`. Checkpoint
+3R.12's dormant implementation, required verification, and pre-commit reviews
+are complete.
+After its named commit, start only 3R.13.
 The checkpoint 3.2 shell boundary remains active; 3.3 has not started.
 S5 and 3R.14's coordinated epoch/reset remain
 design holds. The pre-existing installed-wheel event diagnostic migration is
@@ -10,37 +11,39 @@ also unassigned; do not silently widen another checkpoint to repair it.
 
 ## Delivered This Checkpoint
 
-- Pinned the private, uncalled browser legacy validator to literal version 4
-  and removed its shared live-version constant. Live task events still route
-  only to the existing exact v5 validator; no new runtime route or export.
-- Both routing gates now isolate the actual live function. Active v5 Progress
-  shape/scalar checks and complete reason/detail vocabularies replace legacy
-  source witnesses; 38 in-memory mutations exercise the gate boundaries.
-- Required Node coverage consumes real Python projection/primitive-codec output
-  for all seven event families and relevant public-view witnesses. Existing
-  operation/cancellation, reliable-size, and logical-byte cases use that codec
-  too; independent literals and negative post-projection mutations remain.
-- Updated INTERFACES and causal BUGS. Raw reviewer reports remain the detailed
-  finding source below; installed-wheel diagnostic migration is not included.
+- Added one dormant exact topology comparator using the complete ordered main
+  catalog and a private in-memory reference built from the shipped role schema.
+  Stored SQL and null automatic-index definitions remain exact; only physical
+  root pages and explicitly declared optional statistics rows are excluded.
+- Each exact stat1/stat4 definition is optional at most once. Duplicate or
+  poisoned statistics, extra objects, missing objects, and definition drift
+  refuse; no prefix wildcard, SQL normalization, cache, or integrity scan.
+- Direct tests cover both current roles, populated/relocated schemas, preserved
+  transaction ownership, TEMP/attached isolation, SELECT-only candidate access,
+  and byte preservation. Existing production callers are untouched, with a
+  separate non-selection test rather than a positive marker-only admission test.
+- DATABASE describes the dormant authority and exact exceptions. Causal BUGS
+  keeps S14 open: reader/initializer/repository/pair activation and WAL-aware
+  admission remain the separate 3R.13 checkpoint.
 
 ## Verification
 
-- Tests-first narrow selection against untouched browser production:
-  `3 failed, 2 passed, 54 deselected`. The private seam rejected valid numeric
-  v4 and accepted the same v5-stamped body; both strengthened source gates
-  rejected its shared version authority.
-- Progress/vocabulary mutation selection before the runtime edit:
-  `34 passed, 45 deselected`.
-- Focused browser/static files with required bundled Node: `93 passed`.
-  Independent rerun: `93 passed`.
-- Interfaces department: `1275 passed, 2743 deselected`.
-- Independent code/test and owning-document working reviews: `CLEAN`.
-  The raw reviewer suffix is byte-identical to the prior committed handoff.
-- Ordinary suite with required bundled Node:
-  `3986 passed, 4 skipped, 28 deselected`.
-- Unchanged protected oracle: `30 scenarios x 3 runs`.
-- Exact staged-tree review: `CLEAN`; the final status/evidence-only delta is
-  checked independently before the named commit.
+- Tests-first direct contract before adding the comparator:
+  `77 failed, 1 passed, 33 deselected`. Failures were the missing private
+  authority; the valid production non-selection control already passed.
+- Initial direct matrix after implementation: `78 passed, 33 deselected`.
+  Added TEMP/attached and open-transaction controls; full schema file:
+  `113 passed`.
+- Independent schema-file rerun: `113 passed`.
+- Database department: `278 passed, 3820 deselected`.
+- Source scan finds no production selection of the comparator; existing
+  initializer, reader, repository, and pair functions have no diff.
+- Independent schema-canonicalization, code/test, and owning-document working
+  reviews: `CLEAN`. Exact staged-tree review: `CLEAN`; the final status-only
+  delta is checked independently before the named commit.
+- Most recent ordinary suite (3R.11, required bundled Node):
+  `3986 passed, 4 skipped, 28 deselected`; unchanged protected oracle:
+  `30 scenarios x 3 runs`. Those are prior-checkpoint receipts, not a new run.
 - Protected settlement oracle, baseline, and prior assertions are unchanged.
   Tool/baseline blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
   `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
@@ -91,12 +94,13 @@ Retained ignored artifacts and conventions are under
 ## Safe Stop And Holds
 
 Rebuilt 3R.4 is `1e794e7`; 3R.5 `8f6d8f8`; 3R.6 `f15a82d`;
-3R.7 `bd05ff7`; 3R.8 `f96804b`; 3R.9 `04d5fb8`; 3R.10 `e4fd539`.
+3R.7 `bd05ff7`; 3R.8 `f96804b`; 3R.9 `04d5fb8`; 3R.10 `e4fd539`;
+3R.11 `ec4e9c8`.
 The discarded 3R.4 attempt remains recoverable under ignored
 `build/r34-restart-20260826/`.
 
-No fingerprint, identity codec, epoch, or database topology/admission changes
-are present.
+No fingerprint, identity codec, epoch, or database admission changes are
+present. The exact topology comparator exists but remains dormant.
 
 S5 still requires an explicit storage design or accepted residual. A read-only
 3R.14 audit found textual FileIndex128 changes all non-null identity-bearing
@@ -119,12 +123,15 @@ The earlier blocked patch context remains under ignored
 
 ## Immediate Next Context
 
-All current tracked edits belong to 3R.11. After the final status-only review,
-commit only `fix(web): harden exact-v5 source gates`.
-After that clean stop, start 3R.12,
+All current tracked edits belong to 3R.12. After the final status-only review,
+commit only
 `refactor(database): prepare exact schema topology validation`.
-Keep its exact topology comparator dormant; reader/initializer/repository/pair
-activation and WAL-aware nonmutating admission belong to the separate 3R.13.
+After that clean stop, start 3R.13,
+`fix(database): validate complete pairs without mutation`.
+Activate the comparator only with the shared nonmutating file preflight:
+refuse any source journal before SQLite access; see committed WAL truth through
+a private snapshot without opening source SHM authority. Preserve the existing
+fresh-pair ownership reservations and rollback semantics as a distinct path.
 Do not alter frozen settlement or transport measurement authority, widen into
 unassigned diagnostic migration, or start identity/epoch work without a decision.
 
