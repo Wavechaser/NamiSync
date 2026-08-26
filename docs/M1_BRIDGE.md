@@ -358,6 +358,26 @@ absence. Free-form diagnostics are bounded whole before retained publication.
   `This plan contains more file data than NamiSync can represent safely. Narrow
   the folders or filters, then plan again.` It never calls the condition a
   free-space shortage or suggests Execute/retry on the same plan.
+- `IntegrityCandidateLimitExceeded` is the separately named internal fact
+  `{reason:"integrity_candidate_limit_exceeded",axis:"rows"|"retained-bytes",
+  row_limit:120000|null,byte_limit:201326592|null}`. The rows variant requires
+  the row limit and null byte limit; the retained-bytes variant requires the
+  byte limit and null row limit. These constants deliberately equal the
+  accepted inventory-domain walls, but their authority and charge remain
+  independent. It is not `ReviewFactLimitExceeded`, never
+  populates `review_refusal`, and does not claim an unrun review-publication
+  refusal after a fresh integrity request has already refreshed durable
+  inventory. When recording completes, a post-refresh excess produces
+  `FAILED+RAN` with `FailureDetail.type_name` equal to
+  `IntegrityCandidateLimitExceeded`. The rows message is exactly `This
+  integrity scope contains more than 120,000 items. Narrow the selected
+  folders, then try again.` The retained-bytes message is exactly `This
+  integrity scope contains more item detail than NamiSync can retain safely.
+  Narrow the selected folders, then try again.` If recorder admission or
+  finalization prevents trustworthy completion, that recording failure remains
+  the result error and no canonical scale fact is manufactured. Pre-work
+  malformed or over-cardinality custody refuses before receipt, task, session,
+  ledger, or native mutation.
 - `TaskResults` = `{plan:ResultSummary|null,execution:ResultSummary|null,
   inventory:ResultSummary|null,integrity:ResultSummary|null,
   post_copy_verify:ResultSummary|null}`. A session changes only its named slot:
@@ -1043,6 +1063,19 @@ and manual-post-copy replacement each charge both old and new result-summary
 and overlay generations until replacement write intent has excluded new pins,
 the last old-generation pin has drained, and the atomic swap releases the old
 generation.
+Standalone-integrity candidate custody has an independent 120,000-row and
+201,326,592-byte wall even when the task already retains the matching inventory
+tree. Its complete identity-deduplicated root set is the frozen scope and
+binding needed for resume, ordered selection items, one shared root `Path`,
+nested expected stat/baseline/invalidation/scope values, completed-byte map,
+and candidate indexes/counters. Raw SQLite row shells and the one row being
+projected are separately charged transient owners. Stale plus completed is one
+deduplicated population; saved resume retains its exact frozen population and
+order. Collection applies row precedence before retained bytes, stops before
+the first excess, stages no partial selection, and begins no verifier, hash, or
+outcome work. The task reservation simultaneously charges refresh scan/tree
+and warnings, candidate custody, continuation, outcomes, completion transients,
+and old/new overlay replacement.
 Projection nodes themselves belong to the separately bounded six-view cache,
 whose entries may each reach 240,000 rows; only an unpinned generation may be
 evicted to invalidate/rebuild an open task's view without deleting task
@@ -1251,6 +1284,17 @@ false-rebaseline, and true-baseline/verify payloads are invalid before receipt,
 claim, candidate resolution, ledger, or native work. The exact Boolean remains
 part of the receipted intent, so a confirmed replay cannot be changed into an
 unconfirmed evidence replacement or a different mode.
+
+`start_integrity` exact payload admission validates the 1..256 unique NodeIds
+before canonical gesture construction, receipt publication, descendant
+expansion, ledger reads, location resolution, or native work. After replay and
+live-authority checks, the task reserves the declared worst-case candidate and
+transient graph before resolving those ids against the pinned inventory
+generation. A reservation miss returns only fixed `retention_full`; an admitted
+subset of that complete generation cannot create a partial candidate. Legacy
+non-task integrity paths use the same independently bounded incremental
+candidate collector rather than constructing an unbounded tree or descendant
+union first.
 
 Receipt storage retains an intent hash and the smallest immutable effect
 identity, never a stale native-return graph. Replay projection is exact:
@@ -2140,7 +2184,8 @@ with its omission identities. It first consumes the tuple's latch;
 | normal fresh-preflight refusal | complete nonempty fresh-notice stage |
 | passed fresh preflight | complete stage, including empty, retained through later completed/failed/canceled execution terminal |
 | execution failure/cancellation before candidate completion | no stage; preserve predecessor fresh set |
-| ordinary integrity or manual post-copy, any terminal | no stage; replace only its summary/compact overlay |
+| ordinary integrity candidate-limit failure | no stage or overlay; actual `FAILED+RAN` summary with null `review_refusal`; preserve the predecessor integrity overlay |
+| other ordinary integrity or manual post-copy terminal | no stage; replace only its named summary/complete compact overlay |
 
 Every other tuple/population/stage combination is a structural producer fault.
 The callback follows the exact publication-issue compensation in Task and

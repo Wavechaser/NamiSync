@@ -123,6 +123,13 @@ active until their owning checkpoints:
   plan domain and 192 MiB independently for an inventory domain and either
   informational population. Collection stops before the first excess and
   never publishes a partial artifact.
+- A standalone-integrity candidate independently admits at most 120,000 unique
+  inventory-domain rows and 192 MiB for its complete identity-deduplicated
+  candidate-custody graph. This wall is neither shared with nor implied by an
+  inventory tree: a combined task charges every simultaneous refresh,
+  candidate, continuation, outcome, and completion owner. Candidate collection
+  stops before the first excess, with row precedence over retained bytes, and
+  never publishes a partial selection or begins verifier work.
 - Process-live task custody is capped at 48 tasks and a mechanically derived
   byte budget that must admit at least four simultaneously complete
   maximum-scale combined tasks. The separate immutable-projection cache holds
