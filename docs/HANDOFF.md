@@ -54,6 +54,17 @@ calibrated, or accepted.
   Invalid key/path size refuses before encoding. Raw mapping diagnostics retain
   the existing whole-value omission count; projection subclasses and caller
   aliases cannot rewrite or hide state in a retained result.
+- `2818686` ratifies a standalone-integrity candidate wall independent of an
+  inventory tree: 120,000 unique rows plus a 192-MiB complete candidate graph,
+  row-first/no-partial collection, honest post-refresh `FAILED+RAN` truth, and
+  predecessor-overlay preservation. Enforcement is not complete yet.
+- Linked verify continuation now normalizes executor phase/failure diagnostics,
+  bounds their combined phase string, and advances the execution-set omission
+  authority exactly once per dropped input. It snapshots a fresh exact
+  `PhaseResult`, revalidates v6 encoding and direct workflow/cancellation entry,
+  and drops the raw normalized executor result before invoking the continuation
+  sink. Subclasses, forged counters, caller aliases, reflective mutation, and
+  alternating field access cannot bypass the retained phase boundary.
 
 ## Verification
 
@@ -79,6 +90,13 @@ calibrated, or accepted.
   The final focused matrix passes **33 tests**, expanded core event/scalar
   coverage passes **1,058 tests**, and the settlement oracle remains clean at
   **30 scenarios × 3** with baseline parity.
+- Verify-continuation diagnostics: **6 expected failures, 4 passes** initially;
+  the omission-authority mismatch added one more red witness. Three independent
+  review rounds then exposed **4 canonical snapshot/encoder failures**, **3
+  direct workflow/cancellation failures**, and **1 alternating-access failure**.
+  The final focused files pass **208 tests**; the workflows department passes
+  **657 tests with 3,994 deselected**. The protected settlement oracle passes
+  **30 scenarios × 3** with identical traces and baseline parity.
 - Native prerequisite: six new lifetime/callback witnesses failed before the
   fix. After correction, focused bridge/host tests passed **121 tests**; shared
   host-fixture repair passed **161 tests**.
@@ -86,8 +104,9 @@ calibrated, or accepted.
   tests passed, 6 headed deselected**. Installed-wheel transport/native-host
   run: **8 passed, 32 deselected** (55.17 s).
 - Final ordinary required-Node suite after all current prerequisite corrections:
-  **4,600 passed, 4 privilege skips, 28 headed deselected** (189.96 s),
-  including exact worker retirement and canonical detail admission.
+  **4,619 passed, 4 privilege skips, 28 headed deselected** (195.91 s),
+  including exact worker retirement, canonical detail admission, and the
+  verify-continuation boundary.
   No required Node gate skipped. Whitespace validation passed.
 
 ## Next work and preserved boundaries
@@ -106,15 +125,17 @@ shared dependency expansion), old/new generations, full result/audit owners,
 instance dictionaries, mapping-proxy stores, container high-water capacities,
 Path caches, and native/browser copies. The frozen transport sizer is not a
 complete task-graph validator. Standalone integrity's row reload also needs its
-own admission bound; an inventory-tree limit does not constrain it today.
+newly ratified independent bound enforced; an inventory-tree limit does not
+constrain it today.
 
-The next source-derived blockers are the independently bounded standalone-
-integrity population, pre-custody continuation diagnostics, pre-projection and
-pre-parse continuation ceilings, source-backed primitive/mount admission, and
-exact `_inventory_details` retirement. None is supplied by the inventory-tree
-wall or the bridge's 65,536-byte external command ceiling. Ratify policy before
-implementation; keep the production command map at nine until all model and
-dormant-machinery gates pass.
+The next source-derived blockers are enforcement of the independently bounded
+standalone-integrity population, pre-projection and pre-parse continuation
+ceilings, source-backed primitive/mount admission, and exact
+`_inventory_details` retirement. None is supplied by the inventory-tree wall or
+the bridge's 65,536-byte external command ceiling. The continuation diagnostic
+value itself is closed; do not conflate that with the still-unbounded complete
+codec occurrence graph. Keep the production command map at nine until all
+model and dormant-machinery gates pass.
 
 Protected settlement scenarios/baseline/hash/assertions, frozen transport
 authority, and the epoch-5 witness remain unchanged. The witness SHA-256 is

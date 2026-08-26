@@ -1538,6 +1538,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Verify-continuation diagnostic retention.
+  Linked execution bounded failure type and message separately, then retained
+  their unchecked concatenation in paused verify custody. The continuation also
+  retained a caller-owned phase instance, admitting subclass graphs, forged
+  counters, later alias mutation, and unchecked encoder projection. Cause:
+  terminal normalization ran only at final publication and no canonical owner
+  existed for the intermediate whole value. Fixed by bounding executor inputs,
+  counting each omission once, snapshotting an exact validated phase at
+  admission, and reconstructing the exact continuation again at v6 encoding,
+  public execution, and canceled settlement. Pause/resume, cancellation, and
+  terminal counters retain the same truth.
 - MODERATE - FIXED (2026-08-26). Exceptional terminal attribution loss.
   Exclusion-outcome rejection followed by recording-close failure could publish
   and store a failed terminal with clean recording, then scrub the only exact

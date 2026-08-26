@@ -334,8 +334,11 @@ Commits, in order:
 source audits found that the current complete graph cannot yet justify a
 frozen reservation floor. The dispatcher exception-retention prerequisite
 is fixed separately in `ff23af9`; the native reply lifetime prerequisite now
-passes all eight installed transport/native-host witnesses. Neither change
-freezes a model or closes BR-G-45. Resolve
+passes all eight installed transport/native-host witnesses. The independent
+standalone-integrity candidate wall is ratified in `2818686`, and the linked
+verify-continuation diagnostic boundary is now closed without selecting a
+codec or task-reservation ceiling. None of these changes freezes the model or
+closes BR-G-45. Resolve
 the following before accepting the first model commit:
 
 Canonical typed-detail admission is now structurally closed: exact-base
@@ -363,16 +366,20 @@ revalidates owned state. This is a prerequisite fix, not a frozen model.
   mapping-proxy backing stores, mutable-container high-water capacity, `Path`
   caches, all declared detail entries, and native/browser serialization copies.
   The frozen transport instrument is not that validator and remains untouched.
-- Standalone integrity reload and service-side folder expansion remain
-  independently unbounded by the inventory-tree wall. Define and enforce a
-  separately named candidate population/graph wall before receipt, tree,
-  repository, resolver, native, or result work; stale unions and saved resume
-  selections must refuse as complete populations rather than truncate.
-- Paused `VerifyContinuation.execute_phase.error` can retain an unbounded value
-  before terminal normalization. Continuation codecs also project or parse the
-  complete graph before any whole-envelope ceiling. Bound the phase value under
-  the existing whole-value diagnostic policy and derive pre-projection and
-  pre-parse ceilings from the frozen occurrence model.
+- Standalone integrity now has a separately named 120,000-row/192-MiB candidate
+  wall with honest post-refresh `FAILED+RAN` policy, but repository, workflow,
+  service, and retirement enforcement remain incomplete. Enforce it before
+  receipt, tree, repository, resolver, native, or result work; stale unions and
+  saved resume selections must refuse as complete populations rather than
+  truncate.
+- `VerifyContinuation.execute_phase` now owns a fresh exact base snapshot;
+  executor diagnostics and their combined phase value use the existing
+  whole-value policy with exact omission accounting. Construction, v6 encode/
+  decode, direct workflow entry, and canceled settlement revalidate that
+  boundary, and the raw executor result retires before the continuation sink.
+  Continuation codecs still project or parse the complete graph before any
+  whole-envelope ceiling; derive their pre-projection and pre-parse ceilings
+  from the frozen occurrence model.
 - Root/profile/evidence/filter/assignment/mount values still need source-backed
   typed admission wherever they escape the enclosing graph wall. Runtime
   `_inventory_details` also needs exact task/session retirement or a separately

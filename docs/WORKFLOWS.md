@@ -319,6 +319,27 @@ neither the continuation nor process-local plans survive closing/restarting
 the M1 application. Later standalone integrity sessions use durable ledger
 evidence.
 
+Before linked execution can publish a verify continuation, the workflow applies
+the core 1,024-byte whole-value diagnostic policy to the executor result's phase
+and failure inputs. Each newly omitted input advances the retained
+`ExecutionSet.omitted_detail_count` once. The executor result's incoming count
+must already equal that execution-set authority; a contradiction fails before
+continuation publication instead of being lost during final reattachment. The
+execute-phase error is then formed from the bounded failure type and message
+and checked again as one whole value. Individually bounded components do not
+exempt an oversized combined value. An invalid or oversized combination is
+omitted with one additional witness. `VerifyContinuation` reconstructs every
+execute-phase field into a fresh exact `PhaseResult`, so subclasses, forged
+counters, invalid text, and caller aliases cannot enter custody; the exact v6
+decoder inherits the same refusal. Encoding repeats that reconstruction before
+projection, and both public execution entry points do the same before workflow
+or canceled-settlement use. Reflective post-admission corruption is therefore
+refused rather than serialized or retained in a direct result. Once candidates
+exist, the normalized executor result is released before the continuation sink;
+only its bounded phase projection and the already-selected item tuple remain in
+the workflow frame. The count therefore survives sink failure, pause, resume,
+cancellation, and terminal projection without being added again.
+
 The implemented compound transition rules are explicit:
 
 ```text

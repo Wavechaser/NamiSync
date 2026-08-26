@@ -68,6 +68,7 @@ from .models import (
     ExecutionRequest,
     PlanRequest,
     VerifyContinuation,
+    _exact_verify_continuation,
 )
 
 
@@ -1214,6 +1215,8 @@ def decode_plan_request(payload: bytes) -> PlanRequest:
 
 def encode_execution_request(request: ExecutionRequest) -> bytes:
     continuation = request.continuation
+    if isinstance(continuation, VerifyContinuation):
+        continuation = _exact_verify_continuation(continuation)
     value: dict[str, object] = {
         "schema_version": _EXECUTION_SCHEMA_VERSION,
         "kind": "execute",

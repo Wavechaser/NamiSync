@@ -13,6 +13,7 @@ from namisync.core.integrity import PostCopySelection
 from namisync.core.models import ScanResult
 from namisync.core.planning import OperationKind, Plan, SyncOptions
 from namisync.core.preflight import Verdict
+from namisync.core.scalars import bounded_utf8_text
 from namisync.core.session import PhaseResult, PhaseStatus, SessionState
 from namisync.workflows.views import (
     PhaseResultView,
@@ -69,10 +70,32 @@ class VerifyContinuation:
             raise TypeError("verify filesystem status has the wrong type")
         if not isinstance(self.recording, RecordingStatus):
             raise TypeError("verify recording status has the wrong type")
-        if not isinstance(self.execute_phase, PhaseResult):
+        source_phase = self.execute_phase
+        if not isinstance(source_phase, PhaseResult):
             raise TypeError("verify continuation requires an execute PhaseResult")
-        if self.execute_phase.phase != ExecuteContinuation.phase:
+        phase_name = source_phase.phase
+        if type(phase_name) is not str:
+            raise TypeError("verify continuation execute phase name must be text")
+        execute_phase = PhaseResult(
+            phase=phase_name,
+            status=source_phase.status,
+            items_done=source_phase.items_done,
+            items_total=source_phase.items_total,
+            bytes_done=source_phase.bytes_done,
+            bytes_total=source_phase.bytes_total,
+            error=source_phase.error,
+        )
+        if execute_phase.phase != ExecuteContinuation.phase:
             raise ValueError("verify continuation phase result must describe execute")
+        execute_error = execute_phase.error
+        bounded_error = bounded_utf8_text(
+            execute_error,
+            "verify continuation execute phase error",
+        )
+        if execute_error is not None and bounded_error is None:
+            raise ValueError(
+                "verify continuation execute phase error exceeds its bound"
+            )
         if self.filesystem_status is SessionState.CANCELED:
             raise ValueError(
                 "canceled execution is terminal and cannot continue to verify"
@@ -83,7 +106,7 @@ class VerifyContinuation:
             raise ValueError(
                 "verify continuation requires settled execute filesystem truth"
             ) from error
-        if self.execute_phase.status is not expected_phase_status:
+        if execute_phase.status is not expected_phase_status:
             raise ValueError(
                 "verify filesystem status disagrees with its execute phase"
             )
@@ -184,6 +207,22 @@ class VerifyContinuation:
                     raise ValueError(
                         "post-copy candidate recording identity changed at handoff"
                     )
+        object.__setattr__(self, "execute_phase", execute_phase)
+
+
+def _exact_verify_continuation(
+    value: VerifyContinuation,
+) -> VerifyContinuation:
+    if not isinstance(value, VerifyContinuation):
+        raise TypeError("verify continuation has the wrong type")
+    return VerifyContinuation(
+        execution_set=value.execution_set,
+        candidates=value.candidates,
+        filesystem_status=value.filesystem_status,
+        recording=value.recording,
+        execute_phase=value.execute_phase,
+        missing_evidence_ids=value.missing_evidence_ids,
+    )
 
 
 ExecutionContinuation: TypeAlias = ExecuteContinuation | VerifyContinuation

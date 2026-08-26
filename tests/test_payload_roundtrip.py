@@ -1116,6 +1116,164 @@ def test_verify_continuation_rejects_contradictory_truth_axes() -> None:
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
+def test_verify_continuation_accepts_only_a_bounded_canonical_execute_error() -> None:
+    continuation = _rich_verify_request().continuation
+    assert isinstance(continuation, VerifyContinuation)
+    exact = replace(
+        continuation,
+        execute_phase=replace(continuation.execute_phase, error="x" * 1024),
+    )
+
+    assert exact.execute_phase.error == "x" * 1024
+    decoded = decode_execution_request(
+        encode_execution_request(ExecutionRequest(exact, NOW))
+    )
+    assert decoded.continuation.execute_phase.error == "x" * 1024
+
+    with pytest.raises(ValueError, match="execute phase error"):
+        replace(
+            continuation,
+            execute_phase=replace(
+                continuation.execute_phase,
+                error="x" * 1025,
+            ),
+        )
+    with pytest.raises(ValueError, match="execute phase error"):
+        replace(
+            continuation,
+            execute_phase=replace(
+                continuation.execute_phase,
+                error="\ud800",
+            ),
+        )
+    with pytest.raises(TypeError, match="execute phase error"):
+        replace(
+            continuation,
+            execute_phase=replace(continuation.execute_phase, error=object()),
+        )
+
+
+def test_verify_continuation_snapshots_phase_subclasses_without_hidden_graphs() -> None:
+    class HiddenPhase(PhaseResult):
+        pass
+
+    continuation = _rich_verify_request().continuation
+    assert isinstance(continuation, VerifyContinuation)
+    source = continuation.execute_phase
+    subclass = HiddenPhase(
+        source.phase,
+        source.status,
+        source.items_done,
+        source.items_total,
+        source.bytes_done,
+        source.bytes_total,
+        source.error,
+    )
+    object.__setattr__(subclass, "hidden_graph", ["hidden"])
+
+    admitted = replace(continuation, execute_phase=subclass)
+
+    assert type(admitted.execute_phase) is PhaseResult
+    assert admitted.execute_phase == source
+    assert admitted.execute_phase is not subclass
+    assert not hasattr(admitted.execute_phase, "hidden_graph")
+
+
+def test_verify_continuation_reads_the_source_phase_name_once() -> None:
+    class HiddenText(str):
+        pass
+
+    class AlternatingPhase(PhaseResult):
+        def __getattribute__(self, name):
+            if name == "phase":
+                try:
+                    reads = object.__getattribute__(self, "phase_reads")
+                except AttributeError:
+                    return object.__getattribute__(self, name)
+                object.__setattr__(self, "phase_reads", reads + 1)
+                if reads == 0:
+                    return "execute"
+                return object.__getattribute__(self, "alternate_phase")
+            return object.__getattribute__(self, name)
+
+    continuation = _rich_verify_request().continuation
+    assert isinstance(continuation, VerifyContinuation)
+    phase = continuation.execute_phase
+    source = AlternatingPhase(
+        phase.phase,
+        phase.status,
+        phase.items_done,
+        phase.items_total,
+        phase.bytes_done,
+        phase.bytes_total,
+        phase.error,
+    )
+    alternate = HiddenText("execute")
+    object.__setattr__(alternate, "hidden_graph", ["hidden"])
+    object.__setattr__(source, "phase_reads", 0)
+    object.__setattr__(source, "alternate_phase", alternate)
+
+    admitted = replace(continuation, execute_phase=source)
+
+    assert type(admitted.execute_phase.phase) is str
+    assert not hasattr(admitted.execute_phase.phase, "hidden_graph")
+
+
+def test_verify_continuation_phase_snapshot_breaks_the_source_alias() -> None:
+    continuation = _rich_verify_request().continuation
+    assert isinstance(continuation, VerifyContinuation)
+    source = replace(continuation.execute_phase, error="bounded source")
+
+    admitted = replace(continuation, execute_phase=source)
+    object.__setattr__(source, "error", "x" * 1025)
+    object.__setattr__(source, "items_done", -1)
+
+    assert admitted.execute_phase.error == "bounded source"
+    assert admitted.execute_phase.items_done == continuation.execute_phase.items_done
+    decoded = decode_execution_request(
+        encode_execution_request(ExecutionRequest(admitted, NOW))
+    )
+    assert decoded.continuation.execute_phase == admitted.execute_phase
+
+
+def test_verify_continuation_rejects_a_forged_phase_instance() -> None:
+    continuation = _rich_verify_request().continuation
+    assert isinstance(continuation, VerifyContinuation)
+    source = continuation.execute_phase
+    forged = object.__new__(PhaseResult)
+    for name, value in (
+        ("phase", source.phase),
+        ("status", source.status),
+        ("items_done", -1),
+        ("items_total", source.items_total),
+        ("bytes_done", source.bytes_done),
+        ("bytes_total", source.bytes_total),
+        ("error", source.error),
+    ):
+        object.__setattr__(forged, name, value)
+
+    with pytest.raises(ValueError, match="phase items_done"):
+        replace(continuation, execute_phase=forged)
+
+
+def test_execution_encoder_revalidates_mutated_verify_phase() -> None:
+    continuation = _rich_verify_request().continuation
+    assert isinstance(continuation, VerifyContinuation)
+    object.__setattr__(continuation.execute_phase, "items_done", -1)
+
+    with pytest.raises(ValueError, match="phase items_done"):
+        encode_execution_request(ExecutionRequest(continuation, NOW))
+
+
+@pytest.mark.parametrize("error", ["x" * 1025, "\ud800", 7])
+def test_execution_v6_refuses_hostile_verify_execute_errors(error: object) -> None:
+    value = json.loads(encode_execution_request(_rich_verify_request()))
+    value["execute_phase"]["error"] = error
+
+    with pytest.raises((TypeError, ValueError)):
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+
+
 def test_verify_continuation_rejects_unknown_completion_and_candidate_drift() -> None:
     value = json.loads(encode_execution_request(_rich_verify_request()))
     value["candidates"]["completed_bytes"][0]["item_id"] = str(_op_id(3))

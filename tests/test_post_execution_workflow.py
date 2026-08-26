@@ -8,12 +8,14 @@ from pathlib import Path
 from threading import Event
 from time import monotonic, sleep
 from types import SimpleNamespace
+from weakref import ref
 
 import pytest
 from xxhash import xxh3_128
 
 import namisync.dispatcher.event_bus as dispatcher_event_bus
 import namisync.modules.executor.runtime as executor_runtime
+import namisync.workflows.sync as sync_workflow
 from namisync.core.events import (
     ItemOutcome,
     PhaseChanged,
@@ -78,6 +80,7 @@ from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
     Canceled,
     Disposition,
+    FailureDetail,
     OperationResult,
     PauseRequested,
     PhaseResult,
@@ -220,6 +223,47 @@ def _evidence(
         else None
     )
     return PublishedCopyEvidence(attestation, identity)
+
+
+def _verify_continuation_fixture(
+    operation: PlanOperation,
+) -> VerifyContinuation:
+    xset = _execution_set(operation)
+    evidence = _evidence(operation)
+    xset.status[operation.op_id] = Outcome.SUCCEEDED
+    xset.published_evidence[operation.op_id] = evidence
+    identity = evidence.recorded_identity
+    assert identity is not None
+    return VerifyContinuation(
+        execution_set=xset,
+        candidates=PostCopySelection(
+            (
+                PostCopyCandidate(
+                    item_id=str(operation.op_id),
+                    root=Path(xset.plan.target_root.path),
+                    display_path=operation.target_rel_path,
+                    expected_stat=evidence.attestation.subject,
+                    copy_attestation=evidence.attestation,
+                    recorded_identity=PostCopyRecordIdentity(
+                        identity.row_id,
+                        identity.location_id,
+                        identity.scope_token,
+                        identity.rel_path_key,
+                    ),
+                ),
+            )
+        ),
+        filesystem_status=SessionState.COMPLETED,
+        recording=RecordingStatus.OK,
+        execute_phase=PhaseResult(
+            "execute",
+            PhaseStatus.COMPLETED,
+            1,
+            1,
+            operation.content_bytes,
+            operation.content_bytes,
+        ),
+    )
 
 
 def _settle(
@@ -461,6 +505,271 @@ def test_xv_7_execute_verify_keeps_phase_bytes_separate() -> None:
         (SessionState.COMPLETED, RecordingStatus.OK)
     ]
     assert isinstance(continuations[-1], VerifyContinuation)
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_error", "expected_omissions"),
+    [
+        ("x" * 1021, f"T: {'x' * 1021}", 0),
+        ("x" * 1022, None, 1),
+        ("é" * 510 + "a", f"T: {'é' * 510}a", 0),
+        ("é" * 510 + "aa", None, 1),
+    ],
+)
+def test_verify_continuation_bounds_the_complete_execute_error(
+    message: str,
+    expected_error: str | None,
+    expected_omissions: int,
+) -> None:
+    operation = _operation(79, 7)
+    xset = _execution_set(operation)
+    captured: list[VerifyContinuation] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return OperationResult(
+            SessionState.FAILED,
+            items=(item,),
+            bytes_done=7,
+            bytes_total=7,
+            error=FailureDetail("T", message),
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        continuation_sink=captured.append,
+    )
+
+    assert captured[0].execute_phase.error == expected_error
+    assert result.phases[0].error == expected_error
+    assert result.status is SessionState.FAILED
+    assert result.phases[0].items_done == result.phases[0].items_total == 1
+    assert result.phases[0].bytes_done == result.phases[0].bytes_total == 7
+    assert result.omitted_detail_count == xset.omitted_detail_count
+    assert result.omitted_detail_count == expected_omissions
+
+
+def test_execute_diagnostic_omissions_survive_verify_pause_resume_once() -> None:
+    operation = _operation(80, 9)
+    xset = _execution_set(operation)
+    xset.omitted_detail_count = 2
+    captured: list[VerifyContinuation] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return OperationResult(
+            SessionState.FAILED,
+            items=(item,),
+            phases=(
+                PhaseResult(
+                    "executor-detail",
+                    PhaseStatus.COMPLETED,
+                    1,
+                    1,
+                    9,
+                    9,
+                    "x" * 1025,
+                ),
+            ),
+            bytes_done=9,
+            bytes_total=9,
+            error=FailureDetail("T", "x" * 1025),
+            omitted_detail_count=2,
+        )
+
+    def pause_verifier(*args):
+        raise PauseRequested()
+
+    with pytest.raises(PauseRequested):
+        run_execution(
+            ExecuteContinuation(xset, verify_after_execute=True),
+            RunContext(lambda _body: None, lambda: None),
+            _deps(executor=executor, verifier=pause_verifier, recordings=[]),
+            continuation_sink=captured.append,
+        )
+
+    paused = captured[-1]
+    assert paused.execute_phase.error is None
+    assert paused.execution_set.omitted_detail_count == 4
+    restored = decode_execution_request(
+        encode_execution_request(ExecutionRequest(paused, NOW))
+    ).continuation
+    assert isinstance(restored, VerifyContinuation)
+    assert restored.execution_set.omitted_detail_count == 4
+
+    result = run_execution(
+        restored,
+        RunContext(lambda _body: None, lambda: None),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=_verify_all,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.phases[0].error is None
+    assert result.omitted_detail_count == 4
+
+
+def test_verify_continuation_refuses_executor_omission_count_mismatch() -> None:
+    operation = _operation(81, 5)
+    xset = _execution_set(operation)
+    captured: list[VerifyContinuation] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=5,
+            bytes_total=5,
+            omitted_detail_count=1,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(
+            executor=executor,
+            verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+            recordings=[],
+        ),
+        continuation_sink=captured.append,
+    )
+
+    assert not captured
+    assert result.status is SessionState.FAILED
+    assert result.error is not None
+    assert result.error.type_name == "ValueError"
+    assert "omitted detail count" in result.error.message
+    assert result.omitted_detail_count == xset.omitted_detail_count == 0
+
+
+def test_normalized_executor_result_is_released_before_continuation_sink(
+    monkeypatch,
+) -> None:
+    class TrackableResult(OperationResult):
+        pass
+
+    operation = _operation(82, 6)
+    xset = _execution_set(operation)
+    normalized_refs = []
+    normalize = sync_workflow.normalize_result_diagnostics
+
+    def track_normalized(result):
+        normalized = normalize(result)
+        normalized_refs.append(ref(normalized))
+        return normalized
+
+    monkeypatch.setattr(
+        sync_workflow,
+        "normalize_result_diagnostics",
+        track_normalized,
+    )
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return TrackableResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=6,
+            bytes_total=6,
+        )
+
+    def inspect_continuation(value):
+        assert isinstance(value, VerifyContinuation)
+        assert normalized_refs[-1]() is None
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        continuation_sink=inspect_continuation,
+    )
+
+    assert result.status is SessionState.COMPLETED
+
+
+@pytest.mark.parametrize("corruption", ["mutated", "forged"])
+def test_run_execution_revalidates_direct_verify_continuations(
+    corruption: str,
+) -> None:
+    continuation = _verify_continuation_fixture(_operation(83, 4))
+    phase = continuation.execute_phase
+    if corruption == "mutated":
+        object.__setattr__(phase, "items_done", -1)
+    else:
+        forged = object.__new__(PhaseResult)
+        for name, value in (
+            ("phase", phase.phase),
+            ("status", phase.status),
+            ("items_done", -1),
+            ("items_total", phase.items_total),
+            ("bytes_done", phase.bytes_done),
+            ("bytes_total", phase.bytes_total),
+            ("error", phase.error),
+        ):
+            object.__setattr__(forged, name, value)
+        object.__setattr__(continuation, "execute_phase", forged)
+
+    with pytest.raises(ValueError, match="phase items_done"):
+        run_execution(
+            continuation,
+            RunContext(lambda _body: None, lambda: None),
+            _deps(
+                executor=lambda *args: pytest.fail("execution phase repeated"),
+                verifier=_verify_all,
+                recordings=[],
+            ),
+            resumed=True,
+        )
+
+
+def test_canceled_settlement_revalidates_direct_verify_continuation() -> None:
+    continuation = _verify_continuation_fixture(_operation(84, 5))
+    object.__setattr__(continuation.execute_phase, "error", "x" * 1025)
+    recordings: list[_Recording] = []
+
+    with pytest.raises(ValueError, match="execute phase error"):
+        settle_canceled_execution(
+            continuation,
+            Disposition.RAN,
+            SimpleNamespace(
+                open_recording=lambda execution_set: (
+                    recordings.append(_Recording()) or recordings[-1]
+                )
+            ),
+        )
+
+    assert not recordings
 
 
 def test_post_copy_verifier_binds_volume_without_optional_device_hint() -> None:
@@ -1140,6 +1449,7 @@ def test_continuation_sink_failure_finishes_once_as_execute_failure() -> None:
             items=(item,),
             bytes_done=9,
             bytes_total=9,
+            error=FailureDetail("T", "x" * 1022),
         )
 
     def reject_continuation(value) -> None:
@@ -1163,6 +1473,7 @@ def test_continuation_sink_failure_finishes_once_as_execute_failure() -> None:
     assert result.phases[0].status is PhaseStatus.FAILED
     assert result.error is not None
     assert result.error.type_name == "RuntimeError"
+    assert result.omitted_detail_count == xset.omitted_detail_count == 1
     assert recordings[0].finishes == [
         (SessionState.FAILED, RecordingStatus.OK)
     ]

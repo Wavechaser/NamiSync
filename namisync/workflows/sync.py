@@ -55,6 +55,7 @@ from namisync.core.root_authority import (
     admit_root_chain,
     current_volume_anchor,
 )
+from namisync.core.scalars import bounded_utf8_text, require_safe_int
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -65,6 +66,7 @@ from namisync.core.session import (
     PhaseStatus,
     RunContext,
     SessionState,
+    normalize_result_diagnostics,
 )
 from namisync.modules.executor import ExecutorPolicies
 from namisync.modules.preflight import ObservationFileSystem
@@ -77,6 +79,7 @@ from .models import (
     PlanRequest,
     RefusalView,
     VerifyContinuation,
+    _exact_verify_continuation,
 )
 from .selection import ExecutionSelection, derive_execution_selection
 
@@ -240,6 +243,8 @@ def run_execution(
 ) -> OperationResult:
     """Execute and optionally verify under one logical sync-run recording."""
 
+    if isinstance(continuation, VerifyContinuation):
+        continuation = _exact_verify_continuation(continuation)
     current: list[ExecutionContinuation] = [
         ExecuteContinuation(continuation)
         if isinstance(continuation, ExecutionSet)
@@ -685,6 +690,7 @@ def _run_execution(
                     )
                     return replace(result, recording=recording_status)
 
+                result = _normalize_execute_result_diagnostics(xset, result)
                 execute_phase = _execute_result_phase(xset, result)
                 current = _verify_continuation(
                     xset,
@@ -704,6 +710,7 @@ def _run_execution(
                         recording=recording_status,
                         phases=(execute_phase,),
                     )
+                del result
                 sink(current)
             except PauseRequested:
                 raise
@@ -918,6 +925,8 @@ def settle_canceled_execution(
         raise ValueError("started execution cancellation must retain RAN disposition")
     if not isinstance(continuation, (ExecuteContinuation, VerifyContinuation)):
         raise TypeError("canceled settlement requires a typed continuation")
+    if isinstance(continuation, VerifyContinuation):
+        continuation = _exact_verify_continuation(continuation)
 
     xset = continuation.execution_set
     if isinstance(continuation, ExecuteContinuation):
@@ -1126,6 +1135,17 @@ def _execute_result_phase(
         status = PhaseStatus(result.status.value)
     except ValueError as error:
         raise ValueError("execution returned invalid compound filesystem truth") from error
+    error_text = (
+        None
+        if result.error is None
+        else f"{result.error.type_name}: {result.error.message}"
+    )
+    bounded_error = bounded_utf8_text(
+        error_text,
+        "verify continuation execute phase error",
+    )
+    if error_text is not None and bounded_error is None:
+        _note_omitted_diagnostics(xset, 1)
     return PhaseResult(
         phase=ExecuteContinuation.phase,
         status=status,
@@ -1133,11 +1153,32 @@ def _execute_result_phase(
         items_total=len(xset.selection),
         bytes_done=result.bytes_done,
         bytes_total=result.bytes_total,
-        error=(
-            None
-            if result.error is None
-            else f"{result.error.type_name}: {result.error.message}"
-        ),
+        error=bounded_error,
+    )
+
+
+def _normalize_execute_result_diagnostics(
+    xset: ExecutionSet,
+    result: OperationResult,
+) -> OperationResult:
+    if result.omitted_detail_count != xset.omitted_detail_count:
+        raise ValueError(
+            "executor result omitted detail count disagrees with execution set"
+        )
+    normalized = normalize_result_diagnostics(result)
+    _note_omitted_diagnostics(
+        xset,
+        normalized.omitted_detail_count - result.omitted_detail_count,
+    )
+    return normalized
+
+
+def _note_omitted_diagnostics(xset: ExecutionSet, count: int) -> None:
+    if not count:
+        return
+    xset.omitted_detail_count = require_safe_int(
+        xset.omitted_detail_count + count,
+        "execution omitted_detail_count",
     )
 
 
