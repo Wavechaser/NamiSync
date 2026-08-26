@@ -32,8 +32,8 @@ claims explicit, independently reviewable, and regression-backed.
   inconsistent journal evidence.
 - Aligned scalar/native identity, exact-v5 operation truth, timestamps,
   reliable-envelope bounds, and browser source/differential gates. Malformed
-  task updates refuse before custody release; the live schema name and
-  timestamp comment now describe the active contract.
+  task updates refuse before custody release; the live schema, validator family,
+  vocabulary names, and timestamp comment now describe the active contract.
 - Made database admission inspect complete WAL-visible topology without
   changing source evidence, reused admitted runtime readers with fresh reads,
   and placed private full-file snapshots beside the local database. Recorded

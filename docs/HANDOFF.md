@@ -1,13 +1,16 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.15 is complete after `d05995d`.
-All authorized behavior fixes and the browser cleanup are committed; active
-documentation is reconciled. Checkpoint 3.3 remains unstarted and the private
-legacy decoder remains intact.
+Status (2026-08-26): checkpoint 3R.15b completes the live v5 validator-family
+and vocabulary rename after the earlier remediation closure at `0886c17`.
+The next behavior checkpoint is 3R.14a's strict Unicode-scalar boundary. After
+that, audit and archive the M0 criteria, then relocate `PoC_import` into
+`obsolete`, as separately reviewed documentation checkpoints. Integrity policy
+is held for user consideration; do not change it. Checkpoint 3.3 remains
+unstarted and the private legacy decoder remains intact.
 
 `M1_SHELL_H2.md` owns the checkpoint boundaries and full acceptance criteria.
-No design decisions remain open. The safe stop is before checkpoint 3.3; do not
-fold the two unassigned findings below into its legacy-source removal.
+The safe stop is before checkpoint 3.3; do not fold the two unassigned findings
+below into its legacy-source removal or these follow-ups.
 Completed causal findings belong in `BUGS.md`, not this handoff. The original
 O/S reports and prior verification receipts remain in Git at
 `d7673b7:docs/HANDOFF.md`; no separate report archive is needed.
@@ -37,19 +40,21 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-Final verification with required Node: the ordinary suite passed 4,426 tests
-with four skips and 28 headed tests deselected (193.71 s). All four skips are
-unavailable Windows symlink/reparse privileges (`WinError 1314`), not skipped
-Node gates. Import architecture kept all 11 rules. The protected settlement
-check passed all 30 scenarios three times with identical normalized traces and
-baseline parity. Source/status scans and diff checks passed. Independent final
-documentation review and a separate S5 cross-contract check found no actionable
-issue. Earlier checkpoint receipts remain in their commits rather than
-accumulating here.
+3R.15b verification with required Node: the source gate first rejected the old
+function names, then the old vocabulary names. The initial interfaces run
+caught a remaining caller in the drain probe; that identifier was corrected.
+Focused browser/static/drain checks passed 96 tests (4.41 s); the final
+interfaces run passed 1,277 tests, with 3,183 deselected (43.59 s). Independent
+review confirmed the production diff is exactly 37 identifier substitutions
+across 17 names, with no validator-body changes, name collisions, missed callers,
+or weakened gates. Source scans and diff checks passed.
 
-The closure changes documentation only. Protected settlement and frozen
-transport-authority files are unchanged, as is the frozen identity artifact
-below. No new headed acceptance is claimed; BR-G-45 and SH-G-15 remain open.
+The last ordinary/import/three-run settlement integration receipt remains in
+`0886c17:docs/HANDOFF.md`; rerun integration after the Unicode behavior fix.
+
+Protected settlement and frozen transport-authority files are unchanged, as is
+the frozen identity artifact below. No new headed acceptance is claimed;
+BR-G-45 and SH-G-15 remain open.
 No verification process remains running.
 
 Old epoch-5 pairs now require the documented explicit archive/reset; no user

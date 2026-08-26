@@ -1513,7 +1513,7 @@ function validateTaskUpdate(update, sessionId) {
 }
 
 function validateLiveSessionEvent(event, sessionId) {
-  return validateDormantSessionEventV5(event, sessionId);
+  return validateSessionEventV5(event, sessionId);
 }
 
 function validateLegacySessionEvent(event, sessionId) {
@@ -1826,7 +1826,7 @@ function validateOperationResultView(value) {
     typeof value.canceled !== "boolean" ||
     !Array.isArray(value.phases) ||
     value.phases.length > 3 ||
-    !value.phases.every(validateDormantPhaseResultV5) ||
+    !value.phases.every(validatePhaseResultV5) ||
     new Set(value.phases.map((phase) => phase.phase)).size !==
       value.phases.length ||
     !isScalar64(value.bytes_done) ||
@@ -1836,14 +1836,14 @@ function validateOperationResultView(value) {
     !isNonnegativeInteger(value.recording_degraded_items) ||
     !Array.isArray(value.recording_issues) ||
     value.recording_issues.length > 5 ||
-    !value.recording_issues.every(validateDormantRecordingIssueV5) ||
+    !value.recording_issues.every(validateRecordingIssueV5) ||
     new Set(value.recording_issues.map((issue) => issue.reason)).size !==
       value.recording_issues.length ||
     !isNonnegativeInteger(value.omitted_detail_count) ||
     !isNonnegativeInteger(value.presentation_omitted_detail_count) ||
     !(
       value.review_refusal === null ||
-      validateDormantReviewFactV5(value.review_refusal)
+      validateReviewFactV5(value.review_refusal)
     )
   ) {
     return false;
@@ -1887,7 +1887,7 @@ function validateResultItem(value) {
 
 // Direct checkpoint-3 seam retained through the v5 safe stop. Production now
 // routes through this exact validator; the legacy branch above is read-only.
-export function validateDormantSessionEventV5(event, sessionId) {
+export function validateSessionEventV5(event, sessionId) {
   if (
     !isExactObject(event, [
       "session_id",
@@ -1922,12 +1922,12 @@ export function validateDormantSessionEventV5(event, sessionId) {
       );
       break;
     case "Progress":
-      return validateDormantProgressV5(event.body);
+      return validateProgressV5(event.body);
     case "ItemOutcome":
-      validBody = validateDormantOperationItemV5(event.body);
+      validBody = validateOperationItemV5(event.body);
       break;
     case "IntegrityOutcome":
-      validBody = validateDormantIntegrityItemV5(event.body);
+      validBody = validateIntegrityItemV5(event.body);
       break;
     case "Gap":
       validBody = (
@@ -1940,7 +1940,7 @@ export function validateDormantSessionEventV5(event, sessionId) {
     case "Terminal":
       validBody = (
         isExactObject(event.body, ["result"]) &&
-        validateDormantTerminalSummaryV5(event.body.result)
+        validateTerminalSummaryV5(event.body.result)
       );
       break;
     default:
@@ -1963,7 +1963,7 @@ export function validateDormantSessionEventV5(event, sessionId) {
     MAX_RELIABLE_EVENT_CANONICAL_BYTES;
 }
 
-function validateDormantProgressV5(value) {
+function validateProgressV5(value) {
   if (
     !isExactObject(value, [
       "phase",
@@ -2026,7 +2026,7 @@ function validateDormantProgressV5(value) {
   );
 }
 
-const DORMANT_OPERATION_REASONS_V5 = Object.freeze([
+const OPERATION_REASONS_V5 = Object.freeze([
   "noop",
   "already-exists",
   "blocked",
@@ -2060,7 +2060,7 @@ const DORMANT_OPERATION_REASONS_V5 = Object.freeze([
   "incomplete-scan",
   "user-deselected",
 ]);
-const DORMANT_OPERATION_KINDS_V5 = Object.freeze([
+const OPERATION_KINDS_V5 = Object.freeze([
   "copy",
   "update",
   "move",
@@ -2071,19 +2071,19 @@ const DORMANT_OPERATION_KINDS_V5 = Object.freeze([
   "delete",
   "noop",
 ]);
-const DORMANT_ITEM_RECORDING_REASONS_V5 = Object.freeze([
+const ITEM_RECORDING_REASONS_V5 = Object.freeze([
   "record-write-failed",
   "unrecorded-mutation",
   "recording-prerequisite-failed",
 ]);
-const DORMANT_TASK_RECORDING_REASONS_V5 = Object.freeze([
+const TASK_RECORDING_REASONS_V5 = Object.freeze([
   "recording-open-failed",
   "final-flush-failed",
   "finish-failed",
   "recording-close-failed",
   "post-settlement-state-diverged",
 ]);
-const DORMANT_DETAIL_TEXT_KEYS_V5 = Object.freeze([
+const DETAIL_TEXT_KEYS_V5 = Object.freeze([
   "backup",
   "backup_metadata",
   "backup_state",
@@ -2109,20 +2109,20 @@ const DORMANT_DETAIL_TEXT_KEYS_V5 = Object.freeze([
   "temp_state",
   "trash_state_error",
 ]);
-const DORMANT_DETAIL_PATH_KEYS_V5 = Object.freeze([
+const DETAIL_PATH_KEYS_V5 = Object.freeze([
   "backup_path",
   "mutation_destination",
   "prior_path",
   "published_path",
   "trash_path",
 ]);
-const DORMANT_DETAIL_ARRAY_KEYS_V5 = Object.freeze([
+const DETAIL_ARRAY_KEYS_V5 = Object.freeze([
   "durability_warnings",
   "incomplete_sides",
   "excluded_dependencies",
 ]);
 
-function validateDormantOperationItemV5(value) {
+function validateOperationItemV5(value) {
   return (
     isExactObject(value, [
       "item_type",
@@ -2142,13 +2142,13 @@ function validateDormantOperationItemV5(value) {
     value.phase === "execute" &&
     typeof value.item_id === "string" &&
     ID_PATTERN.test(value.item_id) &&
-    isOneOf(value.kind, DORMANT_OPERATION_KINDS_V5) &&
+    isOneOf(value.kind, OPERATION_KINDS_V5) &&
     isV5Path(value.path) &&
     isOneOf(value.result, OPERATION_OUTCOMES) &&
     (value.reason === null ||
-      isOneOf(value.reason, DORMANT_OPERATION_REASONS_V5)) &&
-    validateDormantDetailProjectionV5(value.detail) &&
-    validateDormantItemRecordingV5(
+      isOneOf(value.reason, OPERATION_REASONS_V5)) &&
+    validateDetailProjectionV5(value.detail) &&
+    validateItemRecordingV5(
       value.recording,
       value.recording_reason,
       value.recording_detail,
@@ -2158,7 +2158,7 @@ function validateDormantOperationItemV5(value) {
   );
 }
 
-function validateDormantIntegrityItemV5(value) {
+function validateIntegrityItemV5(value) {
   const rowPair =
     (value?.row_id === null && value?.location_id === null) ||
     (isBoundedV5Text(value?.row_id, true) &&
@@ -2198,7 +2198,7 @@ function validateDormantIntegrityItemV5(value) {
   );
 }
 
-function validateDormantTerminalSummaryV5(value) {
+function validateTerminalSummaryV5(value) {
   if (
     !isExactObject(value, [
       "status",
@@ -2222,7 +2222,7 @@ function validateDormantTerminalSummaryV5(value) {
     typeof value.canceled !== "boolean" ||
     !Array.isArray(value.phases) ||
     value.phases.length > 3 ||
-    !value.phases.every(validateDormantPhaseResultV5) ||
+    !value.phases.every(validatePhaseResultV5) ||
     new Set(value.phases.map((phase) => phase.phase)).size !==
       value.phases.length ||
     !isScalar64(value.bytes_done) ||
@@ -2237,13 +2237,13 @@ function validateDormantTerminalSummaryV5(value) {
     !isNonnegativeInteger(value.recording_degraded_items) ||
     !Array.isArray(value.recording_issues) ||
     value.recording_issues.length > 5 ||
-    !value.recording_issues.every(validateDormantRecordingIssueV5) ||
+    !value.recording_issues.every(validateRecordingIssueV5) ||
     new Set(value.recording_issues.map((issue) => issue.reason)).size !==
       value.recording_issues.length ||
     !isNonnegativeInteger(value.omitted_detail_count) ||
     !(
       value.review_fact_limit === null ||
-      validateDormantReviewFactV5(value.review_fact_limit)
+      validateReviewFactV5(value.review_fact_limit)
     )
   ) {
     return false;
@@ -2275,7 +2275,7 @@ function validateDormantTerminalSummaryV5(value) {
   );
 }
 
-function validateDormantPhaseResultV5(value) {
+function validatePhaseResultV5(value) {
   return (
     isExactObject(value, [
       "phase",
@@ -2299,15 +2299,15 @@ function validateDormantPhaseResultV5(value) {
   );
 }
 
-function validateDormantRecordingIssueV5(value) {
+function validateRecordingIssueV5(value) {
   return (
     isExactObject(value, ["reason", "detail"]) &&
-    isOneOf(value.reason, DORMANT_TASK_RECORDING_REASONS_V5) &&
+    isOneOf(value.reason, TASK_RECORDING_REASONS_V5) &&
     (value.detail === null || isBoundedV5Text(value.detail, false))
   );
 }
 
-function validateDormantReviewFactV5(value) {
+function validateReviewFactV5(value) {
   if (
     !isExactObject(value, [
       "reason",
@@ -2346,7 +2346,7 @@ function validateDormantReviewFactV5(value) {
   return value.byte_limit === expected;
 }
 
-function validateDormantItemRecordingV5(status, reason, detail, outcome) {
+function validateItemRecordingV5(status, reason, detail, outcome) {
   if (!isOneOf(status, RECORDING_STATES)) {
     return false;
   }
@@ -2354,7 +2354,7 @@ function validateDormantItemRecordingV5(status, reason, detail, outcome) {
     return reason === null && detail === null;
   }
   return (
-    isOneOf(reason, DORMANT_ITEM_RECORDING_REASONS_V5) &&
+    isOneOf(reason, ITEM_RECORDING_REASONS_V5) &&
     (detail === null || isBoundedV5Text(detail, false)) &&
     (reason === "record-write-failed"
       ? outcome === "succeeded" || outcome === "skipped"
@@ -2362,7 +2362,7 @@ function validateDormantItemRecordingV5(status, reason, detail, outcome) {
   );
 }
 
-function validateDormantDetailProjectionV5(value) {
+function validateDetailProjectionV5(value) {
   if (!isPlainJsonObject(value)) {
     return false;
   }
@@ -2372,12 +2372,12 @@ function validateDormantDetailProjectionV5(value) {
     if (!/^[\x20-\x7e]{1,64}$/.test(key)) {
       return false;
     }
-    if (DORMANT_DETAIL_TEXT_KEYS_V5.includes(key)) {
+    if (DETAIL_TEXT_KEYS_V5.includes(key)) {
       if (!isBoundedV5Text(item, false)) {
         return false;
       }
       leaves += 1;
-    } else if (DORMANT_DETAIL_PATH_KEYS_V5.includes(key)) {
+    } else if (DETAIL_PATH_KEYS_V5.includes(key)) {
       if (!isV5Path(item)) {
         return false;
       }
@@ -2388,7 +2388,7 @@ function validateDormantDetailProjectionV5(value) {
         return false;
       }
       leaves += 1;
-    } else if (DORMANT_DETAIL_ARRAY_KEYS_V5.includes(key)) {
+    } else if (DETAIL_ARRAY_KEYS_V5.includes(key)) {
       if (!Array.isArray(item) || item.length > 32) {
         return false;
       }

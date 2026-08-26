@@ -1125,19 +1125,19 @@ def _assert_v5_vocabulary(source: str) -> None:
             "baselined",
             "verified",
         ),
-        "DORMANT_OPERATION_KINDS_V5": tuple(item.value for item in OperationKind),
-        "DORMANT_OPERATION_REASONS_V5": frozenset(
+        "OPERATION_KINDS_V5": tuple(item.value for item in OperationKind),
+        "OPERATION_REASONS_V5": frozenset(
             item.value for item in (*ExecutionReason, *BlockedReason, *ExclusionReason)
         ),
-        "DORMANT_ITEM_RECORDING_REASONS_V5": tuple(
+        "ITEM_RECORDING_REASONS_V5": tuple(
             item.value for item in ItemRecordingReason
         ),
-        "DORMANT_TASK_RECORDING_REASONS_V5": tuple(
+        "TASK_RECORDING_REASONS_V5": tuple(
             item.value for item in TaskRecordingIssueReason
         ),
-        "DORMANT_DETAIL_TEXT_KEYS_V5": events._DETAIL_TEXT_KEYS,
-        "DORMANT_DETAIL_PATH_KEYS_V5": events._DETAIL_PATH_KEYS,
-        "DORMANT_DETAIL_ARRAY_KEYS_V5": (
+        "DETAIL_TEXT_KEYS_V5": events._DETAIL_TEXT_KEYS,
+        "DETAIL_PATH_KEYS_V5": events._DETAIL_PATH_KEYS,
+        "DETAIL_ARRAY_KEYS_V5": (
             events._DETAIL_TEXT_ARRAY_KEYS
             | events._DETAIL_SIDE_ARRAY_KEYS
             | events._DETAIL_ID_ARRAY_KEYS
@@ -1162,7 +1162,7 @@ def _assert_v5_vocabulary(source: str) -> None:
     ):
         assert getattr(events, name) == getattr(event_v5, name)
     assert events._DETAIL_BOOLEAN_KEYS == {"continued"}
-    detail = source.split("function validateDormantDetailProjectionV5(value) {", 1)[1]
+    detail = source.split("function validateDetailProjectionV5(value) {", 1)[1]
     detail = detail.split("function isScalar64(value) {", 1)[0]
     assert detail.lstrip().startswith("if (")
     assert re.search(
@@ -1181,13 +1181,13 @@ def _assert_v5_vocabulary(source: str) -> None:
 
 
 @pytest.mark.parametrize("name", [
-    "DORMANT_OPERATION_KINDS_V5",
-    "DORMANT_OPERATION_REASONS_V5",
-    "DORMANT_ITEM_RECORDING_REASONS_V5",
-    "DORMANT_TASK_RECORDING_REASONS_V5",
-    "DORMANT_DETAIL_TEXT_KEYS_V5",
-    "DORMANT_DETAIL_PATH_KEYS_V5",
-    "DORMANT_DETAIL_ARRAY_KEYS_V5",
+    "OPERATION_KINDS_V5",
+    "OPERATION_REASONS_V5",
+    "ITEM_RECORDING_REASONS_V5",
+    "TASK_RECORDING_REASONS_V5",
+    "DETAIL_TEXT_KEYS_V5",
+    "DETAIL_PATH_KEYS_V5",
+    "DETAIL_ARRAY_KEYS_V5",
 ])
 @pytest.mark.parametrize("mutation", ["missing", "extra", "duplicate"])
 def test_v5_vocabulary_gate_rejects_changed_sets(name: str, mutation: str) -> None:
@@ -1215,7 +1215,7 @@ def test_v5_vocabulary_gate_rejects_changed_sets(name: str, mutation: str) -> No
 def test_v5_vocabulary_gate_rejects_changed_detail_classes(before, after) -> None:
     source = (PROJECT_ROOT / ASSET_ROOT / "bridge.js").read_text(encoding="utf-8")
     _assert_v5_vocabulary(source)
-    start = "function validateDormantDetailProjectionV5(value) {"
+    start = "function validateDetailProjectionV5(value) {"
     end = "function isScalar64(value) {"
     prefix, rest = source.split(start, 1)
     validator, suffix = rest.split(end, 1)
@@ -1239,8 +1239,8 @@ def test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape() -> N
 
 
 def _assert_v5_progress(source: str) -> None:
-    validator = source.split("function validateDormantProgressV5(value) {", 1)[1].split(
-        "const DORMANT_OPERATION_REASONS_V5", 1
+    validator = source.split("function validateProgressV5(value) {", 1)[1].split(
+        "const OPERATION_REASONS_V5", 1
     )[0]
     assert validator.lstrip().startswith("if (")
     keys = re.findall(
@@ -1291,8 +1291,8 @@ def _assert_v5_progress(source: str) -> None:
 def test_v5_progress_gate_rejects_in_memory_active_validator_mutations(before, after) -> None:
     source = (PROJECT_ROOT / ASSET_ROOT / "bridge.js").read_text(encoding="utf-8")
     _assert_v5_progress(source)
-    start = "function validateDormantProgressV5(value) {"
-    end = "const DORMANT_OPERATION_REASONS_V5"
+    start = "function validateProgressV5(value) {"
+    end = "const OPERATION_REASONS_V5"
     prefix, rest = source.split(start, 1)
     validator, suffix = rest.split(end, 1)
     assert before in validator

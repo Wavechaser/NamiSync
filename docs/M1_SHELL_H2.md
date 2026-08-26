@@ -313,6 +313,8 @@ Finding ownership is exact at the aspect level:
 | Follow-up repeated full-file database admission | 3R.13b runtime reader lifetime |
 | Follow-up private database snapshot placement | 3R.13c local snapshot placement |
 | Timestamp comment and live schema constant naming | 3R.15a browser naming cleanup |
+| Follow-up live validator family and vocabulary names | 3R.15b browser family naming |
+| Follow-up strict Unicode-scalar encoding and decoding | 3R.14a Unicode boundaries |
 
 The 2026-08-26 follow-up decision ordered 3R.13a, 3R.13b, 3R.13c, 3R.S5,
 revised 3R.14, 3R.15a, and 3R.15; all are now delivered. The prior
@@ -322,6 +324,10 @@ settlement oracle, baseline, and existing assertions are not editable in these
 rows. The installed-wheel event-diagnostic fixture migration and the separately
 noted pre-entry workflow emission issue remain unassigned, not hidden inside
 the two small browser cleanups.
+
+The next authorized follow-ups are 3R.15b, then 3R.14a, each with its own
+tests, independent review, and commit. These do not start checkpoint 3.3 or
+change integrity selection, baseline, rebaseline, or verification policy.
 
 #### 3R.0 Ratify the remediation sequence
 
@@ -710,6 +716,37 @@ Commit: `docs: reconcile independent checkpoint remediation`
 - **Tests/review:** All affected departments, ordinary suite with required
   bundled Node, import architecture, three-run settlement oracle, exact source
   scans, `git diff --check`, and final independent requirement/security review.
+
+#### 3R.15b Name the active v5 validator family
+
+Commit: `refactor(web): name active v5 validators accurately`
+
+- **Acceptance:** Remove the stale `Dormant` prefix from the live v5 validator
+  family and its vocabulary constants, together with all callers and exact
+  source gates. Preserve validator bodies, accepted/rejected inputs, routing,
+  and the unreachable private legacy decoder.
+- **Tests/review:** Demonstrate the old names fail the revised source gate,
+  retain mutation guards, run focused browser/static checks and the interfaces
+  department with required Node, and independently review the name-only diff.
+
+#### 3R.14a Refuse non-scalar Unicode at JSON boundaries
+
+Commit: `fix(core): enforce strict Unicode JSON boundaries`
+
+- **Acceptance:** Supersede 3R.14's surrogate-tolerance rule with explicit
+  Unicode-scalar input at all four JSON/UTF-8 encoders and matching workflow
+  decoders. Preserve valid-Unicode bytes and hashes. This closes a demonstrated
+  payload round-trip defect for explicit Python surrogate code units, not the
+  disproven raw-encoding hash collision. Keep optional diagnostic degradation
+  from suppressing valid inventory observations; reject malformed identity
+  data. Do not regenerate the frozen epoch-5 artifact or reset databases merely
+  to change malformed-input acceptance.
+- **Tests/review:** Tests precede implementation. Cover lone and paired Python
+  surrogate code units, literal backslashes, supplementary characters, nested
+  keys/values, encoded and decoded requests/continuations, optional diagnostics,
+  and frozen valid-Unicode controls. Run affected producer/consumer departments
+  and the ordinary suite; independently review compatibility and failure
+  behavior. Keep verifier policy and protected settlement authority unchanged.
 
 **Decisions delivered:** The approved memory-only continuation/separate
 stored-projection design and coordinated identity-hash epoch/reset are

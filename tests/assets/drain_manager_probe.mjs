@@ -1198,7 +1198,7 @@ for (const update of overshootRecoveryUpdates.filter(
   (candidate) => candidate.update_type === "event",
 )) {
   assert.equal(
-    bridge.validateDormantSessionEventV5(update.event, reducerSession),
+    bridge.validateSessionEventV5(update.event, reducerSession),
     true,
     update.event.body_type,
   );

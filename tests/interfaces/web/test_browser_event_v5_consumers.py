@@ -57,26 +57,34 @@ BRIDGE_JS = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 def test_second_protocol_stop_routes_the_live_browser_through_exact_v5() -> None:
     source = BRIDGE_JS.read_text(encoding="utf-8")
     _assert_exact_v5_event_routes(source)
-    assert source.count("validateDormantSessionEventV5(") == 2
+    assert source.count("validateSessionEventV5(") == 2
     assert (
-        "export function validateDormantSessionEventV5(event, sessionId)"
+        "export function validateSessionEventV5(event, sessionId)"
         in source
     )
 
 
 @pytest.mark.parametrize("before,after", [
     (
-        "return validateDormantSessionEventV5(event, sessionId);",
-        "return true; return validateDormantSessionEventV5(event, sessionId);",
+        "return validateSessionEventV5(event, sessionId);",
+        "return true; return validateSessionEventV5(event, sessionId);",
     ),
     (
-        "return validateDormantSessionEventV5(event, sessionId);",
+        "return validateSessionEventV5(event, sessionId);",
         "return validateLegacySessionEvent(event, sessionId);",
     ),
     ("event.schema_version !== 4", "event.schema_version !== 5"),
     (
         "return validateLiveSessionEvent(update.event, sessionId);",
         "return validateLegacySessionEvent(update.event, sessionId);",
+    ),
+    (
+        "function validateItemRecordingV5(",
+        "function validateDormantItemRecordingV5(",
+    ),
+    (
+        "const ITEM_RECORDING_REASONS_V5",
+        "const DORMANT_ITEM_RECORDING_REASONS_V5",
     ),
 ])
 def test_event_route_gate_rejects_in_memory_source_mutations(before, after) -> None:
@@ -88,7 +96,7 @@ def test_event_route_gate_rejects_in_memory_source_mutations(before, after) -> N
 
 
 @pytest.mark.supplemental_node
-def test_dormant_node_v5_consumer_accepts_and_rejects_the_exact_target() -> None:
+def test_live_node_v5_consumer_accepts_and_rejects_the_exact_target() -> None:
     node = _node_executable()
     if node is None:
         pytest.fail("the required Node validator runtime is unavailable")
@@ -199,7 +207,7 @@ globalThis.window = { addEventListener() {} };
 const bridge = await import(pathToFileURL(process.argv[1]).href);
 const corpus = JSON.parse(readFileSync(0, "utf8"));
 for (const item of corpus.cases) {
-  const actual = bridge.validateDormantSessionEventV5(
+  const actual = bridge.validateSessionEventV5(
     item.event,
     corpus.session_id,
   );
