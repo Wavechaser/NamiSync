@@ -294,8 +294,12 @@ remains only in the dispatcher terminal record through one reconciliation and
 exact-session release. Before any full result reaches settlement, audit, or
 publication ownership, `run_session` applies the summary's same whole-value
 phase/failure diagnostic bounds and adds only their header omissions; item
-omissions remain summary-local additions. This bounds retained diagnostics,
-not the result item collection or all workflow/audit owners behind it.
+omissions remain summary-local additions. One session separately admits at
+most 240,000 ordered reliable item occurrences across pause/resume: the next
+item is checked before emitter, history/audit, or accumulator mutation, and an
+already-excess continuation is rejected before workflow entry. This closes the
+item collection; the analytical task model must still charge every additional
+full-result, callback, audit, and serialization owner behind those occurrences.
 `MAX_RELIABLE_EVENT_CANONICAL_BYTES=1_048_576` is checked
 before emitter acceptance or sequence/queue/history mutation and guarantees one
 valid head fits the independent bridge-response wall.

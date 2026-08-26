@@ -130,6 +130,16 @@ active until their owning checkpoints:
   candidate, continuation, outcome, and completion owner. Candidate collection
   stops before the first excess, with row precedence over retained bytes, and
   never publishes a partial selection or begins verifier work.
+- One dispatcher session admits at most 240,000 ordered reliable result-item
+  occurrences across its complete paused/resumed lifetime. This is the sum of
+  the separately admitted 120,000-operation execution population and 120,000
+  linked-integrity population; a repeated reference is still a retained
+  occurrence. Admission checks the next item before event publication, audit
+  observation, or accumulator mutation, and rejects an already-excess resume
+  accumulator before workflow re-entry. The first producer excess is an
+  internal workflow failure, not a user review-limit or truncation path; items
+  already produced retain their honest ran-work truth, while no result, event,
+  or audit owner may acquire an occurrence above the wall.
 - Process-live task custody is capped at 48 tasks and a mechanically derived
   byte budget that must admit at least four simultaneously complete
   maximum-scale combined tasks. The separate immutable-projection cache holds
