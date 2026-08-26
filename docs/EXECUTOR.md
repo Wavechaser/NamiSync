@@ -20,6 +20,14 @@ post-settlement restoration divergence retain ordered task issues. The
 and task issues, so one recorder failure cannot label another operation
 degraded or convert filesystem success into filesystem failure.
 
+The typed cause is established before best-effort logical diagnostic rendering.
+If an ordinary exception interrupts `str(error)` or logical-path rendering, the
+optional recording detail is `None`; renderer failure cannot replace the
+recorder cause or change filesystem settlement. Prerequisite attribution is
+already retained in the journal before rendering begins. Successfully rendered
+text still passes through the existing complete-detail bound and omission
+accounting; no diagnostic truncation or alternate recording authority is added.
+
 A valid reliable item outcome is constructed and its complete typed settlement
 is retained in the operation journal before the event sink is called. Only sink
 acceptance moves status, publication evidence, and recording reason into

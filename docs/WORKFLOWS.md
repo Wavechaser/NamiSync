@@ -324,6 +324,15 @@ degrades recording without replacing that truth. Cooperative control and
 without replacing them. If that happens while pausing, the active execute or
 verify continuation is first degraded and recaptured, so paused cancellation
 or resume cannot recover an `OK` aggregate from the failed recording owner.
+Recording-open, finish, and close attribution establishes a typed task cause
+before optional logical diagnostics. If rendering raises an ordinary exception,
+the issue retains `detail=None`; it cannot turn a recording failure into clean
+recording or replace an existing filesystem error. Required result messages and
+secondary exception notes use a fixed diagnostic-unavailable message while
+retaining the original error type. This containment also covers cancellation
+finalization, fallback finishing, and secondary emission/capture diagnostics on
+an already-failing recording path. Successful details keep the existing
+first-observation, complete-bound, and omission-count rules.
 During linked verification, the phase summary counts
 successfully emitted reliable outcome identities as a floor, so a later
 continuation-bookkeeping failure cannot erase an already-published settlement.

@@ -1296,6 +1296,306 @@ def test_recording_boundary_failure_preserves_execution_truth(boundary: str) -> 
     )
 
 
+class _UnrenderableRecordingError(RuntimeError):
+    def __init__(self, diagnostic: str = "str") -> None:
+        super().__init__("recorder failed")
+        self.diagnostic = diagnostic
+
+    def __str__(self) -> str:
+        if self.diagnostic == "str":
+            raise ValueError("recording message unavailable")
+        return super().__str__()
+
+    @property
+    def filename(self) -> str:
+        raise ValueError("recording filename unavailable")
+
+
+@pytest.mark.parametrize("diagnostic", ["str", "logical"])
+@pytest.mark.parametrize("boundary", ["factory", "enter", "finish", "exit"])
+def test_recording_diagnostic_failure_preserves_workflow_truth(
+    boundary: str, diagnostic: str
+) -> None:
+    xset = _execution_set(_operation(65, 9))
+    xset.note_bytes_done(4)
+    primary = _UnrenderableRecordingError(diagnostic)
+
+    class Recording(_Recording):
+        def __enter__(self):
+            if boundary == "enter":
+                raise primary
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            if boundary == "exit":
+                raise primary
+
+        def finish(self, status, recording_status) -> None:
+            super().finish(status, recording_status)
+            if boundary == "finish":
+                raise primary
+
+    recording = Recording()
+
+    def open_recording(execution_set):
+        if boundary == "factory":
+            raise primary
+        return recording
+
+    def executor(execution_set, *args):
+        execution_set.note_bytes_done(9)
+        return OperationResult(SessionState.COMPLETED, bytes_done=9, bytes_total=9)
+
+    deps = _deps(
+        executor=executor,
+        verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+        recordings=[],
+    )
+    deps.open_recording = open_recording
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+        resumed=True,
+    )
+
+    open_failed = boundary in {"factory", "enter"}
+    reason = (
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED if open_failed else
+        TaskRecordingIssueReason.FINISH_FAILED if boundary == "finish" else
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED
+    )
+    assert result.status is (
+        SessionState.FAILED if open_failed else SessionState.COMPLETED
+    )
+    assert result.bytes_done == (4 if open_failed else 9)
+    assert result.bytes_total == 9
+    assert result.recording is xset.recording is RecordingStatus.DEGRADED
+    assert tuple((issue.reason, issue.detail) for issue in result.recording_issues) == (
+        (reason, None),
+    )
+    assert result.recording_issues == xset.recording_issues
+    assert result.omitted_detail_count == xset.omitted_detail_count == 0
+    if boundary == "finish":
+        assert result.error is None
+    else:
+        assert result.error is not None
+        assert result.error.type_name == type(primary).__name__
+        assert result.error.message == "recording diagnostic unavailable"
+
+
+def test_recording_close_diagnostic_failure_preserves_primary_filesystem_error() -> None:
+    primary = OSError("primary filesystem error")
+
+    class Recording(_Recording):
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            raise _UnrenderableRecordingError()
+
+    def executor(*args):
+        raise primary
+
+    deps = _deps(executor=executor, verifier=lambda *args: None, recordings=[])
+    deps.open_recording = lambda execution_set: Recording()
+    result = run_execution(
+        ExecuteContinuation(_execution_set(_operation(65)), verify_after_execute=False),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.error is not None
+    assert result.error.type_name == "OSError"
+    assert result.error.message == "primary filesystem error"
+    assert result.recording is RecordingStatus.DEGRADED
+    assert tuple((issue.reason, issue.detail) for issue in result.recording_issues) == (
+        (TaskRecordingIssueReason.RECORDING_CLOSE_FAILED, None),
+    )
+
+
+@pytest.mark.parametrize("primary_type", [PauseRequested, KeyboardInterrupt])
+def test_recording_diagnostic_failure_cannot_mask_escaping_primary(
+    primary_type: type[BaseException],
+) -> None:
+    xset = _execution_set(_operation(65))
+    primary = primary_type("primary execution failure")
+
+    class Recording(_Recording):
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            raise _UnrenderableRecordingError()
+
+    def executor(*args):
+        raise primary
+
+    def capture(value):
+        if value.execution_set.recording is RecordingStatus.DEGRADED:
+            raise _UnrenderableRecordingError()
+
+    deps = _deps(executor=executor, verifier=lambda *args: None, recordings=[])
+    deps.open_recording = lambda execution_set: Recording()
+    with pytest.raises(primary_type) as raised:
+        run_execution(
+            ExecuteContinuation(xset, verify_after_execute=False),
+            RunContext(lambda body: None, lambda: None),
+            deps,
+            continuation_sink=capture,
+        )
+
+    assert raised.value is primary
+    assert xset.recording is RecordingStatus.DEGRADED
+    assert tuple((issue.reason, issue.detail) for issue in xset.recording_issues) == (
+        (TaskRecordingIssueReason.RECORDING_CLOSE_FAILED, None),
+    )
+    assert primary.__notes__ == [
+        "recording degradation continuation capture also failed: "
+        "_UnrenderableRecordingError: recording diagnostic unavailable",
+        "recording context exit also failed: "
+        "_UnrenderableRecordingError: recording diagnostic unavailable",
+    ]
+
+
+@pytest.mark.parametrize("boundary", ["enter", "finish", "exit"])
+def test_recording_diagnostic_failure_preserves_canceled_settlement(boundary: str) -> None:
+    xset = _execution_set(_operation(66, 8))
+    xset.note_bytes_done(5)
+    primary = _UnrenderableRecordingError()
+
+    class Recording(_Recording):
+        def __enter__(self):
+            if boundary == "enter":
+                raise primary
+            return self
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            if boundary == "exit":
+                raise primary
+
+        def finish(self, status, recording_status) -> None:
+            if boundary == "finish":
+                raise primary
+
+    result = settle_canceled_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        Disposition.RAN,
+        SimpleNamespace(open_recording=lambda execution_set: Recording()),
+    )
+
+    reason = {
+        "enter": TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+        "finish": TaskRecordingIssueReason.FINISH_FAILED,
+        "exit": TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+    }[boundary]
+    assert result.status is SessionState.CANCELED
+    assert result.canceled
+    assert result.bytes_done == 5
+    assert result.bytes_total == 8
+    assert result.recording is RecordingStatus.DEGRADED
+    assert tuple((issue.reason, issue.detail) for issue in result.recording_issues) == (
+        (reason, None),
+    )
+    if boundary == "finish":
+        assert result.error is None
+    else:
+        assert result.error is not None
+        assert result.error.type_name == type(primary).__name__
+        assert result.error.message == "recording diagnostic unavailable"
+
+
+@pytest.mark.parametrize("fallback", ["entry-cancel", "preflight", "preflight-reopen"])
+def test_recording_diagnostic_failure_contains_fallback_finish(fallback: str) -> None:
+    xset = _execution_set(_operation(66, 8))
+
+    def fail_finish(*args):
+        raise _UnrenderableRecordingError()
+
+    def cancel_open(*args):
+        raise Canceled()
+
+    def fail_preflight(*args):
+        raise OSError("preflight unavailable")
+
+    class Recording(_Recording):
+        def finish(self, status, recording_status) -> None:
+            fail_finish()
+
+    deps = _deps(
+        executor=lambda *args: pytest.fail("execution unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+        recordings=[],
+    )
+    if fallback == "entry-cancel":
+        deps.open_recording = cancel_open
+        deps.finish_existing_recording = fail_finish
+    else:
+        deps.observer = fail_preflight
+        if fallback == "preflight":
+            deps.finish_existing_recording = fail_finish
+        else:
+            deps.open_recording = lambda execution_set: Recording()
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+        resumed=True,
+    )
+
+    assert result.status is (
+        SessionState.CANCELED if fallback == "entry-cancel" else SessionState.FAILED
+    )
+    assert result.recording is RecordingStatus.DEGRADED
+    assert tuple((issue.reason, issue.detail) for issue in result.recording_issues) == (
+        (TaskRecordingIssueReason.FINISH_FAILED, None),
+    )
+    if fallback != "entry-cancel":
+        assert result.error is not None
+        assert result.error.type_name == "OSError"
+        assert result.error.message == "preflight unavailable"
+
+
+def test_recording_open_primary_survives_secondary_emission_diagnostic_failure() -> None:
+    selected, excluded = _operation(65), _operation(66)
+    initial = _execution_set(selected, excluded)
+    selection = frozenset({selected.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        user_deselected=frozenset({excluded.op_id}),
+        commitment=Commitment(initial.plan.fingerprint, selection_digest(selection), NOW),
+    )
+
+    def fail_open(*args):
+        raise OSError("recording unavailable")
+
+    def fail_exclusion(body):
+        if isinstance(body, ItemOutcome):
+            raise _UnrenderableRecordingError()
+
+    deps = _deps(
+        executor=lambda *args: pytest.fail("execution unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+        recordings=[],
+    )
+    deps.open_recording = fail_open
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(fail_exclusion, lambda: None),
+        deps,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.error is not None
+    assert result.error.type_name == "OSError"
+    assert result.error.message == "recording unavailable"
+    assert result.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in result.recording_issues) == (
+        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+    )
+    assert result.phases[0].error == (
+        "OSError: recording unavailable; outcome emission also failed: "
+        "_UnrenderableRecordingError: recording diagnostic unavailable"
+    )
+
+
 @pytest.mark.parametrize("boundary", ["factory", "enter"])
 def test_recording_entry_pause_remains_cooperative_control(boundary: str) -> None:
     operation = _operation(70, 9)

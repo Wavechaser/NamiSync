@@ -35,6 +35,7 @@ from namisync.core.execution import (
     RecordedCopyIdentity,
     Retry,
     Stop,
+    TaskRecordingIssue,
     TaskRecordingIssueReason,
 )
 from namisync.core.models import EntryKind, FileStat, MANAGED_FILE_ATTRIBUTE_MASK
@@ -424,7 +425,7 @@ _ByteEffect = _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
 
 @dataclass(frozen=True, slots=True)
 class _RecordingPrerequisiteFailure:
-    detail: str
+    detail: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -4855,10 +4856,10 @@ def _record(
                 "copy recorder did not return a recorded copy identity"
             )
     except Exception as error:
-        return _RecordObservation(
+        failure = _RecordObservation(
             recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
-            recording_detail=_recording_error_detail(error),
         )
+        return replace(failure, recording_detail=_recording_error_detail(error))
     return _RecordObservation(
         recorded_identity=(
             result if isinstance(result, RecordedCopyIdentity) else None
@@ -4874,8 +4875,10 @@ def _flush_before_destructive(
     try:
         recorder.flush()
     except Exception as error:
+        failure = _RecordingPrerequisiteFailure()
+        state.effects.set_recording_prerequisite_failure(op_id, failure)
         state.effects.set_recording_prerequisite_failure(
-            op_id, _RecordingPrerequisiteFailure(_recording_error_detail(error))
+            op_id, replace(failure, detail=_recording_error_detail(error))
         )
         raise OperationFailure(
             ExecutionReason.RECORDER_FAILED,
@@ -4885,8 +4888,11 @@ def _flush_before_destructive(
     state.effects.set_recording_prerequisite_failure(op_id, None)
 
 
-def _recording_error_detail(error: BaseException) -> str:
-    return f"{type(error).__name__}: {logical_error_text(error)}"
+def _recording_error_detail(error: BaseException) -> str | None:
+    try:
+        return f"{type(error).__name__}: {logical_error_text(error)}"
+    except Exception:
+        return None
 
 
 def _note_task_recording_issue(
@@ -4894,7 +4900,8 @@ def _note_task_recording_issue(
     reason: TaskRecordingIssueReason,
     error: BaseException,
 ) -> None:
-    xset.note_task_recording_issue(reason, _recording_error_detail(error))
+    issue = TaskRecordingIssue(reason)
+    xset.note_task_recording_issue(issue.reason, _recording_error_detail(error))
 
 
 def _flush_final(recorder: Recorder, xset: ExecutionSet) -> None:

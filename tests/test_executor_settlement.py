@@ -2740,6 +2740,98 @@ def test_recorder_failure_preserves_filesystem_success_and_degrades_axis(
     assert published.recorded_identity is None
 
 
+class UnrenderableRecordingError(RuntimeError):
+    def __init__(self, diagnostic: str = "str") -> None:
+        super().__init__("recorder failed")
+        self.diagnostic = diagnostic
+
+    def __str__(self) -> str:
+        if self.diagnostic == "str":
+            raise ValueError("recording message unavailable")
+        return super().__str__()
+
+    @property
+    def filename(self) -> str:
+        raise ValueError("recording filename unavailable")
+
+
+@pytest.mark.parametrize("diagnostic", ["str", "logical"])
+@pytest.mark.parametrize("boundary", ["item", "prerequisite", "final-flush"])
+def test_recording_diagnostic_failure_preserves_executor_truth(
+    tmp_path: Path, boundary: str, diagnostic: str
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation, live = _reviewed_byte_operation(
+        OperationKind.UPDATE if boundary == "prerequisite" else OperationKind.COPY,
+        source,
+        target,
+        fs,
+    )
+    xset = _xset(_plan(source, target, (operation,), trash_on_update=False))
+    primary = UnrenderableRecordingError(diagnostic)
+    observed_failures: list[Exception] = []
+
+    class Recording(FakeRecorder):
+        def record_copied(self, op, attestation) -> RecordedCopyIdentity:
+            if boundary == "item":
+                raise primary
+            return super().record_copied(op, attestation)
+
+        def flush(self) -> None:
+            self.flushes += 1
+            if boundary == "final-flush" or (
+                boundary == "prerequisite" and self.flushes == 1
+            ):
+                raise primary
+
+    class InspectFailurePolicy(BoundedFailurePolicy):
+        def on_item_failed(self, operation, error, attempt):
+            observed_failures.append(error)
+            return super().on_item_failed(operation, error, attempt)
+
+    result, events, recorder = _run(
+        xset,
+        fs=fs,
+        recorder=Recording(),
+        policies=_policies(failure=InspectFailurePolicy()),
+    )
+
+    item = _item_outcome(events)
+    assert result.recording is xset.recording is RecordingStatus.DEGRADED
+    assert item.recording_detail is None
+    assert xset.omitted_detail_count == 0
+    assert live.read_bytes() == (
+        b"old-version" if boundary == "prerequisite" else b"new-version"
+    )
+    if boundary == "prerequisite":
+        assert result.status is SessionState.FAILED
+        assert item.outcome is Outcome.FAILED
+        assert item.reason == ExecutionReason.RECORDER_FAILED.value
+        assert item.recording_reason is ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+        assert len(observed_failures) == 1
+        assert isinstance(observed_failures[0], executor_runtime.OperationFailure)
+        assert observed_failures[0].cause is primary
+        assert xset.published_evidence == {}
+        assert recorder.calls == []
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert item.outcome is Outcome.SUCCEEDED
+        assert observed_failures == []
+        evidence = xset.published_evidence[operation.op_id]
+        assert evidence.copy_recorded is (boundary == "final-flush")
+        assert item.recording_reason is (
+            ItemRecordingReason.RECORD_WRITE_FAILED if boundary == "item" else None
+        )
+    assert xset.recording_reasons == (
+        {} if boundary == "final-flush" else {operation.op_id: item.recording_reason}
+    )
+    assert tuple((issue.reason, issue.detail) for issue in xset.recording_issues) == (
+        ((TaskRecordingIssueReason.FINAL_FLUSH_FAILED, None),)
+        if boundary == "final-flush" else ()
+    )
+
+
 class MissingCopyIdentityRecorder(FakeRecorder):
     def record_copied(self, op, attestation) -> None:
         self._record("copied", op, attestation)

@@ -16,6 +16,7 @@ from namisync.core.execution import (
     ExecutorFileSystem,
     PublishedCopyEvidence,
     Recorder,
+    TaskRecordingIssue,
     TaskRecordingIssueReason,
     validated_run_id,
 )
@@ -280,15 +281,15 @@ def run_execution(
                     active = replace(active, recording=RecordingStatus.DEGRADED)
             capture(active)
         except Exception as continuation_error:
+            failure = _recording_failure_detail(continuation_error)
             error.add_note(
                 "recording degradation continuation capture also failed: "
-                f"{type(continuation_error).__name__}: "
-                f"{logical_error_text(continuation_error)}"
+                f"{failure.type_name}: {failure.message}"
             )
+        failure = _recording_failure_detail(boundary.exit_error)
         error.add_note(
             "recording context exit also failed: "
-            f"{type(boundary.exit_error).__name__}: "
-            f"{logical_error_text(boundary.exit_error)}"
+            f"{failure.type_name}: {failure.message}"
         )
 
     try:
@@ -320,12 +321,7 @@ def run_execution(
             if isinstance(continuation, ExecutionSet)
             else continuation
         )
-        result = _recording_open_failure_result(
-            current,
-            ctx,
-            deps,
-            FailureDetail(type(error).__name__, logical_error_text(error)),
-        )
+        result = _recording_open_failure_result(current, ctx, deps, error)
         return _result_with_execution_recording(
             result,
             current.execution_set,
@@ -351,10 +347,7 @@ def run_execution(
         error=(
             result.error
             if result.error is not None
-            else FailureDetail(
-                type(boundary.exit_error).__name__,
-                logical_error_text(boundary.exit_error),
-            )
+            else _recording_failure_detail(boundary.exit_error)
         ),
     )
     return _result_with_execution_recording(result, execution_set)
@@ -982,10 +975,7 @@ def settle_canceled_execution(
         error=(
             None
             if recording_error is None
-            else FailureDetail(
-                type(recording_error).__name__,
-                logical_error_text(recording_error),
-            )
+            else _recording_failure_detail(recording_error)
         ),
     )
 
@@ -1281,15 +1271,17 @@ def _recording_open_failure_result(
     continuation: ExecutionContinuation,
     ctx: RunContext,
     deps: SyncDependencies,
-    error: FailureDetail,
+    error: BaseException,
 ) -> OperationResult:
     """Project an unavailable run recording from authoritative continuation."""
 
     xset = continuation.execution_set
-    xset.note_task_recording_issue(
+    _note_task_recording_issue(
+        xset,
         TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
-        f"{error.type_name}: {error.message}",
+        error,
     )
+    failure = _recording_failure_detail(error)
     if isinstance(continuation, VerifyContinuation):
         _finish_recording_without_open(
             deps,
@@ -1300,7 +1292,7 @@ def _recording_open_failure_result(
         phase = _verify_phase(
             continuation,
             incomplete=True,
-            error=f"{error.type_name}: {error.message}",
+            error=f"{failure.type_name}: {failure.message}",
         )
         return OperationResult(
             status=continuation.filesystem_status,
@@ -1313,7 +1305,7 @@ def _recording_open_failure_result(
                 if continuation.execute_phase.bytes_total is not None
                 else continuation.execute_phase.bytes_done
             ),
-            error=error,
+            error=failure,
         )
 
     _finish_recording_without_open(
@@ -1330,16 +1322,15 @@ def _recording_open_failure_result(
         exclusion_items = _exclusion_items(xset.plan, decision)
         _emit_items(ctx, exclusion_items)
     except Exception as emit_error:
-        error_context = (
-            f"{type(emit_error).__name__}: {logical_error_text(emit_error)}"
-        )
+        emit_failure = _recording_failure_detail(emit_error)
+        error_context = f"{emit_failure.type_name}: {emit_failure.message}"
         phase_error = (
-            f"{error.type_name}: {error.message}; "
+            f"{failure.type_name}: {failure.message}; "
             f"outcome emission also failed: {error_context}"
         )
         exclusion_items = ()
     else:
-        phase_error = f"{error.type_name}: {error.message}"
+        phase_error = f"{failure.type_name}: {failure.message}"
     phase = _execute_continuation_phase(
         xset,
         PhaseStatus.FAILED,
@@ -1357,7 +1348,7 @@ def _recording_open_failure_result(
             if phase.bytes_total is not None
             else phase.bytes_done
         ),
-        error=error,
+        error=failure,
     )
 
 
@@ -1598,9 +1589,26 @@ def _note_task_recording_issue(
     reason: TaskRecordingIssueReason,
     error: BaseException,
 ) -> None:
+    issue = TaskRecordingIssue(reason)
+    message = _recording_error_message(error)
     xset.note_task_recording_issue(
-        reason,
-        f"{type(error).__name__}: {logical_error_text(error)}",
+        issue.reason,
+        None if message is None else f"{type(error).__name__}: {message}",
+    )
+
+
+def _recording_error_message(error: BaseException) -> str | None:
+    try:
+        return logical_error_text(error)
+    except Exception:
+        return None
+
+
+def _recording_failure_detail(error: BaseException) -> FailureDetail:
+    message = _recording_error_message(error)
+    return FailureDetail(
+        type(error).__name__,
+        "recording diagnostic unavailable" if message is None else message,
     )
 
 

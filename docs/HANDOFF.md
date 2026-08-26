@@ -1,60 +1,46 @@
 # Session Handoff
 
-Status (2026-08-26): independent review remediation checkpoint 3R.4 is complete
+Status (2026-08-26): independent review remediation checkpoint 3R.5 is complete
 in `M1_SHELL_H2.md`. The checkpoint 3.2 shell boundary remains active with
-remediation through 3R.4; checkpoint 3.3 has not started, and checkpoint 3R.5
+remediation through 3R.5; checkpoint 3.3 has not started, and checkpoint 3R.6
 is the only authorized next delivery. S5 and 3R.14's coordinated epoch/reset
 remain design holds; neither may be implemented without the recorded user
 disposition.
 
 ## Delivered
 
-- Preserved the shutdown-interrupted two-file 3R.4 diff and established review
-  findings under ignored `build/r34-restart-20260826/`, then restored both files
-  to clean checkpoint `1fc5e5b`. Rebuilt tests-first from those findings rather
-  than reapplying the discarded patch.
-- Retained prerequisite refusal as a typed, operation-local effect-journal
-  value, independent of the exception chosen for filesystem settlement. All
-  six destructive barriers attribute the current operation; a newly refused
-  barrier replaces its diagnostic and a successful barrier clears the cause.
-  Cause-only state does not claim a durable effect or latch pause/cancel.
-- Centralized failure-only recording-cause composition before a valid pending
-  settlement is retained. Cleanup substitution, retained UPDATE reduction, and
-  backstop retry-error selection preserve prerequisite attribution.
-  Reducer-proven unrecorded mutation wins both recording reason and detail;
-  filesystem outcome/reason/detail and 3R.3 receipt finality are unchanged.
-  Removed dynamic exception fields and the unreachable reducer-disagreement
-  branch only after establishing that closed composition.
-- Rebuilt the backstop as two phases: attempt unsettled delivery, then perform
-  accepted-journal validation, cleanup, and retirement inside one guarded
-  phase. Validation compares raw pending settlement with the retained cause
-  and authoritative continuation axes, never bounded ItemOutcome diagnostics.
-  Missing or inconsistent accepted evidence annotates the original external
-  error once and remains retained; the exception handler cannot re-enter
-  validation and replace that error. Duplicate direct settlement now refuses
-  without rewriting accepted truth or retiring evidence.
-- Added the explicitly requested regression in which the backstop itself
-  accepts the pending item, Progress fails, and accepted-state validation then
-  fails. It proves original exception identity, separate secondary diagnostics,
-  one accepted item, and unchanged pending-journal identity. Added missing-
-  pending/mismatched-reason cases and the valid long-diagnostic counterpart.
-- Updated `EXECUTOR.md` and the causal `BUGS.md` entry. Retained the appended
-  raw independent reviewer reports below as the detailed finding source until
-  remediation closure.
+- Completed 3R.5 tests-first from S6. The 24 new executor/workflow cases all
+  failed against untouched checkpoint `1e794e7`, then passed after the fix.
+  They cover hostile `__str__` and logical-filename rendering, item recording,
+  destructive prerequisites, final flush, open/factory/finish/close, canceled
+  finalization, fallback finishing, and secondary emission/capture diagnostics.
+- Established typed recording causes before best-effort diagnostic rendering.
+  Executor's prerequisite cause is journal-retained before rendering; item
+  observations and task issues are typed before rendering and use the existing
+  settlement/attribution owners. An ordinary renderer failure produces
+  `detail=None`, never a substitute recording reason or clean recording axis.
+- Kept committed filesystem/recorder truth and primary exception identity.
+  Required workflow result messages and exception notes use a fixed
+  diagnostic-unavailable fallback with the original error type. Successfully
+  rendered text still uses existing complete-detail bounds, omission accounting,
+  and first-task-issue semantics. No new core API or alternate authority.
+- Updated EXECUTOR, WORKFLOWS, and the causal BUGS entry. The raw independent
+  reviewer reports below remain the detailed finding source until 3R.15.
 
 ## Safe Stop
 
-This checkpoint changes only private executor cause/backstop handling, additive
-settlement regressions, owning executor/bug documentation, and this handoff.
-No public result, exception, wire, database, or layering contract changed.
-Diagnostic rendering and hostile-`__str__` containment remain deliberately
-unchanged and belong to 3R.5. No later checkpoint implementation is present.
+The checkpoint changes only private executor/workflow diagnostic handling,
+additive regressions, owning docs, and this handoff. It does not change public
+result/wire/database/layering contracts, 3R.4 prerequisite precedence or
+accepted-journal retention, or 3R.3 receipt finality. The 3R.6 circular guard,
+compound terminal reconstruction, and canceled-settlement dataflow are
+deliberately unchanged. No later checkpoint implementation is present.
 
-The working tree is expected to be clean after
-`fix(executor): retain prerequisite recording cause`. The interrupted diff is
-recoverable from the ignored reference directory; it is not part of the commit.
-The protected oracle source, baseline, oracle tests, and existing settlement
-assertions remain unchanged.
+The tree is expected to be clean after
+`fix(executor): contain recording diagnostic failures`. The discarded 3R.4
+attempt is still recoverable under ignored `build/r34-restart-20260826/`;
+the reviewed replacement was committed as `1e794e7`. The protected oracle
+source, baseline, oracle tests, and existing settlement assertions are unchanged.
 
 A read-only 3R.14 compatibility audit found that textual `FileIndex128` changes
 all non-null identity-bearing durable hashes under current ledger-v4/history-v6
@@ -63,45 +49,42 @@ payload versions, bumps the shared data epoch to 6 and the ledger contract ID,
 and keeps the history contract ID unchanged. Implementation still waits for
 user ratification.
 
-The restarted native sandbox currently fails its read setup with
-`helper_unknown_error: apply deny-read ACLs`. Approved shell reads and test
-commands work. The built-in patch tool's full-file form was used with approved
-source reads; Git diff checks confirmed surgical content changes. No sandbox,
-permission, or app installation settings were changed.
+The restarted native sandbox fails read setup with
+`helper_unknown_error: apply deny-read ACLs`. Approved shell reads/tests work.
+The built-in patch tool's full-file form used approved source reads; Git diff
+checks confirm surgical content changes. No sandbox, permission, or app
+installation settings were changed.
 
 ## Verification
 
-- Tests-first baseline against untouched `1fc5e5b`: `6 failed, 6 passed`,
-  reproducing the two attribution losses, accepted-journal retention gaps, and
-  duplicate-settlement discard. The rebuilt focused set, including the later
-  nested-backstop and closed-composition tests, passed `14 passed`; the
-  independent reviewer separately reran the same 14 cases successfully.
-- Executor department: `369 passed, 2845 deselected`.
-- Mandatory settlement check: `30 scenarios x 3 runs`. Protected audit-tool
-  and baseline blobs remain
-  `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
+- Tests-first: `24 failed` against untouched `1e794e7`; rebuilt focused set:
+  `24 passed, 202 deselected`, independently rerun with the same result.
+- Executor/workflows neighborhood: `724 passed, 2514 deselected`.
+- Ordinary suite with required bundled Node:
+  `3206 passed, 4 skipped, 28 deselected`.
+- Unchanged protected oracle: `30 scenarios x 3 runs`. Audit-tool and baseline
+  blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
   `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
-- Ordinary suite with bundled Node: `3182 passed, 4 skipped, 28 deselected`.
-- Independent code/test, owning-document, and exact staged review reported
-  `CLEAN`; the final staged tree is checked again before the named commit.
-- `git diff --check` passes. The settlement-test diff is additions only, and
-  the raw reviewer-report tail remains byte-identical to the preceding
-  checkpoint.
+- Independent code/test, owning-document, and exact staged reviews: `CLEAN`.
+  The final review-status-only staged update is checked before the named commit.
+- `git diff --check` passes. Both test diffs are additions only. The raw
+  reviewer-report tail remains byte-identical to the preceding checkpoint.
 
 ## Immediate Next Context
 
-Start only checkpoint 3R.5,
-`fix(executor): contain recording diagnostic failures`.
-First inventory the clean tree and reread 3R's execution protocol and 3R.5
-acceptance. Record the typed item/task cause before optional diagnostic
-rendering in executor and workflow recording paths; if `str(error)` or logical
-rendering fails, retain `detail=None` without replacing the primary
-recorder/filesystem error or leaving the recording axis clean. Do not change
-3R.4 cause precedence, accepted-journal retention, or 3R.3 immutable pending
-settlement. Run hostile-diagnostic cases, executor/workflows departments, the
-ordinary suite with required Node, and the unchanged three-run oracle; obtain
-independent exception-precedence and exact staged reviews, refresh this
-handoff, and commit before starting 3R.6.
+Start only checkpoint 3R.6,
+`fix(workflows): preserve recording truth on compound failure`.
+Use the saved S4 counterexample: exclusion-item sink failure plus recording-close
+failure must return one failed result from live continuation truth before
+terminal payload scrubbing. Cover ordinary failure, successful execute, and
+cancellation entering exclusion emission, including partial acceptance and
+first external-error precedence. Keep controls and process-fatal causes distinct.
+Remove F5's circular recording guard, document the three ratified behavior
+notes, and retain the reported canceled-settlement assignment: direct inspection
+shows its value is passed to fallback finishing before reassignment.
+Run the declared workflow/core-session/dispatcher neighborhood, ordinary suite,
+and unchanged three-run oracle; obtain independent working/staged reviews,
+refresh this handoff, and commit before starting 3R.7.
 
 ## Reviewer O.
 

@@ -116,6 +116,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Diagnostic-coupled recording attribution.
+  Executor and workflow recording boundaries rendered exception text before
+  establishing the typed cause. A failing `__str__` or logical filename access
+  could erase or misclassify recording failure, replace the primary error, or
+  turn filesystem success into failure. Fixed by establishing typed causes
+  before guarded optional rendering and retaining `detail=None` on renderer
+  failure. Result messages and secondary notes have a fixed safe fallback;
+  ordinary rendered details retain existing bounds and first-observation rules.
 - MODERATE - FIXED (2026-08-26). Exception-bound recording attribution.
   A safely refused UPDATE could report recording clean when owned-temp cleanup
   replaced its flush error or a retained-backup retry settled through the
