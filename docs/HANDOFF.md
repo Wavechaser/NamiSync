@@ -1,11 +1,9 @@
 # Session Handoff
 
-Status (2026-08-26): the committed baseline is `d7673b7` (checkpoint 3R.13).
-The user has authorized the follow-ups and ratified the storage/identity
-decisions below; none of that remaining work is claimed implemented here.
+Status (2026-08-26): checkpoint 3R.13a is verified for delivery after the
+`77bfc5f` plan commit. The next implementation checkpoint is 3R.13b.
+The remaining storage/identity decisions below are ratified, not implemented.
 Checkpoint 3.3 remains unstarted and the private legacy decoder remains intact.
-Concurrent 3R.13a cancellation tests/implementation are uncommitted work owned
-by that checkpoint; exclude them from the plan/handoff-only commit.
 
 `M1_SHELL_H2.md` owns the revised order and full acceptance criteria:
 3R.13a, 3R.13b, 3R.13c, 3R.S5, revised 3R.14, 3R.15a, then 3R.15.
@@ -18,17 +16,6 @@ O/S reports and prior verification receipts remain in Git at
 The cancellation, read-cost/temp-placement, and JavaScript follow-ups below
 come from the user's post-3R.13 review and inspection at `d7673b7`.
 F/S identifiers refer to the original independent reports preserved in Git.
-
-### 3R.13a — Cancellation must replay retained settlement
-
-`executor.runtime._handle_canceled` can recompute settlement when a reliable
-item sink raises `Canceled` after retention but before acceptance. The journal
-equality guard then raises `RuntimeError` despite publication and a committed
-receipt; the backstop can replay success while the invariant error still escapes.
-This is a latent collaborator boundary: real EventHub emission does not raise
-`Canceled`. Cover the current operation and the deferred MKDIR sweep after
-`current` advances. Replay the retained value first; preserve receipt/reason,
-the equality guard, delivery-before-acceptance, and existing backstop behavior.
 
 ### 3R.13b — Reuse bounded, admitted runtime readers
 
@@ -130,5 +117,12 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-This handoff cleanup changes documentation only. Verification is source/commit
-cross-check plus `git diff --check`; no runtime tests were run for this edit.
+3R.13a verification: the initial 15 cancellation regressions failed before
+the fix; independent review exposed deferred-directory tail/owner cases that
+also failed before repair. Final focused run: 20 passed. Executor/workflows/
+dispatcher neighborhood: 1,030 passed. Ordinary suite with required Node:
+4,232 passed, 4 expected privilege skips, 28 headed tests deselected (186.14 s).
+Protected settlement oracle: 30 scenarios × 3 identical runs; oracle, baseline,
+and protected assertions unchanged. Independent settlement review found no
+remaining actionable issue. The causal disposition is in `BUGS.md`; the
+completed finding is deliberately absent from the remaining-work list above.

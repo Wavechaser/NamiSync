@@ -23,6 +23,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
     "executor": (
         "tests/test_executor_acl.py",
         "tests/test_executor_native.py",
+        "tests/test_executor_pending_cancel.py",
         "tests/test_executor_pipeline.py",
         "tests/test_executor_runtime.py",
         "tests/test_executor_settlement.py",

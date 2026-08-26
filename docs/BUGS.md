@@ -116,6 +116,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Cancellation settlement ownership gap.
+  A reliable collaborator raising `Canceled` after outcome retention could
+  replace cancellation with an invariant error despite publication and a
+  committed receipt. Interrupted directory finalization also discarded its
+  untouched queue tail, misclassifying already-created directories. Fixed by
+  replaying retained outcomes unchanged and returning only the unprocessed
+  directory tail to its finalizer on cancellation; ready directories remain
+  under that owner's settlement. Recording and metadata are not repeated, and
+  persistent sink refusal never fabricates acceptance. The production EventHub
+  does not raise this control exception; the boundary is latent.
 - MODERATE - FIXED (2026-08-26). Diagnostic-coupled recording attribution.
   Executor and workflow recording boundaries rendered exception text before
   establishing the typed cause. A failing `__str__` or logical filename access

@@ -399,16 +399,33 @@ queue operation waits, so at most one further read is admitted after a
 stage-observed request. Either request aborts both workers, joins them, releases
 the complete byte budget, and unwinds rather than blocking. First-error storage
 preserves one original worker/callback/control exception instead of leaking a
-queue-shutdown artifact. Executor catches `Canceled` only long enough to inspect
-any process-local durable retry continuation before cleanup and emit reliable
+queue-shutdown artifact. Executor catches `Canceled` only long enough to replay
+pending item delivery, inspect unfinished process-local durable retry
+continuations before cleanup, and emit reliable
 outcomes for the in-flight and unreached selection, then re-raises for runner
 aggregation and the one canceled terminal. After those outcomes it forces one
 inactive progress snapshot, so time throttling cannot leave a settled operation
 presented as still running at the terminal boundary. The snapshot comes from
 authoritative live reporter state: it includes every reliably settled item and
 the current aggregate byte high-water, while clearing the four nominal item
-fields and `current_path`. A
-prepared-but-unpublished operation remains `CANCELED`; an unfinished operation
+fields and `current_path`.
+
+Cancellation re-offers every pending settlement unchanged before classifying
+unfinished effects, including deferred directory outcomes whose operation is
+not the current loop item. Success, existing recording degradation, and failure
+retain their original reason, detail, and recorder receipt without another
+filesystem probe or recorder call. Successful delivery still precedes status,
+evidence, progress, and journal retirement; the original `Canceled` then reaches
+the runner. If that replay is rejected again, its external error escapes after
+the existing bounded exception backstop; acceptance is never fabricated.
+Cancellation during deferred finalization returns only its unprocessed tail to
+the directory queue, retaining deepest-first and stable same-depth order. Ready
+directories remain owned by that finalizer rather than current-item
+cancellation classification. The already-offered directory's metadata and
+recorder work are not repeated. Ordinary exceptions retain the existing
+backstop behavior; they do not requeue unfinished directory metadata work.
+
+A prepared-but-unpublished operation remains `CANCELED`; an unfinished operation
 whose target already published is
 `FAILED` with `canceled-after-publish`, structured on-disk-state detail,
 degraded recording, and no success-only published evidence. The classifier
@@ -505,8 +522,9 @@ byte continuation, a non-byte mutation marker, the last retry error, a typed
 recording-prerequisite refusal, and an optional owned temporary path. After a
 fully attributed valid terminal item is constructed, the same entry also
 retains its complete pending `_Settled` value until reliable acceptance permits
-retirement. Failure and cancellation take one immutable effect snapshot before
-cleanup; owned-temp cleanup releases the claim before deletion. A retry error,
+retirement. Without a pending settlement to replay, failure and cancellation
+take one immutable effect snapshot before cleanup; owned-temp cleanup releases
+the claim before deletion. A retry error,
 prerequisite cause, temporary claim, or pending settlement alone is not a
 durable effect and therefore does not latch pause. Runtime observers now perform
 the failure-only filesystem probes

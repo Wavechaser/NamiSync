@@ -1164,9 +1164,22 @@ def _handle_canceled(
     progress: _ProgressTracker,
     current: PlanOperation | None,
 ) -> None:
+    # Sink cancellation cannot reopen a retained outcome. Deferred directory
+    # delivery may belong to an operation other than the current loop item.
+    for operation in xset.plan.operations:
+        if operation.op_id in xset.status:
+            continue
+        pending = state.effects.pending_settlement(operation.op_id)
+        if pending is not None:
+            _settle(xset, state, progress, ctx, operation, pending)
+
     durable_settlement = (
         None
-        if current is None or current.op_id in xset.status
+        if (
+            current is None
+            or current.op_id in xset.status
+            or current.op_id in state.ready_directories
+        )
         else _canceled_durable_settlement(
             current,
             fs,
@@ -2975,7 +2988,7 @@ def _finalize_directories(
         reverse=True,
     )
     state.pending_directories.clear()
-    for operation in pending:
+    for index, operation in enumerate(pending):
         try:
             try:
                 intended = operation.intended or operation.source_expected
@@ -3041,6 +3054,9 @@ def _finalize_directories(
                 operation,
                 settled,
             )
+        except Canceled:
+            state.pending_directories.extend(pending[index + 1 :])
+            raise
         finally:
             state.ready_directories.discard(operation.op_id)
 
