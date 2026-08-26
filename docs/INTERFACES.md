@@ -324,6 +324,19 @@ bridge. Plan task records retain the workflow's exact `sync-plan` kind across
 the service and browser boundary; the adapter does not rename it. Retained
 database history remains independent of adapter task cleanup.
 
+The active plan-task adapter validates exact v5 views at offer, recovery,
+candidate drain, command return, and bridge serialization. A drain constructs
+and validates its complete candidate before popping queued updates, clearing a
+pending terminal, or earning a terminal-delivery receipt. A terminal record
+update must carry a non-null valid result agreeing with its lifecycle state;
+both Python and the packaged browser refuse result-free or malformed updates.
+Bare result-free re-observation snapshots remain valid but cannot earn that
+receipt. Explicit replay still invalidates its uncertain observation generation;
+it does not revoke a previously earned delivery receipt. Release consumes that
+receipt even if replay has cleared the transient terminal cache. Browser batch
+refusal precedes callbacks, cursor/reducer advancement, and release; successful
+terminal presentation remains required before the browser requests release.
+
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
 `settings.json` beside the selected ledger. `read_semantic_settings()` and

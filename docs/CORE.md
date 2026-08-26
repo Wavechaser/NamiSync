@@ -258,6 +258,15 @@ the byte count of these closed v5 primitives. Both reject unpaired UTF-16
 surrogates; valid non-ASCII and supplementary characters retain their actual
 UTF-8 byte lengths. Progress remains exempt from the reliable-event ceiling.
 
+`core/event_v5.py` also validates the exact primitive public result and session
+record shapes. Public results share the terminal summary's phase, scalar,
+recording-witness, cancellation, and review-limit checks, while retaining their
+own flattened-error and presentation-omission representation. Validation does
+not recompute an item-free headline. A generic session snapshot may lack a
+result; when present, its validated result must project to the record's state.
+Terminal state and `ended_at` presence must agree. Whether a snapshot qualifies
+as a terminal task update is adapter policy, not another core lifecycle state.
+
 ### Progress v5 shape
 
 Version 5 makes every Progress body an exact eleven-key object:

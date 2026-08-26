@@ -336,7 +336,7 @@ success(one2, [
   event(session("1"), 4, "Gap", { first_missed_seq: 4 }),
   event(session("1"), 6),
   event(session("1"), 7, "Terminal", { result: coreOperationResult }),
-  terminalRecord(session("1"), null),
+  terminalRecord(session("1")),
 ]);
 await turns();
 assert.deepEqual(
@@ -468,6 +468,49 @@ const three5 = await nextRequest(requests.length);
 assert.equal(three5.request.payload.replay_from, 1);
 assert.equal(acceptedThree.length, 0);
 stopThree();
+
+// A result-free terminal record must not acknowledge a co-batched reliable
+// prefix, advance its cursor, or release stream custody.
+const nullRecordSession = "87".repeat(16);
+const nullRecordTask = `task-${"65".repeat(16)}`;
+const acceptedNullRecord = [];
+const nullRecordReleases = releaseRequests.length;
+const stopNullRecord = bridge.startTaskDrain(
+  nullRecordTask, nullRecordSession,
+  (update) => acceptedNullRecord.push(update), assert.fail,
+);
+let nullRecordRecovery = await nextRequest(requests.length);
+for (const record of [
+  terminalRecord(nullRecordSession, null),
+  terminalRecord(nullRecordSession, { ...operationResult, bytes_done: 0 }),
+  {
+    ...terminalRecord(nullRecordSession),
+    record: { ...terminalRecord(nullRecordSession).record, state: "failed" },
+  },
+]) {
+  const recoveryIndex = requests.length;
+  success(nullRecordRecovery, [
+    event(nullRecordSession, 1),
+    event(nullRecordSession, 2, "PhaseChanged", { phase: "execute" }),
+    record,
+  ]);
+  await turns();
+  assert.equal(acceptedNullRecord.length, 0);
+  assert.equal(releaseRequests.length, nullRecordReleases);
+  nullRecordRecovery = await nextRequest(recoveryIndex);
+  assert.equal(nullRecordRecovery.request.payload.replay_from, 1);
+}
+success(nullRecordRecovery, [
+  event(nullRecordSession, 1),
+  event(nullRecordSession, 2, "PhaseChanged", { phase: "execute" }),
+  terminalRecord(nullRecordSession),
+]);
+await turns();
+assert.deepEqual(acceptedNullRecord.map((update) => update.update_type), [
+  "event", "event", "record",
+]);
+assert.equal(releaseRequests.length, nullRecordReleases + 1);
+stopNullRecord();
 
 // Session events carry the nested core event version independently of the
 // bridge command/response version. Exact-shape failures leave the replay
@@ -1797,7 +1840,7 @@ assert.equal(five1.request.payload.replay_from, 1);
 success(five0, [terminalRecord(session("5"))]);
 await turns();
 assert.equal(acceptedFive.length, 0);
-success(five1, [terminalRecord(session("5"), null)]);
+success(five1, [terminalRecord(session("5"))]);
 await turns();
 assert.equal(acceptedFive.length, 1);
 assert.equal(acceptedFive[0].update_type, "record");

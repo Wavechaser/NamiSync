@@ -19,7 +19,7 @@ import namisync.interfaces.web.bridge as bridge_module
 import namisync.interfaces.web.drain as drain_module
 from namisync.core.events import ItemOutcome, PhaseChanged, Progress, envelope_from_dict
 from namisync.core.planning import OperationKind
-from namisync.core.session import RunContext, SessionId, SessionState
+from namisync.core.session import OperationResult, RunContext, SessionId, SessionState
 from namisync.dispatcher.event_bus import EventHub
 from namisync.interfaces.service import NamiSyncService
 from namisync.interfaces.web.bridge import (
@@ -61,6 +61,7 @@ from namisync.workflows.views import (
     SessionEventView,
     SessionRecordView,
     session_event_view,
+    operation_result_view,
 )
 from tests._executor_fixtures import (
     FakeRecorder,
@@ -873,20 +874,21 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
     event = SessionEventView(
         session_id,
         7,
-        "2026-08-12T11:00:00Z",
-        4,
+        "2026-08-12T11:00:00+00:00",
+        5,
         "StateChanged",
         {"state": "running"},
     )
+    result = operation_result_view(OperationResult(SessionState.COMPLETED))
     record = SessionRecordView(
         session_id,
         PLAN_KIND,
-        "pending",
+        "completed",
         False,
-        "2026-08-12T10:59:59Z",
+        "2026-08-12T10:59:59+00:00",
         None,
-        None,
-        None,
+        "2026-08-12T11:00:00+00:00",
+        result,
     )
 
     class Registry:
@@ -942,8 +944,8 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
                     "event": {
                             "session_id": session_id,
                             "sequence": 7,
-                            "at": "2026-08-12T11:00:00Z",
-                            "schema_version": 4,
+                            "at": "2026-08-12T11:00:00+00:00",
+                            "schema_version": 5,
                             "body_type": "StateChanged",
                         "body": {"state": "running"},
                     },
@@ -953,12 +955,12 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
                     "record": {
                         "session_id": session_id,
                         "kind": "sync-plan",
-                        "state": "pending",
+                        "state": "completed",
                         "supports_pause": False,
-                        "created_at": "2026-08-12T10:59:59Z",
+                        "created_at": "2026-08-12T10:59:59+00:00",
                         "started_at": None,
-                        "ended_at": None,
-                        "result": None,
+                        "ended_at": "2026-08-12T11:00:00+00:00",
+                        "result": bridge_module.to_primitive_view(result),
                     },
                 },
             ],

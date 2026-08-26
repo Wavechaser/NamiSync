@@ -6,6 +6,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Mapping
 
+from namisync.core.event_v5 import (
+    validate_operation_result_view_v5,
+    validate_session_event_view_v5,
+    validate_session_record_view_v5,
+)
 from namisync.core.events import (
     Envelope,
     ItemOutcome,
@@ -164,6 +169,76 @@ class SessionRecordView:
     started_at: str | None
     ended_at: str | None
     result: OperationResultView | None
+
+
+def validate_session_event_view(
+    value: object, *, expected_session_id: str | None = None,
+) -> None:
+    if type(value) is not SessionEventView or not isinstance(value.body, Mapping):
+        raise TypeError("session event must be an exact view with a body mapping")
+    validate_session_event_view_v5({
+        "session_id": value.session_id, "sequence": value.sequence,
+        "at": value.at, "schema_version": value.schema_version,
+        "body_type": value.body_type, "body": dict(value.body),
+    }, expected_session_id=expected_session_id)
+
+
+def _operation_result_view_data(value: object) -> dict[str, object]:
+    if type(value) is not OperationResultView:
+        raise TypeError("result must be an exact operation result view")
+    if type(value.phases) is not tuple or len(value.phases) > 3:
+        raise TypeError("result phases must be a bounded tuple")
+    if any(type(phase) is not PhaseResultView for phase in value.phases):
+        raise TypeError("result phases must be exact phase result views")
+    if type(value.recording_issues) is not tuple or len(value.recording_issues) > 5:
+        raise TypeError("recording issues must be a bounded tuple")
+    if any(type(issue) is not RecordingIssueView for issue in value.recording_issues):
+        raise TypeError("recording issues must be exact recording issue views")
+    review = value.review_refusal
+    if review is not None and type(review) is not ReviewFactLimitView:
+        raise TypeError("review refusal must be an exact review fact limit view")
+    return {
+        "headline": value.headline, "filesystem": value.filesystem,
+        "integrity": value.integrity, "recording": value.recording,
+        "audit": value.audit, "disposition": value.disposition,
+        "canceled": value.canceled,
+        "phases": [{
+            "phase": phase.phase, "status": phase.status,
+            "items_done": phase.items_done, "items_total": phase.items_total,
+            "bytes_done": phase.bytes_done, "bytes_total": phase.bytes_total,
+            "error": phase.error,
+        } for phase in value.phases],
+        "bytes_done": value.bytes_done, "bytes_total": value.bytes_total,
+        "error": value.error, "recording_degraded_items": value.recording_degraded_items,
+        "recording_issues": [{
+            "reason": issue.reason, "detail": issue.detail,
+        } for issue in value.recording_issues],
+        "omitted_detail_count": value.omitted_detail_count,
+        "presentation_omitted_detail_count": value.presentation_omitted_detail_count,
+        "review_refusal": None if review is None else {
+            "reason": review.reason, "tree_kind": review.tree_kind,
+            "population": review.population, "axis": review.axis,
+            "row_limit": review.row_limit, "byte_limit": review.byte_limit,
+        },
+    }
+
+
+def validate_operation_result_view(value: object) -> None:
+    validate_operation_result_view_v5(_operation_result_view_data(value))
+
+
+def validate_session_record_view(
+    value: object, *, expected_session_id: str | None = None,
+) -> None:
+    if type(value) is not SessionRecordView:
+        raise TypeError("session record must be an exact view")
+    validate_session_record_view_v5({
+        "session_id": value.session_id, "kind": value.kind,
+        "state": value.state, "supports_pause": value.supports_pause,
+        "created_at": value.created_at, "started_at": value.started_at,
+        "ended_at": value.ended_at,
+        "result": None if value.result is None else _operation_result_view_data(value.result),
+    }, expected_session_id=expected_session_id)
 
 
 @dataclass(frozen=True, slots=True)

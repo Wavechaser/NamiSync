@@ -13,7 +13,10 @@ from typing import Protocol
 from uuid import uuid4
 
 from namisync.interfaces.service import PlanSession, SessionUpdate
-from namisync.workflows.views import SessionEventView, SessionRecordView
+from namisync.workflows.views import (
+    SessionEventView, SessionRecordView, validate_session_event_view,
+    validate_session_record_view,
+)
 
 
 _CAPACITY = 64
@@ -140,6 +143,52 @@ class TaskDrainView:
             raise ValueError("task drain updates are invalid")
 
 
+def _validate_task_observation(
+    update: object, *, expected_session_id: str | None = None,
+) -> None:
+    if type(update) is SessionEventView:
+        validate_session_event_view(update, expected_session_id=expected_session_id)
+    elif type(update) is SessionRecordView:
+        validate_session_record_view(update, expected_session_id=expected_session_id)
+        if update.kind != "sync-plan" or update.supports_pause or update.result is None:
+            raise ValueError("task record requires a terminal sync-plan result")
+    else:
+        raise TypeError("task updates must be exact service view types")
+
+
+def validate_task_update_view(
+    value: object, *, expected_session_id: str | None = None,
+) -> None:
+    if (
+        type(value) is TaskEventUpdateView
+        and type(value.update_type) is str
+        and value.update_type == "event"
+    ):
+        update = value.event
+        if type(update) is not SessionEventView:
+            raise TypeError("task event update has an invalid view")
+    elif (
+        type(value) is TaskRecordUpdateView
+        and type(value.update_type) is str
+        and value.update_type == "record"
+    ):
+        update = value.record
+        if type(update) is not SessionRecordView:
+            raise TypeError("task record update has an invalid view")
+    else:
+        raise TypeError("task update tag or view is invalid")
+    _validate_task_observation(update, expected_session_id=expected_session_id)
+
+
+def validate_task_drain_view(value: object) -> None:
+    if type(value) is not TaskDrainView:
+        raise TypeError("task drain must be an exact view")
+    # Recheck the outer contract as well as mutable nested collaborator data.
+    value.__post_init__()
+    for update in value.updates:
+        validate_task_update_view(update, expected_session_id=value.session_id)
+
+
 def _is_progress_update(update: SessionUpdate) -> bool:
     return type(update) is SessionEventView and update.body_type == "Progress"
 
@@ -224,6 +273,7 @@ class _TaskState:
                 raise ObservationConflictError(
                     "task observation delivered a mismatched session"
                 )
+            _validate_task_observation(update, expected_session_id=self.session_id)
             if type(update) is SessionRecordView:
                 self.terminal_record = update
                 self.terminal_pending = False
@@ -528,24 +578,31 @@ class TaskRegistry:
                     task.condition.wait(remaining)
                 if task.closing:
                     raise TaskUnavailableError("task is closing")
-                if claim.superseded:
-                    updates: tuple[SessionUpdate, ...] = ()
-                else:
-                    count = min(_CAPACITY, len(task.queue))
-                    drained = [task.queue.popleft() for _ in range(count)]
-                    if (
-                        len(drained) < _CAPACITY
-                        and task.terminal_pending
-                        and task.terminal_record is not None
-                    ):
-                        drained.append(task.terminal_record)
+                count = 0 if claim.superseded else min(_CAPACITY, len(task.queue))
+                drained = list(task.queue)[:count]
+                include_terminal = (
+                    not claim.superseded
+                    and len(drained) < _CAPACITY
+                    and task.terminal_pending
+                    and task.terminal_record is not None
+                )
+                if include_terminal:
+                    drained.append(task.terminal_record)
+                result = TaskDrainView(
+                    task_id, session_id, drain_id,
+                    tuple(_tag_update(update) for update in drained),
+                )
+                validate_task_drain_view(result)
+                if not claim.superseded:
+                    for _ in range(count):
+                        task.queue.popleft()
+                    if include_terminal:
                         task.terminal_pending = False
-                    updates = tuple(drained)
                     if not any(
                         _is_progress_update(update) for update in task.queue
                     ):
                         task.progress_available_at = None
-                    if any(type(update) is SessionRecordView for update in updates):
+                    if any(type(update) is SessionRecordView for update in drained):
                         task.terminal_delivered = True
                     task.condition.notify_all()
         finally:
@@ -554,12 +611,7 @@ class TaskRegistry:
                     task.active_drain = None
                 task.condition.notify_all()
 
-        return TaskDrainView(
-            task_id,
-            session_id,
-            drain_id,
-            tuple(_tag_update(update) for update in updates),
-        )
+        return result
 
     def _recover(
         self,
@@ -597,7 +649,9 @@ class TaskRegistry:
                 raise ObservationConflictError(
                     "reobserve returned a mismatched session"
                 )
+            validate_session_record_view(current, expected_session_id=session_id)
             if current.result is not None:
+                _validate_task_observation(current, expected_session_id=session_id)
                 terminal = current
         except BaseException as error:
             failure = error

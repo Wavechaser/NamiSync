@@ -26,6 +26,7 @@ from namisync.interfaces.web.drain import (
     TaskRecordUpdateView,
     TaskSessionReleaseView,
     TaskStartView,
+    validate_task_drain_view,
 )
 from namisync.interfaces.web.readiness import (
     CommandPhase,
@@ -482,6 +483,10 @@ def production_command_specs(
             or result.drain_id != payload.drain_id
         ):
             raise RuntimeError("task registry returned invalid drain data")
+        try:
+            validate_task_drain_view(result)
+        except (TypeError, ValueError) as error:
+            raise RuntimeError("task registry returned invalid drain data") from error
         return result
 
     def close_task(payload: object) -> object:

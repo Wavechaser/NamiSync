@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from threading import Condition, Event, Thread
@@ -14,9 +15,12 @@ from time import monotonic, sleep
 import pytest
 
 from _event_v5_fixtures import maximum_reliable_envelope
-from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, ItemOutcome, Progress
+from namisync.core.events import (
+    CORE_EVENT_SCHEMA_VERSION, Envelope, Gap, ItemOutcome, Progress, StateChanged,
+    Terminal, TerminalSummary,
+)
 from namisync.core.evidence import Outcome
-from namisync.core.session import OperationResult, SessionState
+from namisync.core.session import OperationResult, SessionId, SessionState
 from namisync.dispatcher import (
     Dispatcher,
     PreparedSession,
@@ -39,7 +43,9 @@ from namisync.interfaces.web.drain import (
     TaskUnavailableError,
 )
 from namisync.workflows import PLAN_KIND
-from namisync.workflows.views import SessionEventView, SessionRecordView
+from namisync.workflows.views import (
+    SessionEventView, SessionRecordView, operation_result_view, session_event_view,
+)
 
 
 REQUEST = "1" * 32
@@ -80,14 +86,21 @@ class _ManualClock:
 
 
 def _event(sequence: int, body_type: str = "StateChanged") -> SessionEventView:
-    return SessionEventView(
-        SESSION,
+    bodies = {
+        "StateChanged": StateChanged(SessionState.RUNNING),
+        "Progress": Progress("execute", 0, None, 0, None, None),
+        "Gap": Gap(1),
+        "Terminal": Terminal(
+            TerminalSummary.from_result(OperationResult(SessionState.COMPLETED))
+        ),
+    }
+    return session_event_view(Envelope(
+        SessionId(SESSION),
         sequence,
-        "2026-01-01T00:00:00Z",
+        datetime(2026, 1, 1, tzinfo=timezone.utc),
         CORE_EVENT_SCHEMA_VERSION,
-        body_type,
-        {},
-    )
+        bodies[body_type],
+    ))
 
 
 def _record(*, terminal: bool = True) -> SessionRecordView:
@@ -96,10 +109,11 @@ def _record(*, terminal: bool = True) -> SessionRecordView:
         PLAN_KIND,
         "completed" if terminal else "pending",
         False,
-        "2026-01-01T00:00:00Z",
+        "2026-01-01T00:00:00+00:00",
         None,
-        None,
-        object() if terminal else None,  # type: ignore[arg-type]
+        "2026-01-01T00:00:00+00:00" if terminal else None,
+        operation_result_view(OperationResult(SessionState.COMPLETED))
+        if terminal else None,
     )
 
 
@@ -440,7 +454,7 @@ def _drain_until_record(
 def _mark_terminal_drained(registry: TaskRegistry, start) -> None:
     task = registry._tasks[start.task_id]
     with task.condition:
-        task.terminal_record = _record()
+        task.terminal_record = replace(_record(), session_id=start.session_id)
         task.terminal_pending = True
         task.condition.notify_all()
     drained = registry.drain(
@@ -1296,7 +1310,7 @@ def test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered() -> None:
                 SessionEventView(
                     session_id,
                     2,
-                    "2026-01-01T00:00:00Z",
+                    "2026-01-01T00:00:00+00:00",
                     CORE_EVENT_SCHEMA_VERSION,
                     "Gap",
                     {"first_missed_seq": 2},
@@ -1306,10 +1320,10 @@ def test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered() -> None:
                 SessionEventView(
                     session_id,
                     4,
-                    "2026-01-01T00:00:00Z",
+                    "2026-01-01T00:00:00+00:00",
                     CORE_EVENT_SCHEMA_VERSION,
                     "StateChanged",
-                    {},
+                    {"state": "running"},
                 )
             )
             return self.reobserve_result
@@ -1745,6 +1759,9 @@ def test_release_settles_a_stale_failed_recovery_without_deadlock() -> None:
     releasing = Thread(target=release)
     recovering.start()
     assert service.reobserve_entered.wait(1)
+    task = registry._tasks[start.task_id]
+    assert task.terminal_record is None
+    assert task.terminal_delivered
     releasing.start()
     service.release_reobserve.set()
     recovering.join(1)
@@ -2170,3 +2187,157 @@ def test_repeated_task_close_bounds_active_state_and_close_receipts() -> None:
         closed[-1].task_id,
         closed[-1].session_id,
     ) == closed[-1]
+
+
+def _malformed_task_updates():
+    event = _event(2)
+    record = _record()
+    return [
+        replace(event, schema_version=4),
+        replace(event, body={}),
+        replace(event, sequence=True),
+        replace(event, at="2026-01-01T00:00:00Z"),
+        replace(event, body={"state": "invented"}),
+        replace(record, result=None),
+        replace(record, state="pending", ended_at=None, result=None),
+        replace(record, ended_at=None),
+        replace(record, kind="sync-execute"),
+        replace(record, supports_pause=True),
+        replace(record, result=object()),
+        replace(record, state="failed"),
+        replace(record, result=replace(record.result, bytes_done=0)),
+        replace(record, result=replace(record.result, recording="degraded")),
+    ]
+
+
+@pytest.mark.parametrize("update", _malformed_task_updates())
+def test_task_offer_validates_before_queue_or_custody_mutation(update) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    task = registry._tasks[start.task_id]
+    service.sink(_event(2, "Progress"))
+    before = (
+        tuple(task.queue), task.progress_available_at, task.terminal_record,
+        task.terminal_pending, task.terminal_delivered, task.cleanup,
+    )
+
+    with pytest.raises((TypeError, ValueError)):
+        service.sink(update)
+
+    assert (
+        tuple(task.queue), task.progress_available_at, task.terminal_record,
+        task.terminal_pending, task.terminal_delivered, task.cleanup,
+    ) == before
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.cleanup == []
+
+
+@pytest.mark.parametrize("pending_record", [False, True])
+def test_task_drain_validates_whole_candidate_before_consuming(pending_record) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    task = registry._tasks[start.task_id]
+    mutable = _event(2)
+    service.sink(mutable)
+    service.sink(_event(3, "Progress"))
+    terminal = _record()
+    if pending_record:
+        task.terminal_record = terminal
+        task.terminal_pending = True
+    else:
+        service.sink(terminal)
+    # This mutation bypasses offer admission, as a retained collaborator can.
+    mutable.body["state"] = "invented"
+    before = (
+        tuple(task.queue), task.progress_available_at, task.terminal_record,
+        task.terminal_pending, task.terminal_delivered,
+    )
+
+    with pytest.raises((TypeError, ValueError)):
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+
+    assert (
+        tuple(task.queue), task.progress_available_at, task.terminal_record,
+        task.terminal_pending, task.terminal_delivered,
+    ) == before
+    assert task.active_drain is None
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.cleanup == []
+
+    mutable.body["state"] = "running"
+    drained = registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    assert [update.event.sequence for update in drained.updates[:-1]] == [1, 2, 3]
+    assert drained.updates[-1].record is terminal
+    registry.release_terminal_session(start.task_id, SESSION)
+    assert service.cleanup == [("unsubscribe", SESSION), ("close_session", SESSION)]
+
+
+@pytest.mark.parametrize("record", [
+    replace(_record(), result=object()),
+    replace(_record(), state="failed"),
+    replace(_record(), ended_at=None),
+    replace(_record(), result=replace(_record().result, bytes_done=0)),
+])
+def test_task_recovery_rejects_malformed_current_record_without_receipt(record) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    service.reobserve_result = record
+    with pytest.raises((TypeError, ValueError)):
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=1)
+    task = registry._tasks[start.task_id]
+    assert not task.queue
+    assert task.terminal_record is None
+    assert not task.terminal_pending and not task.terminal_delivered
+    assert task.active_drain is None and not task.transition
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.cleanup == []
+
+
+@pytest.mark.parametrize("record", [
+    _record(terminal=False),
+    replace(_record(terminal=False), state="running"),
+    replace(_record(), result=None),
+])
+def test_result_free_reobservation_is_not_a_terminal_delivery_receipt(record) -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    service.reobserve_result = record
+    assert not registry.drain(
+        start.task_id, SESSION, DRAIN, replay_from=1,
+    ).updates
+    assert not registry._tasks[start.task_id].terminal_delivered
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.cleanup == []
+
+
+def test_invalid_pending_terminal_preserves_queued_events_and_pending_flag() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    task = registry._tasks[start.task_id]
+    task.terminal_record = replace(_record(), result=None)
+    task.terminal_pending = True
+    before = tuple(task.queue)
+    with pytest.raises((TypeError, ValueError)):
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    assert tuple(task.queue) == before
+    assert task.terminal_pending and not task.terminal_delivered
+    assert task.active_drain is None
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.cleanup == []
+
+
+def test_terminal_event_alone_does_not_earn_release_receipt() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    service.sink(_event(2, "Terminal"))
+    assert len(registry.drain(
+        start.task_id, SESSION, DRAIN, replay_from=None,
+    ).updates) == 2
+    with pytest.raises(TaskUnavailableError):
+        registry.release_terminal_session(start.task_id, SESSION)
+    assert service.cleanup == []

@@ -30,6 +30,7 @@ from namisync.workflows.views import (
     operation_result_view,
     result_item_view,
     session_event_view,
+    validate_operation_result_view,
 )
 
 
@@ -382,6 +383,8 @@ def test_compound_headline_boundaries_and_phase_wide_incomplete_truth() -> None:
     assert mismatch.headline == "mismatch"
     assert canceled.headline == "canceled"
     assert incomplete.headline == "verification-incomplete"
+    for view in (mismatch, canceled, incomplete):
+        validate_operation_result_view(view)
     assert incomplete.integrity == "incomplete"
     assert incomplete.phases[1].error == (
         "RuntimeError: verifier failed before item 1"

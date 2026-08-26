@@ -1,63 +1,54 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.9's implementation and pre-commit gates are
-complete. After its named commit, start only 3R.10. The checkpoint 3.2 shell boundary remains
-active; 3.3 has not started. S5 and 3R.14's coordinated epoch/reset remain
+Status (2026-08-26): checkpoint 3R.9 is committed as `04d5fb8`. Checkpoint
+3R.10's implementation, verification, and pre-commit reviews are complete.
+After its named commit, start only 3R.11.
+The checkpoint 3.2 shell boundary remains active; 3.3 has not started.
+S5 and 3R.14's coordinated epoch/reset remain
 design holds. The pre-existing installed-wheel event diagnostic migration is
 also unassigned; do not silently widen another checkpoint to repair it.
 
 ## Delivered This Checkpoint
 
-- Shared literal 50-case timestamp corpus reproduced 42 Python route failures
-  and 15 JavaScript semantic mismatches against untouched production f96804b.
-  Python and JavaScript now require four-digit real Gregorian dates/times,
-  literal T/+00:00, and absent or exactly six ASCII fractional digits.
-- Python public event-view validation reconstructs the persistence envelope
-  and delegates to the existing authority. JavaScript validates reliable body
-  fields before counting compact UTF-8 bytes of the same shape (seq, not
-  sequence); Progress keeps its existing exemption.
-- Kept the existing maximum reliable fixture and assertions unchanged. Added
-  exact-max/plus-one actual public projections and an equal-byte mixed Unicode
-  derivative in Python and required Node, plus logical-byte review facts from
-  actual terminal/result projections.
-- Extended the existing browser drain probe to prove whole-batch refusal before
-  callbacks, cursor, reducer phase, and terminal release. Independent review
-  strengthened recovery: rejected reliable verify phase cannot leak into
-  self-described execute Progress; no replacement PhaseChanged hides it.
-- Independent review found a necessary byte-accounting precondition defect:
-  JavaScript accepted a trailing lone high surrogate. Shared Unicode tests
-  reproduced nine browser/Python disagreements; one pair-guard condition now
-  refuses a missing next code unit. Existing Unicode policy is unchanged.
-- Corrected only positive event/record witness timestamp spellings and the
-  shared drain probe timestamp. No v4/version, result-nullability, source-gate,
-  or database admission implementation from later rows is included.
-- Updated CORE, INTERFACES, M1_BRIDGE's service grammar, and causal BUGS entries.
-  Raw independent reviewer reports remain the detailed finding source below.
+- Exact primitive result/record validators reuse the terminal summary's
+  existing phase, scalar, recording, cancellation, and review-limit predicates;
+  flattened errors and presentation omissions remain representation-specific.
+- Workflow validators explicitly project exact dataclasses and bounded tuple
+  children. Existing frozen body mappings remain supported; no generic new
+  serializer, fake event, or recomputed item-free headline was introduced.
+- Task offer, recovery, candidate drain, command return, and serialization now
+  select those validators. Whole-candidate validation precedes queue pops,
+  pending-terminal clearing, and the terminal-delivered receipt.
+- Python and JavaScript task records require a non-null valid matching result.
+  Generic active and terminal-in-transition result-free snapshots remain valid
+  but do not earn a delivery receipt. Release preserves an already-earned
+  receipt even when explicit replay has cleared the transient terminal cache.
+- Replaced positive v4/malformed task fixtures with exact production v5 views.
+  Added malformed offer/record/result, post-admission and post-command mutation,
+  invalid pending cache, Terminal-event-only, and browser atomic refusal/replay
+  coverage. The existing stale failed-recovery release race is retained.
+- Updated CORE, WORKFLOWS, INTERFACES, the bridge record-arm contract, and causal
+  BUGS. Raw reviewer reports remain the detailed finding source below.
 
 ## Verification
 
-- Initial new timestamp/size/logical-byte/batch subset:
-  `48 failed, 109 passed, 592 deselected`. The batch failure was made directly
-  diagnostic before runtime edits: three callbacks occurred where zero were
-  required. Shared logical-byte positives/negatives already passed.
-- Initial three focused files after the grammar/size fix: `749 passed`.
-- First core/workflows/interfaces neighborhood:
-  `1 failed, 2519 passed, 1 skipped, 1311 deselected`; the only failure was a
-  positive history witness still using Z. Corrected service event/record
-  witnesses retain all non-timestamp fields and expectations.
-- Unicode precondition tests before the one-line guard fix:
-  `1 failed, 66 passed, 638 deselected`; the Node case reported nine mismatches.
-- Final three focused files: `816 passed`. Independent initial narrow grammar/
-  size/logical-byte check: `156 passed, 482 deselected`.
-- Final core/workflows/interfaces neighborhood:
-  `2587 passed, 1 skipped, 1311 deselected`.
+- Tests-first Python boundary subset against untouched production:
+  `67 failed, 10 passed, 287 deselected`. Required Node separately reproduced
+  two delivered callbacks for a result-free terminal batch where zero was
+  required.
+- After the patch-access interruption, the first resumed focused run had
+  `3 failed, 363 passed`: two multi-session fixture IDs and the new Node
+  asynchronous request-index capture. Corrected those test fixtures.
+- Three focused adapter/browser files: `366 passed`.
+- Core/workflows/interfaces neighborhood:
+  `2666 passed, 1 skipped, 1311 deselected`.
 - Ordinary suite with required bundled Node:
-  `3867 passed, 4 skipped, 28 deselected`.
+  `3946 passed, 4 skipped, 28 deselected`.
 - Unchanged protected oracle: `30 scenarios x 3 runs`.
-- Final independent working implementation/test/fixture/owning-doc review:
-  `CLEAN`; independent new boundary selection `223 passed, 482 deselected`.
-  Exact staged snapshot review: `CLEAN`. The final status-only delta is
-  independently reviewed before the named commit.
+- Independent final code/test and owning-document working reviews: `CLEAN`.
+  Independent boundary/Node selection: `82 passed, 304 deselected`.
+  Exact staged review: `CLEAN`; the final status/evidence-only delta is checked
+  independently before the named commit.
 - Protected settlement oracle, baseline, and prior assertions are unchanged.
   Tool/baseline blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
   `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
@@ -108,10 +99,10 @@ Retained ignored artifacts and conventions are under
 ## Safe Stop And Holds
 
 Rebuilt 3R.4 is `1e794e7`; 3R.5 `8f6d8f8`; 3R.6 `f15a82d`;
-3R.7 `bd05ff7`; 3R.8 `f96804b`. The discarded 3R.4 attempt remains
+3R.7 `bd05ff7`; 3R.8 `f96804b`; 3R.9 `04d5fb8`. The discarded 3R.4 attempt remains
 recoverable under ignored `build/r34-restart-20260826/`.
 
-No 3R.10 task-custody, 3R.11 legacy/source-gate, fingerprint, identity codec,
+No 3R.11 legacy/source-gate, fingerprint, identity codec,
 epoch, or database topology/admission changes are present.
 
 S5 still requires an explicit storage design or accepted residual. A read-only
@@ -125,27 +116,23 @@ that row: `_settle_execute_resume_failure` can return all exclusions after the
 pre-entry/resume sink rejects one, and its emission-error rendering is
 unguarded. It remains inspection-only, not separately reproduced or assigned.
 
-Native sandbox read setup still fails with
-`helper_unknown_error: apply deny-read ACLs`. Approved shell reads/tests work.
-The built-in patch tool's full-file form uses approved source reads, with
-surgical Git diffs. No sandbox, permission, or app settings were changed.
+The user reset the corrupted sandbox ACL state. Normal workspace reads and
+small normal Update hunks now succeed; the first resumed browser hunk's exact
+diff was inspected before continuing. No full-file writes or escalated patches
+were used after reset. Project Python still refuses to launch under the normal
+sandbox (`Access is denied`); existing approved pytest execution works.
+The earlier blocked patch context remains under ignored
+`build/r310-verification/`; HANDOFF now supersedes that interrupted status.
 
 ## Immediate Next Context
 
-The tree is expected to be clean after
-`fix(protocol): align v5 timestamp and size boundaries`.
-
-Start only 3R.10, `fix(web): validate task updates before custody release`.
-Keep result-free re-observation snapshots distinct from terminal drain updates:
-re-observation can legitimately return pending/running or terminal-in-transition
-records, but a terminal drain record requires a valid non-null matching result.
-Validate offered/recovered/candidate-drained/command-returned views before
-queue or custody mutation, including mutable body changes after admission.
-Build and deep-validate a candidate batch before popping its queue or setting
-terminal-delivered. Preserve existing callback-before-release and stale-cache
-recovery receipt behavior. Fix positive v4 task-adapter fixtures in this row,
-not the private source-gate work reserved for 3R.11. Obtain independent working
-and staged reviews, then commit the checkpoint separately.
+All current tracked edits belong to 3R.10. After the final status-only review,
+commit only
+`fix(web): validate task updates before custody release`.
+After that clean stop, start 3R.11, `fix(web): harden exact-v5 source gates`.
+Keep its private v4 seam/source and Python-to-packaged-JavaScript gates separate
+from unassigned installed-wheel diagnostic migration. Do not alter frozen
+settlement or transport measurement authority or begin database rows early.
 
 ## Reviewer O.
 

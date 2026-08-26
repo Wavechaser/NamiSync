@@ -297,6 +297,68 @@ def validate_session_event_view_v5(
     )
 
 
+def validate_operation_result_view_v5(value: object) -> None:
+    """Validate the item-free public result without reclassifying its headline."""
+
+    result = _exact_object(value, frozenset({
+        "headline", "filesystem", "integrity", "recording", "audit",
+        "disposition", "canceled", "phases", "bytes_done", "bytes_total",
+        "error", "recording_degraded_items", "recording_issues",
+        "omitted_detail_count", "presentation_omitted_detail_count",
+        "review_refusal",
+    }), "operation result view")
+    _closed_text(result["headline"], frozenset({
+        "failed", "partial", "refused", "mismatch", "canceled",
+        "verification-incomplete", "degraded", "all-noop", "success",
+    }), "result headline")
+    _closed_text(result["integrity"], frozenset({
+        "mismatch", "incomplete", "not-run", "modified", "missing",
+        "baselined", "verified",
+    }), "result integrity")
+    if result["error"] is not None:
+        _bounded_text(result["error"], "result error")
+    presentation_omitted = _safe_int(
+        result["presentation_omitted_detail_count"], "presentation omission count"
+    )
+    _validate_terminal_fields(
+        result, status=result["filesystem"], review=result["review_refusal"]
+    )
+    if result["review_refusal"] is not None and presentation_omitted != 0:
+        raise ValueError("review-limit result has presentation omissions")
+
+
+def validate_session_record_view_v5(
+    value: object, *, expected_session_id: str | None = None,
+) -> None:
+    """Validate a service snapshot; task terminal eligibility is adapter policy."""
+
+    record = _exact_object(value, frozenset({
+        "session_id", "kind", "state", "supports_pause", "created_at",
+        "started_at", "ended_at", "result",
+    }), "session record view")
+    session_id = _hex_id(record["session_id"], "session record session_id")
+    if expected_session_id is not None and session_id != expected_session_id:
+        raise ValueError("session record belongs to another session")
+    if type(record["kind"]) is not str:
+        raise TypeError("session kind must be text")
+    if not record["kind"]:
+        raise ValueError("session kind must be nonempty")
+    record["kind"].encode("utf-8")
+    state = _closed_text(record["state"], _SESSION_STATES, "session state")
+    _boolean(record["supports_pause"], "session supports_pause")
+    _utc_timestamp(record["created_at"], "session created_at")
+    for field in ("started_at", "ended_at"):
+        if record[field] is not None:
+            _utc_timestamp(record[field], f"session {field}")
+    if (state in _TERMINAL_STATES) != (record["ended_at"] is not None):
+        raise ValueError("terminal state and ended_at must agree")
+    result = record["result"]
+    if result is not None:
+        validate_operation_result_view_v5(result)
+        if state != ("canceled" if result["canceled"] else result["filesystem"]):
+            raise ValueError("record result terminal projection must agree with state")
+
+
 def _validate_body(body_type: str, value: object, sequence: int) -> None:
     if body_type == "StateChanged":
         body = _exact_object(value, frozenset({"state"}), "state body")
@@ -436,7 +498,21 @@ def _validate_integrity_item(value: object) -> None:
 
 def _validate_terminal_summary(value: object) -> None:
     result = _exact_object(value, _TERMINAL_SUMMARY_KEYS, "terminal summary")
-    status = _closed_text(result["status"], _TERMINAL_STATES, "terminal status")
+    if result["error"] is not None:
+        error = _exact_object(
+            result["error"], frozenset({"type_name", "message"}), "terminal error"
+        )
+        _bounded_text(error["type_name"], "terminal error type", nonempty=True)
+        _bounded_text(error["message"], "terminal error message")
+    _validate_terminal_fields(
+        result, status=result["status"], review=result["review_fact_limit"]
+    )
+
+
+def _validate_terminal_fields(
+    result: dict[str, object], *, status: object, review: object,
+) -> None:
+    status = _closed_text(status, _TERMINAL_STATES, "terminal status")
     recording = _closed_text(
         result["recording"], _RECORDING_STATES, "terminal recording"
     )
@@ -455,12 +531,6 @@ def _validate_terminal_summary(value: object) -> None:
     bytes_total = _scalar_64(result["bytes_total"], "terminal bytes_total")
     if bytes_done > bytes_total:
         raise ValueError("terminal bytes_done cannot exceed bytes_total")
-    if result["error"] is not None:
-        error = _exact_object(
-            result["error"], frozenset({"type_name", "message"}), "terminal error"
-        )
-        _bounded_text(error["type_name"], "terminal error type", nonempty=True)
-        _bounded_text(error["message"], "terminal error message")
     degraded_items = _safe_int(
         result["recording_degraded_items"],
         "terminal recording_degraded_items",
@@ -492,7 +562,6 @@ def _validate_terminal_summary(value: object) -> None:
     omitted = _safe_int(
         result["omitted_detail_count"], "terminal omitted_detail_count"
     )
-    review = result["review_fact_limit"]
     if review is not None:
         _validate_review_fact(review)
         if not (

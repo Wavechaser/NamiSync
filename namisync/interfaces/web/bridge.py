@@ -16,6 +16,17 @@ from time import monotonic
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import SplitResult, urlsplit
 
+from namisync.workflows.views import (
+    OperationResultView, SessionEventView, SessionRecordView,
+    validate_operation_result_view, validate_session_event_view,
+    validate_session_record_view,
+)
+
+from .drain import (
+    TaskDrainView, TaskEventUpdateView, TaskRecordUpdateView,
+    validate_task_drain_view, validate_task_update_view,
+)
+
 from .pywebview_runtime import (
     WebView2RefusalReason,
     probe_webview2_runtime,
@@ -24,6 +35,16 @@ from .pywebview_runtime import (
 
 if TYPE_CHECKING:
     from .commands import CommandSpec
+
+
+_VIEW_VALIDATORS = {
+    SessionEventView: validate_session_event_view,
+    SessionRecordView: validate_session_record_view,
+    OperationResultView: validate_operation_result_view,
+    TaskDrainView: validate_task_drain_view,
+    TaskEventUpdateView: validate_task_update_view,
+    TaskRecordUpdateView: validate_task_update_view,
+}
 
 
 BRIDGE_SCHEMA_VERSION = 1
@@ -784,6 +805,12 @@ def _to_primitive_view(
             raise BridgeProtocolError(
                 "structured bridge data contains an unapproved dataclass"
             )
+        validator = _VIEW_VALIDATORS.get(type(value))
+        if validator is not None:
+            try:
+                validator(value)
+            except (TypeError, ValueError) as error:
+                raise BridgeProtocolError("structured bridge view is invalid") from error
         active.add(identity)
         try:
             return {

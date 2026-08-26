@@ -41,6 +41,15 @@ recording and omission fields, while its item-free terminal summary carries
 task issues and aggregate witnesses. Presentation-only omissions remain outside
 the core result and history contracts.
 
+`workflows/views.py` supplies rejecting validators for exact session event,
+session record, and operation result views. They explicitly project only the
+declared dataclass and bounded tuple children into the shared core v5 primitive
+validators; they neither deep-copy arbitrary objects nor implement a second
+serializer. Existing frozen body mappings remain supported. Validation is
+separate from construction so each consuming boundary can recheck collaborator
+data, including event bodies changed after initial admission. Generic
+result-free session snapshots remain legal without implying terminal delivery.
+
 At the active checkpoint-3.2 scalar cutover, workflow accumulation follows the exact
 checked-arithmetic contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
 [DEFENSE.md](DEFENSE.md) §1.3 without a workflow-local numeric variant.

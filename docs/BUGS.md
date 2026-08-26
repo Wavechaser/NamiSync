@@ -661,6 +661,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-26). Shallow view admission. Exact dataclass wrappers
+  could carry old-version events, malformed nested results, or result-free
+  terminal records through Python task drains and bridge serialization. Queue
+  consumption and terminal-delivery receipts could precede semantic refusal,
+  while the browser accepted null terminal results and released session custody.
+  Cause: outer type checks substituted for the v5 view contract. Fixed with
+  shared primitive/typed validation at each consuming boundary, whole-candidate
+  validation before drain mutation, and matching result-bearing terminal gates.
+  Valid result-free recovery snapshots do not earn receipts; replay cache
+  invalidation does not revoke a prior validated delivery receipt.
 - MODERATE - FIXED (2026-08-25). Execution-authority state conflation. The
   accepted desktop design permanently froze a committed selection even when
   submission failed or the attached attempt terminated `unrun`, making its

@@ -361,6 +361,9 @@ absence. Free-form diagnostics are already bounded before construction.
   and rollover dates refuse; filesystem text never enters timestamps.
 - A drain update is exactly `{update_type:"event",event:SessionEventView}` or
   `{update_type:"record",record:SessionRecordView}`.
+  The record arm requires a non-null valid result whose terminal-state
+  projection agrees with the record. A result-free session snapshot is not a
+  terminal drain update and cannot authorize session release.
 - `TaskDetail` = `{summary:TaskSummary, setup:PlanSetupOptions|null,
   plan_available:boolean, execution_available:boolean,
   inventory_available:boolean, plan_view_id:ViewId|null,

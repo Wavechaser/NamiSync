@@ -1588,10 +1588,9 @@ function validateSessionRecord(record, sessionId) {
     isUtcTimestamp(record.created_at) &&
     (record.started_at === null || isUtcTimestamp(record.started_at)) &&
     isUtcTimestamp(record.ended_at) &&
-    (record.result === null ||
-      (validateOperationResultView(record.result) &&
-        record.state ===
-          (record.result.canceled ? "canceled" : record.result.filesystem)))
+    validateOperationResultView(record.result) &&
+    record.state ===
+      (record.result.canceled ? "canceled" : record.result.filesystem)
   );
 }
 

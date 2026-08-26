@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 from collections.abc import Mapping
-from dataclasses import FrozenInstanceError, dataclass, fields, is_dataclass
+from dataclasses import FrozenInstanceError, dataclass, fields, is_dataclass, replace
 from datetime import datetime, timezone
 from enum import Enum, StrEnum
 from pathlib import Path
@@ -14,6 +14,7 @@ from typing import get_args, get_type_hints
 
 import pytest
 
+from namisync.core.session import OperationResult, SessionState
 from namisync.core.events import (
     DeliveryClass,
     delivery_class,
@@ -66,7 +67,10 @@ from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.workflows import PLAN_KIND
 from namisync.workflows.models import HistoryEventPageView, HistoryEventView
-from namisync.workflows.views import SessionEventView
+from namisync.workflows.views import (
+    PhaseResultView, RecordingIssueView, ReviewFactLimitView, SessionEventView,
+    operation_result_view,
+)
 from tests.interfaces.web._public_view_witnesses import (
     PUBLIC_VIEW_WITNESSES,
     iter_public_view_witnesses,
@@ -1694,8 +1698,8 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
     event = SessionEventView(
         SESSION_ID,
         9,
-        "2026-08-12T10:00:00Z",
-        4,
+        "2026-08-12T10:00:00+00:00",
+        5,
         "StateChanged",
         {"state": "running"},
     )
@@ -1724,35 +1728,36 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
                 "event": {
                     "session_id": SESSION_ID,
                     "sequence": 9,
-                    "at": "2026-08-12T10:00:00Z",
-                    "schema_version": 4,
+                    "at": "2026-08-12T10:00:00+00:00",
+                    "schema_version": 5,
                     "body_type": "StateChanged",
                     "body": {"state": "running"},
                 },
             }
         ],
     }
+    result = operation_result_view(OperationResult(SessionState.COMPLETED))
     record = SessionRecordView(
         SESSION_ID,
         PLAN_KIND,
-        "pending",
+        "completed",
         False,
-        "2026-08-12T10:00:00Z",
+        "2026-08-12T10:00:00+00:00",
         None,
-        None,
-        None,
+        "2026-08-12T10:00:00+00:00",
+        result,
     )
     assert to_primitive_view(TaskRecordUpdateView("record", record)) == {
         "update_type": "record",
         "record": {
             "session_id": SESSION_ID,
             "kind": "sync-plan",
-            "state": "pending",
+            "state": "completed",
             "supports_pause": False,
-            "created_at": "2026-08-12T10:00:00Z",
+            "created_at": "2026-08-12T10:00:00+00:00",
             "started_at": None,
-            "ended_at": None,
-            "result": None,
+            "ended_at": "2026-08-12T10:00:00+00:00",
+            "result": to_primitive_view(result),
         },
     }
 
@@ -1781,3 +1786,112 @@ def test_br_g_32_public_view_codec_refuses_recursive_containers() -> None:
 
     with pytest.raises(BridgeProtocolError, match="recursive"):
         to_primitive_view(recursive)
+
+
+def _valid_task_record() -> SessionRecordView:
+    return SessionRecordView(
+        SESSION_ID, PLAN_KIND, "completed", False,
+        "2026-08-12T10:00:00+00:00", None, "2026-08-12T10:00:00+00:00",
+        operation_result_view(OperationResult(SessionState.COMPLETED)),
+    )
+
+
+def _invalid_task_update_views():
+    event = SessionEventView(
+        SESSION_ID, 1, "2026-08-12T10:00:00+00:00", 5,
+        "StateChanged", {"state": "running"},
+    )
+    record = _valid_task_record()
+    return [
+        TaskEventUpdateView("event", replace(event, schema_version=4)),
+        TaskEventUpdateView("event", replace(event, body={})),
+        TaskEventUpdateView("event", replace(event, session_id="1" * 32)),
+        TaskRecordUpdateView("record", replace(record, result=None)),
+        TaskRecordUpdateView("record", replace(record, state="pending", ended_at=None, result=None)),
+        TaskRecordUpdateView("record", replace(record, session_id="1" * 32)),
+        TaskRecordUpdateView("record", replace(record, state="failed")),
+        TaskRecordUpdateView("record", replace(record, result=replace(record.result, bytes_done=0))),
+        object(),
+    ]
+
+
+@pytest.mark.parametrize("update", _invalid_task_update_views())
+def test_next_events_rechecks_exact_nested_task_data(update) -> None:
+    commands, _, service = _commands()
+    returned = TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, (update,))
+    service.drain = lambda *args, **kwargs: returned
+    with pytest.raises(RuntimeError, match="invalid drain data"):
+        _invoke(commands["next_events"], {
+            "task_id": TASK_ID, "session_id": SESSION_ID,
+            "drain_id": DRAIN_ID, "replay_from": None,
+        })
+
+
+@pytest.mark.parametrize("update", _invalid_task_update_views())
+def test_task_serializer_rechecks_nested_data(update) -> None:
+    returned = TaskDrainView(TASK_ID, SESSION_ID, DRAIN_ID, (update,))
+    with pytest.raises(BridgeProtocolError):
+        to_primitive_view(returned)
+
+
+def test_task_serializer_rechecks_body_mutated_after_command_return() -> None:
+    commands, _, service = _commands()
+    event = SessionEventView(
+        SESSION_ID, 1, "2026-08-12T10:00:00+00:00", 5,
+        "StateChanged", {"state": "running"},
+    )
+    returned = TaskDrainView(
+        TASK_ID, SESSION_ID, DRAIN_ID, (TaskEventUpdateView("event", event),),
+    )
+    service.drain = lambda *args, **kwargs: returned
+    accepted = _invoke(commands["next_events"], {
+        "task_id": TASK_ID, "session_id": SESSION_ID,
+        "drain_id": DRAIN_ID, "replay_from": None,
+    })
+    assert accepted is returned
+    event.body["state"] = "invented"
+    with pytest.raises(BridgeProtocolError):
+        to_primitive_view(accepted)
+
+
+@pytest.mark.parametrize("changes", [
+    {"headline": "invented"}, {"filesystem": "running"},
+    {"integrity": "invented"}, {"recording": "degraded"}, {"audit": "invented"},
+    {"disposition": "invented"}, {"canceled": 0}, {"bytes_done": 0},
+    {"bytes_total": "01"}, {"bytes_done": "1", "bytes_total": "0"},
+    {"error": "\ud800"}, {"error": "x" * 1025},
+    {"phases": []}, {"phases": (object(),)},
+    {"phases": (PhaseResultView("execute", "completed", 0, 0, 0, "0", None),)},
+    {"phases": (PhaseResultView("execute", "completed", 0, 0, "0", "0", None),) * 2},
+    {"recording_degraded_items": True},
+    {"recording_issues": []}, {"recording_issues": (object(),)},
+    {"recording_issues": (RecordingIssueView("invented", None),)},
+    {"omitted_detail_count": -1}, {"presentation_omitted_detail_count": True},
+    {"review_refusal": object()},
+    {"review_refusal": ReviewFactLimitView(
+        "review-row-limit", "plan", "review", "rows", 1, None,
+    )},
+    {"canceled": True},
+])
+def test_result_view_serializer_rejects_malformed_typed_facts(changes) -> None:
+    result = replace(_valid_task_record().result, **changes)
+    with pytest.raises(BridgeProtocolError):
+        to_primitive_view(result)
+
+
+@pytest.mark.parametrize("changes", [
+    {"session_id": "bad"}, {"kind": ""}, {"state": "invented"},
+    {"supports_pause": 0}, {"created_at": "2026-08-12T10:00:00Z"},
+    {"started_at": "bad"}, {"ended_at": None}, {"result": object()},
+    {"state": "failed"},
+])
+def test_generic_record_serializer_rejects_malformed_facts(changes) -> None:
+    with pytest.raises(BridgeProtocolError):
+        to_primitive_view(replace(_valid_task_record(), **changes))
+
+
+def test_generic_record_serializer_preserves_result_free_snapshots() -> None:
+    record = replace(_valid_task_record(), result=None)
+    assert to_primitive_view(record)["result"] is None
+    pending = replace(record, state="pending", ended_at=None)
+    assert to_primitive_view(pending)["state"] == "pending"
