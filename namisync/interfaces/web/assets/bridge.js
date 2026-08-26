@@ -1,5 +1,5 @@
 const BRIDGE_SCHEMA_VERSION = 1;
-const DORMANT_CORE_EVENT_SCHEMA_VERSION = 5;
+const CORE_EVENT_SCHEMA_VERSION = 5;
 const MAX_RELIABLE_EVENT_CANONICAL_BYTES = 1_048_576;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
 const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
@@ -1902,7 +1902,7 @@ export function validateDormantSessionEventV5(event, sessionId) {
     !Number.isSafeInteger(event.sequence) ||
     event.sequence < 1 ||
     !isUtcTimestamp(event.at) ||
-    event.schema_version !== DORMANT_CORE_EVENT_SCHEMA_VERSION ||
+    event.schema_version !== CORE_EVENT_SCHEMA_VERSION ||
     !isPlainJsonObject(event.body)
   ) {
     return false;
@@ -2478,7 +2478,7 @@ function isUtcTimestamp(value) {
     return false;
   }
   const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]{6})?\+00:00$/.exec(value);
-  // JavaScript's $ also matches before a final newline.
+  // Without multiline mode, $ matches only the end of the input.
   if (match === null || match[0] !== value) {
     return false;
   }

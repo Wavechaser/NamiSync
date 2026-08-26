@@ -1,29 +1,19 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.14 is verified for delivery after `3a1b409`.
-Closed hash projections and the coordinated epoch-6 cut are implemented.
+Status (2026-08-26): checkpoint 3R.15a is verified for delivery after `4b2af38`.
+The browser constant naming and timestamp comment cleanup is complete.
 Checkpoint 3.3 remains unstarted and the private legacy decoder remains intact.
 
 `M1_SHELL_H2.md` owns the revised order and full acceptance criteria. Remaining
-delivery is 3R.15a, then 3R.15. No design decisions remain open.
+delivery is 3R.15 documentation and integrated verification. No design decisions
+remain open.
 Completed causal findings belong in `BUGS.md`, not this handoff. The original
 O/S reports and prior verification receipts remain in Git at
 `d7673b7:docs/HANDOFF.md`; no separate report archive is needed.
 
 ## Authorized Work Still To Deliver
 
-The JavaScript follow-ups below
-come from the user's post-3R.13 review and inspection at `d7673b7`.
 F/S identifiers refer to the original independent reports preserved in Git.
-
-### 3R.15a — Narrow JavaScript comment/name cleanup
-
-Correct `bridge.js`'s `isUtcTimestamp` comment: without multiline mode,
-JavaScript `$` matches only the end, not before a final newline.
-Rename the live `DORMANT_CORE_EVENT_SCHEMA_VERSION` constant to
-`CORE_EVENT_SCHEMA_VERSION` at both uses and update the exact name/count gate
-in `tests/interfaces/web/_frontend_test_support.py`. Preserve validator
-behavior and the private legacy decoder reserved for checkpoint 3.3.
 
 ### 3R.15 — Reconcile remaining active-document status
 
@@ -58,19 +48,15 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-3R.14 verification: the tests-first codec gate failed 21 cases with six positive
-controls passing; the two epoch-cut cases also failed before implementation.
-Initial focused green: 350 passed. Expanded core/command/native files: 254
-passed, one expected skip; all 28 projection subclass/lookalike guards passed
-their focused rerun. Operation receipt tests: 20 passed. Existing recorder/
-planner/package controls: 70 passed; full workflow file: 27 passed.
-Core/planner/database/workflows neighborhood: 2,081 passed, one expected skip.
-Final ordinary suite with required Node: 4,426 passed, four expected skips,
-28 headed tests deselected (220.30 s). Import architecture: all 11 rules kept.
-Protected settlement check: all 30 scenarios passed three times with identical
-normalized traces and baseline parity. Independent source, compatibility-test,
-and documentation review found no remaining actionable issue; protected
-settlement and frozen transport-authority files are unchanged.
+3R.15a verification: the updated source gate failed on the old constant name
+before the source change. Focused browser/static gates passed all 93 tests with
+required Node, including the timestamp grammar/calendar corpus. The interfaces
+department passed all 1,275 tests (3,183 deselected, 44.28 s). Independent narrow
+review found no actionable issue. The exact diff changes only the constant's
+definition/use, its coordinated test gate, and the comment; validator behavior,
+the private legacy decoder, protected settlement, and frozen transport-authority
+files are unchanged. The 3R.14 integrated verification receipt is in the prior
+commit's handoff.
 
 Old epoch-5 pairs now require the documented explicit archive/reset; no user
 databases were deleted or reset. Ledger-v4/history-v6 schemas, the history

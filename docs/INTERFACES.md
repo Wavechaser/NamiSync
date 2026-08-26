@@ -154,8 +154,9 @@ Python boundaries and the required Node gate, with valid production view
 projections and independently mutated negative cases.
 
 The browser's unreachable private legacy validator is pinned to literal event
-version 4; live task events delegate only to the exact v5 validator. Source
-gates isolate that live function and the active v5 Progress shape, compare the
+version 4; live task events delegate only to the exact v5 validator and its
+`CORE_EVENT_SCHEMA_VERSION` constant. Source gates pin that constant's definition
+and sole use, isolate the live function and active v5 Progress shape, compare the
 complete v5 vocabularies and detail classes with their Python owners, and
 reject in-memory route, shape, scalar, and vocabulary mutations. Required Node
 coverage sends all seven event families and the relevant public-view witnesses

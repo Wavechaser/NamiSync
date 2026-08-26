@@ -60,10 +60,10 @@ def _assert_exact_v5_event_routes(source: str) -> None:
     assert source.count("validateLegacySessionEvent") == 1
     assert source.count("validateLiveSessionEvent(") == 2
     assert "return validateLiveSessionEvent(update.event, sessionId);" in source
-    assert "const DORMANT_CORE_EVENT_SCHEMA_VERSION = 5;" in source
-    assert source.count("DORMANT_CORE_EVENT_SCHEMA_VERSION") == 2
+    assert "const CORE_EVENT_SCHEMA_VERSION = 5;" in source
+    assert source.count("CORE_EVENT_SCHEMA_VERSION") == 2
     v5 = source.split(
         "export function validateDormantSessionEventV5(event, sessionId) {", 1
     )[1].split("function validateDormantProgressV5(value) {", 1)[0]
-    assert "event.schema_version !== DORMANT_CORE_EVENT_SCHEMA_VERSION" in v5
+    assert "event.schema_version !== CORE_EVENT_SCHEMA_VERSION" in v5
     assert 'case "Progress":\n      return validateDormantProgressV5(event.body);' in v5
