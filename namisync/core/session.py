@@ -177,6 +177,37 @@ class ResultItem:
     detail_omitted_count: int = 0
 
 
+def validate_result_cancellation(
+    status: SessionState,
+    disposition: Disposition,
+    canceled: bool,
+    execute_status: PhaseStatus | None,
+    verify_status: PhaseStatus | None,
+) -> None:
+    """Keep filesystem and phase truth intact across terminal projections."""
+
+    if status is SessionState.CANCELED and not canceled:
+        raise ValueError("canceled filesystem status requires canceled=True")
+    if canceled and status is SessionState.REFUSED:
+        raise ValueError("a refused result cannot also be canceled")
+    if status is SessionState.CANCELED and execute_status is PhaseStatus.COMPLETED:
+        raise ValueError("execute cancellation cannot carry a completed execute phase")
+    if canceled and status in {SessionState.COMPLETED, SessionState.FAILED}:
+        if disposition is not Disposition.RAN:
+            raise ValueError("compound cancellation must have run disposition")
+        expected_execute = (
+            PhaseStatus.COMPLETED
+            if status is SessionState.COMPLETED
+            else PhaseStatus.FAILED
+        )
+        if execute_status is not expected_execute:
+            raise ValueError("compound cancellation must preserve matching execute truth")
+        if verify_status is not PhaseStatus.CANCELED:
+            raise ValueError("compound cancellation must carry a canceled verify phase")
+    if status is SessionState.REFUSED and disposition is not Disposition.UNRUN:
+        raise ValueError("refused sessions must have unrun disposition")
+
+
 @dataclass(frozen=True, slots=True)
 class OperationResult:
     """Axis-separated terminal truth for a generic operation session."""
@@ -236,49 +267,13 @@ class OperationResult:
             raise TypeError(
                 "result review_fact_limit must be ReviewFactLimitExceeded or None"
             )
-        if self.status is SessionState.CANCELED and not self.canceled:
-            raise ValueError("canceled filesystem status requires canceled=True")
-        if self.canceled and self.status is SessionState.REFUSED:
-            raise ValueError("a refused result cannot also be canceled")
-        execute = next(
-            (phase for phase in self.phases if phase.phase == "execute"),
-            None,
+        validate_result_cancellation(
+            self.status,
+            self.disposition,
+            self.canceled,
+            next((phase.status for phase in self.phases if phase.phase == "execute"), None),
+            next((phase.status for phase in self.phases if phase.phase == "verify"), None),
         )
-        verify = next(
-            (phase for phase in self.phases if phase.phase == "verify"),
-            None,
-        )
-        if (
-            self.status is SessionState.CANCELED
-            and execute is not None
-            and execute.status is PhaseStatus.COMPLETED
-        ):
-            raise ValueError(
-                "execute cancellation cannot carry a completed execute phase"
-            )
-        if self.canceled and self.status in {
-            SessionState.COMPLETED,
-            SessionState.FAILED,
-        }:
-            if self.disposition is not Disposition.RAN:
-                raise ValueError(
-                    "compound cancellation must have run disposition"
-                )
-            expected_execute = (
-                PhaseStatus.COMPLETED
-                if self.status is SessionState.COMPLETED
-                else PhaseStatus.FAILED
-            )
-            if execute is None or execute.status is not expected_execute:
-                raise ValueError(
-                    "compound cancellation must preserve matching execute truth"
-                )
-            if verify is None or verify.status is not PhaseStatus.CANCELED:
-                raise ValueError(
-                    "compound cancellation must carry a canceled verify phase"
-                )
-        if self.status is SessionState.REFUSED and self.disposition is not Disposition.UNRUN:
-            raise ValueError("refused sessions must have unrun disposition")
         if self.review_fact_limit is not None and not (
             self.status is SessionState.REFUSED
             and self.disposition is Disposition.UNRUN

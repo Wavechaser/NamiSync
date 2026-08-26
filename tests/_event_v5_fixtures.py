@@ -201,3 +201,86 @@ def maximum_reliable_envelope() -> dict[str, object]:
     ) != 1_048_576:
         raise AssertionError("maximum reliable fixture is not exact")
     return value
+
+# Literal contract authority, independent of production enum iteration.
+_VALID_OPERATION_RECORDING = frozenset(
+    {
+        ("succeeded", "ok", None),
+        ("skipped", "ok", None),
+        ("failed", "ok", None),
+        ("canceled", "ok", None),
+        ("deferred", "ok", None),
+        ("blocked", "ok", None),
+        ("succeeded", "degraded", "record-write-failed"),
+        ("skipped", "degraded", "record-write-failed"),
+        ("failed", "degraded", "unrecorded-mutation"),
+        ("failed", "degraded", "recording-prerequisite-failed"),
+    }
+)
+OPERATION_RECORDING_CASES = tuple(
+    (outcome, recording, reason, (outcome, recording, reason) in _VALID_OPERATION_RECORDING)
+    for outcome in ("succeeded", "skipped", "failed", "canceled", "deferred", "blocked")
+    for recording in ("ok", "degraded")
+    for reason in (
+        None,
+        "record-write-failed",
+        "unrecorded-mutation",
+        "recording-prerequisite-failed",
+    )
+)
+
+
+def cancellation_terminal_cases() -> tuple[tuple[str, bool, dict[str, object]], ...]:
+    rows = (
+        ("plain-completed", True, "completed", False, "ran", ()),
+        ("plain-failed", True, "failed", False, "ran", ()),
+        ("ran-cancel", True, "canceled", True, "ran", ()),
+        ("unrun-cancel", True, "canceled", True, "unrun", ()),
+        ("plain-refused", True, "refused", False, "unrun", ()),
+        ("compound-completed", True, "completed", True, "ran", (("execute", "completed"), ("verify", "canceled"))),
+        ("compound-failed", True, "failed", True, "ran", (("execute", "failed"), ("verify", "canceled"))),
+        ("execute-canceled", True, "canceled", True, "ran", (("execute", "canceled"),)),
+        ("execute-failed-canceled", True, "canceled", True, "ran", (("execute", "failed"),)),
+        ("compound-reversed", True, "completed", True, "ran", (("verify", "canceled"), ("execute", "completed"))),
+        ("compound-third-phase", True, "completed", True, "ran", (("preflight", "completed"), ("execute", "completed"), ("verify", "canceled"))),
+        ("unrun-completed-cancel", False, "completed", True, "unrun", ()),
+        ("canceled-completed-execute", False, "canceled", True, "ran", (("execute", "completed"),)),
+        ("compound-missing-execute", False, "completed", True, "ran", (("verify", "canceled"),)),
+        ("compound-wrong-execute", False, "completed", True, "ran", (("execute", "failed"), ("verify", "canceled"))),
+        ("failed-wrong-execute", False, "failed", True, "ran", (("execute", "completed"), ("verify", "canceled"))),
+        ("compound-missing-verify", False, "completed", True, "ran", (("execute", "completed"),)),
+        ("compound-completed-verify", False, "completed", True, "ran", (("execute", "completed"), ("verify", "completed"))),
+        ("compound-failed-verify", False, "failed", True, "ran", (("execute", "failed"), ("verify", "failed"))),
+        ("compound-unrun", False, "failed", True, "unrun", (("execute", "failed"), ("verify", "canceled"))),
+        ("canceled-without-flag", False, "canceled", False, "ran", ()),
+        ("refused-canceled", False, "refused", True, "unrun", ()),
+        ("refused-ran", False, "refused", False, "ran", ()),
+    )
+    cases = []
+    for name, accepted, status, canceled, disposition, phases in rows:
+        result = terminal_summary()
+        result.update(
+            status=status,
+            canceled=canceled,
+            disposition=disposition,
+            phases=[
+                {
+                    "phase": phase,
+                    "status": phase_status,
+                    "items_done": 0,
+                    "items_total": 0,
+                    "bytes_done": "0",
+                    "bytes_total": "0",
+                    "error": None,
+                }
+                for phase, phase_status in phases
+            ],
+            bytes_done="0",
+            bytes_total="0",
+            recording="ok",
+            recording_degraded_items=0,
+            recording_issues=[],
+            omitted_detail_count=0,
+        )
+        cases.append((name, accepted, result))
+    return tuple(cases)

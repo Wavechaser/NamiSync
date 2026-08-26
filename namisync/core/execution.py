@@ -44,6 +44,22 @@ class ItemRecordingReason(StrEnum):
     RECORDING_PREREQUISITE_FAILED = "recording-prerequisite-failed"
 
 
+def validate_item_recording_outcome(
+    outcome: Outcome | None, reason: ItemRecordingReason
+) -> None:
+    """Require one degraded item's reason to agree with filesystem truth."""
+
+    if not isinstance(reason, ItemRecordingReason):
+        raise TypeError("item recording reason has the wrong type")
+    expected = (
+        {Outcome.SUCCEEDED, Outcome.SKIPPED}
+        if reason is ItemRecordingReason.RECORD_WRITE_FAILED
+        else {Outcome.FAILED}
+    )
+    if outcome not in expected:
+        raise ValueError("item recording reason contradicts operation outcome")
+
+
 class TaskRecordingIssueReason(StrEnum):
     """Closed task-wide causes of recording degradation."""
 
@@ -211,18 +227,7 @@ class ExecutionSet:
                 f"{sorted(invalid_recording)!r}"
             )
         for op_id, reason in self.recording_reasons.items():
-            if not isinstance(reason, ItemRecordingReason):
-                raise TypeError("item recording reason has the wrong type")
-            outcome = self.status.get(op_id)
-            expected = (
-                {Outcome.SUCCEEDED, Outcome.SKIPPED}
-                if reason is ItemRecordingReason.RECORD_WRITE_FAILED
-                else {Outcome.FAILED}
-            )
-            if outcome not in expected:
-                raise ValueError(
-                    "item recording reason contradicts operation outcome"
-                )
+            validate_item_recording_outcome(self.status.get(op_id), reason)
         if not isinstance(self.recording_issues, tuple):
             raise TypeError("task recording issues must be a tuple")
         if any(
@@ -330,16 +335,7 @@ class ExecutionSet:
 
         if op_id not in self.selection:
             raise ValueError("recording degradation belongs to an unselected operation")
-        if not isinstance(reason, ItemRecordingReason):
-            raise TypeError("item recording reason has the wrong type")
-        outcome = self.status.get(op_id)
-        expected = (
-            {Outcome.SUCCEEDED, Outcome.SKIPPED}
-            if reason is ItemRecordingReason.RECORD_WRITE_FAILED
-            else {Outcome.FAILED}
-        )
-        if outcome not in expected:
-            raise ValueError("item recording reason contradicts operation outcome")
+        validate_item_recording_outcome(self.status.get(op_id), reason)
         evidence = self.published_evidence.get(op_id)
         if (
             reason is ItemRecordingReason.RECORD_WRITE_FAILED

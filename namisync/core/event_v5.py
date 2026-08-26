@@ -10,6 +10,7 @@ from .execution import (
     ExecutionReason,
     ItemRecordingReason,
     TaskRecordingIssueReason,
+    validate_item_recording_outcome,
 )
 from .integrity import (
     IntegrityMode,
@@ -20,7 +21,7 @@ from .integrity import (
 )
 from .planning import BlockedReason, OperationKind
 from .scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64, scalar_64_from_text
-from .session import Disposition, PhaseStatus, SessionState
+from .session import Disposition, PhaseStatus, SessionState, validate_result_cancellation
 
 
 EVENT_V5_SCHEMA_VERSION = 5
@@ -388,6 +389,10 @@ def _validate_operation_item(value: object) -> None:
         item["recording_reason"],
         item["recording_detail"],
     )
+    if item["recording_reason"] is not None:
+        validate_item_recording_outcome(
+            Outcome(item["result"]), ItemRecordingReason(item["recording_reason"])
+        )
     _safe_int(item["detail_omitted_count"], "operation detail_omitted_count")
 
 
@@ -498,12 +503,19 @@ def _validate_terminal_summary(value: object) -> None:
             and result["error"] is None
         ):
             raise ValueError("review-limit terminal summary has contradictory facts")
-    if status == SessionState.CANCELED.value and not canceled:
-        raise ValueError("canceled terminal status requires canceled=true")
-    if status == SessionState.REFUSED.value and (
-        canceled or disposition != Disposition.UNRUN.value
-    ):
-        raise ValueError("refused terminal summary must be uncanceled and unrun")
+    validate_result_cancellation(
+        SessionState(status),
+        Disposition(disposition),
+        canceled,
+        next(
+            (PhaseStatus(phase["status"]) for phase in phases if phase["phase"] == "execute"),
+            None,
+        ),
+        next(
+            (PhaseStatus(phase["status"]) for phase in phases if phase["phase"] == "verify"),
+            None,
+        ),
+    )
 
 
 def _validate_phase_result(value: object, index: int) -> str:

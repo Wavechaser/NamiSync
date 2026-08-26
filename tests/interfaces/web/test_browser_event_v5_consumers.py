@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import asdict
+from datetime import datetime
 import json
 from pathlib import Path
 import subprocess
@@ -8,15 +10,34 @@ import subprocess
 import pytest
 
 from _event_v5_fixtures import (
+    AT,
+    ITEM_ID,
+    OPERATION_RECORDING_CASES,
     SESSION_ID,
     bodies,
+    cancellation_terminal_cases,
     operation_item_body,
     review_limit_terminal_summary,
     session_event_view,
     terminal_summary,
 )
 from _frontend_test_support import _node_executable
+from namisync.core.evidence import Outcome, RecordingStatus
+from namisync.core.events import Envelope, ItemOutcome, Terminal, TerminalSummary
+from namisync.core.execution import ItemRecordingReason
+from namisync.core.session import (
+    Disposition,
+    OperationResult,
+    PhaseResult,
+    PhaseStatus,
+    SessionId,
+    SessionState,
+)
 from namisync.interfaces.web import bridge as bridge_module
+from namisync.workflows.views import (
+    operation_result_view,
+    session_event_view as project_session_event,
+)
 
 
 BRIDGE_JS = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
@@ -78,12 +99,13 @@ def test_dormant_node_v5_consumer_accepts_and_rejects_the_exact_target() -> None
             accepted.append(
                 session_event_view("Terminal", body={"result": retained})
             )
-    for reason in (
-        "record-write-failed",
-        "unrecorded-mutation",
-        "recording-prerequisite-failed",
+    for outcome, reason in (
+        ("succeeded", "record-write-failed"),
+        ("failed", "unrecorded-mutation"),
+        ("failed", "recording-prerequisite-failed"),
     ):
         item = operation_item_body()
+        item["result"] = outcome
         item["recording_reason"] = reason
         accepted.append(session_event_view("ItemOutcome", body=item))
     for reason in (
@@ -170,3 +192,117 @@ for (const item of corpus.cases) {
         timeout=30,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def _project_public_event(body: object) -> dict[str, object]:
+    return asdict(
+        project_session_event(
+            Envelope(SessionId(SESSION_ID), 3, datetime.fromisoformat(AT), 5, body)
+        )
+    )
+
+
+def _assert_v5_node_cases(cases: list[dict[str, object]]) -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.fail("the required Node validator runtime is unavailable")
+    script = """
+import { readFileSync } from "node:fs";
+globalThis.window = { addEventListener() {} };
+// Expose the private result validator only in this in-memory test module.
+const source = readFileSync(process.argv[1], "utf8") +
+  "\\nexport { validateOperationResultView };";
+const bridge = await import(
+  "data:text/javascript;base64," + Buffer.from(source).toString("base64")
+);
+const corpus = JSON.parse(readFileSync(0, "utf8"));
+const mismatches = [];
+for (const item of corpus.cases) {
+  const actual = item.kind === "event"
+    ? bridge.validateDormantSessionEventV5(item.value, corpus.session_id)
+    : bridge.validateOperationResultView(item.value);
+  if (actual !== item.expected) {
+    mismatches.push(item.name + ": expected " + item.expected + ", got " + actual);
+  }
+}
+if (mismatches.length) throw new Error(mismatches.join("\\n"));
+"""
+    completed = subprocess.run(
+        [str(node), "--input-type=module", "--eval", script, str(BRIDGE_JS)],
+        input=json.dumps({"session_id": SESSION_ID, "cases": cases}),
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_required_node_operation_truth_matches_public_python_projections() -> None:
+    cases = []
+    for outcome, recording, reason, accepted in OPERATION_RECORDING_CASES:
+        item = ItemOutcome(
+            item_id=ITEM_ID,
+            kind="copy",
+            path="folder\\file.bin",
+            outcome=Outcome(outcome) if accepted else Outcome.SUCCEEDED,
+            recording=RecordingStatus(recording) if accepted else RecordingStatus.OK,
+            recording_reason=(
+                ItemRecordingReason(reason) if accepted and reason is not None else None
+            ),
+        )
+        view = _project_public_event(item)
+        if accepted:
+            assert (
+                view["body"]["result"],
+                view["body"]["recording"],
+                view["body"]["recording_reason"],
+                view["body"]["recording_detail"],
+            ) == (outcome, recording, reason, None)
+        else:
+            view["body"].update(
+                result=outcome,
+                recording=recording,
+                recording_reason=reason,
+                recording_detail=None,
+            )
+        cases.append(
+            {
+                "name": f"item:{outcome}/{recording}/{reason}",
+                "kind": "event",
+                "expected": accepted,
+                "value": view,
+            }
+        )
+    for name, accepted, summary in cancellation_terminal_cases():
+        result = (
+            OperationResult(
+                status=SessionState(summary["status"]),
+                canceled=summary["canceled"],
+                disposition=Disposition(summary["disposition"]),
+                phases=tuple(
+                    PhaseResult(phase["phase"], PhaseStatus(phase["status"]), 0, 0, 0, 0)
+                    for phase in summary["phases"]
+                ),
+            )
+            if accepted
+            else OperationResult(SessionState.COMPLETED)
+        )
+        event = _project_public_event(Terminal(TerminalSummary.from_result(result)))
+        result_view = asdict(operation_result_view(result))
+        if not accepted:
+            event["body"]["result"].update(summary)
+            result_view.update(
+                filesystem=summary["status"],
+                canceled=summary["canceled"],
+                disposition=summary["disposition"],
+                phases=summary["phases"],
+            )
+        cases.extend(
+            (
+                {"name": name + ":event", "kind": "event", "expected": accepted, "value": event},
+                {"name": name + ":result", "kind": "result", "expected": accepted, "value": result_view},
+            )
+        )
+    assert len(cases) == 94
+    _assert_v5_node_cases(cases)

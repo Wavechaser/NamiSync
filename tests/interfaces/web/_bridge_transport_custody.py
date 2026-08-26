@@ -150,7 +150,10 @@ CURRENT_V5_TRANSPORT_REPRESENTATION = {
     },
     "reliable_bodies": {
         "StateChanged": "populated at admission; fields and mapping inherited",
-        "ItemOutcome": "populated in ordinary and maximum; fields inherited",
+        "ItemOutcome": (
+            "populated in ordinary and maximum with failed/degraded and "
+            "unrecorded-mutation attribution; remaining fields inherited"
+        ),
         "Terminal": (
             "populated at cleanup; result mapping inherited and its subject-scaled "
             "subtree is charged separately from transport custody"
@@ -163,7 +166,10 @@ CURRENT_V5_TRANSPORT_REPRESENTATION = {
         "SessionEventView.schema_version": (
             "populated with nested live core event version 5"
         ),
-        "ItemOutcome": "fields and body mapping inherited unchanged from frozen v1",
+        "ItemOutcome": (
+            "same current failed/degraded/unrecorded-mutation attribution as "
+            "ordinary; remaining fields and body mapping inherited"
+        ),
     },
     "aliasing": {
         "queue_envelope": (
@@ -332,11 +338,7 @@ class _CustodyInvocation:
                             )
                         ),
                         recording=RecordingStatus.DEGRADED,
-                        recording_reason=(
-                            ItemRecordingReason.RECORD_WRITE_FAILED
-                            if ordinal % 3 == 1
-                            else ItemRecordingReason.UNRECORDED_MUTATION
-                        ),
+                        recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
                         recording_detail=(
                             "published filesystem mutation failed before ledger settlement"
                             if ordinal % 3 == 1
@@ -399,11 +401,7 @@ class _CustodyInvocation:
                     )
                 ),
                 recording=RecordingStatus.DEGRADED,
-                recording_reason=(
-                    ItemRecordingReason.RECORD_WRITE_FAILED
-                    if ordinal % 3 == 1
-                    else ItemRecordingReason.UNRECORDED_MUTATION
-                ),
+                recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
                 recording_detail=(
                     "published filesystem mutation failed before ledger settlement"
                     if ordinal % 3 == 1

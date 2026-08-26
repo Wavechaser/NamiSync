@@ -78,6 +78,27 @@ def test_current_v5_ordinary_fixture_models_attempt_and_settlement() -> None:
     assert len({outcome.item_id for outcome in outcomes}) == 3
     assert {outcome.recording.value for outcome in outcomes} == {"degraded"}
     assert all(outcome.recording_reason is not None for outcome in outcomes)
+    assert {
+        (item.outcome.value, item.recording_reason.value) for item in outcomes
+    } == {("failed", "unrecorded-mutation")}
+
+
+def test_current_v5_maximum_fixture_has_valid_recording_truth() -> None:
+    frozen = _frozen_validator()
+    child = frozen._child_module()
+    state = SimpleNamespace(task_index=0, variant=frozen.VARIANT)
+    invocation = child._CustodyInvocation(state)
+    events = []
+    context = SimpleNamespace(emit=events.append)
+
+    for ordinal in range(3):
+        invocation._emit_maximum(context, ordinal)
+
+    assert len(events) == 3
+    assert {
+        (item.outcome.value, item.recording.value, item.recording_reason.value)
+        for item in events
+    } == {("failed", "degraded", "unrecorded-mutation")}
 
 
 def test_current_v5_progress_representation_overlay_is_complete() -> None:

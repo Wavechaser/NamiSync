@@ -145,6 +145,13 @@ fabricating a live session event for a hash-only receipt. All detail readback
 remains page-bounded. Every current event view requires nested schema version 5;
 byte/size/nanosecond fields in public views are canonical `Scalar64` strings,
 while counts, cursors, and revisions remain exact JavaScript-safe integers.
+Packaged event validation checks the relationship between filesystem outcome
+and item recording reason, not only each closed vocabulary in isolation.
+Terminal events and result views enforce the same compound/execute-
+cancellation rules as the core result; their exact meanings remain in
+[CORE.md](CORE.md). Literal matrix and cancellation corpora exercise both
+Python boundaries and the required Node gate, with valid production view
+projections and independently mutated negative cases.
 
 The current public service surface includes:
 

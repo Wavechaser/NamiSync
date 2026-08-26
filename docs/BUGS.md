@@ -1258,6 +1258,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Cross-axis validation omission. Item and
+  terminal projections could admit recording reasons that contradicted the
+  filesystem outcome, or cancellation without matching execute/verify truth,
+  even though continuation/full-result contracts rejected those combinations.
+  Cause: projection validators checked each closed field independently and
+  omitted their relationships. Fixed by sharing the existing recording matrix
+  and cancellation rules across core objects and Python decoders and mirroring
+  them in browser event/result validation. A literal complete recording matrix
+  and cancellation corpus include public-view Node witnesses; valid plain and
+  compound cancellation behavior is preserved.
 - MINOR - FIXED (2026-08-26). Scalar error-family drift. Shared decimal and
   public event decoders classified malformed strings as wrong types, while
   very long canonical Scalar64 overflow escaped as Python's generic conversion

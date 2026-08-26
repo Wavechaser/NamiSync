@@ -22,6 +22,7 @@ from namisync.core.execution import (
     ItemRecordingReason,
     TaskRecordingIssue,
     TaskRecordingIssueReason,
+    validate_item_recording_outcome,
 )
 from namisync.core.integrity import (
     IntegrityOutcome,
@@ -54,6 +55,7 @@ from namisync.core.session import (
     ResultItem,
     SessionId,
     SessionState,
+    validate_result_cancellation,
 )
 
 
@@ -304,6 +306,7 @@ class ItemOutcome(ResultItem):
         elif self.recording is RecordingStatus.DEGRADED:
             if not isinstance(self.recording_reason, ItemRecordingReason):
                 raise ValueError("degraded recording requires an item reason")
+            validate_item_recording_outcome(self.outcome, self.recording_reason)
         else:
             raise TypeError("operation recording has the wrong type")
 
@@ -374,12 +377,13 @@ class TerminalSummary:
         )
         if self.recording is not expected_recording:
             raise ValueError("terminal recording aggregate contradicts its witnesses")
-        if self.status is SessionState.CANCELED and not self.canceled:
-            raise ValueError("canceled terminal status requires canceled=true")
-        if self.status is SessionState.REFUSED and (
-            self.canceled or self.disposition is not Disposition.UNRUN
-        ):
-            raise ValueError("refused terminal summary must be uncanceled and unrun")
+        validate_result_cancellation(
+            self.status,
+            self.disposition,
+            self.canceled,
+            next((phase.status for phase in self.phases if phase.phase == "execute"), None),
+            next((phase.status for phase in self.phases if phase.phase == "verify"), None),
+        )
         if self.review_fact_limit is not None and not (
             self.status is SessionState.REFUSED
             and self.disposition is Disposition.UNRUN

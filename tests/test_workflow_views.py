@@ -395,11 +395,11 @@ def test_partial_precedes_mismatch_without_hiding_secondary_axes() -> None:
             recording=RecordingStatus.DEGRADED,
             audit=RecordingStatus.DEGRADED,
             items=(
-                _operation(
-                    Outcome.BLOCKED,
+                _operation(Outcome.BLOCKED),
+                _integrity(
+                    IntegrityResult.MISMATCHED,
                     recording=RecordingStatus.DEGRADED,
                 ),
-                _integrity(IntegrityResult.MISMATCHED),
             ),
             phases=(
                 PhaseResult(

@@ -1779,6 +1779,25 @@ function validateCoreOperationResult(value) {
   );
 }
 
+function validateCancellationTruth(status, disposition, canceled, phases) {
+  const execute = phases.find((phase) => phase.phase === "execute");
+  const verify = phases.find((phase) => phase.phase === "verify");
+  if (status === "canceled" && (!canceled || execute?.status === "completed")) {
+    return false;
+  }
+  if (status === "refused") {
+    return !canceled && disposition === "unrun";
+  }
+  if (canceled && (status === "completed" || status === "failed")) {
+    return (
+      disposition === "ran" &&
+      execute?.status === status &&
+      verify?.status === "canceled"
+    );
+  }
+  return true;
+}
+
 function validateOperationResultView(value) {
   if (
     !isExactObject(value, [
@@ -1836,9 +1855,9 @@ function validateOperationResultView(value) {
       : "ok";
   if (
     value.recording !== expectedRecording ||
-    (value.filesystem === "canceled" && !value.canceled) ||
-    (value.filesystem === "refused" &&
-      (value.canceled || value.disposition !== "unrun"))
+    !validateCancellationTruth(
+      value.filesystem, value.disposition, value.canceled, value.phases,
+    )
   ) {
     return false;
   }
@@ -2112,6 +2131,7 @@ function validateDormantOperationItemV5(value) {
       value.recording,
       value.recording_reason,
       value.recording_detail,
+      value.result,
     ) &&
     isNonnegativeInteger(value.detail_omitted_count)
   );
@@ -2213,9 +2233,9 @@ function validateDormantTerminalSummaryV5(value) {
       : "ok";
   if (
     value.recording !== expectedRecording ||
-    (value.status === "canceled" && !value.canceled) ||
-    (value.status === "refused" &&
-      (value.canceled || value.disposition !== "unrun"))
+    !validateCancellationTruth(
+      value.status, value.disposition, value.canceled, value.phases,
+    )
   ) {
     return false;
   }
@@ -2305,7 +2325,7 @@ function validateDormantReviewFactV5(value) {
   return value.byte_limit === expected;
 }
 
-function validateDormantItemRecordingV5(status, reason, detail) {
+function validateDormantItemRecordingV5(status, reason, detail, outcome) {
   if (!isOneOf(status, RECORDING_STATES)) {
     return false;
   }
@@ -2314,7 +2334,10 @@ function validateDormantItemRecordingV5(status, reason, detail) {
   }
   return (
     isOneOf(reason, DORMANT_ITEM_RECORDING_REASONS_V5) &&
-    (detail === null || isBoundedV5Text(detail, false))
+    (detail === null || isBoundedV5Text(detail, false)) &&
+    (reason === "record-write-failed"
+      ? outcome === "succeeded" || outcome === "skipped"
+      : outcome === "failed")
   );
 }
 

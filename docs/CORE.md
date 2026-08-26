@@ -113,7 +113,12 @@ remain exact v5 while execution payloads are exact v6.
 ids to the closed `ItemRecordingReason`, and `recording_issues` retains the
 first bounded `TaskRecordingIssue` for each reason in observation order. Its
 aggregate `recording` value is derived and degraded exactly when either
-collection is nonempty.
+collection is nonempty. The same sparse-reason rule is applied by
+`ItemOutcome` and the Python event/view validators: `record-write-failed`
+requires succeeded or skipped filesystem truth, while `unrecorded-mutation`
+and `recording-prerequisite-failed` require failed truth. A clean recording axis
+has neither a recording reason nor detail; a degraded axis requires one of
+those outcome-compatible reasons.
 
 Every successful selected COPY/UPDATE/MOVE_UPDATE has exactly one
 `PublishedCopyEvidence`: its copy-stream attestation plus either a complete
@@ -466,7 +471,11 @@ verify cancellation may retain filesystem `COMPLETED` or `FAILED`, while
 `result_terminal_state()` is the sole projection to dispatcher lifecycle
 `CANCELED`. These combinations require `Disposition.RAN`, matching execute
 truth, and a canceled verify phase; execute cancellation cannot claim a
-completed execute phase.
+completed execute phase. One shared validator enforces those rules for
+`OperationResult`, `TerminalSummary`, and Python v5 decoding; the browser
+terminal and result validators enforce the same rules. Ordinary phase-free
+cancellation may be ran or unrun. Phase order and an exactly-two-phase shape
+are not additional cancellation requirements.
 
 ## Expectations Of Other Modules
 
