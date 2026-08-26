@@ -59,12 +59,14 @@ def scalar_64_to_text(value: object, field_name: str) -> str:
 def scalar_64_from_text(value: object, field_name: str) -> int:
     """Decode canonical decimal text without accepting JSON-number coercion."""
 
-    if type(value) is not str or _CANONICAL_DECIMAL.fullmatch(value) is None:
+    if type(value) is not str:
         raise TypeError(f"{field_name} must be a canonical decimal string")
-    parsed = int(value)
-    if parsed > MAX_SIGNED_64:
+    if _CANONICAL_DECIMAL.fullmatch(value) is None:
+        raise ValueError(f"{field_name} must be a canonical decimal string")
+    maximum = str(MAX_SIGNED_64)
+    if len(value) > len(maximum) or (len(value) == len(maximum) and value > maximum):
         raise ScalarDomainError(f"{field_name} exceeds the signed-64 domain")
-    return parsed
+    return int(value)
 
 
 def file_index_128_to_text(value: object, field_name: str = "file index") -> str:
@@ -80,12 +82,14 @@ def file_index_128_to_text(value: object, field_name: str = "file index") -> str
 def file_index_128_from_text(value: object, field_name: str = "file index") -> int:
     """Decode one canonical opaque Windows file index."""
 
-    if type(value) is not str or _CANONICAL_DECIMAL.fullmatch(value) is None:
+    if type(value) is not str:
         raise TypeError(f"{field_name} must be canonical unsigned-decimal text")
-    parsed = int(value)
-    if parsed > MAX_FILE_INDEX_128:
+    if _CANONICAL_DECIMAL.fullmatch(value) is None:
+        raise ValueError(f"{field_name} must be canonical unsigned-decimal text")
+    maximum = str(MAX_FILE_INDEX_128)
+    if len(value) > len(maximum) or (len(value) == len(maximum) and value > maximum):
         raise ValueError(f"{field_name} exceeds the FileIndex128 domain")
-    return parsed
+    return int(value)
 
 
 def bounded_utf8_text(

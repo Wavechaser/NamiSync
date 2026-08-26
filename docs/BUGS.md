@@ -1258,6 +1258,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MINOR - FIXED (2026-08-26). Scalar error-family drift. Shared decimal and
+  public event decoders classified malformed strings as wrong types, while
+  very long canonical Scalar64 overflow escaped as Python's generic conversion
+  error. The native file-id decoder also accepted integer/list coercion and
+  carried a redundant optimization-sensitive assertion. Cause: combined
+  type/grammar checks and conversion before domain validation. Fixed with
+  exact type/grammar/domain error families, bounded-domain comparison before
+  conversion, shared public event decoding, and explicit 16-byte unsigned
+  construction. Public payload and optimized-mode regressions preserve valid
+  full-width identity and unchanged volume/hash/epoch semantics.
 - MODERATE - FIXED (2026-08-25). Native file-identity narrowing. Scanner and
   preflight could observe Windows/Python file indexes wider than 64 bits while
   executor and verifier reconstructed only legacy high/low 64-bit fields and

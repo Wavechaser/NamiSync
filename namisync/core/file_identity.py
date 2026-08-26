@@ -30,12 +30,12 @@ GetFileInformationByHandleEx = Callable[[int, int, object, int], object]
 def file_index_128_from_bytes(value: bytes | bytearray | memoryview) -> int:
     """Canonicalize Windows' little-endian 16-byte file identifier."""
 
+    if not isinstance(value, (bytes, bytearray, memoryview)):
+        raise TypeError("FILE_ID_128 must be a byte buffer")
     raw = bytes(value)
     if len(raw) != 16:
         raise ValueError("FILE_ID_128 must contain exactly 16 bytes")
-    result = int.from_bytes(raw, byteorder="little", signed=False)
-    assert 0 <= result <= MAX_FILE_INDEX_128
-    return result
+    return int.from_bytes(raw, byteorder="little", signed=False)
 
 
 def file_index_128_text(value: int) -> str:

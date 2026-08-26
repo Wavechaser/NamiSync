@@ -3,6 +3,8 @@ from __future__ import annotations
 import ctypes
 import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -78,6 +80,67 @@ def test_external_scalar64_rejects_raw_or_noncanonical_values(value: object) -> 
         scalar_64_from_text(value, "value")
 
 
+class _DecimalText(str):
+    pass
+
+
+@pytest.mark.parametrize("decode", (scalar_64_from_text, file_index_128_from_text))
+@pytest.mark.parametrize("value", (None, True, 0, 1.0, b"1", [], {}, _DecimalText("1")))
+def test_decimal_decoder_wrong_type_raises_exact_type_error(decode, value) -> None:
+    with pytest.raises(TypeError) as raised:
+        decode(value, "value")
+    assert type(raised.value) is TypeError
+
+
+@pytest.mark.parametrize("decode", (scalar_64_from_text, file_index_128_from_text))
+@pytest.mark.parametrize(
+    "value",
+    ("", "+1", "-1", "-0", "00", "01", "1.0", "1e0", " 1", "1 ", "1\n", "1\x00", "١"),
+)
+def test_decimal_decoder_invalid_grammar_raises_exact_value_error(decode, value) -> None:
+    with pytest.raises(ValueError) as raised:
+        decode(value, "value")
+    assert type(raised.value) is ValueError
+
+
+@pytest.mark.parametrize(
+    ("decode", "text", "expected"),
+    (
+        (scalar_64_from_text, "0", 0),
+        (scalar_64_from_text, "9223372036854775807", 9_223_372_036_854_775_807),
+        (file_index_128_from_text, "0", 0),
+        (
+            file_index_128_from_text,
+            "340282366920938463463374607431768211455",
+            340_282_366_920_938_463_463_374_607_431_768_211_455,
+        ),
+    ),
+)
+def test_decimal_decoder_accepts_literal_exact_bounds(decode, text, expected) -> None:
+    assert decode(text, "value") == expected
+
+
+@pytest.mark.parametrize(
+    ("decode", "text", "error_type"),
+    (
+        (scalar_64_from_text, "9223372036854775808", ScalarDomainError),
+        (
+            file_index_128_from_text,
+            "340282366920938463463374607431768211456",
+            ValueError,
+        ),
+        pytest.param(scalar_64_from_text, "9" * 5_000, ScalarDomainError, id="long-scalar64"),
+        pytest.param(file_index_128_from_text, "9" * 5_000, ValueError, id="long-file128"),
+    ),
+)
+def test_decimal_decoder_overflow_preserves_exact_error_family(
+    decode, text, error_type
+) -> None:
+    with pytest.raises(error_type) as raised:
+        decode(text, "value")
+    assert type(raised.value) is error_type
+
+
 def test_checked_scalar64_addition_accepts_the_limit_and_refuses_overflow() -> None:
     assert checked_add_signed_64(MAX_SIGNED_64 - 1, 1, "total") == MAX_SIGNED_64
     with pytest.raises(ScalarDomainError, match="exceeds"):
@@ -135,6 +198,77 @@ def test_file_id128_bytes_use_complete_little_endian_identity() -> None:
     assert file_index_128_from_bytes(memoryview(raw)) == expected
     with pytest.raises(ValueError, match="exactly 16 bytes"):
         file_index_128_from_bytes(raw[:-1])
+
+
+@pytest.mark.parametrize("value", (16, True, None, "0" * 16, [0] * 16))
+def test_file_id128_decoder_rejects_nonbuffer_input(value: object) -> None:
+    with pytest.raises(TypeError) as raised:
+        file_index_128_from_bytes(value)  # type: ignore[arg-type]
+    assert type(raised.value) is TypeError
+
+
+@pytest.mark.parametrize("buffer_type", (bytes, bytearray, memoryview))
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    (
+        (bytes(16), 0),
+        (
+            bytes.fromhex("1032547698badcfe0123456789abcdef"),
+            0xEFCDAB8967452301FEDCBA9876543210,
+        ),
+        (b"\xff" * 16, 340_282_366_920_938_463_463_374_607_431_768_211_455),
+    ),
+)
+def test_file_id128_decoder_preserves_literal_full_width(
+    buffer_type, raw: bytes, expected: int
+) -> None:
+    assert file_index_128_from_bytes(buffer_type(raw)) == expected
+
+
+@pytest.mark.parametrize("buffer_type", (bytes, bytearray, memoryview))
+@pytest.mark.parametrize("length", (0, 15, 17))
+def test_file_id128_decoder_rejects_wrong_byte_length(buffer_type, length: int) -> None:
+    with pytest.raises(ValueError) as raised:
+        file_index_128_from_bytes(buffer_type(bytes(length)))
+    assert type(raised.value) is ValueError
+
+
+def test_file_id128_decoder_counts_bytes_not_memoryview_elements() -> None:
+    raw = bytes.fromhex("1032547698badcfe0123456789abcdef")
+    assert file_index_128_from_bytes(memoryview(raw).cast("I")) == (
+        0xEFCDAB8967452301FEDCBA9876543210
+    )
+    with pytest.raises(ValueError, match="exactly 16 bytes"):
+        file_index_128_from_bytes(memoryview(bytes(64)).cast("I"))
+
+
+def test_file_id128_decoder_contract_survives_optimized_python() -> None:
+    program = """
+from namisync.core.file_identity import file_index_128_from_bytes
+
+raw = bytes.fromhex("1032547698badcfe0123456789abcdef")
+if file_index_128_from_bytes(raw) != 0xEFCDAB8967452301FEDCBA9876543210:
+    raise SystemExit("optimized decoder lost identity bits")
+if file_index_128_from_bytes(bytes.fromhex("ff" * 16)) != (1 << 128) - 1:
+    raise SystemExit("optimized decoder lost maximum identity")
+for value, expected_error in ((16, TypeError), (bytes(15), ValueError), (bytes(17), ValueError)):
+    try:
+        file_index_128_from_bytes(value)
+    except Exception as error:
+        if type(error) is not expected_error:
+            raise SystemExit("optimized decoder changed error family")
+    else:
+        raise SystemExit("optimized decoder accepted invalid input")
+"""
+    result = subprocess.run(
+        [sys.executable, "-O", "-c", program],
+        cwd=Path(__file__).parents[2],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("fs_type", ("NTFS", "ReFS", "refs"))

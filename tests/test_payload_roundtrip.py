@@ -664,6 +664,31 @@ def test_execution_payload_preserves_full_width_file_identity_as_text() -> None:
             decode_execution_request(json.dumps(malformed).encode("utf-8"))
 
 
+@pytest.mark.parametrize(
+    ("invalid", "error_type"),
+    (
+        (None, TypeError),
+        (True, TypeError),
+        (17, TypeError),
+        ("01", ValueError),
+        ("-1", ValueError),
+        ("340282366920938463463374607431768211456", ValueError),
+    ),
+)
+def test_execution_payload_file_identity_preserves_exact_error_family(
+    invalid: object, error_type: type[Exception]
+) -> None:
+    plan = _rich_plan(identity_index=MAX_FILE_INDEX_128)
+    value = json.loads(encode_execution_request(_rich_execution_request(plan=plan)))
+    value["execution_set"]["plan"]["operations"][1]["source_expected"][
+        "identity"
+    ]["file_index"] = invalid
+
+    with pytest.raises(error_type) as raised:
+        decode_execution_request(json.dumps(value).encode("utf-8"))
+    assert type(raised.value) is error_type
+
+
 def test_execution_set_byte_high_water_is_bounded_and_strictly_monotonic() -> None:
     xset = _rich_execution_request().execution_set
 

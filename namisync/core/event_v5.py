@@ -19,7 +19,7 @@ from .integrity import (
     RecordDisposition,
 )
 from .planning import BlockedReason, OperationKind
-from .scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64
+from .scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64, scalar_64_from_text
 from .session import Disposition, PhaseStatus, SessionState
 
 
@@ -31,7 +31,6 @@ MAX_DIAGNOSTIC_UTF8_BYTES = 1_024
 MAX_PATH_UTF16_UNITS = 32_767
 
 _HEX_ID = re.compile(r"[0-9a-f]{32}\Z")
-_SCALAR_64 = re.compile(r"0|[1-9][0-9]*\Z")
 _TERMINAL_STATES = frozenset(
     state.value
     for state in (
@@ -683,12 +682,7 @@ def _optional_safe_int(value: object, context: str) -> int | None:
 
 
 def _scalar_64(value: object, context: str) -> int:
-    if type(value) is not str or _SCALAR_64.fullmatch(value) is None:
-        raise TypeError(f"{context} must be a canonical decimal string")
-    parsed = int(value)
-    if parsed > MAX_SIGNED_64:
-        raise ValueError(f"{context} exceeds the signed-64 domain")
-    return parsed
+    return scalar_64_from_text(value, context)
 
 
 def _optional_scalar_64(value: object, context: str) -> int | None:

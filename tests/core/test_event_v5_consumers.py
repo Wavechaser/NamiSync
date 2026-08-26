@@ -37,6 +37,7 @@ from namisync.core.execution import (
 )
 from namisync.core.integrity import IntegrityReason
 from namisync.core.planning import BlockedReason
+from namisync.core.scalars import ScalarDomainError
 from namisync.core.session import SessionId
 
 
@@ -114,6 +115,37 @@ def test_dormant_v5_progress_rejects_noncanonical_scalar64(
     value["body"]["bytes_done"] = invalid  # type: ignore[index]
     with pytest.raises((TypeError, ValueError)):
         validate_event_v5_envelope(value)
+
+
+@pytest.mark.parametrize("route", ("envelope-validator", "envelope-decoder", "view-validator"))
+@pytest.mark.parametrize(
+    ("invalid", "error_type"),
+    (
+        (0, TypeError),
+        (True, TypeError),
+        ("01", ValueError),
+        ("-1", ValueError),
+        ("9223372036854775808", ScalarDomainError),
+        pytest.param("9" * 5_000, ScalarDomainError, id="long-scalar64"),
+    ),
+)
+def test_public_event_scalar64_boundary_preserves_exact_error_family(
+    route: str, invalid: object, error_type: type[Exception]
+) -> None:
+    value = (
+        session_event_view("Progress")
+        if route == "view-validator"
+        else envelope("Progress")
+    )
+    value["body"]["bytes_done"] = invalid  # type: ignore[index]
+    with pytest.raises(error_type) as raised:
+        if route == "envelope-validator":
+            validate_event_v5_envelope(value)
+        elif route == "envelope-decoder":
+            envelope_from_dict(value)
+        else:
+            validate_session_event_view_v5(value, expected_session_id=SESSION_ID)
+    assert type(raised.value) is error_type
 
 
 @pytest.mark.parametrize(

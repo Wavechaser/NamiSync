@@ -1,49 +1,43 @@
 # Session Handoff
 
-Status (2026-08-26): independent review remediation checkpoint 3R.6 is complete
+Status (2026-08-26): independent review remediation checkpoint 3R.7 is complete
 in `M1_SHELL_H2.md`. The checkpoint 3.2 shell boundary remains active with
-remediation through 3R.6; checkpoint 3.3 has not started, and checkpoint 3R.7
+remediation through 3R.7; checkpoint 3.3 has not started, and checkpoint 3R.8
 is the only authorized next delivery. S5 and 3R.14's coordinated epoch/reset
 remain design holds; neither may be implemented without the recorded user
 disposition.
 
 ## Delivered
 
-- Reproduced S4 tests-first through the public session runner and real
-  LocalWorkflowRuntime/registry/Dispatcher/InMemorySessionStore route. Baseline:
-  14 failing compound cases and three passing ratified-behavior checks.
-- Kept opened-execution exclusion acceptance local to workflow. The accepted
-  prefix advances only after reliable emission returns. Its first ordinary
-  rejection is retained without reoffering that item or replaying accepted
-  siblings; only accepted exclusions enter result projection.
-- Reused the existing continuation-derived failed execute projection through a
-  local helper for ordinary failure and cancellation's failed exclusion delivery.
-  It finishes once, keeps the first sink error and authoritative byte counters,
-  then returns normally so recording-close attribution reaches the terminal
-  result before dispatcher scrubbing. No generic-runner or dispatcher hook.
-- Added hostile-primary-diagnostic variants before guarding that projection:
-  12 additional failures became passes by reusing 3R.5's safe FailureDetail
-  projection. Primary error type and optional diagnostic fallback remain exact.
-- Removed F5's self-confirming recording guard. Documented and pinned the
-  already-ratified recording-open containment on an already-failing path,
-  verify-present close attribution, and unconditional exit-failure capture.
-  Retained the reported canceled-settlement assignment: its degraded value
-  is passed to fallback finishing before reassignment, now covered directly.
-- Updated WORKFLOWS and the causal BUGS entry. Raw independent reviewer reports
+- Reproduced F14 tests-first with 99 additional boundary cases. Against
+  untouched `f15a82d`, 45 failed and 54 passed; existing assertions were retained.
+- Separated wrong runtime type (`TypeError`) from malformed decimal grammar
+  (`ValueError`). Canonical Scalar64 overflow raises `ScalarDomainError`;
+  FileIndex128 overflow raises `ValueError`. Decimal domain comparison precedes
+  integer conversion, including canonical text beyond Python's conversion limit.
+- Made the active event-v5 scalar validator delegate to the shared decoder;
+  exact-family regressions exercise envelope validation, public decoding,
+  session-view validation, and execution payload identity decoding.
+- Native file-id decoding explicitly accepts byte buffers, normalizes before
+  requiring 16 bytes, and returns an unsigned little-endian integer without a
+  redundant assertion. Regressions pin exact bounds, asymmetric full-width
+  identity, multi-byte memoryviews, non-buffer refusal, and optimized Python.
+- Updated CORE and the causal BUGS entry. Raw independent reviewer reports
   below remain the detailed finding source until 3R.15.
 
 ## Safe Stop
 
-The checkpoint changes only workflow-local opened-execution failure handling,
-additive workflow/integration regressions, owning docs, and this handoff.
-Core/session, dispatcher/store, executor, public payload versions, and protected
-settlement authority are unchanged. Cooperative and process-fatal exceptions
-retain their separate handling. No later checkpoint implementation is present.
+The checkpoint changes only shared scalar/native identity boundary handling,
+the delegated event-v5 scalar validator, additive regressions, owning docs, and
+this handoff. Valid identity values, volume normalization, hashing, fingerprints,
+wire versions, epoch markers, and protected settlement authority are unchanged.
+No later checkpoint implementation is present.
 
 The tree is expected to be clean after
-`fix(workflows): preserve recording truth on compound failure`.
-Rebuilt 3R.4 is `1e794e7`; 3R.5 is `8f6d8f8`. The discarded 3R.4 attempt
-remains recoverable under ignored `build/r34-restart-20260826/`.
+`fix(core): normalize scalar identity boundaries`.
+Rebuilt 3R.4 is `1e794e7`; 3R.5 is `8f6d8f8`; 3R.6 is `f15a82d`.
+The discarded 3R.4 attempt remains recoverable under ignored
+`build/r34-restart-20260826/`.
 
 A read-only 3R.14 compatibility audit found that textual `FileIndex128` changes
 all non-null identity-bearing durable hashes under current ledger-v4/history-v6
@@ -52,8 +46,8 @@ payload versions, bumps the shared data epoch to 6 and the ledger contract ID,
 and keeps the history contract ID unchanged. Implementation waits for user
 ratification. S5 still requires an explicit storage design or accepted residual.
 
-Independent review also noted an adjacent, pre-existing boundary outside this
-row: `_settle_execute_resume_failure` can return all exclusions after the
+Independent 3R.6 review also noted an adjacent, pre-existing boundary outside
+that row: `_settle_execute_resume_failure` can return all exclusions after the
 pre-entry/resume sink rejects one, and its emission-error rendering is unguarded.
 This is an inspection-only follow-up, not a separately reproduced or assigned
 remediation checkpoint. Do not silently expand the opened-execution guarantee
@@ -67,38 +61,38 @@ installation settings were changed.
 
 ## Verification
 
-- Initial tests-first run against untouched `8f6d8f8`: `14 failed, 3 passed`.
-  Later hostile-sink projection check: `12 failed, 12 passed` before guarding.
-  Final focused set: `29 passed, 77 deselected`, independently rerun identically.
-- Workflow/core/dispatcher neighborhood:
-  `913 passed, 1 skipped, 2353 deselected`.
+- Tests-first focused selection: `45 failed, 54 passed, 261 deselected`.
+- All three changed test modules: `360 passed`, independently rerun identically.
+- Core/database/workflows neighborhood:
+  `1103 passed, 1 skipped, 2262 deselected`.
 - Ordinary suite with required bundled Node:
-  `3235 passed, 4 skipped, 28 deselected`.
-- Unchanged protected oracle: `30 scenarios x 3 runs`. Audit-tool and baseline
-  blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
+  `3334 passed, 4 skipped, 28 deselected`.
+- Protected oracle files and prior settlement assertions have no diff. The
+  3R.6 three-run oracle result remains `30 scenarios x 3 runs`; 3R.7 does not
+  change executor behavior. Audit-tool and baseline blobs remain
+  `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
   `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
 - Independent code/test, owning-document, and exact staged reviews: `CLEAN`.
   The final review-status-only staged update is checked before the named commit.
-- `git diff --check` passes. The test diff is additions only; protected oracle
-  files, prior settlement assertions, and raw reviewer-report tail are unchanged.
+- Raw reviewer-report tail is unchanged. README's phase synopsis is unchanged;
+  task-level changelog/documentation closure remains checkpoint 3R.15.
 
 ## Immediate Next Context
 
-Start only checkpoint 3R.7,
-`fix(core): normalize scalar identity boundaries`.
-Write exact exception-family tests before changing the shared text decoders:
-wrong type -> TypeError; malformed string -> ValueError; Scalar64 overflow ->
-ScalarDomainError; FileIndex128 overflow -> ValueError. The active event-v5
-scalar validator duplicates the old logic and must use the same boundary;
-include the public route and canonical decimal overflow beyond Python's
-integer-string conversion limit. Keep native 16-byte normalization before its
-length check, then use unsigned construction without a redundant assertion;
-pin optimized-mode behavior and non-buffer rejection without changing valid
-native identity or volume normalization. Generic JSON/fingerprint changes and
-all epoch/reset choices remain exclusively 3R.14.
-Run the declared core/database/workflows neighborhood and ordinary suite;
-obtain independent working/staged reviews, update owning docs and this handoff,
-and commit before starting 3R.8.
+Start only checkpoint 3R.8,
+`fix(protocol): enforce exact v5 operation truth`.
+Pin the literal 48-case filesystem/recording matrix independently across typed
+ItemOutcome, Python envelope/view validation, and required Node; only ten
+combinations are valid. Share the existing ExecutionSet sparse-reason rule
+without inventing an ordinary outcome-reason or operation-kind policy.
+Reuse OperationResult's existing compound/execute-cancellation invariants for
+TerminalSummary and Python/JavaScript projections. Retain plain ran/unrun
+cancellation and completed/failed compound positives; do not add phase-order
+or exactly-two-phase rules. Replace only the known contradictory positive
+recording fixtures, with negative counterparts. Keep legacy routing, timestamp,
+reliable-size, custody, and file-identity codec work in their ratified later rows.
+Run the declared neighborhood and ordinary suite; obtain independent working/
+staged reviews, update owning docs and this handoff, then commit.
 
 ## Reviewer O.
 

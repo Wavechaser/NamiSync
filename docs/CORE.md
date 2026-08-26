@@ -283,9 +283,14 @@ attempt. Overshoot retains item and attempt identity while making the byte pair
 absent. Settlement clears item, attempt, and item-byte fields. The tokens are
 opaque and deliberately are not persisted generation counters.
 
-The scalar decoder remains non-coercive: schema, sequence, and counter fields
-require exact integers, booleans cannot impersonate numbers, and string fields
-remain strings. `item_type` names the row-lookup namespace of the opaque id,
+Scalar decoding is non-coercive: schema, sequence, and item counts require
+exact SafeInt integers; byte quantities use canonical decimal Scalar64 text.
+Booleans cannot impersonate numbers. Shared text decoders and the public v5
+envelope/view boundary raise `TypeError` for a wrong runtime type and
+`ValueError` for malformed decimal grammar. Canonical Scalar64 overflow raises
+`ScalarDomainError` (a `ValueError`), including text beyond Python's integer-
+conversion limit; domain comparison precedes conversion. `item_type` names
+the row-lookup namespace of the opaque id,
 not the phase or module producing the event; post-copy verifier progress keyed
 by an executor operation id therefore uses `operation`, even though its
 reliable outcome remains an `IntegrityOutcome`. The central meanings,
@@ -407,7 +412,13 @@ The core-owned adapter canonicalizes either CPython's witnessed NTFS/ReFS
 `GetFileInformationByHandleEx(FileIdInfo)`; native components holding a final
 handle use the latter. Persistence and codecs use canonical unsigned-decimal
 `FileIndex128` text, never JSON/SQLite arithmetic or legacy high/low 64-bit
-projection. Identity equality always includes the normalized volume serial.
+projection. Its text decoder uses the same type/grammar error split and raises
+`ValueError` for overflow. The native byte decoder accepts bytes, bytearray, or
+memoryview, normalizes to bytes before requiring exactly 16, and constructs an
+unsigned little-endian integer; its domain is guaranteed without an assertion
+and is identical under optimized Python. Other runtime types raise `TypeError`;
+wrong byte length raises `ValueError`. Identity equality always includes the
+normalized volume serial.
 
 ## Time And Evidence
 
