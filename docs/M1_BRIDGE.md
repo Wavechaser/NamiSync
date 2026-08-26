@@ -285,7 +285,12 @@ Event v5 uses an item-free `TerminalSummary` with
 `review_fact_limit`; only that typed field maps `ResultSummary.review_refusal`.
 Reliable outcomes update the compact overlay before queueing; the full result
 remains only in the dispatcher terminal record through one reconciliation and
-exact-session release. `MAX_RELIABLE_EVENT_CANONICAL_BYTES=1_048_576` is checked
+exact-session release. Before any full result reaches settlement, audit, or
+publication ownership, `run_session` applies the summary's same whole-value
+phase/failure diagnostic bounds and adds only their header omissions; item
+omissions remain summary-local additions. This bounds retained diagnostics,
+not the result item collection or all workflow/audit owners behind it.
+`MAX_RELIABLE_EVENT_CANONICAL_BYTES=1_048_576` is checked
 before emitter acceptance or sequence/queue/history mutation and guarantees one
 valid head fits the independent bridge-response wall.
 
@@ -295,7 +300,7 @@ valid head fits the independent bridge-response wall.
 domain owner; this subsection is their one shared spelling and invariant table.
 
 Every object below has exactly the named keys. Nullable means JSON `null`, not
-absence. Free-form diagnostics are already bounded before construction.
+absence. Free-form diagnostics are bounded whole before retained publication.
 
 - `SessionRef` = `{session_id:HexId, kind:"sync-plan"|"sync-execution"|
   "inventory"|"baseline"|"verify"|"rebaseline"|"post-copy-verify",

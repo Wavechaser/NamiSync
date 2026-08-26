@@ -1367,6 +1367,20 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Full-result diagnostic divergence. Terminal
+  summaries omitted oversized or invalid phase/failure diagnostics, while the
+  retained `OperationResult` behind them kept the original values through
+  settlement, audit, history, and release. Fixed by applying the same
+  whole-value rules before the first retained owner and counting only header
+  omissions there; item omissions remain summary-local. Bounded header objects
+  retain identity, and phase names/count policy is unchanged.
+- MODERATE - FIXED (2026-08-27). Diagnostic formatting escape. An ordinary
+  workflow exception whose `__str__` raised could escape terminal normalization
+  after reliable items had settled, leaving the session without its one final
+  outcome. Fixed by omitting the whole failure detail with one witness when
+  ordinary formatting fails. `KeyboardInterrupt`, `SystemExit`, and other
+  `BaseException` control flow still escapes; overflow refuses before any
+  settle, audit, publication, or terminal owner.
 - MINOR - FIXED (2026-08-27). Unicode-scalar boundary omission. Free-form
   request/evidence text could contain Python surrogate code units; an explicit
   high/low pair encoded successfully but decoded as one character, violating

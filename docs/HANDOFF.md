@@ -18,6 +18,11 @@ calibrated, or accepted.
   replacement adoption share one lock; cleanup snapshots the current stream,
   while closes and joins run outside that lock. Independent review cleared
   the weak-reference churn and both stop/adopt race directions.
+- Full-result header diagnostics now use the terminal summary's existing
+  whole-value omission rules before settlement, audit, or publication. Header
+  counts are not double-counted with item omissions; bounded objects retain
+  identity. Ordinary exception-formatting failure becomes one omission rather
+  than losing the terminal, while `BaseException` still escapes.
 - `32d7dac` retains each admitted pywebview call's
   position until its exact worker exits, including serialization and native
   delivery. Shutdown joins outside the bridge lock; a timeout keeps ownership
@@ -46,6 +51,10 @@ calibrated, or accepted.
 - Observation prerequisite: **3 expected failures, 2 passes** before the fix;
   **55 service tests** and the required-Node interfaces department's **1,299
   tests** pass afterward. Independent review found no remaining issue.
+- Full-result normalization: **9 expected failures, 2 passes** before the fix;
+  the focused matrix now passes **15 tests**, and expanded core/scalar/v5/history
+  coverage passes **1,146 tests**. Independent mutation review's identity,
+  input-immutability, overflow, and wording findings are resolved.
 - Native prerequisite: six new lifetime/callback witnesses failed before the
   fix. After correction, focused bridge/host tests passed **121 tests**; shared
   host-fixture repair passed **161 tests**.
@@ -63,9 +72,8 @@ Follow checkpoint 4's three ordered stops in
 model/validator first, dormant machinery second, coherent 12-row activation
 third. No size constant may be selected or retuned from measurement.
 
-The remaining source-derived prerequisites include full-result header
-normalization under the existing omission rules,
-canonical typed-detail admission, and a sound worker-retirement witness.
+The remaining source-derived prerequisites include canonical typed-detail
+admission and a sound worker-retirement witness.
 Dispatcher close currently does not prove its exact worker has exited; do not
 use successful close as that proof until the ownership fix lands.
 
@@ -76,13 +84,12 @@ Path caches, and native/browser copies. The frozen transport sizer is not a
 complete task-graph validator. Standalone integrity's row reload also needs its
 own admission bound; an inventory-tree limit does not constrain it today.
 
-The native prerequisite is committed; the observation prerequisite is delivered
-at this safe stop. Remaining dirty core/session/event/scalar files and their
-tests/docs belong to full-result diagnostic normalization; dirty dispatcher
-files and their tests/docs belong to exact worker retirement. Neither is yet a
-committed model or activation. No unrelated dirty work was present. Next:
-finish independent review and verification of those fixes, then canonical
-typed-detail admission, before freezing the model.
+The native and observation prerequisites are committed; full-result diagnostic
+normalization is delivered at this safe stop. Remaining dirty dispatcher files
+and their tests/docs belong to exact worker retirement. Neither that fix nor
+this normalization is a committed model or activation. No unrelated dirty work
+was present. Next: finish independent review and verification of worker
+retirement, then canonical typed-detail admission, before freezing the model.
 
 Protected settlement scenarios/baseline/hash/assertions, frozen transport
 authority, and the epoch-5 witness remain unchanged. The witness SHA-256 is

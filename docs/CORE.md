@@ -186,7 +186,10 @@ and aggregates RELIABLE item outcomes only after the downstream emitter returns
 successfully; a rejected outcome never becomes terminal-result authority.
 Only successfully emitted Progress can seed the runner's generic cancel/failure
 fallback. Ordinary unexpected `Exception` values are likewise consumed after
-typed detail is attached to the one terminal/log path. `KeyboardInterrupt`,
+typed detail is attached to the one terminal/log path. If formatting that
+diagnostic itself raises an ordinary exception, the runner omits the complete
+failure detail with one omission witness and still settles the original failed
+outcome. `KeyboardInterrupt`,
 `SystemExit`,
 and other `BaseException` subclasses deliberately escape without being
 normalized into a workflow result. Operation modules emit outcomes as work settles rather than holding a
@@ -199,6 +202,15 @@ pending for resume.
 The runner accepts a dispatcher-owned item accumulator. It is retained across
 pause attempts and cleared only after terminal settlement, so a resumed session
 that later cancels or fails includes reliable outcomes earned before the pause.
+Before settlement, audit finalization, or result publication, the runner applies
+the terminal summary's existing whole-value diagnostic rules to the full result
+header too. An oversized or invalid-Unicode phase error becomes null; an invalid
+failure type or message omits the whole failure detail once. Only those header
+omissions advance the result's count; item omissions are added separately when
+forming the summary. Bounded phases and failure details retain their identities,
+and item truth, counters, recording, cancellation, and phase status are unchanged.
+This bounds retained header diagnostics, not phase names/count or all workflow
+and audit ownership behind them.
 The registry adapter snapshots continuation bytes before `PAUSED`; the
 dispatcher retains those bytes in the live session record without decoding them
 and opens a fresh adapter invocation on resume.

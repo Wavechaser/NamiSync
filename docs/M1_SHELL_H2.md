@@ -340,8 +340,9 @@ the following before accepting the first model commit:
 
 - Linked execution can retain both 120,000 operation and 120,000 integrity
   outcomes, plus the dispatcher accumulator and shallow audit/store wrappers.
-  A bounded `TerminalSummary` does not bound the raw `OperationResult`
-  failure/phase diagnostics retained behind it.
+  Full-result header diagnostics now share the terminal summary's whole-value
+  bounds, but the summary still does not bound the raw item collection or the
+  additional workflow/audit owners behind it.
 - Serialization expands the complete schema occurrence graph, not just path
   strings: shared dependency tuples, metadata/evidence, and per-candidate
   absolute roots can become distinct lists, strings, and decoded objects.

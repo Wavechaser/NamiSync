@@ -121,6 +121,8 @@ def bounded_utf8_text(
         return None
     if type(value) is not str:
         raise TypeError(f"{field_name} must be text or None")
+    if len(value) > maximum_bytes:
+        return None
     try:
         encoded = value.encode("utf-8")
     except UnicodeEncodeError:

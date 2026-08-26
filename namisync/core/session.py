@@ -10,7 +10,11 @@ from typing import Callable, NewType, Protocol, Sequence
 from namisync.core.evidence import RecordingStatus
 from namisync.core.execution import TaskRecordingIssue
 from namisync.core.review import ReviewFactLimitExceeded
-from namisync.core.scalars import require_safe_int, require_signed_64
+from namisync.core.scalars import (
+    bounded_utf8_text,
+    require_safe_int,
+    require_signed_64,
+)
 
 SessionId = NewType("SessionId", str)
 
@@ -290,6 +294,39 @@ class OperationResult:
             raise ValueError("review fact limit contradicts result truth")
 
 
+def _bounded_failure_detail(error: FailureDetail | None) -> FailureDetail | None:
+    if error is None:
+        return None
+    type_name = bounded_utf8_text(error.type_name, "terminal error type")
+    message = bounded_utf8_text(error.message, "terminal error message")
+    return error if type_name and message is not None else None
+
+
+def normalize_result_diagnostics(result: OperationResult) -> OperationResult:
+    """Bound full-result header diagnostics without changing domain truth."""
+
+    omitted = result.omitted_detail_count
+    phases: list[PhaseResult] = []
+    for phase in result.phases:
+        bounded = bounded_utf8_text(phase.error, "terminal phase error")
+        if phase.error is not None and bounded is None:
+            omitted = require_safe_int(omitted + 1, "terminal omitted_detail_count")
+            phases.append(replace(phase, error=None))
+        else:
+            phases.append(phase)
+    error = _bounded_failure_detail(result.error)
+    if result.error is not None and error is None:
+        omitted = require_safe_int(omitted + 1, "terminal omitted_detail_count")
+    if omitted == result.omitted_detail_count:
+        return result
+    return replace(
+        result,
+        phases=tuple(phases),
+        error=error,
+        omitted_detail_count=omitted,
+    )
+
+
 def result_terminal_state(result: OperationResult) -> SessionState:
     """Project axis-separated result truth onto dispatcher lifecycle state."""
 
@@ -482,13 +519,20 @@ def run_session(
             if latest_progress and latest_progress.bytes_total is not None
             else bytes_done
         )
+        try:
+            detail = _bounded_failure_detail(
+                FailureDetail(type(error).__name__, str(error))
+            )
+        except Exception:
+            detail = None
         result = OperationResult(
             status=SessionState.FAILED,
             disposition=disposition,
             items=tuple(items),
             bytes_done=bytes_done,
             bytes_total=bytes_total,
-            error=FailureDetail(type(error).__name__, str(error)),
+            error=detail,
+            omitted_detail_count=1 if detail is None else 0,
         )
 
     recording = (
@@ -497,7 +541,7 @@ def run_session(
         or any(item.recording is RecordingStatus.DEGRADED for item in items)
         else RecordingStatus.OK
     )
-    result = replace(result, recording=recording)
+    result = normalize_result_diagnostics(replace(result, recording=recording))
 
     settle(result_terminal_state(result), result)
     try:

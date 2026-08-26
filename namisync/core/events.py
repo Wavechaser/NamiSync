@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 import json
@@ -55,6 +55,7 @@ from namisync.core.session import (
     ResultItem,
     SessionId,
     SessionState,
+    normalize_result_diagnostics,
     validate_result_cancellation,
 )
 
@@ -381,6 +382,7 @@ class TerminalSummary:
 
     @classmethod
     def from_result(cls, result: OperationResult) -> "TerminalSummary":
+        result = normalize_result_diagnostics(result)
         omitted = result.omitted_detail_count
         degraded_items = 0
         for item in result.items:
@@ -401,37 +403,16 @@ class TerminalSummary:
         )
         if result.recording is not expected_recording:
             raise ValueError("operation recording aggregate contradicts its witnesses")
-        phases: list[PhaseResult] = []
-        for phase in result.phases:
-            bounded = bounded_utf8_text(phase.error, "terminal phase error")
-            if phase.error is not None and bounded is None:
-                omitted = require_safe_int(
-                    omitted + 1,
-                    "terminal omitted_detail_count",
-                )
-                phases.append(replace(phase, error=None))
-            else:
-                phases.append(phase)
-        error = result.error
-        if error is not None:
-            type_name = bounded_utf8_text(error.type_name, "terminal error type")
-            message = bounded_utf8_text(error.message, "terminal error message")
-            if not type_name or message is None:
-                error = None
-                omitted = require_safe_int(
-                    omitted + 1,
-                    "terminal omitted_detail_count",
-                )
         return cls(
             status=result.status,
             recording=result.recording,
             audit=result.audit,
             disposition=result.disposition,
             canceled=result.canceled,
-            phases=tuple(phases),
+            phases=result.phases,
             bytes_done=result.bytes_done,
             bytes_total=result.bytes_total,
-            error=error,
+            error=result.error,
             recording_degraded_items=degraded_items,
             recording_issues=result.recording_issues,
             omitted_detail_count=omitted,

@@ -52,6 +52,7 @@ from namisync.core.session import (
     LEGAL_TRANSITIONS,
     Canceled,
     Disposition,
+    FailureDetail,
     IllegalTransition,
     OperationResult,
     PauseRequested,
@@ -63,10 +64,12 @@ from namisync.core.session import (
     SessionState,
     StoredSessionRecord,
     is_terminal,
+    normalize_result_diagnostics,
     require_transition,
     result_terminal_state,
     run_session,
 )
+from namisync.core.scalars import MAX_SAFE_INTEGER
 from namisync.dispatcher.store import InMemorySessionStore
 
 
@@ -862,6 +865,31 @@ def test_runner_does_not_normalize_audit_base_exceptions(
     assert not any(isinstance(body, Terminal) for body in emitted)
 
 
+@pytest.mark.parametrize("error", [KeyboardInterrupt(), SystemExit(3)])
+def test_runner_does_not_normalize_diagnostic_base_exceptions(
+    error: BaseException,
+) -> None:
+    class UnprintableError(Exception):
+        def __str__(self) -> str:
+            raise error
+
+    emitted: list[object] = []
+    settled: list[SessionState] = []
+    with pytest.raises(type(error)) as caught:
+        run_session(
+            lambda context: (_ for _ in ()).throw(UnprintableError()),
+            emit=emitted.append,
+            checkpoint=lambda: None,
+            settle=lambda state, result: settled.append(state),
+            finalize_audit=lambda result: RecordingStatus.OK,
+            publish_result=lambda result: None,
+        )
+
+    assert caught.value is error
+    assert settled == []
+    assert not any(isinstance(body, Terminal) for body in emitted)
+
+
 def test_runner_rejects_workflow_terminal_without_creating_a_second_one() -> None:
     emitted: list[object] = []
 
@@ -1103,6 +1131,191 @@ def test_terminal_summary_copies_bounded_truth_without_retaining_items() -> None
     assert summary.omitted_detail_count == 3
     assert not hasattr(summary, "items")
     assert "items" not in wire
+
+
+@pytest.mark.parametrize(
+    ("phase_error", "type_name", "message", "phase_omitted", "header_omissions"),
+    (
+        ("é" * 512, "Failure", "é" * 512, False, 0),
+        ("", "Failure", "", False, 0),
+        ("é" * 513, "Failure", "bounded", True, 1),
+        ("\ud800", "Failure", "bounded", True, 1),
+        ("bounded", "", "bounded", False, 1),
+        ("bounded", "F" * 1025, "bounded", False, 1),
+        ("bounded", "\ud800", "bounded", False, 1),
+        ("bounded", "Failure", "é" * 513, False, 1),
+        ("bounded", "Failure", "\ud800", False, 1),
+        ("é" * 513, "F" * 1025, "é" * 513, True, 2),
+    ),
+    ids=(
+        "maximum-utf8",
+        "empty-values",
+        "oversized-phase",
+        "invalid-phase",
+        "empty-type",
+        "oversized-type",
+        "invalid-type",
+        "oversized-message",
+        "invalid-message",
+        "whole-failure-counted-once",
+    ),
+)
+def test_runner_normalizes_full_result_headers_before_every_owner(
+    phase_error: str,
+    type_name: str,
+    message: str,
+    phase_omitted: bool,
+    header_omissions: int,
+) -> None:
+    item = ItemOutcome(
+        "2" * 32,
+        "copy",
+        "file.bin",
+        Outcome.SUCCEEDED,
+        recording=RecordingStatus.DEGRADED,
+        recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+        detail_omitted_count=2,
+    )
+    phase = PhaseResult("execute", PhaseStatus.FAILED, 1, 1, 17, 100, phase_error)
+    original = OperationResult(
+        SessionState.FAILED,
+        recording=RecordingStatus.DEGRADED,
+        audit=RecordingStatus.DEGRADED,
+        items=(item,),
+        phases=(phase,),
+        bytes_done=17,
+        bytes_total=100,
+        error=FailureDetail(type_name, message),
+        recording_issues=(
+            TaskRecordingIssue(TaskRecordingIssueReason.FINAL_FLUSH_FAILED, "flush"),
+        ),
+        omitted_detail_count=3,
+    )
+    original_error = original.error
+    expected_full = replace(
+        original,
+        phases=(replace(phase, error=None),) if phase_omitted else original.phases,
+        error=None if header_omissions > int(phase_omitted) else original_error,
+        omitted_detail_count=3 + header_omissions,
+    )
+    expected = TerminalSummary.from_result(expected_full)
+    normalized = normalize_result_diagnostics(original)
+    assert normalized == expected_full
+    if expected_full.error is not None:
+        assert normalized.error is original_error
+    assert normalize_result_diagnostics(normalized) is normalized
+    if header_omissions == 0:
+        assert normalized is original
+    owned: list[OperationResult] = []
+    emitted: list[object] = []
+
+    def work(context):
+        context.emit(item)
+        return original
+
+    def finalize(result):
+        owned.append(result)
+        return RecordingStatus.DEGRADED
+
+    outcome = run_session(
+        work,
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda state, result: owned.append(result),
+        finalize_audit=finalize,
+        publish_result=owned.append,
+    )
+
+    assert len(owned) == 3
+    assert owned[0] is owned[1]
+    assert outcome.result is owned[2]
+    for retained in owned:
+        assert retained == expected_full
+        assert retained.items[0] is item
+        assert retained.recording_issues is original.recording_issues
+        if not phase_omitted:
+            assert retained.phases[0] is phase
+        if expected_full.error is not None:
+            assert retained.error is original_error
+        assert TerminalSummary.from_result(retained) == expected
+        if header_omissions == 0:
+            assert retained.phases is original.phases
+            assert retained.error is original.error
+    assert expected.omitted_detail_count == 5 + header_omissions
+    assert emitted == [item, Terminal(expected)]
+    assert original.phases == (phase,)
+    assert phase.error == phase_error
+    assert original.error is original_error
+    assert original_error == FailureDetail(type_name, message)
+    assert original.omitted_detail_count == 3
+
+
+def test_runner_contains_exception_diagnostic_failure_without_losing_items() -> None:
+    class UnprintableError(Exception):
+        def __str__(self) -> str:
+            raise RuntimeError("format failed")
+
+    item = ItemOutcome("3" * 32, "copy", "file.bin", Outcome.SUCCEEDED)
+    emitted: list[object] = []
+    settled: list[OperationResult] = []
+
+    def work(context):
+        context.emit(item)
+        context.emit(Progress("execute", 1, 1, 17, 100, "file.bin"))
+        raise UnprintableError()
+
+    outcome = run_session(
+        work,
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda state, result: settled.append(result),
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+    )
+
+    assert outcome.result is not None
+    assert len(settled) == 1
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.error is None
+    assert outcome.result.omitted_detail_count == 1
+    assert outcome.result.items == (item,)
+    assert (outcome.result.bytes_done, outcome.result.bytes_total) == (17, 100)
+    assert emitted[-1] == Terminal(TerminalSummary.from_result(outcome.result))
+
+
+def test_header_omission_overflow_refuses_before_any_terminal_owner() -> None:
+    result = OperationResult(
+        SessionState.FAILED,
+        phases=(
+            PhaseResult(
+                "execute",
+                PhaseStatus.FAILED,
+                0,
+                0,
+                0,
+                0,
+                "x" * 1025,
+            ),
+        ),
+        omitted_detail_count=MAX_SAFE_INTEGER,
+    )
+    owners = []
+
+    with pytest.raises(ValueError, match="SafeInt domain"):
+        normalize_result_diagnostics(result)
+    with pytest.raises(ValueError, match="SafeInt domain"):
+        run_session(
+            lambda context: result,
+            emit=lambda body: owners.append(("emit", body)),
+            checkpoint=lambda: None,
+            settle=lambda state, owned: owners.append(("settle", owned)),
+            finalize_audit=lambda owned: owners.append(("audit", owned)),
+            publish_result=lambda owned: owners.append(("publish", owned)),
+        )
+
+    assert owners == []
+    assert result.phases[0].error == "x" * 1025
+    assert result.omitted_detail_count == MAX_SAFE_INTEGER
 
 
 def _event_bodies() -> tuple[object, ...]:
