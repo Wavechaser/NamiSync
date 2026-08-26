@@ -176,6 +176,15 @@ assets, CPython and pinned Python dependencies, WebView2 and its native host
 stack when the desktop is used, Windows, and the documented behavior of the
 filesystem primitives on which an operation relies.
 
+The desktop task-artifact containment claim has a narrower executable premise:
+64-bit CPython 3.13 on Windows x64, a release build with the standard GIL,
+pymalloc compiled in, and no nonstandard `PYTHONMALLOC` override. The host checks
+that source-derived profile before constructing the task registry and gives an
+action-guiding startup refusal on drift. Debug, free-threaded, 32-bit, ARM64,
+PyPy, CPython 3.14+, and alternate allocator profiles are unsupported for the
+desktop claim rather than silently interpreted through the frozen object-graph
+coefficients. This predicate is contract admission, not calibration evidence.
+
 The desktop host must remain at standard integrity. Before headed beta release,
 an elevated launch must be refused before command exposure unless a revision of
 this model explicitly supports it; until that gate exists, elevated launch is

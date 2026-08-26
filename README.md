@@ -116,8 +116,11 @@ this automatically; resetting loses app evidence and history, not managed files.
 
 ## Setup and dependencies
 
-NamiSync requires Windows 11 x64 and Python 3.13 or later. Runtime dependencies
-are `xxhash` 3.x and the reality-tested `pywebview` 6.2.1 host stack.
+NamiSync requires Windows 11 x64 and 64-bit CPython 3.13. The desktop refuses
+debug, free-threaded, non-CPython, non-x64, or nonstandard allocator runtimes
+before constructing its task registry because the task-artifact reservation
+model is valid only for the standard GIL and pymalloc profile. Runtime
+dependencies are `xxhash` 3.x and the reality-tested `pywebview` 6.2.1 host stack.
 Development dependencies are `pytest` and `import-linter`. The ordinary test
 suite also requires a Node.js executable for the packaged Progress validator;
 provide it through `NAMISYNC_TEST_NODE` or `PATH` as described in

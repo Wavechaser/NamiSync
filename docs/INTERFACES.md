@@ -451,6 +451,14 @@ through a lazy wrapper.
 `M1_BRIDGE.md` owns the exact transport mechanisms and acceptance gates below
 it. This document records their interface-layer implementation.
 
+Before `TaskRegistry` import or construction, the production host admits only
+the exact runtime profile owned by `runtime_profile.py`: standard 64-bit
+CPython 3.13 on Windows x64, release/GIL-enabled, with pymalloc active and no
+nonstandard allocator override. A mismatch is a startup refusal with install
+and restart guidance; no task maps, receipts, queues, or reservation state are
+allocated first. The predicate is separately mirrored by the checkpoint-4
+analytical validator so a model/runtime drift cannot become a supported launch.
+
 The replacement for the unused `interfaces/ui_state.py` prototype now owns
 strict-shape `ui-state.json` independently from database-owned
 semantic defaults. Schema v1 contains only the typed appearance section and
