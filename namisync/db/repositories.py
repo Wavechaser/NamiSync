@@ -28,7 +28,7 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import MappingPair, MappingSnapshot
-from namisync.core.scalars import file_index_128_from_text
+from namisync.core.scalars import file_index_128_from_text, file_index_128_to_text
 
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_reader
 from .contracts import require_database_file_contract
@@ -134,6 +134,31 @@ def _identity(serial: str | None, index: str | None) -> FileIdentity | None:
         return None
     assert index is not None
     return FileIdentity(serial, file_index_128_from_text(index))
+
+
+def _identity_query_values(
+    identities: Iterable[FileIdentity],
+) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (identity.volume_serial, file_index_128_to_text(identity.file_index))
+        for identity in sorted(set(identities))
+    )
+
+
+def _mapping_pair(row: sqlite3.Row) -> MappingPair:
+    return MappingPair(
+        source_rel_path_key=normalize_relative_path(row["source_rel_path_key"]),
+        target_rel_path=row["target_rel_path"],
+        target_rel_path_key=normalize_relative_path(row["target_rel_path_key"]),
+        source_identity=FileIdentity(
+            row["source_identity_volume_serial"],
+            file_index_128_from_text(row["source_identity_file_index"]),
+        ),
+        target_identity=_identity(
+            row["target_identity_volume_serial"],
+            row["target_identity_file_index"],
+        ),
+    )
 
 
 def _observed_stat(row: sqlite3.Row) -> FileStat | None:
@@ -675,24 +700,7 @@ class LedgerRepository:
                 ORDER BY source.rel_path_key, target.rel_path_key""",
             (mapping_id,),
         ).fetchall()
-        pairs = tuple(
-            MappingPair(
-                source_rel_path_key=normalize_relative_path(row["source_rel_path_key"]),
-                target_rel_path=row["target_rel_path"],
-                target_rel_path_key=normalize_relative_path(row["target_rel_path_key"]),
-                source_identity=FileIdentity(
-                    row["source_identity_volume_serial"],
-                    file_index_128_from_text(
-                        row["source_identity_file_index"]
-                    ),
-                ),
-                target_identity=_identity(
-                    row["target_identity_volume_serial"],
-                    row["target_identity_file_index"],
-                ),
-            )
-            for row in pair_rows
-        )
+        pairs = tuple(_mapping_pair(row) for row in pair_rows)
         return MappingSnapshot(
             source_volume_id=VolumeId(
                 mapping["source_serial"], mapping["source_fs_type"]
@@ -756,6 +764,181 @@ class LedgerRepository:
             target_location_id=int(row["target_location_id"]),
             snapshot=self.get_mapping_snapshot(mapping_id),
         )
+
+    def find_current_mapping(
+        self,
+        source_volume: VolumeId,
+        source_relative_root: str,
+        target_volume: VolumeId,
+        target_relative_root: str,
+        *,
+        target_path_keys: Iterable[str],
+        source_identities: Iterable[FileIdentity],
+        target_identities: Iterable[FileIdentity],
+    ) -> MappingLookup | None:
+        """Return correspondence relevant to one pair of current file scans."""
+
+        source_key = normalize_relative_path(source_relative_root, allow_root=True)
+        target_key = normalize_relative_path(target_relative_root, allow_root=True)
+        current_target_keys = tuple(
+            sorted({normalize_relative_path(path) for path in target_path_keys})
+        )
+        current_source_identities = _identity_query_values(source_identities)
+        current_target_identities = _identity_query_values(target_identities)
+        source_identity_values = frozenset(current_source_identities)
+        target_identity_values = frozenset(current_target_identities)
+
+        self._connection.execute("BEGIN")
+        try:
+            row = self._connection.execute(
+                """SELECT mapping.id, mapping.source_location_id,
+                          mapping.target_location_id
+                     FROM mappings AS mapping
+                     JOIN locations AS source_location
+                       ON source_location.id = mapping.source_location_id
+                     JOIN volumes AS source_volume
+                       ON source_volume.id = source_location.volume_id
+                     JOIN locations AS target_location
+                       ON target_location.id = mapping.target_location_id
+                     JOIN volumes AS target_volume
+                       ON target_volume.id = target_location.volume_id
+                    WHERE mapping.deleted_at IS NULL
+                      AND source_volume.serial = ? AND source_volume.fs_type = ?
+                      AND source_location.volume_relative_path_key = ?
+                      AND target_volume.serial = ? AND target_volume.fs_type = ?
+                      AND target_location.volume_relative_path_key = ?
+                    ORDER BY mapping.id
+                    LIMIT 1""",
+                (
+                    source_volume.serial,
+                    source_volume.fs_type,
+                    source_key,
+                    target_volume.serial,
+                    target_volume.fs_type,
+                    target_key,
+                ),
+            ).fetchone()
+            if row is None:
+                return None
+
+            mapping_id = int(row["id"])
+            source_location_id = int(row["source_location_id"])
+            target_location_id = int(row["target_location_id"])
+            pairs: list[MappingPair] = []
+            if current_target_keys and source_identity_values:
+                for start in range(0, len(current_target_keys), 400):
+                    chunk = current_target_keys[start : start + 400]
+                    placeholders = ",".join("?" for _ in chunk)
+                    cursor = self._connection.execute(
+                        f"""SELECT source.rel_path_key AS source_rel_path_key,
+                                   target.rel_path AS target_rel_path,
+                                   target.rel_path_key AS target_rel_path_key,
+                                   pair.source_identity_volume_serial,
+                                   pair.source_identity_file_index,
+                                   pair.target_identity_volume_serial,
+                                   pair.target_identity_file_index
+                              FROM mapping_correspondence AS pair
+                              JOIN inventory AS source
+                                ON source.id = pair.source_inventory_id
+                             JOIN inventory AS target
+                                ON target.id = pair.target_inventory_id
+                             WHERE pair.mapping_id = ?
+                               AND pair.target_inventory_id IN (
+                                   SELECT current_target.id
+                                     FROM inventory AS current_target
+                                    WHERE current_target.location_id = ?
+                                      AND current_target.rel_path_key
+                                          IN ({placeholders})
+                               )
+                             ORDER BY source.rel_path_key, target.rel_path_key""",
+                        (mapping_id, target_location_id, *chunk),
+                    )
+                    for pair_row in cursor:
+                        pair = _mapping_pair(pair_row)
+                        stored_source_identity = (
+                            pair.source_identity.volume_serial,
+                            file_index_128_to_text(pair.source_identity.file_index),
+                        )
+                        if stored_source_identity not in source_identity_values:
+                            continue
+                        stored_target_identity = (
+                            None
+                            if pair.target_identity is None
+                            else (
+                                pair.target_identity.volume_serial,
+                                file_index_128_to_text(
+                                    pair.target_identity.file_index
+                                ),
+                            )
+                        )
+                        if stored_target_identity is not None and (
+                            stored_target_identity not in target_identity_values
+                        ):
+                            continue
+                        pairs.append(pair)
+            pairs.sort(
+                key=lambda pair: (
+                    pair.source_rel_path_key,
+                    pair.target_rel_path_key,
+                )
+            )
+            return MappingLookup(
+                mapping_id=mapping_id,
+                source_location_id=source_location_id,
+                target_location_id=target_location_id,
+                snapshot=MappingSnapshot(
+                    source_volume_id=source_volume,
+                    target_volume_id=target_volume,
+                    pairs=tuple(pairs),
+                    ambiguous_source_keys=frozenset(),
+                    disqualified_source_identities=(
+                        self._current_disqualified_identities(
+                            source_location_id,
+                            current_source_identities,
+                        )
+                    ),
+                    disqualified_target_identities=(
+                        self._current_disqualified_identities(
+                            target_location_id,
+                            current_target_identities,
+                        )
+                    ),
+                ),
+            )
+        finally:
+            self._connection.rollback()
+
+    def _current_disqualified_identities(
+        self,
+        location_id: int,
+        identities: tuple[tuple[str, str], ...],
+    ) -> frozenset[FileIdentity]:
+        disqualified: set[FileIdentity] = set()
+        for start in range(0, len(identities), 400):
+            chunk = identities[start : start + 400]
+            values = ",".join("(?, ?)" for _ in chunk)
+            parameters = tuple(value for identity in chunk for value in identity)
+            cursor = self._connection.execute(
+                f"""WITH requested(volume_serial, file_index) AS (VALUES {values})
+                     SELECT inventory.file_identity_volume_serial,
+                            inventory.file_identity_file_index
+                       FROM inventory
+                       JOIN requested
+                         ON requested.volume_serial =
+                                inventory.file_identity_volume_serial
+                        AND requested.file_index =
+                                inventory.file_identity_file_index
+                      WHERE inventory.location_id = ?
+                      GROUP BY inventory.file_identity_volume_serial,
+                               inventory.file_identity_file_index
+                     HAVING count(*) > 1 OR max(inventory.observed_nlink) > 1""",
+                (*parameters, location_id),
+            )
+            for identity_row in cursor:
+                identity = _identity(identity_row[0], identity_row[1])
+                assert identity is not None
+                disqualified.add(identity)
+        return frozenset(disqualified)
 
     def _disqualified_identities(self, location_id: int) -> frozenset[FileIdentity]:
         rows = self._connection.execute(

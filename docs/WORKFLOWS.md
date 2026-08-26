@@ -151,7 +151,10 @@ reprojects a staged candidate after publication.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
 3. Scan both roots with the same role-free observation contract.
-4. Read immutable prior correspondence and one complete semantic-settings
+4. Read immutable prior correspondence through a source-derived bounded ledger
+   query: current target file keys and current source/target file identities are
+   the complete query scope, with all 400-subject batches and disqualification
+   checks sharing one read snapshot. Then read one complete semantic-settings
    snapshot. If the request supplies a deletion-policy override, replace only
    that field in the snapshot.
 5. Apply filters/policies and plan.
@@ -223,10 +226,11 @@ selection rather than replacing the old artifact or carrying authorization.
 
 `workflows/sync.py` contains the plain planning and execution functions.
 `LocalWorkflowRuntime` is the local composition root: it injects every module,
-resolves immutable prior correspondence through read-only repositories,
-declares physical-volume resource keys, owns schema-versioned JSON continuation
-payloads, starts ledger recording only after commitment and fresh preflight,
-and supplies the dispatcher history observer. Planning and declined review do
+derives immutable prior-correspondence query bounds from the current source and
+target file scans, resolves that subset through a one-snapshot read-only
+repository query, declares physical-volume resource keys, owns schema-versioned
+JSON continuation payloads, starts ledger recording only after commitment and
+fresh preflight, and supplies the dispatcher history observer. Planning and declined review do
 not create either database. Invalid database locations are rejected before the
 plan session, and an execution refusal may still create independent audit
 history while leaving managed files and ledger configuration untouched.

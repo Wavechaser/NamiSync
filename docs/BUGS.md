@@ -1237,6 +1237,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Historical correspondence amplification.
+  Every plan loaded all retained pairs and identity aliases for a mapping's two
+  locations, so a small current scan could materialize an arbitrarily large
+  historical graph before planning and exhaust the desktop process. Cause: the
+  runtime used the general mapping snapshot reader without passing current scan
+  scope. Fixed with current target-key and source/target-identity selection,
+  400-subject streamed queries under one read snapshot, identity-indexed
+  disqualification limited to identities relevant now, and restored canonical
+  pair order. Nullable target identity, current alias, and multi-link safety
+  semantics remain unchanged; unrelated history is not planning input.
 - MODERATE - FIXED (2026-08-27). Unbounded integrity candidate population.
   Fresh full and selected-path integrity, stale-plus-completed scope, and saved
   resume could materialize an arbitrary eligible ledger population before any

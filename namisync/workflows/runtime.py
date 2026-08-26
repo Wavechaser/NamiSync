@@ -1046,11 +1046,22 @@ class LocalWorkflowRuntime:
             target.root.path, target.volume_evidence
         )
         with LedgerRepository(self.ledger_path) as repository:
-            found = repository.find_mapping(
+            found = repository.find_current_mapping(
                 source.volume_id,
                 source_relative,
                 target.volume_id,
                 target_relative,
+                target_path_keys=tuple(record.rel_path_key for record in target.files),
+                source_identities=frozenset(
+                    record.file_identity
+                    for record in source.files
+                    if record.file_identity is not None
+                ),
+                target_identities=frozenset(
+                    record.file_identity
+                    for record in target.files
+                    if record.file_identity is not None
+                ),
             )
         return (
             MappingSnapshot.empty(source.volume_id, target.volume_id)

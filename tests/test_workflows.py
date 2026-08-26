@@ -12,17 +12,29 @@ import pytest
 from _identity_epoch5 import frozen_execution
 
 import namisync.workflows.sync as sync_workflow
+import namisync.workflows.runtime as runtime_module
 from namisync.core.events import ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import Commitment, ExecutionSet, validated_run_id
 from namisync.core.integrity import PostCopySelection
-from namisync.core.models import CapabilityProfile, Root
+from namisync.core.models import (
+    CapabilityProfile,
+    FileIdentity,
+    FileRecord,
+    MetadataSnapshot,
+    Root,
+    ScanResult,
+    ScanScope,
+    VolumeEvidence,
+    VolumeId,
+)
 from namisync.core.pathing import to_extended_length_path
 from namisync.core.planning import (
     Assignment,
     BlockedReason,
     DeletionPolicy,
     FilterSet,
+    MappingSnapshot,
     OpId,
     OperationKind,
     OperationReason,
@@ -58,6 +70,100 @@ from namisync.workflows.payloads import decode_execution_request
 
 
 NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
+
+
+def test_runtime_derives_correspondence_bounds_only_from_current_file_scans(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_volume = VolumeId("source-serial", "NTFS")
+    target_volume = VolumeId("target-serial", "NTFS")
+    profile = CapabilityProfile("NTFS", 100, True, False, 32_767, True, True)
+
+    def record(path: str, identity: FileIdentity | None) -> FileRecord:
+        return FileRecord(
+            path,
+            path.upper(),
+            1,
+            2,
+            identity,
+            1,
+            MetadataSnapshot(0, None),
+        )
+
+    source = ScanResult(
+        Root(r"C:\source", "source"),
+        source_volume,
+        VolumeEvidence("source", "C:\\"),
+        profile,
+        (
+            record("renamed.bin", FileIdentity("source-serial", 11)),
+            record("identityless.bin", None),
+        ),
+        (),
+        (),
+        (),
+        ScanScope.full(),
+        True,
+    )
+    target = ScanResult(
+        Root(r"D:\target", "target"),
+        target_volume,
+        VolumeEvidence("target", "D:\\"),
+        profile,
+        (
+            record("old.bin", FileIdentity("target-serial", 21)),
+            record("identityless.bin", None),
+        ),
+        (),
+        (),
+        (),
+        ScanScope.full(),
+        True,
+    )
+    expected = MappingSnapshot.empty(source_volume, target_volume)
+    observed: list[tuple[object, ...]] = []
+
+    class Repository:
+        def __init__(self, path: Path) -> None:
+            observed.append(("open", Path(path)))
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args) -> None:
+            return None
+
+        def find_mapping(self, *args, **kwargs):
+            raise AssertionError("runtime used the unbounded mapping reader")
+
+        def find_current_mapping(self, *args, **kwargs):
+            observed.append((args, kwargs))
+            return SimpleNamespace(snapshot=expected)
+
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    runtime.ledger_path.write_bytes(b"present")
+    monkeypatch.setattr(runtime_module, "LedgerRepository", Repository)
+    try:
+        assert runtime._correspondence(source, target) is expected
+    finally:
+        runtime.close()
+
+    assert observed[1] == (
+        (source_volume, "source", target_volume, "target"),
+        {
+            "target_path_keys": ("OLD.BIN", "IDENTITYLESS.BIN"),
+            "source_identities": frozenset(
+                {FileIdentity("source-serial", 11)}
+            ),
+            "target_identities": frozenset(
+                {FileIdentity("target-serial", 21)}
+            ),
+        },
+    )
 
 
 def test_sync_path_validation_refuses_a_final_root_reparse_without_following_it(

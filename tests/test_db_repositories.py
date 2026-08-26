@@ -16,6 +16,8 @@ from namisync.core.integrity import (
     InventoryState,
     RecordDisposition,
 )
+from namisync.core.models import FileIdentity, VolumeId
+from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, OperationReason
 from namisync.core.recording import InventoryCommand
 from namisync.core.scalars import MAX_FILE_INDEX_128
@@ -56,6 +58,108 @@ def _insert_minimal_inventory_rows(
                     f"CANDIDATE-{index:06d}.BIN",
                 )
                 for index in range(start, start + count)
+            ),
+        )
+        writer.commit()
+    finally:
+        writer.close()
+
+
+def _insert_mapping_history(
+    path: Path,
+    setup,
+    rows: tuple[
+        tuple[str, FileIdentity, str, FileIdentity | None, int, int], ...
+    ],
+) -> None:
+    """Seed correspondence without routing a large synthetic run through recorder."""
+
+    source_count = len(rows)
+    writer = connect_ledger_writer(path)
+    try:
+        writer.execute("BEGIN IMMEDIATE")
+        writer.executemany(
+            """INSERT INTO inventory(
+                   id, location_id, rel_path, rel_path_key, entry_kind, presence,
+                   observed_size, observed_mtime_ns,
+                   file_identity_volume_serial, file_identity_file_index,
+                   observed_nlink, observed_attributes, scope_token
+               ) VALUES (?, ?, ?, ?, 'file', 'present', 1, 1, ?, ?, ?, 0, 'scope')""",
+            (
+                (
+                    index,
+                    setup.source_location_id,
+                    source_path,
+                    normalize_relative_path(source_path),
+                    source_identity.volume_serial,
+                    str(source_identity.file_index),
+                    source_nlink,
+                )
+                for index, (
+                    source_path,
+                    source_identity,
+                    _target_path,
+                    _target_identity,
+                    source_nlink,
+                    _target_nlink,
+                ) in enumerate(rows, start=1)
+            ),
+        )
+        writer.executemany(
+            """INSERT INTO inventory(
+                   id, location_id, rel_path, rel_path_key, entry_kind, presence,
+                   observed_size, observed_mtime_ns,
+                   file_identity_volume_serial, file_identity_file_index,
+                   observed_nlink, observed_attributes, scope_token
+               ) VALUES (?, ?, ?, ?, 'file', 'present', 1, 1, ?, ?, ?, 0, 'scope')""",
+            (
+                (
+                    source_count + index,
+                    setup.target_location_id,
+                    target_path,
+                    normalize_relative_path(target_path),
+                    None if target_identity is None else target_identity.volume_serial,
+                    None if target_identity is None else str(target_identity.file_index),
+                    target_nlink,
+                )
+                for index, (
+                    _source_path,
+                    _source_identity,
+                    target_path,
+                    target_identity,
+                    _source_nlink,
+                    target_nlink,
+                ) in enumerate(rows, start=1)
+            ),
+        )
+        writer.executemany(
+            """INSERT INTO mapping_correspondence(
+                   mapping_id, source_inventory_id, target_inventory_id,
+                   source_identity_volume_serial, source_identity_file_index,
+                   target_identity_volume_serial, target_identity_file_index,
+                   last_seen_at, run_token, op_token
+               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                (
+                    setup.mapping_id,
+                    index,
+                    source_count + index,
+                    source_identity.volume_serial,
+                    str(source_identity.file_index),
+                    None if target_identity is None else target_identity.volume_serial,
+                    None if target_identity is None else str(target_identity.file_index),
+                    NOW.isoformat(),
+                    setup.run_token,
+                    f"op-{index}",
+                )
+                for index, (
+                    _source_path,
+                    source_identity,
+                    _target_path,
+                    target_identity,
+                    _source_nlink,
+                    _target_nlink,
+                ) in enumerate(rows, start=1)
             ),
         )
         writer.commit()
@@ -358,6 +462,379 @@ def test_ledger_round_trips_full_width_file_indexes_as_canonical_text(
         finally:
             writer.close()
     finally:
+        setup.recorder.close()
+
+
+def test_current_mapping_read_ignores_large_irrelevant_history_and_keeps_pair_order(
+    tmp_path: Path,
+) -> None:
+    count = 1_201
+    rows = tuple(
+        (
+            f"source-{count - index:04d}.bin",
+            FileIdentity("source-serial", index),
+            f"target-{index:04d}.bin",
+            None
+            if index == 700
+            else FileIdentity("target-serial", 10_000 + index),
+            1,
+            1,
+        )
+        for index in range(1, count + 1)
+    )
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    statements: list[str] = []
+    try:
+        _insert_mapping_history(setup.recorder.path, setup, rows)
+        selected = (900, 300, 700, 1_100)
+        source_identities = frozenset(
+            rows[index - 1][1] for index in selected[:-1]
+        )
+        target_identities = frozenset(
+            identity
+            for index in selected[:-1]
+            if (identity := rows[index - 1][3]) is not None
+        ) | {FileIdentity("target-serial", 99_999)}
+        target_paths = tuple(rows[index - 1][2] for index in reversed(selected))
+
+        with LedgerRepository(
+            setup.recorder.path, trace_callback=statements.append
+        ) as repository:
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=target_paths,
+                source_identities=source_identities,
+                target_identities=target_identities,
+            )
+
+        assert found is not None
+        assert [pair.source_rel_path_key for pair in found.snapshot.pairs] == sorted(
+            normalize_relative_path(rows[index - 1][0])
+            for index in selected[:-1]
+        )
+        assert {pair.target_rel_path_key for pair in found.snapshot.pairs} == {
+            normalize_relative_path(rows[index - 1][2])
+            for index in selected[:-1]
+        }
+        assert any(pair.target_identity is None for pair in found.snapshot.pairs)
+        pair_selects = [
+            statement
+            for statement in statements
+            if "FROM mapping_correspondence AS pair" in statement
+        ]
+        assert len(pair_selects) == 1
+        assert "pair.target_inventory_id IN" in pair_selects[0]
+        assert "current_target.location_id" in pair_selects[0]
+    finally:
+        setup.recorder.close()
+
+
+def test_current_mapping_read_preserves_relevant_identity_alias_disqualification(
+    tmp_path: Path,
+) -> None:
+    shared_source = FileIdentity("source-serial", 41)
+    shared_target = FileIdentity("target-serial", 51)
+    linked_source = FileIdentity("source-serial", 42)
+    linked_target = FileIdentity("target-serial", 52)
+    irrelevant_source = FileIdentity("source-serial", 99)
+    irrelevant_target = FileIdentity("target-serial", 199)
+    rows = (
+        ("z-source.bin", shared_source, "z-target.bin", shared_target, 1, 1),
+        ("a-source.bin", shared_source, "a-target.bin", shared_target, 1, 1),
+        ("linked.bin", linked_source, "linked-old.bin", linked_target, 2, 2),
+        ("irrelevant-a.bin", irrelevant_source, "irrelevant-a.bin", irrelevant_target, 1, 1),
+        ("irrelevant-b.bin", irrelevant_source, "irrelevant-b.bin", irrelevant_target, 1, 1),
+    )
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    try:
+        _insert_mapping_history(setup.recorder.path, setup, rows)
+        with LedgerRepository(setup.recorder.path) as repository:
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=("z-target.bin", "linked-old.bin", "a-target.bin"),
+                source_identities=frozenset({shared_source, linked_source}),
+                target_identities=frozenset({shared_target, linked_target}),
+            )
+
+        assert found is not None
+        assert [pair.source_rel_path_key for pair in found.snapshot.pairs] == [
+            "A-SOURCE.BIN",
+            "LINKED.BIN",
+            "Z-SOURCE.BIN",
+        ]
+        assert found.snapshot.disqualified_source_identities == frozenset(
+            {shared_source, linked_source}
+        )
+        assert found.snapshot.disqualified_target_identities == frozenset(
+            {shared_target, linked_target}
+        )
+        assert irrelevant_source not in found.snapshot.disqualified_source_identities
+        assert irrelevant_target not in found.snapshot.disqualified_target_identities
+    finally:
+        setup.recorder.close()
+
+
+def test_current_mapping_read_excludes_a_stale_nonnull_target_identity(
+    tmp_path: Path,
+) -> None:
+    source_identity = FileIdentity("source-serial", 41)
+    stored_target_identity = FileIdentity("target-serial", 51)
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    try:
+        _insert_mapping_history(
+            setup.recorder.path,
+            setup,
+            (("renamed.bin", source_identity, "old.bin", stored_target_identity, 1, 1),),
+        )
+        with LedgerRepository(setup.recorder.path) as repository:
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=("old.bin",),
+                source_identities=(source_identity,),
+                target_identities=(FileIdentity("target-serial", 52),),
+            )
+
+        assert found is not None
+        assert found.snapshot.pairs == ()
+    finally:
+        setup.recorder.close()
+
+
+def test_current_mapping_read_skips_pair_query_for_an_empty_target_scope(
+    tmp_path: Path,
+) -> None:
+    source_identity = FileIdentity("source-serial", 41)
+    target_identity = FileIdentity("target-serial", 51)
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    statements: list[str] = []
+    try:
+        _insert_mapping_history(
+            setup.recorder.path,
+            setup,
+            (("renamed.bin", source_identity, "old.bin", target_identity, 1, 1),),
+        )
+        with LedgerRepository(
+            setup.recorder.path, trace_callback=statements.append
+        ) as repository:
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=(),
+                source_identities=(source_identity,),
+                target_identities=(target_identity,),
+            )
+
+        assert found is not None
+        assert found.snapshot.pairs == ()
+        assert not any(
+            "FROM mapping_correspondence AS pair" in statement
+            for statement in statements
+        )
+    finally:
+        setup.recorder.close()
+
+
+def test_current_mapping_queries_use_target_and_identity_indexes(
+    tmp_path: Path,
+) -> None:
+    source_identity = FileIdentity("source-serial", 41)
+    target_identity = FileIdentity("target-serial", 51)
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    statements: list[str] = []
+    try:
+        _insert_mapping_history(
+            setup.recorder.path,
+            setup,
+            (("renamed.bin", source_identity, "old.bin", target_identity, 2, 2),),
+        )
+        with LedgerRepository(
+            setup.recorder.path, trace_callback=statements.append
+        ) as repository:
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=("old.bin",),
+                source_identities=(source_identity,),
+                target_identities=(target_identity,),
+            )
+        assert found is not None
+
+        pair_statement = next(
+            statement
+            for statement in statements
+            if "FROM mapping_correspondence AS pair" in statement
+        )
+        identity_statement = next(
+            statement
+            for statement in statements
+            if "WITH requested(volume_serial, file_index)" in statement
+        )
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            pair_plan = tuple(
+                str(row["detail"])
+                for row in connection.execute(
+                    "EXPLAIN QUERY PLAN " + pair_statement
+                )
+            )
+            identity_plan = tuple(
+                str(row["detail"])
+                for row in connection.execute(
+                    "EXPLAIN QUERY PLAN " + identity_statement
+                )
+            )
+        finally:
+            connection.close()
+
+        assert any(
+            "SEARCH pair USING INDEX" in detail
+            and "mapping_id=? AND target_inventory_id=?" in detail
+            for detail in pair_plan
+        )
+        assert any(
+            "SEARCH current_target USING COVERING INDEX" in detail
+            and "location_id=? AND rel_path_key=?" in detail
+            for detail in pair_plan
+        )
+        assert any("inventory_identity_idx" in detail for detail in identity_plan)
+    finally:
+        setup.recorder.close()
+
+
+def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
+    tmp_path: Path,
+) -> None:
+    rows = tuple(
+        (
+            f"source-{index:04d}.bin",
+            FileIdentity("source-serial", index),
+            f"target-{index:04d}.bin",
+            FileIdentity("target-serial", 10_000 + index),
+            1,
+            1,
+        )
+        for index in range(1, 802)
+    )
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    statements: list[str] = []
+    try:
+        _insert_mapping_history(setup.recorder.path, setup, rows)
+        with LedgerRepository(
+            setup.recorder.path, trace_callback=statements.append
+        ) as repository:
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=tuple(row[2] for row in reversed(rows)),
+                source_identities=frozenset(row[1] for row in rows),
+                target_identities=frozenset(row[3] for row in rows if row[3] is not None),
+            )
+
+        assert found is not None
+        assert len(found.snapshot.pairs) == len(rows)
+        pair_selects = [
+            statement
+            for statement in statements
+            if "FROM mapping_correspondence AS pair" in statement
+        ]
+        identity_selects = [
+            statement
+            for statement in statements
+            if "WITH requested(volume_serial, file_index)" in statement
+        ]
+        assert len(pair_selects) == 3
+        assert len(identity_selects) == 6
+        assert all(statement.count("TARGET-") <= 400 for statement in pair_selects)
+        assert all(
+            max(statement.count("source-serial"), statement.count("target-serial"))
+            <= 400
+            for statement in identity_selects
+        )
+    finally:
+        setup.recorder.close()
+
+
+def test_current_mapping_read_uses_one_snapshot_across_query_batches(
+    tmp_path: Path,
+) -> None:
+    rows = tuple(
+        (
+            f"source-{index:04d}.bin",
+            FileIdentity("source-serial", index),
+            f"target-{index:04d}.bin",
+            FileIdentity("target-serial", 10_000 + index),
+            1,
+            1,
+        )
+        for index in range(1, 402)
+    )
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    writer = connect_ledger_writer(setup.recorder.path)
+    pair_select_count = 0
+
+    def update_between_batches(statement: str) -> None:
+        nonlocal pair_select_count
+        if "FROM mapping_correspondence AS pair" not in statement:
+            return
+        pair_select_count += 1
+        if pair_select_count == 2:
+            writer.execute(
+                "UPDATE inventory SET observed_nlink = 2 WHERE id = 1"
+            )
+            writer.commit()
+
+    try:
+        _insert_mapping_history(setup.recorder.path, setup, rows)
+        source_identities = frozenset(row[1] for row in rows)
+        target_identities = frozenset(row[3] for row in rows if row[3] is not None)
+        with LedgerRepository(
+            setup.recorder.path,
+            trace_callback=update_between_batches,
+        ) as repository:
+            found = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=tuple(row[2] for row in rows),
+                source_identities=source_identities,
+                target_identities=target_identities,
+            )
+        assert found is not None
+        assert pair_select_count == 2
+        assert found.snapshot.disqualified_source_identities == frozenset()
+
+        with LedgerRepository(setup.recorder.path) as repository:
+            current = repository.find_current_mapping(
+                VolumeId("source-serial", "NTFS"),
+                "source",
+                VolumeId("target-serial", "NTFS"),
+                "target",
+                target_path_keys=tuple(row[2] for row in rows),
+                source_identities=source_identities,
+                target_identities=target_identities,
+            )
+        assert current is not None
+        assert current.snapshot.disqualified_source_identities == frozenset(
+            {FileIdentity("source-serial", 1)}
+        )
+    finally:
+        writer.close()
         setup.recorder.close()
 
 

@@ -312,11 +312,12 @@ file, or a role/version-marker mismatch is refused with the coordinated
 manual-reset direction and no mutation.
 
 `repositories.py` returns immutable inventory, run, and `MappingSnapshot`
-values. Canonical path and canonical positive-decimal row-ID selections are
-queried in bounded 400-key chunks inside one read transaction, so a concurrent
-commit cannot split one selection across different database snapshots. Row-ID
-lookups are location-scoped, deduplicate in first-requested order, and omit
-malformed or missing identifiers rather than broadening the query.
+values. Canonical path, file-identity, and canonical positive-decimal row-ID
+selections are queried in bounded 400-subject chunks inside one read
+transaction, so a concurrent commit cannot split one selection across different
+database snapshots. Row-ID lookups are location-scoped, deduplicate in
+first-requested order, and omit malformed or missing identifiers rather than
+broadening the query.
 
 History version 6 creates a provisional `history_runs` row at the first durable
 window and appends disposition-bound reliable receipts to `history_events`.
@@ -492,12 +493,22 @@ history views, and mapping guidance. Reads are batched by canonical key; no
 one-query-per-path loop for large selections. Query functions never refresh
 state as a side effect.
 
-Mapping snapshots include correspondence from paired no-ops, missing rows,
-identity ambiguity, and location ids. Inventory reads distinguish current
-observation from retained attested baseline and derive
-unverified/verified/modified/mismatched state from the baseline, current stat,
-last verified time, and sticky invalidation. History readers branch by activity
-kind rather than rendering every activity as source-to-target. History list and
+The planning mapping reader derives its complete query scope from the two
+current file scans. It reads correspondence only for current target path keys,
+then retains only current source identities and a current target identity or the
+existing nullable target-identity evidence. Source and target disqualification
+queries cover only identities present in those scans while still counting every
+matching inventory alias and retained multi-link observation. Mapping lookup,
+all 400-key/identity batches, and disqualification share one SQLite snapshot;
+the bounded result is restored to canonical source-key/target-key order before
+planning. Irrelevant historical location rows are therefore never materialized
+by planning. The general mapping snapshot reader remains available for explicit
+mapping inspection.
+
+Inventory reads distinguish current observation from retained attested baseline
+and derive unverified/verified/modified/mismatched state from the baseline,
+current stat, last verified time, and sticky invalidation. History readers
+branch by activity kind rather than rendering every activity as source-to-target. History list and
 summary reads use a fixed query count and one primitive indexed fact row per
 run; workflow-supplied predicates preserve workflow ownership of selection and
 headline interpretation. Item and reliable-event reads use keyset pages with a
