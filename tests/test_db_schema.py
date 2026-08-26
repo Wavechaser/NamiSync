@@ -934,29 +934,41 @@ def test_exact_schema_topology_does_not_replace_marker_value_validation(history:
             validate(connection)
 
 
-def test_exact_schema_topology_is_not_selected_by_production_callers_yet(
+def test_exact_schema_topology_is_selected_by_all_admission_boundaries(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from namisync.db.contracts import history_file_contract_matches, ledger_file_contract_matches
     from namisync.workflows.database_pair import validate_database_pair
 
-    def unexpected(*args, **kwargs):
-        pytest.fail("the preparatory topology authority must remain dormant")
-
-    monkeypatch.setattr(schema_module, "_validate_schema_topology", unexpected, raising=False)
     ledger = initialize_ledger(tmp_path / "ledger.db")
     history = initialize_history(tmp_path / "history.db")
-    initialize_ledger(ledger)
-    initialize_history(history)
-    with closing(connect_ledger_reader(ledger)) as connection:
-        schema_module.validate_ledger_reader_contract(connection)
-    with closing(connect_history_reader(history)) as connection:
-        schema_module.validate_history_reader_contract(connection)
-    LedgerRepository(ledger).close()
-    HistoryRepository(history).close()
-    assert ledger_file_contract_matches(ledger)
-    assert history_file_contract_matches(history)
-    assert validate_database_pair(ledger, history).state == "ready"
+    validate = schema_module._validate_schema_topology
+    observed = []
+
+    def tracked(connection, *, history):
+        observed.append(history)
+        return validate(connection, history=history)
+
+    monkeypatch.setattr(schema_module, "_validate_schema_topology", tracked)
+    with closing(connect_ledger_reader(ledger)) as ledger_reader, closing(
+        connect_history_reader(history)
+    ) as history_reader:
+        for expected, action in (
+            ({False}, lambda: initialize_ledger(tmp_path / "fresh-ledger.db")),
+            ({True}, lambda: initialize_history(tmp_path / "fresh-history.db")),
+            ({False}, lambda: initialize_ledger(ledger)),
+            ({True}, lambda: initialize_history(history)),
+            ({False}, lambda: schema_module.validate_ledger_reader_contract(ledger_reader)),
+            ({True}, lambda: schema_module.validate_history_reader_contract(history_reader)),
+            ({False}, lambda: LedgerRepository(ledger).close()),
+            ({True}, lambda: HistoryRepository(history).close()),
+            ({False}, lambda: ledger_file_contract_matches(ledger)),
+            ({True}, lambda: history_file_contract_matches(history)),
+            ({False, True}, lambda: validate_database_pair(ledger, history)),
+        ):
+            observed.clear()
+            action()
+            assert set(observed) == expected
 
 
 def _sqlite_artifact_snapshot(path: Path) -> dict[str, bytes | None]:
@@ -1040,7 +1052,7 @@ def test_read_repositories_close_reader_when_contract_validation_refuses(
     connect_name: str,
 ) -> None:
     path = tmp_path / f"{repository_type.__name__}.db"
-    sqlite3.connect(path).close()
+    (initialize_ledger if repository_type is LedgerRepository else initialize_history)(path)
     connection = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
 
     class TrackedReader:
@@ -1056,7 +1068,29 @@ def test_read_repositories_close_reader_when_contract_validation_refuses(
     reader = TrackedReader()
     monkeypatch.setattr(module, connect_name, lambda *args, **kwargs: reader)
 
+    def refuse_after_open(_connection) -> None:
+        raise SchemaResetRequired("injected post-open contract change")
+
+    monkeypatch.setattr(
+        module,
+        "validate_ledger_reader_contract" if repository_type is LedgerRepository else "validate_history_reader_contract",
+        refuse_after_open,
+    )
+
     with pytest.raises(SchemaResetRequired):
         repository_type(path)
 
     assert reader.closed
+
+
+@pytest.mark.parametrize("initialize", [initialize_ledger, initialize_history])
+def test_existing_database_initializer_still_rejects_negative_busy_timeout(
+    tmp_path: Path, initialize,
+) -> None:
+    path = initialize(tmp_path / "existing.db")
+    before = _sqlite_artifact_snapshot(path)
+
+    with pytest.raises(ValueError, match="busy timeout cannot be negative"):
+        initialize(path, busy_timeout_ms=-1)
+
+    assert _sqlite_artifact_snapshot(path) == before

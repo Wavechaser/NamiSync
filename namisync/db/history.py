@@ -55,6 +55,7 @@ from .connections import (
     connect_history_reader,
     connect_history_writer,
 )
+from .contracts import require_database_file_contract
 from .schema import (
     MAX_HISTORY_ERROR_MESSAGE_BYTES,
     MAX_HISTORY_ERROR_TYPE_BYTES,
@@ -1657,6 +1658,7 @@ class HistoryRepository:
         if not isinstance(classification_query, HistoryClassificationQuery):
             raise TypeError("classification_query must be HistoryClassificationQuery")
         self._classification_query = classification_query
+        require_database_file_contract(self.path, history=True)
         self._connection = connect_history_reader(
             self.path, busy_timeout_ms=busy_timeout_ms
         )

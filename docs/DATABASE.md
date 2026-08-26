@@ -16,14 +16,16 @@ reset, not an in-place migration.
 | ledger | 4 | 5 | `m1-ledger-v4-event-v5-evidence-v1` |
 | history | 6 | 5 | `m1-history-v6-event-v5-recording-v1` |
 
-Both metadata rows are mandatory. Two absent main files with no sidecars remain
-the only fresh state. Any old or mixed pair, one-present pair, missing/wrong
-marker, or orphan WAL/SHM/journal sidecar is refused by read-only validation
-before mutating startup or CLI work. The refusal directs the user to close NamiSync and
+Version, contract id, and epoch values are mandatory. Two absent main files
+with no sidecars remain the only fresh state. Any old or mixed pair,
+one-present pair, missing/wrong marker, incomplete/poisoned topology, or orphan
+WAL/SHM/journal sidecar is refused by read-only validation before mutating
+startup or CLI work. The refusal directs the user to close NamiSync and
 archive or delete both database mains and all sidecars together; startup does
 not migrate, repair, or delete them. A standalone read-only history command may
 open one exact history-v6 database without creating or requiring its ledger
-peer; it still validates the history role, version, contract id, and epoch.
+peer; it still validates the history role, version, contract id, epoch, and
+complete topology through the shared nonmutating file preflight.
 
 Ledger v4 stores complete file identities as canonical `FileIndex128` text and
 strengthens pair, canonical-domain, and attestation checks. It does not add an
@@ -43,9 +45,9 @@ Presentation-only omission state is never stored.
 
 ### Exact topology authority
 
-Status: prepared but dormant at remediation checkpoint 3R.12. Reader,
-initializer, repository, and pair admission still select metadata checks only;
-production closure of the incomplete/poisoned-schema finding belongs to 3R.13.
+Status: active from remediation checkpoint 3R.13, using the exact authority
+prepared independently in 3R.12. Reader validation, initializer/repository
+preflight, and pair admission all select it alongside the current markers.
 
 `schema.py` compares the complete ordered `main.sqlite_schema` projection
 `(type, name, tbl_name, sql)` with a private in-memory reference created from the
@@ -60,8 +62,53 @@ Only these SQLite-owned table definitions are optional, at most once each:
 and SQL must match exactly. Undeclared statistics objects, duplicate rows, and
 indexes/triggers attached to statistics tables are not exempt. The candidate
 receives only a catalog read; DDL is restricted to the private reference, which
-is always closed. This is not a physical database-integrity scan, a metadata
-value validator, or a change to WAL admission.
+is always closed. The topology comparator is not a physical database-integrity
+scan or a replacement for metadata-value validation.
+
+### Nonmutating file admission
+
+`contracts.py` owns the shared file preflight. Any lexical `-journal` entry,
+including an empty file, directory, or dangling link, refuses before SQLite
+access; an inaccessible entry is not absence. Pair admission checks both
+journals before validating either role. Admission never guesses journal
+hotness or performs rollback recovery on source artifacts.
+
+With no WAL or SHM, the validator keeps the direct `mode=ro&immutable=1`
+source read. Otherwise it copies only main and existing WAL bytes to an owned
+temporary directory and validates through ordinary read-only SQLite there.
+SQLite sees committed WAL markers/topology and builds its own private SHM;
+source SHM is drift evidence only, never copied or opened as recovery authority.
+This also covers a missing source SHM. There is no SQLite backup call, source
+checkpoint, custom WAL parser, or new database-size acceptance limit.
+
+Each main/WAL/SHM observation binds regular-file identity, size, modification
+time, and SHA-256 content. Stream reads are bounded by the observed length and
+use at most 1 MiB per chunk. Copying and rechecks reject changed stamps before
+reading or copying enlarged artifacts; final hashes also catch same-stamp
+edits. Membership and journal checks bracket observation, and the pair gate
+rechecks both roles after peer validation. Observed drift refuses; quiescent
+ready/refusal/error fixtures preserve all source bytes, and injected-drift
+fixtures retain only the external mutation. Private SQLite handles close before
+temporary cleanup. One preflight-local cleanup guard covers source/copy handles,
+the validation connection, and the temporary directory. Ordinary cleanup
+errors annotate and preserve the primary error; an existing control
+interruption wins, while a cleanup interruption outranks an ordinary primary
+error. Outer cleanup is still attempted after inner failures. A cleanup
+failure after successful validation refuses admission.
+
+Existing-file initializers return after this preflight without an ordinary
+source connection or `CREATE IF NOT EXISTS` repair. A pre-existing empty main
+or orphan sidecar is not fresh. Repository constructors preflight first, then
+open their ordinary reader, repeat exact contract validation, and close it on
+refusal. The evidence is a point-in-time observation, not a source lease or an
+atomic pair snapshot: mutation after the final guard and a repository's later
+ordinary open remains outside the classifier's no-write guarantee.
+
+Coordinated fresh creation uses a separate private schema-creation path only
+after every reserved main/WAL/SHM/journal entry still matches its ownership lease
+and is an empty regular file. The existing handle-bound rollback remains in
+force. Standalone fresh `initialize_*` calls do not acquire those leases; their
+absence-to-writer-open race is not an exclusive cross-process creation boundary.
 
 ### Atomic execution-evidence read
 
@@ -107,11 +154,10 @@ group room. Database triggers reject correspondence whose rows do not belong to
 the mapping's source and target locations.
 
 `connections.py` enables foreign keys, WAL, and bounded busy timeout on writers;
-read repositories open SQLite in `mode=ro` and enable `query_only`. Before
-exposing a retained reader, both repository constructors validate the numeric
-schema version and exact contract marker through that read-only connection;
-every refusal closes the reader and leaves the database plus WAL/SHM/journal
-sidecars byte-for-byte unchanged. Live database paths can be validated against
+read repositories open SQLite in `mode=ro` and enable `query_only`. Both
+repository constructors use the shared file preflight above before opening
+that reader, then repeat the exact current contract check before exposing it.
+Live database paths can be validated against
 managed roots before creation; that containment resolver converts long managed
 roots only at the native I/O boundary and compares ordinary logical spellings.
 This is not a claim that SQLite database files themselves may use overlong
@@ -123,9 +169,9 @@ read-only `validate_database_contracts()` preflight returning a
 `fresh`/`ready`/`refused` pair state — including the exactly-one-present and
 orphaned-sidecar refusals — enforced by the CLI mutation paths and ready for
 the Slice 1 product host to consume before window creation, so history cannot
-be initialized without the ledger. Validation uses a SQLite immutable
-reader so opening a live WAL database cannot create or rewrite shared-memory
-state. Fresh creation is a separate, serialized workflow operation: it
+be initialized without the ledger. Validation uses the shared immutable or
+private-WAL path above, never source SHM recovery authority.
+Fresh creation is a separate, serialized workflow operation: it
 publishes ledger then history after reserving every main and sidecar cleanup
 target through a Windows ownership lease. Failure cleanup derives a new delete
 handle from the retained reservation with `ReOpenFile` and requests
@@ -197,7 +243,7 @@ can lose only the last uncommitted window. A nonterminal committed row is
 readable as `incomplete` after restart and is not classified as interrupted or
 resumable without future durable custody.
 
-The current schemas carry immutable whole-contract metadata: ledger
+The current schemas carry exact whole-contract metadata: ledger
 `contract_id=m1-ledger-v4-event-v5-evidence-v1`, history
 `contract_id=m1-history-v6-event-v5-recording-v1`, and shared `data_epoch=5`.
 Opening ledger v1-v3, history v1-v5, or a current database with a

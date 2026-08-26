@@ -8,9 +8,7 @@ from typing import Iterable
 
 from .connections import (
     DEFAULT_BUSY_TIMEOUT_MS,
-    connect_history_reader,
     connect_history_writer,
-    connect_ledger_reader,
     connect_ledger_writer,
     validate_database_path,
 )
@@ -1088,38 +1086,30 @@ def _initialize(
     busy_timeout_ms: int,
     managed_roots: Iterable[str | Path],
 ) -> Path:
+    # Deferred import: the shared file probe selects this module's validators.
+    from .contracts import database_artifacts_present, require_database_file_contract
+
     resolved = validate_database_path(path, managed_roots=managed_roots)
+    if busy_timeout_ms < 0:
+        raise ValueError("busy timeout cannot be negative")
+    if database_artifacts_present(resolved):
+        require_database_file_contract(resolved, history=history)
+        return resolved
+    return _create_schema(resolved, schema, history=history, busy_timeout_ms=busy_timeout_ms)
+
+
+def _create_schema(
+    resolved: Path, schema: str, *, history: bool, busy_timeout_ms: int,
+) -> Path:
     resolved.parent.mkdir(parents=True, exist_ok=True)
-    if resolved.exists():
-        read = connect_history_reader if history else connect_ledger_reader
-        readonly = read(resolved, busy_timeout_ms=busy_timeout_ms)
-        try:
-            version = _existing_schema_version(readonly, history=history)
-            expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
-            if version is not None and version != expected:
-                _raise_reset_required(version, history=history)
-            if version is not None:
-                _require_contract_id(readonly, history=history)
-        finally:
-            readonly.close()
     connect = connect_history_writer if history else connect_ledger_writer
     connection = connect(resolved, busy_timeout_ms=busy_timeout_ms)
     try:
         version = _existing_schema_version(connection, history=history)
-        expected = HISTORY_SCHEMA_VERSION if history else LEDGER_SCHEMA_VERSION
-        if version is not None and version != expected:
-            _raise_reset_required(version, history=history)
         if version is not None:
-            _require_contract_id(connection, history=history)
+            _raise_reset_required("not-empty", history=history)
         connection.executescript(schema)
-        version = int(
-            connection.execute(
-                "SELECT value FROM schema_metadata WHERE key = 'schema_version'"
-            ).fetchone()[0]
-        )
-        if version != expected:
-            _raise_reset_required(version, history=history)
-        _require_contract_id(connection, history=history)
+        _validate_reader_contract(connection, history=history)
     finally:
         connection.close()
     return resolved
@@ -1206,6 +1196,7 @@ def _validate_reader_contract(
             history=history,
         )
     _require_contract_id(connection, history=history)
+    _validate_schema_topology(connection, history=history)
 
 
 def validate_ledger_reader_contract(connection: sqlite3.Connection) -> None:
@@ -1218,6 +1209,22 @@ def validate_history_reader_contract(connection: sqlite3.Connection) -> None:
     """Refuse an incompatible history store through a read-only connection."""
 
     _validate_reader_contract(connection, history=True)
+
+
+def _initialize_reserved_ledger(path: Path) -> Path:
+    """Create only under the pair coordinator's existing empty reservations."""
+
+    return _create_schema(
+        path, _LEDGER_SCHEMA, history=False, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS,
+    )
+
+
+def _initialize_reserved_history(path: Path) -> Path:
+    """Create only under the pair coordinator's existing empty reservations."""
+
+    return _create_schema(
+        path, _HISTORY_SCHEMA, history=True, busy_timeout_ms=DEFAULT_BUSY_TIMEOUT_MS,
+    )
 
 
 def initialize_ledger(

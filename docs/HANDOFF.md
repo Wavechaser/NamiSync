@@ -1,9 +1,8 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.11 is committed as `ec4e9c8`. Checkpoint
-3R.12's dormant implementation, required verification, and pre-commit reviews
-are complete.
-After its named commit, start only 3R.13.
+Status (2026-08-26): checkpoint 3R.12 is committed as `7956834`. Checkpoint
+3R.13's implementation, required verification, and pre-commit reviews are
+complete. After its named commit, stop for the design decisions below.
 The checkpoint 3.2 shell boundary remains active; 3.3 has not started.
 S5 and 3R.14's coordinated epoch/reset remain
 design holds. The pre-existing installed-wheel event diagnostic migration is
@@ -11,44 +10,65 @@ also unassigned; do not silently widen another checkpoint to repair it.
 
 ## Delivered This Checkpoint
 
-- Added one dormant exact topology comparator using the complete ordered main
-  catalog and a private in-memory reference built from the shipped role schema.
-  Stored SQL and null automatic-index definitions remain exact; only physical
-  root pages and explicitly declared optional statistics rows are excluded.
-- Each exact stat1/stat4 definition is optional at most once. Duplicate or
-  poisoned statistics, extra objects, missing objects, and definition drift
-  refuse; no prefix wildcard, SQL normalization, cache, or integrity scan.
-- Direct tests cover both current roles, populated/relocated schemas, preserved
-  transaction ownership, TEMP/attached isolation, SELECT-only candidate access,
-  and byte preservation. Existing production callers are untouched, with a
-  separate non-selection test rather than a positive marker-only admission test.
-- DATABASE describes the dormant authority and exact exceptions. Causal BUGS
-  keeps S14 open: reader/initializer/repository/pair activation and WAL-aware
-  admission remain the separate 3R.13 checkpoint.
+- Activated 3R.12's unchanged exact topology authority in reader validation
+  and shared initializer/repository/pair preflight. Existing initializers are
+  no-ops after successful validation; they never repair partial current files.
+- Any lexical journal entry or inaccessible journal refuses. Sidecar-free
+  validation remains immutable; WAL/SHM-bearing files use private main/WAL
+  copies and private SQLite SHM, never source recovery authority.
+- Typed ephemeral evidence binds identity, length, mtime, and content. Copy and
+  recheck reads stay bound to initial observations; same-stamp changes and peer
+  drift refuse. Cleanup preserves primary errors against ordinary close
+  failures and preserves existing control interruptions; a new cleanup
+  interruption outranks an ordinary primary error.
+- Coordinated fresh creation retains native ownership leases and now checks
+  all reserved entries are still owned, empty regular files before the private
+  initializer. Standalone fresh creation is not an exclusive reservation path.
+- Regressions cover both roles, corrupted current topology and WAL truth,
+  missing SHM, journal presence/access, source drift, temp/copy/SQLite failures,
+  control interruption, cleanup failure, and reservation replacement.
+- History tampering fixtures restore exact captured trigger definitions before
+  readback; their corruption statements and integrity assertions are unchanged.
+  DATABASE and causal BUGS describe S14/S15 fixes and the point-in-time boundary.
 
 ## Verification
 
-- Tests-first direct contract before adding the comparator:
-  `77 failed, 1 passed, 33 deselected`. Failures were the missing private
-  authority; the valid production non-selection control already passed.
-- Initial direct matrix after implementation: `78 passed, 33 deselected`.
-  Added TEMP/attached and open-transaction controls; full schema file:
-  `113 passed`.
-- Independent schema-file rerun: `113 passed`.
-- Database department: `278 passed, 3820 deselected`.
-- Source scan finds no production selection of the comparator; existing
-  initializer, reader, repository, and pair functions have no diff.
-- Independent schema-canonicalization, code/test, and owning-document working
-  reviews: `CLEAN`. Exact staged-tree review: `CLEAN`; the final status-only
-  delta is checked independently before the named commit.
-- Most recent ordinary suite (3R.11, required bundled Node):
-  `3986 passed, 4 skipped, 28 deselected`; unchanged protected oracle:
-  `30 scenarios x 3 runs`. Those are prior-checkpoint receipts, not a new run.
+- Tests-first marker/topology, journal, and WAL matrix: `28 failed,
+  39 deselected`; separate production-selection control: `1 failed,
+  112 deselected`. These now pass with shared preflight activation.
+- Review found copy/recheck reads could adopt a grown artifact's new length.
+  Six regressions failed before the expected-evidence guard and then passed.
+  Negative-timeout compatibility and nonregular reservation guards likewise
+  have failed-before/passed-after regressions.
+- Late independent review exposed masking by stream/SQLite close failures:
+  per-resource regressions `9 failed, 9 passed`; cascading-close regressions
+  `3 failed, 3 passed`. One preflight-local cleanup guard now covers all owned
+  resources; the combined cleanup/copy-bound run is `51 passed, 130 deselected`.
+- Final inspection found an already-observed journal could lose to the fresh
+  pair return. Both role regressions failed first (`2 failed, 181 deselected`);
+  moving only the journal refusal before that return gives `26 passed,
+  157 deselected` across the journal/fresh matrix. No SQLite call or validator
+  mutation is permitted by those regressions.
+- Independent final admission/schema/history rerun: `408 passed`.
+  History fixture adaptation independently reviewed `CLEAN`; all 110 existing
+  history tests retain their assertions.
+- Final database/workflows: `808 passed, 3436 deselected`.
+- Import architecture: `11 contracts kept, 0 broken`.
+- Final independent code/test/document and TOCTOU/temp-ownership reviews:
+  `CLEAN`, including the cleanup and fresh-journal deltas. Exact staged-tree
+  review: `CLEAN`; the final status-only delta is checked independently before
+  the named commit.
+- Final ordinary suite (required bundled Node):
+  `4212 passed, 4 skipped, 28 deselected`. All four skips are unavailable Windows
+  symlink/reparse creation privileges (`WinError 1314`); the 28 headed tests
+  are excluded by the ordinary gate, not claimed as headed acceptance.
+- Final protected settlement oracle: `30 scenarios x 3 runs` passed.
 - Protected settlement oracle, baseline, and prior assertions are unchanged.
   Tool/baseline blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
   `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
-- README's phase synopsis is unchanged; task-level changelog/cross-cutting
-  closure remains 3R.15.
+- README's database safety paragraph reflects the activated admission boundary;
+  its phase synopsis is unchanged. Task-level changelog/cross-cutting closure
+  remains 3R.15.
 
 ## Clean-Commit 3R.8 Diagnostic Follow-Up
 
@@ -95,15 +115,21 @@ Retained ignored artifacts and conventions are under
 
 Rebuilt 3R.4 is `1e794e7`; 3R.5 `8f6d8f8`; 3R.6 `f15a82d`;
 3R.7 `bd05ff7`; 3R.8 `f96804b`; 3R.9 `04d5fb8`; 3R.10 `e4fd539`;
-3R.11 `ec4e9c8`.
+3R.11 `ec4e9c8`; 3R.12 `7956834`.
 The discarded 3R.4 attempt remains recoverable under ignored
 `build/r34-restart-20260826/`.
 
-No fingerprint, identity codec, epoch, or database admission changes are
-present. The exact topology comparator exists but remains dormant.
+No fingerprint, identity codec, or epoch changes are present. Exact topology
+and WAL-aware file admission are active in the rebuilt 3R.13 diff. This is not
+a lease across later ordinary SQLite opens or an atomic pair snapshot.
 
-S5 still requires an explicit storage design or accepted residual. A read-only
-3R.14 audit found textual FileIndex128 changes all non-null identity-bearing
+S5 still requires an explicit storage design or accepted residual: the current
+`put/load_all/drop` store cannot guarantee scrubbing a previous continuation
+after a refused terminal write. The recommended M1 direction is memory-only
+continuations with redacted persisted records; a stronger atomic storage
+contract or an explicitly accepted residual remain alternatives, not decisions.
+
+A read-only 3R.14 audit found textual FileIndex128 changes all non-null identity-bearing
 durable hashes under ledger-v4/history-v6 epoch 5. The recommended reset keeps
 schema shapes/payload versions, bumps shared data epoch to 6 and ledger contract
 ID, and keeps history contract ID. Implementation waits for user ratification.
@@ -123,15 +149,12 @@ The earlier blocked patch context remains under ignored
 
 ## Immediate Next Context
 
-All current tracked edits belong to 3R.12. After the final status-only review,
+All current tracked edits belong to 3R.13. After the final status-only review,
 commit only
-`refactor(database): prepare exact schema topology validation`.
-After that clean stop, start 3R.13,
 `fix(database): validate complete pairs without mutation`.
-Activate the comparator only with the shared nonmutating file preflight:
-refuse any source journal before SQLite access; see committed WAL truth through
-a private snapshot without opening source SHM authority. Preserve the existing
-fresh-pair ownership reservations and rollback semantics as a distinct path.
+After that clean stop, report the unchanged S5 and identity/epoch design holds
+and the unassigned adjacent findings to the user; do not start 3R.14/3R.15 or
+checkpoint 3.3 without the required decisions.
 Do not alter frozen settlement or transport measurement authority, widen into
 unassigned diagnostic migration, or start identity/epoch work without a decision.
 

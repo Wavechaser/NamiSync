@@ -27,6 +27,7 @@ from namisync.core.planning import MappingPair, MappingSnapshot
 from namisync.core.scalars import file_index_128_from_text
 
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_reader
+from .contracts import require_database_file_contract
 from .schema import validate_ledger_reader_contract
 from .timestamps import decode_utc, encode_utc
 
@@ -219,6 +220,7 @@ class LedgerRepository:
         trace_callback: Callable[[str], None] | None = None,
     ) -> None:
         self.path = Path(path).resolve()
+        require_database_file_contract(self.path, history=False)
         self._connection = connect_ledger_reader(
             self.path, busy_timeout_ms=busy_timeout_ms
         )

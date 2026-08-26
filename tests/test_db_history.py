@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing, contextmanager
 import sqlite3
 from dataclasses import replace
 from datetime import timedelta
@@ -101,12 +102,23 @@ def _item(seq: int, outcome: Outcome = Outcome.SUCCEEDED) -> ItemOutcome:
     )
 
 
-def _allow_history_event_updates(connection: sqlite3.Connection) -> None:
-    connection.execute("DROP TRIGGER history_events_append_only_update")
-
-
-def _allow_finalized_run_updates(connection: sqlite3.Connection) -> None:
-    connection.execute("DROP TRIGGER history_runs_finalized_update")
+@contextmanager
+def _without_history_triggers(connection: sqlite3.Connection, *names: str):
+    # Corrupt data independently of topology so readback integrity assertions
+    # still run behind the exact-schema admission boundary.
+    definitions = [
+        connection.execute(
+            "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = ?", (name,),
+        ).fetchone()[0]
+        for name in names
+    ]
+    for name in names:
+        connection.execute(f'DROP TRIGGER "{name}"')
+    try:
+        yield
+    finally:
+        for definition in definitions:
+            connection.execute(definition)
 
 
 def _insert_history_event(
@@ -337,16 +349,13 @@ def test_history_schema_rejects_a_partial_review_fact_group(tmp_path: Path) -> N
             HistoryContext("run-partial-review", "host-1"),
         ).finalize(OperationResult(SessionState.COMPLETED))
         connection = connect_history_writer(store.path)
-        try:
-            _allow_finalized_run_updates(connection)
+        with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
             with pytest.raises(sqlite3.IntegrityError):
                 connection.execute(
                     """UPDATE history_runs
                           SET review_reason = 'review_fact_limit_exceeded'
                         WHERE run_token = 'run-partial-review'"""
                 )
-        finally:
-            connection.close()
 
 
 def test_history_terminal_recording_witnesses_round_trip_exactly(
@@ -428,11 +437,8 @@ def test_terminal_hash_and_repeat_finalize_bind_recording_witnesses(
         observer.on_event(_envelope(record, 1, item))
         observer.finalize(result)
         connection = connect_history_writer(store.path)
-        try:
-            _allow_finalized_run_updates(connection)
+        with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
             connection.execute(tamper_sql)
-        finally:
-            connection.close()
 
         with HistoryRepository(store.path) as repository:
             with pytest.raises(HistoryIntegrityError, match="payload hash"):
@@ -456,16 +462,13 @@ def test_terminal_hash_binds_the_exact_review_fact_group(tmp_path: Path) -> None
         )
         observer.finalize(result)
         connection = connect_history_writer(store.path)
-        try:
-            _allow_finalized_run_updates(connection)
+        with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
             connection.execute(
                 """UPDATE history_runs
                       SET review_axis = 'retained-bytes',
                           review_byte_limit = 134217728
                     WHERE run_token = 'run-review-hash'"""
             )
-        finally:
-            connection.close()
 
         with HistoryRepository(store.path) as repository:
             with pytest.raises(HistoryIntegrityError, match="payload hash"):
@@ -752,15 +755,12 @@ def test_duplicate_page_authenticates_a_linked_rejected_receipt(
         observer.flush()
 
     connection = connect_history_writer(path)
-    try:
-        _allow_history_event_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_events_append_only_update"):
         connection.execute(
             """UPDATE history_events
                   SET event_at = '2026-01-02T03:04:06.123456Z'
                 WHERE event_seq = 1"""
         )
-    finally:
-        connection.close()
 
     with HistoryRepository(path) as repository:
         with pytest.raises(HistoryIntegrityError, match="receipt hash"):
@@ -890,6 +890,8 @@ def test_failed_finalization_rolls_back_tail_and_keeps_pending_window(
         assert observer.pending_bytes == pending_bytes
         assert tuple(observer._pending) == pending_events
         assert observer._event_hashes == pending_hashes
+        with closing(connect_history_writer(path)) as connection:
+            connection.execute("DROP TRIGGER reject_history_terminal")
         with HistoryRepository(path) as repository:
             summary = repository.get_summary("run-1")
             items = repository.get_item_page("run-1")
@@ -927,6 +929,8 @@ def test_failed_window_commit_is_absent_and_keeps_its_bounded_pending_data(
 
         assert observer.pending_event_count == 1
         assert 0 < observer.pending_bytes <= policy.max_bytes
+        with closing(connect_history_writer(path)) as connection:
+            connection.execute("DROP TRIGGER reject_history_event")
         with HistoryRepository(path) as repository:
             with pytest.raises(KeyError):
                 repository.get_summary("run-1")
@@ -1680,12 +1684,9 @@ def test_event_readback_detects_payload_tampering(tmp_path: Path) -> None:
         observer.on_event(_envelope(record, 1, _item(1)))
         observer.flush()
     connection = connect_history_writer(path)
-    try:
-        _allow_history_event_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_events_append_only_update"):
         connection.execute(
             "UPDATE history_events SET envelope_json = envelope_json || ' '")
-    finally:
-        connection.close()
     with HistoryRepository(path) as repository:
         with pytest.raises(HistoryIntegrityError, match="payload hash"):
             repository.get_event_page("run-1")
@@ -1712,8 +1713,8 @@ def test_history_event_rows_are_append_only_and_item_projections_are_validated(
             connection.execute(
                 "INSERT INTO history_events(result) VALUES ('failed')"
             )
-        _allow_history_event_updates(connection)
-        connection.execute("UPDATE history_events SET result = 'failed'")
+        with _without_history_triggers(connection, "history_events_append_only_update"):
+            connection.execute("UPDATE history_events SET result = 'failed'")
     finally:
         connection.close()
 
@@ -1943,8 +1944,7 @@ def test_event_and_item_pages_reject_envelope_session_misattribution(
         observer.on_event(_envelope(record, 1, _item(1)))
         observer.flush()
     connection = connect_history_writer(path)
-    try:
-        _allow_history_event_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_events_append_only_update"):
         row = connection.execute(
             "SELECT * FROM history_events WHERE event_seq = 1"
         ).fetchone()
@@ -1971,8 +1971,6 @@ def test_event_and_item_pages_reject_envelope_session_misattribution(
                 WHERE event_seq = 1""",
             (envelope_json, payload_hash, receipt_hash),
         )
-    finally:
-        connection.close()
 
     with HistoryRepository(path) as repository:
         with pytest.raises(HistoryIntegrityError, match="columns disagree"):
@@ -2011,8 +2009,7 @@ def test_rejected_receipt_binds_retained_event_metadata(
         observer = store.observer(record, HistoryContext("run-rejected", "host-1"))
         assert observer.on_event(event) is RecordingStatus.DEGRADED
     connection = connect_history_writer(path)
-    try:
-        _allow_history_event_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_events_append_only_update"):
         connection.executescript(tamper_sql)
         if "last_committed_seq" in tamper_sql:
             run = connection.execute("SELECT * FROM history_runs").fetchone()
@@ -2020,8 +2017,6 @@ def test_rejected_receipt_binds_retained_event_metadata(
                 "UPDATE history_runs SET prefix_projection_hash = ?",
                 (history_module._prefix_projection_hash_from_row(run),),
             )
-    finally:
-        connection.close()
 
     with HistoryRepository(path) as repository:
         with pytest.raises(HistoryIntegrityError, match="receipt hash"):
@@ -2044,13 +2039,10 @@ def test_replay_rejects_tampered_rejected_receipt_metadata(tmp_path: Path) -> No
         observer = store.observer(record, HistoryContext("run-replay", "host-1"))
         observer.on_event(event)
         connection = connect_history_writer(path)
-        try:
-            _allow_history_event_updates(connection)
+        with closing(connection), _without_history_triggers(connection, "history_events_append_only_update"):
             connection.execute(
                 "UPDATE history_events SET body_type = 'IntegrityOutcome'"
             )
-        finally:
-            connection.close()
 
         replay = store.observer(record, HistoryContext("run-replay", "host-1"))
         with pytest.raises(HistoryIntegrityError, match="receipt hash"):
@@ -2066,16 +2058,13 @@ def test_item_page_rejects_item_order_tampering(tmp_path: Path) -> None:
         observer.on_event(_envelope(record, 2, _item(2)))
         observer.flush()
     connection = connect_history_writer(path)
-    try:
-        _allow_history_event_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_events_append_only_update"):
         connection.execute(
             "UPDATE history_events SET item_order = 3 WHERE event_seq = 1"
         )
         connection.execute(
             "UPDATE history_events SET item_order = 1 WHERE event_seq = 2"
         )
-    finally:
-        connection.close()
 
     with HistoryRepository(path) as repository:
         with pytest.raises(
@@ -2092,8 +2081,7 @@ def test_item_identity_hash_is_validated_against_the_envelope(tmp_path: Path) ->
         observer.on_event(_envelope(record, 1, _item(1)))
         observer.flush()
     connection = connect_history_writer(path)
-    try:
-        _allow_history_event_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_events_append_only_update"):
         row = connection.execute(
             "SELECT * FROM history_events WHERE event_seq = 1"
         ).fetchone()
@@ -2115,8 +2103,6 @@ def test_item_identity_hash_is_validated_against_the_envelope(tmp_path: Path) ->
                 WHERE event_seq = 1""",
             (altered_identity_hash, receipt_hash),
         )
-    finally:
-        connection.close()
 
     with HistoryRepository(path) as repository:
         with pytest.raises(HistoryIntegrityError, match="identity hash"):
@@ -2133,14 +2119,11 @@ def test_summary_detects_receipt_counter_tampering(tmp_path: Path) -> None:
         observer.on_event(_envelope(record, 2, item))
         observer.finalize(OperationResult(SessionState.COMPLETED, items=(item,)))
     connection = connect_history_writer(path)
-    try:
-        _allow_finalized_run_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
         connection.execute(
             """UPDATE history_runs SET duplicate_item_count = 0
                 WHERE run_token = 'run-counts'"""
         )
-    finally:
-        connection.close()
 
     with HistoryRepository(path) as repository:
         with pytest.raises(
@@ -2175,13 +2158,10 @@ def test_terminal_hash_binds_item_and_outcome_counts(
             observer.on_event(_envelope(record, seq, item))
         observer.finalize(OperationResult(SessionState.COMPLETED, items=items))
     connection = connect_history_writer(path)
-    try:
-        _allow_finalized_run_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
         connection.execute(
             f"UPDATE history_runs SET {column} = {column} + 1"
         )
-    finally:
-        connection.close()
 
     with HistoryRepository(path) as repository:
         with pytest.raises(
@@ -2339,14 +2319,15 @@ def test_event_readback_validates_duplicate_link_against_canonical_item(
             item_payload_hash=bytes(row["item_payload_hash"]),
             duplicate_of_seq=2,
         )
-        _allow_history_event_updates(connection)
-        connection.execute("DROP TRIGGER history_events_duplicate_link_update")
-        connection.execute(
-            """UPDATE history_events
+        with _without_history_triggers(
+            connection, "history_events_append_only_update", "history_events_duplicate_link_update",
+        ):
+            connection.execute(
+                """UPDATE history_events
                   SET duplicate_of_seq = 2, receipt_hash = ?
                 WHERE event_seq = 3""",
-            (receipt_hash,),
-        )
+                (receipt_hash,),
+            )
     finally:
         connection.close()
 
@@ -2399,13 +2380,13 @@ def test_event_readback_rejects_duplicate_json_members_after_hash_validation(
             rejection_reason=row["rejection_reason"],
             item_order=int(row["item_order"]),
         )
-        _allow_history_event_updates(connection)
-        connection.execute(
-            """UPDATE history_events
+        with _without_history_triggers(connection, "history_events_append_only_update"):
+            connection.execute(
+                """UPDATE history_events
                   SET envelope_json = ?, payload_hash = ?, receipt_hash = ?
                 WHERE event_seq = 1""",
-            (duplicate, payload_hash, receipt_hash),
-        )
+                (duplicate, payload_hash, receipt_hash),
+            )
     finally:
         connection.close()
 
@@ -2812,11 +2793,8 @@ def test_summary_and_repeat_finalize_reject_tampered_terminal_payload(
         observer = store.observer(record, context)
         observer.finalize(result)
         connection = connect_history_writer(store.path)
-        try:
-            _allow_finalized_run_updates(connection)
+        with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
             connection.execute(tamper_sql)
-        finally:
-            connection.close()
 
         with HistoryRepository(store.path) as repository:
             with pytest.raises(
@@ -2858,11 +2836,8 @@ def test_finalized_summary_binds_derived_state_and_timestamps(
         observer.on_event(_envelope(record, 2, PhaseChanged("execute")))
         observer.finalize(OperationResult(SessionState.COMPLETED))
     connection = connect_history_writer(path)
-    try:
-        _allow_finalized_run_updates(connection)
+    with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
         connection.execute(tamper_sql)
-    finally:
-        connection.close()
 
     with HistoryRepository(path) as repository:
         with pytest.raises(
@@ -2903,11 +2878,8 @@ def test_summary_and_repeat_finalize_reject_tampered_context_columns(
         observer = store.observer(record, context)
         observer.finalize(result)
         connection = connect_history_writer(store.path)
-        try:
-            _allow_finalized_run_updates(connection)
+        with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
             connection.execute(tamper_sql)
-        finally:
-            connection.close()
 
         with HistoryRepository(store.path) as repository:
             with pytest.raises(
@@ -2949,8 +2921,7 @@ def test_schema_rejects_terminal_summary_text_beyond_byte_bounds(
             record, HistoryContext("run-schema-bounds", "host-1")
         ).finalize(result)
         connection = connect_history_writer(store.path)
-        try:
-            _allow_finalized_run_updates(connection)
+        with closing(connection), _without_history_triggers(connection, "history_runs_finalized_update"):
             with pytest.raises(sqlite3.IntegrityError):
                 connection.execute(
                     "UPDATE history_runs SET error_message = ?",
@@ -2961,8 +2932,6 @@ def test_schema_rejects_terminal_summary_text_beyond_byte_bounds(
                     "UPDATE history_phases SET phase = ?",
                     ("x" * (MAX_HISTORY_PHASE_NAME_BYTES + 1),),
                 )
-        finally:
-            connection.close()
 
 
 def test_history_page_queries_use_paging_and_aggregate_indexes(tmp_path: Path) -> None:

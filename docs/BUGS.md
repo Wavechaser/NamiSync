@@ -1169,13 +1169,22 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - OPEN (2026-08-26). Metadata self-certification. Exact schema
-  markers can admit databases with missing or poisoned objects; later queries
-  fail, and initialization may silently add missing tables while preserving
+- MODERATE - FIXED (2026-08-26). WAL-blind admission. A database whose WAL
+  changed its contract marker could pass main-only admission, then refuse in a
+  normal reader after creating source SHM. Cause: immutable SQLite ignores WAL
+  truth. Fixed with shared private main/WAL validation before repository or
+  existing-initializer opens, lexical journal refusal, and content/identity
+  drift checks. Tests pin missing-SHM and poisoned-WAL refusal without source
+  mutation, cleanup failures, and peer drift. Evidence is point-in-time, not a
+  lease over later ordinary SQLite use.
+- MODERATE - FIXED (2026-08-26). Metadata self-certification. Exact schema
+  markers could admit databases with missing or poisoned objects; later queries
+  failed, and initialization could silently add missing tables while preserving
   hostile same-name definitions. Cause: role admission trusts metadata without
-  comparing topology. A dormant exact catalog comparator and direct drift/
-  spoofing regressions are prepared, but production callers remain unchanged.
-  Closure requires the separately reviewed WAL-aware admission checkpoint.
+  comparing topology. Fixed by activating the exact catalog comparator in
+  reader validation and shared initializer/repository/pair preflight before
+  repair DDL. Both roles reject missing, extra, or poisoned definitions without
+  mutation; only declared exact optional statistics tables are exempt.
 - MODERATE - FIXED (2026-08-10). Message-based error classification. The
   serialized writer retried any `OperationalError` whose message contained
   "busy" or "locked", delaying unrelated failures and reporting them as lock

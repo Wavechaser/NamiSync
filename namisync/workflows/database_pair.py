@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+import stat
 
 from namisync.db.contracts import (
-    history_file_contract_matches,
-    ledger_file_contract_matches,
+    require_database_file_contract,
 )
 from namisync.db.schema import (
-    initialize_history,
-    initialize_ledger,
+    SchemaResetRequired,
+    _initialize_reserved_history,
+    _initialize_reserved_ledger,
 )
 from namisync.workflows._database_pair_native import (
     ArtifactNative,
@@ -72,11 +72,19 @@ def validate_database_pair(
     if ledger == history:
         raise ValueError("ledger and history databases must use distinct paths")
 
-    ledger_main = _entry_exists(ledger)
-    history_main = _entry_exists(history)
-    ledger_sidecars = any(_entry_exists(path) for path in _sidecars(ledger))
-    history_sidecars = any(_entry_exists(path) for path in _sidecars(history))
+    try:
+        ledger_main = _entry_exists(ledger)
+        history_main = _entry_exists(history)
+        ledger_sidecars = any(_entry_exists(path) for path in _sidecars(ledger))
+        history_sidecars = any(_entry_exists(path) for path in _sidecars(history))
+        # Check both before either role can open SQLite, including an empty,
+        # directory, or dangling-link journal entry.
+        journals = any(_entry_exists(Path(f"{path}-journal")) for path in (ledger, history))
+    except OSError:
+        return _refused("inconsistent-pair")
 
+    if journals:
+        return _refused("inconsistent-pair")
     if not ledger_main and not history_main:
         if ledger_sidecars or history_sidecars:
             return _refused("inconsistent-pair")
@@ -86,9 +94,17 @@ def validate_database_pair(
     if not ledger.is_file() or not history.is_file():
         return _refused("inconsistent-pair")
 
-    if not ledger_file_contract_matches(ledger):
+    try:
+        ledger_evidence = require_database_file_contract(ledger, history=False)
+    except SchemaResetRequired:
         return _refused("ledger-contract")
-    if not history_file_contract_matches(history):
+    try:
+        history_evidence = require_database_file_contract(history, history=True)
+    except SchemaResetRequired:
+        return _refused("history-contract")
+    if not ledger_evidence.unchanged():
+        return _refused("ledger-contract")
+    if not history_evidence.unchanged():
         return _refused("history-contract")
     return DatabasePairContract(DatabasePairState.READY)
 
@@ -108,12 +124,14 @@ def initialize_database_pair(
     owned: dict[Path, OwnedArtifactLease] = {}
     try:
         _reserve_database(ledger, owned)
-        initialize_ledger(ledger)
+        _require_empty_reservations(ledger, owned)
+        _initialize_reserved_ledger(ledger)
         _require_owned(owned[ledger])
         _discard_reserved_sidecars(ledger, owned)
 
         _reserve_database(history, owned)
-        initialize_history(history)
+        _require_empty_reservations(history, owned)
+        _initialize_reserved_history(history)
         _require_owned(owned[history])
         _discard_reserved_sidecars(history, owned)
 
@@ -202,6 +220,14 @@ def _reserve_database(
         _reserve(artifact, owned)
 
 
+def _require_empty_reservations(main: Path, owned: dict[Path, OwnedArtifactLease]) -> None:
+    for artifact in (main, *_sidecars(main)):
+        _require_owned(owned[artifact])
+        entry = artifact.lstat()
+        if not stat.S_ISREG(entry.st_mode) or entry.st_size != 0:
+            raise OSError("database reservation is no longer an empty regular file")
+
+
 def _require_owned(lease: OwnedArtifactLease) -> None:
     if not lease.matches_path():
         raise OSError("database publication replaced its reserved file")
@@ -265,7 +291,11 @@ def _sidecars(path: Path) -> tuple[Path, ...]:
 
 
 def _entry_exists(path: Path) -> bool:
-    return os.path.lexists(path)
+    try:
+        path.lstat()
+    except FileNotFoundError:
+        return False
+    return True
 
 
 def _refused(reason: str) -> DatabasePairContract:

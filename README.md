@@ -54,8 +54,10 @@ M1 state remains process-local: queued sessions and unexecuted plans do not
 survive an application restart, and committed nonterminal history returns only
 as `incomplete`. The active database boundary is ledger v4 plus history v6 at
 shared data epoch 5. Older, one-present, markerless, transitional, mismatched,
-or orphan-sidecar pairs are refused; both local database mains and their SQLite
-sidecars must be archived or deleted together before creating a fresh pair.
+incomplete/poisoned, or orphan-sidecar pairs are refused. Admission checks
+WAL-visible markers and schema without changing source artifacts; any journal
+entry refuses. Both local database mains and their SQLite sidecars must be
+archived or deleted together before creating a fresh pair.
 
 ## Compatibility
 
