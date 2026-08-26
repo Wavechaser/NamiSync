@@ -4,7 +4,7 @@ import gc
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from threading import Event, Lock, Thread, get_ident
+from threading import Event, Lock, Thread, current_thread, get_ident
 from time import monotonic, sleep
 from weakref import ref
 
@@ -34,6 +34,7 @@ from namisync.core.session import (
     PhaseResult,
     PhaseStatus,
     ResourceId,
+    SessionId,
     SessionRecord,
     SessionState,
     StoredSessionRecord,
@@ -70,6 +71,21 @@ def wait_for(dispatcher: Dispatcher, session_id, state: SessionState, timeout=2.
             return record
         sleep(0.005)
     raise AssertionError(f"session did not reach {state}: {dispatcher.get(session_id)}")
+
+
+def wait_for_admission_cleanup_attempt(
+    dispatcher: Dispatcher,
+    timeout: float = 2.0,
+) -> None:
+    deadline = monotonic() + timeout
+    while True:
+        with dispatcher._condition:
+            attempt = dispatcher._admission_cleanup_attempt
+        if attempt is None:
+            return
+        dispatcher._join_admission_cleanup_worker(attempt, deadline)
+        if monotonic() >= deadline:
+            raise AssertionError("admission cleanup worker did not retire")
 
 
 @dataclass
@@ -2973,6 +2989,442 @@ def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only
     assert dispatcher._admission_cleanups == {}
     assert finalized == []
     assert not dispatcher._scheduler.is_alive()
+
+
+def test_admission_cleanup_releases_graphs_and_refuses_recursive_submit() -> None:
+    class PrivateGraph:
+        pass
+
+    completed_owner_refs = []
+    failure_refs = []
+    recursive_errors: list[tuple[type[BaseException], str]] = []
+    reader_done = Event()
+    prepare_calls = 0
+
+    class Audit:
+        def __init__(self):
+            self.graph = PrivateGraph()
+            completed_owner_refs.append(ref(self.graph))
+
+        def on_event(self, envelope):
+            del envelope
+            return RecordingStatus.OK
+
+        def flush(self):
+            pass
+
+        def finalize(self, result):
+            del result
+            return RecordingStatus.OK
+
+        def close(self):
+            pass
+
+    class FailingStore(InMemorySessionStore):
+        def __init__(self):
+            super().__init__()
+            self.allow_drop = False
+
+        def drop(self, session_id):
+            if not self.allow_drop:
+                graph = PrivateGraph()
+                failure_refs.append(ref(graph))
+                error = OSError("drop unavailable")
+                error.private_graph = graph
+                raise error
+            super().drop(session_id)
+
+    calls = 0
+
+    class FailingClock:
+        def now(self):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("pending clock failed")
+            return datetime.now(timezone.utc)
+
+    def prepare(request):
+        nonlocal prepare_calls
+        prepare_calls += 1
+        return PreparedSession(request)
+
+    def recursive_submit() -> None:
+        try:
+            dispatcher.submit("observed", b"must remain unpublished")
+        except BaseException as error:
+            recursive_errors.append((type(error), str(error)))
+
+    def attach(session_id, stream):
+        del session_id
+        graph = PrivateGraph()
+        completed_owner_refs.append(ref(graph))
+        recursive_submit()
+
+        def read() -> None:
+            try:
+                stream.next()
+            except StopIteration:
+                pass
+            finally:
+                reader_done.set()
+
+        thread = Thread(target=read)
+        thread.start()
+
+        def rollback() -> None:
+            assert graph is not None
+            recursive_submit()
+            stream.close()
+            thread.join(1)
+            assert not thread.is_alive()
+
+        return rollback
+
+    store = FailingStore()
+    dispatcher = Dispatcher(
+        {
+            "observed": WorkflowRegistration(
+                prepare=prepare,
+                open=lambda _payload: Invocation(completed),
+            )
+        },
+        store=store,
+        clock=FailingClock(),
+        audit_observer_factory=lambda _record: Audit(),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="pending clock failed"):
+            dispatcher.submit("observed", b"private continuation", attach=attach)
+
+        assert prepare_calls == 1
+        assert len(recursive_errors) == 2
+        assert all(
+            error_type is SessionCleanupPending
+            for error_type, _detail in recursive_errors
+        )
+        assert all(
+            "another admission" in detail
+            for _error_type, detail in recursive_errors
+        )
+        assert len(dispatcher._admission_cleanups) == 1
+        (cleanup,) = dispatcher._admission_cleanups.values()
+        assert cleanup.failure_seen
+        assert cleanup.rollback is None
+        assert cleanup.stream is None
+        assert cleanup.hub is None
+        assert cleanup.store_pending
+        assert reader_done.wait(1)
+
+        with pytest.raises(SessionCleanupPending, match="another admission"):
+            dispatcher.submit("observed", b"must not be admitted")
+        wait_for_admission_cleanup_attempt(dispatcher)
+        assert prepare_calls == 1
+        gc.collect()
+        assert all(graph() is None for graph in completed_owner_refs)
+        assert len(failure_refs) == 2
+        assert all(graph() is None for graph in failure_refs)
+    finally:
+        store.allow_drop = True
+        assert dispatcher.shutdown().complete
+
+
+def test_admission_liability_refuses_concurrent_submit_without_waiting() -> None:
+    attach_entered = Event()
+    release_attach = Event()
+    prepare_calls = 0
+    submitted: list[SessionId] = []
+    errors: list[BaseException] = []
+
+    def prepare(request):
+        nonlocal prepare_calls
+        prepare_calls += 1
+        return PreparedSession(request)
+
+    def attach(session_id, stream):
+        del session_id
+        attach_entered.set()
+        assert release_attach.wait(2)
+        return stream.close
+
+    dispatcher = Dispatcher(
+        {
+            "work": WorkflowRegistration(
+                prepare=prepare,
+                open=lambda _payload: Invocation(completed),
+            )
+        }
+    )
+
+    def submit() -> None:
+        try:
+            submitted.append(
+                dispatcher.submit("work", b"first", attach=attach)
+            )
+        except BaseException as error:
+            errors.append(error)
+
+    thread = Thread(target=submit)
+    thread.start()
+    try:
+        assert attach_entered.wait(1)
+        started = monotonic()
+        with pytest.raises(SessionCleanupPending, match="another admission"):
+            dispatcher.submit("work", b"second")
+        assert monotonic() - started < 0.2
+        assert prepare_calls == 1
+
+        release_attach.set()
+        thread.join(2)
+        assert not thread.is_alive()
+        assert errors == []
+        assert len(submitted) == 1
+        session_id = submitted[0]
+        wait_for(dispatcher, session_id, SessionState.COMPLETED)
+        dispatcher.close(session_id)
+        assert dispatcher._workers == {}
+        assert dispatcher._current_workers == {}
+        assert dispatcher._retiring_workers == set()
+    finally:
+        release_attach.set()
+        assert dispatcher.shutdown().complete
+
+
+def test_failed_admission_cleanup_caps_churn_retries_and_releases() -> None:
+    class FailingStore(InMemorySessionStore):
+        def __init__(self):
+            super().__init__()
+            self.allow_put = False
+            self.allow_drop = False
+            self.put_calls = 0
+            self.drop_calls = 0
+
+        def put(self, record):
+            self.put_calls += 1
+            super().put(record)
+            if not self.allow_put:
+                raise OSError("admission write accepted then failed")
+
+        def drop(self, session_id):
+            self.drop_calls += 1
+            if not self.allow_drop:
+                raise OSError("drop unavailable")
+            super().drop(session_id)
+
+    store = FailingStore()
+    dispatcher = Dispatcher(
+        {"work": registration(lambda _payload: completed)},
+        store=store,
+    )
+    try:
+        with pytest.raises(OSError, match="admission write accepted then failed"):
+            dispatcher.submit("work", b"first")
+        (failed_session_id,) = dispatcher._admission_cleanups
+
+        for _ in range(12):
+            with pytest.raises(SessionCleanupPending, match="another admission"):
+                dispatcher.submit("work", b"must not be admitted")
+            wait_for_admission_cleanup_attempt(dispatcher)
+
+        assert tuple(dispatcher._admission_cleanups) == (failed_session_id,)
+        assert store.put_calls == 1
+        assert store.drop_calls == 13
+        assert len(store.snapshot()) == 1
+        assert dispatcher.list() == ()
+        assert dispatcher._workers == {}
+
+        with pytest.raises(SessionNotFound):
+            dispatcher.close(failed_session_id)
+
+        store.allow_drop = True
+        store.allow_put = True
+        with pytest.raises(SessionCleanupPending, match="another admission"):
+            dispatcher.submit("work", b"cleanup trigger")
+        wait_for_admission_cleanup_attempt(dispatcher)
+        assert dispatcher._admission_cleanups == {}
+        assert not dispatcher._admission_liability_claimed
+
+        session_id = dispatcher.submit("work", b"admitted after cleanup")
+        wait_for(dispatcher, session_id, SessionState.COMPLETED)
+        dispatcher.close(session_id)
+        assert dispatcher._workers == {}
+        assert dispatcher._current_workers == {}
+        assert dispatcher._retiring_workers == set()
+    finally:
+        store.allow_drop = True
+        store.allow_put = True
+        assert dispatcher.shutdown().complete
+
+
+def test_shutdown_joins_one_blocked_admission_cleanup_worker_to_deadline() -> None:
+    cleanup_entered = Event()
+    release_cleanup = Event()
+
+    class BlockingStore(InMemorySessionStore):
+        def __init__(self):
+            super().__init__()
+            self.put_calls = 0
+            self.drop_calls = 0
+
+        def put(self, record):
+            self.put_calls += 1
+            super().put(record)
+            raise OSError("admission write accepted then failed")
+
+        def drop(self, session_id):
+            self.drop_calls += 1
+            cleanup_entered.set()
+            release_cleanup.wait(2)
+            super().drop(session_id)
+
+    store = BlockingStore()
+    dispatcher = Dispatcher(
+        {"work": registration(lambda _payload: completed)},
+        store=store,
+        audit_timeout=0.02,
+    )
+    try:
+        started = monotonic()
+        with pytest.raises(OSError, match="admission write accepted then failed"):
+            dispatcher.submit("work", b"first")
+        assert monotonic() - started < 0.2
+        assert cleanup_entered.is_set()
+        (failed_session_id,) = dispatcher._admission_cleanups
+        attempt = dispatcher._admission_cleanup_attempt
+        assert attempt is not None
+        assert attempt.thread.is_alive()
+
+        with pytest.raises(SessionNotFound):
+            dispatcher.close(failed_session_id)
+
+        for _ in range(2):
+            started = monotonic()
+            incomplete = dispatcher.shutdown(0.03)
+            assert monotonic() - started < 0.2
+            assert not incomplete.complete
+            assert incomplete.unfinished == (failed_session_id,)
+            assert incomplete.custody_released
+            assert dispatcher._admission_cleanup_attempt is attempt
+            assert attempt.thread.is_alive()
+            assert store.drop_calls == 1
+
+        release_cleanup.set()
+        assert dispatcher.shutdown(2).complete
+        assert store.put_calls == 1
+        assert store.drop_calls == 1
+        assert store.snapshot() == ()
+        assert dispatcher._admission_cleanups == {}
+        assert dispatcher._admission_cleanup_attempt is None
+        assert not dispatcher._admission_liability_claimed
+    finally:
+        release_cleanup.set()
+        dispatcher.shutdown(2)
+
+
+@pytest.mark.parametrize("accepted_before_failure", (False, True))
+def test_admission_cleanup_worker_start_failure_preserves_exact_owner(
+    monkeypatch,
+    accepted_before_failure: bool,
+) -> None:
+    original_start = Thread.start
+    cleanup_start_calls = 0
+
+    def start(thread):
+        nonlocal cleanup_start_calls
+        if thread.name.startswith("namisync-admission-cleanup-"):
+            cleanup_start_calls += 1
+            if cleanup_start_calls == 1:
+                if accepted_before_failure:
+                    original_start(thread)
+                raise OSError("cleanup worker start failed")
+        original_start(thread)
+
+    class FailingStore(InMemorySessionStore):
+        def put(self, record):
+            super().put(record)
+            raise RuntimeError("initiating admission failure")
+
+    monkeypatch.setattr(Thread, "start", start)
+    dispatcher = Dispatcher(
+        {"work": registration(lambda _payload: completed)},
+        store=FailingStore(),
+    )
+    try:
+        with pytest.raises(RuntimeError, match="initiating admission failure"):
+            dispatcher.submit("work", b"payload")
+
+        if not accepted_before_failure:
+            assert len(dispatcher._admission_cleanups) == 1
+            assert dispatcher._admission_cleanup_attempt is None
+            with pytest.raises(SessionCleanupPending, match="another admission"):
+                dispatcher.submit("work", b"retry trigger")
+            wait_for_admission_cleanup_attempt(dispatcher)
+
+        assert dispatcher._admission_cleanups == {}
+        assert dispatcher._admission_cleanup_attempt is None
+        assert not dispatcher._admission_liability_claimed
+        assert cleanup_start_calls == (1 if accepted_before_failure else 2)
+    finally:
+        assert dispatcher.shutdown().complete
+
+
+def test_admission_cleanup_worker_does_not_join_itself_during_shutdown() -> None:
+    calls = 0
+    attached_session_ids = []
+    shutdown_results = []
+    shutdown_errors: list[BaseException] = []
+    cleanup_threads = []
+    rollback_steps = []
+    rollback_finished = Event()
+
+    class FailingClock:
+        def now(self):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError("pending clock failed")
+            return datetime.now(timezone.utc)
+
+    def attach(session_id, stream):
+        attached_session_ids.append(session_id)
+
+        def rollback() -> None:
+            try:
+                rollback_steps.append("entered")
+                cleanup_threads.append(current_thread())
+                try:
+                    result = dispatcher.shutdown(0.0)
+                except BaseException as error:
+                    shutdown_errors.append(error)
+                else:
+                    shutdown_results.append(result)
+                rollback_steps.append("shutdown-returned")
+                stream.close()
+            finally:
+                rollback_finished.set()
+
+        return rollback
+
+    dispatcher = Dispatcher(
+        {"observed": registration(lambda _payload: completed)},
+        clock=FailingClock(),
+        audit_timeout=0.2,
+    )
+
+    with pytest.raises(RuntimeError, match="pending clock failed"):
+        dispatcher.submit("observed", b"private continuation", attach=attach)
+
+    assert rollback_finished.wait(1)
+    assert rollback_steps == ["entered", "shutdown-returned"]
+    assert shutdown_errors == []
+    assert len(shutdown_results) == 1
+    assert not shutdown_results[0].complete
+    assert shutdown_results[0].unfinished == (attached_session_ids[0],)
+    assert cleanup_threads[0].name.startswith("namisync-admission-cleanup-")
+    assert dispatcher._admission_cleanups == {}
+    assert dispatcher._admission_cleanup_attempt is None
+    assert not dispatcher._admission_liability_claimed
+    assert dispatcher.shutdown(2).complete
 
 
 def test_observed_admission_emits_pending_before_workflow_can_enter() -> None:

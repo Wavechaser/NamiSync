@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import deque
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
-from threading import Condition, Lock, Thread, current_thread
+from threading import Condition, Event, Lock, Thread, current_thread
 from time import monotonic
 from typing import Callable
 from uuid import uuid4
@@ -146,23 +146,32 @@ class _AdmissionCleanup:
     """Retained ownership for an unpublished admission that failed cleanup."""
 
     session_id: SessionId
-    hub: EventHub
+    hub: EventHub | None
     stream: EventStream | None
     rollback: _AdmissionRollback | None
-    rollback_done: bool
-    stream_done: bool
-    hub_done: bool
-    store_done: bool
-    failures: tuple[BaseException, ...] = ()
+    store_pending: bool
+    failure_seen: bool = False
 
     @property
     def complete(self) -> bool:
         return (
-            self.rollback_done
-            and self.stream_done
-            and self.hub_done
-            and self.store_done
+            self.rollback is None
+            and self.stream is None
+            and self.hub is None
+            and not self.store_pending
         )
+
+
+@dataclass(slots=True)
+class _AdmissionLiability:
+    transferred: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _AdmissionCleanupAttempt:
+    cleanup: _AdmissionCleanup
+    thread: Thread
+    start_complete: Event
 
 
 class _StaleWorkerAttempt(BaseException):
@@ -219,7 +228,9 @@ class Dispatcher:
         self._admitting = 0
         self._admission_order = 0
         self._accepting = True
+        self._admission_liability_claimed = False
         self._admission_cleanups: dict[SessionId, _AdmissionCleanup] = {}
+        self._admission_cleanup_attempt: _AdmissionCleanupAttempt | None = None
         self._store_failed = False
         self._custody_failed = False
         self._scheduler = Thread(
@@ -259,11 +270,59 @@ class Dispatcher:
         *,
         attach: _AdmissionAttach | None,
     ) -> SessionId:
-        prepared = registration.prepare(request)
-        resources = tuple(sorted(prepared.resources))
+        if not self._claim_admission_liability():
+            self._start_admission_cleanup_worker(self._audit_timeout)
+            raise self._admission_cleanup_pending()
+        liability = _AdmissionLiability()
+        try:
+            prepared = registration.prepare(request)
+            resources = tuple(sorted(prepared.resources))
+            return self._admit_owned(
+                kind,
+                prepared.payload,
+                resources,
+                registration,
+                attach=attach,
+                liability=liability,
+            )
+        finally:
+            if not liability.transferred:
+                self._release_admission_liability()
+
+    def _claim_admission_liability(self) -> bool:
+        with self._condition:
+            if not self._accepting:
+                raise AdmissionClosed("dispatcher stopped during admission")
+            self._reap_admission_cleanup_attempt_locked()
+            if (
+                self._admission_liability_claimed
+                or self._admission_cleanup_attempt is not None
+            ):
+                return False
+            self._admission_liability_claimed = True
+            return True
+
+    def _release_admission_liability(self) -> None:
+        with self._condition:
+            assert self._admission_liability_claimed
+            self._admission_liability_claimed = False
+            self._condition.notify_all()
+
+    def _admit_owned(
+        self,
+        kind: str,
+        payload: bytes,
+        resources: tuple[ResourceId, ...],
+        registration: WorkflowRegistration,
+        *,
+        attach: _AdmissionAttach | None,
+        liability: _AdmissionLiability,
+    ) -> SessionId:
         session_id = SessionId(uuid4().hex)
         created_at = self._now()
         with self._condition:
+            if not self._accepting:
+                raise AdmissionClosed("dispatcher stopped during admission")
             admission_order = self._admission_order
             self._admission_order += 1
         record = SessionRecord(
@@ -271,7 +330,7 @@ class Dispatcher:
             kind=kind,
             state=SessionState.PENDING,
             resources=resources,
-            payload=prepared.payload,
+            payload=payload,
             supports_pause=registration.supports_pause,
             admission_order=admission_order,
             created_at=created_at,
@@ -343,16 +402,20 @@ class Dispatcher:
                 hub=hub,
                 stream=stream,
                 rollback=rollback,
-                rollback_done=rollback is None,
-                stream_done=stream is None,
-                hub_done=False,
-                store_done=not store_touched,
+                store_pending=store_touched,
             )
-            self._attempt_admission_cleanup(cleanup, self._audit_timeout)
-            if not cleanup.complete:
-                with self._condition:
-                    self._admission_cleanups[session_id] = cleanup
-                    self._condition.notify_all()
+            with self._condition:
+                assert self._admission_liability_claimed
+                assert not self._admission_cleanups
+                self._admission_cleanups[session_id] = cleanup
+                liability.transferred = True
+                self._condition.notify_all()
+            attempt = self._start_admission_cleanup_worker(self._audit_timeout)
+            if attempt is not None:
+                self._join_admission_cleanup_worker(
+                    attempt,
+                    monotonic() + max(0.0, self._audit_timeout),
+                )
             raise
         return session_id
 
@@ -361,60 +424,133 @@ class Dispatcher:
         cleanup: _AdmissionCleanup,
         timeout: float,
     ) -> None:
-        failures: list[BaseException] = []
-        if not cleanup.rollback_done:
-            assert cleanup.rollback is not None
+        if cleanup.rollback is not None:
             try:
                 cleanup.rollback()
-            except BaseException as error:
-                failures.append(error)
+            except BaseException:
+                cleanup.failure_seen = True
             else:
-                cleanup.rollback_done = True
-        if not cleanup.stream_done:
-            assert cleanup.stream is not None
+                cleanup.rollback = None
+        if cleanup.stream is not None:
             try:
                 cleanup.stream.close()
-            except BaseException as error:
-                failures.append(error)
+            except BaseException:
+                cleanup.failure_seen = True
             else:
-                cleanup.stream_done = True
-        if not cleanup.hub_done:
+                cleanup.stream = None
+        if cleanup.hub is not None:
             try:
                 close_status = cleanup.hub.close(timeout)
-            except BaseException as error:
-                failures.append(error)
+            except BaseException:
+                cleanup.failure_seen = True
             else:
                 if close_status is EventHubCloseStatus.COMPLETE:
-                    cleanup.hub_done = True
+                    cleanup.hub = None
                 else:
-                    failures.append(
-                        TimeoutError(
-                            "failed admission event cleanup remains pending: "
-                            f"{cleanup.session_id}"
-                        )
-                    )
-        if not cleanup.store_done:
+                    cleanup.failure_seen = True
+        if cleanup.store_pending:
             try:
                 self._store.drop(cleanup.session_id)
-            except BaseException as error:
-                failures.append(error)
+            except BaseException:
+                cleanup.failure_seen = True
             else:
-                cleanup.store_done = True
-        cleanup.failures = tuple(failures)
+                cleanup.store_pending = False
+
+    def _start_admission_cleanup_worker(
+        self,
+        timeout: float,
+    ) -> _AdmissionCleanupAttempt | None:
+        start_complete = Event()
+        with self._condition:
+            self._reap_admission_cleanup_attempt_locked()
+            current = self._admission_cleanup_attempt
+            if current is not None:
+                return current
+            pending = tuple(self._admission_cleanups.values())
+            assert len(pending) <= 1
+            if not pending:
+                return None
+            cleanup = pending[0]
+            thread = Thread(
+                target=self._run_admission_cleanup_worker,
+                args=(cleanup, max(0.0, timeout), start_complete),
+                name=f"namisync-admission-cleanup-{cleanup.session_id}",
+                daemon=True,
+            )
+            attempt = _AdmissionCleanupAttempt(cleanup, thread, start_complete)
+            self._admission_cleanup_attempt = attempt
+        try:
+            thread.start()
+        except BaseException:
+            cleanup.failure_seen = True
+            started = thread.ident is not None
+            with self._condition:
+                if not started and self._admission_cleanup_attempt is attempt:
+                    self._admission_cleanup_attempt = None
+                self._condition.notify_all()
+            start_complete.set()
+            return attempt if started else None
+        start_complete.set()
+        return attempt
+
+    def _run_admission_cleanup_worker(
+        self,
+        cleanup: _AdmissionCleanup,
+        timeout: float,
+        start_complete: Event,
+    ) -> None:
+        start_complete.wait()
+        try:
+            self._attempt_admission_cleanup(cleanup, timeout)
+        finally:
+            with self._condition:
+                attempt = self._admission_cleanup_attempt
+                assert attempt is not None
+                assert attempt.thread is current_thread()
+                assert attempt.cleanup is cleanup
+                if (
+                    cleanup.complete
+                    and self._admission_cleanups.get(cleanup.session_id) is cleanup
+                ):
+                    self._admission_cleanups.pop(cleanup.session_id, None)
+                    assert self._admission_liability_claimed
+                    self._admission_liability_claimed = False
+                self._condition.notify_all()
+
+    def _join_admission_cleanup_worker(
+        self,
+        attempt: _AdmissionCleanupAttempt,
+        deadline: float,
+    ) -> None:
+        if attempt.thread is current_thread():
+            return
+        remaining = max(0.0, deadline - monotonic())
+        if not attempt.start_complete.wait(remaining):
+            return
+        if attempt.thread.ident is None:
+            return
+        attempt.thread.join(max(0.0, deadline - monotonic()))
+        with self._condition:
+            self._reap_admission_cleanup_attempt_locked()
+
+    def _reap_admission_cleanup_attempt_locked(self) -> None:
+        attempt = self._admission_cleanup_attempt
+        if (
+            attempt is None
+            or not attempt.start_complete.is_set()
+            or attempt.thread.ident is None
+            or attempt.thread.is_alive()
+        ):
+            return
+        self._admission_cleanup_attempt = None
+        self._condition.notify_all()
 
     def _retry_admission_cleanups(self, deadline: float) -> None:
-        with self._condition:
-            pending = tuple(self._admission_cleanups.values())
-        for cleanup in pending:
-            self._attempt_admission_cleanup(
-                cleanup,
-                max(0.0, deadline - monotonic()),
-            )
-            if cleanup.complete:
-                with self._condition:
-                    if self._admission_cleanups.get(cleanup.session_id) is cleanup:
-                        self._admission_cleanups.pop(cleanup.session_id, None)
-                    self._condition.notify_all()
+        attempt = self._start_admission_cleanup_worker(
+            max(0.0, deadline - monotonic())
+        )
+        if attempt is not None:
+            self._join_admission_cleanup_worker(attempt, deadline)
 
     def get(self, session_id: SessionId) -> SessionRecord:
         with self._condition:
@@ -882,10 +1018,15 @@ class Dispatcher:
                 publication_lock.release()
         all_unfinished = tuple(dict.fromkeys((*unfinished, *observer_incomplete)))
         with self._condition:
+            self._reap_admission_cleanup_attempt_locked()
             admitting = self._admitting
             workers_retired = not self._workers and not self._current_workers
             custody_released = not self._leases and not self._reserved
-            admissions_clean = not self._admission_cleanups
+            admissions_clean = (
+                not self._admission_cleanups
+                and self._admission_cleanup_attempt is None
+                and not self._admission_liability_claimed
+            )
         complete = (
             not all_unfinished
             and custody_released
@@ -1386,6 +1527,13 @@ class Dispatcher:
         return SessionCleanupPending(
             "session terminal settlement is complete; only cleanup remains "
             f"pending: {session_id}"
+        )
+
+    @staticmethod
+    def _admission_cleanup_pending() -> SessionCleanupPending:
+        return SessionCleanupPending(
+            "another admission or failed-admission cleanup is in progress; "
+            "retry admission later"
         )
 
     @staticmethod

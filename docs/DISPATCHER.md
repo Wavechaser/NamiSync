@@ -55,8 +55,20 @@ the same cleanup path. After adoption, dispatcher invokes the returned rollback
 first so it signals, closes, joins, and identity-removes that observation, then
 closes its remaining stream/hub ownership and drops the store row. Cleanup
 failure is retained as non-schedulable cleanup-pending ownership and makes
-shutdown incomplete without replacing the initiating exception. No task
-identity or interface policy enters dispatcher.
+shutdown incomplete without replacing the initiating exception. A nonblocking
+claim serializes admission's cleanup-liability interval; a competing or
+recursive admission receives one fixed `SessionCleanupPending` refusal before
+preparation or allocation. At most one failed unpublished owner can remain.
+Only its separately tracked daemon worker calls rollback, stream, hub, or store
+cleanup, with no dispatcher condition or blocking gate held. The initiating
+submission may join that exact worker for at most the audit timeout. A later
+admission can start or reuse its retry worker but still returns the fixed
+refusal; admission resumes only on a later call after exact worker retirement.
+Shutdown likewise only starts or reuses and deadline-joins the exact worker; it
+never runs injected cleanup inline, never duplicates a live attempt, and
+reports the unpublished session id while cleanup remains incomplete. A cleanup
+worker invoking shutdown cannot join itself. No task identity or interface
+policy enters dispatcher.
 
 The desktop task owner-claim, binding, lease, epoch, and release protocol is an
 interface obligation specified by [M1_BRIDGE.md](M1_BRIDGE.md); it uses the
@@ -415,10 +427,18 @@ Contained store-write and custody-release failures retain only separate sticky
 Boolean failure markers. The dispatcher does not retain the exception, its
 arguments, attributes, cause, context, or traceback: any of those can keep an
 earlier live record or full workflow graph reachable after session close.
-The markers do not change filesystem outcomes, store fallback, release order,
-or the existing shutdown result. A failed audit-observer factory also retains
-no initiating exception: its sentinel raises only a fresh fixed error, keeping
-the existing failed-prefix audit behavior without retaining factory frames.
+Failed-admission cleanup follows the same rule with one sticky Boolean marker;
+each successful cleanup step clears its rollback, stream, or hub reference
+immediately even when a different step still needs retry. The single retained
+owner therefore contains only unfinished cleanup capabilities, its generated
+session id, one store-pending bit, and the failure marker. While cleanup runs,
+one exact thread attempt is also retained through actual thread exit; a dead
+attempt is reaped before admission capacity is released or shutdown completes.
+These markers do not change filesystem outcomes, store fallback, release
+order, or the existing shutdown result. A failed audit-observer factory also
+retains no initiating exception: its sentinel raises only a fresh fixed error,
+keeping the existing failed-prefix audit behavior without retaining factory
+frames.
 Caller-owned exceptions and audit observers
 may still reference earlier records; this boundary does not promise
 whole-process or secure-memory erasure. BR-G-45 remains open.
