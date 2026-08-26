@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import os
 import platform
-from collections.abc import Callable, Mapping
-from contextlib import AbstractContextManager
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -278,11 +278,16 @@ class LocalWorkflowRuntime:
         self._lock = Lock()
         self._close_lock = Lock()
         self._database_pair_lock = Lock()
+        self._ledger_reader_lock = Lock()
+        self._history_reader_lock = Lock()
+        self._ledger_reader: LedgerRepository | None = None
+        self._history_reader: HistoryRepository | None = None
         self._plans: dict[str, PlanArtifact] = {}
         self._execution_details: dict[str, ExecutionDetails] = {}
         self._inventory_details: dict[str, InventoryDetails] = {}
         self._execution_started: dict[str, datetime] = {}
         self._history_store: HistoryStore | None = None
+        self._closing = False
         self._closed = False
 
         self._deps = SyncDependencies(
@@ -747,16 +752,14 @@ class LocalWorkflowRuntime:
     def list_inventory(
         self, location_id: int, selected_paths: tuple[str, ...] = ()
     ) -> tuple[InventorySnapshot, ...]:
-        self._require_open()
-        with LedgerRepository(self.ledger_path) as repository:
+        with self._ledger_read() as repository:
             return repository.get_inventory(
                 location_id,
                 None if not selected_paths else selected_paths,
             )
 
     def mapping_ids_for_location(self, location_id: int) -> tuple[int, ...]:
-        self._require_open()
-        with LedgerRepository(self.ledger_path) as repository:
+        with self._ledger_read() as repository:
             return repository.mapping_ids_for_location(location_id)
 
     def list_stale_inventory(
@@ -764,14 +767,13 @@ class LocalWorkflowRuntime:
     ) -> tuple[InventorySnapshot, ...]:
         self._require_open()
         _require_utc(verified_before, "stale inventory cutoff")
-        with LedgerRepository(self.ledger_path) as repository:
+        with self._ledger_read() as repository:
             return repository.get_stale_inventory(location_id, verified_before)
 
     def list_unacknowledged_missing(
         self, location_id: int
     ) -> tuple[InventorySnapshot, ...]:
-        self._require_open()
-        with LedgerRepository(self.ledger_path) as repository:
+        with self._ledger_read() as repository:
             return repository.get_unacknowledged_missing(location_id)
 
     def acknowledge_inventory(
@@ -832,24 +834,18 @@ class LocalWorkflowRuntime:
         )
 
     def list_history(self, limit: int = 50) -> tuple[HistoryRunSummaryView, ...]:
-        if not self.history_path.exists():
-            return ()
-        with HistoryRepository(
-            self.history_path,
-            classification_query=_HISTORY_CLASSIFICATION_QUERY,
-        ) as repository:
+        with self._history_read() as repository:
+            if repository is None:
+                return ()
             return tuple(
                 _history_summary_view(item)
                 for item in repository.list_summaries(limit)
             )
 
     def get_history_summary(self, run_token: str) -> HistoryRunSummaryView:
-        if not self.history_path.exists():
-            raise KeyError(run_token)
-        with HistoryRepository(
-            self.history_path,
-            classification_query=_HISTORY_CLASSIFICATION_QUERY,
-        ) as repository:
+        with self._history_read() as repository:
+            if repository is None:
+                raise KeyError(run_token)
             return _history_summary_view(repository.get_summary(run_token))
 
     def get_history_items(
@@ -860,9 +856,9 @@ class LocalWorkflowRuntime:
         through_order: int | None = None,
         limit: int = 256,
     ) -> HistoryItemPageView:
-        if not self.history_path.exists():
-            raise KeyError(run_token)
-        with HistoryRepository(self.history_path) as repository:
+        with self._history_read() as repository:
+            if repository is None:
+                raise KeyError(run_token)
             return _history_item_page_view(
                 repository.get_item_page(
                     run_token,
@@ -880,9 +876,9 @@ class LocalWorkflowRuntime:
         through_seq: int | None = None,
         limit: int = 256,
     ) -> HistoryEventPageView:
-        if not self.history_path.exists():
-            raise KeyError(run_token)
-        with HistoryRepository(self.history_path) as repository:
+        with self._history_read() as repository:
+            if repository is None:
+                raise KeyError(run_token)
             return _history_event_page_view(
                 repository.get_event_page(
                     run_token,
@@ -892,22 +888,73 @@ class LocalWorkflowRuntime:
                 )
             )
 
+    @contextmanager
+    def _ledger_read(self) -> Iterator[LedgerRepository]:
+        with self._ledger_reader_lock:
+            self._require_open()
+            if self._ledger_reader is None:
+                self._ledger_reader = LedgerRepository(self.ledger_path)
+            try:
+                yield self._ledger_reader
+            except BaseException as error:
+                if self._close_failed_reader(self._ledger_reader, error):
+                    self._ledger_reader = None
+                raise
+
+    @contextmanager
+    def _history_read(self) -> Iterator[HistoryRepository | None]:
+        with self._history_reader_lock:
+            self._require_open()
+            if self._history_reader is None:
+                if not self.history_path.exists():
+                    yield None
+                    return
+                self._history_reader = HistoryRepository(
+                    self.history_path,
+                    classification_query=_HISTORY_CLASSIFICATION_QUERY,
+                )
+            try:
+                yield self._history_reader
+            except BaseException as error:
+                if self._close_failed_reader(self._history_reader, error):
+                    self._history_reader = None
+                raise
+
+    def _close_failed_reader(
+        self, reader: LedgerRepository | HistoryRepository, primary: BaseException,
+    ) -> bool:
+        try:
+            reader.close()
+        except BaseException as cleanup:
+            with self._lock:
+                self._closing = True
+            if isinstance(primary, Exception) and not isinstance(cleanup, Exception):
+                raise cleanup from primary
+            primary.add_note("runtime database reader close was incomplete")
+            return False
+        return True
+
     def close(self) -> None:
         with self._close_lock:
             with self._lock:
                 if self._closed:
                     return
-                self._closed = True
+                self._closing = True
                 store = self._history_store
-            try:
-                if store is not None:
-                    store.close()
-            except BaseException:
+            if store is not None:
+                store.close()
                 with self._lock:
-                    self._closed = False
-                raise
+                    self._history_store = None
+            with self._ledger_reader_lock:
+                if self._ledger_reader is not None:
+                    self._ledger_reader.close()
+                    self._ledger_reader = None
+            with self._history_reader_lock:
+                if self._history_reader is not None:
+                    self._history_reader.close()
+                    self._history_reader = None
             with self._lock:
-                self._history_store = None
+                self._closed = True
 
     def _resolve_volume(self, path: str) -> VolumeId:
         resolved = self._scanner_backend.resolve_root(path)
@@ -1139,6 +1186,7 @@ class LocalWorkflowRuntime:
     def _ensure_history_store(self, managed_roots: tuple[str, ...]) -> HistoryStore:
         self._validate_database_roots(managed_roots)
         with self._lock:
+            self._require_open()
             if self._history_store is None:
                 self._history_store = HistoryStore(
                     self.history_path,
@@ -1150,7 +1198,7 @@ class LocalWorkflowRuntime:
             return self._history_store
 
     def _require_open(self) -> None:
-        if self._closed:
+        if self._closed or self._closing:
             raise RuntimeError("workflow runtime is closed")
 
 

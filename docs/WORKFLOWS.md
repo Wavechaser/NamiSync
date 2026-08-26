@@ -69,6 +69,16 @@ observer/preflight, executor, verifier, recorder, and later importer. Planning
 adapters may snapshot semantic defaults when constructing a request; admitted
 execution does not receive or reread a settings provider.
 
+The local runtime owns two lazy presentation readers: one ledger repository for
+inventory/mapping reads and one history repository for summary/page reads. Each
+role lock covers admission, query, and materialization; successful requests leave
+no open read transaction. Shutdown quiesces admission before waiting for active
+readers and keeps failed closes retryable without reopening partly closed owners.
+Query failures retire the affected reader; replacement handles always undergo
+full admission. Planning correspondence, worker-local integrity/location readers,
+recorders, and database-pair admission keep their separate lifetimes. `DATABASE.md`
+owns the detailed lifecycle, reset, and diagnostic cost contract.
+
 ### Node tree substrate
 
 `build_node_tree` is a pure workflow helper over path-keyed members. It emits

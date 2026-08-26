@@ -1,7 +1,7 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.13a is verified for delivery after the
-`77bfc5f` plan commit. The next implementation checkpoint is 3R.13b.
+Status (2026-08-26): checkpoint 3R.13b is verified for delivery after the
+`76d897b` cancellation checkpoint. The next implementation checkpoint is 3R.13c.
 The remaining storage/identity decisions below are ratified, not implemented.
 Checkpoint 3.3 remains unstarted and the private legacy decoder remains intact.
 
@@ -13,22 +13,9 @@ O/S reports and prior verification receipts remain in Git at
 
 ## Authorized Work Still To Deliver
 
-The cancellation, read-cost/temp-placement, and JavaScript follow-ups below
+The temp-placement and JavaScript follow-ups below
 come from the user's post-3R.13 review and inspection at `d7673b7`.
 F/S identifiers refer to the original independent reports preserved in Git.
-
-### 3R.13b — Reuse bounded, admitted runtime readers
-
-`LocalWorkflowRuntime` repeatedly constructs `LedgerRepository` and
-`HistoryRepository`, repeating full artifact admission for read requests.
-For main/WAL/SHM lengths M/W/S, current logical Python read/hash work is 2M
-without sidecars or 3M+3W+2S with WAL/SHM, excluding SQLite I/O; pair READY adds
-a recheck pass. These are code-path diagnostics, not latency or acceptance
-measurements. Use bounded runtime-owned admitted handles with serialized reads,
-fresh per-request transactions, and full admission on every new handle.
-Hashes remain load-bearing even without WAL: same-stamp byte edits currently
-refuse. Do not replace them with detached path/stamp caches or weaken standalone
-repository, initializer, or pair admission.
 
 ### 3R.13c — Place private copies beside the local database
 
@@ -117,12 +104,12 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-3R.13a verification: the initial 15 cancellation regressions failed before
-the fix; independent review exposed deferred-directory tail/owner cases that
-also failed before repair. Final focused run: 20 passed. Executor/workflows/
-dispatcher neighborhood: 1,030 passed. Ordinary suite with required Node:
-4,232 passed, 4 expected privilege skips, 28 headed tests deselected (186.14 s).
-Protected settlement oracle: 30 scenarios × 3 identical runs; oracle, baseline,
-and protected assertions unchanged. Independent settlement review found no
-remaining actionable issue. The causal disposition is in `BUGS.md`; the
-completed finding is deliberately absent from the remaining-work list above.
+3R.13b verification: the tests-first run recorded 29 failures and 6 passing
+controls. Independent review strengthened queued-before-close and in-progress
+constructor coverage. Final focused run: 43 passed. Database/workflows/
+interfaces neighborhood: 2,124 passed. Ordinary suite with required Node:
+4,273 passed, 4 expected privilege skips, 28 headed tests deselected (218.09 s).
+Independent lifetime/TOCTOU review found no remaining actionable issue.
+Standalone admission and protected settlement files are unchanged. The causal
+disposition is in `BUGS.md`; `DATABASE.md` owns the exact reader lifetime and
+cost diagnostics, so the completed finding is absent from the list above.

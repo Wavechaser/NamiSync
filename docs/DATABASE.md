@@ -110,6 +110,62 @@ and is an empty regular file. The existing handle-bound rollback remains in
 force. Standalone fresh `initialize_*` calls do not acquire those leases; their
 absence-to-writer-open race is not an exclusive cross-process creation boundary.
 
+### Runtime reader ownership and admission diagnostics
+
+`LocalWorkflowRuntime` owns at most one lazy ledger reader and one lazy history
+reader for its four inventory/mapping and four history presentation-read methods.
+Separate role locks serialize complete queries and view materialization, including
+first construction. Every newly opened handle still receives the full file
+preflight and post-open contract validation. An owned reader is not a detached
+path/stamp validation cache: it stays bound to its admitted database until retired
+or the runtime closes. Missing history keeps its empty-list/unknown-run behavior
+while no reader is owned, without caching absence. Replacing or resetting database
+files requires closing the application and opening a new runtime.
+
+Successful requests do not retain a transaction between calls. Existing multi-statement
+history and selected-inventory reads keep their per-request transactions; ordinary
+single-statement inventory reads remain autocommit. Later requests therefore see
+later committed updates without reopening the reader. Any query or projection
+exception retires that reader; a successful close permits a fully admitted retry.
+A failed retirement close retains the handle and quiesces the runtime. Ordinary
+cleanup errors annotate the original error, an existing control interruption wins,
+and a new cleanup interruption outranks an ordinary primary error. Runtime close
+quiesces before waiting for active reads, clears only successfully closed owners,
+and keeps failed or not-yet-closed owners for an explicit close retry. A queued
+read cannot reopen a reader, and audit setup cannot recreate a history writer,
+after quiescing starts. The service's dispatcher shutdown timeout is not a new
+reader-query or reader-close deadline. Two owned reader handles is not a bound
+on native SQLite cache memory.
+
+This change amortizes admission, not query work or first-open validation. Let
+`M`, `W`, and `S` denote source main, WAL, and SHM lengths, with absent sidecars
+counted as zero. The current preflight's Python streams read/hash `2M` logical
+bytes without sidecars; the private-copy branch reads/hashes `3M + 3W + 2S` and
+writes `M + W` copied bytes plus SQLite's private SHM. Pair admission adds a final
+`M + W + S` recheck per role. These are source-derived diagnostics, excluding
+SQLite page reads, small EOF probes, cache effects, and filesystem allocation;
+they are not measured physical I/O, latency limits, or database-size walls.
+Planning correspondence, location binding, integrity selection, pair checks,
+recorders, initializers, and standalone repositories retain their existing full
+admission paths.
+
+The retained fixture is `test_repeated_runtime_reads_admit_once_per_owned_handle`
+in `tests/test_runtime_readers.py`. Its admission-count matrix
+uses the shipped role DDL with two SQLite page sizes (1,024 and 8,192 bytes), an
+empty ledger or a five-event history run, and initially absent sidecars or a live
+WAL writer with a benign committed `user_version` change. It executes each role's
+four read methods for three cycles, asserting one admission/open after 4, 8, and
+12 requests, one close on owner shutdown, and another full admission on a new
+runtime and on a standalone repository. It does not measure actual database byte
+scaling. A service summary-plus-page traversal and live-writer fixtures separately
+exercise public reachability and visibility of later commits. Counts are exact
+per-case observations, never averaged; the committed tests are the rerunnable
+artifact, with no empirical timing or memory baseline. Rerun after changes to
+runtime ownership, repository transactions, schema/connection factories, file
+admission, or SQLite/Python behavior. The I/O algebra must also be re-derived when
+the admission stream/copy sequence changes. Quantitative classification remains
+owned by `DEFENSE.md` §7.
+
 ### Atomic execution-evidence read
 
 Status: accepted for the later execution-review checkpoint; not active in

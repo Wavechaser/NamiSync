@@ -277,6 +277,15 @@ watermark below `after_seq` remains an invalid interval. Each request ends its
 read transaction, allowing the same WAL reader to observe the next committed
 window on its next request.
 
+The local workflow runtime reuses one lazily admitted history repository across
+summary and page requests, serializing each complete query and projection with
+its own role lock. Successful requests leave no open read transaction. A query
+failure retires that reader; a failed close quiesces the runtime and retains the
+handle for close retry. Every replacement reader receives full admission. Runtime
+shutdown owns the final close, while an absent history file remains an empty
+listing or unknown run when no reader is owned. `DATABASE.md` owns the complete
+reader-lifetime, reset, and admission-cost boundary and diagnostic fixtures.
+
 Workflow code supplies the finite selection-exclusion/no-op predicates and,
 not SQL, interprets the resulting primitive counts into integrity and headline
 values. The service exposes `list_history()`,

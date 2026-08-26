@@ -1179,6 +1179,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Reader-lifetime admission amplification.
+  Repeated inventory and history requests opened a new repository each time,
+  rehashing complete main/WAL artifacts even for small result pages. Fixed by
+  retaining one fully admitted reader per role in the local runtime, with
+  serialized queries, fresh request transactions, and explicit close ownership.
+  Query failures retire the reader; failed close retains ownership and blocks
+  new use until cleanup is retried. Standalone, pair, and writer admission are
+  unchanged. First-open work still scales with database size; DATABASE records
+  its logical I/O and fixture axes without claiming a latency or memory bound.
 - MODERATE - FIXED (2026-08-26). WAL-blind admission. A database whose WAL
   changed its contract marker could pass main-only admission, then refuse in a
   normal reader after creating source SHM. Cause: immutable SQLite ignores WAL

@@ -1478,6 +1478,11 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     runtime = object.__new__(LocalWorkflowRuntime)
     runtime._lock = Lock()
     runtime._close_lock = Lock()
+    runtime._ledger_reader_lock = Lock()
+    runtime._history_reader_lock = Lock()
+    runtime._ledger_reader = None
+    runtime._history_reader = None
+    runtime._closing = False
     runtime._closed = False
     runtime._history_store = store
 
@@ -1512,6 +1517,11 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     runtime = object.__new__(LocalWorkflowRuntime)
     runtime._lock = Lock()
     runtime._close_lock = Lock()
+    runtime._ledger_reader_lock = Lock()
+    runtime._history_reader_lock = Lock()
+    runtime._ledger_reader = None
+    runtime._history_reader = None
+    runtime._closing = False
     runtime._closed = False
     runtime._history_store = store
     first_errors: list[Exception] = []
