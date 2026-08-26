@@ -19,6 +19,9 @@ from namisync.core.execution import (
     bounded_recording_detail,
 )
 from namisync.core.integrity import (
+    INTEGRITY_CANDIDATE_ROW_LIMIT,
+    IntegrityCandidateLimitError,
+    IntegrityCandidateLimitExceeded,
     IntegrityMode,
     IntegrityOutcome,
     IntegrityRunResult,
@@ -277,6 +280,14 @@ class IntegrityWorkflowRequest:
     def __post_init__(self) -> None:
         if not self.request_id:
             raise ValueError("request id is required")
+        if not isinstance(self.mode, IntegrityMode):
+            raise TypeError("integrity mode has the wrong type")
+        if not isinstance(self.selected_paths, tuple):
+            raise TypeError("integrity selected_paths must be a tuple")
+        if len(self.selected_paths) > INTEGRITY_CANDIDATE_ROW_LIMIT:
+            raise IntegrityCandidateLimitError(
+                IntegrityCandidateLimitExceeded.rows()
+            )
         if self.selected_paths:
             object.__setattr__(
                 self,
@@ -285,21 +296,49 @@ class IntegrityWorkflowRequest:
             )
         if self.stale_before is not None:
             _require_utc(self.stale_before, "stale_before")
-        if any(not item_id for item_id in self.selection_item_ids):
-            raise ValueError("integrity selection item ids are required")
-        if len(self.selection_item_ids) != len(set(self.selection_item_ids)):
-            raise ValueError("integrity selection item ids must be unique")
-        item_ids = [item_id for item_id, _ in self.completed_bytes]
-        if any(not item_id for item_id in item_ids):
-            raise ValueError("completed integrity item ids are required")
-        if len(item_ids) != len(set(item_ids)):
-            raise ValueError("completed integrity item ids must be unique")
-        if not set(item_ids).issubset(self.selection_item_ids):
+        if not isinstance(self.selection_item_ids, tuple):
+            raise TypeError("integrity selection_item_ids must be a tuple")
+        if len(self.selection_item_ids) > INTEGRITY_CANDIDATE_ROW_LIMIT:
+            raise IntegrityCandidateLimitError(
+                IntegrityCandidateLimitExceeded.rows()
+            )
+        if not isinstance(self.completed_bytes, tuple):
+            raise TypeError("integrity completed_bytes must be a tuple")
+        if len(self.completed_bytes) > len(self.selection_item_ids):
             raise ValueError(
                 "completed integrity items must belong to the saved selection"
             )
+        selection_positions: dict[str, int] = {}
+        for index, item_id in enumerate(self.selection_item_ids):
+            if not isinstance(item_id, str) or not item_id:
+                raise ValueError("integrity selection item ids are required")
+            if item_id in selection_positions:
+                raise ValueError("integrity selection item ids must be unique")
+            selection_positions[item_id] = index
+        completed_ids: set[str] = set()
+        last_completed_position = -1
         completed_bytes = 0
-        for _, size in self.completed_bytes:
+        for entry in self.completed_bytes:
+            if not isinstance(entry, tuple) or len(entry) != 2:
+                raise TypeError(
+                    "integrity completed_bytes entries must be two-item tuples"
+                )
+            item_id, size = entry
+            if not isinstance(item_id, str) or not item_id:
+                raise ValueError("completed integrity item ids are required")
+            if item_id in completed_ids:
+                raise ValueError("completed integrity item ids must be unique")
+            completed_ids.add(item_id)
+            position = selection_positions.get(item_id)
+            if position is None:
+                raise ValueError(
+                    "completed integrity items must belong to the saved selection"
+                )
+            if position <= last_completed_position:
+                raise ValueError(
+                    "completed integrity items must follow saved selection order"
+                )
+            last_completed_position = position
             require_signed_64(size, "completed integrity byte count")
             completed_bytes = checked_add_signed_64(
                 completed_bytes,
@@ -355,6 +394,7 @@ class IntegrityWorkflowRequest:
 class _ObservedTaskRecordingIssue:
     issue: TaskRecordingIssue
     omitted_detail_count: int
+    failure: FailureDetail
 
 
 class Scanner(Protocol):
@@ -857,7 +897,18 @@ def run_integrity(
                 recorder_observation[0],
             )
         )
-        failure = FailureDetail(type(error).__name__, logical_error_text(error))
+        if (
+            isinstance(error, IntegrityCandidateLimitError)
+            and recorder_observation[0] is not None
+        ):
+            failure = recorder_observation[0].failure
+        elif isinstance(error, IntegrityCandidateLimitError):
+            failure = FailureDetail(
+                type(error.fact).__name__,
+                logical_error_text(error),
+            )
+        else:
+            failure = FailureDetail(type(error).__name__, logical_error_text(error))
         if selection is None:
             return _integrity_request_terminal_result(
                 request,
@@ -1031,11 +1082,14 @@ def _task_recording_issue(
     reason: TaskRecordingIssueReason,
     error: BaseException,
 ) -> _ObservedTaskRecordingIssue:
-    raw_detail = f"{type(error).__name__}: {logical_error_text(error)}"
+    type_name = type(error).__name__
+    message = logical_error_text(error)
+    raw_detail = f"{type_name}: {message}"
     detail = bounded_recording_detail(raw_detail)
     return _ObservedTaskRecordingIssue(
         TaskRecordingIssue(reason, detail),
         1 if detail is None else 0,
+        FailureDetail(type_name, message),
     )
 
 
@@ -1418,68 +1472,29 @@ def _integrity_rows(
 ) -> tuple[InventorySnapshot, ...]:
     if selection_item_ids:
         row_ids = _saved_inventory_row_ids(location_id, selection_item_ids)
-        rows = {
-            f"{row.location_id}:{row.row_id}": row
-            for row in repository.get_inventory_by_row_ids(location_id, row_ids)
-        }
-        missing = [
-            item_id for item_id in selection_item_ids if item_id not in rows
-        ]
-        if missing:
-            raise RuntimeError(
-                "saved integrity selection references missing inventory rows"
-            )
-        return tuple(rows[item_id] for item_id in selection_item_ids)
+        return repository.get_integrity_candidates(
+            location_id,
+            mode,
+            saved_row_ids=row_ids,
+        )
     if selected_paths:
-        candidates = tuple(
-            row
-            for row in repository.get_inventory(location_id, selected_paths)
-            if (
-                row.entry_kind is None
-                or row.entry_kind.value != "directory"
-                or f"{row.location_id}:{row.row_id}" in completed_item_ids
-            )
+        return repository.get_integrity_candidates(
+            location_id,
+            mode,
+            path_keys=selected_paths,
         )
-    elif stale_before is not None:
-        rows = {
-            row.row_id: row
-            for row in repository.get_stale_inventory(location_id, stale_before)
-        }
-        if completed_item_ids:
-            completed_row_ids = _saved_inventory_row_ids(
-                location_id, tuple(completed_item_ids)
-            )
-            rows.update(
-                (row.row_id, row)
-                for row in repository.get_inventory_by_row_ids(
-                    location_id, completed_row_ids
-                )
-            )
-            missing = [
-                row_id for row_id in completed_row_ids if row_id not in rows
-            ]
-            if missing:
-                raise RuntimeError(
-                    "saved integrity progress references missing inventory rows"
-                )
-        candidates = tuple(
-            sorted(rows.values(), key=lambda row: (row.rel_path_key, int(row.row_id)))
+    if stale_before is not None:
+        completed_row_ids = _saved_inventory_row_ids(
+            location_id,
+            tuple(completed_item_ids),
         )
-    else:
-        candidates = tuple(
-            row
-            for row in repository.get_inventory(location_id)
-            if (
-                row.entry_kind is None
-                or row.entry_kind.value != "directory"
-                or f"{row.location_id}:{row.row_id}" in completed_item_ids
-            )
+        return repository.get_integrity_candidates(
+            location_id,
+            mode,
+            stale_before=stale_before,
+            completed_row_ids=completed_row_ids,
         )
-    if mode is IntegrityMode.BASELINE:
-        return tuple(row for row in candidates if row.attestation is None)
-    if mode is IntegrityMode.REBASELINE:
-        return tuple(row for row in candidates if row.attestation is not None)
-    return candidates
+    return repository.get_integrity_candidates(location_id, mode)
 
 
 def _saved_inventory_row_ids(
@@ -1502,12 +1517,13 @@ def _integrity_selection(
     root: str,
 ) -> IntegritySelection:
     completed = dict(request.completed_bytes)
+    shared_root = Path(root)
     items = tuple(
         IntegritySelectionItem(
             item_id=f"{row.location_id}:{row.row_id}",
             row_id=row.row_id,
             location_id=str(row.location_id),
-            root=Path(root),
+            root=shared_root,
             rel_path_key=row.rel_path_key,
             display_path=row.rel_path,
             expected_state=InventoryState(row.presence.value),

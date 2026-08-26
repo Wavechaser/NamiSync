@@ -503,6 +503,16 @@ of broadening it. A stale-before run consumes the repository's stale query
 directly and fetches only exact already-completed rows needed for settlement.
 Explicit selected-path and intentional full Verify All behavior are unchanged.
 
+Standalone integrity now enforces the independent 120,000-row candidate wall
+while freezing that selection. Repository SQL applies fresh mode eligibility
+before the limit; stale and completed rows form one deduplicated population;
+saved resume validates every exact id and order. The first post-refresh excess
+returns `FAILED+RAN` with the core-owned candidate fact's type and message,
+without invoking the selection sink, verifier context, runner, hashing, or
+outcome collection. Recorder open/close failure remains authoritative over a
+simultaneous scale fact. The retained-byte and payload-envelope axes await the
+checkpoint-4 frozen graph/occurrence model.
+
 Candidate filtering happens only while freezing a new integrity selection.
 In the current implementation, baseline admits eligible non-directory rows
 with no attestation; rebaseline

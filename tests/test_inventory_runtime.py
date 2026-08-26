@@ -33,6 +33,7 @@ from namisync.core.integrity import (
 from namisync.core.session import (
     Disposition,
     OperationResult,
+    PauseRequested,
     ResourceId,
     RunContext,
     SessionState,
@@ -660,11 +661,19 @@ def test_resumed_integrity_runtime_queries_only_frozen_row_ids(
                     full_reads.append(selected_location_id)
                 return super().get_inventory(selected_location_id, path_keys)
 
-            def get_inventory_by_row_ids(self, selected_location_id, row_ids):
-                requested = tuple(row_ids)
-                row_id_reads.append((selected_location_id, requested))
-                return super().get_inventory_by_row_ids(
-                    selected_location_id, requested
+            def get_integrity_candidates(
+                self,
+                selected_location_id,
+                mode,
+                **scopes,
+            ):
+                requested = tuple(scopes.get("saved_row_ids", ()))
+                if requested:
+                    row_id_reads.append((selected_location_id, requested))
+                return super().get_integrity_candidates(
+                    selected_location_id,
+                    mode,
+                    **scopes,
                 )
 
         monkeypatch.setattr(
@@ -807,6 +816,52 @@ def test_runtime_exposes_stale_and_missing_visibility_inventory_facade(
         assert [
             row.rel_path for row in runtime.list_unacknowledged_missing(location_id)
         ] == ["a.txt"]
+    finally:
+        runtime.close()
+
+
+def test_integrity_snapshot_orders_completed_rows_by_frozen_selection(
+    tmp_path: Path,
+) -> None:
+    def pause_after_completing(selection, context, recorder):
+        del context, recorder
+        for item in selection.items:
+            size = 0 if item.expected_stat is None else item.expected_stat.size
+            selection.note_bytes_processed(size)
+            selection.mark_completed(item.item_id, size)
+        raise PauseRequested("capture ordered continuation")
+
+    runtime, location_id, _scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {IntegrityMode.VERIFY: pause_after_completing},
+    )
+    try:
+        rows = runtime.list_inventory(location_id)
+        frozen = tuple(
+            f"{row.location_id}:{row.row_id}" for row in reversed(rows)
+        )
+        prepared = runtime.prepare_verify(
+            IntegrityRequest(
+                "ordered-completion-binding",
+                IntegrityMode.VERIFY,
+                location_id=location_id,
+            )
+        )
+        request = IntegrityWorkflowRequest(
+            request_id="ordered-completion",
+            binding=decode_integrity_request(prepared.payload).binding,
+            mode=IntegrityMode.VERIFY,
+            selection_item_ids=frozen,
+            refresh_generation=1,
+        )
+        session = runtime.open_verify(encode_integrity_request(request))
+
+        with pytest.raises(PauseRequested, match="ordered continuation"):
+            session.run(RunContext(lambda _event: None, lambda: None))
+        continuation = decode_integrity_request(session.snapshot())
+
+        assert continuation.selection_item_ids == frozen
+        assert tuple(item_id for item_id, _ in continuation.completed_bytes) == frozen
     finally:
         runtime.close()
 

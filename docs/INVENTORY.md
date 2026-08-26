@@ -76,12 +76,18 @@ exact admitted inventory row ids plus completed ids/bytes. A resume always
 refreshes physical inventory but reconstructs the original ordered candidate
 set without reapplying those mode filters, so evidence drift cannot drop
 pending work and a newly appeared row cannot enter an admitted session.
-The reconstruction queries only canonical location-owned row IDs in 400-ID
-chunks under one repository read snapshot; it does not materialize the complete
-location. Foreign, malformed, or missing saved identifiers refuse rather than
-widening selection. Stale-before integrity consumes the stale repository query
-directly and fetches only exact completed rows needed to preserve settlement;
-selected-path and intentional full Verify All scope remain unchanged.
+Fresh full, selected-path, and stale candidate reads apply their eligibility in
+SQL and admit at most 120,000 unique rows. The reconstruction queries only
+location-owned row IDs in 400-ID chunks under the same repository read snapshot;
+it does not materialize the complete location and preserves the frozen order.
+Foreign or missing saved identifiers refuse rather than widening selection.
+Stale-before integrity unions exact completed rows with eligible stale rows by
+identity before enforcing the count, so an overlap is charged once. An excess
+after successful refresh is `FAILED+RAN`, publishes no partial selection, and
+starts no verifier work; a recorder finalization failure retains error
+precedence. Accepted rows share one root `Path` owner rather than copying it per
+candidate. The independent retained-byte axis remains inactive until the
+checkpoint-4 graph model freezes its complete charge.
 
 Checkpoint 10 will admit eligible null-evidence files to fresh rebaseline as
 well. It remains explicit acceptance of current content: always hash and

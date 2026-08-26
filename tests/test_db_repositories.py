@@ -5,8 +5,12 @@ import sqlite3
 
 import pytest
 
+import namisync.db.repositories as repository_module
 from namisync.core.evidence import Provenance
 from namisync.core.integrity import (
+    INTEGRITY_CANDIDATE_ROW_LIMIT,
+    IntegrityCandidateLimitError,
+    IntegrityCandidateLimitExceeded,
     IntegrityMode,
     IntegrityRecordCommand,
     InventoryState,
@@ -28,6 +32,231 @@ from _db_fixtures import (
     plan,
     setup_recorder,
 )
+
+
+def _insert_minimal_inventory_rows(
+    path: Path,
+    location_id: int,
+    *,
+    start: int,
+    count: int,
+) -> None:
+    writer = connect_ledger_writer(path)
+    try:
+        writer.execute("BEGIN IMMEDIATE")
+        writer.executemany(
+            """INSERT INTO inventory(
+                   location_id, rel_path, rel_path_key, entry_kind, presence,
+                   scope_token
+               ) VALUES (?, ?, ?, 'file', 'present', 'candidate-scope')""",
+            (
+                (
+                    location_id,
+                    f"candidate-{index:06d}.bin",
+                    f"CANDIDATE-{index:06d}.BIN",
+                )
+                for index in range(start, start + count)
+            ),
+        )
+        writer.commit()
+    finally:
+        writer.close()
+
+
+def test_integrity_candidate_reader_enforces_complete_population_row_wall(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    limit = INTEGRITY_CANDIDATE_ROW_LIMIT
+    _insert_minimal_inventory_rows(
+        setup.recorder.path,
+        setup.source_location_id,
+        start=0,
+        count=limit,
+    )
+    monkeypatch.setattr(
+        repository_module,
+        "_inventory_snapshot",
+        lambda row: str(row["id"]),
+    )
+    paths = tuple(f"candidate-{index:06d}.bin" for index in range(limit))
+    try:
+        with LedgerRepository(setup.recorder.path) as repository:
+            full = repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.VERIFY,
+            )
+            assert len(full) == limit
+            del full
+
+            selected = repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.VERIFY,
+                path_keys=reversed(paths),
+            )
+            assert len(selected) == limit
+            assert (selected[0], selected[-1]) == ("1", str(limit))
+            del selected
+
+            saved_ids = tuple(str(value) for value in range(limit, 0, -1))
+            saved = repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.BASELINE,
+                saved_row_ids=saved_ids,
+            )
+            assert saved == saved_ids
+            del saved
+
+        _insert_minimal_inventory_rows(
+            setup.recorder.path,
+            setup.source_location_id,
+            start=limit,
+            count=1,
+        )
+        excess_paths = paths + (f"candidate-{limit:06d}.bin",)
+        with LedgerRepository(setup.recorder.path) as repository:
+            for kwargs in (
+                {},
+                {"path_keys": excess_paths},
+                {
+                    "saved_row_ids": tuple(
+                        str(value) for value in range(1, limit + 2)
+                    )
+                },
+            ):
+                with pytest.raises(IntegrityCandidateLimitError) as raised:
+                    repository.get_integrity_candidates(
+                        setup.source_location_id,
+                        IntegrityMode.VERIFY,
+                        **kwargs,
+                    )
+                assert raised.value.fact == IntegrityCandidateLimitExceeded.rows()
+
+            assert repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.REBASELINE,
+            ) == ()
+            assert repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.REBASELINE,
+                path_keys=excess_paths,
+            ) == ()
+    finally:
+        setup.recorder.close()
+
+
+def test_stale_integrity_candidate_union_deduplicates_before_row_limit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    limit = INTEGRITY_CANDIDATE_ROW_LIMIT
+    _insert_minimal_inventory_rows(
+        setup.recorder.path,
+        setup.source_location_id,
+        start=0,
+        count=limit + 1,
+    )
+    writer = connect_ledger_writer(setup.recorder.path)
+    try:
+        writer.execute(
+            """UPDATE inventory SET presence = 'missing'
+                 WHERE location_id = ? AND id IN (?, ?)""",
+            (setup.source_location_id, limit, limit + 1),
+        )
+    finally:
+        writer.close()
+    monkeypatch.setattr(
+        repository_module,
+        "_inventory_snapshot",
+        lambda row: str(row["id"]),
+    )
+    try:
+        with LedgerRepository(setup.recorder.path) as repository:
+            exact = repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.VERIFY,
+                stale_before=NOW,
+                completed_row_ids=(str(limit),),
+            )
+            assert len(exact) == limit
+            assert str(limit) in exact
+
+            with pytest.raises(IntegrityCandidateLimitError):
+                repository.get_integrity_candidates(
+                    setup.source_location_id,
+                    IntegrityMode.VERIFY,
+                    stale_before=NOW,
+                    completed_row_ids=(str(limit), str(limit + 1)),
+                )
+    finally:
+        setup.recorder.close()
+
+
+def test_chunked_integrity_candidate_read_uses_one_snapshot_and_saved_order(
+    tmp_path: Path,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    records = tuple(
+        _file(f"folder\\file-{index:04d}.bin", index) for index in range(401)
+    )
+    writer = connect_ledger_writer(setup.recorder.path)
+    select_count = 0
+
+    def update_between_batches(statement: str) -> None:
+        nonlocal select_count
+        if "SELECT * FROM INVENTORY" not in statement.upper():
+            return
+        select_count += 1
+        if select_count == 2:
+            writer.execute(
+                "UPDATE inventory SET scope_token = ? WHERE location_id = ?",
+                ("scope-new", setup.source_location_id),
+            )
+
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, records),
+                "scope-old",
+                NOW,
+            )
+        )
+        paths = tuple(record.rel_path for record in reversed(records))
+        with LedgerRepository(
+            setup.recorder.path,
+            trace_callback=update_between_batches,
+        ) as repository:
+            selected = repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.VERIFY,
+                path_keys=paths,
+            )
+            row_ids = tuple(row.row_id for row in selected)
+            saved = repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.BASELINE,
+                saved_row_ids=tuple(reversed(row_ids)),
+            )
+            with pytest.raises(RuntimeError, match="missing inventory rows"):
+                repository.get_integrity_candidates(
+                    setup.source_location_id,
+                    IntegrityMode.BASELINE,
+                    saved_row_ids=(row_ids[0], "999999999"),
+                )
+
+        assert select_count >= 2
+        assert {row.scope_token for row in selected} == {"scope-old"}
+        assert tuple(row.row_id for row in saved) == tuple(reversed(row_ids))
+        with LedgerRepository(setup.recorder.path) as repository:
+            durable = repository.get_inventory(setup.source_location_id)
+        assert {row.scope_token for row in durable} == {"scope-new"}
+    finally:
+        writer.close()
+        setup.recorder.close()
 
 
 def test_mapping_repository_round_trips_paired_noop_correspondence(tmp_path: Path) -> None:

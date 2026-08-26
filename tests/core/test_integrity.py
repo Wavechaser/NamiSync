@@ -8,6 +8,13 @@ from types import SimpleNamespace
 import pytest
 
 from namisync.core.integrity import (
+    INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT,
+    INTEGRITY_CANDIDATE_ROW_LIMIT,
+    INTEGRITY_CANDIDATE_RETAINED_BYTES_MESSAGE,
+    INTEGRITY_CANDIDATE_ROWS_MESSAGE,
+    IntegrityCandidateLimitAxis,
+    IntegrityCandidateLimitError,
+    IntegrityCandidateLimitExceeded,
     IntegritySelection,
     PostCopySelection,
     VerifierContext,
@@ -32,6 +39,96 @@ _SUBJECT = FileStat(
     nlink=1,
     metadata=MetadataSnapshot(attributes=0, created_ns=50),
 )
+
+
+def test_integrity_candidate_limit_facts_are_exact_and_typed() -> None:
+    rows = IntegrityCandidateLimitExceeded.rows()
+    retained_bytes = IntegrityCandidateLimitExceeded.retained_bytes()
+
+    assert rows == IntegrityCandidateLimitExceeded(
+        reason="integrity_candidate_limit_exceeded",
+        axis=IntegrityCandidateLimitAxis.ROWS,
+        row_limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+        byte_limit=None,
+    )
+    assert retained_bytes == IntegrityCandidateLimitExceeded(
+        reason="integrity_candidate_limit_exceeded",
+        axis=IntegrityCandidateLimitAxis.RETAINED_BYTES,
+        row_limit=None,
+        byte_limit=INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT,
+    )
+    assert IntegrityCandidateLimitError(rows).args == (
+        INTEGRITY_CANDIDATE_ROWS_MESSAGE,
+    )
+    assert IntegrityCandidateLimitError(retained_bytes).args == (
+        INTEGRITY_CANDIDATE_RETAINED_BYTES_MESSAGE,
+    )
+
+
+@pytest.mark.parametrize(
+    "fact",
+    (
+        IntegrityCandidateLimitExceeded(
+            "integrity_candidate_limit_exceeded",
+            IntegrityCandidateLimitAxis.ROWS,
+            INTEGRITY_CANDIDATE_ROW_LIMIT,
+            None,
+        ),
+        IntegrityCandidateLimitExceeded(
+            "integrity_candidate_limit_exceeded",
+            IntegrityCandidateLimitAxis.RETAINED_BYTES,
+            None,
+            INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT,
+        ),
+    ),
+)
+def test_integrity_candidate_limit_fact_rejects_mutated_closed_shape(
+    fact: IntegrityCandidateLimitExceeded,
+) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        replace(fact, axis=fact.axis.value)
+    with pytest.raises(ValueError):
+        replace(fact, row_limit=1)
+    with pytest.raises(ValueError):
+        replace(fact, byte_limit=1)
+
+
+def test_integrity_candidate_limit_fact_rejects_hidden_graph_subclasses() -> None:
+    class HiddenReason(str):
+        pass
+
+    class HiddenFact(IntegrityCandidateLimitExceeded):
+        pass
+
+    reason = HiddenReason("integrity_candidate_limit_exceeded")
+    reason.hidden = object()
+    with pytest.raises(TypeError, match="reason has the wrong type"):
+        IntegrityCandidateLimitExceeded(
+            reason,
+            IntegrityCandidateLimitAxis.ROWS,
+            INTEGRITY_CANDIDATE_ROW_LIMIT,
+            None,
+        )
+
+    hidden_fact = HiddenFact(
+        "integrity_candidate_limit_exceeded",
+        IntegrityCandidateLimitAxis.ROWS,
+        INTEGRITY_CANDIDATE_ROW_LIMIT,
+        None,
+    )
+    hidden_fact.hidden = object()
+    with pytest.raises(TypeError, match="requires its typed fact"):
+        IntegrityCandidateLimitError(hidden_fact)
+
+    source = IntegrityCandidateLimitExceeded.rows()
+    owned = IntegrityCandidateLimitError(source).fact
+    assert owned == source
+    assert owned is not source
+
+    corrupted = IntegrityCandidateLimitExceeded.rows()
+    object.__setattr__(corrupted, "reason", reason)
+    with pytest.raises(TypeError, match="reason has the wrong type"):
+        IntegrityCandidateLimitError(corrupted)
 
 
 @pytest.mark.parametrize(

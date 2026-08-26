@@ -134,6 +134,10 @@ target; partial, borrowed, or invented identity is unrepresentable.
 `PostCopySelection`. Candidates copy verifier-facing values from published
 evidence without embedding the execution type or requiring a ledger row.
 Completion ids and processed bytes are validated continuation state.
+It also owns the closed `IntegrityCandidateLimitExceeded` fact and its error,
+axes, fixed limits, and user messages. This fact describes standalone-integrity
+candidate custody only; workflows project it as failed work after a durable
+refresh, and never substitute the review-publication limit fact.
 `PostCopySelection.physical_bytes_total()` is the shared candidate-budget
 projection used by both the direct verifier and workflow terminal phase; an
 explicit additional admitted-byte value accounts for workflow items that could

@@ -1237,6 +1237,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Unbounded integrity candidate population.
+  Fresh full and selected-path integrity, stale-plus-completed scope, and saved
+  resume could materialize an arbitrary eligible ledger population before any
+  custody refusal, risking process exhaustion and partial downstream work.
+  Cause: general inventory getters and Python post-filtering owned selection,
+  so batching bounded parameters but not total rows or one complete union.
+  Fixed with the separately typed candidate fact, SQL-side mode eligibility,
+  one-snapshot streamed reads capped at the first row beyond 120,000, exact
+  saved order/missing checks, stale identity deduplication, and workflow
+  settlement that starts no verifier work. The independently modeled retained-
+  byte and codec-envelope axes remain checkpoint-4 work.
 - MODERATE - FIXED (2026-08-26). Ambient snapshot placement. File admission
   copied complete database/WAL contents into an environment-selected temporary
   directory, which could place private validation data outside the required

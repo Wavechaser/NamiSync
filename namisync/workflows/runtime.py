@@ -1321,8 +1321,11 @@ class _IntegrityInvocation:
         processed_bytes = self._request.processed_bytes
         bytes_total_high_water = self._request.bytes_total_high_water
         if self._selection is not None:
+            completed = self._selection.completed_bytes
             completed_bytes = tuple(
-                sorted(self._selection.completed_bytes.items())
+                (item.item_id, completed[item.item_id])
+                for item in self._selection.items
+                if item.item_id in completed
             )
             processed_bytes = self._selection.processed_bytes
             bytes_total_high_water = self._selection.bytes_total_high_water

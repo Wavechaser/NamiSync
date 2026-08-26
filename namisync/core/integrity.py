@@ -85,6 +85,98 @@ class IntegrityMode(StrEnum):
     REBASELINE = "rebaseline"
 
 
+INTEGRITY_CANDIDATE_ROW_LIMIT = 120_000
+INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT = 201_326_592
+INTEGRITY_CANDIDATE_ROWS_MESSAGE = (
+    "This integrity scope contains more than 120,000 items. Narrow the selected "
+    "folders, then try again."
+)
+INTEGRITY_CANDIDATE_RETAINED_BYTES_MESSAGE = (
+    "This integrity scope contains more item detail than NamiSync can retain safely. "
+    "Narrow the selected folders, then try again."
+)
+
+
+class IntegrityCandidateLimitAxis(StrEnum):
+    """Closed axis vocabulary for standalone-integrity candidate custody."""
+
+    ROWS = "rows"
+    RETAINED_BYTES = "retained-bytes"
+
+
+@dataclass(frozen=True, slots=True)
+class IntegrityCandidateLimitExceeded:
+    """Exact internal fact for a complete candidate population that cannot fit."""
+
+    reason: str
+    axis: IntegrityCandidateLimitAxis
+    row_limit: int | None
+    byte_limit: int | None
+
+    def __post_init__(self) -> None:
+        if type(self.reason) is not str:
+            raise TypeError("integrity candidate fact reason has the wrong type")
+        if self.reason != "integrity_candidate_limit_exceeded":
+            raise ValueError("integrity candidate fact reason is invalid")
+        if type(self.axis) is not IntegrityCandidateLimitAxis:
+            raise TypeError("integrity candidate axis has the wrong type")
+        if self.row_limit is not None:
+            require_safe_int(self.row_limit, "integrity candidate row_limit")
+        if self.byte_limit is not None:
+            require_signed_64(self.byte_limit, "integrity candidate byte_limit")
+        if self.axis is IntegrityCandidateLimitAxis.ROWS:
+            if (
+                self.row_limit != INTEGRITY_CANDIDATE_ROW_LIMIT
+                or self.byte_limit is not None
+            ):
+                raise ValueError("row integrity candidate fact has invalid limits")
+            return
+        if (
+            self.row_limit is not None
+            or self.byte_limit != INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT
+        ):
+            raise ValueError("byte integrity candidate fact has invalid limits")
+
+    @classmethod
+    def rows(cls) -> "IntegrityCandidateLimitExceeded":
+        return cls(
+            "integrity_candidate_limit_exceeded",
+            IntegrityCandidateLimitAxis.ROWS,
+            INTEGRITY_CANDIDATE_ROW_LIMIT,
+            None,
+        )
+
+    @classmethod
+    def retained_bytes(cls) -> "IntegrityCandidateLimitExceeded":
+        return cls(
+            "integrity_candidate_limit_exceeded",
+            IntegrityCandidateLimitAxis.RETAINED_BYTES,
+            None,
+            INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT,
+        )
+
+
+class IntegrityCandidateLimitError(ValueError):
+    """Raised when complete standalone-integrity candidate custody cannot fit."""
+
+    def __init__(self, fact: IntegrityCandidateLimitExceeded) -> None:
+        if type(fact) is not IntegrityCandidateLimitExceeded:
+            raise TypeError("integrity candidate limit error requires its typed fact")
+        canonical = IntegrityCandidateLimitExceeded(
+            fact.reason,
+            fact.axis,
+            fact.row_limit,
+            fact.byte_limit,
+        )
+        message = (
+            INTEGRITY_CANDIDATE_ROWS_MESSAGE
+            if canonical.axis is IntegrityCandidateLimitAxis.ROWS
+            else INTEGRITY_CANDIDATE_RETAINED_BYTES_MESSAGE
+        )
+        super().__init__(message)
+        self.fact = canonical
+
+
 class IntegrityReason(StrEnum):
     PATH_INVALID = "path-invalid"
     INVENTORY_MISSING = "inventory-missing"

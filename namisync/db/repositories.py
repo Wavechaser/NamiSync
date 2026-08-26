@@ -11,6 +11,10 @@ from typing import Callable, Iterable
 
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance
 from namisync.core.integrity import (
+    INTEGRITY_CANDIDATE_ROW_LIMIT,
+    IntegrityCandidateLimitError,
+    IntegrityCandidateLimitExceeded,
+    IntegrityMode,
     InventoryVerificationState,
     VerificationInvalidation,
     VerificationInvalidationReason,
@@ -209,6 +213,70 @@ def _inventory_snapshot(row: sqlite3.Row) -> InventorySnapshot:
     )
 
 
+def _integrity_row_limit_error() -> IntegrityCandidateLimitError:
+    return IntegrityCandidateLimitError(IntegrityCandidateLimitExceeded.rows())
+
+
+def _bounded_integrity_path_keys(paths: Iterable[str]) -> tuple[str, ...]:
+    keys: set[str] = set()
+    for path in paths:
+        key = normalize_relative_path(path)
+        if key in keys:
+            continue
+        if len(keys) == INTEGRITY_CANDIDATE_ROW_LIMIT + 1:
+            raise _integrity_row_limit_error()
+        keys.add(key)
+    return tuple(sorted(keys))
+
+
+def _bounded_integrity_row_ids(row_ids: Iterable[str]) -> tuple[str, ...]:
+    requested: list[str] = []
+    seen: set[str] = set()
+    for row_id in row_ids:
+        if len(requested) == INTEGRITY_CANDIDATE_ROW_LIMIT:
+            raise _integrity_row_limit_error()
+        if not isinstance(row_id, str) or not row_id:
+            raise ValueError("integrity inventory row id is invalid")
+        if row_id in seen:
+            raise ValueError("integrity inventory row ids must be unique")
+        seen.add(row_id)
+        requested.append(row_id)
+    return tuple(requested)
+
+
+def _integrity_eligibility_sql(mode: IntegrityMode) -> str:
+    if mode is IntegrityMode.BASELINE:
+        return "content_algorithm IS NULL"
+    if mode is IntegrityMode.REBASELINE:
+        return "content_algorithm IS NOT NULL"
+    return "1"
+
+
+def _append_integrity_candidates(
+    candidates: list[InventorySnapshot],
+    rows: Iterable[sqlite3.Row],
+) -> None:
+    for row in rows:
+        if len(candidates) == INTEGRITY_CANDIDATE_ROW_LIMIT:
+            raise _integrity_row_limit_error()
+        candidates.append(_inventory_snapshot(row))
+
+
+def _append_integrity_candidate_by_id(
+    candidates: dict[str, tuple[tuple[str, int], InventorySnapshot]],
+    row: sqlite3.Row,
+) -> None:
+    row_id = str(row["id"])
+    if row_id in candidates:
+        return
+    if len(candidates) == INTEGRITY_CANDIDATE_ROW_LIMIT:
+        raise _integrity_row_limit_error()
+    candidates[row_id] = (
+        (str(row["rel_path_key"]), int(row["id"])),
+        _inventory_snapshot(row),
+    )
+
+
 class LedgerRepository:
     """Read-only ledger queries with bounded path selection batches."""
 
@@ -306,6 +374,187 @@ class LedgerRepository:
             _inventory_snapshot(rows_by_id[row_id])
             for row_id in requested
             if row_id in rows_by_id
+        )
+
+    def get_integrity_candidates(
+        self,
+        location_id: int,
+        mode: IntegrityMode,
+        *,
+        path_keys: Iterable[str] = (),
+        stale_before: datetime | None = None,
+        saved_row_ids: Iterable[str] = (),
+        completed_row_ids: Iterable[str] = (),
+    ) -> tuple[InventorySnapshot, ...]:
+        """Read one complete, bounded integrity population from one snapshot."""
+
+        if not isinstance(mode, IntegrityMode):
+            raise TypeError("integrity candidate mode has the wrong type")
+        paths = _bounded_integrity_path_keys(path_keys)
+        saved = _bounded_integrity_row_ids(saved_row_ids)
+        completed = _bounded_integrity_row_ids(completed_row_ids)
+        if saved and (paths or stale_before is not None or completed):
+            raise ValueError("saved integrity selection cannot combine query scopes")
+        if paths and stale_before is not None:
+            raise ValueError("integrity path and stale scopes are mutually exclusive")
+        if completed and stale_before is None:
+            raise ValueError("completed integrity rows require a stale scope")
+
+        self._connection.execute("BEGIN")
+        try:
+            if saved:
+                return self._saved_integrity_candidates(location_id, saved)
+            if stale_before is not None:
+                return self._stale_integrity_candidates(
+                    location_id,
+                    mode,
+                    stale_before,
+                    completed,
+                )
+            return self._fresh_integrity_candidates(location_id, mode, paths)
+        finally:
+            self._connection.rollback()
+
+    def _fresh_integrity_candidates(
+        self,
+        location_id: int,
+        mode: IntegrityMode,
+        path_keys: tuple[str, ...],
+    ) -> tuple[InventorySnapshot, ...]:
+        predicate = _integrity_eligibility_sql(mode)
+        candidates: list[InventorySnapshot] = []
+        if not path_keys:
+            cursor = self._connection.execute(
+                f"""SELECT * FROM inventory
+                      WHERE location_id = ?
+                        AND entry_kind <> 'directory'
+                        AND {predicate}
+                      ORDER BY rel_path_key, id
+                      LIMIT ?""",
+                (location_id, INTEGRITY_CANDIDATE_ROW_LIMIT + 1),
+            )
+            _append_integrity_candidates(candidates, cursor)
+            return tuple(candidates)
+
+        for start in range(0, len(path_keys), 400):
+            chunk = path_keys[start : start + 400]
+            placeholders = ",".join("?" for _ in chunk)
+            cursor = self._connection.execute(
+                f"""SELECT * FROM inventory
+                      WHERE location_id = ?
+                        AND rel_path_key IN ({placeholders})
+                        AND entry_kind <> 'directory'
+                        AND {predicate}
+                      ORDER BY rel_path_key, id
+                      LIMIT ?""",
+                (
+                    location_id,
+                    *chunk,
+                    INTEGRITY_CANDIDATE_ROW_LIMIT + 1,
+                ),
+            )
+            _append_integrity_candidates(candidates, cursor)
+        return tuple(candidates)
+
+    def _saved_integrity_candidates(
+        self,
+        location_id: int,
+        row_ids: tuple[str, ...],
+    ) -> tuple[InventorySnapshot, ...]:
+        rows_by_id: dict[str, InventorySnapshot] = {}
+        for start in range(0, len(row_ids), 400):
+            chunk = row_ids[start : start + 400]
+            placeholders = ",".join("?" for _ in chunk)
+            cursor = self._connection.execute(
+                f"""SELECT * FROM inventory
+                      WHERE location_id = ? AND id IN ({placeholders})
+                      LIMIT ?""",
+                (
+                    location_id,
+                    *chunk,
+                    INTEGRITY_CANDIDATE_ROW_LIMIT + 1,
+                ),
+            )
+            for row in cursor:
+                rows_by_id[str(row["id"])] = _inventory_snapshot(row)
+        if any(row_id not in rows_by_id for row_id in row_ids):
+            raise RuntimeError(
+                "saved integrity selection references missing inventory rows"
+            )
+        return tuple(rows_by_id[row_id] for row_id in row_ids)
+
+    def _stale_integrity_candidates(
+        self,
+        location_id: int,
+        mode: IntegrityMode,
+        stale_before: datetime,
+        completed_row_ids: tuple[str, ...],
+    ) -> tuple[InventorySnapshot, ...]:
+        candidates: dict[
+            str,
+            tuple[tuple[str, int], InventorySnapshot],
+        ] = {}
+        found_completed: set[str] = set()
+        for start in range(0, len(completed_row_ids), 400):
+            chunk = completed_row_ids[start : start + 400]
+            placeholders = ",".join("?" for _ in chunk)
+            cursor = self._connection.execute(
+                f"""SELECT * FROM inventory
+                      WHERE location_id = ? AND id IN ({placeholders})
+                      LIMIT ?""",
+                (
+                    location_id,
+                    *chunk,
+                    INTEGRITY_CANDIDATE_ROW_LIMIT + 1,
+                ),
+            )
+            for row in cursor:
+                row_id = str(row["id"])
+                found_completed.add(row_id)
+                _append_integrity_candidate_by_id(candidates, row)
+        if any(row_id not in found_completed for row_id in completed_row_ids):
+            raise RuntimeError(
+                "saved integrity progress references missing inventory rows"
+            )
+
+        predicate = _integrity_eligibility_sql(mode)
+        cursor = self._connection.execute(
+            f"""SELECT * FROM inventory
+                  WHERE location_id = ?
+                    AND presence = 'present'
+                    AND entry_kind = 'file'
+                    AND {predicate}
+                    AND (
+                        content_algorithm IS NULL
+                        OR last_verified_at IS NULL
+                        OR last_verified_at < ?
+                        OR verification_invalidated_at IS NOT NULL
+                        OR attested_kind IS NOT entry_kind
+                        OR attested_size IS NOT observed_size
+                        OR attested_mtime_ns IS NOT observed_mtime_ns
+                        OR (
+                            attested_file_identity_volume_serial IS NOT NULL
+                            AND (
+                                attested_file_identity_volume_serial
+                                    IS NOT file_identity_volume_serial
+                                OR attested_file_identity_file_index
+                                    IS NOT file_identity_file_index
+                            )
+                        )
+                    )
+                  ORDER BY rel_path_key, id
+                  LIMIT ?""",
+            (
+                location_id,
+                encode_utc(stale_before),
+                INTEGRITY_CANDIDATE_ROW_LIMIT + 1,
+            ),
+        )
+        for row in cursor:
+            _append_integrity_candidate_by_id(candidates, row)
+        return tuple(
+            snapshot
+            for _, snapshot in sorted(candidates.values(), key=lambda item: item[0])
         )
 
     def get_location(self, location_id: int) -> LocationSnapshot:

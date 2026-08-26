@@ -17,6 +17,10 @@ from namisync.core.events import Progress
 from namisync.core.evidence import RecordingStatus
 from namisync.core.execution import TaskRecordingIssue, TaskRecordingIssueReason
 from namisync.core.integrity import (
+    INTEGRITY_CANDIDATE_ROW_LIMIT,
+    INTEGRITY_CANDIDATE_ROWS_MESSAGE,
+    IntegrityCandidateLimitError,
+    IntegrityCandidateLimitExceeded,
     IntegrityMode,
     IntegrityOutcome,
     IntegrityResult,
@@ -256,6 +260,121 @@ class _IntegrityRepositorySpy:
     def get_stale_inventory(self, location_id, stale_before):
         self.stale_calls.append((location_id, stale_before))
         return self.stale
+
+    def get_integrity_candidates(
+        self,
+        location_id,
+        mode,
+        *,
+        path_keys=(),
+        stale_before=None,
+        saved_row_ids=(),
+        completed_row_ids=(),
+    ):
+        if saved_row_ids:
+            requested = tuple(saved_row_ids)
+            self.row_id_calls.append((location_id, requested))
+            rows = tuple(
+                self.rows[row_id] for row_id in requested if row_id in self.rows
+            )
+            if len(rows) != len(requested):
+                raise RuntimeError(
+                    "saved integrity selection references missing inventory rows"
+                )
+            return rows
+        if stale_before is not None:
+            self.stale_calls.append((location_id, stale_before))
+            rows = {row.row_id: row for row in self.stale}
+            if completed_row_ids:
+                requested = tuple(completed_row_ids)
+                self.row_id_calls.append((location_id, requested))
+                completed = tuple(
+                    self.rows[row_id]
+                    for row_id in requested
+                    if row_id in self.rows
+                )
+                if len(completed) != len(requested):
+                    raise RuntimeError(
+                        "saved integrity progress references missing inventory rows"
+                    )
+                rows.update((row.row_id, row) for row in completed)
+            candidates = tuple(
+                sorted(
+                    rows.values(),
+                    key=lambda row: (row.rel_path_key, int(row.row_id)),
+                )
+            )
+        else:
+            candidates = tuple(
+                row
+                for row in self.rows.values()
+                if not path_keys or row.rel_path_key in path_keys
+            )
+            candidates = tuple(
+                row
+                for row in candidates
+                if row.entry_kind is None or row.entry_kind.value != "directory"
+            )
+        if mode is IntegrityMode.BASELINE:
+            return tuple(row for row in candidates if row.attestation is None)
+        if mode is IntegrityMode.REBASELINE:
+            return tuple(row for row in candidates if row.attestation is not None)
+        return candidates
+
+
+def test_integrity_continuation_refuses_excess_before_duplicate_copies() -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    excess = ("7:11",) * (INTEGRITY_CANDIDATE_ROW_LIMIT + 1)
+
+    with pytest.raises(IntegrityCandidateLimitError) as raised:
+        IntegrityWorkflowRequest(
+            "excess-saved",
+            binding,
+            IntegrityMode.VERIFY,
+            selection_item_ids=excess,
+        )
+
+    assert str(raised.value) == INTEGRITY_CANDIDATE_ROWS_MESSAGE
+
+
+def test_integrity_continuation_requires_completed_selection_order() -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+
+    with pytest.raises(ValueError, match="saved selection order"):
+        IntegrityWorkflowRequest(
+            "misordered-completion",
+            binding,
+            IntegrityMode.VERIFY,
+            selection_item_ids=("7:11", "7:12", "7:13"),
+            completed_bytes=(("7:12", 1), ("7:11", 1)),
+            processed_bytes=2,
+            bytes_total_high_water=3,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (
+        ("selected_paths", ["a.txt"]),
+        ("selection_item_ids", ["7:11"]),
+        ("completed_bytes", [["7:11", 1]]),
+    ),
+)
+def test_integrity_continuation_rejects_aliasable_sequence_shapes(
+    field: str,
+    value: object,
+) -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    fields: dict[str, object] = {
+        "request_id": "aliasable-sequence",
+        "binding": binding,
+        "mode": IntegrityMode.VERIFY,
+        "selection_item_ids": ("7:11",),
+    }
+    fields[field] = value
+
+    with pytest.raises(TypeError):
+        IntegrityWorkflowRequest(**fields)  # type: ignore[arg-type]
 
 
 def test_resolve_binding_stats_extended_path_but_reports_logical_root(
@@ -1418,6 +1537,170 @@ def test_integrity_recorder_close_failure_preserves_primary_authority(
         assert result.error.message == "close failed"
 
 
+def test_post_refresh_integrity_candidate_excess_fails_without_verifier_work(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db",
+        _Scanner(records=(_file(),)),
+        _Resolver(mount),
+        details,
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    run_inventory(prepared, _context(), inventory_deps)
+
+    def excess(*_args, **_kwargs):
+        raise IntegrityCandidateLimitError(IntegrityCandidateLimitExceeded.rows())
+
+    monkeypatch.setattr(
+        inventory_workflow.LedgerRepository,
+        "get_integrity_candidates",
+        excess,
+    )
+    selections: list[object] = []
+    runner_calls: list[object] = []
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "candidate-excess",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=inventory_deps.ledger_path,
+            scanner=inventory_deps.scanner,
+            resolver=inventory_deps.resolver,
+            clock=inventory_deps.clock,
+            host_key=inventory_deps.host_key,
+            host_name=inventory_deps.host_name,
+            save_details=inventory_deps.save_details,
+            verifier_context=lambda _context: pytest.fail(
+                "verifier context constructed after candidate excess"
+            ),
+            runners={
+                IntegrityMode.VERIFY: lambda *_args: runner_calls.append(object())
+            },
+        ),
+        selection_sink=selections.append,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.error is not None
+    assert result.error.type_name == "IntegrityCandidateLimitExceeded"
+    assert result.error.message == INTEGRITY_CANDIDATE_ROWS_MESSAGE
+    assert result.items == ()
+    assert selections == []
+    assert runner_calls == []
+    assert details[-1].observed_count == 1
+
+
+def test_recorder_finalization_failure_precedes_candidate_excess(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db",
+        _Scanner(records=(_file(),)),
+        _Resolver(mount),
+        details,
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    run_inventory(prepared, _context(), inventory_deps)
+    original_close = inventory_workflow.LedgerRecorder.close
+
+    def excess(*_args, **_kwargs):
+        raise IntegrityCandidateLimitError(IntegrityCandidateLimitExceeded.rows())
+
+    def failing_close(recorder) -> None:
+        original_close(recorder)
+        raise RuntimeError("candidate recorder close failed")
+
+    monkeypatch.setattr(
+        inventory_workflow.LedgerRepository,
+        "get_integrity_candidates",
+        excess,
+    )
+    monkeypatch.setattr(inventory_workflow.LedgerRecorder, "close", failing_close)
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "candidate-close-failure",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=inventory_deps.ledger_path,
+            scanner=inventory_deps.scanner,
+            resolver=inventory_deps.resolver,
+            clock=inventory_deps.clock,
+            host_key=inventory_deps.host_key,
+            host_name=inventory_deps.host_name,
+            save_details=inventory_deps.save_details,
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.recording is RecordingStatus.DEGRADED
+    assert result.error is not None
+    assert result.error.type_name == "RuntimeError"
+    assert result.error.message == "candidate recorder close failed"
+    assert result.recording_issues == (
+        TaskRecordingIssue(
+            TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+            "RuntimeError: candidate recorder close failed",
+        ),
+    )
+
+
+def test_recording_failure_uses_one_exception_render_for_both_projections() -> None:
+    class AlternatingError(RuntimeError):
+        def __init__(self) -> None:
+            super().__init__()
+            self.calls = 0
+
+        def __str__(self) -> str:
+            self.calls += 1
+            if self.calls > 1:
+                raise AssertionError("recording failure rendered more than once")
+            return "one observation"
+
+    error = AlternatingError()
+    observed = inventory_workflow._task_recording_issue(
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+        error,
+    )
+
+    assert error.calls == 1
+    assert observed.issue == TaskRecordingIssue(
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+        "AlternatingError: one observation",
+    )
+    assert observed.failure.type_name == "AlternatingError"
+    assert observed.failure.message == "one observation"
+
+
 @pytest.mark.parametrize(
     "error, expected_status, expected_canceled",
     [
@@ -1658,6 +1941,17 @@ def test_saved_integrity_selection_uses_only_frozen_row_ids(
             (by_path["b.txt"].row_id, by_path["a.txt"].row_id),
         )
     ]
+    selection = inventory_workflow._integrity_selection(
+        IntegrityWorkflowRequest(
+            "shared-root",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+            selection_item_ids=frozen,
+        ),
+        selected,
+        str(root),
+    )
+    assert selection.items[0].root is selection.items[1].root
 
     with pytest.raises(RuntimeError, match="missing inventory rows"):
         inventory_workflow._integrity_rows(

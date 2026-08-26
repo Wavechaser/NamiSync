@@ -200,6 +200,20 @@ Planning correspondence, location binding, integrity selection, pair checks,
 recorders, initializers, and standalone repositories retain their existing full
 admission paths.
 
+Standalone-integrity candidate reads are a distinct bounded repository path.
+Fresh full and exact-path reads apply directory and mode eligibility in SQL;
+stale scope unions exact completed rows by row identity; and saved resume reads
+only its exact row ids and restores their original order. Every branch uses one
+explicit read snapshot, streams raw rows into typed projections, and refuses at
+the first eligible row beyond the core-owned candidate count. Chunking cannot
+publish a torn or partial population, and SQLite's numeric affinity cannot make
+a noncanonical saved spelling satisfy exact missing-row validation. The direct
+exact-path reader may retain one normalized lookahead key so SQL mode
+eligibility, rather than raw request cardinality, decides that boundary; the
+workflow request itself admits at most 120,000 raw selected paths. The frozen
+model must charge that one repository-only transient. The retained-graph byte
+axis remains part of the checkpoint-4 model rather than a database estimate.
+
 The retained fixture is `test_repeated_runtime_reads_admit_once_per_owned_handle`
 in `tests/test_runtime_readers.py`. Its admission-count matrix
 uses the shipped role DDL with two SQLite page sizes (1,024 and 8,192 bytes), an
