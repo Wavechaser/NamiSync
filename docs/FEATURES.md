@@ -15,8 +15,9 @@ status belongs to the roadmap in `ARCHITECTURE.md`, and detailed delivery status
 belongs to the active M1 documents.
 
 Reference documentation imported from the proof-of-concept lives in
-`PoC_import/`; its `BUGS.md` is the evidence base behind many of this
-document's rules.
+[obsolete/PoC_import/](obsolete/PoC_import/); its `BUGS.md` preserves the
+historical evidence behind many of this document's rules. These imported notes
+are not current behavior or implementation guidance.
 
 ## PROJECT ARCHITECTURE
 

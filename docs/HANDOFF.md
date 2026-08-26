@@ -2,9 +2,9 @@
 
 Status (2026-08-27): both hanging fixes are delivered: 3R.15b live v5 naming
 (`1c2ca16`) and 3R.14a strict Unicode-scalar boundaries (`bba64ec`). The M0
-criteria archive separates historical checklists from active contracts.
-Next, relocate `PoC_import` into `obsolete` as its own reviewed documentation
-checkpoint.
+criteria archive (`6735f8c`) separates historical checklists from active
+contracts, and all five PoC documents now live in `obsolete/PoC_import/`.
+The requested documentation cleanup is complete.
 Integrity policy is held for user consideration; do not change it. Checkpoint
 3.3 remains unstarted and the private legacy decoder remains intact.
 
@@ -36,8 +36,8 @@ O/S reports and prior verification receipts remain in Git at
 
 For runtime work, deliver one tests-first, independently reviewed and committed
 checkpoint at a time, following `M1_SHELL_H2.md`. Keep protected settlement
-oracle/baseline/assertions and frozen transport measurement authority unchanged. Use the
-required bundled Node for applicable ordinary gates. Do not reuse retained
+oracle/baseline/assertions and frozen transport measurement authority unchanged.
+Use the required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
 The retrospective `obsolete/M0_PLAN.md` uses the final pre-M1 snapshot
@@ -51,8 +51,15 @@ and `RECORDER.md`. Current M1 gates and latent ingest criteria remain in place.
 Independent review corrected archive-authority wording; all 22 new local links
 resolve, including their section anchors. Active pre-tail prose is unchanged
 apart from the five explicit retention insertions in those three documents.
-This checkpoint changes documentation only; the runtime verification below
-therefore still applies to the unchanged code.
+
+The separate PoC relocation preserved all five files byte-for-byte, verified
+by before/after SHA-256 checks. Source/destination inventory and reference
+review found no hidden contents, linked directories, or runtime/package/test
+dependency on the old path. README and feature references now explicitly point
+to the historical archive; the old design-review reference resolves from its
+existing obsolete directory. No source text inside the imported files changed.
+Both documentation checkpoints leave runtime code and tests unchanged, so the
+runtime verification below still applies.
 
 3R.14a tests-first Unicode/warning regressions failed 64 cases against the old
 runtime, with five controls passing. Strict encoding/decoding and warning

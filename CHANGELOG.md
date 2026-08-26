@@ -125,6 +125,8 @@ ownership explicit without changing public or persisted contracts.
   in their owning documents. Newer prose prevails over stale criteria.
 - Kept current M1 gates and explicitly deferred ingest criteria separate;
   updated references to the archived M0 source without changing runtime policy.
+- Relocated all five imported PoC documents to `docs/obsolete/PoC_import/`
+  byte-for-byte, updating references to identify them as historical evidence.
 
 #### Establish layered test operations (2026-08-16)
 

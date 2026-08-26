@@ -217,8 +217,9 @@ never hides the other result axes in rendered output.
 - [M1 Stage 6 second-half checklist](docs/M1_SHELL_H2.md) — newest checkpoints 0–12 reslice, detailed acceptance, review, and verification.
 
 Historical criteria are collected in the [retrospective M0 plan](docs/obsolete/M0_PLAN.md).
-It is an archive, not current acceptance authority; active component contracts
-and the M1 plans govern current work.
+The [imported PoC documents](docs/obsolete/PoC_import/) are archived alongside it.
+These are historical sources, not current acceptance authority; active component
+contracts and the M1 plans govern current work.
 
 ## Changelog
 
