@@ -31,7 +31,6 @@ from namisync.core.models import (
     ScanScope,
     ScanScopeKind,
     ScanWarning,
-    ScanWarningCode,
     UnsupportedReason,
     UnsupportedRecord,
     VolumeId,
@@ -42,6 +41,9 @@ from namisync.core.models import (
     root_projection,
     volume_evidence_projection,
     volume_id_projection,
+    validate_scan_result,
+    validate_scan_scope,
+    validate_scan_warning,
 )
 from namisync.core.pathing import normalize_relative_path, validate_relative_path
 from namisync.core.planning import (
@@ -183,19 +185,12 @@ def _unsupported_record_projection(value: UnsupportedRecord) -> dict[str, object
 
 
 def _scan_warning_projection(value: ScanWarning) -> dict[str, object]:
-    if type(value) is not ScanWarning or type(value.code) is not ScanWarningCode:
-        raise TypeError("warning projection requires ScanWarning with ScanWarningCode")
+    validate_scan_warning(value)
     return {"code": value.code.value, "rel_path": value.rel_path, "detail": value.detail}
 
 
 def _scan_scope_projection(value: ScanScope) -> dict[str, object]:
-    if (
-        type(value) is not ScanScope
-        or type(value.kind) is not ScanScopeKind
-        or type(value.selected_paths) is not tuple
-        or type(value.subtree_roots) is not tuple
-    ):
-        raise TypeError("scope projection requires ScanScope with typed kind and paths")
+    validate_scan_scope(value)
     return {
         "kind": value.kind.value,
         "selected_paths": list(value.selected_paths),
@@ -204,12 +199,7 @@ def _scan_scope_projection(value: ScanScope) -> dict[str, object]:
 
 
 def _scan_projection(value: ScanResult) -> dict[str, object]:
-    if type(value) is not ScanResult:
-        raise TypeError("scan projection requires ScanResult")
-    if any(type(items) is not tuple for items in (
-        value.files, value.directories, value.unsupported, value.warnings,
-    )):
-        raise TypeError("scan projection requires tuple observations")
+    validate_scan_result(value)
     return {
         "root": root_projection(value.root),
         "volume_id": volume_id_projection(value.volume_id),
@@ -424,6 +414,13 @@ class LedgerRecorder:
         return self._writer.transact(apply)
 
     def observe_volume(self, command: VolumeCommand) -> int:
+        if type(command) is not VolumeCommand:
+            raise TypeError("volume observation requires VolumeCommand")
+        command = VolumeCommand(
+            command.volume_id,
+            command.evidence,
+            command.observed_at,
+        )
         if command.evidence.clone_ambiguous:
             raise AmbiguousVolumeError("duplicate mounted volume identity requires explicit choice")
         at = encode_utc(command.observed_at)
@@ -474,6 +471,13 @@ class LedgerRecorder:
         return self._writer.transact(apply)
 
     def ensure_location(self, command: LocationCommand) -> int:
+        if type(command) is not LocationCommand:
+            raise TypeError("location observation requires LocationCommand")
+        command = LocationCommand(
+            command.volume_row_id,
+            command.volume_relative_path,
+            command.observed_at,
+        )
         canonical = validate_relative_path(command.volume_relative_path, allow_root=True)
         key = normalize_relative_path(canonical, allow_root=True)
         at = encode_utc(command.observed_at)
@@ -652,6 +656,16 @@ class LedgerRecorder:
         return self._writer.transact(apply)
 
     def record_inventory(self, command: InventoryCommand) -> InventoryReconcileResult:
+        if type(command) is not InventoryCommand:
+            raise TypeError("inventory recording requires InventoryCommand")
+        command = InventoryCommand(
+            command.location_id,
+            command.host_id,
+            command.scan,
+            command.scope_token,
+            command.observed_at,
+            command.online,
+        )
         if not command.online:
             return InventoryReconcileResult(RecordDisposition.NOOP, 0, 0)
         payload_hash = _payload_hash(_inventory_projection(command))

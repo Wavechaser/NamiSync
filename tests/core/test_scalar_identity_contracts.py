@@ -38,6 +38,7 @@ from namisync.core.scalars import (
     require_safe_int,
     require_signed_64,
     require_utf16_path,
+    require_utf8_text,
     scalar_64_from_text,
     scalar_64_to_text,
 )
@@ -50,6 +51,40 @@ def test_utf16_path_accepts_exact_unit_boundary_and_rejects_next_unit() -> None:
     assert require_utf16_path(exact, "path") is exact
     with pytest.raises(ValueError, match="UTF-16 path bound"):
         require_utf16_path(over, "path")
+
+
+def test_utf8_text_accepts_exact_byte_boundary_and_rejects_next_byte() -> None:
+    exact = "\u00e9" * 512
+    over = exact + "x"
+
+    assert require_utf8_text(
+        exact,
+        "text",
+        minimum_bytes=1,
+        maximum_bytes=1_024,
+    ) is exact
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        require_utf8_text(
+            over,
+            "text",
+            minimum_bytes=1,
+            maximum_bytes=1_024,
+        )
+
+
+class _TextSubclass(str):
+    pass
+
+
+def test_text_bounds_reject_string_subclasses() -> None:
+    with pytest.raises(TypeError):
+        require_utf8_text(
+            _TextSubclass("value"),
+            "text",
+            maximum_bytes=1_024,
+        )
+    with pytest.raises(TypeError):
+        require_utf16_path(_TextSubclass("path"), "path")
 
 
 @pytest.mark.parametrize("value", (0, MAX_SAFE_INTEGER))

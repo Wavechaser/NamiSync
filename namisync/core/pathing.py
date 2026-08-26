@@ -6,6 +6,8 @@ import os
 import re
 from pathlib import Path, PureWindowsPath
 
+from .scalars import require_utf16_path
+
 
 class PathValidationError(ValueError):
     """Raised when a path cannot safely identify an entry below a root."""
@@ -46,10 +48,12 @@ def _uppercase_one_codepoint(value: str) -> str:
 def validate_relative_path(value: str, *, allow_root: bool = False) -> str:
     """Validate and return a canonical-separator Windows relative path."""
 
-    if not isinstance(value, str):
-        raise TypeError("relative path must be a string")
-    if "\x00" in value:
-        raise PathValidationError("relative path contains NUL")
+    try:
+        require_utf16_path(value, "relative path")
+    except TypeError:
+        raise
+    except ValueError as error:
+        raise PathValidationError(str(error)) from error
     if any("\ud800" <= character <= "\udfff" for character in value):
         raise PathValidationError("relative path contains an unpaired surrogate")
     if value == "":
@@ -220,10 +224,12 @@ def from_extended_length_path(path: str) -> str:
     """
 
     raw = os.fspath(path)
-    if not isinstance(raw, str):
-        raise TypeError("path must be a string")
-    if "\x00" in raw:
-        raise PathValidationError("path contains NUL")
+    try:
+        require_utf16_path(raw, "path")
+    except TypeError:
+        raise
+    except ValueError as error:
+        raise PathValidationError(str(error)) from error
     upper = raw.upper()
     if upper.startswith(("\\\\.\\", "\\??\\", "\\\\??\\")):
         raise PathValidationError("path uses a device namespace")
@@ -242,7 +248,10 @@ def from_extended_length_path(path: str) -> str:
         ):
             raise PathValidationError("extended UNC path is incomplete")
         _validate_absolute_path_spelling(logical)
-        return logical
+        try:
+            return require_utf16_path(logical, "path")
+        except ValueError as error:
+            raise PathValidationError(str(error)) from error
     if upper.startswith("\\\\?\\"):
         logical = raw[4:]
         if not (
@@ -252,7 +261,10 @@ def from_extended_length_path(path: str) -> str:
         ):
             raise PathValidationError("unsupported extended device namespace")
         _validate_absolute_path_spelling(logical)
-        return logical
+        try:
+            return require_utf16_path(logical, "path")
+        except ValueError as error:
+            raise PathValidationError(str(error)) from error
     return raw
 
 

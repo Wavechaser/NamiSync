@@ -85,6 +85,24 @@ schemas; other active documents point here instead of reproducing these limits.
   JavaScript-safe integers. Native file indices are an opaque exception: their
   full Windows 128-bit value is canonical unsigned-decimal `TEXT`, never an
   arithmetic scalar or JSON number.
+- Source primitives are admitted before they enter scans, plans, task roots,
+  persistence projections, or codec projections. Complete paths use the
+  Windows 32,767-UTF-16-unit ceiling; native volume label/filesystem buffers
+  retain at most 260 units and native volume paths at most 32,767. Optional
+  scan/resolution diagnostics retain a complete value of at most 1,024 UTF-8
+  bytes or omit the whole value. Filters accept an exact tuple of at most 64
+  nonempty valid-Unicode spellings, each at most 1,024 UTF-8 bytes and together
+  at most 16,384 bytes, charged before slash normalization, deduplication, or
+  sorting. One scan scope charges at most 120,000 supplied selected/subtree
+  entries before canonical maps or sets are allocated. Root ids are nonempty
+  valid Unicode and use a mechanically derived byte ceiling: the request-id
+  maximum plus the UTF-8 lengths of the longest inventory namespace/suffix and
+  the decimal width of `MAX_SAFE_INTEGER`.
+- Destination-policy name/version and optional assignment annotations have no
+  narrower production grammar yet. Constructors and projections enforce only
+  the plan-domain ceiling per value; the checkpoint-4 completed-plan graph wall
+  must still admit their combined retained occurrences before publication.
+  Neither boundary is claimed as an empirical source-primitive maximum.
 - Reachability determines whether the signed-domain guard is a product branch
   or an assertion; the two are not presented as equivalent risks:
 

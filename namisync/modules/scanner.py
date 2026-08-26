@@ -28,6 +28,7 @@ from namisync.core.models import (
     UnsupportedRecord,
     VolumeEvidence,
     VolumeId,
+    validate_scan_scope,
 )
 from namisync.core.pathing import (
     PathValidationError,
@@ -55,7 +56,10 @@ from namisync.core.root_authority import (
     observe_native_volume,
 )
 from namisync.core.session import RunContext
-from namisync.core.scalars import ScalarDomainError
+from namisync.core.scalars import (
+    ScalarDomainError,
+    require_utf16_path,
+)
 
 
 FILE_NAMED_STREAMS = 0x00040000
@@ -67,6 +71,38 @@ class VolumeSnapshot:
     volume_id: VolumeId
     evidence: VolumeEvidence
     profile: CapabilityProfile
+
+    def __post_init__(self) -> None:
+        validate_volume_snapshot(self)
+
+
+def validate_volume_snapshot(value: object) -> VolumeSnapshot:
+    """Re-admit exact native volume facts before policy consumes them."""
+
+    if type(value) is not VolumeSnapshot:
+        raise TypeError("volume backend must return VolumeSnapshot")
+    if type(value.volume_id) is not VolumeId:
+        raise TypeError("volume snapshot identity has the wrong type")
+    if type(value.evidence) is not VolumeEvidence:
+        raise TypeError("volume snapshot evidence has the wrong type")
+    if type(value.profile) is not CapabilityProfile:
+        raise TypeError("volume snapshot profile has the wrong type")
+    VolumeId(value.volume_id.serial, value.volume_id.fs_type)
+    VolumeEvidence(
+        value.evidence.label,
+        value.evidence.device_id,
+        value.evidence.clone_ambiguous,
+    )
+    CapabilityProfile(
+        value.profile.fs_type,
+        value.profile.mtime_granularity_ns,
+        value.profile.stable_file_identity,
+        value.profile.incurs_seek_penalty,
+        value.profile.max_path,
+        value.profile.supports_ads,
+        value.profile.supports_hardlinks,
+    )
+    return value
 
 
 class DirectoryEntry(Protocol):
@@ -264,7 +300,20 @@ class WalkingScanner:
         *,
         trusted_anchor: str | None = None,
     ) -> ScanResult:
-        requested_scope = scope or ScanScope.full()
+        if type(root) is not Root:
+            raise TypeError("scanner root requires Root")
+        root = Root(root.path, root.root_id)
+        if type(ignores) is not IgnoreSet:
+            raise TypeError("scanner ignores require IgnoreSet")
+        requested_scope = (
+            ScanScope.full()
+            if scope is None
+            else validate_scan_scope(scope)
+        )
+        if trusted_anchor is not None:
+            require_utf16_path(trusted_anchor, "trusted scanner anchor")
+            if not trusted_anchor:
+                raise ValueError("trusted scanner anchor is required")
         try:
             if trusted_anchor is None:
                 resolved = self._backend.resolve_root(root.path)
@@ -297,7 +346,9 @@ class WalkingScanner:
                 ScanWarningCode.ROOT_UNAVAILABLE,
             )
         try:
-            volume = self._backend.volume_snapshot(resolved)
+            volume = validate_volume_snapshot(
+                self._backend.volume_snapshot(resolved)
+            )
         except (OSError, PermissionError) as error:
             return self._offline_result(
                 resolved_root,
@@ -1110,7 +1161,9 @@ class WalkingScanner:
                     "location volume anchor changed after binding review"
                 )
         try:
-            current_volume = self._backend.volume_snapshot(path)
+            current_volume = validate_volume_snapshot(
+                self._backend.volume_snapshot(path)
+            )
         except (OSError, PermissionError) as error:
             return error
         if current_volume.volume_id != expected_volume:

@@ -1406,17 +1406,13 @@ def test_execution_set_rejects_recorded_identities_from_multiple_locations() -> 
 
 
 @pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
-def test_execution_payload_rejects_surrogate_code_units(text: str) -> None:
+def test_root_contract_rejects_surrogate_code_units(text: str) -> None:
     original = _rich_execution_request()
-    changed_plan = replace(
-        original.execution_set.plan,
-        source_root=replace(original.execution_set.plan.source_root, root_id="source_" + text),
-    )
-    changed_set = replace(original.execution_set, plan=changed_plan)
-
-    # Do not re-fingerprint first: the encoder itself must refuse this value.
-    with pytest.raises(UnicodeEncodeError):
-        encode_execution_request(ExecutionRequest(changed_set, NOW))
+    with pytest.raises(ValueError, match="valid Unicode"):
+        replace(
+            original.execution_set.plan.source_root,
+            root_id="source_" + text,
+        )
 
 
 @pytest.mark.parametrize("text", ("\ud800", "\udcff"))

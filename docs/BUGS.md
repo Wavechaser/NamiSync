@@ -1413,6 +1413,18 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-08-27). Source primitive admission gaps. Core path,
+  volume, capability, warning, filter, assignment, scan-scope, and inventory
+  binding values could retain subclasses, malformed Unicode, or source-sized
+  populations before a later serializer or aggregate wall noticed them;
+  settings also decoded an unbounded document first. Cause: constructors and
+  projections relied on annotations or downstream validation without finite
+  source contracts. Current hardening adds exact types, source-derived ceilings,
+  preallocation checks, whole-diagnostic omission, hostile workflow/recorder
+  revalidation, and the exact predecode settings wall. Nested operation/stat/
+  identity continuation projection and whole-envelope preflight remain open for
+  the checkpoint-4 occurrence-codec prerequisite; policy annotation text has
+  only the enclosing plan graph boundary.
 - MODERATE - FIXED (2026-08-27). Typed detail canonicality bypass. A directly
   constructed or subclassed `DetailProjection` could retain duplicate keys,
   mutable or oversized values, hidden graphs, or excess leaves while its wire

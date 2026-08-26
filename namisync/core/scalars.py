@@ -8,6 +8,11 @@ import re
 MAX_SAFE_INTEGER = (1 << 53) - 1
 MAX_SIGNED_64 = (1 << 63) - 1
 MAX_FILE_INDEX_128 = (1 << 128) - 1
+MAX_PATH_UTF16_UNITS = 32_767
+MAX_DIAGNOSTIC_UTF8_BYTES = 1_024
+# Complete external command envelopes are capped at this many UTF-8 bytes.
+# A request identifier cannot occupy more bytes than its containing envelope.
+MAX_REQUEST_ID_UTF8_BYTES = 65_536
 
 _CANONICAL_DECIMAL = re.compile(r"0|[1-9][0-9]*\Z")
 
@@ -130,24 +135,81 @@ def bounded_utf8_text(
     return value if len(encoded) <= maximum_bytes else None
 
 
-def require_utf16_path(
+def require_utf8_text(
     value: object,
     field_name: str,
     *,
-    maximum_units: int = 32_767,
+    minimum_bytes: int = 0,
+    maximum_bytes: int,
 ) -> str:
-    """Validate one complete path-like string without truncation."""
+    """Return exact Unicode text whose complete UTF-8 form fits the bound."""
 
     if type(value) is not str:
         raise TypeError(f"{field_name} must be text")
+    if not 0 <= minimum_bytes <= maximum_bytes:
+        raise ValueError("text byte bounds are invalid")
+    # Every Unicode scalar needs at least one UTF-8 byte. Refuse impossible
+    # lengths before creating an encoded copy of hostile input.
+    if len(value) > maximum_bytes:
+        raise ValueError(f"{field_name} exceeds the UTF-8 text bound")
+    encoded_bytes = 0
+    try:
+        for start in range(0, len(value), 4_096):
+            encoded_bytes += len(value[start : start + 4_096].encode("utf-8"))
+            if encoded_bytes > maximum_bytes:
+                raise ValueError(
+                    f"{field_name} exceeds the UTF-8 text bound"
+                )
+    except UnicodeEncodeError as error:
+        raise ValueError(f"{field_name} must be valid Unicode") from error
+    if encoded_bytes < minimum_bytes:
+        raise ValueError(f"{field_name} is shorter than its UTF-8 text bound")
+    return value
+
+
+def require_utf16_text(
+    value: object,
+    field_name: str,
+    *,
+    maximum_units: int,
+    allow_empty: bool = True,
+) -> str:
+    """Return exact Unicode text whose complete UTF-16 form fits the bound."""
+
+    if type(value) is not str:
+        raise TypeError(f"{field_name} must be text")
+    if not allow_empty and not value:
+        raise ValueError(f"{field_name} is required")
     if "\x00" in value:
         raise ValueError(f"{field_name} cannot contain NUL")
     if len(value) > maximum_units:
-        raise ValueError(f"{field_name} exceeds the UTF-16 path bound")
+        raise ValueError(f"{field_name} exceeds the UTF-16 text bound")
     try:
         units = len(value.encode("utf-16-le")) // 2
     except UnicodeEncodeError as error:
         raise ValueError(f"{field_name} must be valid Unicode") from error
     if units > maximum_units:
-        raise ValueError(f"{field_name} exceeds the UTF-16 path bound")
+        raise ValueError(f"{field_name} exceeds the UTF-16 text bound")
     return value
+
+
+def require_utf16_path(
+    value: object,
+    field_name: str,
+    *,
+    maximum_units: int = MAX_PATH_UTF16_UNITS,
+) -> str:
+    """Validate one complete path-like string without truncation."""
+
+    try:
+        return require_utf16_text(
+            value,
+            field_name,
+            maximum_units=maximum_units,
+        )
+    except ValueError as error:
+        if "UTF-16 text bound" in str(error):
+            raise ValueError(
+                f"{field_name} exceeds the UTF-16 path bound"
+            ) from error
+        raise

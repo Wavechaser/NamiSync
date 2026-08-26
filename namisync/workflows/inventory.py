@@ -32,6 +32,7 @@ from namisync.core.integrity import (
     VerifierContext,
 )
 from namisync.core.models import (
+    CapabilityProfile,
     IgnoreSet,
     Root,
     ScanResult,
@@ -39,8 +40,10 @@ from namisync.core.models import (
     ScanScopeKind,
     ScanWarning,
     ScanWarningCode,
+    SCAN_SCOPE_ENTRY_LIMIT,
     VolumeEvidence,
     VolumeId,
+    validate_scan_result,
 )
 from namisync.core.pathing import (
     PathValidationError,
@@ -64,10 +67,15 @@ from namisync.core.root_authority import (
     admit_root_chain,
 )
 from namisync.core.scalars import (
+    MAX_DIAGNOSTIC_UTF8_BYTES,
+    MAX_REQUEST_ID_UTF8_BYTES,
+    bounded_utf8_text,
     checked_add_signed_64,
     require_json_unicode,
     require_safe_int,
     require_signed_64,
+    require_utf16_path,
+    require_utf8_text,
 )
 from namisync.core.session import (
     Canceled,
@@ -87,7 +95,25 @@ from namisync.db.repositories import (
 from namisync.modules.scanner import (
     NativeScannerBackend,
     VolumeSnapshot,
+    validate_volume_snapshot,
 )
+
+
+_MAX_LOGICAL_DRIVE_ROOTS = 26
+_MAX_PERSISTED_MOUNT_HINTS = 1
+# A production binding is formed from the logical-drive enumeration plus at
+# most one persisted folder-mounted-volume hint. A later resolution may replay
+# every admitted binding candidate as a hint and enumerate the drives again.
+# These limits describe this resolver's source graph, not all Windows mounts.
+MAX_MOUNT_CANDIDATES = (
+    _MAX_LOGICAL_DRIVE_ROOTS + _MAX_PERSISTED_MOUNT_HINTS
+)
+MAX_VOLUME_RESOLUTION_CANDIDATES = (
+    MAX_MOUNT_CANDIDATES + _MAX_LOGICAL_DRIVE_ROOTS
+)
+# The zero-buffer GetLogicalDriveStringsW result includes the final MULTI_SZ
+# terminator: 26 drive roots at four characters each, plus one trailing NUL.
+_MAX_LOGICAL_DRIVE_STRING_CHARS = _MAX_LOGICAL_DRIVE_ROOTS * 4 + 1
 
 
 class VolumeResolutionState(StrEnum):
@@ -102,6 +128,39 @@ class VolumeResolutionState(StrEnum):
 class MountedVolume:
     mount_path: str
     evidence: VolumeEvidence
+
+    def __post_init__(self) -> None:
+        _require_mounted_volume_fields(self)
+
+
+def _require_mounted_volume_fields(value: MountedVolume) -> None:
+    require_utf16_path(value.mount_path, "mounted volume path")
+    if not value.mount_path:
+        raise ValueError("mounted volume path is required")
+    if type(value.evidence) is not VolumeEvidence:
+        raise TypeError("mounted volume evidence has the wrong type")
+    VolumeEvidence(
+        value.evidence.label,
+        value.evidence.device_id,
+        value.evidence.clone_ambiguous,
+    )
+
+
+def _require_mounted_volumes(value: object) -> tuple[MountedVolume, ...]:
+    if type(value) is not tuple:
+        raise TypeError("mounted-volume result must be a tuple")
+    if len(value) > MAX_VOLUME_RESOLUTION_CANDIDATES:
+        raise ValueError("mounted-volume result exceeds the candidate limit")
+    keys: set[str] = set()
+    for item in value:
+        if type(item) is not MountedVolume:
+            raise TypeError("mounted-volume result contains an invalid value")
+        _require_mounted_volume_fields(item)
+        key = _path_key(item.mount_path)
+        if key in keys:
+            raise ValueError("mounted-volume result contains duplicate paths")
+        keys.add(key)
+    return value
 
 
 class MountedVolumeResolver(Protocol):
@@ -132,20 +191,48 @@ class LocationBinding:
     location_id: int | None = None
 
     def __post_init__(self) -> None:
-        canonical = validate_relative_path(
-            self.volume_relative_path, allow_root=True
-        )
-        object.__setattr__(self, "volume_relative_path", canonical)
-        if not self.selected_mount or not self.expected_mounts:
-            raise ValueError("location binding requires a selected mounted volume")
-        expected_keys = tuple(_path_key(path) for path in self.expected_mounts)
-        if len(expected_keys) != len(set(expected_keys)):
-            raise ValueError("location binding mount candidates must be unique")
-        if _path_key(self.selected_mount) not in set(expected_keys):
-            raise ValueError("selected mount must be one of the expected candidates")
-        if self.explicit_ambiguity_choice and len(self.expected_mounts) < 2:
-            raise ValueError("explicit ambiguity choice requires multiple candidates")
-        if self.location_id is not None and self.location_id < 1:
+        _require_location_binding_fields(self, canonicalize=True)
+
+
+def _require_location_binding_fields(
+    value: LocationBinding,
+    *,
+    canonicalize: bool = False,
+) -> None:
+    if type(value.volume_id) is not VolumeId:
+        raise TypeError("location binding volume has the wrong type")
+    VolumeId(value.volume_id.serial, value.volume_id.fs_type)
+    canonical = validate_relative_path(
+        value.volume_relative_path, allow_root=True
+    )
+    if canonical != value.volume_relative_path:
+        if canonicalize:
+            object.__setattr__(value, "volume_relative_path", canonical)
+        else:
+            raise ValueError("location binding relative path is not canonical")
+    require_utf16_path(value.selected_mount, "selected volume mount")
+    if type(value.expected_mounts) is not tuple:
+        raise TypeError("location binding mount candidates must be a tuple")
+    if not value.selected_mount or not value.expected_mounts:
+        raise ValueError("location binding requires a selected mounted volume")
+    if len(value.expected_mounts) > MAX_MOUNT_CANDIDATES:
+        raise ValueError("location binding exceeds the mount-candidate limit")
+    for path in value.expected_mounts:
+        require_utf16_path(path, "expected volume mount")
+        if not path:
+            raise ValueError("expected volume mount is required")
+    expected_keys = tuple(_path_key(path) for path in value.expected_mounts)
+    if len(expected_keys) != len(set(expected_keys)):
+        raise ValueError("location binding mount candidates must be unique")
+    if _path_key(value.selected_mount) not in set(expected_keys):
+        raise ValueError("selected mount must be one of the expected candidates")
+    if type(value.explicit_ambiguity_choice) is not bool:
+        raise TypeError("explicit ambiguity choice must be a bool")
+    if value.explicit_ambiguity_choice and len(value.expected_mounts) < 2:
+        raise ValueError("explicit ambiguity choice requires multiple candidates")
+    if value.location_id is not None:
+        require_safe_int(value.location_id, "location binding id")
+        if value.location_id < 1:
             raise ValueError("location binding id must be positive")
 
 
@@ -160,6 +247,47 @@ class VolumeResolution:
     detail: str | None = None
 
     def __post_init__(self) -> None:
+        if type(self.state) is not VolumeResolutionState:
+            raise TypeError("volume resolution state has the wrong type")
+        if type(self.binding) is not LocationBinding:
+            raise TypeError("volume resolution binding has the wrong type")
+        _require_location_binding_fields(self.binding)
+        for field_name, path in (
+            ("resolved root path", self.root_path),
+            ("resolved selected mount", self.selected_mount),
+        ):
+            if path is not None:
+                require_utf16_path(path, field_name)
+                if not path:
+                    raise ValueError(f"{field_name} is required when present")
+        if self.evidence is not None:
+            if type(self.evidence) is not VolumeEvidence:
+                raise TypeError("volume resolution evidence has the wrong type")
+            VolumeEvidence(
+                self.evidence.label,
+                self.evidence.device_id,
+                self.evidence.clone_ambiguous,
+            )
+        if type(self.candidates) is not tuple:
+            raise TypeError("volume resolution candidates must be a tuple")
+        if len(self.candidates) > MAX_VOLUME_RESOLUTION_CANDIDATES:
+            raise ValueError("volume resolution exceeds the mount-candidate limit")
+        for candidate in self.candidates:
+            require_utf16_path(candidate, "volume resolution candidate")
+            if not candidate:
+                raise ValueError("volume resolution candidate is required")
+        candidate_keys = tuple(_path_key(path) for path in self.candidates)
+        if len(candidate_keys) != len(set(candidate_keys)):
+            raise ValueError("volume resolution candidates must be unique")
+        if self.detail is not None:
+            if type(self.detail) is not str:
+                raise TypeError("volume resolution detail must be text or None")
+            if bounded_utf8_text(
+                self.detail,
+                "volume resolution detail",
+                maximum_bytes=MAX_DIAGNOSTIC_UTF8_BYTES,
+            ) is None:
+                object.__setattr__(self, "detail", None)
         if self.state is VolumeResolutionState.RESOLVED:
             if self.root_path is None or self.selected_mount is None:
                 raise ValueError(
@@ -199,6 +327,8 @@ class InventoryRequest:
         _validate_location_request(
             self.request_id, self.root_path, self.location_id
         )
+        if self.selected_mount is not None:
+            require_utf16_path(self.selected_mount, "selected volume mount")
         scope = ScanScope.scoped(
             selected_paths=self.selected_paths,
             subtree_roots=self.subtree_roots,
@@ -221,12 +351,14 @@ class IntegrityRequest:
         _validate_location_request(
             self.request_id, self.root_path, self.location_id
         )
-        if self.selected_paths:
-            object.__setattr__(
-                self,
-                "selected_paths",
-                ScanScope.selected(self.selected_paths).selected_paths,
-            )
+        if type(self.mode) is not IntegrityMode:
+            raise TypeError("integrity mode has the wrong type")
+        if self.selected_mount is not None:
+            require_utf16_path(self.selected_mount, "selected volume mount")
+        if type(self.selected_paths) is not tuple:
+            raise TypeError("integrity selected_paths must be a tuple")
+        scope = ScanScope.scoped(selected_paths=self.selected_paths)
+        object.__setattr__(self, "selected_paths", scope.selected_paths)
         if self.stale_before is not None:
             _require_utc(self.stale_before, "stale_before")
 
@@ -251,8 +383,7 @@ class InventoryWorkflowRequest:
     subtree_roots: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if not self.request_id:
-            raise ValueError("request id is required")
+        _require_workflow_request(self.request_id, self.binding)
         scope = ScanScope.scoped(
             selected_paths=self.selected_paths,
             subtree_roots=self.subtree_roots,
@@ -278,11 +409,10 @@ class IntegrityWorkflowRequest:
     omitted_detail_count: int = 0
 
     def __post_init__(self) -> None:
-        if not self.request_id:
-            raise ValueError("request id is required")
-        if not isinstance(self.mode, IntegrityMode):
+        _require_workflow_request(self.request_id, self.binding)
+        if type(self.mode) is not IntegrityMode:
             raise TypeError("integrity mode has the wrong type")
-        if not isinstance(self.selected_paths, tuple):
+        if type(self.selected_paths) is not tuple:
             raise TypeError("integrity selected_paths must be a tuple")
         if len(self.selected_paths) > INTEGRITY_CANDIDATE_ROW_LIMIT:
             raise IntegrityCandidateLimitError(
@@ -296,13 +426,13 @@ class IntegrityWorkflowRequest:
             )
         if self.stale_before is not None:
             _require_utc(self.stale_before, "stale_before")
-        if not isinstance(self.selection_item_ids, tuple):
+        if type(self.selection_item_ids) is not tuple:
             raise TypeError("integrity selection_item_ids must be a tuple")
         if len(self.selection_item_ids) > INTEGRITY_CANDIDATE_ROW_LIMIT:
             raise IntegrityCandidateLimitError(
                 IntegrityCandidateLimitExceeded.rows()
             )
-        if not isinstance(self.completed_bytes, tuple):
+        if type(self.completed_bytes) is not tuple:
             raise TypeError("integrity completed_bytes must be a tuple")
         if len(self.completed_bytes) > len(self.selection_item_ids):
             raise ValueError(
@@ -390,6 +520,68 @@ class IntegrityWorkflowRequest:
         )
 
 
+def _exact_inventory_request(value: object) -> InventoryRequest:
+    if type(value) is not InventoryRequest:
+        raise TypeError("inventory binding requires InventoryRequest")
+    return InventoryRequest(
+        request_id=value.request_id,
+        root_path=value.root_path,
+        location_id=value.location_id,
+        selected_paths=value.selected_paths,
+        selected_mount=value.selected_mount,
+        subtree_roots=value.subtree_roots,
+    )
+
+
+def _exact_integrity_request(value: object) -> IntegrityRequest:
+    if type(value) is not IntegrityRequest:
+        raise TypeError("integrity binding requires IntegrityRequest")
+    return IntegrityRequest(
+        request_id=value.request_id,
+        mode=value.mode,
+        root_path=value.root_path,
+        location_id=value.location_id,
+        selected_paths=value.selected_paths,
+        selected_mount=value.selected_mount,
+        stale_before=value.stale_before,
+    )
+
+
+def _exact_inventory_workflow_request(
+    value: object,
+) -> InventoryWorkflowRequest:
+    if type(value) is not InventoryWorkflowRequest:
+        raise TypeError("inventory workflow requires InventoryWorkflowRequest")
+    return InventoryWorkflowRequest(
+        value.request_id,
+        value.binding,
+        value.selected_paths,
+        value.subtree_roots,
+    )
+
+
+def _exact_integrity_workflow_request(
+    value: object,
+) -> IntegrityWorkflowRequest:
+    if type(value) is not IntegrityWorkflowRequest:
+        raise TypeError("integrity workflow requires IntegrityWorkflowRequest")
+    return IntegrityWorkflowRequest(
+        request_id=value.request_id,
+        binding=value.binding,
+        mode=value.mode,
+        selected_paths=value.selected_paths,
+        stale_before=value.stale_before,
+        selection_item_ids=value.selection_item_ids,
+        completed_bytes=value.completed_bytes,
+        processed_bytes=value.processed_bytes,
+        refresh_generation=value.refresh_generation,
+        bytes_total_high_water=value.bytes_total_high_water,
+        recording=value.recording,
+        recording_issues=value.recording_issues,
+        omitted_detail_count=value.omitted_detail_count,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class _ObservedTaskRecordingIssue:
     issue: TaskRecordingIssue
@@ -443,6 +635,15 @@ class NativeMountedVolumeResolver:
     def mounted_volumes(
         self, volume_id: VolumeId, hints: tuple[str, ...] = ()
     ) -> tuple[MountedVolume, ...]:
+        if type(volume_id) is not VolumeId:
+            raise TypeError("mounted-volume lookup requires VolumeId")
+        VolumeId(volume_id.serial, volume_id.fs_type)
+        if type(hints) is not tuple:
+            raise TypeError("mounted-volume hints must be a tuple")
+        if len(hints) > MAX_MOUNT_CANDIDATES:
+            raise ValueError("mounted-volume hints exceed the candidate limit")
+        for hint in hints:
+            require_utf16_path(hint, "mounted-volume hint")
         candidates = {*hints, *_logical_drive_roots()}
         mounted: dict[str, MountedVolume] = {}
         for path in candidates:
@@ -452,10 +653,13 @@ class NativeMountedVolumeResolver:
                 snapshot = self._backend.volume_snapshot(path)
             except (OSError, PermissionError):
                 continue
+            validate_volume_snapshot(snapshot)
             if snapshot.volume_id != volume_id:
                 continue
             mount = snapshot.evidence.device_id or path
             mounted[_path_key(mount)] = MountedVolume(mount, snapshot.evidence)
+            if len(mounted) > MAX_VOLUME_RESOLUTION_CANDIDATES:
+                raise ValueError("mounted-volume result exceeds the candidate limit")
         return tuple(mounted[key] for key in sorted(mounted))
 
     def probe_root(self, root_path: str) -> None:
@@ -470,6 +674,7 @@ def bind_inventory_request(
     backend: VolumeBindingBackend,
     resolver: MountedVolumeResolver,
 ) -> InventoryWorkflowRequest:
+    request = _exact_inventory_request(request)
     binding = _bind_request_location(
         request.root_path,
         request.location_id,
@@ -493,6 +698,7 @@ def bind_integrity_request(
     backend: VolumeBindingBackend,
     resolver: MountedVolumeResolver,
 ) -> IntegrityWorkflowRequest:
+    request = _exact_integrity_request(request)
     binding = _bind_request_location(
         request.root_path,
         request.location_id,
@@ -513,8 +719,13 @@ def bind_integrity_request(
 def resolve_binding(
     binding: LocationBinding, resolver: MountedVolumeResolver
 ) -> VolumeResolution:
-    mounted = resolver.mounted_volumes(
-        binding.volume_id, hints=binding.expected_mounts
+    if type(binding) is not LocationBinding:
+        raise TypeError("volume resolution requires LocationBinding")
+    _require_location_binding_fields(binding)
+    mounted = _require_mounted_volumes(
+        resolver.mounted_volumes(
+            binding.volume_id, hints=binding.expected_mounts
+        )
     )
     candidates = tuple(item.mount_path for item in mounted)
     if not mounted:
@@ -633,6 +844,7 @@ def run_inventory(
     ctx: RunContext,
     deps: InventoryDependencies,
 ) -> OperationResult:
+    request = _exact_inventory_workflow_request(request)
     resolution = resolve_binding(request.binding, deps.resolver)
     if resolution.state != VolumeResolutionState.RESOLVED:
         deps.save_details(
@@ -703,6 +915,7 @@ def run_integrity(
         | None
     ) = None,
 ) -> OperationResult:
+    request = _exact_integrity_workflow_request(request)
     try:
         resolution = resolve_binding(request.binding, deps.resolver)
         if resolution.state != VolumeResolutionState.RESOLVED:
@@ -950,6 +1163,7 @@ def settle_canceled_integrity(
 ) -> OperationResult:
     """Settle one paused standalone integrity session without reopening work."""
 
+    request = _exact_integrity_workflow_request(request)
     if disposition is not Disposition.RAN:
         raise ValueError("started integrity cancellation must retain RAN disposition")
     return OperationResult(
@@ -1164,6 +1378,7 @@ def change_inventory_visibility(
 
 
 def encode_inventory_request(request: InventoryWorkflowRequest) -> bytes:
+    request = _exact_inventory_workflow_request(request)
     return _json_bytes(
         {
             "version": 2,
@@ -1190,21 +1405,26 @@ def decode_inventory_request(payload: bytes) -> InventoryWorkflowRequest:
         },
         "inventory payload",
     )
+    selected_paths = _list(value["selected_paths"])
+    subtree_roots = _list(value["subtree_roots"])
+    if len(selected_paths) > SCAN_SCOPE_ENTRY_LIMIT - len(subtree_roots):
+        raise ValueError("inventory payload exceeds the scan-scope item limit")
     return InventoryWorkflowRequest(
         _string(value["request_id"], "inventory.request_id"),
         _decode_binding(value["binding"]),
         tuple(
             _string(item, "inventory.selected_paths[]")
-            for item in _list(value["selected_paths"])
+            for item in selected_paths
         ),
         tuple(
             _string(item, "inventory.subtree_roots[]")
-            for item in _list(value["subtree_roots"])
+            for item in subtree_roots
         ),
     )
 
 
 def encode_integrity_request(request: IntegrityWorkflowRequest) -> bytes:
+    request = _exact_integrity_workflow_request(request)
     return _json_bytes(
         {
             "version": 2,
@@ -1257,8 +1477,28 @@ def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
         "integrity payload",
     )
     stale = value["stale_before"]
+    selected_paths = _list(value["selected_paths"])
+    selection_item_ids = _list(value["selection_item_ids"])
+    raw_completed_bytes = _list(value["completed_bytes"])
+    raw_recording_issues = _list(value["recording_issues"])
+    for population, context, limit in (
+        (selected_paths, "integrity.selected_paths", INTEGRITY_CANDIDATE_ROW_LIMIT),
+        (
+            selection_item_ids,
+            "integrity.selection_item_ids",
+            INTEGRITY_CANDIDATE_ROW_LIMIT,
+        ),
+        (
+            raw_completed_bytes,
+            "integrity.completed_bytes",
+            INTEGRITY_CANDIDATE_ROW_LIMIT,
+        ),
+        (raw_recording_issues, "integrity.recording_issues", 5),
+    ):
+        if len(population) > limit:
+            raise ValueError(f"{context} exceeds its item limit")
     completed_bytes: list[tuple[str, int]] = []
-    for raw in _list(value["completed_bytes"]):
+    for raw in raw_completed_bytes:
         item = _list(raw)
         if len(item) != 2:
             raise ValueError(
@@ -1276,7 +1516,7 @@ def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
         mode=IntegrityMode(_string(value["mode"], "integrity.mode")),
         selected_paths=tuple(
             _string(item, "integrity.selected_paths[]")
-            for item in _list(value["selected_paths"])
+            for item in selected_paths
         ),
         stale_before=(
             None
@@ -1287,7 +1527,7 @@ def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
         ),
         selection_item_ids=tuple(
             _string(item, "integrity.selection_item_ids[]")
-            for item in _list(value["selection_item_ids"])
+            for item in selection_item_ids
         ),
         completed_bytes=tuple(completed_bytes),
         processed_bytes=_integer(
@@ -1303,7 +1543,7 @@ def decode_integrity_request(payload: bytes) -> IntegrityWorkflowRequest:
         ),
         recording_issues=tuple(
             _decode_integrity_recording_issue(issue, index)
-            for index, issue in enumerate(_list(value["recording_issues"]))
+            for index, issue in enumerate(raw_recording_issues)
         ),
         omitted_detail_count=_integer(
             value["omitted_detail_count"],
@@ -1332,7 +1572,8 @@ def _bind_request_location(
     if root_path is None:
         raise RuntimeError("validated root-path request lost its path")
     resolved = backend.resolve_root(root_path)
-    snapshot = backend.volume_snapshot(resolved)
+    require_utf16_path(resolved, "resolved root path")
+    snapshot = validate_volume_snapshot(backend.volume_snapshot(resolved))
     mount = snapshot.evidence.device_id or Path(resolved).anchor
     relative = _relative_to_mount(resolved, mount)
     return _binding_from_identity(
@@ -1368,8 +1609,14 @@ def _binding_from_identity(
     location_id: int | None,
     resolver: MountedVolumeResolver,
 ) -> LocationBinding:
+    if mount_hint is not None:
+        require_utf16_path(mount_hint, "persisted mount hint")
+    if selected_mount is not None:
+        require_utf16_path(selected_mount, "selected volume mount")
     hints = () if mount_hint is None else (mount_hint,)
-    mounted = resolver.mounted_volumes(volume_id, hints)
+    mounted = _require_mounted_volumes(
+        resolver.mounted_volumes(volume_id, hints)
+    )
     candidates = tuple(item.mount_path for item in mounted)
     if not candidates:
         unresolved_mount = mount_hint or "<unmounted>"
@@ -1432,6 +1679,27 @@ def _register_and_scan(
 ) -> tuple[int, int, ScanResult]:
     if resolution.root_path is None or resolution.evidence is None:
         raise RuntimeError("resolved inventory root lacks volume evidence")
+    scope = ScanScope.scoped(
+        selected_paths=selected_paths,
+        subtree_roots=subtree_roots,
+    )
+    root = Root(resolution.root_path, f"inventory:{scope_token}")
+    ctx.emit(PhaseChanged("inventory"))
+    scan = validate_scan_result(
+        deps.scanner(
+            root,
+            deps.ignores,
+            ctx,
+            scope,
+            trusted_anchor=resolution.selected_mount,
+        )
+    )
+    if scan.root != root:
+        raise RuntimeError("inventory scanner returned a different root")
+    if scan.scope != scope:
+        raise RuntimeError("inventory scanner returned a different scope")
+    if scan.volume_id != binding.volume_id:
+        raise RuntimeError("inventory scan volume changed after preflight")
     now = deps.clock.now()
     host_id = recorder.ensure_host(
         HostCommand(deps.host_key, deps.host_name, now)
@@ -1444,20 +1712,6 @@ def _register_and_scan(
     )
     if binding.location_id is not None and binding.location_id != location_id:
         raise RuntimeError("resolved location identity changed")
-    ctx.emit(PhaseChanged("inventory"))
-    scope = ScanScope.scoped(
-        selected_paths=selected_paths,
-        subtree_roots=subtree_roots,
-    )
-    scan = deps.scanner(
-        Root(resolution.root_path, f"inventory:{scope_token}"),
-        deps.ignores,
-        ctx,
-        scope,
-        trusted_anchor=resolution.selected_mount,
-    )
-    if scan.volume_id != binding.volume_id:
-        raise RuntimeError("inventory scan volume changed after preflight")
     return host_id, location_id, scan
 
 
@@ -1630,6 +1884,9 @@ def _refused_resolution(resolution: VolumeResolution) -> OperationResult:
 
 
 def _binding_dict(binding: LocationBinding) -> dict[str, object]:
+    if type(binding) is not LocationBinding:
+        raise TypeError("location binding projection requires LocationBinding")
+    _require_location_binding_fields(binding)
     return {
         "volume": {
             "serial": binding.volume_id.serial,
@@ -1659,6 +1916,9 @@ def _decode_binding(value: object) -> LocationBinding:
     )
     volume = _mapping(data["volume"])
     _expect_keys(volume, {"serial", "fs_type"}, "location binding volume")
+    raw_expected_mounts = _list(data["expected_mounts"])
+    if len(raw_expected_mounts) > MAX_MOUNT_CANDIDATES:
+        raise ValueError("location binding exceeds the mount-candidate limit")
     return LocationBinding(
         VolumeId(
             _string(volume["serial"], "location binding volume.serial"),
@@ -1671,7 +1931,7 @@ def _decode_binding(value: object) -> LocationBinding:
         _string(data["selected_mount"], "location binding.selected_mount"),
         tuple(
             _string(item, "location binding.expected_mounts[]")
-            for item in _list(data["expected_mounts"])
+            for item in raw_expected_mounts
         ),
         _boolean(
             data["explicit_ambiguity_choice"],
@@ -1722,15 +1982,15 @@ def _json_bytes(value: object) -> bytes:
 
 
 def _mapping(value: object) -> Mapping[str, object]:
-    if not isinstance(value, dict) or not all(
-        isinstance(key, str) for key in value
+    if type(value) is not dict or not all(
+        type(key) is str for key in value
     ):
         raise ValueError("workflow payload value must be an object")
     return value
 
 
 def _list(value: object) -> list[object]:
-    if not isinstance(value, list):
+    if type(value) is not list:
         raise ValueError("workflow payload value must be a list")
     return value
 
@@ -1762,7 +2022,7 @@ def _expect_keys(
 
 
 def _string(value: object, context: str) -> str:
-    if not isinstance(value, str):
+    if type(value) is not str:
         raise ValueError(f"{context} must be a string")
     return value
 
@@ -1782,14 +2042,37 @@ def _boolean(value: object, context: str) -> bool:
 def _validate_location_request(
     request_id: str, root_path: str | None, location_id: int | None
 ) -> None:
-    if not request_id:
-        raise ValueError("request id is required")
+    require_utf8_text(
+        request_id,
+        "request id",
+        minimum_bytes=1,
+        maximum_bytes=MAX_REQUEST_ID_UTF8_BYTES,
+    )
     if (root_path is None) == (location_id is None):
         raise ValueError("request requires exactly one root path or location id")
-    if root_path is not None and not root_path:
-        raise ValueError("root path cannot be empty")
-    if location_id is not None and location_id < 1:
-        raise ValueError("location id must be positive")
+    if root_path is not None:
+        require_utf16_path(root_path, "root path")
+        if not root_path:
+            raise ValueError("root path cannot be empty")
+    if location_id is not None:
+        require_safe_int(location_id, "location id")
+        if location_id < 1:
+            raise ValueError("location id must be positive")
+
+
+def _require_workflow_request(
+    request_id: object,
+    binding: object,
+) -> None:
+    require_utf8_text(
+        request_id,
+        "request id",
+        minimum_bytes=1,
+        maximum_bytes=MAX_REQUEST_ID_UTF8_BYTES,
+    )
+    if type(binding) is not LocationBinding:
+        raise TypeError("workflow request binding has the wrong type")
+    _require_location_binding_fields(binding)
 
 
 def _relative_to_mount(path: str, mount: str) -> str:
@@ -1817,13 +2100,18 @@ def _logical_drive_roots() -> tuple[str, ...]:
     import ctypes
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    length = kernel32.GetLogicalDriveStringsW(0, None)
+    buffer = ctypes.create_unicode_buffer(_MAX_LOGICAL_DRIVE_STRING_CHARS)
+    length = kernel32.GetLogicalDriveStringsW(len(buffer), buffer)
     if length <= 0:
         raise OSError(ctypes.get_last_error(), "GetLogicalDriveStringsW failed")
-    buffer = ctypes.create_unicode_buffer(length + 1)
-    if kernel32.GetLogicalDriveStringsW(len(buffer), buffer) == 0:
-        raise OSError(ctypes.get_last_error(), "GetLogicalDriveStringsW failed")
-    return tuple(value for value in buffer[:length].split("\x00") if value)
+    if length >= len(buffer):
+        raise OSError("logical-drive enumeration exceeded its fixed source bound")
+    roots = tuple(value for value in buffer[:length].split("\x00") if value)
+    if len(roots) > _MAX_LOGICAL_DRIVE_ROOTS:
+        raise OSError("logical-drive enumeration exceeded its fixed source bound")
+    for root in roots:
+        require_utf16_path(root, "logical drive root")
+    return roots
 
 
 def _require_utc(value: datetime, field_name: str) -> None:

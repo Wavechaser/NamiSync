@@ -14,15 +14,33 @@ from .pathing import (
     validate_relative_path,
 )
 from .scalars import (
+    MAX_DIAGNOSTIC_UTF8_BYTES,
     MAX_FILE_INDEX_128,
+    MAX_REQUEST_ID_UTF8_BYTES,
+    MAX_SAFE_INTEGER,
     file_index_128_to_text,
+    bounded_utf8_text,
     require_safe_int,
     require_signed_64,
+    require_utf16_path,
+    require_utf16_text,
+    require_utf8_text,
 )
 
 
 # Windows attributes that execution deliberately propagates from source to target.
 MANAGED_FILE_ATTRIBUTE_MASK = 0x00000001 | 0x00000002 | 0x00000004 | 0x00002000
+MAX_VOLUME_TEXT_UTF16_UNITS = 260
+# Inventory root identifiers retain the complete admitted request id plus the
+# longest production suffix (``:refresh:`` and one SafeInt generation) and the
+# ``inventory:`` namespace. Other production root-id grammars are shorter.
+MAX_ROOT_ID_UTF8_BYTES = (
+    MAX_REQUEST_ID_UTF8_BYTES
+    + len("inventory:".encode("utf-8"))
+    + len(":refresh:".encode("utf-8"))
+    + len(str(MAX_SAFE_INTEGER).encode("ascii"))
+)
+SCAN_SCOPE_ENTRY_LIMIT = 120_000
 
 
 class EntryKind(StrEnum):
@@ -36,8 +54,7 @@ class VolumeId:
     fs_type: str
 
     def __post_init__(self) -> None:
-        if not self.serial or not self.fs_type:
-            raise ValueError("volume identity requires serial and filesystem type")
+        _require_volume_id_fields(self)
 
 
 @dataclass(frozen=True)
@@ -45,6 +62,9 @@ class VolumeEvidence:
     label: str | None = None
     device_id: str | None = None
     clone_ambiguous: bool = False
+
+    def __post_init__(self) -> None:
+        _require_volume_evidence_fields(self)
 
 
 @dataclass(frozen=True)
@@ -58,15 +78,67 @@ class CapabilityProfile:
     supports_hardlinks: bool
 
     def __post_init__(self) -> None:
-        require_signed_64(
-            self.mtime_granularity_ns,
-            "mtime granularity",
+        _require_capability_profile_fields(self)
+
+
+def _require_volume_id_fields(value: VolumeId) -> None:
+    require_utf16_text(
+        value.serial,
+        "volume serial",
+        maximum_units=MAX_VOLUME_TEXT_UTF16_UNITS,
+        allow_empty=False,
+    )
+    require_utf16_text(
+        value.fs_type,
+        "volume filesystem type",
+        maximum_units=MAX_VOLUME_TEXT_UTF16_UNITS,
+        allow_empty=False,
+    )
+
+
+def _require_volume_evidence_fields(value: VolumeEvidence) -> None:
+    if value.label is not None:
+        require_utf16_text(
+            value.label,
+            "volume label",
+            maximum_units=MAX_VOLUME_TEXT_UTF16_UNITS,
         )
-        if self.mtime_granularity_ns == 0:
-            raise ValueError("mtime granularity must be positive")
-        require_safe_int(self.max_path, "maximum path")
-        if self.max_path == 0:
-            raise ValueError("maximum path must be positive")
+    if value.device_id is not None:
+        require_utf16_path(value.device_id, "volume device path")
+    if type(value.clone_ambiguous) is not bool:
+        raise TypeError("volume clone ambiguity must be a bool")
+
+
+def _require_capability_profile_fields(value: CapabilityProfile) -> None:
+    require_utf16_text(
+        value.fs_type,
+        "capability filesystem type",
+        maximum_units=MAX_VOLUME_TEXT_UTF16_UNITS,
+        allow_empty=False,
+    )
+    for field_name, field_value in (
+        ("stable file identity", value.stable_file_identity),
+        ("supports ADS", value.supports_ads),
+        ("supports hardlinks", value.supports_hardlinks),
+    ):
+        if type(field_value) is not bool:
+            raise TypeError(f"{field_name} must be a bool")
+    if (
+        value.incurs_seek_penalty is not None
+        and type(value.incurs_seek_penalty) is not bool
+    ):
+        raise TypeError("seek penalty must be a bool or None")
+    require_signed_64(
+        value.mtime_granularity_ns,
+        "mtime granularity",
+    )
+    if value.mtime_granularity_ns == 0:
+        raise ValueError("mtime granularity must be positive")
+    require_safe_int(value.max_path, "maximum path")
+    if value.max_path == 0:
+        raise ValueError("maximum path must be positive")
+    if value.max_path > 32_767:
+        raise ValueError("maximum path exceeds the UTF-16 path bound")
 
 
 @dataclass(frozen=True, order=True)
@@ -82,6 +154,12 @@ class FileIdentity:
             or not 0 <= self.file_index <= MAX_FILE_INDEX_128
         ):
             raise ValueError("invalid file identity")
+        require_utf16_text(
+            self.volume_serial,
+            "file identity volume serial",
+            maximum_units=MAX_VOLUME_TEXT_UTF16_UNITS,
+            allow_empty=False,
+        )
 
 
 @dataclass(frozen=True)
@@ -105,11 +183,23 @@ class FileStat:
     metadata: MetadataSnapshot
 
     def __post_init__(self) -> None:
+        if type(self.kind) is not EntryKind:
+            raise TypeError("file stat kind has the wrong type")
         require_signed_64(self.size, "file size")
         require_signed_64(self.mtime_ns, "file modification time")
+        if self.file_identity is not None:
+            if type(self.file_identity) is not FileIdentity:
+                raise TypeError("file stat identity has the wrong type")
+            FileIdentity(
+                self.file_identity.volume_serial,
+                self.file_identity.file_index,
+            )
         require_safe_int(self.nlink, "file link count")
         if self.nlink < 1:
             raise ValueError("link count must be positive")
+        if type(self.metadata) is not MetadataSnapshot:
+            raise TypeError("file stat metadata has the wrong type")
+        MetadataSnapshot(self.metadata.attributes, self.metadata.created_ns)
 
 
 @dataclass(frozen=True)
@@ -118,10 +208,20 @@ class Root:
     root_id: str
 
     def __post_init__(self) -> None:
-        if not self.path or "\x00" in self.path:
+        try:
+            require_utf16_path(self.path, "root path")
+        except TypeError:
+            raise
+        except ValueError as error:
+            raise ValueError("root path is invalid") from error
+        if not self.path:
             raise ValueError("root path is invalid")
-        if not self.root_id:
-            raise ValueError("root id is required")
+        require_utf8_text(
+            self.root_id,
+            "root id",
+            minimum_bytes=1,
+            maximum_bytes=MAX_ROOT_ID_UTF8_BYTES,
+        )
 
 
 @dataclass(frozen=True)
@@ -135,6 +235,8 @@ class FileRecord:
     metadata: MetadataSnapshot
 
     def __post_init__(self) -> None:
+        if type(self.rel_path_key) is not str:
+            raise TypeError("file path key must be text")
         canonical = validate_relative_path(self.rel_path)
         if self.rel_path_key != normalize_relative_path(canonical):
             raise ValueError("file path key is not canonical")
@@ -162,6 +264,8 @@ class DirRecord:
     nlink: int = 1
 
     def __post_init__(self) -> None:
+        if type(self.rel_path_key) is not str:
+            raise TypeError("directory path key must be text")
         canonical = validate_relative_path(self.rel_path, allow_root=True)
         if self.rel_path_key != normalize_relative_path(canonical, allow_root=True):
             raise ValueError("directory path key is not canonical")
@@ -195,6 +299,12 @@ class UnsupportedRecord:
     kind: EntryKind | None = None
 
     def __post_init__(self) -> None:
+        if type(self.rel_path_key) is not str:
+            raise TypeError("unsupported path key must be text")
+        if type(self.reason) is not UnsupportedReason:
+            raise TypeError("unsupported record reason has the wrong type")
+        if self.kind is not None and type(self.kind) is not EntryKind:
+            raise TypeError("unsupported record kind has the wrong type")
         canonical = validate_relative_path(self.rel_path)
         if self.rel_path_key != normalize_relative_path(canonical):
             raise ValueError("unsupported path key is not canonical")
@@ -223,13 +333,17 @@ class ScanWarning:
     detail: str = ""
 
     def __post_init__(self) -> None:
+        if type(self.code) is not ScanWarningCode:
+            raise TypeError("scan warning code has the wrong type")
         if self.rel_path is not None:
             validate_relative_path(self.rel_path, allow_root=True)
-        if not isinstance(self.detail, str):
+        if type(self.detail) is not str:
             raise TypeError("scan warning detail must be a string")
-        try:
-            self.detail.encode("utf-8", errors="strict")
-        except UnicodeEncodeError:
+        if bounded_utf8_text(
+            self.detail,
+            "scan warning detail",
+            maximum_bytes=MAX_DIAGNOSTIC_UTF8_BYTES,
+        ) is None:
             # Optional diagnostics cannot prevent recording valid observations.
             object.__setattr__(self, "detail", "")
 
@@ -252,6 +366,7 @@ class ScanScope:
 
     @classmethod
     def selected(cls, paths: tuple[str, ...] | list[str]) -> ScanScope:
+        _require_scope_population(paths, (), "selected scan")
         return cls(ScanScopeKind.PATHS, _canonical_scope_paths(paths))
 
     @classmethod
@@ -261,6 +376,7 @@ class ScanScope:
         *,
         selected_paths: tuple[str, ...] | list[str] = (),
     ) -> ScanScope:
+        _require_scope_population(selected_paths, roots, "subtree scan")
         return cls.scoped(
             selected_paths=selected_paths,
             subtree_roots=roots,
@@ -273,6 +389,11 @@ class ScanScope:
         selected_paths: tuple[str, ...] | list[str] = (),
         subtree_roots: tuple[str, ...] | list[str] = (),
     ) -> ScanScope:
+        _require_scope_population(
+            selected_paths,
+            subtree_roots,
+            "scoped scan",
+        )
         paths = _canonical_scope_paths(selected_paths)
         roots = _canonical_scope_paths(subtree_roots, allow_root=True)
         if "" in roots:
@@ -300,6 +421,17 @@ class ScanScope:
         return cls.full()
 
     def __post_init__(self) -> None:
+        if type(self.kind) is not ScanScopeKind:
+            raise TypeError("scan scope kind has the wrong type")
+        if type(self.selected_paths) is not tuple:
+            raise TypeError("selected scan paths must be a tuple")
+        if type(self.subtree_roots) is not tuple:
+            raise TypeError("scan subtree roots must be a tuple")
+        _require_scope_population(
+            self.selected_paths,
+            self.subtree_roots,
+            "scan scope",
+        )
         selected_paths = _canonical_scope_paths(self.selected_paths)
         subtree_roots = _minimal_subtree_roots(
             _canonical_scope_paths(self.subtree_roots, allow_root=True)
@@ -343,6 +475,10 @@ def _canonical_scope_paths(
     *,
     allow_root: bool = False,
 ) -> tuple[str, ...]:
+    if type(paths) not in {tuple, list}:
+        raise TypeError("scan scope paths must be a tuple or list")
+    if len(paths) > SCAN_SCOPE_ENTRY_LIMIT:
+        raise ValueError("scan scope exceeds the 120000-entry limit")
     by_key: dict[str, str] = {}
     for path in paths:
         canonical = validate_relative_path(path, allow_root=allow_root)
@@ -351,6 +487,19 @@ def _canonical_scope_paths(
         if retained is None or canonical < retained:
             by_key[key] = canonical
     return tuple(by_key[key] for key in sorted(by_key))
+
+
+def _require_scope_population(
+    selected_paths: object,
+    subtree_roots: object,
+    context: str,
+) -> None:
+    if type(selected_paths) not in {tuple, list}:
+        raise TypeError(f"{context} selected paths must be a tuple or list")
+    if type(subtree_roots) not in {tuple, list}:
+        raise TypeError(f"{context} subtree roots must be a tuple or list")
+    if len(selected_paths) > SCAN_SCOPE_ENTRY_LIMIT - len(subtree_roots):
+        raise ValueError("scan scope exceeds the 120000-entry limit")
 
 
 def _minimal_subtree_roots(roots: tuple[str, ...]) -> tuple[str, ...]:
@@ -441,9 +590,107 @@ class ScanResult:
     scope: ScanScope
     complete: bool
 
+    def __post_init__(self) -> None:
+        validate_scan_result(self)
+
     @property
     def is_full_scan(self) -> bool:
         return self.scope.kind is ScanScopeKind.FULL
+
+
+def validate_scan_warning(value: object) -> ScanWarning:
+    """Re-admit one exact warning without retaining a repaired projection."""
+
+    if type(value) is not ScanWarning:
+        raise TypeError("scan warning requires ScanWarning")
+    snapshot = ScanWarning(value.code, value.rel_path, value.detail)
+    if snapshot != value:
+        raise ValueError("scan warning is not canonical")
+    return value
+
+
+def validate_scan_scope(value: object) -> ScanScope:
+    """Re-admit one exact canonical scan scope."""
+
+    if type(value) is not ScanScope:
+        raise TypeError("scan result scope requires ScanScope")
+    snapshot = ScanScope(
+        value.kind,
+        value.selected_paths,
+        value.subtree_roots,
+    )
+    if snapshot != value:
+        raise ValueError("scan scope is not canonical")
+    return value
+
+
+def validate_scan_result(value: object) -> ScanResult:
+    """Re-admit a complete exact scan graph before downstream allocation."""
+
+    if type(value) is not ScanResult:
+        raise TypeError("scanner must return ScanResult")
+    if type(value.root) is not Root:
+        raise TypeError("scan result root has the wrong type")
+    Root(value.root.path, value.root.root_id)
+    if value.volume_id is not None:
+        if type(value.volume_id) is not VolumeId:
+            raise TypeError("scan result volume has the wrong type")
+        _require_volume_id_fields(value.volume_id)
+    if value.volume_evidence is not None:
+        if type(value.volume_evidence) is not VolumeEvidence:
+            raise TypeError("scan result volume evidence has the wrong type")
+        _require_volume_evidence_fields(value.volume_evidence)
+    if type(value.profile) is not CapabilityProfile:
+        raise TypeError("scan result capability profile has the wrong type")
+    _require_capability_profile_fields(value.profile)
+    for population, context in (
+        (value.files, "scan files"),
+        (value.directories, "scan directories"),
+        (value.unsupported, "scan unsupported records"),
+        (value.warnings, "scan warnings"),
+    ):
+        if type(population) is not tuple:
+            raise TypeError(f"{context} must be a tuple")
+    for item in value.files:
+        if type(item) is not FileRecord:
+            raise TypeError("scan files must contain FileRecord values")
+        FileRecord(
+            item.rel_path,
+            item.rel_path_key,
+            item.size,
+            item.mtime_ns,
+            item.file_identity,
+            item.nlink,
+            item.metadata,
+        )
+    for item in value.directories:
+        if type(item) is not DirRecord:
+            raise TypeError("scan directories must contain DirRecord values")
+        DirRecord(
+            item.rel_path,
+            item.rel_path_key,
+            item.mtime_ns,
+            item.metadata,
+            item.file_identity,
+            item.nlink,
+        )
+    for item in value.unsupported:
+        if type(item) is not UnsupportedRecord:
+            raise TypeError(
+                "scan unsupported records must contain UnsupportedRecord values"
+            )
+        UnsupportedRecord(
+            item.rel_path,
+            item.rel_path_key,
+            item.reason,
+            item.kind,
+        )
+    for item in value.warnings:
+        validate_scan_warning(item)
+    validate_scan_scope(value.scope)
+    if type(value.complete) is not bool:
+        raise TypeError("scan completeness must be a bool")
+    return value
 
 
 def file_identity_projection(value: FileIdentity | None) -> dict[str, object] | None:
@@ -451,6 +698,7 @@ def file_identity_projection(value: FileIdentity | None) -> dict[str, object] | 
         return None
     if type(value) is not FileIdentity:
         raise TypeError("file identity projection requires FileIdentity")
+    FileIdentity(value.volume_serial, value.file_index)
     return {
         "volume_serial": value.volume_serial,
         "file_index": file_index_128_to_text(value.file_index),
@@ -483,6 +731,7 @@ def file_stat_projection(value: FileStat | None) -> dict[str, object] | None:
 def root_projection(value: Root) -> dict[str, object]:
     if type(value) is not Root:
         raise TypeError("root projection requires Root")
+    Root(value.path, value.root_id)
     return {"path": value.path, "root_id": value.root_id}
 
 
@@ -491,6 +740,7 @@ def volume_id_projection(value: VolumeId | None) -> dict[str, object] | None:
         return None
     if type(value) is not VolumeId:
         raise TypeError("volume projection requires VolumeId")
+    _require_volume_id_fields(value)
     return {"serial": value.serial, "fs_type": value.fs_type}
 
 
@@ -499,6 +749,7 @@ def volume_evidence_projection(value: VolumeEvidence | None) -> dict[str, object
         return None
     if type(value) is not VolumeEvidence:
         raise TypeError("volume evidence projection requires VolumeEvidence")
+    _require_volume_evidence_fields(value)
     return {
         "label": value.label,
         "device_id": value.device_id,
@@ -509,6 +760,7 @@ def volume_evidence_projection(value: VolumeEvidence | None) -> dict[str, object
 def capability_profile_projection(value: CapabilityProfile) -> dict[str, object]:
     if type(value) is not CapabilityProfile:
         raise TypeError("capability projection requires CapabilityProfile")
+    _require_capability_profile_fields(value)
     return {
         "fs_type": value.fs_type,
         "mtime_granularity_ns": value.mtime_granularity_ns,

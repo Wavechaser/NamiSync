@@ -7,7 +7,19 @@ from datetime import datetime, timezone
 from enum import StrEnum
 
 from .evidence import RecordingStatus
-from .models import ScanResult, VolumeEvidence, VolumeId
+from .models import (
+    ScanResult,
+    VolumeEvidence,
+    VolumeId,
+    validate_scan_result,
+)
+from .pathing import validate_relative_path
+from .scalars import (
+    MAX_REQUEST_ID_UTF8_BYTES,
+    MAX_SAFE_INTEGER,
+    require_safe_int,
+    require_utf8_text,
+)
 from .planning import (
     OpId,
     Plan,
@@ -42,6 +54,18 @@ class VolumeCommand:
     observed_at: datetime
 
     def __post_init__(self) -> None:
+        if type(self.volume_id) is not VolumeId:
+            raise TypeError("volume command identity has the wrong type")
+        if type(self.evidence) is not VolumeEvidence:
+            raise TypeError("volume command evidence has the wrong type")
+        volume_id = VolumeId(self.volume_id.serial, self.volume_id.fs_type)
+        evidence = VolumeEvidence(
+            self.evidence.label,
+            self.evidence.device_id,
+            self.evidence.clone_ambiguous,
+        )
+        object.__setattr__(self, "volume_id", volume_id)
+        object.__setattr__(self, "evidence", evidence)
         _require_utc(self.observed_at, "observed_at")
 
 
@@ -52,8 +76,14 @@ class LocationCommand:
     observed_at: datetime
 
     def __post_init__(self) -> None:
+        require_safe_int(self.volume_row_id, "volume row id")
         if self.volume_row_id < 1:
             raise ValueError("volume row id must be positive")
+        canonical = validate_relative_path(
+            self.volume_relative_path,
+            allow_root=True,
+        )
+        object.__setattr__(self, "volume_relative_path", canonical)
         _require_utc(self.observed_at, "observed_at")
 
 
@@ -133,11 +163,24 @@ class InventoryCommand:
     online: bool = True
 
     def __post_init__(self) -> None:
+        require_safe_int(self.location_id, "inventory location id")
+        require_safe_int(self.host_id, "inventory host id")
         if self.location_id < 1 or self.host_id < 1:
             raise ValueError("inventory database ids must be positive")
-        if not self.scope_token:
-            raise ValueError("inventory scope token is required")
+        validate_scan_result(self.scan)
+        require_utf8_text(
+            self.scope_token,
+            "inventory scope token",
+            minimum_bytes=1,
+            maximum_bytes=(
+                MAX_REQUEST_ID_UTF8_BYTES
+                + len(":refresh:".encode("ascii"))
+                + len(str(MAX_SAFE_INTEGER).encode("ascii"))
+            ),
+        )
         _require_utc(self.observed_at, "observed_at")
+        if type(self.online) is not bool:
+            raise TypeError("inventory online state must be a bool")
 
 
 class InventoryVisibilityAction(StrEnum):

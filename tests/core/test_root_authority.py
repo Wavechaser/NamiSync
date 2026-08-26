@@ -71,6 +71,36 @@ def test_root_authority_normalizes_and_requires_anchor_containment(
         RootAuthority(str(root), str(tmp_path / "other"), VOLUME)
 
 
+def test_native_volume_info_accepts_dword_boundary_and_rejects_n_plus_one() -> None:
+    evidence = VolumeEvidence("Reviewed", r"C:\\")
+
+    NativeVolumeInfo(VOLUME, evidence, (1 << 32) - 1, (1 << 32) - 1)
+    with pytest.raises(ValueError, match="exceeds DWORD"):
+        NativeVolumeInfo(VOLUME, evidence, 1 << 32, 0)
+    with pytest.raises(ValueError, match="exceed DWORD"):
+        NativeVolumeInfo(VOLUME, evidence, 0, 1 << 32)
+
+
+def test_admit_root_revalidates_forged_native_volume_fields(
+    tmp_path: Path,
+) -> None:
+    anchor = tmp_path / "mount"
+    root = anchor / "managed"
+    evidence = VolumeEvidence("Reviewed", str(anchor))
+    observed = NativeVolumeInfo(VOLUME, evidence, 255, 0)
+    object.__setattr__(evidence, "device_id", "p" * 32_768)
+
+    with pytest.raises(RootAuthorityError, match="invalid fields") as raised:
+        admit_root(
+            RootAuthority(str(root), str(anchor), VOLUME),
+            lstat=lambda _path: _stat(directory=True),
+            anchor_probe=lambda _path: str(anchor),
+            volume_probe=lambda _path: observed,
+        )
+
+    assert raised.value.issue is RootAuthorityIssue.VOLUME_UNAVAILABLE
+
+
 def test_admit_root_checks_anchor_chain_then_volume(tmp_path: Path) -> None:
     anchor = tmp_path / "mount"
     parent = anchor / "parent"

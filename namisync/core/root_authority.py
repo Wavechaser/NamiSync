@@ -20,6 +20,7 @@ from .pathing import (
     to_extended_length_path,
     validate_relative_path,
 )
+from .scalars import require_safe_int
 
 
 FILE_ATTRIBUTE_DIRECTORY = 0x00000010
@@ -27,6 +28,9 @@ FILE_ATTRIBUTE_REPARSE_POINT = 0x00000400
 FILE_ATTRIBUTE_OFFLINE = 0x00001000
 FILE_ATTRIBUTE_RECALL_ON_OPEN = 0x00040000
 FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS = 0x00400000
+_MAX_DWORD = (1 << 32) - 1
+_VOLUME_PATH_BUFFER_CHARS = 32_768
+_VOLUME_TEXT_BUFFER_CHARS = 261
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,9 +53,14 @@ class RootAuthority:
             object.__setattr__(self, "reviewed_anchor", reviewed_anchor)
         if (
             self.expected_volume_id is not None
-            and not isinstance(self.expected_volume_id, VolumeId)
+            and type(self.expected_volume_id) is not VolumeId
         ):
             raise TypeError("expected root volume has the wrong type")
+        if self.expected_volume_id is not None:
+            VolumeId(
+                self.expected_volume_id.serial,
+                self.expected_volume_id.fs_type,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,10 +73,25 @@ class NativeVolumeInfo:
     filesystem_flags: int
 
     def __post_init__(self) -> None:
-        if self.max_component_length < 0:
-            raise ValueError("maximum volume component length cannot be negative")
-        if self.filesystem_flags < 0:
-            raise ValueError("volume filesystem flags cannot be negative")
+        if type(self.volume_id) is not VolumeId:
+            raise TypeError("native volume identity has the wrong type")
+        if type(self.evidence) is not VolumeEvidence:
+            raise TypeError("native volume evidence has the wrong type")
+        VolumeId(self.volume_id.serial, self.volume_id.fs_type)
+        VolumeEvidence(
+            self.evidence.label,
+            self.evidence.device_id,
+            self.evidence.clone_ambiguous,
+        )
+        require_safe_int(
+            self.max_component_length,
+            "maximum volume component length",
+        )
+        require_safe_int(self.filesystem_flags, "volume filesystem flags")
+        if self.max_component_length > _MAX_DWORD:
+            raise ValueError("maximum volume component length exceeds DWORD")
+        if self.filesystem_flags > _MAX_DWORD:
+            raise ValueError("volume filesystem flags exceed DWORD")
 
 
 class RootAuthorityIssue(StrEnum):
@@ -155,7 +179,7 @@ def current_volume_anchor(path: str | os.PathLike[str]) -> str:
     import ctypes
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    volume_path = ctypes.create_unicode_buffer(32768)
+    volume_path = ctypes.create_unicode_buffer(_VOLUME_PATH_BUFFER_CHARS)
     if not kernel32.GetVolumePathNameW(
         to_extended_length_path(logical),
         volume_path,
@@ -198,7 +222,7 @@ def observe_native_volume(path: str | os.PathLike[str]) -> NativeVolumeInfo:
     from ctypes import wintypes
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    volume_path = ctypes.create_unicode_buffer(32768)
+    volume_path = ctypes.create_unicode_buffer(_VOLUME_PATH_BUFFER_CHARS)
     if not kernel32.GetVolumePathNameW(
         to_extended_length_path(logical),
         volume_path,
@@ -210,8 +234,8 @@ def observe_native_volume(path: str | os.PathLike[str]) -> NativeVolumeInfo:
             logical,
         )
 
-    label = ctypes.create_unicode_buffer(261)
-    filesystem = ctypes.create_unicode_buffer(261)
+    label = ctypes.create_unicode_buffer(_VOLUME_TEXT_BUFFER_CHARS)
+    filesystem = ctypes.create_unicode_buffer(_VOLUME_TEXT_BUFFER_CHARS)
     serial = wintypes.DWORD()
     max_component = wintypes.DWORD()
     flags = wintypes.DWORD()
@@ -320,6 +344,25 @@ def admit_root(
             RootAuthorityIssue.VOLUME_UNAVAILABLE,
             authority.logical_root,
             logical_error_text(error),
+        ) from error
+    if type(volume) is not NativeVolumeInfo:
+        raise RootAuthorityError(
+            RootAuthorityIssue.VOLUME_UNAVAILABLE,
+            authority.logical_root,
+            "volume observation returned an invalid value",
+        )
+    try:
+        NativeVolumeInfo(
+            volume.volume_id,
+            volume.evidence,
+            volume.max_component_length,
+            volume.filesystem_flags,
+        )
+    except (TypeError, ValueError) as error:
+        raise RootAuthorityError(
+            RootAuthorityIssue.VOLUME_UNAVAILABLE,
+            authority.logical_root,
+            "volume observation returned invalid fields",
         ) from error
     evidence_anchor = volume.evidence.device_id
     if not isinstance(evidence_anchor, str) or not evidence_anchor:

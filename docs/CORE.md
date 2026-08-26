@@ -90,6 +90,12 @@ silently reinterpret malformed scope. Root minimization and exact-path coverage
 walk canonical parent keys rather than comparing every declared path with every
 root, so normalization work scales with total path depth.
 
+Every `Root.root_id` is nonempty valid Unicode and is capped by the derived
+`MAX_ROOT_ID_UTF8_BYTES`: the admitted request-id byte ceiling plus the UTF-8
+lengths of `inventory:` and `:refresh:` and the decimal width of
+`MAX_SAFE_INTEGER`. This admits the longest production inventory refresh id
+without turning an internal identifier into an unbounded source primitive.
+
 `SyncOptions.propagate_source_casing` is a fingerprinted planning policy. It
 defaults to false, is available through the primitive semantic-settings
 facade, and survives workflow payload round trips without changing the plan
@@ -481,7 +487,11 @@ paths: the scanner retains an escaped typed warning at the nearest valid parent
 and marks the scan incomplete. `ScanWarning` retains its code and valid parent
 path even if optional detail contains malformed Unicode: construction omits
 that whole detail to the existing empty-string representation. Valid detail is
-kept complete, without a new size limit; nontext detail is a type error.
+kept complete through 1,024 UTF-8 bytes; a larger complete value is omitted
+rather than truncated, and nontext detail is a type error. `ScanScope` admits
+at most 120,000 combined raw selected-path and subtree-root entries before it
+constructs canonical dictionaries, sets, or sorted tuples; duplicate and
+covered paths retain their established canonicalization after that admission.
 
 Canonical plan/ledger hashes, history JSON, and opaque workflow payloads use
 strict UTF-8. Strings and dictionary keys must contain Unicode scalar values;
@@ -498,7 +508,13 @@ relax required identity text or malformed-filename refusal.
 facts live in `VolumeEvidence`: relabeling is only noted, a matching serial with
 a changed filesystem type requires explicit rebind, and two mounted volumes
 with one key require explicit user choice. File identity is nullable and never
-fabricated on filesystems that cannot supply stable identity.
+fabricated on filesystems that cannot supply stable identity. Native volume
+serial, filesystem, and label text admit at most 260 UTF-16 units; device paths
+admit at most 32,767. Capability filesystem text uses the same 260-unit bound,
+its Boolean fields require exact Booleans, its optional seek-penalty field is
+an exact Boolean or null, and its maximum path is a positive safe integer no
+larger than 32,767. Constructors and named projections freshly revalidate the
+same fields.
 
 `FileIdentity.file_index` spans the complete unsigned 128-bit Windows domain.
 The core-owned adapter canonicalizes either CPython's witnessed NTFS/ReFS

@@ -81,7 +81,17 @@ canonically equivalent source/target pair without changing either name.
 otherwise valid inventory observations: it omits that entire detail to the
 existing empty string, retaining the warning code and valid parent path. This
 does not remove a warning or make an incomplete scan complete. Already escaped
-display spellings and every valid-Unicode detail remain unchanged.
+display spellings remain unchanged. Valid-Unicode detail is retained unchanged
+through 1,024 UTF-8 bytes; a larger complete value is omitted rather than
+truncated.
+
+`WalkingScanner.scan()` freshly re-admits the exact root, canonical scope, and
+bounded trusted anchor before its first backend call. Every backend
+`VolumeSnapshot` is an exact typed value whose identity, evidence, and
+capability fields are revalidated before anchor or filesystem policy consumes
+them, including the second binding probe. Workflow consumers independently
+re-admit the returned exact `ScanResult` and require its root and scope to match
+the request before ledger registration.
 
 ## Walking Rules
 

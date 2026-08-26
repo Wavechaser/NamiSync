@@ -6,6 +6,8 @@ from pathlib import Path
 
 import pytest
 
+import namisync.db.settings as settings_module
+
 from namisync.core.planning import (
     DeletionPolicy,
     FilterSet,
@@ -13,6 +15,7 @@ from namisync.core.planning import (
     policy_fingerprint,
 )
 from namisync.db.settings import (
+    SETTINGS_MAX_BYTES,
     SemanticSettings,
     SemanticSettingsPatch,
     SemanticSettingsStore,
@@ -146,6 +149,116 @@ def test_semantic_settings_reject_duplicate_json_keys(tmp_path: Path) -> None:
 
     with pytest.raises(SettingsFormatError, match="duplicate"):
         SemanticSettingsStore(path).read()
+
+
+def test_settings_read_admits_exact_byte_limit_and_rejects_n_plus_one_before_json(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "settings.json"
+    calls: list[int] = []
+    decoded = {
+        "schema_version": 1,
+        "filters": [],
+        "deletion_policy": "trash",
+        "trash_on_update": True,
+        "preservation": {
+            "preserve_ads": False,
+            "preserve_created": True,
+            "preserve_acl": False,
+        },
+        "propagate_source_casing": False,
+    }
+
+    def accepted_loads(payload: str, **_kwargs):
+        calls.append(len(payload))
+        return decoded
+
+    path.write_bytes(b" " * SETTINGS_MAX_BYTES)
+    monkeypatch.setattr(settings_module.json, "loads", accepted_loads)
+    assert SemanticSettingsStore(path).read() == SemanticSettings()
+    assert calls == [SETTINGS_MAX_BYTES]
+
+    path.write_bytes(b" " * (SETTINGS_MAX_BYTES + 1))
+
+    def forbidden_loads(*_args, **_kwargs):
+        raise AssertionError("oversized settings must not reach json.loads")
+
+    monkeypatch.setattr(settings_module.json, "loads", forbidden_loads)
+    with pytest.raises(SettingsFormatError, match="document byte limit"):
+        SemanticSettingsStore(path).read()
+
+
+def test_settings_filter_decode_rejects_n_plus_one_before_filter_construction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    path = tmp_path / "settings.json"
+    payload = {
+        "schema_version": 1,
+        "filters": [str(index) for index in range(65)],
+        "deletion_policy": "trash",
+        "trash_on_update": True,
+        "preservation": {
+            "preserve_ads": False,
+            "preserve_created": True,
+            "preserve_acl": False,
+        },
+        "propagate_source_casing": False,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def forbidden_filter(*_args, **_kwargs):
+        raise AssertionError("excess filters must not construct FilterSet")
+
+    monkeypatch.setattr(settings_module, "FilterSet", forbidden_filter)
+    with pytest.raises(SettingsFormatError, match="pattern limit"):
+        SemanticSettingsStore(path).read()
+
+
+def test_settings_derived_document_limit_is_attained_by_the_writer() -> None:
+    patterns = tuple(
+        "".join(chr(1 + ((index >> bit) & 1)) for bit in range(6))
+        + (chr(1) * 250)
+        for index in range(64)
+    )
+    settings = SemanticSettings(
+        filters=FilterSet(patterns),
+        deletion_policy=DeletionPolicy.ADDITIVE,
+        trash_on_update=False,
+        preservation=PreservationPolicy(
+            preserve_ads=False,
+            preserve_created=False,
+            preserve_acl=False,
+        ),
+        propagate_source_casing=False,
+    )
+
+    assert sum(len(pattern.encode("utf-8")) for pattern in patterns) == 16_384
+    assert len(settings_module._encode_settings(settings)) == SETTINGS_MAX_BYTES
+
+
+def test_settings_commit_revalidates_a_forged_exact_patch_before_locking(
+    tmp_path: Path,
+) -> None:
+    patch = SemanticSettingsPatch()
+    object.__setattr__(patch, "trash_on_update", 1)
+
+    with pytest.raises(TypeError, match="trash_on_update"):
+        SemanticSettingsStore(tmp_path / "settings.json").commit(patch)
+
+
+def test_semantic_settings_reject_aliasable_contract_values() -> None:
+    class FilterSubclass(FilterSet):
+        pass
+
+    class PatchSubclass(SemanticSettingsPatch):
+        pass
+
+    with pytest.raises(TypeError, match="FilterSet"):
+        SemanticSettings(filters=FilterSubclass())
+    with pytest.raises(TypeError, match="SemanticSettingsPatch"):
+        SemanticSettingsStore("settings.json").commit(PatchSubclass())
 
 
 def test_concurrent_semantic_commits_reread_under_named_mutex(

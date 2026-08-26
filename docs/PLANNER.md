@@ -66,6 +66,16 @@ The exact Setup and filter contracts are owned by
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
 
+Core policy admission bounds the raw shape before canonicalization. A filter
+snapshot is an exact tuple of at most 64 nonempty valid-Unicode patterns, each
+at most 1,024 UTF-8 bytes and together at most 16,384 bytes. An assignment is
+an exact tuple of at most 120,000 typed items. Destination-policy name/version
+and optional group/conflict annotations have no narrower production grammar;
+each value is capped by the plan-domain ceiling, and the complete combined
+occurrences still require the checkpoint-4 publication graph admission.
+Constructors and every named policy/assignment projection revalidate these
+contracts so forged frozen fields do not bypass them.
+
 ## Plan Contract
 
 A plan snapshots roots and `VolumeId` evidence, complete-scan state, filters,

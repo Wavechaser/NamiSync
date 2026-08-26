@@ -23,6 +23,7 @@ from namisync.core.models import (
     ScanResult,
     ScanScope,
     VolumeEvidence,
+    VolumeId,
 )
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, OperationReason, canonical_json_bytes
@@ -30,7 +31,9 @@ from namisync.core.recording import (
     InventoryCommand,
     InventoryVisibilityAction,
     InventoryVisibilityCommand,
+    LocationCommand,
     SyncRunCommand,
+    VolumeCommand,
 )
 from namisync.db.connections import connect_ledger_reader, connect_ledger_writer
 from namisync.db.recorder import StaleRecordingError, _payload_hash
@@ -313,7 +316,10 @@ def test_recorder_hash_projections_cover_exact_known_dataclasses() -> None:
             [("future_file_index", int, MAX_FILE_INDEX)],
             bases=(type(value),), frozen=True,
         )
-        extended = subclass_type(**{name: getattr(value, name) for name in declared})
+        extended = object.__new__(subclass_type)
+        for name in declared:
+            object.__setattr__(extended, name, getattr(value, name))
+        object.__setattr__(extended, "future_file_index", MAX_FILE_INDEX)
         with pytest.raises(TypeError):
             project(extended)
     assert _payload_hash({"kind": "recorder", "item": 7}) == hashlib.sha256(
@@ -565,15 +571,44 @@ def test_inventory_rejects_unprojected_nested_input_before_mutation(
 ) -> None:
     plans, inputs = hash_fixtures(False)
     command = inputs["inventory"]
-    # Warning detail is checked at construction. This unvalidated evidence
-    # field still reaches the recorder's independent closed hash boundary.
-    evidence = replace(command.scan.volume_evidence, label=value)
-    malformed = replace(command, scan=replace(command.scan, volume_evidence=evidence))
+    # Source evidence now rejects this at construction. Forge the frozen exact
+    # instance to keep proving the recorder's independent projection boundary.
+    malformed_scan = replace(command.scan)
+    malformed = replace(command, scan=malformed_scan)
+    evidence = replace(malformed_scan.volume_evidence)
+    object.__setattr__(malformed_scan, "volume_evidence", evidence)
+    object.__setattr__(evidence, "label", value)
     setup = setup_recorder(tmp_path / "ledger.db", plans["two_copy"])
     try:
         before = _ledger_state(setup.recorder.path)
         with pytest.raises((TypeError, ValueError)):
             setup.recorder.record_inventory(malformed)
+        assert _ledger_state(setup.recorder.path) == before
+    finally:
+        setup.recorder.close()
+
+
+def test_volume_and_location_commands_are_readmitted_before_ledger_mutation(
+    tmp_path: Path,
+) -> None:
+    reviewed, _inputs = hash_fixtures(False)
+    setup = setup_recorder(tmp_path / "ledger.db", reviewed["two_copy"])
+    try:
+        volume = VolumeCommand(
+            VolumeId("extra-volume", "NTFS"),
+            VolumeEvidence("Extra", "X:\\"),
+            NOW,
+        )
+        object.__setattr__(volume.evidence, "label", "v" * 261)
+        location = LocationCommand(1, "managed", NOW)
+        object.__setattr__(location, "volume_relative_path", "p" * 32_768)
+        before = _ledger_state(setup.recorder.path)
+
+        with pytest.raises(ValueError, match="UTF-16 text bound"):
+            setup.recorder.observe_volume(volume)
+        with pytest.raises(ValueError, match="UTF-16 path bound"):
+            setup.recorder.ensure_location(location)
+
         assert _ledger_state(setup.recorder.path) == before
     finally:
         setup.recorder.close()

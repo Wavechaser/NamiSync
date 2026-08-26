@@ -49,6 +49,14 @@ volumes, plan, selection, and token, then returns a run-bound
 keeps run and plan context out of every per-operation call without making
 operation ids globally unique across reruns.
 
+Volume, location, and inventory entry points reconstruct the exact typed
+command before any transaction. Volume identity/evidence use the core text and
+path ceilings, location paths are freshly validated and canonicalized, and an
+inventory command freshly re-admits its complete exact scan graph. Recorder's
+canonical hash projections repeat scan warning/scope/result admission so a
+forged frozen field cannot reach SQLite through either the command or hashing
+boundary.
+
 M0 uses eager operation-scoped transactions behind the final batching
 interface. Every successful call is already durable, and `flush()` is therefore
 a boundary-compatible no-op rather than a missing seam. One re-entrant lock

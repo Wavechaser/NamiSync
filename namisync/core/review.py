@@ -89,3 +89,8 @@ class ReviewFactLimitError(ValueError):
     def __init__(self, fact: ReviewFactLimitExceeded) -> None:
         super().__init__(fact.reason)
         self.fact = fact
+
+
+# Shared source-contract limits used before the completed artifact model lands.
+MAX_PLAN_REVIEW_ROWS = 120_000
+MAX_PLAN_DOMAIN_RETAINED_BYTES = 134_217_728

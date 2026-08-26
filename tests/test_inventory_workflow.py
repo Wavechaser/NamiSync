@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import stat as stat_module
@@ -38,6 +39,7 @@ from namisync.core.models import (
     ScanResult,
     ScanScope,
     ScanScopeKind,
+    SCAN_SCOPE_ENTRY_LIMIT,
     ScanWarning,
     ScanWarningCode,
     UnsupportedReason,
@@ -68,16 +70,21 @@ from namisync.modules.scanner import (
 )
 from namisync.workflows.inventory import (
     IntegrityDependencies,
+    IntegrityRequest,
     IntegrityWorkflowRequest,
     InventoryDependencies,
     InventoryDetails,
     InventoryRequest,
     InventoryWorkflowRequest,
     LocationBinding,
+    MAX_MOUNT_CANDIDATES,
+    MAX_VOLUME_RESOLUTION_CANDIDATES,
     MountedVolume,
     NativeMountedVolumeResolver,
+    VolumeResolution,
     VolumeResolutionRequired,
     VolumeResolutionState,
+    bind_integrity_request,
     bind_inventory_request,
     decode_integrity_request,
     decode_inventory_request,
@@ -337,6 +344,302 @@ def test_integrity_continuation_refuses_excess_before_duplicate_copies() -> None
     assert str(raised.value) == INTEGRITY_CANDIDATE_ROWS_MESSAGE
 
 
+def test_location_binding_accepts_exact_mount_limit_and_rejects_n_plus_one() -> None:
+    mounts = tuple(f"M:\\mount-{index}" for index in range(MAX_MOUNT_CANDIDATES))
+
+    binding = LocationBinding(VOLUME_ID, "managed", mounts[0], mounts, True, 7)
+    assert binding.expected_mounts == mounts
+
+    with pytest.raises(ValueError, match="mount-candidate limit"):
+        LocationBinding(
+            VOLUME_ID,
+            "managed",
+            mounts[0],
+            (*mounts, "M:\\excess"),
+            True,
+            7,
+        )
+
+
+def test_workflow_request_id_uses_complete_external_text_wall() -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+
+    assert InventoryWorkflowRequest("r" * 65_536, binding).request_id == (
+        "r" * 65_536
+    )
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        InventoryWorkflowRequest("r" * 65_537, binding)
+    with pytest.raises(TypeError, match="request id"):
+        InventoryWorkflowRequest(
+            type("Text", (str,), {})("request"),
+            binding,
+        )
+
+
+def test_integrity_request_rejects_empty_list_alias() -> None:
+    with pytest.raises(TypeError, match="selected_paths must be a tuple"):
+        IntegrityRequest(
+            "request",
+            IntegrityMode.VERIFY,
+            root_path="M:\\managed",
+            selected_paths=[],
+        )
+
+
+@pytest.mark.parametrize("kind", ("inventory", "integrity"))
+def test_inventory_encoders_revalidate_forged_exact_requests_before_projection(
+    kind: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    if kind == "inventory":
+        request = InventoryWorkflowRequest("request", binding)
+        object.__setattr__(
+            request,
+            "selected_paths",
+            ("a",) * (SCAN_SCOPE_ENTRY_LIMIT + 1),
+        )
+        encode = encode_inventory_request
+    else:
+        request = IntegrityWorkflowRequest(
+            "request",
+            binding,
+            IntegrityMode.VERIFY,
+        )
+        object.__setattr__(request, "request_id", "r" * 65_537)
+        encode = encode_integrity_request
+
+    def forbidden_json(*_args, **_kwargs):
+        raise AssertionError("forged request must not reach JSON projection")
+
+    monkeypatch.setattr(inventory_workflow, "_json_bytes", forbidden_json)
+    with pytest.raises((IntegrityCandidateLimitError, ValueError)):
+        encode(request)
+
+
+@pytest.mark.parametrize("kind", ("inventory", "integrity"))
+def test_inventory_direct_entries_revalidate_before_resolver_or_ledger_work(
+    kind: str,
+    tmp_path: Path,
+) -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    if kind == "inventory":
+        outer = InventoryRequest("request", root_path="M:\\managed")
+        workflow_request = InventoryWorkflowRequest("request", binding)
+        bind = bind_inventory_request
+        run = run_inventory
+    else:
+        outer = IntegrityRequest(
+            "request",
+            IntegrityMode.VERIFY,
+            root_path="M:\\managed",
+        )
+        workflow_request = IntegrityWorkflowRequest(
+            "request",
+            binding,
+            IntegrityMode.VERIFY,
+        )
+        bind = bind_integrity_request
+        run = run_integrity
+    object.__setattr__(outer, "request_id", "r" * 65_537)
+    object.__setattr__(workflow_request, "request_id", "r" * 65_537)
+
+    inaccessible = SimpleNamespace()
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        bind(
+            outer,
+            ledger_path=tmp_path / "ledger.db",
+            backend=inaccessible,
+            resolver=inaccessible,
+        )
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        run(workflow_request, _context(), inaccessible)
+
+
+@pytest.mark.parametrize("mutation", ("complete", "root", "scope", "files"))
+def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
+    mutation: str,
+) -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    resolution = VolumeResolution(
+        VolumeResolutionState.RESOLVED,
+        binding,
+        root_path="M:\\managed",
+        selected_mount="M:\\",
+        evidence=EVIDENCE,
+        candidates=("M:\\",),
+    )
+
+    def scanner(root, _ignores, _ctx, scope, *, trusted_anchor=None):
+        assert trusted_anchor == "M:\\"
+        result = ScanResult(
+            root,
+            VOLUME_ID,
+            EVIDENCE,
+            PROFILE,
+            (),
+            (),
+            (),
+            (),
+            scope,
+            True,
+        )
+        if mutation == "complete":
+            object.__setattr__(result, "complete", 1)
+        elif mutation == "root":
+            object.__setattr__(result, "root", Root(root.path, "other"))
+        elif mutation == "scope":
+            object.__setattr__(result, "scope", ScanScope.selected(("other",)))
+        else:
+            object.__setattr__(result, "files", [])
+        return result
+
+    class ForbiddenRecorder:
+        def ensure_host(self, *_args):
+            raise AssertionError("invalid scan must not register a host")
+
+        def observe_volume(self, *_args):
+            raise AssertionError("invalid scan must not observe a volume")
+
+        def ensure_location(self, *_args):
+            raise AssertionError("invalid scan must not register a location")
+
+    deps = SimpleNamespace(
+        scanner=scanner,
+        ignores=IgnoreSet(),
+        clock=FakeClock(),
+        host_key="host",
+        host_name="Host",
+    )
+    expected = TypeError if mutation in {"complete", "files"} else RuntimeError
+    with pytest.raises(expected):
+        inventory_workflow._register_and_scan(
+            "request",
+            "request",
+            binding,
+            resolution,
+            (),
+            (),
+            _context(),
+            deps,
+            ForbiddenRecorder(),
+        )
+
+
+def test_resolution_rejects_excess_candidates_before_path_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+
+    projected: list[str] = []
+    original_path_key = inventory_workflow._path_key
+
+    def observed_path_key(path: str) -> str:
+        projected.append(path)
+        return original_path_key(path)
+
+    monkeypatch.setattr(inventory_workflow, "_path_key", observed_path_key)
+    with pytest.raises(ValueError, match="mount-candidate limit"):
+        VolumeResolution(
+            VolumeResolutionState.AMBIGUOUS,
+            binding,
+            candidates=tuple(
+                f"M:\\mount-{index}"
+                for index in range(MAX_VOLUME_RESOLUTION_CANDIDATES + 1)
+            ),
+        )
+    assert all("mount-" not in path for path in projected)
+
+
+def test_resolution_diagnostic_uses_complete_omission_at_utf8_boundary() -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+
+    exact = VolumeResolution(
+        VolumeResolutionState.OFFLINE,
+        binding,
+        detail="\u00e9" * 512,
+    )
+    omitted = VolumeResolution(
+        VolumeResolutionState.OFFLINE,
+        binding,
+        detail=("\u00e9" * 512) + "x",
+    )
+
+    assert exact.detail == "\u00e9" * 512
+    assert omitted.detail is None
+
+
+def test_native_resolver_rejects_excess_hints_before_drive_enumeration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden_drives() -> tuple[str, ...]:
+        raise AssertionError("excess hints must not enumerate drives")
+
+    monkeypatch.setattr(
+        inventory_workflow,
+        "_logical_drive_roots",
+        forbidden_drives,
+    )
+    resolver = NativeMountedVolumeResolver(SimpleNamespace())
+
+    with pytest.raises(ValueError, match="hints exceed"):
+        resolver.mounted_volumes(
+            VOLUME_ID,
+            tuple(
+                f"M:\\mount-{index}"
+                for index in range(MAX_MOUNT_CANDIDATES + 1)
+            ),
+        )
+
+
+def test_logical_drive_source_buffer_accepts_exact_maximum_and_rejects_next(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    roots = tuple(f"{chr(ord('A') + index)}:\\" for index in range(26))
+    multistring = "\x00".join(roots) + "\x00\x00"
+    assert len(multistring) == 105
+
+    class Kernel32:
+        result = 104
+        calls = 0
+
+        def GetLogicalDriveStringsW(self, size, buffer):
+            self.calls += 1
+            assert size == len(multistring)
+            if self.result >= size:
+                return self.result
+            for index, character in enumerate(multistring):
+                buffer[index] = character
+            return self.result
+
+    kernel32 = Kernel32()
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *_args, **_kwargs: kernel32)
+
+    assert inventory_workflow._logical_drive_roots() == roots
+    assert kernel32.calls == 1
+
+    kernel32.result = 105
+    with pytest.raises(OSError, match="fixed source bound"):
+        inventory_workflow._logical_drive_roots()
+    assert kernel32.calls == 2
+
+
+def test_native_resolver_revalidates_forged_snapshot_before_mount_projection() -> None:
+    evidence = VolumeEvidence("Inventory", "M:\\")
+    snapshot = VolumeSnapshot(VOLUME_ID, evidence, PROFILE)
+    object.__setattr__(evidence, "device_id", "p" * 32_768)
+
+    class Backend:
+        def volume_snapshot(self, _path: str) -> VolumeSnapshot:
+            return snapshot
+
+    with pytest.raises(ValueError, match="UTF-16 path bound"):
+        NativeMountedVolumeResolver(Backend()).mounted_volumes(
+            VOLUME_ID,
+            ("M:\\",),
+        )
+
+
 def test_integrity_continuation_requires_completed_selection_order() -> None:
     binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
 
@@ -444,7 +747,7 @@ def test_native_resolver_probe_uses_scanner_backend(
     assert backend.scanned_paths == ["logical-root"]
 
 
-def test_first_location_registers_role_free_before_scan_then_records_inventory(
+def test_first_location_validates_scan_before_role_free_registration_and_inventory(
     tmp_path: Path,
 ) -> None:
     mount = tmp_path / "mount"
@@ -454,15 +757,15 @@ def test_first_location_registers_role_free_before_scan_then_records_inventory(
     scanner = _Scanner(records=(_file(),))
     details: list[InventoryDetails] = []
 
-    def assert_registration_precedes_scan() -> None:
+    def assert_scan_precedes_registration() -> None:
         with connect_ledger_reader(ledger_path) as connection:
-            assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 1
-            assert connection.execute("SELECT count(*) FROM volumes").fetchone()[0] == 1
-            assert connection.execute("SELECT count(*) FROM locations").fetchone()[0] == 1
+            assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 0
+            assert connection.execute("SELECT count(*) FROM volumes").fetchone()[0] == 0
+            assert connection.execute("SELECT count(*) FROM locations").fetchone()[0] == 0
             assert connection.execute("SELECT count(*) FROM mappings").fetchone()[0] == 0
             assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0
 
-    scanner.before_scan = assert_registration_precedes_scan
+    scanner.before_scan = assert_scan_precedes_registration
     result = run_inventory(
         bind_inventory_request(
             InventoryRequest("first", root_path=str(root)),
@@ -2091,16 +2394,45 @@ def test_inventory_json_rejects_nested_surrogate_code_units(text: str, position:
 
 @pytest.mark.parametrize("kind", ("inventory", "integrity"))
 @pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
-def test_inventory_payload_encoding_rejects_surrogate_code_units(kind: str, text: str) -> None:
+def test_inventory_workflow_request_rejects_surrogate_code_units(
+    kind: str, text: str
+) -> None:
     binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
-    if kind == "inventory":
-        request = InventoryWorkflowRequest("request-" + text, binding)
-        encode = encode_inventory_request
-    else:
-        request = IntegrityWorkflowRequest("request-" + text, binding, IntegrityMode.VERIFY)
-        encode = encode_integrity_request
-    with pytest.raises(UnicodeEncodeError):
-        encode(request)
+    with pytest.raises(ValueError, match="valid Unicode"):
+        if kind == "inventory":
+            InventoryWorkflowRequest("request-" + text, binding)
+        else:
+            IntegrityWorkflowRequest(
+                "request-" + text,
+                binding,
+                IntegrityMode.VERIFY,
+            )
+
+
+def test_inventory_decode_counts_combined_scope_before_text_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    value = {
+        "version": 2,
+        "kind": "inventory",
+        "request_id": "request",
+        "binding": {},
+        "selected_paths": ["a"] * 60_000,
+        "subtree_roots": ["b"] * 60_001,
+    }
+
+    monkeypatch.setattr(
+        inventory_workflow,
+        "_payload",
+        lambda *_args: value,
+    )
+
+    def forbidden_string(*_args):
+        raise AssertionError("excess scope must not project text")
+
+    monkeypatch.setattr(inventory_workflow, "_string", forbidden_string)
+    with pytest.raises(ValueError, match="scan-scope item limit"):
+        decode_inventory_request(b"")
 
 
 @pytest.mark.parametrize("kind", ("inventory", "integrity"))

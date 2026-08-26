@@ -13,13 +13,30 @@ from types import TracebackType
 
 from namisync.core.planning import (
     DeletionPolicy,
+    FILTER_PATTERN_LIMIT,
+    FILTER_TOTAL_UTF8_LIMIT,
     FilterSet,
     PreservationPolicy,
     SyncOptions,
+    validate_filter_set,
 )
+from namisync.core.scalars import require_utf16_path
 
 
 SETTINGS_SCHEMA_VERSION = 1
+_MAX_JSON_CHARACTER_ESCAPE_BYTES = 6
+_LONGEST_FIXED_SETTINGS_DOCUMENT = (
+    b'{"deletion_policy":"additive","filters":[],"preservation":'
+    b'{"preserve_acl":false,"preserve_ads":false,"preserve_created":false},'
+    b'"propagate_source_casing":false,"schema_version":1,'
+    b'"trash_on_update":false}\n'
+)
+SETTINGS_MAX_BYTES = (
+    len(_LONGEST_FIXED_SETTINGS_DOCUMENT)
+    + FILTER_TOTAL_UTF8_LIMIT * _MAX_JSON_CHARACTER_ESCAPE_BYTES
+    + FILTER_PATTERN_LIMIT * 3
+    - 1
+)
 
 
 class SettingsFormatError(ValueError):
@@ -35,6 +52,21 @@ class SemanticSettings:
     propagate_source_casing: bool = False
 
     def __post_init__(self) -> None:
+        validate_filter_set(self.filters)
+        if type(self.deletion_policy) is not DeletionPolicy:
+            raise TypeError("semantic deletion policy has the wrong type")
+        if type(self.preservation) is not PreservationPolicy:
+            raise TypeError("semantic preservation policy has the wrong type")
+        PreservationPolicy(
+            self.preservation.preserve_ads,
+            self.preservation.preserve_created,
+            self.preservation.preserve_acl,
+        )
+        if (
+            type(self.trash_on_update) is not bool
+            or type(self.propagate_source_casing) is not bool
+        ):
+            raise TypeError("semantic settings switches must be bools")
         if self.deletion_policy not in {
             DeletionPolicy.TRASH,
             DeletionPolicy.ADDITIVE,
@@ -63,6 +95,29 @@ class SemanticSettingsPatch:
     preservation: PreservationPolicy | None = None
     propagate_source_casing: bool | None = None
 
+    def __post_init__(self) -> None:
+        if self.filters is not None:
+            validate_filter_set(self.filters)
+        if (
+            self.deletion_policy is not None
+            and type(self.deletion_policy) is not DeletionPolicy
+        ):
+            raise TypeError("semantic deletion patch has the wrong type")
+        if self.preservation is not None:
+            if type(self.preservation) is not PreservationPolicy:
+                raise TypeError("semantic preservation patch has the wrong type")
+            PreservationPolicy(
+                self.preservation.preserve_ads,
+                self.preservation.preserve_created,
+                self.preservation.preserve_acl,
+            )
+        for field_name, value in (
+            ("trash_on_update", self.trash_on_update),
+            ("propagate_source_casing", self.propagate_source_casing),
+        ):
+            if value is not None and type(value) is not bool:
+                raise TypeError(f"semantic {field_name} patch must be a bool")
+
 
 class SemanticSettingsStore:
     """Atomic settings reads and cross-process serialized partial commits."""
@@ -75,7 +130,11 @@ class SemanticSettingsStore:
     ) -> None:
         if mutex_timeout_seconds <= 0:
             raise ValueError("settings mutex timeout must be positive")
-        self.path = Path(path).resolve()
+        raw_path = os.fspath(path)
+        require_utf16_path(raw_path, "settings path")
+        resolved = str(Path(raw_path).resolve())
+        require_utf16_path(resolved, "settings path")
+        self.path = Path(resolved)
         self._mutex_timeout_seconds = mutex_timeout_seconds
 
     @property
@@ -86,9 +145,14 @@ class SemanticSettingsStore:
 
     def read(self) -> SemanticSettings:
         try:
-            payload = self.path.read_bytes()
+            with self.path.open("rb") as stream:
+                payload = stream.read(SETTINGS_MAX_BYTES + 1)
         except FileNotFoundError:
             return SemanticSettings()
+        if len(payload) > SETTINGS_MAX_BYTES:
+            raise SettingsFormatError(
+                "settings.json exceeds the complete document byte limit"
+            )
         try:
             value = json.loads(
                 payload.decode("utf-8"),
@@ -99,8 +163,15 @@ class SemanticSettingsStore:
         return _decode_settings(value)
 
     def commit(self, patch: SemanticSettingsPatch) -> SemanticSettings:
-        if not isinstance(patch, SemanticSettingsPatch):
+        if type(patch) is not SemanticSettingsPatch:
             raise TypeError("semantic settings commit requires SemanticSettingsPatch")
+        patch = SemanticSettingsPatch(
+            filters=patch.filters,
+            deletion_policy=patch.deletion_policy,
+            trash_on_update=patch.trash_on_update,
+            preservation=patch.preservation,
+            propagate_source_casing=patch.propagate_source_casing,
+        )
         with _WindowsNamedMutex(
             self.mutex_name,
             timeout_seconds=self._mutex_timeout_seconds,
@@ -194,6 +265,15 @@ def _apply_patch(
 
 
 def _encode_settings(value: SemanticSettings) -> bytes:
+    if type(value) is not SemanticSettings:
+        raise TypeError("settings encoder requires SemanticSettings")
+    SemanticSettings(
+        filters=value.filters,
+        deletion_policy=value.deletion_policy,
+        trash_on_update=value.trash_on_update,
+        preservation=value.preservation,
+        propagate_source_casing=value.propagate_source_casing,
+    )
     payload = {
         "schema_version": SETTINGS_SCHEMA_VERSION,
         "filters": list(value.filters.patterns),
@@ -206,7 +286,7 @@ def _encode_settings(value: SemanticSettings) -> bytes:
         },
         "propagate_source_casing": value.propagate_source_casing,
     }
-    return (
+    encoded = (
         json.dumps(
             payload,
             ensure_ascii=False,
@@ -215,11 +295,14 @@ def _encode_settings(value: SemanticSettings) -> bytes:
         ).encode("utf-8")
         + b"\n"
     )
+    if len(encoded) > SETTINGS_MAX_BYTES:
+        raise RuntimeError("settings encoding exceeded its derived byte limit")
+    return encoded
 
 
 def _decode_settings(value: object) -> SemanticSettings:
-    if not isinstance(value, dict) or not all(
-        isinstance(key, str) for key in value
+    if type(value) is not dict or not all(
+        type(key) is str for key in value
     ):
         raise SettingsFormatError("settings.json must contain one JSON object")
     expected = {
@@ -240,12 +323,14 @@ def _decode_settings(value: object) -> SemanticSettings:
             f"unsupported settings schema version: {value['schema_version']}"
         )
     filters = value["filters"]
-    if not isinstance(filters, list) or not all(
-        isinstance(item, str) for item in filters
-    ):
+    if type(filters) is not list:
+        raise SettingsFormatError("settings filters must be a list of strings")
+    if len(filters) > FILTER_PATTERN_LIMIT:
+        raise SettingsFormatError("settings filters exceed the pattern limit")
+    if not all(type(item) is str for item in filters):
         raise SettingsFormatError("settings filters must be a list of strings")
     preservation = value["preservation"]
-    if not isinstance(preservation, dict) or set(preservation) != {
+    if type(preservation) is not dict or set(preservation) != {
         "preserve_ads",
         "preserve_created",
         "preserve_acl",
@@ -258,12 +343,15 @@ def _decode_settings(value: object) -> SemanticSettings:
         preservation["preserve_created"],
         preservation["preserve_acl"],
     )
-    if not all(isinstance(item, bool) for item in booleans):
+    if not all(type(item) is bool for item in booleans):
         raise SettingsFormatError("settings boolean values must be true or false")
+    deletion_policy = value["deletion_policy"]
+    if type(deletion_policy) is not str:
+        raise SettingsFormatError("settings deletion policy must be a string")
     try:
         return SemanticSettings(
             filters=FilterSet(tuple(filters)),
-            deletion_policy=DeletionPolicy(str(value["deletion_policy"])),
+            deletion_policy=DeletionPolicy(deletion_policy),
             trash_on_update=value["trash_on_update"],
             preservation=PreservationPolicy(
                 preserve_ads=preservation["preserve_ads"],

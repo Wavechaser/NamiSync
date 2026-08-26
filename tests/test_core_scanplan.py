@@ -12,6 +12,7 @@ import pytest
 
 import namisync.core.models as model_contracts
 import namisync.core.planning as planning_contracts
+import namisync.core.scalars as scalar_contracts
 from namisync.core.models import IgnoreSet
 from namisync.core.pathing import (
     PathValidationError,
@@ -91,6 +92,241 @@ def test_long_relative_path_is_valid() -> None:
     path = "\\".join(["directory" * 10] * 4 + ["file.bin"])
     assert len(path) > 260
     assert validate_relative_path(path) == path
+
+
+def test_relative_path_accepts_complete_utf16_limit_and_rejects_next_unit() -> None:
+    exact = "a" * 32_767
+
+    assert validate_relative_path(exact) is exact
+    with pytest.raises(PathValidationError, match="UTF-16 path bound"):
+        validate_relative_path(exact + "a")
+
+
+def test_volume_root_profile_and_warning_source_bounds_are_exact() -> None:
+    assert model_contracts.MAX_ROOT_ID_UTF8_BYTES == (
+        scalar_contracts.MAX_REQUEST_ID_UTF8_BYTES
+        + len("inventory:".encode("utf-8"))
+        + len(":refresh:".encode("utf-8"))
+        + len(str(scalar_contracts.MAX_SAFE_INTEGER).encode("ascii"))
+    )
+    volume_text = "\U0001f600" * 130
+    model_contracts.VolumeId(volume_text, volume_text)
+    model_contracts.VolumeEvidence(volume_text, "p" * 32_767, False)
+    model_contracts.CapabilityProfile(
+        volume_text,
+        1,
+        True,
+        None,
+        32_767,
+        False,
+        True,
+    )
+    model_contracts.Root(
+        r"C:\root", "r" * model_contracts.MAX_ROOT_ID_UTF8_BYTES
+    )
+    warning = model_contracts.ScanWarning(
+        model_contracts.ScanWarningCode.ACCESS_DENIED,
+        None,
+        "\u00e9" * 512,
+    )
+
+    assert warning.detail == "\u00e9" * 512
+    with pytest.raises(ValueError, match="UTF-16 text bound"):
+        model_contracts.VolumeId(volume_text + "x", "NTFS")
+    with pytest.raises(ValueError, match="UTF-16 path bound"):
+        model_contracts.VolumeEvidence(device_id="p" * 32_768)
+    with pytest.raises(ValueError, match="maximum path"):
+        model_contracts.CapabilityProfile(
+            "NTFS", 1, True, None, 32_768, False, False
+        )
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        model_contracts.Root(
+            r"C:\root", "r" * (model_contracts.MAX_ROOT_ID_UTF8_BYTES + 1)
+        )
+    assert model_contracts.ScanWarning(
+        model_contracts.ScanWarningCode.ACCESS_DENIED,
+        None,
+        ("\u00e9" * 512) + "x",
+    ).detail == ""
+
+
+def test_source_contracts_reject_coercible_scalar_fields() -> None:
+    class Text(str):
+        pass
+
+    with pytest.raises(TypeError):
+        model_contracts.VolumeId(Text("serial"), "NTFS")
+    with pytest.raises(TypeError):
+        model_contracts.VolumeEvidence(clone_ambiguous=1)  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        model_contracts.CapabilityProfile(
+            "NTFS", 1, 1, None, 32_767, False, False  # type: ignore[arg-type]
+        )
+    with pytest.raises(TypeError):
+        model_contracts.ScanWarning(
+            "access_denied", None  # type: ignore[arg-type]
+        )
+
+
+@pytest.mark.parametrize(
+    ("record_factory", "message"),
+    (
+        pytest.param(
+            lambda key, metadata: model_contracts.FileRecord(
+                "file.txt", key, 1, 1, None, 1, metadata
+            ),
+            "file path key",
+            id="file",
+        ),
+        pytest.param(
+            lambda key, metadata: model_contracts.DirRecord(
+                "folder", key, 1, metadata, None
+            ),
+            "directory path key",
+            id="directory",
+        ),
+        pytest.param(
+            lambda key, _metadata: model_contracts.UnsupportedRecord(
+                "other", key, model_contracts.UnsupportedReason.UNKNOWN_TYPE
+            ),
+            "unsupported path key",
+            id="unsupported",
+        ),
+    ),
+)
+def test_source_records_reject_coercible_path_keys(record_factory, message: str) -> None:
+    class Text(str):
+        pass
+
+    with pytest.raises(TypeError, match=message):
+        record_factory(Text("FORGED"), model_contracts.MetadataSnapshot(0, None))
+
+
+def test_source_projections_revalidate_forged_exact_dataclasses() -> None:
+    root = model_contracts.Root(r"C:\root", "source")
+    volume = model_contracts.VolumeId("serial", "NTFS")
+    object.__setattr__(
+        root,
+        "root_id",
+        "r" * (model_contracts.MAX_ROOT_ID_UTF8_BYTES + 1),
+    )
+    object.__setattr__(volume, "fs_type", "f" * 261)
+
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        model_contracts.root_projection(root)
+    with pytest.raises(ValueError, match="UTF-16 text bound"):
+        model_contracts.volume_id_projection(volume)
+
+
+def test_filter_contract_charges_raw_shape_before_canonicalization() -> None:
+    exact = tuple(f"{index:02x}" + ("x" * 1_022) for index in range(16))
+    assert sum(len(value.encode("utf-8")) for value in exact) == 16_384
+    assert planning_contracts.FilterSet(exact).patterns == tuple(sorted(exact))
+
+    with pytest.raises(ValueError, match="total limit"):
+        planning_contracts.FilterSet((*exact, "x"))
+    with pytest.raises(ValueError, match="64-pattern"):
+        planning_contracts.FilterSet(tuple(str(index) for index in range(65)))
+    with pytest.raises(ValueError, match="total limit"):
+        planning_contracts.FilterSet(("x" * 1_024,) * 17)
+    with pytest.raises(ValueError, match="UTF-8 text bound"):
+        planning_contracts.FilterSet(("/" * 1_025,))
+
+
+def test_scan_scope_combined_source_population_has_exact_preallocation_wall(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    exact = ("a",) * model_contracts.SCAN_SCOPE_ENTRY_LIMIT
+    assert model_contracts.ScanScope.selected(exact).selected_paths == ("a",)
+
+    def forbidden_normalize(*_args, **_kwargs):
+        raise AssertionError("excess scope must not normalize any path")
+
+    monkeypatch.setattr(
+        model_contracts,
+        "normalize_relative_path",
+        forbidden_normalize,
+    )
+    with pytest.raises(ValueError, match="120000-entry limit"):
+        model_contracts.ScanScope.scoped(
+            selected_paths=("a",) * 60_000,
+            subtree_roots=("b",) * 60_001,
+        )
+
+
+def test_filter_and_assignment_contracts_reject_aliasable_shapes() -> None:
+    class Text(str):
+        pass
+
+    class TupleAlias(tuple):
+        pass
+
+    with pytest.raises(TypeError, match="tuple"):
+        planning_contracts.FilterSet(TupleAlias(("*.tmp",)))
+    with pytest.raises(TypeError, match="filter pattern"):
+        planning_contracts.FilterSet((Text("*.tmp"),))
+    with pytest.raises(TypeError, match="source assignment path"):
+        planning_contracts.DestinationAssignment(
+            Text("a.txt"), "A.TXT", "a.txt", "A.TXT"
+        )
+    with pytest.raises(TypeError, match="tuple"):
+        planning_contracts.Assignment(
+            "identity", "1", TupleAlias(())
+        )
+
+
+def test_assignment_rejects_n_plus_one_items_before_item_traversal() -> None:
+    item = planning_contracts.DestinationAssignment(
+        "a.txt", "A.TXT", "a.txt", "A.TXT"
+    )
+
+    with pytest.raises(ValueError, match="plan row limit"):
+        planning_contracts.Assignment(
+            "identity",
+            "1",
+            (item,) * (planning_contracts.ASSIGNMENT_ITEM_LIMIT + 1),
+        )
+
+
+def test_policy_fingerprint_snapshots_each_hostile_property_once() -> None:
+    class HostilePolicy:
+        def __init__(self) -> None:
+            self.name_reads = 0
+            self.version_reads = 0
+
+        @property
+        def name(self) -> str:
+            self.name_reads += 1
+            if self.name_reads == 1:
+                return "identity"
+            return type("Text", (str,), {})("identity")
+
+        @property
+        def version(self) -> str:
+            self.version_reads += 1
+            return "1"
+
+        def assign(self, records, meta, target):
+            raise AssertionError("fingerprinting must not invoke assignment")
+
+    policy = HostilePolicy()
+    options = planning_contracts.SyncOptions(destination_policy=policy)
+
+    policy_fingerprint(options)
+    assert (policy.name_reads, policy.version_reads) == (1, 1)
+    with pytest.raises(TypeError, match="policy version"):
+        planning_contracts.policy_fingerprint(
+            planning_contracts.SyncOptions(
+                destination_policy=type(
+                    "InvalidPolicy",
+                    (),
+                    {
+                        "name": "identity",
+                        "version": type("Text", (str,), {})("1"),
+                    },
+                )(),
+            )
+        )
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows native path spelling")
@@ -258,7 +494,7 @@ def test_scan_warning_retains_complete_valid_detail_and_rejects_nontext() -> Non
         model_contracts.ScanWarningCode.ACCESS_DENIED, "folder", detail,
     )
     assert warning.rel_path == "folder"
-    assert warning.detail == detail
+    assert warning.detail == ""
     with pytest.raises(TypeError):
         model_contracts.ScanWarning(
             model_contracts.ScanWarningCode.ACCESS_DENIED, "folder", 7,

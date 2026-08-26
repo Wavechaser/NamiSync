@@ -281,6 +281,22 @@ class FakeBackend:
         yield iter(self.entries.get(path, ()))
 
 
+def test_scanner_revalidates_forged_volume_snapshot_before_enumeration() -> None:
+    backend = FakeBackend({}, _profile())
+    snapshot = backend.volume_snapshot(r"C:\root")
+    object.__setattr__(snapshot.profile, "fs_type", "f" * 261)
+    backend.volume_snapshot = lambda _root: snapshot  # type: ignore[method-assign]
+
+    with pytest.raises(ValueError, match="UTF-16 text bound"):
+        WalkingScanner(backend).scan(
+            Root(r"C:\root", "source"),
+            IgnoreSet(),
+            _ctx(),
+        )
+
+    assert backend.scandir_calls == []
+
+
 class ScopedAdmissionBackend(FakeBackend):
     def __init__(
         self,

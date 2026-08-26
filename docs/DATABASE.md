@@ -38,9 +38,10 @@ bytes remain unchanged. A later boundary hardening requires Unicode scalar
 strings/keys and strict UTF-8 without another epoch or schema change. JSON had
 already distinguished surrogate escapes from literal backslashes; this is a
 malformed-input/round-trip fix, not a demonstrated hash collision. Optional scan
-warning detail is omitted at construction if malformed; its old captured
-receipt consequently conflicts without mutation even when identityless. Valid
-observations are still recorded. [CORE.md](CORE.md) and [RECORDER.md](RECORDER.md)
+warning detail is omitted at construction if malformed or larger than 1,024
+UTF-8 bytes; its old captured receipt consequently conflicts without mutation
+even when identityless. Valid observations are still recorded.
+[CORE.md](CORE.md) and [RECORDER.md](RECORDER.md)
 own that input policy and replay behavior; frozen old bytes remain immutable.
 
 Both old epoch-5 databases, either mixed 5/6 direction, and epoch 6 carrying the
@@ -402,6 +403,16 @@ part of the audit ledger's durability contract.
 Reads require the exact integer schema discriminator and reject duplicate JSON
 object keys rather than accepting boolean/integer equivalence or last-key-wins
 ambiguity.
+Before UTF-8 decoding or JSON construction, a binary read stops at one byte
+past an exact schema-derived ceiling. The ceiling is the longest fixed
+canonical schema document plus six output bytes for each of the filters'
+16,384 admitted UTF-8 bytes and the exact quotes/comma expansion for 64 list
+items. The canonical writer attains that bound with control-character filters;
+arbitrary whitespace or noncanonical JSON that exceeds it is refused even if
+its decoded values would otherwise fit. Filter count is checked before the
+decoded list is copied into the immutable settings contract, and exact patches
+are reconstructed before taking the write mutex so forged frozen fields cannot
+bypass validation.
 The store accepts user-facing `trash` and `additive`; hidden `mirror` is not a
 persistable preference. Runtime composition defaults the path to
 `settings.json` beside the selected ledger, so an explicit ledger override

@@ -66,6 +66,18 @@ equals that selected folder mount, FULL scanning admits the anchor's own
 mount-point classification only under matching current mount and full-volume
 binding; no component below it inherits the exception.
 
+The native resolver's collection ceilings follow its actual candidate sources,
+not a claim that Windows has only a fixed number of mounts. A newly persisted
+binding can contain the 26 `GetLogicalDriveStringsW` roots plus at most one
+persisted hint, including the only route by which this implementation discovers
+a folder-mounted volume, so its bound is 27. Re-resolving an admitted binding
+can replay all 27 candidates as hints and enumerate 26 drive roots again, so a
+resolver result and `VolumeResolution` admit at most 53 candidates before path
+projection. Native logical-drive enumeration uses one fixed, API-derived
+105-character buffer and rejects an insufficient-buffer return, avoiding a
+size/fill race. All mounted-volume, binding, and resolution projections
+revalidate exact base types and bounded paths.
+
 The production dispatcher registry contains inventory (pause unsupported) and
 baseline/verify/rebaseline (pause supported), and the CLI reaches all four only
 through the shared service. In the current implementation, a fresh baseline
@@ -88,6 +100,13 @@ starts no verifier work; a recorder finalization failure retains error
 precedence. Accepted rows share one root `Path` owner rather than copying it per
 candidate. The independent retained-byte axis remains inactive until the
 checkpoint-4 graph model freezes its complete charge.
+
+Inventory scan scopes independently charge the combined raw selected-path and
+subtree-root population against 120,000 before canonical path dictionaries,
+sets, sorting, or codec tuple copies. Duplicate and covered paths still
+canonicalize with their established semantics after that raw-shape charge.
+Resolution detail follows complete-value omission at 1,024 UTF-8 bytes; it is
+never truncated into misleading recovery guidance.
 
 Checkpoint 10 will admit eligible null-evidence files to fresh rebaseline as
 well. It remains explicit acceptance of current content: always hash and
