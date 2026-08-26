@@ -78,6 +78,9 @@ decision that serves none of them is a decision to cut.
    reservation that avoids a second incompatible bump; no Stage 6 cache,
    projection, or presentation helper lands early merely to make Stage 5.5 look
    complete.
+   The accepted H2 sorting exception concerns GUI layout only: sort/reset and
+   mtime controls may remain latent visually, but their production command,
+   validator, projection, and window consumers must land in checkpoints 7/9.
 
 ### Non-goals
 
@@ -153,6 +156,12 @@ local rule not centralized by their mapped register. Unmapped decisions are not
 superseded. History UI/pagination, global-settings mutation, drag/drop,
 remaining cosmetic state, cross-process task survival, GUI Break 2, and release
 packaging are outside this reslice.
+
+The 2026-08-27 additions accept process-live sibling sorting for checkpoints
+7/9 and null-evidence rebaseline admission for checkpoint 10. They are not
+active runtime claims. Sort/reset and raw size/mtime data must be usable through
+the production bridge by their checkpoints even if the GUI column/control
+layout remains latent; durable sort preferences remain outside M1.
 
 ### Exact epochs, scalar classes, and recording views
 
@@ -536,9 +545,16 @@ absence. Free-form diagnostics are already bounded before construction.
   warnings add only all/error, facts may overlap, missing excludes acknowledged,
   and terminal-frozen integrity error joins error. Filters union; empty means no
   domain filter, and plan notices bypass filters but obey search.
+- `TreeSort` = exactly `{column:"path-key"|"filename"|"size"|"mtime",
+  direction:"asc"|"desc"}`. `path-key` permits only `asc`. New views and explicit
+  reset use `{column:"path-key",direction:"asc"}`; the other three columns are
+  opt-in and support both directions. There is no null, omitted-field, toggle,
+  inferred-direction, or unknown-column spelling. DR-BR-15 owns comparison and
+  ordering semantics; this object is process-live view state, not preference
+  storage or execution authority.
 - `PlanView` = `{task_id:TaskId,view_id:ViewId,
   view_state_revision:SafeInt,selection_revision:SafeInt,
-  result_revision:SafeInt,search:string,filters:[PlanFilter],
+  result_revision:SafeInt,search:string,filters:[PlanFilter],sort:TreeSort,
   filter_counts:PlanFilterCounts,total_rows:SafeInt,visible_rows:SafeInt,
   total_operations:SafeInt,risk_count:SafeInt,header:PlanReviewHeader}`. `search` is the exact currently accepted literal query
   and is at most 65,536 UTF-8 bytes; `filters` is the unique ordered subset in
@@ -551,7 +567,7 @@ absence. Free-form diagnostics are already bounded before construction.
 - `InventoryView` = `{task_id:TaskId,view_id:ViewId,
   view_state_revision:SafeInt,projection_revision:SafeInt,
   result_revision:SafeInt,
-  search:string,filters:[InventoryFilter],hide_acknowledged:boolean,
+  search:string,filters:[InventoryFilter],sort:TreeSort,hide_acknowledged:boolean,
   filter_counts:InventoryFilterCounts,total_rows:SafeInt,
   visible_rows:SafeInt,warning_count:SafeInt,
   presentation_omitted_detail_count:SafeInt,
@@ -637,7 +653,8 @@ absence. Free-form diagnostics are already bounded before construction.
   selection:"selected"|"unselected"|"mixed"|"disabled"|null,
   exclusion_outcome:Outcome|null,
   selection_reason:ExclusionReason|BlockedReason|null,
-  content_bytes:Scalar64|null,rollup:PlanRollup|null,
+  content_bytes:Scalar64|null,size:Scalar64|null,mtime_ns:Scalar64|null,
+  rollup:PlanRollup|null,
   execution:ExecutionOverlay|null,
   post_copy:IntegrityOverlay|null,
   notice_kind:"scan-warning"|"preflight-refusal"|null,
@@ -665,6 +682,19 @@ absence. Free-form diagnostics are already bounded before construction.
   target, prior target. A null operation makes all operation-derived fields and
   aligned overlays null and requires `dependency_count=0`; otherwise the count
   is the exact dependency count, including zero.
+
+  `size` and `mtime_ns` are server-projected reviewed/intended metadata, not
+  copied-work bytes or a new filesystem observation. For a singular operation,
+  choose the first non-null stat in the same order as `entry_kind`: intended,
+  source, target, prior target. `size` is that stat's size only for a file;
+  `mtime_ns` is its own modification time, including an operation-bearing
+  directory's own reviewed stat. Without such a stat the value is null. A row
+  without a singular operation has both null, even when a structural folder
+  happens to exist physically. Never infer its stat from descendant operations.
+  An operation-group, move ghost, or notice has neither singular metadata value.
+  `content_bytes` and rollup bytes keep their separate work/aggregate meanings;
+  MOVE, NOOP, and DELETE file size must not become zero merely because their
+  copied-work count is zero.
 
   | exclusion outcome / reason | operation-row selection |
   | --- | --- |
@@ -737,10 +767,18 @@ absence. Free-form diagnostics are already bounded before construction.
 
   | `row_kind` | required facts | null facts |
   | --- | --- | --- |
-  | `folder` | container and rollup | every subject, warning, and overlay field |
+  | `folder` | container and rollup; nullable own-observation `mtime_ns` | size and every other subject, warning, and overlay field |
   | `file` | noncontainer; present/missing presence, verification, acknowledgment, reappeared, currentness | rollup, unsupported reason, warning fields |
   | `unsupported` | noncontainer; unsupported presence/reason plus the other subject facts | rollup and warning fields |
   | `warning` | noncontainer and typed warning code | every subject, rollup, and overlay field |
+
+  File/unsupported `size` and `mtime_ns` come from that row's own retained
+  observation, including a last-known observation for a missing subject. Folder
+  `mtime_ns` is available only from its own explicit directory observation at
+  the same canonical key; a structural-only ancestor has null. Folder size is
+  null, not directory-entry storage size or a descendant aggregate. Never use
+  minimum/maximum descendant mtime, a scan/run time, or an attestation timestamp
+  as folder mtime. No sort performs fresh filesystem or per-row detail reads.
 
   A warning path is null exactly at the root; otherwise it is the complete
   relative path. Its display is exactly `[<code>] <path-or-Inventory root>`
@@ -1180,7 +1218,7 @@ named view type, `CandidateAssessment`, `HandoffAssessment`, and
 | `start_plan` (cp6) | `{command_id:HexId,source_id:SlotId,target_id:SlotId,options:PlanSetupInput}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`, `PlanStartRefusal`, or `{disposition:"busy",reason:"slot-claimed"}` | M; setup/published-start receipt route, native option canonicalization, slots, reserve, fresh pair admission, unpublished owner claim and attached plan start |
 | `start_inventory` (cp6) | `{command_id:HexId,inventory_id:SlotId}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`, `InventoryStartRefusal`, or `{disposition:"busy",reason:"slot-claimed"}` | M; setup/published-start receipt route, slot, reserve, fresh admission, unpublished owner claim and attached inventory start |
 | `open_plan_view` (cp7) | `{task_id:TaskId,expected_lifecycle_revision:SafeInt}` | `{disposition:"opened",view:PlanView}` or `{disposition:"conflict",lifecycle_revision:SafeInt}` | R; task/lifecycle, immutable plan memo |
-| `update_plan_view` (cp7) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,search:string,filters:[PlanFilter],collapse:{node_id:NodeId,collapsed:boolean}|null}` | `{disposition:"applied"|"noop"|"conflict",view:PlanView}` | M; receipt, task/view, view-state revision |
+| `update_plan_view` (cp7) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,search:string,filters:[PlanFilter],sort:TreeSort,collapse:{node_id:NodeId,collapsed:boolean}|null}` | `{disposition:"applied"|"noop"|"conflict",view:PlanView}` | M; receipt, task/view, view-state revision |
 | `get_plan_window` (cp7) | `{task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,expected_selection_revision:SafeInt,expected_result_revision:SafeInt,offset:SafeInt,limit:SafeInt}` | `{disposition:"current",view:PlanView,window:PlanWindow}` or `{disposition:"conflict",view:PlanView}` | R; task/view, view-state, selection, result |
 | `get_plan_anchor` (cp7) | `{task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,expected_result_revision:SafeInt,anchor:{anchor_type:"item",item_id:HexId}|{anchor_type:"node",node_id:NodeId}}` | `{disposition:"current",node_id:NodeId,index:SafeInt,ancestor_ids:[NodeId]}` with 0..16,385 strict ancestors ordered parent first through root; `{disposition:"not-visible",view:PlanView}`; or `{disposition:"conflict",view:PlanView}` | R; task/view/view-state/result, shared resolver; node anchors enable off-window move-peer navigation without path derivation, while current search/filter state may hide the complete chain |
 | `get_plan_detail` (cp7) | `{task_id:TaskId,view_id:ViewId,operation_id:HexId,offset:SafeInt,limit:SafeInt}` | `{disposition:"current",page:PlanDependencyPage}` | R; immutable task/view/operation dependencies |
@@ -1191,7 +1229,7 @@ named view type, `CandidateAssessment`, `HandoffAssessment`, and
 | `read_post_copy_handoff` (cp10) | `{task_id:TaskId,expected_result_revision:SafeInt}` | `{disposition:"ready"|"already-verified"|"blocked",assessment:HandoffAssessment}` or `{disposition:"conflict",result_revision:SafeInt}` | R; task/result then atomic ledger snapshot |
 | `start_post_copy_verify` (cp10) | `{command_id:HexId,task_id:TaskId,expected_lifecycle_revision:SafeInt,expected_result_revision:SafeInt}` | `{disposition:"started",session_id:HexId,task:TaskDetail}`; `{disposition:"already-verified"|"blocked",assessment:HandoffAssessment,task:TaskDetail}`; `{disposition:"refused",refusal:CandidateStartRefusal,task:TaskDetail}`; or `{disposition:"conflict"|"busy",task:TaskDetail}` | M; receipt, task/lifecycle/result, reserve/claim, atomic classification, ready-only fresh root admission, final atomic classification/freeze, attached new session |
 | `open_inventory_view` (cp9) | `{task_id:TaskId,expected_lifecycle_revision:SafeInt}` | `{disposition:"opened",view:InventoryView}` or `{disposition:"conflict",lifecycle_revision:SafeInt}` | R; task/lifecycle, projection open/rebuild |
-| `update_inventory_view` (cp9) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,search:string,filters:[InventoryFilter],hide_acknowledged:boolean,collapse:{node_id:NodeId,collapsed:boolean}|null}` | `{disposition:"applied"|"noop"|"conflict",view:InventoryView}` | M; receipt, task/view/view-state |
+| `update_inventory_view` (cp9) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,search:string,filters:[InventoryFilter],sort:TreeSort,hide_acknowledged:boolean,collapse:{node_id:NodeId,collapsed:boolean}|null}` | `{disposition:"applied"|"noop"|"conflict",view:InventoryView}` | M; receipt, task/view/view-state |
 | `get_inventory_window` (cp9) | `{task_id:TaskId,view_id:ViewId,expected_view_state_revision:SafeInt,expected_projection_revision:SafeInt,expected_result_revision:SafeInt,offset:SafeInt,limit:SafeInt}` | `{disposition:"current",view:InventoryView,window:InventoryWindow}` or `{disposition:"conflict",view:InventoryView}` | R; task/view, view-state, projection, then result overlay |
 | `get_inventory_detail` (cp9) | `{task_id:TaskId,view_id:ViewId,node_id:NodeId,expected_projection_revision:SafeInt}` | `{disposition:"current",projection_revision:SafeInt,detail:InventoryDetail}` or `{disposition:"conflict",projection_revision:SafeInt}` | R; task/view/projection then bounded row query |
 | `refresh_inventory` (cp9) | `{command_id:HexId,task_id:TaskId,view_id:ViewId,expected_lifecycle_revision:SafeInt,expected_projection_revision:SafeInt,node_ids:[NodeId]}` with 1..256 unique actionable ids | `{disposition:"started",session_id:HexId,task:TaskDetail}`; `{disposition:"conflict"|"busy",task:TaskDetail}`; or `{disposition:"refused",refusal:LocationStartRefusal,task:TaskDetail}` | M; receipt, task/lifecycle/view/projection, reserve/claim, frozen recursive scope and fresh location admission, attached refresh |
@@ -1734,11 +1772,14 @@ scan, recorder, and payload-module behavior.
   incompleteness not attributable to a frozen subject still refuses before
   hashing.
 - Folder actions and row actions have distinct labels. No pre-admission
-  descendant count is shown because baseline, verify, and rebaseline select
-  different eligible subsets. Baseline and verify require no confirmation;
-  rebaseline requires explicit confirmation that current evidence will be
-  replaced. Every admitted operation reports the actual selected count in
-  progress.
+  descendant count is shown: the fresh scope and mode determine admission,
+  and baseline excludes existing evidence. Under the checkpoint-10 target,
+  verify and rebaseline both admit eligible files with or without evidence;
+  their comparison/replacement policies differ, not that admission rule.
+  Baseline and verify require no confirmation; rebaseline requires explicit
+  current-evidence acceptance even for an all-null-evidence selection. The
+  [verifier policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
+  owns the distinction. Every admitted operation reports its actual count.
 - Folder refresh uses `ScanScopeKind.SUBTREES` so new descendants are
   discoverable. A mixed refresh carries both `selected_paths` and
   `subtree_roots` in one session.
@@ -1906,7 +1947,7 @@ project avoids.
 | `db/recorder.py` | explicit FULL/PATHS/SUBTREES reconciliation; completed subtree refresh uses indexed literal ranges and marks missing only within its exact-path/root union |
 | `workflows/selection.py` | safety exclusions, user deselection, downward cascade, upward closure |
 | `workflows/node_tree.py` | ancestor synthesis, node ids, subtree op sets, rollups, id->path lookup; emits the ordered depth/parent-indexed array interfaces flatten |
-| `workflows/views.py` | `PlanNodeView`, `InventoryNodeView`, preview projection |
+| `workflows/views.py` | `PlanNodeView`, `InventoryNodeView`, preview projection; workflow-owned basename and raw own-object sort facts |
 | `workflows/runtime.py` | construct committed requests from authoritative `user_deselected`; no revision or client digest |
 | `interfaces/service.py` | selection state/revision and commit transition, `view_id` minting and projection ownership, the four lifts, revision-guarded id-based location commands, tree passthroughs |
 | `interfaces/web` | bridge, host, command allowlist, task state and locks, bounded event queue, JSON encoding, collapse/filter/search flattening, windowing, autoscroll lookup |
@@ -1976,8 +2017,10 @@ as an immediate noncontainer `operation` child whose id is
 `BLAKE2b-128(person=b"NamiSyncMemberV1")` over the ordered four length-prefixed
 strings `(tree_kind="plan", scope_identity, canonical_path_key,
 operation_id)`, using the same `u32be(length)||UTF-8` member encoding. Direct
-member children precede ordinary path children and preserve immutable
-`Plan.operations` order, with `operation_id` as a defensive tie-breaker.
+member children in canonical/reset order precede ordinary path children and
+preserve immutable `Plan.operations` order, with `operation_id` as a defensive tie-breaker.
+An explicit DR-BR-15 view sort may reorder immediate siblings, including these
+members, without changing canonical indexes, membership, or execution order.
 Their `display` is the exact final component of the operation's
 `target_rel_path`; the group uses the existing deterministic path-node display.
 The browser's accessible name combines operation kind, exact complete source
@@ -2117,8 +2160,9 @@ retain their already frozen informational order. Plan notices attach directly
 below the plan root as one block after every domain child, in their frozen
 informational order, because source and target warning paths are not
 interchangeable with destination-tree paths. These total merge rules own
-pre-order, sibling positions, windows, and byte-stable memo rebuilds. Every
-informational leaf is a noncontainer. This preserves every occurrence,
+canonical/reset pre-order and byte-stable memo rebuilds; explicit view sorting
+derives presentation positions under DR-BR-15 without altering that authority.
+Every informational leaf is a noncontainer. This preserves every occurrence,
 prevents collision with a domain row or another notice, and retains the fixed
 `node-` plus BLAKE2b-128 wire grammar.
 
@@ -2321,14 +2365,94 @@ the current view. **Never join on `current_path`**, which remains display-only t
 ### DR-BR-15 — Flattened windows over a stateless visible sequence
 
 **Binding rule.** The server derives one ordered visible sequence from the
-canonical tree projection plus collapsed ids, literal search, and domain-owned
-filters. Clients request exact `[offset, limit]` windows; the DOM never owns or
-reconstructs the hierarchy.
+canonical tree projection plus explicit sort state, collapsed ids, literal
+search, and domain-owned filters. Clients request exact `[offset, limit]`
+windows; the DOM never owns or reconstructs the hierarchy.
 
 The shared [result-shape register](#exact-shared-result-shapes) owns exact
 `PlanView`/`InventoryView`, row/frame, window, revision, count, rollup, and
 overlay fields. This record owns visible-sequence derivation and renderer
 request-generation behavior.
+
+#### Sibling sorting (accepted checkpoints 7 and 9)
+
+`TreeSort` is required in both view records and both existing update-view
+commands. New views start in path-key order; reset explicitly requests that
+same state. Filename, size, and mtime are user-selected alternatives. No new
+command row or durable preference section is introduced.
+
+- Keep the canonical domain tree and its indexes immutable. Derive a complete
+  presentation permutation by sorting each parent's **whole immediate sibling
+  set**, then traversing parent before descendants with contiguous subtrees.
+  Apply search/filter/hiding/collapse and only then window that sequence.
+  Sorting a returned page or globally sorting the flattened tree is invalid.
+- One pure server-side comparator/permutation path serves plan and inventory.
+  Workflow projections supply basename and numeric keys from their owned facts;
+  the generic helper imports no path helpers, interprets no domain statuses,
+  and does not reconstruct hierarchy or keys from display labels. It retains
+  references/indexes, not a second complete domain/DTO tree. Validate a
+  hierarchy-preserving permutation, including uniqueness and parent identity;
+  merely removing the existing increasing-source-index check is insufficient.
+- Filename compares the raw basename's Python `casefold()` result by Unicode
+  code-point order. No locale/natural-number collation, trimming, normalization,
+  full-path comparison, or rendered layout markers participate. Path-bearing
+  informational rows use their path basename; pathless rows have no filename
+  key. Numeric columns compare the exact integers underlying the projected
+  `size`/`mtime_ns`, never formatted sizes, date text, floats, or JavaScript
+  `Number`. Their own-object provenance and null rules are in the row register.
+- There is no folders-first tier. Unavailable values sort last in **both**
+  directions. Reverse only the primary comparison; equal values and unavailable
+  peers retain ascending canonical sibling ordinal as the deterministic final
+  tie-breaker. Explicit sorting includes operation members, ghosts, warnings,
+  and notices without changing their parent or actionable/nonactionable kind.
+  Path-key reset reproduces the entire DR-BR-11 canonical order exactly,
+  including its member and informational merge rules.
+- NodeIds, parent identities, subtree membership, move peers, collapse by id,
+  selection/provenance/digest, risk/counts/rollups, plan fingerprint,
+  `Plan.operations` and dependency/execution order remain unchanged. Scope and
+  commitment resolution always use canonical domain indexes, never the sorted
+  permutation or viewport. Sorting starts no session and performs no ledger,
+  filesystem, or recorder mutation. Progress/status overlays cannot reorder it.
+- Recompute all presentation pre-order/parent/subtree indexes, visible indexes,
+  parent/first-child indexes, sibling position/set size, and item/node anchor
+  lookups coherently from one captured generation. Every window remains an
+  exact slice with the existing byte/row bounds, even when its parent is outside
+  the window. A live follow anchor resolves the same item id at its new index.
+- A changed sort-only intent publishes one new `view_state_revision`, without
+  changing selection, result, projection, or lifecycle revision. Identical
+  sort-only intent, including reset while already default, is a no-op. Different
+  sort states still count as a change when their resulting row orders happen
+  to coincide. Search/filter/collapse updates carry and preserve the requested
+  sort; a combined changed intent advances the view revision only once.
+  Receipt identity includes sort. Retrying an earlier command cannot reapply
+  its old ordering over a newer view; the shared receipt table governs replay.
+- Build outside task locks with a pinned source generation; recheck captured
+  view/projection/result authority before atomically publishing state, sequence,
+  and indexes. Stale or failed construction leaves the previous complete view
+  unchanged. Inventory replacement keeps the chosen sort and derives it anew
+  from new raw facts under the new projection revision; sorting itself never
+  pretends to be a domain projection change. Acknowledgment retains its local
+  patch contract and does not trigger a database reload or re-stat for sorting.
+- Navigation/reinjection and eviction reconstruction of the same live view
+  retain its chosen sort. Independent views do not share it; a genuinely new
+  view starts path-key order. Retain only the current derived ordering per
+  view, not a cache for each column/direction combination. Charge keys,
+  permutations, indexes, and old/new construction overlap before publication.
+  Unchanged windows/details/anchors neither sort again nor rebuild the tree.
+
+Sort/reset advances the browser's intent generation before any response can
+apply and invalidates cached numeric window, focus, and anchor indexes. The
+ordinary viewport restarts at offset zero, with selection/collapse preserved;
+it never treats an old index as the same row. Plan follow mode instead resolves
+the same active item through the guarded server anchor and requests its new
+window. Delayed prior-sort windows/anchors, successes **and** failures, are
+inert before payload access. Inventory needs no new anchor command for the
+offset-zero policy. Later GUI column/reset-control layout consumes these
+already-complete contracts and must not require a new sorting/bridge protocol.
+
+Status/progress sorting, global flat sorting, and durable sort preferences are
+explicitly outside M1. BR-G-34/35/38 and the H2 checkpoint-7/9 additions own the
+functional witnesses; BR-G-42/45 retain their scale and containment authority.
 
 #### Sequence contract
 
@@ -2357,7 +2481,7 @@ request-generation behavior.
   active-view cache.
 - Search is literal, case-folded display matching. The first Slice 5/6 request
   owner applies a fixed 150 ms trailing debounce, advances generation on every
-  search/collapse/filter intent, sends only the final burst value, and ignores
+  search/collapse/filter/sort intent, sends only the final burst value, and ignores
   stale success or failure while leaving the current valid window visible.
   Task-list/rail and task-detail/panel response owners use the same local
   generation rule. A `publication_issue` observation advances those owners and its exact session-
@@ -2473,6 +2597,12 @@ objects identified by opaque `view_id`.
   changes from a future row-local domain patch update only the exact ancestor
   chain. Acknowledgment is deliberately absent from `InventoryRollup`, so its
   patch remains one node and changes only the visible sequence/counts.
+- Sorting consumes complete cached raw metadata, not per-window detail reads.
+  Rebuilds derive the retained live sort against the new immutable projection;
+  projection and view revision checks prevent an old-key permutation from
+  publishing with new rows. Acknowledge/restore does not change sort keys or
+  require a new whole-location query. DR-BR-15 owns sort-only revisions and
+  complete view publication.
 - Eviction and causal invalidation share the stale-revision path. An in-flight
   request may finish against its immutable reference; the next request rebuilds
   or refuses stale state.
@@ -3366,9 +3496,11 @@ automatic task close, and task/listener/timer cleanup.
 
 **`ui-state.json` carries cosmetics only.** `M1_PLAN.md` DR-M1-03 established it
 as the GUI-owned counterpart to `db/settings.json`. The ratified strict v1 schema
-contains only the appearance override; later window geometry, column and sort
-state, active filter chips, and file-list treegrid state require explicit typed
+contains only the appearance override; later window geometry, column state,
+active filter chips, and file-list treegrid state require explicit typed
 section additions whose durable keys are ratified by their owning slice.
+Sort state is process-live view state delivered at H2 checkpoints 7/9, not a
+cosmetic persistence section; durable sort preferences are excluded from M1.
 Ledger-derived recents never enter UI state. It may **not** hold a plan
 request id, a session id, a task identity, a selection, a `view_id`, or a
 projection revision. The distinction is not stylistic — anything in the
@@ -4131,6 +4263,13 @@ headings are organizational, not lane ownership.
   plus its informational merge; plan uses that same path array plus the exact
   sparse multi-member expansion, retaining original path-node identity where
   no expansion is required and adding only `NamiSyncMemberV1` children/groups.
+  **Sorting extension, pending checkpoints 7/9:** one shared pure presentation
+  permutation implements DR-BR-15 over real complete projections. Every
+  permitted column/direction and exact canonical reset must preserve identities,
+  parent/subtree membership and all authority, with coherent window/frame/anchor
+  indexes. H2 7.A/9.A supply the independent numeric/tie/null/wide-tree,
+  revision-race, production-command, and no-per-window-work witnesses. Earlier
+  canonical-order renderer evidence alone does not close this extension.
   Anchor lookup uses the same derived sequence and
   exact deepest-to-root id chain and performs work proportional to chain depth,
   not tree size. Plan and inventory cases must start from real
@@ -4201,6 +4340,9 @@ headings are organizational, not lane ownership.
   counts, risk, dependencies, and overlays remain operation-exact. Synthetic
   node ids never enter execution,
   persistence, or a selection digest. The production plan DOM passes DR-BR-25.
+  Explicit sorting preserves those facts and exact immutable execution order;
+  all sort states/reset pass through production plan commands, including latent
+  size/mtime data and controls, without selection or commitment changes.
   *Not satisfied by* a move-only happy path, a synthetic operation standing in
   for a folder, or a renderer that relabels inferred groups as renames.
 - **BR-G-36 — Progress compatibility and follow mode use identity, never
@@ -4255,8 +4397,15 @@ headings are organizational, not lane ownership.
   the least-recently-used unpinned one. With all six pinned it instead returns
   `retention_full`; location change, task close, and service shutdown release
   their views only after their last pins. Eviction and invalidation take the same stale-revision
-  client path. *Not satisfied by* rebuilding on every page, deep-copying every
-  node, guarding only the immutable value rather than the cache map, or testing
+  client path. Checkpoint 9 also closes DR-BR-15 sorting: collect all raw own-
+  object sort facts in the complete projection, preserve chosen live sort
+  state across replacement/eviction, and atomically publish the new ordering
+  with its projection/view revisions. Window/detail reads perform no I/O to
+  discover sort keys; sorting adds no native or N+1 database reads. Sort/reset
+  leaves selection, recursive scope, ledger truth, and integrity candidate
+  order unchanged; the adversarial fixtures in H2 9.A are required.
+  *Not satisfied by* rebuilding on every page, deep-copying every node,
+  guarding only the immutable value rather than the cache map, or testing
   fewer than seven views or omitting the all-six-pinned case.
 - **BR-G-39 — Inventory interaction exposes all observed truth and exact
   scope.** The five location-resolution states render distinctly; incomplete
@@ -4270,7 +4419,11 @@ headings are organizational, not lane ownership.
   overlay remain independently projectable and neither overwrites the other. Row
   actions remain exact while folder refresh is recursive and folder integrity
   freezes all indexed descendants regardless of filter. Each integrity action
-  reports the count actually selected after mode eligibility. One unreadable
+  reports the count actually selected after mode eligibility. Checkpoint 10
+  additionally proves the complete three-operation policy matrix in H2 10.A:
+  rebaseline includes null evidence, always hashes and conditionally replaces
+  or creates it, clears verification freshness even for matching content, and
+  retains explicit acceptance for all-null and mixed scopes. One unreadable
   frozen descendant produces one visible `unsupported` item and an incomplete
   verification axis while every other eligible subject proceeds.
   Acknowledge hides the row by default, changes no ancestor rollup, refetches
@@ -4352,6 +4505,7 @@ headings are organizational, not lane ownership.
   | Inventory | Base: 100,000 subject rows plus up to 20,000 directory rows in one location; information-heavy: add 120,000 warning rows while their complete retained charge stays at or below 192 MiB |
   | History | 50 run summaries covering 1,000,000 retained items, including one 100,000-item run |
   | Projection retention | Six populated 240,000-row information-heavy inventory projections, then a seventh view to force LRU eviction |
+  | Sorting variants (checkpoints 7/9) | Plan and inventory base/information-heavy populations above, with balanced and widest-sibling shapes, repeated/tied and unavailable keys, Unicode basename keys, every allowed sort/direction and reset; exact seeds, raw key populations and independently expected permutations frozen before measurement |
   | Events | Four active tasks for 60 seconds at 100 aggregate `Progress` events/s plus 10 aggregate reliable events/s |
 
   The informational count fixture is deterministic: seed `0x4E414D49`, stable
@@ -4367,6 +4521,18 @@ headings are organizational, not lane ownership.
   combination of maximum path and detail—is the guaranteed fixture; production
   rejects any real informational population whose next complete row exceeds
   either limit before publication.
+
+  Sorting adds sibling width, key availability/tie density, Unicode-key
+  expansion, and column/direction to those fixtures' existing row/depth/byte
+  axes. Record each variant separately, including changed-sort-plus-window and
+  subsequent unchanged windows; do not pool fast cases to hide a failed sort.
+  Reuse the profile, sample counts and budgets below, and retain raw samples
+  and expected-order witnesses with the owning plan/inventory evidence.
+  Include raw keys, permutation/index arrays, retained state and old/new staging
+  overlap in the predeclared complete-graph charge and memory measurement.
+  Rerun on key/projection/comparator/index/publication/retention changes; a new
+  retained field must be classified before evidence. This adds no new size wall,
+  timing allowance, or authority over the frozen transport artifacts.
 
   Current-source event and custody fixtures must use the active version-5
   Progress contract rather than treating the cadence coordinate as completed items.
@@ -4400,7 +4566,7 @@ headings are organizational, not lane ownership.
   | Cold 120,000-row base / 240,000-row information-heavy plan projection | 2 s / 4 s maximum; Tier 2 Slice 5 acceptance |
   | Cold 120,000-row base / 240,000-row information-heavy inventory projection | 3 s / 6 s maximum; Tier 2 Slice 6 acceptance |
   | Unchanged-parameter 256-row window | 250 ms p95, 500 ms maximum; Tier 2 Slice 5/6 acceptance |
-  | Changed search/filter/collapse plus 256-row window at 240,000 rows | 1.5 s p95, 3 s maximum; Tier 2 Slice 5/6 acceptance |
+  | Changed search/filter/collapse/sort/reset plus 256-row window at 240,000 rows | 1.5 s p95, 3 s maximum; Tier 2 Slice 5/6 acceptance |
   | `preview_selection` at depth 32 | 500 ms p95, 1 s maximum; Tier 2 Slice 5 acceptance |
   | Fifty-run/1,000,000-item history summary | 3 s maximum; Tier 2 Slice 7 acceptance |
   | 256-row history detail window | 500 ms p95, 1 s maximum; Tier 2 Slice 7 acceptance |
@@ -4744,7 +4910,7 @@ its row and the applicable regression rows are green.
 | DR-BR-12 | BR-G-12, BR-G-24, BR-G-29, BR-G-37, BR-G-39 |
 | DR-BR-13 | BR-G-34, BR-G-35 |
 | DR-BR-14 | BR-G-32, BR-G-36, BR-G-48 |
-| DR-BR-15 | BR-G-2, BR-G-34, BR-G-36 |
+| DR-BR-15 | BR-G-2, BR-G-14, BR-G-16, BR-G-22, BR-G-23, BR-G-32, BR-G-34–39, BR-G-42, BR-G-45 |
 | DR-BR-16 | BR-G-27, BR-G-34, BR-G-38, BR-G-40, BR-G-42, BR-G-45 |
 | DR-BR-16.1 | BR-G-22, BR-G-23, BR-G-38, BR-G-42, BR-G-45 |
 | DR-BR-16.2 | BR-G-11, BR-G-40, BR-G-42, BR-G-48 |

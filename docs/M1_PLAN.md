@@ -192,7 +192,7 @@ directly.
   commits. No unused retention key ships while retention is deferred.
 - `ui-state.json`, owned by `interfaces/`: one strict, schema-versioned
   cosmetic document. Its first production section is the appearance override;
-  recents, window geometry, column/sort state, treegrid expansion/grouping
+  recents, window geometry, column state, treegrid expansion/grouping
   state, and filter chips remain planned typed sections rather than permissive
   dictionaries in the initial schema. Every registered section and value has an explicit
   version, and any change to the recognized on-disk section set or shape also
@@ -200,6 +200,8 @@ directly.
   cosmetic state. The bridge refinement forbids plan request ids,
   session/task ids, selection, `view_id`, and projection revision here so
   cosmetic persistence cannot become an unreconciled session store.
+  H2 checkpoints 7/9 add process-live sibling sort state only; durable sort
+  preferences are excluded from M1 under Bridge DR-BR-15/28.
 This amends the FEATURES.md *Local Settings File* bullet from one file to
 two — the smaller edit, given what it buys.
 **Also removes obsolete preflight plumbing:** the `SettingsReader` protocol

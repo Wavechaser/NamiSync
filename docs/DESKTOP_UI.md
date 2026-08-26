@@ -771,8 +771,10 @@ Setup reads them only as initial values and freezes per-task overrides without
 writing the file. The ratified `ui_state.py` replacement owns a strict,
 section-versioned cosmetic document; schema v1 contains only the appearance
 override. Recents are not a future cosmetic section: they derive from ledger
-runs and current workflow probing. Geometry, columns, sorting, treegrid
-expansion/grouping state, and filter chips remain deferred typed sections. UI
+runs and current workflow probing. Geometry, columns, treegrid
+expansion/grouping state, and filter chips remain deferred typed sections.
+H2 sorting is process-live view state, not a persistence section; durable sort
+preferences are excluded from M1. UI
 state must not become another semantic-settings, task, or session store.
 
 ## Bridge and renderer security
@@ -939,6 +941,26 @@ structural/search/filter/window/anchor contract and installed shell/tree
 contract live in `M1_BRIDGE.md`; the installed shell/tree witness is SH-G-7 in
 `M1_SHELL.md`.
 
+H2 checkpoints 7/9 add server-owned sibling sorting for plan/inventory views.
+New views start in canonical path-key order; users can choose filename, size,
+or mtime with explicit direction, and reset restores path-key order. The server
+sorts complete sibling sets before windowing, with deterministic ties and
+unavailable values last. Size/time use raw numeric facts, including only a
+folder's own available mtime, never a time inferred from descendants. Sorting
+preserves hierarchy, node ids, selection, collapse, and execution authority
+and order. It advances coherent view revisions, indexes, and anchors; the
+browser cannot sort only a page or reuse old numeric indexes. Ordinary
+sort/reset starts at offset zero; enabled plan follow resolves the active item
+through a fresh guarded server anchor.
+
+The 48rem table's mtime column and ordering/reset control layout may remain
+latent, but production commands, validators, state, raw row facts, and window/
+anchor behavior must be complete by the owning H2 checkpoints. Later GUI
+layout work must not reopen those contracts. Status/progress sorting, global
+flat sorting, and durable preferences are excluded from M1. Exact rules and
+acceptance live in [Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9)
+and H2 7.A/9.A; the existing shell/tree witness does not close this new work.
+
 A valid scroll page is terminal for the viewport snapshot that requested it.
 If it is narrower than the viewport, the renderer waits for a later viewport
 change rather than automatically alternating requests between missing edges;
@@ -1074,6 +1096,16 @@ Baseline, Verify, and Rebaseline actions. Rebaseline alone asks the user to
 confirm replacing current evidence; the receipted native command enforces that
 intent. Context actions require a valid domain row; warning rows are
 informational and never actionable.
+
+Checkpoint 10 admits eligible selected files with or without evidence to
+rebaseline. It always hashes and conditionally replaces/creates evidence,
+even for a genuine match, and clears verification freshness; explicit
+acceptance remains required for all-null and mixed selections. Baseline stays
+missing-evidence-only; verify compares existing evidence or establishes an
+initial baseline without claiming a verification. The
+[three-operation policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
+owns the outcomes and deferred compare-and-accept behavior. This is accepted
+checkpoint-10 work, not current desktop functionality.
 
 Each inventory subject presents ledger-derived verification state separately
 from the latest ordinary-integrity overlay. Manual post-copy results never enter

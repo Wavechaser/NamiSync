@@ -1,6 +1,6 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-26 checkpoint-review remediation; 2026-08-24 second-half
+Status (2026-08-27 checkpoint-review closeout and target additions; 2026-08-24 second-half
 reslice; earlier host/presentation contracts realigned 2026-08-14 and hardened
 2026-08-17): plan and progress for the
 remaining M1 desktop shell. The second-half reslice replaces the former broad
@@ -46,6 +46,12 @@ remains unstarted, as do checkpoints 4–12. NamiSync remains version
 `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
+
+The 2026-08-27 additions assign shared/plan sibling sorting to checkpoint 7,
+full inventory integration to checkpoint 9, and null-evidence rebaseline to
+checkpoint 10. They are accepted, not implemented. New views and reset retain
+path-key order; explicit filename/size/mtime sorting never changes selection or
+execution authority. H2 owns their acceptance, regression, and test criteria.
 
 ## Standing
 
@@ -752,10 +758,10 @@ ratification; `M1_SHELL_H2.md` records the exact titles.
 | 4 | three ordered model, dormant-lifecycle, and activation commits listed in `M1_SHELL_H2.md` | Install the task lifecycle and containment foundation | pending |
 | 5 | `feat(workflows): unify location probing and recent locations` | Share location admission and ledger-derived recents | pending |
 | 6 | `feat(web): add frozen setup and serial task creation` | Deliver Setup and serial multi-pair creation | pending |
-| 7 | `feat(web): add bounded plan review and selection` | Deliver plan projection, selection, and execution admission | pending |
+| 7 | `feat(web): add bounded plan review and selection` | Deliver plan projection, shared sibling sorting, selection, and execution admission | pending |
 | 8 | `feat(web): add execution review and ledger evidence` | Deliver live/retained execution and current evidence | pending |
-| 9 | `feat(web): add inventory projections and evidence` | Deliver bounded inventory and current provenance | pending |
-| 10 | `feat(web): add integrity and post-copy verification` | Deliver integrity controls and no-rescan manual handoff | pending |
+| 9 | `feat(web): add inventory projections and evidence` | Deliver bounded inventory, full sibling sorting, and current provenance | pending |
+| 10 | `feat(web): add integrity and post-copy verification` | Deliver integrity controls, null-evidence rebaseline, and no-rescan manual handoff | pending |
 | 11 | separate policy fixes if required, then the closure commit in `M1_SHELL_H2.md` | Calibrate and harden shutdown and retained-state containment | pending |
 | 12 | `docs(gui): close stage 6 surface verification` | Run the final adversarial, complete, headed, and documentation sweep | pending |
 

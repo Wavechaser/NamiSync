@@ -68,8 +68,9 @@ binding; no component below it inherits the exception.
 
 The production dispatcher registry contains inventory (pause unsupported) and
 baseline/verify/rebaseline (pause supported), and the CLI reaches all four only
-through the shared service. A fresh baseline selection admits eligible
-non-directory rows without evidence; a fresh rebaseline selection admits only
+through the shared service. In the current implementation, a fresh baseline
+selection admits eligible non-directory rows without evidence; a fresh
+rebaseline selection admits only
 rows with evidence; verify retains both. Integrity continuation stores the
 exact admitted inventory row ids plus completed ids/bytes. A resume always
 refreshes physical inventory but reconstructs the original ordered candidate
@@ -81,6 +82,13 @@ location. Foreign, malformed, or missing saved identifiers refuse rather than
 widening selection. Stale-before integrity consumes the stale repository query
 directly and fetches only exact completed rows needed to preserve settlement;
 selected-path and intentional full Verify All scope remain unchanged.
+
+Checkpoint 10 will admit eligible null-evidence files to fresh rebaseline as
+well. It remains explicit acceptance of current content: always hash and
+conditionally replace/create evidence, even on a genuine match, and clear
+verification freshness. Compare-and-accept is deferred beyond M1. The
+[verifier policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
+distinguishes the three operations and current versus accepted behavior.
 
 Desktop rebaseline requires explicit acknowledgement of current evidence;
 baseline and verify do not. The bridge owns the exact receipted request shape
@@ -125,6 +133,19 @@ does not reconstruct hierarchy or scope from paths or its current page.
 Projection eviction removes only rebuildable view state. A refused refresh
 stages no partial artifact and preserves the prior inventory generation and its
 view identity unchanged.
+
+Checkpoint 9 adds the shared server-owned sibling sorter from
+[Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9).
+New views and reset use canonical path-key order; filename, size, and mtime
+are explicit opt-in column/direction choices. Sort the complete projection
+before windowing, using raw own-object values, deterministic ties, and
+unavailable values last. A real folder may expose its own observed mtime;
+synthetic ancestors have no invented descendant-derived time. Sorting changes
+only presentation/view state, never selection, recursive action scope,
+integrity candidate order, or execution authority. Full production bridge
+support and raw mtime facts land even if their GUI layout remains latent.
+Status/progress sorting, global flat sorting, and durable preferences are not
+M1 work. H2 9.A owns regression, race, and scale acceptance.
 
 Warning rows are informational leaves, not inventory subjects. They have typed,
 stable identities and attachment order, but never enter the canonical path

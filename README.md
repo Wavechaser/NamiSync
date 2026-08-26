@@ -53,6 +53,15 @@ retention closure. Its exact core-event-v5, recording, signed-64 scalar, full-
 width Windows file-identity, and coordinated persistence epoch are active;
 the product surfaces and task lifecycle remain checkpoint targets.
 
+Accepted H2 work also includes server-owned filename/size/mtime sibling sorting
+for plan and inventory views, with path-key order for new views and reset;
+sorting changes neither selection nor execution authority. Rebaseline will
+also create evidence for selected files that lack it, while remaining explicit
+hash-and-replace rather than compare-and-accept. These changes are planned for
+checkpoints 7/9 and 10 respectively, not implemented by this documentation pass.
+See the [H2 plan](docs/M1_SHELL_H2.md) and
+[integrity policy table](docs/VERIFIER.md#standalone-operation-policy-checkpoint-10-target).
+
 M1 state remains process-local: queued sessions and unexecuted plans do not
 survive an application restart, and committed nonterminal history returns only
 as `incomplete`. Continuations stay in live session records; the session store

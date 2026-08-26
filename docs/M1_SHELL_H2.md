@@ -5,9 +5,13 @@
 > sequence; this file is the newest checkpoint reslice and owns the detailed
 > acceptance, review, and test boundary for checkpoints 0-12.
 
-Delivery status (2026-08-26): checkpoints 0–3.2 and the independently reviewed
+Delivery status (2026-08-27): checkpoints 0–3.2 and the independently reviewed
 3R remediation are complete. Checkpoint 3.3 remains a separate, unstarted
 legacy-source removal; checkpoints 4–12 remain pending.
+
+The 2026-08-27 sorting and rebaseline additions below are accepted requirements
+for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
+and explicit sorting reset use canonical path-key order.
 
 ## Main objectives
 
@@ -257,502 +261,54 @@ Commits, in order:
 
 ### 3R. Remediate independent checkpoint-review findings
 
-The authorized remediation sequence, including S5's payload-free stored
-projection and the identity-hash reset, is implemented and independently
-verified. Its temporary hold on checkpoint 3.3 is closed; 3.3 remains unstarted.
-The findings were reported after checkpoints 1–3.2 had already landed, so this
-sequence repairs those delivered boundaries without folding the work into the
-legacy-removal commit or changing checkpoints 4–12.
-
-Every row below is a separately reviewed and committed checkpoint. One builder
-implements only that row, runs its declared focused and departmental gates,
-and presents the exact diff to a reviewer who did not build it. The reviewer
-checks requirement drift, fault combinations, security consequences, test
-authority, and unnecessary scope. Findings are corrected and the affected
-gates rerun before the row is committed. Review the staged snapshot and run
-`git diff --cached --check` immediately before every commit; do not carry a
-partly implemented later row into that snapshot. Matching component docs and
-causal `BUGS.md` entries travel with the behavior they describe. At every safe
-stop, replace HANDOFF's operational sections with the completed row, exact
-verification, dirty-file ownership, and next command. Remove completed findings
-once their causal BUGS entries and component documentation have landed; retain
-only actionable unfinished findings. The original reports remain in Git at
-`d7673b7:docs/HANDOFF.md`. The final row reconciles cross-cutting status,
-changelog, and integrated evidence.
-
-Finding ownership is exact at the aspect level:
-
-| Finding or finding aspect | Owning row |
-| --- | --- |
-| F1, F4, F7, S2 | 3R.4 prerequisite-cause settlement |
-| F2, F3, F10, S3, S7 reducer-matrix gap | 3R.1 settlement gate |
-| F6, S7 payload closed-set/contradiction gaps | 3R.2 continuation codec gate |
-| F5, S4, the first three post-F7 behavior notes | 3R.6 compound workflow failure |
-| Post-F7 canceled-settlement assignment note | 3R.6 direct dataflow check; remove only if it is still dead |
-| F8, F9 | 3R.11 private seam and source gates |
-| F11, S8 | 3R.15 documentation closure |
-| F12 production Python-view validation | 3R.10 live task-update boundary |
-| F12 logical-byte Node corpus | 3R.9 timestamp/reliable-size corpus |
-| F12 Python-to-JavaScript witness binding | 3R.11 source/differential gate |
-| F13, S16 | 3R.14 file-identity codecs |
-| F14 | 3R.7 scalar/file-id boundary |
-| S1 | 3R.3 retained committed settlement |
-| S5 | 3R.S5 payload-free session storage |
-| S6 | 3R.5 diagnostic containment |
-| S9, S13 | 3R.10 live task-update/custody boundary |
-| S10, S11 | 3R.8 exact event operation truth |
-| S12, S17 | 3R.9 timestamp/reliable-size boundary |
-| S14 topology authority and direct tests | 3R.12 dormant database authority |
-| S14 production admission and S15 | 3R.13 WAL-aware database activation |
-| S18 positive v4 task-view fixtures | 3R.10 live task-update boundary |
-| S18 contradictory recording/cancellation corpora | 3R.8 operation truth |
-| S18 timestamp/size/logical-byte Node corpora | 3R.9 timestamp/size boundary |
-| S18 legacy Progress/vocabulary/live-route gates | 3R.11 source gates |
-| S18 active-document drift | 3R.15 documentation closure |
-| Follow-up cancellation ignores retained settlement | 3R.13a cancellation replay |
-| Follow-up repeated full-file database admission | 3R.13b runtime reader lifetime |
-| Follow-up private database snapshot placement | 3R.13c local snapshot placement |
-| Timestamp comment and live schema constant naming | 3R.15a browser naming cleanup |
-| Follow-up live validator family and vocabulary names | 3R.15b browser family naming |
-| Follow-up strict Unicode-scalar encoding and decoding | 3R.14a Unicode boundaries |
-
-The 2026-08-26 follow-up decision ordered 3R.13a, 3R.13b, 3R.13c, 3R.S5,
-revised 3R.14, 3R.15a, and 3R.15; all are now delivered. The prior
-3R.0–3R.13 commits remain unchanged. New regressions precede each behavioral
-fix, and each row retains its own independent review and commit. The protected
-settlement oracle, baseline, and existing assertions are not editable in these
-rows. The installed-wheel event-diagnostic fixture migration and the separately
-noted pre-entry workflow emission issue remain unassigned, not hidden inside
-the two small browser cleanups.
-
-The authorized follow-ups 3R.15b and 3R.14a are delivered in that order, each
-with its own tests, independent review, and commit. These do not start
-checkpoint 3.3 or change integrity selection, baseline, rebaseline, or
-verification policy, which remains held for user consideration.
-
-#### 3R.0 Ratify the remediation sequence
-
-Commit: `docs: plan independent checkpoint remediation`
-
-- **Acceptance:** Freeze this order and the aspect-level ownership map above,
-  preserve checkpoint 3.2 as the active runtime, and keep checkpoint 3.3
-  unstarted.
-- **Tests/review:** Finding-map completeness, active-plan consistency,
-  documentation links, `git diff --check`, and independent plan review.
-
-#### 3R.1 Restore settlement-gate authority
-
-Commit: `test(executor): restore settlement gate authority`
-
-- **Findings:** F2, F3, F10, S3, and S7's reducer-matrix gap.
-- **Acceptance:** The settlement oracle reads the authoritative production
-  `ExecutionSet.recording_reasons` and `recording_issues` through a typed
-  oracle-only side channel; its exact seven-case attribution catalog fails
-  closed and is manifest-protected. Keep the historical event-v4 normalized
-  trace adapter explicit, and leave the protected scenario/row manifest,
-  normalized trace, baseline JSON, and semantic hash byte-for-byte unchanged.
-  Restore both directions of the reducer matrix assertion.
-- **Tests/review:** Focused executor/tool tests; tools and executor departments;
-  three-run settlement check; baseline/hash comparison; explicit TOOLS
-  documentation of authoritative typed truth versus the frozen historical trace
-  adapter; and an independent gate-authority review.
-
-#### 3R.2 Pin the execution-v6 recording codec
-
-Commit: `test(workflows): pin recording continuation codec`
-
-- **Findings:** F6 and S7's payload closed-set/contradiction gaps.
-- **Acceptance:** Pin literal sets of exactly three item reasons and five task
-  reasons independently of encoder/decoder enum iteration. Reject every unknown
-  raw execution-v6 reason and directly reject the redundant aggregate-versus-
-  attribution contradiction. Do not change a production codec in this test-
-  authority checkpoint unless a counterexample exposes a separate policy bug.
-- **Tests/review:** Focused payload tests, workflows department, exact raw-JSON
-  counterexamples, and independent closed-vocabulary review.
-
-#### 3R.3 Retain committed settlement across reliable-sink failure
-
-Commit: `fix: preserve committed settlement across sink failure`
-
-- **Findings:** S1.
-- **Acceptance:** Retain the complete pending typed settlement, including a
-  committed recorder receipt, before reliable emission without prematurely
-  marking continuation status settled. A one-shot sink rejection retries the
-  retained settlement through the backstop, never records twice, preserves the
-  successful filesystem and recording truth, and still propagates the original
-  sink failure. If the item sink rejects every attempt, journal retirement and
-  `ExecutionSet.status` remain pending because reliable delivery never
-  succeeded; no item enters the accepted-item accumulator or terminal result.
-  The durable recorder row/receipt remains immutable and ledger-observable, no
-  false failed/unrecorded replacement is emitted, and the task terminalizes as
-  failed by the original sink error using only accepted items. This preserves
-  receipt finality without inventing a new result or exception contract.
-- **Tests/review:** Exact one-shot and persistently rejecting COPY
-  counterexamples plus non-byte coverage where the shared path requires it;
-  assert the one-shot accepted item, persistent-case immutable ledger receipt,
-  pending execution status, absence of a contradictory replacement item, and
-  failed accepted-items-only terminal result; executor/workflows/dispatcher
-  departments; ordinary suite; three-run settlement oracle; and independent
-  journal/terminal-ordering review.
-
-#### 3R.4 Retain prerequisite recording cause through settlement
-
-Commit: `fix(executor): retain prerequisite recording cause`
-
-- **Findings:** F1, F4, F7, and S2.
-- **Acceptance:** Make `recording-prerequisite-failed` typed operation-local
-  retained state rather than a dynamic exception attribute. Preserve it across
-  retry, cleanup-error substitution, backstop exception choice, and durable-
-  effect reduction while keeping filesystem settlement precedence unchanged.
-  If the same operation also has a reducer-proven unrecorded durable mutation,
-  `unrecorded-mutation` takes precedence; otherwise the terminal prerequisite
-  refusal remains `recording-prerequisite-failed`. Centralize that precedence
-  and only then remove the reducer-disagreement branch made unreachable by the
-  closed two-reason composition.
-- **Tests/review:** The exact flush-refusal-plus-cleanup-failure and retained-
-  UPDATE-retry counterexamples, a combined prerequisite-plus-unrecorded-
-  mutation case, executor department, three-run oracle, updated EXECUTOR
-  documentation/bug record, and independent retry/reducer review.
-
-#### 3R.5 Contain recording-diagnostic failures
-
-Commit: `fix(executor): contain recording diagnostic failures`
-
-- **Findings:** S6.
-- **Acceptance:** Record the typed item/task cause before optional diagnostic
-  rendering. If `str(error)` or logical rendering fails, retain `detail=None`,
-  preserve the primary recorder/filesystem error, and never leave the recording
-  axis clean. Apply the same boundary in executor and workflow recording paths.
-- **Tests/review:** Hostile-`__str__` item/final-flush/open/finish/close cases as
-  applicable, executor/workflows departments, ordinary suite, three-run oracle,
-  owning docs and bug record, and independent exception-precedence review.
-
-#### 3R.6 Preserve recording truth on compound workflow failure
-
-Commit: `fix(workflows): preserve recording truth on compound failure`
-
-- **Findings:** F5, S4, and the behavior notes following F7.
-- **Acceptance:** An exclusion-item sink failure combined with recording-close
-  failure produces one terminal failed result derived from the live
-  continuation, including `recording-close-failed`, before terminal payload
-  scrubbing. Remove the circular guard that compares two projections of the
-  same `ExecutionSet.recording` value. Retain and document the three ratified
-  behavior notes: recording-open containment on an already-failing path,
-  verify-present close attribution, and unconditional exit-failure
-  preservation. Recheck the reported canceled-settlement assignment against
-  current dataflow and remove it only if no consumer remains.
-- **Tests/review:** Exact compound counterexample, workflow/core-session/
-  dispatcher neighborhood, ordinary suite, three-run oracle, owning docs and
-  bug record, and independent terminalization review.
-
-#### 3R.7 Normalize scalar and file-id boundaries
-
-Commit: `fix(core): normalize scalar identity boundaries`
-
-- **Findings:** F14.
-- **Acceptance:** Wrong runtime type raises `TypeError`; a grammar-invalid
-  string raises `ValueError`; `Scalar64` overflow raises `ScalarDomainError`;
-  and `FileIndex128` overflow raises `ValueError`. Replace the mathematically
-  guaranteed `FILE_ID_128` byte-range assertion with construction that needs no
-  optimization-sensitive guard.
-- **Tests/review:** Wrong-type, malformed-text, exact-bound, and plus-one cases;
-  optimized-mode file-id decoding; core, database, and workflows departments;
-  ordinary suite; owning docs and causal bug record; and independent scalar-
-  boundary review.
-
-#### 3R.8 Enforce exact event-v5 operation truth
-
-Commit: `fix(protocol): enforce exact v5 operation truth`
-
-- **Findings:** S10, S11, and the contradictory-recording/cancellation portion
-  of S18.
-- **Acceptance:** One filesystem-outcome/recording-reason matrix governs
-  `ItemOutcome`, Python envelope/view validation, and packaged JavaScript.
-  `TerminalSummary`, Python validators, JavaScript terminal/result validators,
-  and `OperationResult` enforce the same compound and execute-cancellation
-  invariants.
-- **Tests/review:** Complete valid/invalid axis matrix, both cancellation
-  counterexamples, required Node corpus, core, executor, workflows, database
-  (including history), and interfaces departments, ordinary suite, owning docs/
-  bug records, and independent Python/JavaScript differential review.
-
-#### 3R.9 Align timestamp and reliable-size boundaries
-
-Commit: `fix(protocol): align v5 timestamp and size boundaries`
-
-- **Findings:** S12, S17, F12's logical-byte corpus gap, and the timestamp/size/
-  logical-byte corpus portion of S18.
-- **Acceptance:** Freeze the service grammar to a four-digit calendar date,
-  literal `T`, two-digit hour/minute/second, either no fraction or exactly six
-  fractional ASCII digits, and the literal UTC suffix `+00:00`; calendar fields
-  must construct a real Python datetime, so basic/week/date-only/24:00 forms,
-  impossible dates, `Z`, and other offsets refuse. Apply that grammar identically
-  in Python and JavaScript. Python `SessionEventView` and JavaScript reliable-
-  event validation reconstruct the canonical persistence envelope and enforce
-  the 1,048,576-byte ceiling on reliable events before cursor, queue, reducer,
-  or callback mutation.
-- **Tests/review:** One shared timestamp corpus, exact-maximum and plus-one
-  public-view witnesses in Python and Node, logical-byte review facts in the
-  Node corpus, core, workflows, and interfaces departments, ordinary suite,
-  owning docs/bug records, and independent grammar/byte-accounting review.
-
-#### 3R.10 Validate exact task updates before custody release
-
-Commit: `fix(web): validate task updates before custody release`
-
-- **Findings:** F12's production Python-view boundary, S9, S13, and S18's
-  positive-v4 task-view fixtures.
-- **Acceptance:** Validate every offered, recovered, drained, and command-
-  returned task update through the exact v5 Python view contract before queue,
-  cursor, terminal-delivered, serialization, or release mutation. A terminal
-  record requires a non-null valid result whose terminal state agrees; a
-  result-free or malformed collaborator record never releases custody.
-  Packaged JavaScript applies the same terminal-record rule.
-- **Tests/review:** Replace positive v4 adapter fixtures, prove rejected batches
-  leave queue/cursor/custody unchanged, exercise result-bearing release and
-  result-free refusal, interfaces/workflows departments and ordinary suite,
-  owning docs/bug records, and independent custody/mutation-order review.
-
-#### 3R.11 Harden exact-v5 seam and source gates
-
-Commit: `fix(web): harden exact-v5 source gates`
-
-- **Findings:** F8, F9, F12's Python-to-JavaScript witness gap, and S18's legacy
-  Progress/vocabulary/live-route gate gaps.
-- **Acceptance:** Freeze the private legacy browser seam to literal version 4,
-  slice only the actual live validator in routing tests, inspect the active v5
-  Progress validator and complete v5 vocabulary, and run production Python
-  public witnesses through the packaged JavaScript consumer. The checkpoint is
-  gate/test hardening; it does not widen the private compatibility seam or
-  activate a new production route.
-- **Tests/review:** Static mutation-resistant source gates, production-view-to-
-  Node differential corpus, interfaces department, ordinary suite, matching
-  INTERFACES documentation, and independent gate review.
-
-#### 3R.12 Pin exact database topology authority
-
-Commit: `refactor(database): prepare exact schema topology validation`
-
-- **Findings:** S14's topology authority and direct-test portion.
-- **Acceptance:** Add one exact comparator for the complete current user
-  schema—tables, columns, constraints, indexes, triggers, and definitions—and
-  direct tests for marker-only, missing-object, extra/poisoned-object, and
-  definition drift. Only declared SQLite-owned statistics artifacts are exempt.
-  Keep the comparator dormant: no reader, initializer, repository, or pair gate
-  selects it yet, so this preparatory safe stop does not claim production S14
-  closure or change WAL behavior.
-- **Tests/review:** Direct complete-v4/v6 and malformed-topology matrices,
-  database department, proof that production callers remain unchanged, and
-  independent schema-canonicalization review.
-
-#### 3R.13 Activate complete WAL-aware database admission
-
-Commit: `fix(database): validate complete pairs without mutation`
-
-- **Findings:** S14's production boundary and S15.
-- **Acceptance:** Ledger/history readers and initializers select 3R.12's exact
-  topology authority before any `CREATE IF NOT EXISTS` repair. Sidecar-free
-  databases retain the direct immutable read. Any `-journal` presence refuses
-  before opening a source database; NamiSync neither guesses whether it is hot
-  nor performs rollback recovery during admission. A WAL-bearing database is
-  validated from a private recovery snapshot that sees committed marker and
-  topology truth without opening or creating source SHM authority. The
-  validator never mutates source main/WAL/SHM/journal artifacts; quiescent ready,
-  refusal, and error fixtures remain byte-for-byte identical. An injected or
-  concurrent source drift refuses closed, and the drift fixture attributes only
-  that external change with no additional validator mutation. Repository and
-  initializer entry points use the same preflight before an ordinary SQLite
-  open can mutate refused source artifacts. Do not invent a new database-size
-  acceptance wall.
-- **Tests/review:** Complete current reopen, marker-only/poisoned current files,
-  main-plus-journal and orphan-journal refusal, journal drift/no-validator-
-  mutation, wrong WAL marker, missing SHM, benign live WAL, WAL topology poison,
-  snapshot drift/failure, repository/initializer no-mutation cases, database
-  department and ordinary suite, updated DATABASE docs/bug records, and
-  independent schema/TOCTOU/temp-ownership review.
-
-#### 3R.13a Replay retained settlement on cancellation
-
-Commit: `fix(executor): replay pending settlement on cancellation`
-
-- **Acceptance:** Cancellation reuses an already retained settlement unchanged,
-  including recorder receipt and degradation reason, before deriving a new
-  cancellation outcome. Cover both the current operation and deferred directory
-  settlement after `current` has advanced. Preserve the journal equality guard,
-  reliable-delivery-before-acceptance ordering, and existing external-error
-  precedence; do not invent accepted items when every delivery attempt fails.
-- **Tests/review:** Failed-before/passed-after current and deferred cases,
-  byte/non-byte success and degradation, pending failure, subsequent unstarted
-  cancellation, single recording/delivery, retained evidence under persistent
-  refusal, executor/workflows/dispatcher neighborhood, ordinary suite,
-  three-run protected oracle, and independent settlement review.
-
-#### 3R.13b Bound repeated admission to runtime reader lifetime
-
-Commit: `perf(database): reuse admitted runtime readers`
-
-- **Acceptance:** Repeated inventory/history read requests reuse a bounded set
-  of admitted reader handles under an explicit runtime owner and serialization.
-  Keep fresh per-request SQLite transactions, visibility of committed updates,
-  close/reopen ownership, and full admission for every newly opened handle.
-  Do not cache validation by path/stamp, remove same-stamp hash checks, or bypass
-  standalone repository/pair/initializer admission. First-open validation remains
-  proportional to main/WAL size; this is amortization, not constant-time admission.
-- **Tests/review:** Repeated-request admission counts, fresh committed data,
-  concurrent read/close behavior, failed-open/retry and close ownership, database/
-  workflows/interfaces neighborhood and ordinary suite. DATABASE documents the
-  exact fixtures, main/WAL/request-count scaling axes, logical I/O and scratch
-  space, retained artifacts, and rerun triggers as diagnostics, with no invented
-  database-size or latency acceptance wall. Independent lifetime/TOCTOU review.
-
-#### 3R.13c Keep validation snapshots on local database storage
-
-Commit: `fix(database): keep private snapshots beside local databases`
-
-- **Acceptance:** Private main/WAL validation copies use an explicit owned
-  temporary child of the database directory, inheriting the app database's
-  required local, non-cloud-synced placement instead of ambient system-temp
-  selection. Refuse if that private directory cannot be created. Document the
-  writable-parent requirement, full main/WAL contents, temporary disk cost,
-  normal cleanup, and possible crash leftovers. Never mutate or recover source
-  main/WAL/SHM/journal artifacts; do not claim the parent directory is unchanged.
-- **Tests/review:** Hostile ambient temp selection, both database roles,
-  unavailable private-directory creation and cleanup faults, existing source
-  no-mutation/drift tests, database department, ordinary suite, and independent
-  temporary-ownership review. No new filesystem-placement detection framework.
-
-#### 3R.S5 Keep continuation outside the session-store contract
-
-Commit: `fix(dispatcher): persist payload-free session projections`
-
-- **Acceptance:** Keep live `SessionRecord` and its payload invariants unchanged.
-  Introduce a separate frozen stored-record type with no payload field or live-
-  record reference. Explicitly project both admission and subsequent writes;
-  `SessionStore` and its concrete implementation accept only that shape. Retain
-  complete ordinary result axes and the result-free intermediate terminal record.
-  The current-process queue, latest-snapshot pause/resume, cancellation, and
-  custody semantics stay unchanged. Terminal live-record scrubbing remains
-  required but is no longer the store's continuation-retention guarantee.
-- **M2 constraint:** The metadata store is not a recovery store. DISPATCHER and
-  ARCHITECTURE must say durable restart/resume needs a separate protected
-  continuation/recovery contract and fresh authority/custody reconciliation;
-  replacing the metadata store with SQLite is insufficient. No M2 recovery,
-  cryptography, all-reference erasure claim, or ledger/history epoch change is
-  part of S5. Future projections cannot retroactively scrub incompatible old
-  stores; M1's supported in-memory store is fresh on restart.
-- **Tests/review:** Inspect every supplied and retained store value from
-  admission onward under accept-first/reject-later faults, reject accidental
-  live-record storage, preserve latest pause snapshots, cancel and terminal
-  result axes, admission rollback and cleanup-pending ownership. Run core/
-  dispatcher/workflows/database/interfaces consumers and ordinary/import gates,
-  classify the new retained fields against existing measurement authority, and
-  obtain independent storage/lifecycle review.
-
-#### 3R.14 Hash explicit closed canonical projections
-
-Commit: `fix(identity): hash explicit canonical projections`
-
-- **Findings:** F13 and S16.
-- **Acceptance:** Owner-defined plan and recorder projections replace generic
-  dataclass descent. A closed JSON encoder refuses unsupported types, non-string
-  keys, and non-finite numbers; no field-name guessing or fallback coercion.
-  Remove `asdict(plan)` before hashing. The explicit `FileIdentity` projection
-  emits canonical quoted `FileIndex128`; ordinary projected integers stay
-  numeric. Preserve complete declared hash inputs, existing field names, sequence
-  and set ordering, byte/date encodings, custom destination-policy name/version
-  semantics, and identityless hash bytes. Projection-coverage tests force review
-  of new domain fields/types. This corrects canonical consistency and latent
-  portability risk, not a demonstrated Python integer-precision defect.
-  Preserve and explicitly pin the existing low-32-bit uppercase volume-serial
-  normalization that makes `FILE_ID_INFO` evidence comparable with
-  `GetVolumeInformationW` `VolumeId`; it is separate from the full 128-bit file
-  index. The approved compatibility cut advances shared data epoch 5 to 6 and
-  the ledger contract id, while retaining ledger-v4/history-v6 shapes and the
-  history contract id. Old pairs refuse with explicit archive/reset guidance;
-  never delete user databases automatically. Execution-v6 keeps its wire shape;
-  old identity-bearing commitments fail re-fingerprinting, not a blanket version
-  ban. Reset discards app receipts/evidence/history, not source or target files.
-  At this checkpoint, retain surrogate escaping: JSON escapes a literal
-  backslash before UTF-8 encoding, so the reported raw-encoding collision does
-  not occur in these hashes. Pin that distinction and preserve scan observations.
-  The later 3R.14a checkpoint supersedes this malformed-input acceptance rule
-  with strict Unicode-scalar boundaries and explicit optional-detail omission.
-- **Tests/review:** Exact maximum file index through nested plans/inventory/
-  evidence and recorder hashes, ordinary integers in known projected types,
-  refusal of unknown nested dataclasses/types and coercive keys, projection
-  completeness, deterministic byte/fingerprint vectors, exact persisted-
-  consumer compatibility evidence, and an old-current-marker numeric-
-  fingerprint execution-v6 continuation decoded and re-fingerprinted by new
-  workflow code. Run core, planner, database, and workflows departments plus
-  the ordinary suite; update owning docs/bug record; and obtain independent
-  codec-compatibility review.
-
-#### 3R.15a Align browser comments and live constant naming
-
-Commit: `refactor(web): clarify live event schema naming`
-
-- **Acceptance:** Correct the non-multiline JavaScript end-anchor comment and
-  rename the live event version constant to `CORE_EVENT_SCHEMA_VERSION` together
-  with its exact source/name/count gate. Preserve all validator behavior and the
-  unreachable private legacy decoder reserved for checkpoint 3.3.
-- **Tests/review:** Focused source gates, required Node timestamp/decoder corpus,
-  interfaces department, exact diff inspection, and independent narrow review.
-
-#### 3R.15 Reconcile remediation evidence and active documentation
-
-Commit: `docs: reconcile independent checkpoint remediation`
-
-- **Findings:** F11, S8, and S18's active-document/status drift.
-- **Acceptance:** Reconcile M1_SHELL, M1_BRIDGE, DATABASE, ARCHITECTURE, CORE,
-  TESTS, component documents, README, CHANGELOG, BUGS, and HANDOFF with the
-  delivered behavior and exact safe stop. Remove stale active-v4/history-v5/
-  checkpoint status claims without rewriting historical evidence. Require the
-  approved S5 checkpoint and all authorized follow-ups to be implemented and
-  verified before this row completes. Keep lasting causal dispositions and
-  evidence in BUGS, CHANGELOG, and owning documents, removing their completed
-  finding entries from HANDOFF as each fix lands. HANDOFF contains current
-  verification, exact safe stop, and only actionable remaining work, not raw
-  reports already preserved in Git. Keep checkpoint 3.3 unstarted and the
-  private decoder seam intact.
-- **Tests/review:** All affected departments, ordinary suite with required
-  bundled Node, import architecture, three-run settlement oracle, exact source
-  scans, `git diff --check`, and final independent requirement/security review.
-
-#### 3R.15b Name the active v5 validator family
-
-Commit: `refactor(web): name active v5 validators accurately`
-
-- **Acceptance:** Remove the stale `Dormant` prefix from the live v5 validator
-  family and its vocabulary constants, together with all callers and exact
-  source gates. Preserve validator bodies, accepted/rejected inputs, routing,
-  and the unreachable private legacy decoder.
-- **Tests/review:** Demonstrate the old names fail the revised source gate,
-  retain mutation guards, run focused browser/static checks and the interfaces
-  department with required Node, and independently review the name-only diff.
-
-#### 3R.14a Refuse non-scalar Unicode at JSON boundaries
-
-Commit: `fix(core): enforce strict Unicode JSON boundaries`
-
-- **Acceptance:** Supersede 3R.14's surrogate-tolerance rule with explicit
-  Unicode-scalar input at all four JSON/UTF-8 encoders and matching workflow
-  decoders. Preserve valid-Unicode bytes and hashes. This closes a demonstrated
-  payload round-trip defect for explicit Python surrogate code units, not the
-  disproven raw-encoding hash collision. Keep optional diagnostic degradation
-  from suppressing valid inventory observations; reject malformed identity
-  data. Do not regenerate the frozen epoch-5 artifact or reset databases merely
-  to change malformed-input acceptance.
-- **Tests/review:** Tests precede implementation. Cover lone and paired Python
-  surrogate code units, literal backslashes, supplementary characters, nested
-  keys/values, encoded and decoded requests/continuations, optional diagnostics,
-  and frozen valid-Unicode controls. Run affected producer/consumer departments
-  and the ordinary suite; independently review compatibility and failure
-  behavior. Keep verifier policy and protected settlement authority unchanged.
-
-**Decisions delivered:** The approved memory-only continuation/separate
-stored-projection design and coordinated identity-hash epoch/reset are
-implemented and reviewed. No S5 or identity design hold remains. The private
-legacy decoder is intact for the separately scoped, unstarted checkpoint 3.3.
+**Complete (2026-08-27).** All accepted findings from the independent review of
+checkpoints 1–3.2 and its follow-ups are closed in 24 separately reviewed
+planning, repair, and closure commits (`989617a` through `bba64ec`).
+The temporary 3R hold is lifted; checkpoint 3.3 remains unstarted.
+
+| Checkpoint | Delivered issue or boundary | Commit |
+| --- | --- | --- |
+| 3R.0 / follow-up plan | Freeze remediation scope, ordering, and independent review boundaries. | `989617a`, `77bfc5f` |
+| 3R.1 | Restore authoritative settlement attribution and unconditional reducer gates. | `15c628c` |
+| 3R.2 | Pin execution-v6's closed recording vocabulary and contradictory-state refusal. | `306de50` |
+| 3R.3 | Retain committed receipts and exact pending settlement across reliable-sink rejection. | `1fc5e5b` |
+| 3R.4 | Retain prerequisite cause; backstop validation cannot mask an external error or retire inconsistent evidence. | `1e794e7` |
+| 3R.5 | Contain diagnostic-rendering faults without losing recording truth. | `8f6d8f8` |
+| 3R.6 | Preserve recording-close and accepted-item truth on compound workflow failure. | `f15a82d` |
+| 3R.7 | Normalize scalar/file-id type, grammar, range, and optimized-mode boundaries. | `bd05ff7` |
+| 3R.8 | Enforce one exact v5 outcome/recording/cancellation matrix across Python and JavaScript. | `f96804b` |
+| 3R.9 | Align timestamp grammar and canonical reliable-envelope size checks. | `04d5fb8` |
+| 3R.10 | Validate complete task updates before queue/cursor mutation or custody release. | `e4fd539` |
+| 3R.11 | Harden live-route, private-seam, and real Python-to-JavaScript source gates. | `ec4e9c8` |
+| 3R.12 | Establish exact database topology comparison and independent negative fixtures. | `7956834` |
+| 3R.13 | Activate complete WAL-aware admission without mutating source database evidence. | `d7673b7` |
+| 3R.13a | Replay retained settlement unchanged on cancellation. | `76d897b` |
+| 3R.13b | Amortize full admission through bounded runtime-owned reader lifetimes. | `544f249` |
+| 3R.13c | Keep private validation copies beside the required local database. | `6cdfd08` |
+| 3R.S5 | Separate payload-free stored projections from process-local live continuation. | `3a1b409` |
+| 3R.14 | Hash explicit closed canonical projections and enforce the coordinated epoch-6 reset boundary. | `4b2af38` |
+| 3R.15a | Correct the timestamp comment and live schema-constant name. | `d05995d` |
+| 3R.15 | Reconcile active documentation, findings, and integrated verification. | `0886c17` |
+| 3R.15b | Rename the live v5 validator family and its exact source gates. | `1c2ca16` |
+| 3R.14a | Enforce Unicode-scalar JSON boundaries while preserving valid bytes and optional-warning containment. | `bba64ec` |
+
+[BUGS.md](BUGS.md) owns the causal findings, fixes, and residual boundaries;
+component documents own the resulting contracts. The full former checkpoint
+clauses remain in `74abbc6:docs/M1_SHELL_H2.md`; original reviewer reports
+remain in `d7673b7:docs/HANDOFF.md`. Do not recreate those reports here.
+
+The closing ordinary run passed 4,498 tests with four Windows privilege skips
+and 28 headed deselections; required Node ran, all 11 import rules held, and
+the settlement oracle passed 30 scenarios three times with identical traces.
+This closes 3R, not later product/headed/resource gates or the private legacy
+source seam reserved for checkpoint 3.3. [HANDOFF.md](HANDOFF.md) carries the
+restart boundary and separately deferred context.
+
+Protected settlement traces/baseline/semantic hash, frozen epoch-5 witnesses,
+and frozen transport evidence remain unchanged; the repaired gate authority
+remains protected. S5 and identity design holds are
+resolved; current persistence/reset and M2 recovery constraints live in
+[DATABASE.md](DATABASE.md) and [DISPATCHER.md](DISPATCHER.md).
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
@@ -865,6 +421,91 @@ Commit: `feat(web): add bounded plan review and selection`
   hostile DOM; latency/memory; and headed production witnesses.
 - **Docs/review:** Update PLANNER, WORKFLOWS, M1_BRIDGE, M1_SHELL, and DESKTOP_UI. Close BR-G-15, BR-G-35, BR-G-37, plan BR-G-32, and the plan portion of BR-G-42 after adversarial selection/reopening review.
 
+#### 7.A Shared sibling sorting and complete plan integration
+
+- **Accepted contract:** Implement [Bridge sibling sorting](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9),
+  its exact `TreeSort`, raw row metadata, and update-view request/response
+  shapes. New views start canonical path-key order. The user may choose
+  filename, size, or mtime in either direction; reset returns to path-key order.
+  Shared machinery and the full production plan path land here; checkpoint 9
+  supplies the full inventory consumer. No immediate implementation is implied
+  by this documentation addition.
+- **Acceptance — complete ordering:** Sort entire immediate sibling sets in
+  the complete server projection before visibility derivation and windowing.
+  Preserve every NodeId, parent identity, subtree, same-target member, move
+  peer, notice, and canonical lookup. Keep one immutable canonical tree and one
+  current presentation ordering, with a shared comparator/permutation path.
+  Its validator must reject duplicate/missing nodes and broken hierarchy rather
+  than simply dropping the prior canonical-source-index monotonicity check.
+  Follow the exact basename, raw integer, null-last, and canonical-tie rules;
+  do not sort formatted labels, infer folder mtimes, or use copied-work bytes
+  as file size. Publish coherent frame indexes and guarded anchors atomically.
+- **Acceptance — authority:** Sorting is view state only. Assert unchanged
+  effective selection, canonical user-deselection provenance, selection digest
+  and revision, plan fingerprint, risk/counts/rollups, immutable operation and
+  dependency order, execution commitment, result/lifecycle authority, and
+  recursive action scope. A view change must not start work, write evidence,
+  or reinterpret a selected folder as only its visible/sorted members.
+- **Acceptance — state/bridge:** Required column/direction state is validated
+  and echoed through existing update/open/window views, including exact replay,
+  conflicts and rehydration. A changed sort-only intent advances view revision
+  once; identical intent/reset-default is no-op; changes of state still count
+  when row order coincides. Unrelated view gestures preserve sort. New views
+  are canonical, existing views retain process-live state across navigation and
+  reconstruction, and different tasks/views are independent. Sort/reset
+  invalidates old numeric windows/anchors/focus indexes; apply the documented
+  offset-zero policy or identity-based plan follow. Delayed replies cannot
+  restore an older order or activate a different row through an old index.
+- **Acceptance — future GUI independence:** The production command, exact
+  validators, server state, raw size/mtime fields, all sort choices, and reset
+  work at this checkpoint, even if the mtime column/reset affordance is not yet
+  placed in the 48rem table. Later GUI layout must use these contracts without
+  reopening tree building or the bridge. This is not permission to ship only
+  an unreachable helper, test-only route, or page-local sorter.
+- **Regression watch:** Per-page/global-flat sorting; mutable canonical
+  indexes; lost same-path operations; reparented descendants; locale/natural
+  sort; lexical numeric or float/date precision loss; null-first descending;
+  unstable ties; selection/execution reordering; synthetic folder dates;
+  search/collapse silently resetting sort; stale-anchor application; replay
+  undoing a newer intent; and uncharged per-sort caches or staging copies.
+- **Tests — independent ordering oracle:** Build real workflow trees with more
+  than 1,024 siblings, nested and empty containers, same-target operation groups,
+  move ghosts, duplicate/pathless informational leaves, and parents outside a
+  returned window. Independently authored expected NodeId sequences must cover
+  every permitted sort/direction and exact reset, shuffled construction input,
+  ties, all-unavailable and mixed keys. Concatenate windows across 255/256 and
+  later boundaries, including byte-limited short pages; assert no loss/duplicate,
+  complete subtree contiguity, exact parent/child/sibling frames, counts, and
+  item/node anchor results. Comparator-only or hand-built DTO tests do not close
+  this gate; include production plan open/update/window/anchor commands.
+- **Tests — discriminating keys:** Use mixed-case/Unicode and `file2`/`file10`
+  names, hostile layout-control text, equal basenames on distinct operations,
+  numbers 0/9/10/100/null, adjacent values around `2**53`, adjacent nanoseconds,
+  and the signed-64 maximum. Choose names/canonical ties that make lexical or
+  rounded numeric comparisons fail visibly. Cover file MOVE/NOOP/DELETE with
+  zero copied bytes but nonzero file size; own-directory mtime versus absent
+  stat, groups and synthetic ancestors; descendant changes must not invent or
+  update a folder's mtime. Unknown/status/progress columns, missing/extra keys,
+  wrong types/directions, and descending path-key refuse before traversal or
+  state mutation in Python and required Node contracts.
+- **Tests — authority/races/scale:** Compare complete canonical authority before
+  and after every sort under selection, search/filter/collapse, live execution
+  and terminal overlays. Race two sorts, sort versus other view edits, delayed
+  windows/anchors, replacement/eviction and close; prove atomic publication,
+  current-state replay, retained previous view on failure, and no stale browser
+  success or failure before payload access. Instrument unchanged windows to
+  prove no sorting/rebuild/native work, and changed views to prove one complete
+  derivation, not a family of retained variants. Include sorting keys,
+  permutations and old/new overlap in BR-G-42/45's existing predeclared fixture,
+  memory, and changed-view budgets; do not select a new budget after observing.
+- **Verification/review:** Run workflow/planner/interface consumers, existing
+  structural and selection regressions, required Node and ordinary gates, plus
+  installed production plan witnesses. Exercise latent choices through the real
+  production command path even when no visible column control exists. Update
+  BR-G-32's exact schemas/mirror without changing command counts, extend
+  BR-G-34/35/36/37 and plan BR-G-42 evidence, and independently review ordering,
+  immutable authority, and retention. Keep inventory closure pending until 9.A.
+
 ### 8. Deliver execution review and ledger-current evidence
 
 Commit: `feat(web): add execution review and ledger evidence`
@@ -906,16 +547,106 @@ Commit: `feat(web): add inventory projections and evidence`
   boundary/display; memory/latency; and hostile DOM witnesses.
 - **Docs/review:** Update INVENTORY, DATABASE, M1_BRIDGE, M1_SHELL, and DESKTOP_UI. Close BR-G-22, BR-G-23, BR-G-38, inventory BR-G-32, inventory BR-G-42, and the inventory portion of BR-G-39 after projection-race review.
 
+#### 9.A Full inventory sorting integration
+
+- **Acceptance:** Use checkpoint 7's same sorter and exact Bridge contract in
+  production inventory open/update/window flows. The complete slim projection
+  supplies raw keys **before** any window/detail query; do not fetch metadata
+  only for visible rows or perform per-subject I/O to sort. Project each real
+  directory's own observed mtime when available; structural ancestors and
+  unavailable metadata remain null, never descendant-derived. Keep recorded
+  observation, provenance, and integrity overlays distinct. New views/reset use
+  path-key order, with every explicit column/direction and raw mtime field fully
+  supported even if its GUI control/column remains latent.
+- **Acceptance — replacement:** Refresh/rebuild retains the live view's chosen
+  sort and recomputes ordering against the newly published raw facts. Publish
+  projection, derived sequence, windows, and indexes as one coherent captured
+  authority; stale sort/build work cannot overwrite a newer projection or view
+  intent. Preserve local acknowledgment patching, independent views, pins/LRU,
+  complete-predecessor retention on refusal, and the offset-zero sort policy.
+  No sorting operation writes the ledger or changes recursive refresh/integrity
+  scope, candidate order, selection, rollups, warnings, or verification truth.
+- **Regression watch:** Plan-only sorter left unused by inventory; different
+  comparator/tie/null rules; size/mtime fetched after windowing; full-location
+  reload per window/sort; wrong folder timestamps; accidental missing-row nulls;
+  old ordering paired with new metadata; sort lost on patch/refresh/eviction;
+  and view order leaking into recursive action or verifier candidate order.
+- **Tests:** Reuse 7.A's independent ordering/numeric/Unicode/window oracle on
+  real repository → workflow projection → production inventory bridge output,
+  with present, missing/acknowledged, unsupported, warning, real directory, and
+  structural ancestor rows. Cover every permitted column/direction and reset,
+  including all-null folders and last-known missing-row metadata; reject
+  descending path-key order. Cross sort
+  with search/filter/collapse/hide-acknowledged; assert exact frame/offset data
+  and unchanged counts/rollups, canonical descendant scope and admitted order.
+  Race sort with acknowledge/restore, refresh/integrity completion, projection
+  rebuild/eviction and task close; reject stale windows and preserve the last
+  complete generation. Prove same-view sort survives reconstruction while a
+  new independent view remains canonical. Instrument one complete structure
+  query per build, bounded detail/window work, no sort-time native or N+1
+  reads, and no resort on unchanged windows. Run the shared wide/tie/null scale
+  variants, six-view retention and seventh-view eviction under BR-G-42/45.
+- **Verification/review:** Run database/workflow/verifier/interface consumers,
+  required Node and ordinary gates, and installed production inventory command
+  witnesses including latent sort/reset/mtime support. Extend BR-G-22/23/34/38/39
+  and inventory BR-G-32/42 without relaxing existing limits. Independently review
+  projection replacement, raw-data provenance, and authority preservation.
+
 ### 10. Deliver integrity and deferred post-copy verification
 
 Commit: `feat(web): add integrity and post-copy verification`
 
 - **Objective:** Complete integrity controls and same-task manual verification without persistent operation-time hashes.
-- **Acceptance:** Add baseline/verify/rebaseline actions and a distinct no-rescan post-copy workflow. `start_integrity` carries receipted `current_evidence_acknowledged:boolean`, required true exactly for rebaseline and false for baseline/verify; every other combination is invalid before claim, scope resolution, ledger, or native work. Automatic linked verification remains the original compound session using transient evidence. Ordinary integrity publishes only the inventory row's `integrity_outcome` overlay; manual exact verification publishes only the plan row's separate `post_copy` overlay, and neither overwrites current ledger state or execution. Each manual exact attempt attaches a new dispatcher/history session identity and conditionally reads/writes against the original execution `runs.run_token`; it neither opens a new ledger scope nor reuses an earlier history identity. Under the owner claim, start first performs the atomic handoff classification and returns blocked/all-already-verified without native probing; only a ready subset triggers fresh target admission, followed by one final atomic classification that either freezes the still-ready rows or returns the new assessment. A failed, canceled, or partial attempt may be retried for the newly ready remainder, atomically replacing only the task's prior post-copy result/overlay after the old/new overlap is reserved. A race returns exact conflict, the five typed `ready`/`already_verified`/`eligible_incomplete`/`unrecorded`/`superseded` counts plus reason, or typed candidate refusal without inventing a task/view/count.
+- **Acceptance:** Add baseline/verify/rebaseline actions and a distinct no-rescan post-copy workflow. `start_integrity` carries receipted `current_evidence_acknowledged:boolean`, required true exactly for rebaseline and false for baseline/verify; every other combination is invalid before claim, scope resolution, ledger, or native work. Automatic linked verification remains the original compound session using transient evidence. Ordinary integrity publishes only the inventory row's `integrity_outcome` overlay; manual exact verification publishes only the plan row's separate `post_copy` overlay. These overlays never substitute for ledger-derived state or rewrite execution truth; successful conditional integrity recording still updates ledger evidence. Each manual exact attempt attaches a new dispatcher/history session identity and conditionally reads/writes against the original execution `runs.run_token`; it neither opens a new ledger scope nor reuses an earlier history identity. Under the owner claim, start first performs the atomic handoff classification and returns blocked/all-already-verified without native probing; only a ready subset triggers fresh target admission, followed by one final atomic classification that either freezes the still-ready rows or returns the new assessment. A failed, canceled, or partial attempt may be retried for the newly ready remainder, atomically replacing only the task's prior post-copy result/overlay after the old/new overlap is reserved. A race returns exact conflict, the five typed `ready`/`already_verified`/`eligible_incomplete`/`unrecorded`/`superseded` counts plus reason, or typed candidate refusal without inventing a task/view/count.
 - **Handoff policy:** Every applicable selected byte-producing operation must have a filesystem-successful terminal outcome, but unrelated non-byte-operation failure does not falsify a copied file's evidence and aggregate recording may be degraded. The five counts partition applicable selected byte-producing work; failed, canceled, or unreached work increments `eligible_incomplete`. Same-scope copy evidence is `ready`; same-scope readback/verify evidence with non-null `last_verified_at` is `already-verified` and increments `already_verified`; any incomplete, unrecorded, or superseded applicable item blocks exact admission. `post-settlement-state-diverged` also blocks because execution applicability is no longer trustworthy, regardless of the five counts; final-flush, finish, or close degradation alone remains admissible when every eligible row is committed and current. Positive `ready` with optional already-verified siblings starts only the ready subset; a nonempty all-already-verified set reports that without starting work; absent divergence, all five counts zero blocks as `no-applicable-items`. Otherwise offer ordinary “verify current state,” which may refresh and establish a new scope.
 - **Regression watch:** Reusing ordinary `run_integrity()` for exact handoff—it refreshes and destroys scope continuity; classification/admission races; mixing exact and current candidates; canonical target duplicates; stale mount choice; verifier recording degradation; result-ID misalignment; mutation of the original execution result.
 - **Tests:** Exact true-rebaseline/false-baseline/false-verify acknowledgement starts and receipt replay; false rebaseline, true baseline/verify, missing, and non-Boolean rejection before claim/scope/ledger/native work; ready, mixed ready/already-verified, all-already-verified, superseded by scan/run/rebaseline, missing/invalidation/unrecorded/offline, failed execution, final-flush-degraded but fully committed execution, last-moment conditional-recording race, pause/resume/cancel followed by a same-scope remaining-subset retry and old/new post-copy reservation, whole-object live replacement over overlapping/disjoint candidate indexes with prior settled membership retained until terminal, projection invalidation-before-outcome, and current-state fallback.
 - **Docs/review:** Update VERIFIER, WORKFLOWS, INVENTORY, DATABASE, M1_BRIDGE, and DESKTOP_UI. Close the remaining BR-G-39 and BR-G-48 cases after a dedicated handoff/race review.
+
+#### 10.A Rebaseline missing evidence without comparison semantics
+
+- **Accepted protocol:** Implement the [three-operation policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target).
+  A fresh rebaseline admits eligible selected files both with and without prior
+  evidence. Hash current content and conditionally create/replace evidence;
+  unchanged content is still `baselined`, never a verified match. Baseline's
+  missing-only admission and verify's compare-or-first-baseline policy remain
+  unchanged. Compare-and-accept for matching rebaseline content is outside M1.
+- **Acceptance:** Preserve explicit selected scope and the existing required
+  rebaseline acknowledgement even when every selected row has null evidence.
+  Keep the mode `REBASELINE`; do not adapt it per row. Successful replacement
+  clears verification freshness and conditional invalidation/reappearance in
+  the same transaction. Prior evidence, including null, participates in the
+  conditional write. Keep all fresh-subject/read-stability, scope, custody,
+  recording-axis, and exact-candidate continuation guarantees. Change only
+  fresh admission where current engine/recorder paths already satisfy this
+  contract; no schema, wire-version, or automatic post-copy-policy redesign.
+- **Regression watch:** Dropping null-evidence rows; skipping a read/write on
+  equal content; reporting `verified` or retaining `last_verified_at` after
+  rebaseline; weakened acknowledgement for null evidence; overwriting evidence
+  created after selection; mode filters dropping pending resumed rows; adding
+  newcomers on resume; and treating receipt replay as content comparison.
+- **Tests:** Start from mixed selections containing no evidence, baseline-only,
+  repeatedly verified, changed-stat, and stable-stat/different-digest subjects.
+  Assert admitted ids, actual read/hash counts, exact outcomes, recorder mode,
+  old/new evidence, freshness, and phase headline for **all three operations**.
+  Include all-null and mixed explicit rebaseline through workflow, service/CLI,
+  and production bridge; engine-only success is insufficient. Retain repeated
+  baseline's zero verifier-work control and null-baseline verify's incomplete
+  headline. Prove equal-content rebaseline really reads/replaces and clears
+  prior verification freshness, while no evidence appears before a stable read.
+  Use real-ledger null-to-present races, conditional stale/conflict/error and
+  rollback fixtures, invalidation/reappearance atomicity, and independent
+  recording degradation. Exercise mixed-state pause/resume/cancel with exact
+  ordered candidate retention, completed-item nonrepetition, and byte/status
+  high-water preservation. Extend acknowledgement/malformed-intent/receipt
+  replay cases to all-null and mixed scopes. Retain manual exact post-copy
+  supersession by rebaseline and automatic linked-verification controls.
+- **Verification/review:** Run verifier, workflows, database, dispatcher and
+  interfaces consumers plus the ordinary suite with required Node; include
+  installed production integrity controls at checkpoint closure. Independently
+  review the policy matrix and conditional-recording races. Update current
+  versus accepted wording in VERIFIER, WORKFLOWS, INVENTORY, COMMANDLINE,
+  FEATURES, and Bridge only when this checkpoint activates it.
 
 ### 11. Close early Slice 7 lifecycle and scale
 
@@ -958,7 +689,9 @@ Commit: `docs(gui): close stage 6 surface verification`
 - History page, history bridge pagination, BR-G-40, history BR-G-42, and SH-G-9.
 - Global settings mutation page; Setup only reads defaults and freezes per-task overrides.
 - Drag-and-drop and file-scoped planning.
-- Geometry, column, durable tree-expansion, and other nonappearance UI-state consumers.
+- Geometry, column layout, durable tree-expansion, and other nonappearance UI-state consumers. Deferred layout must not postpone checkpoint-7/9 sorting commands, raw size/mtime facts, or reset support.
+- Status/progress sorting, global flat sorting, and durable sort preferences are excluded from M1.
+- Compare-and-accept behavior for genuine matches during rebaseline is deferred beyond M1; checkpoint 10 always hashes and replaces/creates evidence.
 - Human-gesture provenance against compromised trusted JavaScript.
 - Desktop task survival across process closure/restart.
 - GUI Break 2 cohesion work, release packaging, BR-G-43/44, and SH-G-15.

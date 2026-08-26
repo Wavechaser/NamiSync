@@ -239,6 +239,15 @@ and framing. Task reads rehydrate the UI, exact release removes session custody,
 and close destroys task presentation/receipts. Interfaces follow and recheck
 bridge authority around outside work.
 
+H2 checkpoints 7/9 add shared plan/inventory sibling sorting to those server
+projections. New views and reset use canonical path-key order; explicit
+filename/size/mtime choices reorder presentation before windowing, not domain
+selection, recursive scope, or execution authority/order. Raw workflow-owned
+sort facts and complete production command/validator support must land even
+if mtime/reset GUI layout remains latent. Revisions, indexes, anchors, and
+late-response guards move coherently under the exact
+[Bridge sorting contract](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9).
+
 External values are validated before presentation construction. Numeric
 encoding follows bridge/defense domains and identity remains non-arithmetic.
 Execution evidence is an atomic ledger view, never later-start authority; exact
@@ -422,8 +431,9 @@ The replacement for the unused `interfaces/ui_state.py` prototype now owns
 strict-shape `ui-state.json` independently from database-owned
 semantic defaults. Schema v1 contains only the typed appearance section and
 its `system`, `light`, or `dark` value. Ledger-derived recents never enter this
-file; geometry, column, sort, treegrid expansion/grouping, and filter state
-require later typed schema additions.
+file; geometry, column, treegrid expansion/grouping, and filter persistence
+require later typed schema additions. H2 sorting is process-live view state;
+durable sort preferences are excluded from M1.
 The owner bounds the file before decoding, refuses duplicate or unknown
 members, and never rewrites during load. Missing state yields clean defaults;
 malformed current state yields dirty session defaults; a newer unsupported

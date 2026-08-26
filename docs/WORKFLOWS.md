@@ -483,7 +483,8 @@ directly and fetches only exact already-completed rows needed for settlement.
 Explicit selected-path and intentional full Verify All behavior are unchanged.
 
 Candidate filtering happens only while freezing a new integrity selection.
-Baseline admits eligible non-directory rows with no attestation; rebaseline
+In the current implementation, baseline admits eligible non-directory rows
+with no attestation; rebaseline
 admits eligible rows that already have an attestation; verify retains both,
 including null-attestation rows that must establish evidence and report
 verification-incomplete. When a continuation already carries
@@ -493,6 +494,15 @@ therefore survive even if evidence changes after admission. A repeat full
 baseline still performs
 its required fresh inventory recording, but hashes and writes no integrity
 attestation when every eligible row already has evidence.
+
+The accepted checkpoint-10 change admits null-attestation rows to fresh
+rebaseline too, without weakening its explicit selected scope/acceptance or
+changing resume selection. Rebaseline hashes and conditionally replaces or
+creates evidence even when content matches; it clears verification freshness
+rather than reporting a verified match. This admission change is not yet
+implemented. See the [three-operation policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
+and [H2 checkpoint 10](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification)
+for the complete acceptance and regression requirements.
 
 ## Other Workflows
 

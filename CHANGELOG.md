@@ -51,8 +51,15 @@ claims explicit, independently reviewable, and regression-backed.
   detail before it can suppress inventory observations; no further reset.
 - Delivered small independently reviewed commits, reconciled active versus
   historical documentation, and removed completed findings from HANDOFF.
-  Parent checkpoint 3.3 remains unstarted; its private legacy decoder, the two
-  unassigned findings, and open headed/resource acceptance gates remain separate.
+  Condensed the completed 3R plan to a commit/issue index pointing to BUGS and
+  refreshed HANDOFF for the whole bug hunt. Parent checkpoint 3.3 remains
+  unstarted; its private legacy decoder, separately deferred diagnostic and
+  inspection notes, and open headed/resource acceptance gates remain separate.
+- Specified future checkpoint-7/9 server-owned sibling sorting with initial/
+  reset path-key order and unchanged selection/execution authority, plus
+  checkpoint-10 null-evidence rebaseline with unconditional fresh hash-and-
+  replace semantics. Added acceptance, regression, and test requirements and
+  aligned owner docs; this closeout changes documentation only.
 
 #### Ratify measurement and documentation authority (2026-08-14 – 2026-08-18)
 

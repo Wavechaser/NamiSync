@@ -1,107 +1,95 @@
 # Session Handoff
 
-Status (2026-08-27): both hanging fixes are delivered: 3R.15b live v5 naming
-(`1c2ca16`) and 3R.14a strict Unicode-scalar boundaries (`bba64ec`). The M0
-criteria archive (`6735f8c`) separates historical checklists from active
-contracts, and all five PoC documents now live in `obsolete/PoC_import/`.
-The requested documentation cleanup is complete.
-Integrity policy is held for user consideration; do not change it. Checkpoint
-3.3 remains unstarted and the private legacy decoder remains intact.
+Status (2026-08-27): delivered checkpoint **3R**, closing the independent review
+findings against H2 checkpoints 1–3.2. The compact issue/commit index in
+[M1_SHELL_H2.md](M1_SHELL_H2.md#3r-remediate-independent-checkpoint-review-findings)
+and the module-first [bugs ledger](BUGS.md) own the details. Checkpoint 3.3
+remains unstarted; the safe next step is its separately reviewed private legacy
+decoder removal, not a restart of the completed bug hunt.
 
-`M1_SHELL_H2.md` owns the checkpoint boundaries and full acceptance criteria.
-The safe stop is before checkpoint 3.3; do not fold the two unassigned findings
-below into its legacy-source removal or these follow-ups.
-Completed causal findings belong in `BUGS.md`, not this handoff. The original
-O/S reports and prior verification receipts remain in Git at
-`d7673b7:docs/HANDOFF.md`; no separate report archive is needed.
+## Delivered in this bug-hunt session
 
-## Still Unassigned
+- Paused the parent delivery after `4c3b5ea`–`7c93380`, investigated both
+  external reviews, and delivered 24 small planning/fix/closure commits from
+  `989617a` through `bba64ec`. The index includes the oracle repair,
+  tests-first 3R.4 rebuild, cancellation follow-up, database admission/read
+  cost fixes, S5 store projection, explicit hash projections/epoch 6, and the
+  final live-validator naming and strict-Unicode refinements.
+- Completed findings are in BUGS, not duplicated here. Original O/S reports
+  remain at `d7673b7:docs/HANDOFF.md`; the full pre-condensation checklist and
+  prior verification/capture receipts remain at `74abbc6:docs/M1_SHELL_H2.md`
+  and `74abbc6:docs/HANDOFF.md`.
+- Archived historical M0 criteria in [obsolete/M0_PLAN.md](obsolete/M0_PLAN.md)
+  (`6735f8c`), retaining the few unique current rules in their component
+  contracts. Relocated all five PoC documents byte-for-byte into
+  `obsolete/PoC_import/` (`74abbc6`). Active prose remains authoritative.
+- This final documentation pass condenses 3R, aligns the owner documents, and
+  records the accepted sorting and integrity additions below. It changes no
+  runtime, test, oracle, database, or protected measurement artifact.
 
-- The installed-wheel event diagnostic needs coordinated producer/page/parent
-  fixture migration: `task-0-item-000` violates v5 HexId; the terminal callback
-  still reads `result.items.map` from an item-free summary; expected IDs and
-  numeric-byte assumptions also need alignment. Independent probes confirmed
-  these predate 3R.8 (at `bd05ff7` and `f96804b`). The failed artifact
-  is `build/r38-verification/event-f96804b-1.json`; the directory README retains
-  its artifact conventions.
-  Passing custody drift evidence is not event or whole-runtime acceptance;
-  frozen calibration/holdout/ceiling authority needs no change.
-- The adjacent workflow finding from independent 3R.6 review remains
-  inspection-only, not separately reproduced or assigned:
-  `_settle_execute_resume_failure` can return all exclusions after the
-  pre-entry/resume sink rejects one, and emission-error rendering is unguarded.
-  Keep it distinct from the repaired ordinary/canceled terminal projection.
+## Accepted next-checkpoint additions — not implemented
 
-## Execution Notes
+- **7:** shared server-owned sibling sorting and full plan integration.
+  **9:** full inventory integration. New views and reset use canonical path-key
+  order; filename, size, and mtime are explicit opt-in sorts. Sort complete
+  sibling sets before windowing, with raw numeric values, deterministic ties,
+  unavailable values last, and no descendant-derived folder timestamps.
+  Selection, collapse, hierarchy, node identity, execution authority/order,
+  and recursive action scope are unchanged. Revisions, windows, indexes and
+  anchors must agree. Complete production bridge support cannot wait for the
+  48rem table's mtime/reset layout. Status/progress sorting, global flat
+  sorting, and durable preferences are excluded from M1.
+- **10:** fresh rebaseline also admits eligible selected files without evidence.
+  It always hashes and conditionally replaces/creates evidence, even for a
+  genuine match, and clears verification freshness. Explicit selected scope
+  and current-evidence acceptance remain required. Compare-and-accept is
+  deferred beyond M1; baseline and verify policy are unchanged. The
+  [three-operation table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
+  distinguishes current behavior from this accepted target.
+- H2 7.A, 9.A and 10.A contain acceptance, regression, tests, and independent
+  review requirements. Bridge DR-BR-15 owns exact sorting semantics.
+  There is no remaining design hold for these additions, S5, or 3R.14.
 
-For runtime work, deliver one tests-first, independently reviewed and committed
-checkpoint at a time, following `M1_SHELL_H2.md`. Keep protected settlement
-oracle/baseline/assertions and frozen transport measurement authority unchanged.
-Use the required bundled Node for applicable ordinary gates. Do not reuse retained
-measurement pytest base directories.
+## Verification and preserved boundaries
 
-The retrospective `obsolete/M0_PLAN.md` uses the final pre-M1 snapshot
-`5b6a0013098f4e73febd6630831daeaa40abc686`, not M1-amended checklists relabeled
-as M0. All 13 extracted acceptance tails match that source exactly apart from
-heading depth, line endings, and trailing blank lines, including the original
-future/latent qualifications and verification notes. Blame and current-prose
-review identified stale criteria; active prose remains authoritative. The few
-unique current rules and fixture details stay in `VERIFIER.md`, `DATABASE.md`,
-and `RECORDER.md`. Current M1 gates and latent ingest criteria remain in place.
-Independent review corrected archive-authority wording; all 22 new local links
-resolve, including their section anchors. Active pre-tail prose is unchanged
-apart from the five explicit retention insertions in those three documents.
+This documentation pass verified the 24-commit map, the 51-line 3R section,
+all 26 new local links/anchors, and the unchanged runtime/test/tool trees.
+Independent sorting, integrity, and closure reviews found only wording issues,
+corrected before staging; whitespace validation passed.
 
-The separate PoC relocation preserved all five files byte-for-byte, verified
-by before/after SHA-256 checks. Source/destination inventory and reference
-review found no hidden contents, linked directories, or runtime/package/test
-dependency on the old path. README and feature references now explicitly point
-to the historical archive; the old design-review reference resolves from its
-existing obsolete directory. No source text inside the imported files changed.
-Both documentation checkpoints leave runtime code and tests unchanged, so the
-runtime verification below still applies.
+The latest behavioral receipt is `bba64ec`: required-Node ordinary suite
+**4,498 passed, 4 privilege skips, 28 headed deselected** (194.81 s); six
+affected departments **3,511 passed, 1 privilege skip**; import architecture
+**11 kept, 0 broken**; protected settlement **30 scenarios × 3** with identical
+normalized traces and baseline parity. The later M0/PoC and present closeout
+commits are documentation-only; these are retained receipts, not newly run
+behavioral or headed acceptance. BR-G-45 and SH-G-15 remain open.
 
-3R.14a tests-first Unicode/warning regressions failed 64 cases against the old
-runtime, with five controls passing. Strict encoding/decoding and warning
-construction made the focused checks pass. The complete five-module run then
-passed 426 tests with one reparse-privilege skip (9.17 s); its initial four
-setup failures were corrected by moving the existing malformed-value injection
-from the now-validated warning constructor to an unvalidated evidence field,
-preserving the recorder's independent refusal/no-write assertions.
+For runtime work, continue one tests-first, independently reviewed and
+committed checkpoint at a time. Preserve the protected settlement
+oracle/baseline/assertions and frozen transport authority; no new oracle
+defect is demonstrated by this documentation pass. Use required bundled Node
+for applicable gates and fresh measurement directories.
 
-With required Node, the six affected departments passed 3,511 tests with one
-skip and 1,018 deselected (85.45 s). The ordinary suite passed 4,498 tests with
-four skips and 28 headed tests deselected (194.81 s). All skips are unavailable
-Windows symlink/reparse privileges (`WinError 1314`), not skipped Node gates.
-Import architecture kept all 11 rules. The protected settlement check passed
-30 scenarios three times with identical normalized traces and baseline parity.
-Independent source/test review found no actionable issue; documentation review
-caught stale planner/features wording, corrected before final review.
-The naming checkpoint's own receipt remains in `1c2ca16:docs/HANDOFF.md`.
+The active pair remains ledger v4/history v6, shared data epoch 6. Old epoch-5
+pairs require the documented explicit paired archive/reset; no user database
+was reset or deleted. S5 keeps continuations process-local and offers stores
+only payload-free projections; M2 restart requires its separately protected
+continuation design, as recorded in [DISPATCHER.md](DISPATCHER.md).
+The frozen old-byte witness `tests/assets/identity_epoch5_vectors.json` must
+not be regenerated with the new encoder. Its SHA-256 remains
+`52f80f8539b863da0a357ba4a47c20a32cb77a5a14db9194d5adf98e31c538d9`;
+the old handoff retains capture provenance and the MOVE/surrogate witness
+qualifications. This pass launches no runtime verification processes.
 
-Protected settlement and frozen transport-authority files are unchanged, as is
-the frozen identity artifact below. No new headed acceptance is claimed;
-BR-G-45 and SH-G-15 remain open.
-No verification process remains running.
+## Other context outside the closed 3R findings
 
-Old epoch-5 pairs now require the documented explicit archive/reset; no user
-databases were deleted or reset. Ledger-v4/history-v6 schemas, the history
-contract id, and plan-v5/execution-v6 wire shapes remain unchanged.
-The captured MOVE vector is an isolated old-hash replay-gate witness,
-not proof of a valid historical first write; a separate valid producer control
-and stale/no-write assertion preserve that distinction. `BUGS.md` and owning
-component docs now hold the completed identity-hash, Unicode, and S5 dispositions.
-The Unicode refinement adds no reset: valid-Unicode bytes are unchanged.
-Captured surrogate preimages remain historical refusal witnesses; the two old
-inventory vectors contain malformed optional warning detail, now omitted at
-construction, so even their identityless old receipt conflicts without writes.
-
-Ignored `build/r314-baseline/` contains the independently reviewed one-shot
-capture helper and fixed synthetic fixtures. Capture succeeded once at clean
-commit `3a1b409`, before any hash changes: 39 byte vectors and two valid
-execution-v6 continuations. Its frozen `epoch5-vectors.json` was copied without
-replacement to `tests/assets/identity_epoch5_vectors.json`; both have SHA-256
-`52f80f8539b863da0a357ba4a47c20a32cb77a5a14db9194d5adf98e31c538d9`.
-Never regenerate these old expectations with the new encoder. The ignored
-directory README owns capture conventions; the capture opened or reset no
-databases.
+- The installed-wheel event diagnostic's producer/page/parent fixture
+  migration remains unassigned, not current-v5 timing acceptance. Its invalid
+  HexId, old terminal-item access, and numeric-byte assumptions predate 3R.8;
+  Bridge BR-G-42 owns that disposition. Historical probe/artifact details are
+  in `74abbc6:docs/HANDOFF.md`; protected calibration authority is unaffected.
+- The adjacent `_settle_execute_resume_failure` pre-entry/resume sink concern
+  remains inspection-only, not separately reproduced or assigned. It is not
+  the repaired ordinary/canceled terminal projection. Retain that distinction
+  rather than silently adding it to checkpoint 3.3 or calling it fixed.

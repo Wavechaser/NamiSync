@@ -12,6 +12,8 @@ actions remain Stage 6. Signed-64 totals, exact event v5, and full-width native
 identity are active from checkpoint 3.2. The no-rescan manual post-copy handoff
 and ledger-current classification below remain accepted Stage 6 targets until
 their implementation gates close.
+Checkpoint 10 also broadens fresh rebaseline admission to rows without prior
+evidence; that selection change is accepted but not yet implemented.
 
 ## Purpose
 
@@ -69,6 +71,11 @@ parallel verifier design requires workload evidence and must preserve one
 outcome/write per row plus per-volume safety.
 
 ## Per-File Algorithm
+
+The old-baseline stat and digest comparisons below apply to **verify**.
+Baseline and rebaseline use the same fresh-subject/read-stability guards but
+their mode-specific evidence policy is defined under
+[Baseline And Re-Baseline](#baseline-and-re-baseline).
 
 1. Checkpoint and validate root-relative path/containment.
 2. Open the intended file without following an unexpected reparse point.
@@ -174,9 +181,10 @@ during verify is `baselined`, never `verified`; because no comparison occurred,
 its `phase=verify` result receives the `verification-incomplete` headline even
 though an explicit baseline/rebaseline activity may complete successfully.
 
-Re-baseline is an explicit user-reviewed acceptance of current modified content.
+Re-baseline is explicit user-reviewed acceptance of current content, whether
+or not that content differs from prior evidence.
 It uses the same fresh stat/hash/conditional write path, supplies the prior
-attestation to the recorder for conflict detection/audit retention, and never
+attestation to the recorder for conditional conflict detection, and never
 runs automatically after mismatch. A reappeared row receiving accepted
 matching/new evidence clears `reappeared_at` atomically with that write.
 Baseline/rebaseline replacement evidence never advances verification freshness
@@ -185,13 +193,49 @@ advances that timestamp. Copy/update/move-update evidence follows the same
 freshness rule and replaces any prior invalidation only with new attested
 evidence.
 
-Workflow freezes a mode-aware initial selection before calling this module.
+The current workflow freezes a mode-aware initial selection before calling this module.
 Baseline admits only eligible non-directory rows without an attestation;
 rebaseline admits only rows with one; verify admits both. The filters are not
 reapplied when a paused continuation already has exact candidate ids, so an
 evidence change cannot remove admitted pending work. Repeating a full baseline
 still refreshes and records inventory, but when every row already has evidence
 it runs with zero verifier hashes and zero integrity-attestation writes.
+
+### Standalone operation policy (checkpoint 10 target)
+
+This table governs the accepted checkpoint-10 behavior after fresh inventory,
+for eligible readable files whose current subject remains stable during the
+read. Only rebaseline's missing-evidence admission changes; all other cells
+describe existing policy. Until checkpoint 10 lands, fresh rebaseline still
+excludes rows without evidence as stated above.
+
+| Operation | No prior evidence | Prior evidence exists | Successful evidence / verification freshness |
+| --- | --- | --- | --- |
+| Baseline | Hash and conditionally create a baseline. | Not admitted to verifier work; no verifier hash or attestation write. | Report `baselined`; do not claim a comparison or advance `last_verified_at`. |
+| Verify | Hash and conditionally create a baseline; report `baselined`, so the verify phase is `verification-incomplete`. | Changed baseline stat: `modified` without hashing. Stable stat: hash; equal digest is `verified`, different digest is `mismatched` and never auto-accepted. | Only a genuine comparison match advances `last_verified_at`; negative results retain prior evidence and may conditionally record invalidation. |
+| Rebaseline | **New at checkpoint 10:** hash and conditionally create a baseline, accepting null as the prior evidence state. | Hash and conditionally replace with fresh evidence, including when the digest genuinely matches. | Report `baselined`, never `verified`; clear prior `last_verified_at`, leaving the successfully baselined row `unverified`. |
+
+These are workflow admission rules, not silent per-item `skipped` results.
+Fresh inventory may still update observations for excluded baseline subjects.
+Rebaseline keeps its explicit selected scope and current-evidence acceptance,
+including an all-null selection. An unchanged digest does not bypass the read,
+convert the mode to verify, preserve verification freshness, or avoid the fresh
+evidence write. Compare-and-accept treatment of genuine rebaseline matches is
+deferred beyond M1. Exact command/receipt replay may still be an idempotent
+`NOOP`; it is not that deferred content-match behavior.
+
+All modes keep fresh root/volume, current-stat, complete-read, and same-subject
+post-read guards. Missing, unsupported, canceled, drift, and error outcomes
+remain truthful; a failed read cannot install replacement positive evidence.
+Applicable negative invalidations retain their existing conditional-write rule.
+Every positive write guards prior evidence **including its absence**, so a
+concurrent null-to-present evidence change refuses instead of overwriting the
+new evidence. Recorder refusal/error degrades recording without rewriting the
+content verdict. Successful replacement clears invalidation/reappearance only
+atomically with the evidence transaction. Pause/resume retains exact admitted
+ids/order and completed results without reapplying fresh-selection filters.
+Automatic linked and manual exact post-copy verification remain separate.
+Delivery and regression gates live in [H2 checkpoint 10](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification).
 
 ## Selected And Post-Execution Verification
 
