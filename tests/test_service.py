@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import ast
+import gc
 import io
 import json
 from hashlib import blake2b
 from collections import deque
 from dataclasses import asdict
 from pathlib import Path
+import threading
 from types import SimpleNamespace
 from threading import Event, Lock, Thread
 from unittest.mock import Mock
@@ -71,6 +73,33 @@ from namisync.workflows.inventory import (
 from namisync.workflows.views import operation_result_view
 
 from _db_fixtures import FakeClock, NOW, operation, plan
+
+
+def _raise_private_observer_failure(
+    references: list[object],
+    *,
+    exception_base: type[BaseException] = Exception,
+) -> None:
+    payload_type = type("PrivateObserverPayload", (), {})
+    failure_type = type("PrivateObserverFailure", (exception_base,), {})
+    attached_payload = payload_type()
+    cause_payload = payload_type()
+    frame_only_payload = payload_type()
+    cause = failure_type("private observer cause")
+    cause.payload = cause_payload
+    failure = failure_type("private observer failure")
+    failure.payload = attached_payload
+    references.extend(
+        ref(value)
+        for value in (
+            payload_type,
+            failure_type,
+            attached_payload,
+            cause_payload,
+            frame_only_payload,
+        )
+    )
+    raise failure from cause
 
 
 def _record(
@@ -1030,7 +1059,7 @@ def test_gap_recovery_stop_closes_racing_replacement_outside_observer_lock(
     assert first.closed and replacement.closed
     assert close_outside_lock == [True]
     assert observation.done.is_set()
-    assert observation.failure is None
+    assert not observation.failed
     assert observer._observations == {}
 
 
@@ -1062,8 +1091,237 @@ def test_sink_exception_closes_stream_and_does_not_block_shutdown() -> None:
     assert closed.wait(0.5)
     with pytest.raises(RuntimeError, match="session observation failed") as raised:
         observer.wait(session_id)
-    assert isinstance(raised.value.__cause__, RuntimeError)
-    assert str(raised.value.__cause__) == "sink failed"
+    assert str(raised.value) == "session observation failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    observer.close()
+
+
+@pytest.mark.parametrize("cleanup", ("unsubscribe", "close"))
+@pytest.mark.parametrize(
+    "exception_base",
+    (Exception, BaseException),
+    ids=("exception", "base-exception"),
+)
+def test_observer_failure_retires_private_graph_before_wait_and_cleanup(
+    cleanup: str,
+    exception_base: type[BaseException],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = "8" * 32
+    stream = _SequenceStream(_envelope(session_id, 1, PhaseChanged("explode")))
+    graph_references: list[object] = []
+    excepthook_calls = []
+    monkeypatch.setattr(threading, "excepthook", excepthook_calls.append)
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            return stream
+
+    def explode(_update) -> None:
+        _raise_private_observer_failure(
+            graph_references,
+            exception_base=exception_base,
+        )
+
+    observer = SessionObserver(Dispatcher())
+    observer.observe(session_id, explode)
+    observation = observer._observations[session_id]
+    assert observation.done.wait(0.5)
+    assert observation.thread is not None
+    observation.thread.join(0.5)
+    assert not observation.thread.is_alive()
+    assert observation.failed
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert excepthook_calls == []
+
+    failures = []
+    for _ in range(2):
+        with pytest.raises(RuntimeError) as raised:
+            observer.wait(session_id)
+        failures.append(raised.value)
+    assert failures[0] is not failures[1]
+    assert all(str(error) == "session observation failed" for error in failures)
+    assert all(error.__cause__ is None for error in failures)
+    assert all(error.__context__ is None for error in failures)
+
+    if cleanup == "unsubscribe":
+        observer.unsubscribe(session_id)
+    else:
+        observer.close()
+    assert observer._observations == {}
+    observer.close()
+
+
+def test_observer_stream_close_base_exception_is_contained(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = "8" * 32
+    graph_references: list[object] = []
+    excepthook_calls = []
+    monkeypatch.setattr(threading, "excepthook", excepthook_calls.append)
+
+    class Stream(_SequenceStream):
+        def __init__(self) -> None:
+            super().__init__(_envelope(session_id, 1, PhaseChanged("closing")))
+            self.close_attempts = 0
+
+        def close(self) -> None:
+            self.close_attempts += 1
+            if self.close_attempts == 1:
+                _raise_private_observer_failure(
+                    graph_references,
+                    exception_base=BaseException,
+                )
+            super().close()
+
+    stream = Stream()
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.get_count = 0
+
+        def get(self, requested: str) -> SessionRecord:
+            self.get_count += 1
+            return _record(requested, terminal=self.get_count > 1)
+
+        def subscribe(self, requested: str, from_seq=None):
+            return stream
+
+    observer = SessionObserver(Dispatcher())
+    observer.observe(session_id, lambda _update: None)
+    observation = observer._observations[session_id]
+    assert observation.done.wait(0.5)
+    assert observation.thread is not None
+    observation.thread.join(0.5)
+    assert not observation.thread.is_alive()
+    assert observation.failed
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert excepthook_calls == []
+
+    with pytest.raises(RuntimeError) as raised:
+        observer.wait(session_id)
+    assert str(raised.value) == "session observation failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    observer.close()
+    assert stream.closed
+    assert stream.close_attempts == 2
+
+
+def test_observer_close_continues_after_private_base_exception_and_retires_all(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    graph_references: list[object] = []
+    excepthook_calls = []
+    monkeypatch.setattr(threading, "excepthook", excepthook_calls.append)
+
+    class FirstStream(_BlockingStream):
+        def close(self) -> None:
+            if self.closed:
+                return
+            super().close()
+            _raise_private_observer_failure(
+                graph_references,
+                exception_base=BaseException,
+            )
+
+    streams = {
+        "first": FirstStream("first"),
+        "second": _BlockingStream("second"),
+    }
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            return streams[requested]
+
+    observer = SessionObserver(Dispatcher())
+    for session_id in streams:
+        observer.observe(session_id, lambda _update: None)
+    assert all(stream.entered.wait(0.5) for stream in streams.values())
+    observations = tuple(observer._observations.values())
+
+    with pytest.raises(RuntimeError) as raised:
+        observer.close()
+
+    assert str(raised.value) == "session observer cleanup failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert all(stream.closed for stream in streams.values())
+    assert all(
+        observation.thread is not None and not observation.thread.is_alive()
+        for observation in observations
+    )
+    assert observer._observations == {}
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert excepthook_calls == []
+    observer.close()
+
+
+@pytest.mark.parametrize("cleanup", ("unsubscribe", "rollback"))
+def test_observer_single_cleanup_retires_after_private_close_base_exception(
+    cleanup: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = "8" * 32
+    graph_references: list[object] = []
+    excepthook_calls = []
+    monkeypatch.setattr(threading, "excepthook", excepthook_calls.append)
+
+    class Stream(_BlockingStream):
+        def close(self) -> None:
+            if self.closed:
+                return
+            super().close()
+            _raise_private_observer_failure(
+                graph_references,
+                exception_base=BaseException,
+            )
+
+    stream = Stream(cleanup)
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            return stream
+
+    observer = SessionObserver(Dispatcher())
+    if cleanup == "unsubscribe":
+        observer.observe(session_id, lambda _update: None)
+        action = lambda: observer.unsubscribe(session_id)
+    else:
+        action = observer.adopt(session_id, lambda _update: None, stream)
+    assert stream.entered.wait(0.5)
+    observation = observer._observations[session_id]
+
+    with pytest.raises(RuntimeError) as raised:
+        action()
+
+    assert str(raised.value) == "session observer cleanup failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert stream.closed
+    assert observation.thread is not None
+    assert not observation.thread.is_alive()
+    assert observer._observations == {}
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert excepthook_calls == []
     observer.close()
 
 

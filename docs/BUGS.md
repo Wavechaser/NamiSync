@@ -1113,6 +1113,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Adapter exception graph retention. Failed
+  single-flight starts retained original or retry-cleanup exceptions; observer
+  workers and cleanup leaked control exceptions or aborted later stream closes.
+  Invalid or post-validation-mutated planning returns could acquire compensation
+  custody. Fixed with closed failure codes, per-stream contained cleanup, Boolean
+  observer failure, and one-time exact `PlanSession` field snapshots before
+  compensation. Callers receive fresh unchained failures and cleanup remains
+  retryable; weak-reference regressions cover starts/replays, mutation, multi-
+  stream close, observer wait, unsubscribe, and rollback.
 - SEVERE - FIXED (2026-08-13). Publisher lifetime-control omission. The
   appearance-publication UI-thread deadlock remedy was not lifecycle-bounded.
   The 2026-08-12 fix moved synchronous pywebview DOM

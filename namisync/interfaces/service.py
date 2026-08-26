@@ -85,6 +85,7 @@ SERVICE_CLOSE_TIMEOUT_SECONDS = (
 # deliberately independent of the finalization cutoff above and must not scale
 # with the history writer's retry bound.
 AUDIT_OFFER_TIMEOUT_SECONDS = 5.0
+_OBSERVER_CLEANUP_FAILURE = "session observer cleanup failed"
 
 
 class SyncPathInputError(ValueError):
@@ -245,7 +246,7 @@ class _Observation:
     stop: Event = field(default_factory=Event)
     done: Event = field(default_factory=Event)
     thread: Thread | None = None
-    failure: Exception | None = None
+    failed: bool = False
 
 
 @dataclass(slots=True)
@@ -403,11 +404,13 @@ class SessionObserver:
     def _rollback(self, observation: _Observation) -> None:
         with self._lock:
             observation.stop.set()
-        self._close_streams((observation,))
-        self._join_threads((observation,))
-        with self._lock:
-            if self._observations.get(observation.session_id) is observation:
-                self._observations.pop(observation.session_id, None)
+        close_failed = self._close_streams((observation,))
+        try:
+            self._join_threads((observation,))
+        finally:
+            self._retire_stopped_observations((observation,))
+        if close_failed:
+            raise RuntimeError(_OBSERVER_CLEANUP_FAILURE) from None
 
     def wait(self, session_id: str) -> SessionRecordView:
         with self._lock:
@@ -418,10 +421,8 @@ class SessionObserver:
                 return current
             raise KeyError(f"session is not observed: {session_id}")
         observation.done.wait()
-        if observation.failure is not None:
-            raise RuntimeError(
-                f"session observation failed: {session_id}"
-            ) from observation.failure
+        if observation.failed:
+            raise RuntimeError("session observation failed") from None
         current = session_record_view(self._dispatcher.get(session_id))
         if current.result is None:
             raise RuntimeError(
@@ -437,26 +438,13 @@ class SessionObserver:
             observations = tuple(self._observations.values())
             for observation in observations:
                 observation.stop.set()
-        self._close_streams(observations)
+        close_failed = self._close_streams(observations)
         try:
             self._join_threads(observations)
         finally:
-            with self._lock:
-                for observation in observations:
-                    thread = observation.thread
-                    if (
-                        thread is None
-                        or thread is current_thread()
-                        or not thread.is_alive()
-                    ):
-                        if (
-                            self._observations.get(observation.session_id)
-                            is observation
-                        ):
-                            self._observations.pop(
-                                observation.session_id,
-                                None,
-                            )
+            self._retire_stopped_observations(observations)
+        if close_failed:
+            raise RuntimeError(_OBSERVER_CLEANUP_FAILURE) from None
 
     def _run(self, observation: _Observation) -> None:
         stream = observation.stream
@@ -508,10 +496,11 @@ class SessionObserver:
                         )
                     )
                     return
-        except Exception as error:
-            observation.failure = error
+        except BaseException:
+            observation.failed = True
         finally:
-            self._close_streams((observation,))
+            if self._close_streams((observation,)):
+                observation.failed = True
             observation.done.set()
 
     @staticmethod
@@ -523,11 +512,38 @@ class SessionObserver:
         ):
             raise ValueError("from_sequence must be a positive integer")
 
-    def _close_streams(self, observations: tuple[_Observation, ...]) -> None:
+    def _close_streams(self, observations: tuple[_Observation, ...]) -> bool:
         with self._lock:
-            streams = tuple(observation.stream for observation in observations)
-        for stream in streams:
-            stream.close()
+            streams = tuple(
+                (observation, observation.stream)
+                for observation in observations
+            )
+        failed = False
+        for observation, stream in streams:
+            try:
+                stream.close()
+            except BaseException:
+                observation.failed = True
+                failed = True
+        return failed
+
+    def _retire_stopped_observations(
+        self,
+        observations: tuple[_Observation, ...],
+    ) -> None:
+        with self._lock:
+            for observation in observations:
+                thread = observation.thread
+                if (
+                    thread is None
+                    or thread is current_thread()
+                    or not thread.is_alive()
+                ):
+                    if (
+                        self._observations.get(observation.session_id)
+                        is observation
+                    ):
+                        self._observations.pop(observation.session_id, None)
 
     def _join_threads(self, observations: tuple[_Observation, ...]) -> None:
         deadline = monotonic() + self._join_timeout

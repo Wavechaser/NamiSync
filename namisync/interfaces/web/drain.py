@@ -9,7 +9,8 @@ from dataclasses import dataclass, field
 from math import isfinite
 from threading import Condition, Lock, get_ident
 from time import monotonic
-from typing import Protocol
+from types import MappingProxyType
+from typing import Never, Protocol
 from uuid import uuid4
 
 from namisync.interfaces.service import PlanSession, SessionUpdate
@@ -42,6 +43,47 @@ class ObservationConflictError(RuntimeError):
 
 class TaskIntentConflictError(RuntimeError):
     """A task command id was reused for a different resolved intent."""
+
+
+_START_FAILURE_OBSERVATION_CONFLICT = "observation_conflict"
+_START_FAILURE_TASK_UNAVAILABLE = "task_unavailable"
+_START_FAILURE_INTERRUPTED = "interrupted"
+_START_FAILURE_GENERIC = "start_failed"
+_START_FAILURES = MappingProxyType(
+    {
+        _START_FAILURE_OBSERVATION_CONFLICT: (
+            ObservationConflictError,
+            "task start observation conflicted",
+        ),
+        _START_FAILURE_TASK_UNAVAILABLE: (
+            TaskUnavailableError,
+            "task became unavailable during start",
+        ),
+        _START_FAILURE_INTERRUPTED: (
+            KeyboardInterrupt,
+            "task start was interrupted",
+        ),
+        _START_FAILURE_GENERIC: (RuntimeError, "task start failed"),
+    }
+)
+
+
+def _classify_start_failure(error: BaseException) -> str:
+    if isinstance(error, ObservationConflictError):
+        return _START_FAILURE_OBSERVATION_CONFLICT
+    if isinstance(error, TaskUnavailableError):
+        return _START_FAILURE_TASK_UNAVAILABLE
+    if not isinstance(error, Exception):
+        return _START_FAILURE_INTERRUPTED
+    return _START_FAILURE_GENERIC
+
+
+def _raise_start_failure(failure_code: str) -> Never:
+    try:
+        failure_type, message = _START_FAILURES[failure_code]
+    except KeyError:
+        raise RuntimeError("task start failure code is invalid") from None
+    raise failure_type(message) from None
 
 
 class _TaskService(Protocol):
@@ -330,7 +372,7 @@ class _StartEntry:
     participants: int = 0
     complete: bool = False
     result: TaskStartView | None = None
-    failure: BaseException | None = None
+    failure_code: str | None = None
 
 
 class TaskRegistry:
@@ -442,7 +484,13 @@ class TaskRegistry:
             entry.participants += 1
         try:
             if entry.complete and entry.result is None and entry.task.cleanup_pending:
-                self._retry_compensation(entry.task)
+                retry_failure_code: str | None = None
+                try:
+                    self._retry_compensation(entry.task)
+                except BaseException as error:
+                    retry_failure_code = _classify_start_failure(error)
+                if retry_failure_code is not None:
+                    _raise_start_failure(retry_failure_code)
             return self._await_start_entry(entry)
         finally:
             self._leave_start_entry(entry)
@@ -453,8 +501,8 @@ class TaskRegistry:
                 self._condition.wait()
             if entry.result is not None:
                 return entry.result
-            assert entry.failure is not None
-            raise entry.failure
+            assert entry.failure_code is not None
+            _raise_start_failure(entry.failure_code)
 
     def _leave_start_entry(self, entry: _StartEntry) -> None:
         with self._condition:
@@ -480,19 +528,22 @@ class TaskRegistry:
     ) -> None:
         task = entry.task
         plan: PlanSession | None = None
-        failure: BaseException | None = None
+        failure_code: str | None = None
         try:
-            plan = self._service.start_plan(
+            candidate = self._service.start_plan(
                 source,
                 target,
                 deletion_policy=deletion_policy,
                 command_id=entry.command_id,
                 observation_sink=task.sink(task.generation),
             )
-            if type(plan) is not PlanSession:
+            if type(candidate) is not PlanSession:
                 raise RuntimeError("planning service returned invalid task data")
-            _require_opaque_id(plan.request_id, "plan request id")
-            _require_opaque_id(plan.session_id, "plan session id")
+            request_id = candidate.request_id
+            session_id = candidate.session_id
+            _require_opaque_id(request_id, "plan request id")
+            _require_opaque_id(session_id, "plan session id")
+            plan = PlanSession(request_id, session_id)
             with task.condition:
                 if task.closing:
                     raise TaskUnavailableError("task registry closed during start")
@@ -506,21 +557,18 @@ class TaskRegistry:
                 task.condition.notify_all()
             result = TaskStartView(task.task_id, plan.request_id, plan.session_id)
         except BaseException as error:
-            failure = error
+            failure_code = _classify_start_failure(error)
             if plan is not None:
                 task.compensation = _Compensation(plan)
                 try:
                     self._attempt_compensation(task)
                 except BaseException as cleanup_error:
-                    cleanup_error.add_note(
-                        "task admission compensation was interrupted"
-                    )
-                    failure = cleanup_error
+                    failure_code = _classify_start_failure(cleanup_error)
             result = None
 
         with self._condition:
             entry.result = result
-            entry.failure = failure
+            entry.failure_code = failure_code
             entry.complete = True
             self._condition.notify_all()
 

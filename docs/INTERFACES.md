@@ -375,6 +375,17 @@ it does not revoke a previously earned delivery receipt. Release consumes that
 receipt even if replay has cleared the transient terminal cache. Browser batch
 refusal precedes callbacks, cursor/reducer advancement, and release; successful
 terminal presentation remains required before the browser requests release.
+Failed single-flight starts retain only a closed four-value failure code for
+observation conflict, task unavailability, interruption, or generic start
+failure. Every participant and cleanup-pending replay receives a fresh fixed
+exception without chaining; the initiating or compensation exception, its
+message, type, traceback, cause, context, and attached graph are never retained.
+Compensation authority is created only after the service returns an exact
+`PlanSession` whose request and session ids pass canonical validation; malformed
+or graph-bearing collaborator returns are discarded without cleanup authority.
+Both ids are snapshotted once before validation and the frozen compensation
+value is cloned only from those snapshots, so later candidate mutation cannot
+change the admitted cleanup target.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
@@ -406,11 +417,19 @@ get-before-subscribe check, returns an already-terminal view without opening a
 stream, and otherwise forwards only primitive session event/record views to the
 sink. Its worker blocks on `EventStream.next()` without polling, recovers an
 ejected stream from the first undelivered sequence, and never exposes the raw
-stream. Each observation retains only its current stream; recovery temporarily
+stream. Any worker `BaseException`, including stream-close failure, retains only
+a Boolean and `wait()` raises a fresh fixed `RuntimeError` without chaining or
+invoking `threading.excepthook`. Each observation
+retains only its current stream; recovery temporarily
 owns the previous stream and its replacement, then closes and releases the
 retired stream without accumulating a history. Stop, observation identity, and
 replacement adoption share the observer lock. Cleanup snapshots current streams
 under that same lock, while every stream close and worker join runs outside it.
+Every snapshotted stream receives an independent close attempt even if an
+earlier close raises `BaseException`; cleanup still joins and retires all stopped
+observations before exposing one fresh fixed unchained cleanup failure. A stream
+that remains live after its failed close retains the observation only through
+the existing bounded join-timeout retry path.
 Slice 3 adds an explicit positive-first-desired-sequence resubscribe
 seam. The currently implemented plan start may transactionally adopt a
 preopened stream before `PENDING` and schedulable publication. The accepted

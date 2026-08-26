@@ -7,10 +7,12 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
+import gc
 import json
 from pathlib import Path
 from threading import Condition, Event, Thread
 from time import monotonic, sleep
+from weakref import ref
 
 import pytest
 
@@ -40,6 +42,7 @@ from namisync.interfaces.web.drain import (
     TaskDrainView,
     TaskRegistry,
     TaskSessionReleaseView,
+    TaskStartView,
     TaskUnavailableError,
 )
 from namisync.workflows import PLAN_KIND
@@ -51,6 +54,57 @@ from namisync.workflows.views import (
 REQUEST = "1" * 32
 SESSION = "2" * 32
 DRAIN = "3" * 32
+
+
+def _raise_private_failure(
+    references: list[object],
+    *,
+    exception_base: type[BaseException] = Exception,
+) -> None:
+    payload_type = type("PrivatePayload", (), {})
+    failure_type = type("PrivateFailure", (exception_base,), {})
+    attached_payload = payload_type()
+    cause_payload = payload_type()
+    frame_only_payload = payload_type()
+    cause = failure_type("private cause")
+    cause.payload = cause_payload
+    failure = failure_type("private failure")
+    failure.payload = attached_payload
+    references.extend(
+        ref(value)
+        for value in (
+            payload_type,
+            failure_type,
+            attached_payload,
+            cause_payload,
+            frame_only_payload,
+        )
+    )
+    raise failure from cause
+
+
+def _private_invalid_plan(references: list[object]) -> object:
+    payload_type = type("PrivatePlanPayload", (), {})
+    plan_type = type("PrivatePlan", (), {})
+    payload = payload_type()
+    candidate = plan_type()
+    candidate.payload = payload
+    references.extend(
+        ref(value) for value in (payload_type, plan_type, payload, candidate)
+    )
+    return candidate
+
+
+def _private_plan_with_graph_string(references: list[object]) -> PlanSession:
+    payload_type = type("PrivatePlanStringPayload", (), {})
+    string_type = type("PrivatePlanString", (str,), {})
+    payload = payload_type()
+    request_id = string_type(REQUEST)
+    request_id.payload = payload
+    references.extend(
+        ref(value) for value in (payload_type, string_type, payload)
+    )
+    return PlanSession(request_id, SESSION)
 
 
 class _ManualClock:
@@ -981,6 +1035,221 @@ def test_br_g_33_start_is_singleflight_and_changed_intent_conflicts() -> None:
     assert results == [results[0], results[0]]
 
 
+@pytest.mark.parametrize(
+    ("failure", "expected_type", "expected_message"),
+    (
+        (
+            ObservationConflictError("private observation"),
+            ObservationConflictError,
+            "task start observation conflicted",
+        ),
+        (
+            TaskUnavailableError("private availability"),
+            TaskUnavailableError,
+            "task became unavailable during start",
+        ),
+        (
+            KeyboardInterrupt("private interruption"),
+            KeyboardInterrupt,
+            "task start was interrupted",
+        ),
+        (ValueError("private generic"), RuntimeError, "task start failed"),
+    ),
+)
+def test_failed_start_raises_fresh_closed_failure_category(
+    failure: BaseException,
+    expected_type: type[BaseException],
+    expected_message: str,
+) -> None:
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target, kwargs
+            raise failure
+
+    registry, _ = _registry(Service())
+
+    with pytest.raises(expected_type) as raised:
+        _start(registry)
+
+    assert raised.value is not failure
+    assert str(raised.value) == expected_message
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert registry._commands == {}
+    assert registry._tasks == {}
+
+
+def test_invalid_plan_return_is_not_retained_or_given_compensation_authority(
+) -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target, kwargs
+            return _private_invalid_plan(graph_references)
+
+    service = Service()
+    registry, _ = _registry(service)
+
+    with pytest.raises(RuntimeError) as raised:
+        _start(registry)
+
+    assert str(raised.value) == "task start failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert service.cleanup == []
+    assert registry._commands == {}
+    assert registry._tasks == {}
+
+
+def test_exact_plan_with_graph_string_is_rejected_and_released() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target, kwargs
+            return _private_plan_with_graph_string(graph_references)
+
+    service = Service()
+    registry, _ = _registry(service)
+
+    with pytest.raises(RuntimeError, match="task start failed") as raised:
+        _start(registry)
+
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert service.cleanup == []
+    assert registry._commands == {}
+    assert registry._tasks == {}
+
+
+def test_validated_plan_candidate_fields_are_not_reread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    graph_references: list[object] = []
+    candidates: list[PlanSession] = []
+
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target
+            kwargs["observation_sink"](_event(1))
+            candidate = PlanSession(REQUEST, SESSION)
+            candidates.append(candidate)
+            return candidate
+
+    require_opaque_id = drain_module._require_opaque_id
+
+    def mutate_after_request_validation(value: object, label: str) -> None:
+        require_opaque_id(value, label)
+        if label == "plan request id":
+            candidate = candidates.pop()
+            private = _private_plan_with_graph_string(graph_references)
+            object.__setattr__(candidate, "request_id", private.request_id)
+
+    monkeypatch.setattr(
+        drain_module,
+        "_require_opaque_id",
+        mutate_after_request_validation,
+    )
+    service = Service()
+    registry, _ = _registry(service)
+
+    started = _start(registry)
+
+    assert started == TaskStartView("task-" + "a" * 32, REQUEST, SESSION)
+    assert candidates == []
+    assert service.cleanup == []
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    (
+        PlanSession("invalid", SESSION),
+        PlanSession(REQUEST, "invalid"),
+    ),
+)
+def test_invalid_plan_ids_never_acquire_compensation_authority(
+    candidate: PlanSession,
+) -> None:
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target, kwargs
+            return candidate
+
+    service = Service()
+    registry, _ = _registry(service)
+
+    with pytest.raises(RuntimeError, match="task start failed"):
+        _start(registry)
+
+    assert service.cleanup == []
+    assert registry._commands == {}
+    assert registry._tasks == {}
+
+
+def test_concurrent_failed_start_retires_private_exception_graph() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def start_plan(self, source, target, **kwargs):
+            del source, target, kwargs
+            self.start_entered.set()
+            assert self.release_start.wait(2)
+            _raise_private_failure(graph_references)
+
+    service = Service()
+    service.release_start.clear()
+    registry, _ = _registry(service)
+    errors: list[BaseException] = []
+
+    def start() -> None:
+        try:
+            _start(registry)
+        except BaseException as error:
+            errors.append(error)
+
+    first = Thread(target=start)
+    second = Thread(target=start)
+    first.start()
+    assert service.start_entered.wait(1)
+    second.start()
+    deadline = monotonic() + 1
+    participants = 0
+    while monotonic() < deadline:
+        with registry._condition:
+            participants = registry._commands["4" * 32].participants
+        if participants == 2:
+            break
+        sleep(0.005)
+    assert participants == 2
+    service.release_start.set()
+    first.join(1)
+    second.join(1)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert len(errors) == 2
+    assert errors[0] is not errors[1]
+    assert all(type(error) is RuntimeError for error in errors)
+    assert all(str(error) == "task start failed" for error in errors)
+    assert all(error.__cause__ is None for error in errors)
+    assert all(error.__context__ is None for error in errors)
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert registry._commands == {}
+    assert registry._tasks == {}
+
+
 def test_br_g_33_progress_linger_default_and_constructor_boundary() -> None:
     assert TaskRegistry(_Service())._progress_linger == 0.150
     assert TaskRegistry(_Service(), progress_linger=1)._progress_linger == 1.0
@@ -1893,12 +2162,133 @@ def test_compensation_interrupt_propagates_without_stranding_the_registry() -> N
 
     registry, _ = _registry(Service())
 
-    with pytest.raises(KeyboardInterrupt, match="stop cleanup"):
+    with pytest.raises(
+        KeyboardInterrupt,
+        match="task start was interrupted",
+    ) as raised:
         _start(registry)
 
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
     assert len(registry._tasks) == 1
     task = next(iter(registry._tasks.values()))
     assert task.cleanup_pending
+
+
+def test_cleanup_pending_start_retires_private_interruption_graph_before_replay(
+) -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_attempts = 0
+
+        def start_plan(self, source, target, **kwargs):
+            del source, target
+            kwargs["observation_sink"](_event(1))
+            return PlanSession(REQUEST, "8" * 32)
+
+        def close_session(self, session_id):
+            self.close_attempts += 1
+            self.cleanup.append(("close_session", session_id))
+            if self.close_attempts == 1:
+                _raise_private_failure(
+                    graph_references,
+                    exception_base=BaseException,
+                )
+
+    service = Service()
+    registry, _ = _registry(service)
+
+    with pytest.raises(KeyboardInterrupt) as initial:
+        _start(registry)
+
+    assert str(initial.value) == "task start was interrupted"
+    assert initial.value.__cause__ is None
+    assert initial.value.__context__ is None
+    entry = registry._commands["4" * 32]
+    assert type(entry.failure_code) is str
+    assert entry.task.cleanup_pending
+    del initial
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+    with pytest.raises(KeyboardInterrupt) as replayed:
+        registry.replay_start("4" * 32, None)  # type: ignore[arg-type]
+
+    assert str(replayed.value) == "task start was interrupted"
+    assert replayed.value.__cause__ is None
+    assert replayed.value.__context__ is None
+    assert service.cleanup == [
+        ("unsubscribe", "8" * 32),
+        ("close_session", "8" * 32),
+        ("close_session", "8" * 32),
+        ("drop_plan", REQUEST),
+    ]
+    assert registry._commands == {}
+    assert registry._tasks == {}
+
+
+def test_replay_compensation_interruption_is_closed_and_remains_retryable(
+) -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.close_attempts = 0
+
+        def start_plan(self, source, target, **kwargs):
+            del source, target
+            kwargs["observation_sink"](_event(1))
+            return PlanSession(REQUEST, "8" * 32)
+
+        def close_session(self, session_id):
+            self.close_attempts += 1
+            self.cleanup.append(("close_session", session_id))
+            if self.close_attempts == 1:
+                raise OSError("private ordinary cleanup failure")
+            if self.close_attempts == 2:
+                _raise_private_failure(
+                    graph_references,
+                    exception_base=BaseException,
+                )
+
+    service = Service()
+    registry, _ = _registry(service)
+    with pytest.raises(ObservationConflictError):
+        _start(registry)
+
+    with pytest.raises(KeyboardInterrupt) as interrupted:
+        registry.replay_start("4" * 32, None)  # type: ignore[arg-type]
+
+    assert str(interrupted.value) == "task start was interrupted"
+    assert interrupted.value.__cause__ is None
+    assert interrupted.value.__context__ is None
+    entry = registry._commands["4" * 32]
+    assert entry.task.cleanup_pending
+    del interrupted
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+    with pytest.raises(ObservationConflictError) as replayed:
+        registry.replay_start("4" * 32, None)  # type: ignore[arg-type]
+
+    assert str(replayed.value) == "task start observation conflicted"
+    assert replayed.value.__cause__ is None
+    assert replayed.value.__context__ is None
+    assert service.cleanup == [
+        ("unsubscribe", "8" * 32),
+        ("close_session", "8" * 32),
+        ("close_session", "8" * 32),
+        ("close_session", "8" * 32),
+        ("drop_plan", REQUEST),
+    ]
+    assert registry._commands == {}
+    assert registry._tasks == {}
 
 
 def test_concurrent_replays_single_flight_failed_admission_compensation() -> None:
@@ -1946,6 +2336,12 @@ def test_concurrent_replays_single_flight_failed_admission_compensation() -> Non
 
     assert len(errors) == 2
     assert all(isinstance(error, ObservationConflictError) for error in errors)
+    assert errors[0] is not errors[1]
+    assert all(
+        str(error) == "task start observation conflicted" for error in errors
+    )
+    assert all(error.__cause__ is None for error in errors)
+    assert all(error.__context__ is None for error in errors)
     assert service.cleanup == [
         ("unsubscribe", "8" * 32),
         ("close_session", "8" * 32),
