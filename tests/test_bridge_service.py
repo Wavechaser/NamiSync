@@ -82,15 +82,22 @@ class _Dispatcher:
         self.submissions: list[tuple[str, object]] = []
         self.closed: list[str] = []
 
-    def submit(self, kind: str, request: object) -> str:
+    def submit(self, kind: str, request: object, *, attach=None) -> str:
         self.submissions.append((kind, request))
-        return f"session-{len(self.submissions)}"
+        session_id = f"session-{len(self.submissions)}"
+        if attach is not None:
+            attach(session_id, SimpleNamespace(close=lambda: None))
+        return session_id
 
     def close(self, session_id: str) -> None:
         self.closed.append(session_id)
 
 
 def _service(runtime, dispatcher=None) -> NamiSyncService:
+    if not hasattr(runtime, "drop_execution_details"):
+        runtime.drop_execution_details = lambda _run_id: None
+    if not hasattr(runtime, "drop_inventory_details"):
+        runtime.drop_inventory_details = lambda _request_id: None
     service = object.__new__(NamiSyncService)
     service._runtime = runtime
     service._dispatcher = dispatcher or _Dispatcher()
@@ -99,6 +106,8 @@ def _service(runtime, dispatcher=None) -> NamiSyncService:
     service._plan_selections = {}
     service._session_receipts = {}
     service._receipt_ids_by_session = {}
+    service._detail_owners_by_session = {}
+    service._runtime_detail_retirement_started = False
     service._session_receipt_locks = tuple(Lock() for _ in range(64))
     service._session_receipt_lifecycle = Lock()
     service._visibility_receipts = {}
@@ -436,7 +445,7 @@ def test_br_g_15_admission_failure_unfreezes_selection() -> None:
     runtime = _PlanRuntime(_artifact(plan((noop,))))
 
     class FailingDispatcher(_Dispatcher):
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             raise RuntimeError("admission failed")
 
     failed_service = _service(runtime, FailingDispatcher())
@@ -454,8 +463,10 @@ def test_br_g_21_commitment_states_are_named_and_always_resolve() -> None:
     release = Event()
 
     class BlockingDispatcher(_Dispatcher):
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             self.submissions.append((kind, request))
+            if attach is not None:
+                attach("only-session", SimpleNamespace(close=lambda: None))
             entered.set()
             assert release.wait(2)
             return "only-session"
@@ -651,15 +662,18 @@ def test_br_g_16_concurrent_session_retry_admits_exactly_one_session() -> None:
     submission_lock = Lock()
 
     class BlockingDispatcher(_Dispatcher):
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             with submission_lock:
                 self.submissions.append((kind, request))
+                session_id = f"session-{len(self.submissions)}"
                 if len(self.submissions) == 1:
                     entered.set()
                 else:
                     second_submission.set()
+            if attach is not None:
+                attach(session_id, SimpleNamespace(close=lambda: None))
             assert release.wait(2)
-            return f"session-{len(self.submissions)}"
+            return session_id
 
     dispatcher = BlockingDispatcher()
     service = _service(SimpleNamespace(), dispatcher)
@@ -702,15 +716,18 @@ def test_br_g_16_execution_command_id_is_single_flight_across_plans() -> None:
     submission_lock = Lock()
 
     class BlockingDispatcher(_Dispatcher):
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             with submission_lock:
                 self.submissions.append((kind, request))
+                session_id = f"session-{len(self.submissions)}"
                 if len(self.submissions) == 1:
                     entered.set()
                 else:
                     second_submission.set()
+            if attach is not None:
+                attach(session_id, SimpleNamespace(close=lambda: None))
             assert release.wait(2)
-            return f"session-{len(self.submissions)}"
+            return session_id
 
     runtime = _PlanRuntime(
         _artifact(plan((operation(OperationKind.NOOP),)))
@@ -954,8 +971,10 @@ def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     release = Event()
 
     class Dispatcher(_Dispatcher):
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             self.submissions.append((kind, request))
+            if attach is not None:
+                attach("late-session", SimpleNamespace(close=lambda: None))
             entered.set()
             assert release.wait(2)
             return "late-session"
@@ -993,6 +1012,7 @@ def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     assert errors == []
     assert service._session_receipts == {}
     assert service._receipt_ids_by_session == {}
+    assert service._detail_owners_by_session == {}
 
 
 def test_br_g_16_shutdown_waits_for_an_inflight_receipt_replay() -> None:
@@ -1005,8 +1025,8 @@ def test_br_g_16_shutdown_waits_for_an_inflight_receipt_replay() -> None:
             self.sessions: set[str] = set()
             self.block_get = False
 
-        def submit(self, kind: str, request: object) -> str:
-            session_id = super().submit(kind, request)
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            session_id = super().submit(kind, request, attach=attach)
             self.sessions.add(session_id)
             return session_id
 
@@ -1076,8 +1096,8 @@ def test_br_g_16_close_and_retry_do_not_replay_a_closed_session() -> None:
             super().__init__()
             self.sessions: set[str] = set()
 
-        def submit(self, kind: str, request: object) -> str:
-            session_id = super().submit(kind, request)
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            session_id = super().submit(kind, request, attach=attach)
             self.sessions.add(session_id)
             return session_id
 
@@ -1142,8 +1162,8 @@ def test_br_g_16_close_before_receipt_publication_drops_late_receipt() -> None:
             super().__init__()
             self.sessions: set[str] = set()
 
-        def submit(self, kind: str, request: object) -> str:
-            session_id = super().submit(kind, request)
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            session_id = super().submit(kind, request, attach=attach)
             self.sessions.add(session_id)
             return session_id
 

@@ -566,6 +566,8 @@ class NamiSyncService:
         self._plan_selections: dict[str, _PlanSelectionState] = {}
         self._session_receipts: dict[str, _SessionReceipt] = {}
         self._receipt_ids_by_session: dict[str, set[str]] = {}
+        self._detail_owners_by_session: dict[str, tuple[str, str]] = {}
+        self._runtime_detail_retirement_started = False
         self._session_receipt_locks = tuple(Lock() for _ in range(64))
         self._session_receipt_lifecycle = Lock()
         self._visibility_receipts: dict[str, tuple[object, ...]] = {}
@@ -908,7 +910,11 @@ class NamiSyncService:
                 user_deselected=user_deselected,
                 expected_artifact=artifact,
             )
-            session_id = self._dispatcher.submit(EXECUTION_KIND, request)
+            session_id = self._submit_detail_session(
+                EXECUTION_KIND,
+                request,
+                ("execution", str(request.execution_set.run_id)),
+            )
             result = ExecutionSession(
                 str(request.execution_set.run_id),
                 str(session_id),
@@ -1104,6 +1110,7 @@ class NamiSyncService:
 
     def close_session(self, session_id: str) -> None:
         self._observer.unsubscribe(session_id)
+        owner: tuple[str, str] | None = None
         with self._session_receipt_lifecycle_guard():
             self._dispatcher.close(session_id)
             with self._lock:
@@ -1112,6 +1119,8 @@ class NamiSyncService:
                     (),
                 ):
                     self._session_receipts.pop(command_id, None)
+                owner = self._detail_owners_by_session.pop(session_id, None)
+        self._drop_runtime_details(owner)
 
     def get_execution_details(self, run_id: str):
         self._require_open()
@@ -1314,9 +1323,15 @@ class NamiSyncService:
                 self._shutdown = view
         if view.complete:
             if not getattr(self, "_runtime_closed", False):
+                with self._session_receipt_lifecycle_guard():
+                    with self._lock:
+                        self._runtime_detail_retirement_started = True
                 self._runtime.close()
                 with self._lock:
                     self._runtime_closed = True
+                    owners = getattr(self, "_detail_owners_by_session", None)
+                    if owners is not None:
+                        owners.clear()
         if observer_failure is not None:
             raise observer_failure
         return view
@@ -1381,12 +1396,81 @@ class NamiSyncService:
         request: object,
     ) -> LocationSession:
         try:
-            session_id = self._dispatcher.submit(kind, request)
+            session_id = self._submit_detail_session(
+                kind,
+                request,
+                ("inventory", request_id),
+            )
         except VolumeResolutionRequired as error:
             raise LocationResolutionError(
                 _location_resolution_view(error.resolution)
             ) from error
         return LocationSession(request_id, str(session_id))
+
+    def _submit_detail_session(
+        self,
+        kind: str,
+        request: object,
+        owner: tuple[str, str],
+    ) -> SessionId:
+        self._require_open()
+
+        def attach(
+            session_id: SessionId,
+            stream: EventStream,
+        ) -> Callable[[], None]:
+            stream.close()
+            session_token = str(session_id)
+
+            def rollback() -> None:
+                with self._session_receipt_lifecycle_guard():
+                    lock = getattr(self, "_lock", None)
+                    with (nullcontext() if lock is None else lock):
+                        owners = getattr(
+                            self,
+                            "_detail_owners_by_session",
+                            None,
+                        )
+                        if (
+                            owners is not None
+                            and owners.get(session_token) is owner
+                        ):
+                            owners.pop(session_token)
+
+            with self._session_receipt_lifecycle_guard():
+                lock = getattr(self, "_lock", None)
+                with (nullcontext() if lock is None else lock):
+                    if getattr(self, "_closed", False) or getattr(
+                        self,
+                        "_runtime_detail_retirement_started",
+                        False,
+                    ):
+                        raise RuntimeError("service is closed")
+                    owners = getattr(self, "_detail_owners_by_session", None)
+                    if owners is None:
+                        owners = {}
+                        self._detail_owners_by_session = owners
+                    if session_token in owners:
+                        raise RuntimeError(
+                            "dispatcher reused a detail session id"
+                        )
+                    owners[session_token] = owner
+
+            return rollback
+
+        return self._dispatcher.submit(kind, request, attach=attach)
+
+    def _drop_runtime_details(self, owner: tuple[str, str] | None) -> None:
+        if owner is None:
+            return
+        detail_kind, detail_id = owner
+        if detail_kind == "execution":
+            self._runtime.drop_execution_details(detail_id)
+            return
+        if detail_kind == "inventory":
+            self._runtime.drop_inventory_details(detail_id)
+            return
+        raise RuntimeError(f"unknown runtime detail owner kind: {detail_kind}")
 
     def _selection_state(
         self,

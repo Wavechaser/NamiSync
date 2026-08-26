@@ -105,6 +105,22 @@ views. Runtime plan storage remains the existing process-local dictionary behind
 named `save_plan`/`get_plan`/`drop_plan` methods; it is not a `PlanStore` and
 does not survive process exit.
 
+Every admitted execution, inventory, baseline, verify, or rebaseline session
+also receives one exact process-local detail owner: the dispatcher session id
+maps to either its execution run id or its inventory request id. Terminal detail
+ownership is attached before dispatcher publication and is removed by the
+admission rollback if publication fails, so shutdown cannot pass an admitted
+but unowned detail session. Readback remains available until explicit session
+close. `close_session()`
+first waits for the dispatcher's exact worker/publication/audit retirement fence;
+only a successful return removes that owner and drops the matching runtime
+details, with the runtime drop performed after leaving dispatcher and service
+locks. Timeout, self-close, and other dispatcher-close failures preserve both
+objects for retry and cannot affect another session's details. Service shutdown
+leaves all owners intact after an incomplete dispatcher result or failed runtime
+close. A successful runtime close clears both detail maps, after which the
+service clears the now-ownerless session relation.
+
 `start_plan` delegates root resolution to the shared workflow gate before
 admission. That gate performs directory I/O with extended-length native
 spelling but returns ordinary logical paths; the service neither imports core

@@ -742,12 +742,20 @@ class LocalWorkflowRuntime:
             details = self._execution_details.get(run_id)
         return details or ExecutionDetails(run_id)
 
+    def drop_execution_details(self, run_id: str) -> None:
+        with self._lock:
+            self._execution_details.pop(run_id, None)
+
     def get_inventory_details(self, request_id: str) -> InventoryDetails:
         with self._lock:
             details = self._inventory_details.get(request_id)
         if details is None:
             raise KeyError(request_id)
         return details
+
+    def drop_inventory_details(self, request_id: str) -> None:
+        with self._lock:
+            self._inventory_details.pop(request_id, None)
 
     def list_inventory(
         self, location_id: int, selected_paths: tuple[str, ...] = ()
@@ -954,6 +962,8 @@ class LocalWorkflowRuntime:
                     self._history_reader.close()
                     self._history_reader = None
             with self._lock:
+                self._execution_details.clear()
+                self._inventory_details.clear()
                 self._closed = True
 
     def _resolve_volume(self, path: str) -> VolumeId:

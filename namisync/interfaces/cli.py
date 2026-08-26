@@ -291,6 +291,9 @@ def _run_sync(
                 stderr,
                 observed_items=execution_items,
             )
+            execution_details = service.get_execution_details(
+                execution_session.run_id
+            )
         except Exception as error:
             print(f"Execution could not start: {_safe(error)}", file=stderr)
             return EXIT_FAILED
@@ -300,7 +303,7 @@ def _run_sync(
 
         _render_execution(
             execution_record,
-            service.get_execution_details(execution_session.run_id),
+            execution_details,
             _terminal_items(
                 service,
                 execution_session.run_id,
@@ -406,6 +409,11 @@ def _run_location_workflow(
                     stderr,
                     observed_items=observed_items,
                 )
+                details = None
+                try:
+                    details = service.get_inventory_details(session.request_id)
+                except KeyError:
+                    pass
             except Exception as error:
                 print(
                     f"{namespace.command.capitalize()} did not settle: "
@@ -416,11 +424,6 @@ def _run_location_workflow(
         finally:
             _close_terminal(service, session.session_id, stderr)
 
-        details = None
-        try:
-            details = service.get_inventory_details(session.request_id)
-        except KeyError:
-            pass
         if namespace.command == "inventory":
             _render_inventory(
                 service,

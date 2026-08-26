@@ -27,7 +27,7 @@ from namisync.core.events import (
 )
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.integrity import IntegrityOutcome, IntegrityResult
-from namisync.core.models import VolumeId
+from namisync.core.models import ScanWarning, ScanWarningCode, VolumeId
 from namisync.core.planning import OperationKind
 from namisync.core.session import (
     OperationResult,
@@ -53,11 +53,14 @@ from namisync.interfaces.service import (
     SessionRecordView,
 )
 from namisync.workflows import (
+    ExecutionDetails,
     HistoryEventView,
+    InventoryDetails,
     InventoryRequest,
     LocalWorkflowRuntime,
 )
 from namisync.workflows.runtime import HISTORY_WRITER_RETRY_TIMEOUT_SECONDS
+from namisync.workflows.models import RefusalView
 from namisync.workflows.inventory import (
     IntegrityRequest,
     LocationBinding,
@@ -1392,8 +1395,12 @@ def test_incomplete_service_shutdown_keeps_runtime_open_and_can_retry() -> None:
             return shutdowns.pop(0)
 
     class Runtime:
+        def __init__(self) -> None:
+            self.inventory = {"request": object()}
+
         def close(self) -> None:
             log.append("runtime")
+            self.inventory.clear()
 
     service = object.__new__(NamiSyncService)
     service._observer = Observer()
@@ -1407,10 +1414,17 @@ def test_incomplete_service_shutdown_keeps_runtime_open_and_can_retry() -> None:
     service._closed = False
     service._shutdown = None
     service._runtime_closed = False
+    service._detail_owners_by_session = {
+        "running-session": ("inventory", "request"),
+    }
 
     incomplete = service.close(timeout=0)
     assert not incomplete.complete
     assert log == ["observer", "dispatcher"]
+    assert tuple(service._runtime.inventory) == ("request",)
+    assert service._detail_owners_by_session == {
+        "running-session": ("inventory", "request"),
+    }
     with pytest.raises(RuntimeError, match="service is closed"):
         service.read_semantic_settings()
     with pytest.raises(RuntimeError, match="service is closed"):
@@ -1423,6 +1437,8 @@ def test_incomplete_service_shutdown_keeps_runtime_open_and_can_retry() -> None:
     assert complete.complete
     assert cached is complete
     assert log == ["observer", "dispatcher", "dispatcher", "runtime"]
+    assert service._runtime.inventory == {}
+    assert service._detail_owners_by_session == {}
 
 
 def test_service_close_retries_an_observer_join_failure() -> None:
@@ -1604,6 +1620,9 @@ def test_concurrent_service_close_serializes_dependency_retry() -> None:
 def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     attempts = 0
 
+    class Details:
+        pass
+
     class Store:
         def close(self) -> None:
             nonlocal attempts
@@ -1622,15 +1641,30 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     runtime._closing = False
     runtime._closed = False
     runtime._history_store = store
+    execution_details = Details()
+    inventory_details = Details()
+    execution_ref = ref(execution_details)
+    inventory_ref = ref(inventory_details)
+    runtime._execution_details = {"run": execution_details}
+    runtime._inventory_details = {"request": inventory_details}
+    del execution_details, inventory_details
 
     with pytest.raises(RuntimeError, match="writer close failed"):
         runtime.close()
     assert not runtime._closed
     assert runtime._history_store is store
+    assert tuple(runtime._execution_details) == ("run",)
+    assert tuple(runtime._inventory_details) == ("request",)
+    assert execution_ref() is not None
+    assert inventory_ref() is not None
 
     runtime.close()
     assert runtime._closed
     assert runtime._history_store is None
+    assert runtime._execution_details == {}
+    assert runtime._inventory_details == {}
+    assert execution_ref() is None
+    assert inventory_ref() is None
     assert attempts == 2
 
 
@@ -1661,6 +1695,8 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     runtime._closing = False
     runtime._closed = False
     runtime._history_store = store
+    runtime._execution_details = {}
+    runtime._inventory_details = {}
     first_errors: list[Exception] = []
 
     def first_close() -> None:
@@ -1694,6 +1730,487 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     assert runtime._history_store is None
 
 
+def test_runtime_detail_drops_release_complete_diagnostic_graphs(
+    tmp_path: Path,
+) -> None:
+    class WeakResolution(VolumeResolution):
+        __slots__ = ("__weakref__",)
+
+    class WeakInventoryDetails(InventoryDetails):
+        __slots__ = ("__weakref__",)
+
+    class WeakRefusal(RefusalView):
+        __slots__ = ("__weakref__",)
+
+    class WeakExecutionDetails(ExecutionDetails):
+        __slots__ = ("__weakref__",)
+
+    runtime = LocalWorkflowRuntime(
+        tmp_path / "ledger.db",
+        tmp_path / "history.db",
+    )
+    binding = LocationBinding(
+        VolumeId("serial", "NTFS"),
+        "library",
+        "F:\\",
+        ("F:\\",),
+        False,
+        7,
+    )
+    resolution = WeakResolution(VolumeResolutionState.OFFLINE, binding)
+    warning = ScanWarning(
+        ScanWarningCode.ACCESS_DENIED,
+        "private.bin",
+        "denied",
+    )
+    inventory = WeakInventoryDetails(
+        "inventory-request",
+        resolution,
+        selected_paths=("private.bin",),
+        warnings=(warning,),
+    )
+    refusal = WeakRefusal("unsafe", "target.bin", "changed")
+    execution = WeakExecutionDetails("execution-run", (refusal,))
+    resolution_ref = ref(resolution)
+    warning_ref = ref(warning)
+    inventory_ref = ref(inventory)
+    refusal_ref = ref(refusal)
+    execution_ref = ref(execution)
+    runtime._save_inventory_details(inventory)
+    runtime._save_execution_details(execution)
+    del resolution, warning, inventory, refusal, execution
+
+    assert all(
+        reference() is not None
+        for reference in (
+            resolution_ref,
+            warning_ref,
+            inventory_ref,
+            refusal_ref,
+            execution_ref,
+        )
+    )
+
+    runtime.drop_inventory_details("inventory-request")
+    runtime.drop_execution_details("execution-run")
+
+    assert all(
+        reference() is None
+        for reference in (
+            resolution_ref,
+            warning_ref,
+            inventory_ref,
+            refusal_ref,
+            execution_ref,
+        )
+    )
+    runtime.close()
+
+
+def test_session_close_retires_only_its_exact_runtime_details() -> None:
+    inventory_details = object()
+    unrelated_details = object()
+    events: list[tuple[str, str]] = []
+
+    class Observer:
+        def unsubscribe(self, session_id: str) -> None:
+            events.append(("unsubscribe", session_id))
+
+    class Dispatcher:
+        closing = False
+
+        def close(self, session_id: str) -> None:
+            self.closing = True
+            events.append(("dispatcher", session_id))
+            self.closing = False
+
+    dispatcher = Dispatcher()
+
+    class Runtime:
+        inventory = {
+            "owned-request": inventory_details,
+            "unrelated-request": unrelated_details,
+        }
+
+        def get_inventory_details(self, request_id: str):
+            return self.inventory[request_id]
+
+        def drop_inventory_details(self, request_id: str) -> None:
+            assert not dispatcher.closing
+            assert service._lock.acquire(blocking=False)
+            service._lock.release()
+            assert service._session_receipt_lifecycle.acquire(blocking=False)
+            service._session_receipt_lifecycle.release()
+            events.append(("drop", request_id))
+            self.inventory.pop(request_id, None)
+
+    service = object.__new__(NamiSyncService)
+    service._runtime = Runtime()
+    service._dispatcher = dispatcher
+    service._observer = Observer()
+    service._lock = Lock()
+    service._session_receipt_lifecycle = Lock()
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._detail_owners_by_session = {
+        "owned-session": ("inventory", "owned-request"),
+        "unrelated-session": ("inventory", "unrelated-request"),
+    }
+
+    assert service._runtime.get_inventory_details("owned-request") is inventory_details
+    service.close_session("owned-session")
+
+    assert events == [
+        ("unsubscribe", "owned-session"),
+        ("dispatcher", "owned-session"),
+        ("drop", "owned-request"),
+    ]
+    assert service._runtime.inventory == {
+        "unrelated-request": unrelated_details,
+    }
+    assert service._detail_owners_by_session == {
+        "unrelated-session": ("inventory", "unrelated-request"),
+    }
+
+
+def test_failed_session_close_preserves_detail_owner_for_retry() -> None:
+    attempts = 0
+
+    class Observer:
+        def unsubscribe(self, session_id: str) -> None:
+            pass
+
+    class Dispatcher:
+        def close(self, session_id: str) -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise TimeoutError(
+                    "session worker retirement is pending; cleanup did not start"
+                )
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.execution = {"run": object()}
+
+        def drop_execution_details(self, run_id: str) -> None:
+            self.execution.pop(run_id, None)
+
+    service = object.__new__(NamiSyncService)
+    service._runtime = Runtime()
+    service._dispatcher = Dispatcher()
+    service._observer = Observer()
+    service._lock = Lock()
+    service._session_receipt_lifecycle = Lock()
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._detail_owners_by_session = {
+        "session": ("execution", "run"),
+    }
+
+    with pytest.raises(TimeoutError, match="worker retirement"):
+        service.close_session("session")
+    assert tuple(service._runtime.execution) == ("run",)
+    assert service._detail_owners_by_session == {
+        "session": ("execution", "run"),
+    }
+
+    service.close_session("session")
+
+    assert service._runtime.execution == {}
+    assert service._detail_owners_by_session == {}
+
+
+def test_blocked_session_retirement_keeps_details_until_close_returns() -> None:
+    close_entered = Event()
+    release_close = Event()
+    close_done = Event()
+
+    class Observer:
+        def unsubscribe(self, session_id: str) -> None:
+            pass
+
+    class Dispatcher:
+        def close(self, session_id: str) -> None:
+            close_entered.set()
+            assert release_close.wait(2)
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.inventory = {"request": object()}
+
+        def get_inventory_details(self, request_id: str):
+            return self.inventory[request_id]
+
+        def drop_inventory_details(self, request_id: str) -> None:
+            self.inventory.pop(request_id, None)
+
+    service = object.__new__(NamiSyncService)
+    service._runtime = Runtime()
+    service._dispatcher = Dispatcher()
+    service._observer = Observer()
+    service._lock = Lock()
+    service._session_receipt_lifecycle = Lock()
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._detail_owners_by_session = {
+        "session": ("inventory", "request"),
+    }
+
+    def close_session() -> None:
+        service.close_session("session")
+        close_done.set()
+
+    closer = Thread(target=close_session)
+    closer.start()
+    assert close_entered.wait(1)
+    assert service._runtime.get_inventory_details("request") is not None
+    assert not close_done.is_set()
+    release_close.set()
+    closer.join(2)
+
+    assert not closer.is_alive()
+    assert close_done.is_set()
+    assert service._runtime.inventory == {}
+
+
+def test_service_shutdown_preserves_detail_owners_until_runtime_close_succeeds() -> None:
+    runtime_close_attempts = 0
+
+    class Observer:
+        def close(self) -> None:
+            pass
+
+    class Dispatcher:
+        def shutdown(self, timeout: float):
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.inventory = {"request": object()}
+
+        def close(self) -> None:
+            nonlocal runtime_close_attempts
+            runtime_close_attempts += 1
+            if runtime_close_attempts == 1:
+                raise RuntimeError("runtime detail owner still closing")
+            self.inventory.clear()
+
+    service = object.__new__(NamiSyncService)
+    service._runtime = Runtime()
+    service._dispatcher = Dispatcher()
+    service._observer = Observer()
+    service._lock = Lock()
+    service._close_lock = Lock()
+    service._session_receipt_lifecycle = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
+    service._detail_owners_by_session = {
+        "session": ("inventory", "request"),
+    }
+    service._closed = False
+    service._shutdown = None
+    service._runtime_closed = False
+    service._observer_closed = False
+
+    with pytest.raises(RuntimeError, match="detail owner still closing"):
+        service.close()
+    assert tuple(service._runtime.inventory) == ("request",)
+    assert service._detail_owners_by_session == {
+        "session": ("inventory", "request"),
+    }
+
+    assert service.close().complete
+    assert service._runtime.inventory == {}
+    assert service._detail_owners_by_session == {}
+
+
+def _detail_lifecycle_service(runtime, dispatcher) -> NamiSyncService:
+    service = object.__new__(NamiSyncService)
+    service._runtime = runtime
+    service._dispatcher = dispatcher
+    service._observer = SimpleNamespace(close=lambda: None)
+    service._lock = Lock()
+    service._close_lock = Lock()
+    service._session_receipt_lifecycle = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
+    service._detail_owners_by_session = {}
+    service._runtime_detail_retirement_started = False
+    service._closed = False
+    service._shutdown = None
+    service._runtime_closed = False
+    service._observer_closed = False
+    return service
+
+
+def test_detail_owner_attachment_rolls_back_a_failed_publication() -> None:
+    observed: list[object] = []
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            assert service._lock.acquire(blocking=False)
+            service._lock.release()
+            assert service._session_receipt_lifecycle.acquire(blocking=False)
+            service._session_receipt_lifecycle.release()
+            assert attach is not None
+            stream = _SequenceStream()
+            rollback = attach("session", stream)
+            assert stream.closed
+            observed.append(service._detail_owners_by_session["session"])
+            rollback()
+            raise RuntimeError("publication failed")
+
+    service = _detail_lifecycle_service(SimpleNamespace(), Dispatcher())
+
+    with pytest.raises(RuntimeError, match="publication failed"):
+        service.start_inventory(root_path=r"F:\library")
+
+    assert len(observed) == 1
+    assert service._detail_owners_by_session == {}
+
+
+def test_detail_owner_attachment_rechecks_service_lifecycle() -> None:
+    stream = _SequenceStream()
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            assert attach is not None
+            service._closed = True
+            attach("session", stream)
+            raise AssertionError("closed service attachment returned")
+
+    service = _detail_lifecycle_service(SimpleNamespace(), Dispatcher())
+
+    with pytest.raises(RuntimeError, match="service is closed"):
+        service.start_inventory(root_path=r"F:\library")
+
+    assert stream.closed
+    assert service._detail_owners_by_session == {}
+
+
+def test_detail_owner_rollback_preserves_a_replacement_binding() -> None:
+    replacement: tuple[str, str] | None = None
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            nonlocal replacement
+            assert attach is not None
+            rollback = attach("session", _SequenceStream())
+            original = service._detail_owners_by_session["session"]
+            replacement = tuple(list(original))
+            assert replacement == original
+            assert replacement is not original
+            service._detail_owners_by_session["session"] = replacement
+            rollback()
+            raise RuntimeError("superseded publication failed")
+
+    service = _detail_lifecycle_service(SimpleNamespace(), Dispatcher())
+
+    with pytest.raises(RuntimeError, match="superseded publication failed"):
+        service.start_inventory(root_path=r"F:\library")
+
+    assert replacement is not None
+    assert service._detail_owners_by_session["session"] is replacement
+
+
+@pytest.mark.parametrize("runtime_close_fails", [False, True])
+def test_detail_owner_attachment_precedes_post_admission_shutdown(
+    runtime_close_fails: bool,
+) -> None:
+    attached = Event()
+    release_submit = Event()
+    start_results: list[object] = []
+    start_errors: list[BaseException] = []
+    close_attempts = 0
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.details: dict[str, object] = {}
+
+        def close(self) -> None:
+            nonlocal close_attempts
+            close_attempts += 1
+            assert len(service._detail_owners_by_session) == 1
+            session_id, owner = next(
+                iter(service._detail_owners_by_session.items())
+            )
+            assert session_id == "session"
+            assert owner[0] == "inventory"
+            assert owner[1] in self.details
+            if runtime_close_fails and close_attempts == 1:
+                raise RuntimeError("runtime close failed")
+            self.details.clear()
+
+    runtime = Runtime()
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            assert attach is not None
+            runtime.details[request.request_id] = object()
+            stream = _SequenceStream()
+            rollback = attach("session", stream)
+            assert callable(rollback)
+            assert stream.closed
+            attached.set()
+            assert release_submit.wait(2)
+            return "session"
+
+        def shutdown(self, timeout: float):
+            assert attached.is_set()
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    service = _detail_lifecycle_service(runtime, Dispatcher())
+
+    def start() -> None:
+        try:
+            start_results.append(
+                service.start_inventory(root_path=r"F:\library")
+            )
+        except BaseException as error:
+            start_errors.append(error)
+
+    starter = Thread(target=start)
+    starter.start()
+    assert attached.wait(1)
+
+    if runtime_close_fails:
+        with pytest.raises(RuntimeError, match="runtime close failed"):
+            service.close()
+        assert len(service._detail_owners_by_session) == 1
+        assert len(runtime.details) == 1
+    else:
+        assert service.close().complete
+        assert service._detail_owners_by_session == {}
+        assert runtime.details == {}
+
+    release_submit.set()
+    starter.join(2)
+    assert not starter.is_alive()
+    assert start_errors == []
+    assert len(start_results) == 1
+
+    if runtime_close_fails:
+        assert service.close().complete
+        assert service._detail_owners_by_session == {}
+        assert runtime.details == {}
+        assert close_attempts == 2
+    else:
+        assert close_attempts == 1
+
+
 def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> None:
     calls: list[tuple[str, bool]] = []
     artifact = SimpleNamespace(plan=plan((operation(OperationKind.NOOP),)))
@@ -1718,9 +2235,12 @@ def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> 
             )
 
     class Dispatcher:
-        def submit(self, kind: str, request: object):
+        def submit(self, kind: str, request: object, *, attach=None):
             assert kind == "sync-execution"
-            return f"session-{len(calls)}"
+            session_id = f"session-{len(calls)}"
+            assert attach is not None
+            attach(session_id, _SequenceStream())
+            return session_id
 
     service = object.__new__(NamiSyncService)
     service._runtime = Runtime()
@@ -1745,15 +2265,22 @@ def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> 
         "run-verified",
         "session-2",
     )
+    assert service._detail_owners_by_session == {
+        "session-1": ("execution", "run-default"),
+        "session-2": ("execution", "run-verified"),
+    }
 
 
 def test_location_commands_submit_exact_typed_workflow_requests() -> None:
     submitted: list[tuple[str, object]] = []
 
     class Dispatcher:
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             submitted.append((kind, request))
-            return f"session-{kind}"
+            session_id = f"session-{kind}"
+            assert attach is not None
+            attach(session_id, _SequenceStream())
+            return session_id
 
     service = object.__new__(NamiSyncService)
     service._dispatcher = Dispatcher()
@@ -1792,11 +2319,15 @@ def test_location_commands_submit_exact_typed_workflow_requests() -> None:
     assert baseline.session_id == "session-baseline"
     assert verify.session_id == "session-verify"
     assert rebaseline.session_id == "session-rebaseline"
+    assert service._detail_owners_by_session == {
+        session.session_id: ("inventory", session.request_id)
+        for session in (inventory, baseline, verify, rebaseline)
+    }
 
 
 def test_rebaseline_refuses_an_unselected_scope_before_submission() -> None:
     class Dispatcher:
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             raise AssertionError("unselected rebaseline must not be submitted")
 
     service = object.__new__(NamiSyncService)
@@ -1854,7 +2385,7 @@ def test_location_resolution_is_primitive_and_precedes_admission(
     )
 
     class Dispatcher:
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             raise VolumeResolutionRequired(resolution)
 
     service = object.__new__(NamiSyncService)
@@ -1894,7 +2425,7 @@ def test_ambiguous_resolution_preserves_only_a_real_explicit_choice() -> None:
     )
 
     class Dispatcher:
-        def submit(self, kind: str, request: object) -> str:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
             raise VolumeResolutionRequired(resolution)
 
     service = object.__new__(NamiSyncService)

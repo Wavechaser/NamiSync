@@ -110,6 +110,15 @@ independently. Inventory and integrity details retain the scanner's typed
 warnings; an incomplete refresh therefore preserves the warning code, relative
 path, and detail rather than reporting only `complete=False`.
 
+Those details are process-local terminal readback artifacts, not durable
+inventory. Each admitted inventory or integrity session owns its exact request
+id through the service relation. The artifact remains readable after terminal
+settlement and is dropped only after explicit session close completes the
+dispatcher's exact retirement fence. A failed close preserves the complete
+resolution, scope, and warning graph for retry; unrelated sessions remain
+unchanged. Successful runtime shutdown clears any remaining detail artifacts,
+while incomplete dispatcher or runtime shutdown preserves them.
+
 Every incomplete full or stale-scope integrity refresh refuses before hashing.
 An exact integrity pre-scan may continue only when all incompleteness is
 explained by warning-backed unreadable frozen subjects. Those rows enter the

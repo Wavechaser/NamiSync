@@ -82,6 +82,15 @@ full admission. Planning correspondence, worker-local integrity/location readers
 recorders, and database-pair admission keep their separate lifetimes. `DATABASE.md`
 owns the detailed lifecycle, reset, and diagnostic cost contract.
 
+The same runtime owns execution and inventory detail maps for terminal
+interface readback. Their explicit idempotent drop operations remove exactly one
+run or request. Runtime close clears both maps only after the history store and
+both presentation readers have closed successfully; any dependency-close failure
+leaves the maps intact for the serialized retry. The service owns the separate
+session-to-detail relation and invokes a single drop only after dispatcher
+retirement, so workflow code does not infer a detail lifetime from terminal
+state alone.
+
 ### Node tree substrate
 
 `build_node_tree` is a pure workflow helper over path-keyed members. It emits
