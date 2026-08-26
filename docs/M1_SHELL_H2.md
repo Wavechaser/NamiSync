@@ -5,6 +5,10 @@
 > sequence; this file is the newest checkpoint reslice and owns the detailed
 > acceptance, review, and test boundary for checkpoints 0-12.
 
+Delivery status (2026-08-26): checkpoints 0–3.2 and the independently reviewed
+3R remediation are complete. Checkpoint 3.3 remains a separate, unstarted
+legacy-source removal; checkpoints 4–12 remain pending.
+
 ## Main objectives
 
 - Deliver the complete Setup → Plan → Execute → Inventory/Integrity workflow, including typed paths, remembered locations, bounded file lists, execution controls, full recorded hashes, and modification times.
@@ -253,8 +257,9 @@ Commits, in order:
 
 ### 3R. Remediate independent checkpoint-review findings
 
-Checkpoint 3.3 is blocked until the authorized remediation sequence closes and
-Reviewer S5's approved payload-free storage design is implemented and verified.
+The authorized remediation sequence, including S5's payload-free stored
+projection and the identity-hash reset, is implemented and independently
+verified. Its temporary hold on checkpoint 3.3 is closed; 3.3 remains unstarted.
 The findings were reported after checkpoints 1–3.2 had already landed, so this
 sequence repairs those delivered boundaries without folding the work into the
 legacy-removal commit or changing checkpoints 4–12.
@@ -309,8 +314,8 @@ Finding ownership is exact at the aspect level:
 | Follow-up private database snapshot placement | 3R.13c local snapshot placement |
 | Timestamp comment and live schema constant naming | 3R.15a browser naming cleanup |
 
-The 2026-08-26 follow-up decision orders the remaining work as 3R.13a,
-3R.13b, 3R.13c, 3R.S5, revised 3R.14, 3R.15a, and 3R.15. The already delivered
+The 2026-08-26 follow-up decision ordered 3R.13a, 3R.13b, 3R.13c, 3R.S5,
+revised 3R.14, 3R.15a, and 3R.15; all are now delivered. The prior
 3R.0–3R.13 commits remain unchanged. New regressions precede each behavioral
 fix, and each row retains its own independent review and commit. The protected
 settlement oracle, baseline, and existing assertions are not editable in these
@@ -706,10 +711,10 @@ Commit: `docs: reconcile independent checkpoint remediation`
   bundled Node, import architecture, three-run settlement oracle, exact source
   scans, `git diff --check`, and final independent requirement/security review.
 
-**Decisions ratified:** The user approved the memory-only continuation/separate
-stored-projection design and the coordinated identity-hash epoch/reset. These
-are no longer design holds. Checkpoint 3.3 remains blocked on delivery and
-independent verification of the remediation, not on another design decision.
+**Decisions delivered:** The approved memory-only continuation/separate
+stored-projection design and coordinated identity-hash epoch/reset are
+implemented and reviewed. No S5 or identity design hold remains. The private
+legacy decoder is intact for the separately scoped, unstarted checkpoint 3.3.
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
@@ -922,10 +927,11 @@ Commit: `docs(gui): close stage 6 surface verification`
 
 ## Checkpoint 0 audit issue and resolution record
 
-This is the retained review record for the first ratification and
-reconciliation round. It is not a separate contract authority. “Accepted
-target” means the named implementation checkpoint has not activated the
-documented resolution.
+This is the historical review record for checkpoint 0's first ratification and
+reconciliation round, not current delivery status or a separate contract
+authority. States below describe that ratification: “Accepted target” meant the
+named implementation checkpoint had not yet activated the documented
+resolution. Current progress is recorded at the top of this checklist.
 
 ### Runtime and cross-contract findings
 

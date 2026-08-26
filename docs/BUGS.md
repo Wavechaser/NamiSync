@@ -1392,15 +1392,13 @@ defect, and move implementation-level test choreography out of the log.
   stat equivalence, canonical full-width text through codecs and ledger v4,
   and removal of legacy high/low handle projection and numeric storage.
 - MINOR - OPEN (2026-08-25). Cross-consumer schema acceptance drift. The core
-  decoder retains exact v3 history compatibility beside v4 while the live
-  browser validator and canonical history projection accept different version-
-  specific populations; later reuse can therefore make a shape valid in one
-  boundary and unusable in another. Cause: compatibility was added at individual
-  consumers without one event/data epoch and removal point. Checkpoint 3.2 made
-  production exact-v5-only; the identity-hash cut advances data epoch to 6.
-  The finding remains open only until checkpoint 3.3 deletes the unreachable
-  private read-only v3/v4 source
-  branch and its positive compatibility fixtures.
+  decoder previously retained v3 history compatibility beside v4 while the live
+  browser and canonical history projection accepted different populations.
+  Cause: consumer-local compatibility lacked one event/data epoch and removal
+  point. Production is now exact-v5-only at data epoch 6; no active mixed-version
+  route remains. The unreachable private read-only v3/v4 source branch still
+  risks accidental reuse, so this entry remains open until checkpoint 3.3
+  removes that source seam and its private compatibility fixtures.
 - MODERATE - FIXED (2026-08-22). Lossy-progress authority conflation. Forced
   control snapshots combined aggregates from an earlier throttled emission with
   live item-attempt state, producing internally contradictory pause/cancel views;
@@ -1686,7 +1684,9 @@ defect, and move implementation-level test choreography out of the log.
   arrived through free-form detail or a future relaxed boundary. Cause: only
   canonical plan JSON used the defensive final UTF-8 encoding rule; fixed by
   applying the same valid-Unicode-compatible backslash escaping at all three
-  module boundaries and round-tripping hostile history detail in tests.
+  encoder boundaries. Current typed item diagnostics omit invalid Unicode and
+  count it before history JSON; required event/history text may refuse it.
+  Serializer tolerance is not a claim that hostile history detail round-trips.
 - SEVERE - FIXED (2026-07-20). Pre-validation name normalization. One NTFS, SMB,
   archive, or WSL-originated name outside NamiSync's relative-path contract
   could abort planning; an unpaired surrogate could later crash ID or fingerprint

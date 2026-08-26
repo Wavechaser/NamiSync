@@ -1,7 +1,8 @@
 # M1 Desktop Shell Delivery Plan
 
-Status (2026-08-24 second-half reslice; earlier host/presentation contracts
-realigned 2026-08-14 and hardened 2026-08-17): plan and progress for the
+Status (2026-08-26 checkpoint-review remediation; 2026-08-24 second-half
+reslice; earlier host/presentation contracts realigned 2026-08-14 and hardened
+2026-08-17): plan and progress for the
 remaining M1 desktop shell. The second-half reslice replaces the former broad
 Slices 5-7 schedule with prerequisite recording/protocol/task checkpoints,
 then frozen Setup, bounded plan/execution review, inventory/integrity, and the
@@ -39,8 +40,9 @@ foundation and Slice 4's presentation core/shell frame completed their audited
 realignment and were hardened and reverified on 2026-08-17. Second-half
 checkpoint 0 is complete after final documentation, three independent bounded
 reviews, link/anchor validation, manifest-backed test collection, stale-contract
-searches, and diff validation; checkpoint 1 settlement-oracle work is complete,
-and checkpoint 2 recording attribution is next. NamiSync remains version
+searches, and diff validation. Checkpoints 1–3.2 and their independently reviewed
+3R remediation are complete; checkpoint 3.3's private legacy decoder removal
+remains unstarted, as do checkpoints 4–12. NamiSync remains version
 `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.
@@ -746,7 +748,7 @@ ratification; `M1_SHELL_H2.md` records the exact titles.
 | 0 | five documentation commits listed in `M1_SHELL_H2.md` | Ratify the corrected reslice without coupling independent documentation owners | complete |
 | 1 | `test(executor): pin typed recording settlement truth` | Extend the retained oracle before producer changes | complete |
 | 2 | `refactor(executor): attribute recording degradation by scope` | Add sparse item/task attribution and advance only the execution continuation | complete |
-| 3 | three ordered protocol commits listed in `M1_SHELL_H2.md` | Switch the event/database protocol with dormant consumer, producer/reset, and legacy-removal stops | pending |
+| 3 | three ordered protocol commits listed in `M1_SHELL_H2.md` | Switch the event/database protocol with dormant consumer, producer/reset, and legacy-removal stops | 3.1–3.2 and review remediation complete; 3.3 unstarted |
 | 4 | three ordered model, dormant-lifecycle, and activation commits listed in `M1_SHELL_H2.md` | Install the task lifecycle and containment foundation | pending |
 | 5 | `feat(workflows): unify location probing and recent locations` | Share location admission and ledger-derived recents | pending |
 | 6 | `feat(web): add frozen setup and serial task creation` | Deliver Setup and serial multi-pair creation | pending |
@@ -1273,7 +1275,7 @@ This table maps shell delivery order to the sole BR-G definitions in
 | GUI Break 1 | presentation foundations for later BR-G surfaces | complete |
 | Slice 4 | BR-G-2 Stage 6 clause, BR-G-32 generic-tree-sink portion, and BR-G-34 | complete |
 | Cosmetic thaw/refreeze | BR-G-46 cosmetic clause | complete before Slices 5–7; command-map clause reopened for checkpoint 4/6 revisions alongside BR-G-32's exact table |
-| Second-half protocols/task foundation | revised BR-G-32 command table, BR-G-36, BR-G-41, BR-G-45, BR-G-46 command-map, and BR-G-48 foundations | accepted target; implementation pending |
+| Second-half protocols/task foundation | revised BR-G-32 command table, BR-G-36, BR-G-41, BR-G-45, BR-G-46 command-map, and BR-G-48 foundations | recording/exact protocol active; checkpoint 3.3 source cleanup and task foundation pending |
 | Slice 5A | BR-G-47 | pending |
 | Slice 5B | BR-G-32 plan-DOM portion, BR-G-35 through BR-G-37; plan portion of BR-G-42 | pending |
 | Slice 5C | execution portion of BR-G-36 and BR-G-48 | pending |

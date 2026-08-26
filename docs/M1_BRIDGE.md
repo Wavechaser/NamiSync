@@ -3189,7 +3189,7 @@ members. Each member is exactly
 `{"update_type":"record","record":<SessionRecordView>}`. The server wait is
 25 seconds and the browser deadline is 30 seconds. `SessionEventView` is
 exactly `session_id`, `sequence`, `at`, `schema_version`, `body_type`, and
-`body`; its `schema_version` is the nested core event version `4`, independent
+`body`; its `schema_version` is the nested core event version `5`, independent
 of the containing bridge command/response schema `1`. A terminal record
 returned by `start_plan` carries the workflow's exact `kind` value,
 `"sync-plan"`; the
@@ -3819,11 +3819,12 @@ headings are organizational, not lane ownership.
 
 **Lane C — selection semantics**
 
-- **BR-G-10 — Provenance survives the payload.** Current payload v5 round-trips
+- **BR-G-10 — Provenance survives the payload.** Current execution payload v6 round-trips
   `user_deselected` and validated `bytes_done_high_water` through a real pause
   and resume; direct choices settle `SKIPPED` and dependency fallout settles
-  `DEFERRED` **after** the round trip, not only before it; versions 1-4 are
-  rejected. *Not satisfied by* asserting a field
+  `DEFERRED` **after** the round trip, not only before it; execution versions 1-5
+  are rejected. Plan payloads retain their independent v5 contract.
+  *Not satisfied by* asserting a field
   encodes and decodes, which a payload that is never consulted also satisfies.
   Additionally: a continuation whose `selection` differs by one operation from
   `derive_execution_selection(plan, user_deselected=…)` is refused before
@@ -4367,12 +4368,12 @@ headings are organizational, not lane ownership.
   rejects any real informational population whose next complete row exceeds
   either limit before publication.
 
-  The current-source event and custody fixtures use the version-4 Progress
-  protocol rather than treating the cadence coordinate as completed items.
+  Current-source event and custody fixtures must use the active version-5
+  Progress contract rather than treating the cadence coordinate as completed items.
   Each task admits 150 reliable items; `items_done` is the number of reliable
   terminal item outcomes emitted before that snapshot, while the independent
   `bytes_done` coordinate advances from 1 through 1,500 and owns coalesced
-  cadence/monotonicity sampling. Progress snapshots populate the version-4
+  cadence/monotonicity sampling. Progress snapshots populate the version-5
   operation identity, opaque attempt identity, and attempt-local byte pair;
   each modeled attempt keeps one token through its chunks and is followed by
   its matching reliable outcome. In the ordinary fixture, terminal results
@@ -4382,6 +4383,12 @@ headings are organizational, not lane ownership.
   A source-hashed current-version overlay classifies every retained
   `Envelope`, `SessionEventView`, exact Progress-body field, and reachable body
   mapping without altering the frozen v1 corpus specification.
+
+  The current-source custody fixture is aligned with v5. The installed-wheel
+  event diagnostic still needs coordinated producer/page/parent fixture
+  migration; that work remains unassigned. Earlier v4 event results are
+  historical, not current-v5 timing or whole-runtime acceptance, and passing
+  custody drift does not close either of those gates.
 
   | Measurement | Ceiling and authority |
   | --- | --- |

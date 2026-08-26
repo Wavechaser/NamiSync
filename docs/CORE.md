@@ -434,12 +434,13 @@ and marks the scan incomplete. Canonical plan JSON preserves established UTF-8
 bytes for valid Unicode and defensively emits JSON surrogate escapes for any
 malformed free-form string that reaches serialization.
 
-The same final UTF-8 rule applies at ledger command hashing, history
-hash/detail serialization, and opaque workflow payload encoding: valid Unicode
-bytes remain unchanged, while an unpaired surrogate is emitted as its JSON
-escape instead of raising. Path validation remains the primary boundary; this
-serializer defense prevents a future relaxation or unrelated free-form detail
-from reintroducing raw encoding failures.
+Ledger command hashing, history's JSON/hash encoder, and opaque workflow
+payload encoding retain the same defensive final UTF-8 rule. This is an
+encoder fallback, not permission for malformed text to cross typed boundaries:
+bounded optional item diagnostics omit invalid Unicode and count the omission
+before history serialization, while required event/history text can refuse it.
+Path validation still rejects malformed filenames. Valid Unicode bytes and
+lossless JSON escaping at the hash boundary remain unchanged.
 
 `VolumeId(serial, fs_type)` is the stable key. Label and other mutable mount
 facts live in `VolumeEvidence`: relabeling is only noted, a matching serial with

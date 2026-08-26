@@ -23,6 +23,35 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Remediate independent H2 checkpoint reviews (2026-08-26)
+
+- Restored settlement-gate authority and pinned continuation invariants before
+  repairing retained receipts, cancellation, prerequisite recording causes,
+  diagnostic faults, and compound workflow failure. Accepted-settlement
+  validation cannot mask the original external error or silently retire
+  inconsistent journal evidence.
+- Aligned scalar/native identity, exact-v5 operation truth, timestamps,
+  reliable-envelope bounds, and browser source/differential gates. Malformed
+  task updates refuse before custody release; the live schema name and
+  timestamp comment now describe the active contract.
+- Made database admission inspect complete WAL-visible topology without
+  changing source evidence, reused admitted runtime readers with fresh reads,
+  and placed private full-file snapshots beside the local database. Recorded
+  admission's database-size cost without inventing an acceptance ceiling.
+- Gave session storage a separate payload-free metadata/result shape while
+  preserving strict live records. Continuations remain process-local, and M2
+  restart requires a separate protected recovery contract rather than a
+  metadata-store substitution.
+- Replaced inferred dataclass hash forms with closed, explicit projections and
+  frozen old-byte compatibility witnesses. Canonical full-width file identity
+  advances the shared data epoch to 6 with explicit paired reset guidance;
+  schema numbers and execution-v6 wire shape stay unchanged, and lossless
+  Unicode behavior remains pinned.
+- Delivered small independently reviewed commits, reconciled active versus
+  historical documentation, and removed completed findings from HANDOFF.
+  Parent checkpoint 3.3 remains unstarted; its private legacy decoder, the two
+  unassigned findings, and open headed/resource acceptance gates remain separate.
+
 #### Ratify measurement and documentation authority (2026-08-14 – 2026-08-18)
 
 - Separated reasoned targets, live drift guards, named-reference acceptance,

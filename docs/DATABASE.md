@@ -290,7 +290,7 @@ commit cannot split one selection across different database snapshots. Row-ID
 lookups are location-scoped, deduplicate in first-requested order, and omit
 malformed or missing identifiers rather than broadening the query.
 
-History version 5 creates a provisional `history_runs` row at the first durable
+History version 6 creates a provisional `history_runs` row at the first durable
 window and appends disposition-bound reliable receipts to `history_events`.
 Canonical and exact-duplicate rows retain their envelopes; a supported
 oversized event retains only bounded metadata, reason, and its original payload

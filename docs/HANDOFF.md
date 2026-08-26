@@ -1,27 +1,16 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.15a is verified for delivery after `4b2af38`.
-The browser constant naming and timestamp comment cleanup is complete.
-Checkpoint 3.3 remains unstarted and the private legacy decoder remains intact.
+Status (2026-08-26): checkpoint 3R.15 is complete after `d05995d`.
+All authorized behavior fixes and the browser cleanup are committed; active
+documentation is reconciled. Checkpoint 3.3 remains unstarted and the private
+legacy decoder remains intact.
 
-`M1_SHELL_H2.md` owns the revised order and full acceptance criteria. Remaining
-delivery is 3R.15 documentation and integrated verification. No design decisions
-remain open.
+`M1_SHELL_H2.md` owns the checkpoint boundaries and full acceptance criteria.
+No design decisions remain open. The safe stop is before checkpoint 3.3; do not
+fold the two unassigned findings below into its legacy-source removal.
 Completed causal findings belong in `BUGS.md`, not this handoff. The original
 O/S reports and prior verification receipts remain in Git at
 `d7673b7:docs/HANDOFF.md`; no separate report archive is needed.
-
-## Authorized Work Still To Deliver
-
-F/S identifiers refer to the original independent reports preserved in Git.
-
-### 3R.15 — Reconcile remaining active-document status
-
-F11/S8 and S18's documentation portion remain for final reconciliation.
-Update active status, owning docs, BUGS, README/CHANGELOG, and this handoff
-after the authorized deliveries. Do not reintroduce completed finding reports.
-Checkpoint 3.3 remains blocked on delivery and independent verification of this
-remediation, not on another S5 or identity/epoch design decision.
 
 ## Still Unassigned
 
@@ -48,15 +37,20 @@ assertions and frozen transport measurement authority unchanged. Use the
 required bundled Node for applicable ordinary gates. Do not reuse retained
 measurement pytest base directories.
 
-3R.15a verification: the updated source gate failed on the old constant name
-before the source change. Focused browser/static gates passed all 93 tests with
-required Node, including the timestamp grammar/calendar corpus. The interfaces
-department passed all 1,275 tests (3,183 deselected, 44.28 s). Independent narrow
-review found no actionable issue. The exact diff changes only the constant's
-definition/use, its coordinated test gate, and the comment; validator behavior,
-the private legacy decoder, protected settlement, and frozen transport-authority
-files are unchanged. The 3R.14 integrated verification receipt is in the prior
-commit's handoff.
+Final verification with required Node: the ordinary suite passed 4,426 tests
+with four skips and 28 headed tests deselected (193.71 s). All four skips are
+unavailable Windows symlink/reparse privileges (`WinError 1314`), not skipped
+Node gates. Import architecture kept all 11 rules. The protected settlement
+check passed all 30 scenarios three times with identical normalized traces and
+baseline parity. Source/status scans and diff checks passed. Independent final
+documentation review and a separate S5 cross-contract check found no actionable
+issue. Earlier checkpoint receipts remain in their commits rather than
+accumulating here.
+
+The closure changes documentation only. Protected settlement and frozen
+transport-authority files are unchanged, as is the frozen identity artifact
+below. No new headed acceptance is claimed; BR-G-45 and SH-G-15 remain open.
+No verification process remains running.
 
 Old epoch-5 pairs now require the documented explicit archive/reset; no user
 databases were deleted or reset. Ledger-v4/history-v6 schemas, the history
@@ -73,4 +67,5 @@ execution-v6 continuations. Its frozen `epoch5-vectors.json` was copied without
 replacement to `tests/assets/identity_epoch5_vectors.json`; both have SHA-256
 `52f80f8539b863da0a357ba4a47c20a32cb77a5a14db9194d5adf98e31c538d9`.
 Never regenerate these old expectations with the new encoder. The ignored
-directory README owns capture conventions; no databases were opened or reset.
+directory README owns capture conventions; the capture opened or reset no
+databases.
