@@ -284,3 +284,82 @@ def cancellation_terminal_cases() -> tuple[tuple[str, bool, dict[str, object]], 
         )
         cases.append((name, accepted, result))
     return tuple(cases)
+
+# One literal ingress grammar/calendar corpus shared by Python and Node.
+UTC_TIMESTAMP_CASES = (
+    ("minimum-year", "0001-01-01T00:00:00+00:00", True),
+    ("maximum-year", "9999-12-31T23:59:59.999999+00:00", True),
+    ("plain-seconds", "2026-08-25T00:00:00+00:00", True),
+    ("zero-microseconds", "2026-08-25T00:00:00.000000+00:00", True),
+    ("microseconds", "2026-08-25T12:34:56.123456+00:00", True),
+    ("early-leap-year", "0004-02-29T00:00:00+00:00", True),
+    ("century-leap-year", "2000-02-29T00:00:00+00:00", True),
+    ("ordinary-leap-year", "2024-02-29T00:00:00+00:00", True),
+    ("century-february-end", "1900-02-28T00:00:00+00:00", True),
+    ("year-zero", "0000-01-01T00:00:00+00:00", False),
+    ("long-year", "10000-01-01T00:00:00+00:00", False),
+    ("signed-year", "+002026-08-25T00:00:00+00:00", False),
+    ("century-not-leap", "1900-02-29T00:00:00+00:00", False),
+    ("ordinary-not-leap", "2025-02-29T00:00:00+00:00", False),
+    ("impossible-february", "2024-02-30T00:00:00+00:00", False),
+    ("impossible-april", "2026-04-31T00:00:00+00:00", False),
+    ("zero-month", "2026-00-25T00:00:00+00:00", False),
+    ("month-overflow", "2026-13-25T00:00:00+00:00", False),
+    ("zero-day", "2026-08-00T00:00:00+00:00", False),
+    ("day-overflow", "2026-08-32T00:00:00+00:00", False),
+    ("hour-overflow", "2026-08-25T24:00:00+00:00", False),
+    ("minute-overflow", "2026-08-25T00:60:00+00:00", False),
+    ("second-overflow", "2026-08-25T00:00:60+00:00", False),
+    ("utc-z", "2026-08-25T00:00:00Z", False),
+    ("other-offset", "2026-08-25T08:00:00+08:00", False),
+    ("negative-zero-offset", "2026-08-25T00:00:00-00:00", False),
+    ("offset-seconds", "2026-08-25T00:00:00+00:00:00", False),
+    ("offset-without-colon", "2026-08-25T00:00:00+0000", False),
+    ("no-offset", "2026-08-25T00:00:00", False),
+    ("date-only", "2026-08-25", False),
+    ("date-with-offset", "2026-08-25+00:00", False),
+    ("basic-date", "20260825T00:00:00+00:00", False),
+    ("week-date", "2026-W35-2T00:00:00+00:00", False),
+    ("space-separator", "2026-08-25 00:00:00+00:00", False),
+    ("lowercase-separator", "2026-08-25t00:00:00+00:00", False),
+    ("missing-seconds", "2026-08-25T00:00+00:00", False),
+    ("short-month", "2026-8-25T00:00:00+00:00", False),
+    ("one-fraction", "2026-08-25T00:00:00.1+00:00", False),
+    ("three-fraction", "2026-08-25T00:00:00.123+00:00", False),
+    ("five-fraction", "2026-08-25T00:00:00.12345+00:00", False),
+    ("seven-fraction", "2026-08-25T00:00:00.1234567+00:00", False),
+    ("comma-fraction", "2026-08-25T00:00:00,123456+00:00", False),
+    ("non-ascii-fraction", "2026-08-25T00:00:00.１２３４５６+00:00", False),
+    ("non-ascii-year", "２０２６-08-25T00:00:00+00:00", False),
+    ("trailing-newline", "2026-08-25T00:00:00+00:00\n", False),
+    ("leading-space", " 2026-08-25T00:00:00+00:00", False),
+    ("empty", "", False),
+    ("number", 0, False),
+    ("boolean", True, False),
+    ("null", None, False),
+)
+
+
+def maximum_non_ascii_reliable_envelope() -> dict[str, object]:
+    value = maximum_reliable_envelope()
+    # Two escaped controls and this mixed Unicode text each occupy 12 UTF-8
+    # JSON bytes, but have different character/UTF-16 lengths.
+    value["body"]["path"] = value["body"]["path"].replace(
+        "\x01\x01", "海é🙂abc", 1
+    )
+    return value
+
+# JSON input must not let an unpaired UTF-16 code unit impersonate Unicode.
+UNICODE_TEXT_CASES = (
+    ("ascii", "a", True),
+    ("bmp", "海é", True),
+    ("non-bmp", "🙂", True),
+    ("surrounded-pair", "a🙂b", True),
+    ("lone-high", "\ud800", False),
+    ("trailing-high", "a\ud800", False),
+    ("high-before-ascii", "\ud800a", False),
+    ("lone-low", "\udc00", False),
+    ("reversed-pair", "\udc00\ud800", False),
+    ("double-high", "\ud800\ud800", False),
+    ("pair-then-high", "🙂\ud800", False),
+)

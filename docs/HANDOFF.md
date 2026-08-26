@@ -1,119 +1,151 @@
 # Session Handoff
 
-Status (2026-08-26): checkpoint 3R.8's implementation and pre-commit gates are
-complete in `M1_SHELL_H2.md`. Clean-commit event/custody diagnostic reruns are
-the immediate next action before starting 3R.9. The checkpoint 3.2 shell
-boundary remains active; 3.3 has not started. S5 and 3R.14's coordinated
-epoch/reset remain design holds requiring user disposition.
+Status (2026-08-26): checkpoint 3R.9's implementation and pre-commit gates are
+complete. After its named commit, start only 3R.10. The checkpoint 3.2 shell boundary remains
+active; 3.3 has not started. S5 and 3R.14's coordinated epoch/reset remain
+design holds. The pre-existing installed-wheel event diagnostic migration is
+also unassigned; do not silently widen another checkpoint to repair it.
 
-## Delivered
+## Delivered This Checkpoint
 
-- Reproduced S10/S11 tests-first: the new Python matrix/cancellation cases
-  had 92 failures and 216 passes against untouched `bd05ff7`. The corrected
-  production-summary Node witness independently exposed 32 contradictions.
-- Extracted the existing ExecutionSet sparse recording-reason rule once;
-  ItemOutcome and Python event/view validation now use the same outcome
-  relationship. Packaged JavaScript mirrors the closed matrix.
-- Extracted OperationResult's existing cancellation rules once and reused them
-  in TerminalSummary and Python validation. JavaScript terminal/result views
-  share the same check. Plain ran/unrun cancellation, reversed/third phases,
-  and completed/failed compound cancellation retain their existing semantics.
-- Added a literal 48-combination recording matrix (ten valid) and 23 selected
-  cancellation variants. Required Node exercises 94 event/result cases using
-  unchanged production Python projections for positives and copied mutations
-  for negatives. Independent review caught and removed an initial positive-
-  witness rewrite that could have hidden projection drift.
-- Corrected contradictory positive Python/Node recording fixtures and a partial
-  result fixture: its blocked operation stays clean, while the existing
-  mismatched integrity item carries recording degradation.
-- Corrected both current-source custody fixture emitters to pair their frozen
-  failed filesystem outcomes with unrecorded mutation. Existing diagnostics,
-  corpus/scale/alias/cadence rules, frozen validators, artifacts, ceiling, and
-  assertions are unchanged. Added literal ordinary/maximum family guards and
-  updated only the current representation descriptions. Independent authority
-  review confirmed this live-fixture correction is permitted within 3R.8.
-- Updated CORE, INTERFACES, and the causal BUGS entry. Raw independent reviewer
-  reports remain the detailed finding source below until 3R.15.
+- Shared literal 50-case timestamp corpus reproduced 42 Python route failures
+  and 15 JavaScript semantic mismatches against untouched production f96804b.
+  Python and JavaScript now require four-digit real Gregorian dates/times,
+  literal T/+00:00, and absent or exactly six ASCII fractional digits.
+- Python public event-view validation reconstructs the persistence envelope
+  and delegates to the existing authority. JavaScript validates reliable body
+  fields before counting compact UTF-8 bytes of the same shape (seq, not
+  sequence); Progress keeps its existing exemption.
+- Kept the existing maximum reliable fixture and assertions unchanged. Added
+  exact-max/plus-one actual public projections and an equal-byte mixed Unicode
+  derivative in Python and required Node, plus logical-byte review facts from
+  actual terminal/result projections.
+- Extended the existing browser drain probe to prove whole-batch refusal before
+  callbacks, cursor, reducer phase, and terminal release. Independent review
+  strengthened recovery: rejected reliable verify phase cannot leak into
+  self-described execute Progress; no replacement PhaseChanged hides it.
+- Independent review found a necessary byte-accounting precondition defect:
+  JavaScript accepted a trailing lone high surrogate. Shared Unicode tests
+  reproduced nine browser/Python disagreements; one pair-guard condition now
+  refuses a missing next code unit. Existing Unicode policy is unchanged.
+- Corrected only positive event/record witness timestamp spellings and the
+  shared drain probe timestamp. No v4/version, result-nullability, source-gate,
+  or database admission implementation from later rows is included.
+- Updated CORE, INTERFACES, M1_BRIDGE's service grammar, and causal BUGS entries.
+  Raw independent reviewer reports remain the detailed finding source below.
 
-## Safe Stop
+## Verification
 
-No timestamp, reliable-size, task-custody, legacy-route, fingerprint, identity
-codec, or epoch implementation from a later row is present. Protected settlement
-oracle, baseline, and prior settlement assertions are unchanged.
+- Initial new timestamp/size/logical-byte/batch subset:
+  `48 failed, 109 passed, 592 deselected`. The batch failure was made directly
+  diagnostic before runtime edits: three callbacks occurred where zero were
+  required. Shared logical-byte positives/negatives already passed.
+- Initial three focused files after the grammar/size fix: `749 passed`.
+- First core/workflows/interfaces neighborhood:
+  `1 failed, 2519 passed, 1 skipped, 1311 deselected`; the only failure was a
+  positive history witness still using Z. Corrected service event/record
+  witnesses retain all non-timestamp fields and expectations.
+- Unicode precondition tests before the one-line guard fix:
+  `1 failed, 66 passed, 638 deselected`; the Node case reported nine mismatches.
+- Final three focused files: `816 passed`. Independent initial narrow grammar/
+  size/logical-byte check: `156 passed, 482 deselected`.
+- Final core/workflows/interfaces neighborhood:
+  `2587 passed, 1 skipped, 1311 deselected`.
+- Ordinary suite with required bundled Node:
+  `3867 passed, 4 skipped, 28 deselected`.
+- Unchanged protected oracle: `30 scenarios x 3 runs`.
+- Final independent working implementation/test/fixture/owning-doc review:
+  `CLEAN`; independent new boundary selection `223 passed, 482 deselected`.
+  Exact staged snapshot review: `CLEAN`. The final status-only delta is
+  independently reviewed before the named commit.
+- Protected settlement oracle, baseline, and prior assertions are unchanged.
+  Tool/baseline blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
+  `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
+- README's phase synopsis is unchanged; task-level changelog/cross-cutting
+  closure remains 3R.15.
 
-The tree is expected to be clean after
-`fix(protocol): enforce exact v5 operation truth`.
-Rebuilt 3R.4 is `1e794e7`; 3R.5 is `8f6d8f8`; 3R.6 is `f15a82d`;
-3R.7 is `bd05ff7`. The discarded 3R.4 attempt remains recoverable under ignored
-`build/r34-restart-20260826/`.
+## Clean-Commit 3R.8 Diagnostic Follow-Up
 
-A read-only 3R.14 compatibility audit found that textual FileIndex128 changes
-all non-null identity-bearing durable hashes under ledger-v4/history-v6 epoch
-5. The recommended reset keeps schema shapes and payload versions, bumps the
-shared data epoch to 6 and ledger contract ID, and keeps the history contract
-ID. Implementation waits for user ratification. S5 still requires an explicit
-storage design or accepted residual.
+Source: `f96804ba4e890b89dd3702cc816e11359c258bbe`, clean when both checks ran.
+Retained ignored artifacts and conventions are under
+`build/r38-verification/`. Never reuse a pytest base directory.
 
-Independent 3R.6 review also noted an adjacent, pre-existing boundary outside
+- Installed-wheel event diagnostic attempt 1 failed at the first settlement:
+  producer item_id `task-0-item-000` violates exact v5 HexId. The valid failed
+  terminal then reached a stale benchmark callback using `result.items.map`
+  on an item-free summary and threw the observed BridgeTransportError.
+  Independent direct Python/Node probes confirmed both defects also exist at
+  bd05ff7 (the diagnostic source's parent); producer, page, parent validator,
+  and ordinary tests
+  were unchanged by 3R.8. The incomplete producer manifest is downstream.
+- That diagnostic needs a coordinated fixture migration (producer/expected
+  IDs, item-free terminal sampling, numeric-byte assumptions). It is not
+  assigned by the ratified rows; carry to the user. Frozen transport custody
+  calibration/holdout/ceiling need no change. Do not claim event or whole-runtime
+  acceptance from the failed artifact.
+- Event artifact SHA-256:
+  `d6e75a809b9ffd3651db6a939fae1a803988421e1c9b6e9716919f6e6522f41b`.
+- Custody attempt 1 refused the in-repository pytest base before measurement;
+  its unchanged guard requires external pycache. Attempt 2 passed from fresh
+  `C:/Users/Spectrum/AppData/Local/Temp/namisync-r38-custody-f96804b-2/`.
+  Its JSON is copied byte-for-byte as `custody-f96804b-2.json`.
+- Ordinary 1,404,967 bytes; maximum-no-Gap 1,609,183 bytes; frozen ceiling
+  1,966,080 bytes. Margins: 561,113 and 356,897 bytes. This is Tier-1 drift
+  evidence, not new calibration or acceptance.
+- Custody artifact SHA-256:
+  `5c50b874af4c4b8a5b50f689c3571b6068cd24b72e588e71c052eb338a3be0df`.
+  Source SHA-256:
+  `0c3211710601f521e999aaec7a7a57a3b0b967c972f53c548f8d34abbb3bf0da`.
+  Evidence SHA-256:
+  `2d8d56af823942676537f7051da4c15ea0be132c05ccb1c0b3df414db97753f5`.
+  Dependency SHA-256:
+  `8c0cab9dfa7aeed198ecbd0e66844cd834cf36ca8b32fd6647a53924a200de30`.
+  The frozen test's tested_commit field is an all-zero sentinel; source
+  attribution uses its receipt plus the clean HEAD, not that sentinel.
+- DWM PID 2344 remained the same before/after; StartTime was unavailable.
+  This is not the missing compositor-health sentinel or health acceptance.
+
+## Safe Stop And Holds
+
+Rebuilt 3R.4 is `1e794e7`; 3R.5 `8f6d8f8`; 3R.6 `f15a82d`;
+3R.7 `bd05ff7`; 3R.8 `f96804b`. The discarded 3R.4 attempt remains
+recoverable under ignored `build/r34-restart-20260826/`.
+
+No 3R.10 task-custody, 3R.11 legacy/source-gate, fingerprint, identity codec,
+epoch, or database topology/admission changes are present.
+
+S5 still requires an explicit storage design or accepted residual. A read-only
+3R.14 audit found textual FileIndex128 changes all non-null identity-bearing
+durable hashes under ledger-v4/history-v6 epoch 5. The recommended reset keeps
+schema shapes/payload versions, bumps shared data epoch to 6 and ledger contract
+ID, and keeps history contract ID. Implementation waits for user ratification.
+
+Independent 3R.6 review also noted an adjacent pre-existing boundary outside
 that row: `_settle_execute_resume_failure` can return all exclusions after the
-pre-entry/resume sink rejects one, and its emission-error rendering is unguarded.
-This is inspection-only, not separately reproduced or assigned. Do not expand
-an existing row silently; carry it to the user for disposition.
+pre-entry/resume sink rejects one, and its emission-error rendering is
+unguarded. It remains inspection-only, not separately reproduced or assigned.
 
 Native sandbox read setup still fails with
 `helper_unknown_error: apply deny-read ACLs`. Approved shell reads/tests work.
 The built-in patch tool's full-file form uses approved source reads, with
 surgical Git diffs. No sandbox, permission, or app settings were changed.
 
-## Verification
-
-- Core/event/session/Node focused files: `610 passed`, independently repeated.
-- First neighborhood exposed two contradictory consumer fixtures:
-  `3 failed, 2905 passed, 1 skipped, 738 deselected, 28 errors`; the custody
-  setup errors were downstream tick timeouts after its invalid item failed.
-  Both ordinary and maximum custody emitters then reproduced directly.
-- Corrected custody/workflow fixture files: `84 passed`; independent workflow
-  file `20 passed` and ordinary/maximum pair guards `2 passed`.
-- Final core/executor/workflows/database/interfaces neighborhood:
-  `2937 passed, 1 skipped, 738 deselected`.
-- Ordinary suite with required bundled Node:
-  `3644 passed, 4 skipped, 28 deselected`.
-- Unchanged protected oracle: `30 scenarios x 3 runs`. Audit-tool and baseline
-  blobs remain `8bc8b9bf9f273ff4b2f43e3b54ed838bc6ed9c44` and
-  `1fad487a36c7956f2bf4d1461c7ef0c7efce3e89`.
-- Independent code/test, consumer-fixture, authority, owning-doc, and exact
-  staged reviews: `CLEAN`. The final status/command-only delta is reviewed before
-  the named commit.
-- Raw reviewer-report tail is unchanged. README's phase synopsis is unchanged;
-  task-level changelog/cross-cutting closure remains 3R.15.
-
 ## Immediate Next Context
 
-First run the installed-wheel event diagnostic and one-child Tier-1 custody
-guard from the clean committed 3R.8 source, as required by TOOLS measurement
-authority. Keep outputs under ignored `build/r38-verification/`, following its
-README. Use a fresh commit/attempt-qualified output and pytest base directory;
-do not reuse a pytest base directory because pytest removes it on entry.
-Retain failed attempts, source/receipt hashes, both byte values and ceiling
-margins. These are diagnostic/drift evidence, not new acceptance or calibration.
+The tree is expected to be clean after
+`fix(protocol): align v5 timestamp and size boundaries`.
 
-```powershell
-$r38Commit = git rev-parse --short HEAD
-$r38Attempt = 1 # Choose an unused attempt number; never reuse a base directory.
-.\.venv\Scripts\python.exe tests\bridge_event_benchmark.py --output "build/r38-verification/event-$r38Commit-$r38Attempt.json"
-.\.venv\Scripts\python.exe -m pytest -q tests/interfaces/web/test_bridge_transport_custody_live.py::test_current_source_transport_custody_stays_within_frozen_ceiling --basetemp "build/r38-verification/custody-$r38Commit-$r38Attempt"
-```
-
-Then start only 3R.9, `fix(protocol): align v5 timestamp and size boundaries`.
-Use one literal timestamp corpus across Python and required Node: four-digit
-calendar date, T, hh:mm:ss, absent or exactly six ASCII fractional digits, and
-literal +00:00; reject impossible dates, year zero, other offsets/Z, alternative
-date spellings, and trailing newlines. Reconstruct the canonical persistence
-envelope (seq, not sequence) for reliable-size accounting; no custom JSON
-serializer is needed. Keep the existing maximum fixture/assertions unchanged;
-add public production view exact-max/+one and non-ASCII witnesses, atomic Node
-batch refusal, and logical-byte review facts. Leave task-custody and source-gate
-changes in 3R.10/11. Obtain independent working/staged reviews and commit.
+Start only 3R.10, `fix(web): validate task updates before custody release`.
+Keep result-free re-observation snapshots distinct from terminal drain updates:
+re-observation can legitimately return pending/running or terminal-in-transition
+records, but a terminal drain record requires a valid non-null matching result.
+Validate offered/recovered/candidate-drained/command-returned views before
+queue or custody mutation, including mutable body changes after admission.
+Build and deep-validate a candidate batch before popping its queue or setting
+terminal-delivered. Preserve existing callback-before-release and stale-cache
+recovery receipt behavior. Fix positive v4 task-adapter fixtures in this row,
+not the private source-gate work reserved for 3R.11. Obtain independent working
+and staged reviews, then commit the checkpoint separately.
 
 ## Reviewer O.
 

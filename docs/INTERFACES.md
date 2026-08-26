@@ -153,6 +153,15 @@ cancellation rules as the core result; their exact meanings remain in
 Python boundaries and the required Node gate, with valid production view
 projections and independently mutated negative cases.
 
+Event and record timestamps use CORE's exact UTC service grammar. Python's
+event-view validator and the packaged browser enforce the reliable-event byte
+ceiling on the reconstructed persistence envelope, not the longer public-view
+shape. Invalid Unicode is refused before UTF-8 accounting. Shared timestamp,
+Unicode, exact-maximum/plus-one, and logical-byte review-fact corpora cover both
+consumers. The browser rejects an oversized event's entire batch before
+callback, cursor, reducer, or terminal-release mutation; a clean replay retains
+the previously unaccepted prefix.
+
 The current public service surface includes:
 
 ```python

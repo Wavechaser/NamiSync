@@ -183,7 +183,7 @@ function reinjectBridge() {
 
 const session = (digit) => digit.repeat(32);
 const task = (digit) => `task-${digit.repeat(32)}`;
-const at = "2026-08-12T00:00:00Z";
+const at = "2026-08-12T00:00:00+00:00";
 const event = (sessionId, sequence, bodyType = "StateChanged", body = { state: "running" }) => ({
   update_type: "event",
   event: {
@@ -1355,6 +1355,65 @@ if (crossBoundaryFixture !== null) {
     assert.equal(acceptedCrossBoundary.at(-1).progressState.activeItem, null);
   }
   stopCrossBoundary();
+}
+
+// A per-field-valid oversized reliable event invalidates its whole batch.
+// Use untouched production Python projections at the exact envelope ceiling;
+// the view key "sequence" itself is five bytes longer than persistence "seq".
+for (const [index, maximumEvent] of (
+  crossBoundaryFixture?.reliable_size_events ?? []
+).entries()) {
+  const sizeTask = `task-${String(index + 1).padStart(32, "0")}`;
+  const sizeSession = maximumEvent.session_id;
+  const acceptedSizes = [];
+  const refusedSizes = [];
+  const requestIndex = requests.length;
+  const releasesBefore = releaseRequests.length;
+  const stopSizes = bridge.startTaskDrain(
+    sizeTask,
+    sizeSession,
+    (update, progressState) => acceptedSizes.push({ update, progressState }),
+    (error) => refusedSizes.push(error),
+  );
+  const pending = await nextRequest(requestIndex);
+  const oversized = structuredClone(maximumEvent);
+  oversized.body.path += "x";
+  success(pending, [
+    event(sizeSession, 1, "PhaseChanged", { phase: "verify" }),
+    { update_type: "event", event: oversized },
+    terminalRecord(sizeSession),
+  ]);
+  await turns();
+  assert.equal(acceptedSizes.length, 0);
+  assert.equal(refusedSizes.length, 0);
+  assert.equal(releaseRequests.length, releasesBefore);
+  const recovery = await nextRequest(requestIndex + 1);
+  assert.equal(recovery.request.payload.replay_from, 1);
+
+  // A leaked reliable "verify" phase would reject this self-described
+  // "execute" Progress; no new PhaseChanged may erase that evidence.
+  success(recovery, [
+    event(sizeSession, 1, "Progress", {
+      ...validProgressBody,
+      item_id: maximumEvent.body.item_id,
+    }),
+    { update_type: "event", event: maximumEvent },
+    terminalRecord(sizeSession),
+  ]);
+  await turns();
+  assert.deepEqual(
+    acceptedSizes.map(({ update }) => update.update_type),
+    ["event", "event", "record"],
+  );
+  assert.deepEqual(
+    acceptedSizes.slice(0, 2).map(({ update }) => update.event.sequence),
+    [1, 3],
+  );
+  assert.deepEqual(acceptedSizes[1].update.event, maximumEvent);
+  assert.equal(acceptedSizes.at(-1).progressState.activeItem, null);
+  assert.equal(refusedSizes.length, 0);
+  assert.equal(releaseRequests.length, releasesBefore + 1);
+  stopSizes();
 }
 
 // Gap discards the pre-gap reducer domain. A matching recovery Gap can then

@@ -1258,6 +1258,23 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Projection byte-boundary omission. A
+  structurally valid reliable event above 1,048,576 canonical bytes could pass
+  Python's public-view validator and the browser, then advance browser state
+  despite persistence-envelope refusal. Cause: those validators checked field
+  shapes but omitted the shared envelope ceiling. Fixed by reconstructing the
+  persistence shape (`seq`, not `sequence`) and applying its UTF-8 byte wall.
+  Exact-maximum/plus-one public projections include mixed Unicode; rejected
+  batches preserve callbacks, replay cursor, reducer phase, and release state.
+- MODERATE - FIXED (2026-08-26). Cross-runtime primitive grammar drift.
+  Python and JavaScript admitted different timestamp spellings, and the browser
+  normalized impossible dates. Its Unicode guard also admitted a trailing lone
+  high surrogate because comparisons with the missing next unit's NaN did not
+  reject. Cause: permissive runtime parsers and an incomplete surrogate-pair
+  predicate. Fixed with one literal UTC timestamp grammar, real Gregorian
+  calendar validation, and mandatory valid low-surrogate pairing before byte
+  accounting. Shared positive/negative Python and Node corpora preserve valid
+  early/leap dates and non-ASCII text while refusing the divergent inputs.
 - MODERATE - FIXED (2026-08-26). Cross-axis validation omission. Item and
   terminal projections could admit recording reasons that contradicted the
   filesystem outcome, or cancellation without matching execute/verify truth,

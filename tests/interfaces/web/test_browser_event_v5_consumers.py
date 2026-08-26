@@ -14,8 +14,12 @@ from _event_v5_fixtures import (
     ITEM_ID,
     OPERATION_RECORDING_CASES,
     SESSION_ID,
+    UTC_TIMESTAMP_CASES,
+    UNICODE_TEXT_CASES,
     bodies,
     cancellation_terminal_cases,
+    maximum_non_ascii_reliable_envelope,
+    maximum_reliable_envelope,
     operation_item_body,
     review_limit_terminal_summary,
     session_event_view,
@@ -23,8 +27,11 @@ from _event_v5_fixtures import (
 )
 from _frontend_test_support import _node_executable
 from namisync.core.evidence import Outcome, RecordingStatus
-from namisync.core.events import Envelope, ItemOutcome, Terminal, TerminalSummary
+from namisync.core.events import (
+    Envelope, ItemOutcome, PhaseChanged, Terminal, TerminalSummary, envelope_from_dict,
+)
 from namisync.core.execution import ItemRecordingReason
+from namisync.core.review import ReviewFactLimitExceeded
 from namisync.core.session import (
     Disposition,
     OperationResult,
@@ -305,4 +312,91 @@ def test_required_node_operation_truth_matches_public_python_projections() -> No
             )
         )
     assert len(cases) == 94
+    _assert_v5_node_cases(cases)
+
+def test_required_node_uses_the_shared_timestamp_grammar_and_calendar() -> None:
+    cases = []
+    for name, timestamp, accepted in UTC_TIMESTAMP_CASES:
+        view = _project_public_event(PhaseChanged("execute"))
+        view["at"] = timestamp
+        cases.append(
+            {"name": name, "kind": "event", "expected": accepted, "value": view}
+        )
+    assert len(cases) == 50
+    _assert_v5_node_cases(cases)
+
+
+@pytest.mark.parametrize(
+    "factory",
+    (maximum_reliable_envelope, maximum_non_ascii_reliable_envelope),
+    ids=("escaped-ascii", "mixed-unicode"),
+)
+def test_required_node_reliable_ceiling_uses_the_public_envelope_bytes(factory) -> None:
+    raw = factory()
+    assert len(json.dumps(raw, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")) == 1_048_576
+    view = asdict(project_session_event(envelope_from_dict(raw)))
+    assert view["sequence"] == raw["seq"]
+    assert view["body"] == raw["body"]
+    oversized = deepcopy(view)
+    oversized["body"]["path"] += "x"
+    _assert_v5_node_cases(
+        [
+            {"name": "exact-max", "kind": "event", "expected": True, "value": view},
+            {"name": "plus-one", "kind": "event", "expected": False, "value": oversized},
+        ]
+    )
+
+
+def test_required_node_preserves_logical_byte_review_facts() -> None:
+    result = OperationResult(
+        SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+        review_fact_limit=ReviewFactLimitExceeded.plan_logical_bytes(),
+    )
+    event = _project_public_event(Terminal(TerminalSummary.from_result(result)))
+    result_view = asdict(operation_result_view(result))
+    cases = [
+        {
+            "name": "literal-logical-byte-fact",
+            "kind": "event",
+            "expected": True,
+            "value": session_event_view(
+                "Terminal", body={"result": review_limit_terminal_summary()}
+            ),
+        },
+        {"name": "public-logical-byte-event", "kind": "event", "expected": True, "value": event},
+        {"name": "public-logical-byte-result", "kind": "result", "expected": True, "value": result_view},
+    ]
+    for mutation in (
+        {"tree_kind": "inventory"},
+        {"population": "informational"},
+        {"row_limit": 120_000},
+        {"byte_limit": "9223372036854775806"},
+    ):
+        invalid_event = deepcopy(event)
+        invalid_event["body"]["result"]["review_fact_limit"].update(mutation)
+        invalid_result = deepcopy(result_view)
+        invalid_result["review_refusal"].update(mutation)
+        cases.extend(
+            (
+                {"name": f"event:{mutation}", "kind": "event", "expected": False, "value": invalid_event},
+                {"name": f"result:{mutation}", "kind": "result", "expected": False, "value": invalid_result},
+            )
+        )
+    assert len(cases) == 11
+    _assert_v5_node_cases(cases)
+
+def test_required_node_canonical_byte_inputs_require_real_unicode() -> None:
+    cases = []
+    for field in ("path", "detail-message", "recording_detail"):
+        for name, value, accepted in UNICODE_TEXT_CASES:
+            view = session_event_view("ItemOutcome")
+            if field == "detail-message":
+                view["body"]["detail"] = {"message": value}
+            else:
+                view["body"][field] = value
+            cases.append(
+                {"name": f"{field}:{name}", "kind": "event", "expected": accepted, "value": view}
+            )
+    assert len(cases) == 33
     _assert_v5_node_cases(cases)

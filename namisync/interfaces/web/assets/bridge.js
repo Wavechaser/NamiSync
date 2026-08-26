@@ -1,6 +1,7 @@
 const BRIDGE_SCHEMA_VERSION = 1;
 const LIVE_CORE_EVENT_SCHEMA_VERSION = 5;
 const DORMANT_CORE_EVENT_SCHEMA_VERSION = 5;
+const MAX_RELIABLE_EVENT_CANONICAL_BYTES = 1_048_576;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
 const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
 const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
@@ -1908,38 +1909,60 @@ export function validateDormantSessionEventV5(event, sessionId) {
   ) {
     return false;
   }
+  let validBody;
   switch (event.body_type) {
     case "StateChanged":
-      return (
+      validBody = (
         isExactObject(event.body, ["state"]) &&
         isOneOf(event.body.state, SESSION_STATES)
       );
+      break;
     case "PhaseChanged":
-      return (
+      validBody = (
         isExactObject(event.body, ["phase"]) &&
         isBoundedV5Text(event.body.phase, true)
       );
+      break;
     case "Progress":
       return validateDormantProgressV5(event.body);
     case "ItemOutcome":
-      return validateDormantOperationItemV5(event.body);
+      validBody = validateDormantOperationItemV5(event.body);
+      break;
     case "IntegrityOutcome":
-      return validateDormantIntegrityItemV5(event.body);
+      validBody = validateDormantIntegrityItemV5(event.body);
+      break;
     case "Gap":
-      return (
+      validBody = (
         isExactObject(event.body, ["first_missed_seq"]) &&
         Number.isSafeInteger(event.body.first_missed_seq) &&
         event.body.first_missed_seq > 0 &&
         event.body.first_missed_seq <= event.sequence
       );
+      break;
     case "Terminal":
-      return (
+      validBody = (
         isExactObject(event.body, ["result"]) &&
         validateDormantTerminalSummaryV5(event.body.result)
       );
+      break;
     default:
       return false;
   }
+  if (!validBody) {
+    return false;
+  }
+  // Validated v5 primitives have the same compact JSON byte length in Python
+  // and JavaScript. Count the persistence envelope ("seq"), not this view.
+  const canonical = JSON.stringify({
+    session_id: event.session_id,
+    seq: event.sequence,
+    at: event.at,
+    schema_version: event.schema_version,
+    body_type: event.body_type,
+    body: event.body,
+  });
+  return new TextEncoder().encode(canonical).length <=
+    MAX_RELIABLE_EVENT_CANONICAL_BYTES;
 }
 
 function validateDormantProgressV5(value) {
@@ -2453,11 +2476,22 @@ function isOneOf(value, choices) {
 }
 
 function isUtcTimestamp(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+  const match = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2}):([0-9]{2})(?:\.[0-9]{6})?\+00:00$/.exec(value);
+  // JavaScript's $ also matches before a final newline.
+  if (match === null || match[0] !== value) {
+    return false;
+  }
+  const [year, month, day, hour, minute, second] = match.slice(1).map(Number);
+  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   return (
-    typeof value === "string" &&
-    isValidUnicode(value) &&
-    (value.endsWith("Z") || value.endsWith("+00:00")) &&
-    Number.isFinite(Date.parse(value))
+    year >= 1 &&
+    month >= 1 && month <= 12 &&
+    day >= 1 && day <= days[month - 1] &&
+    hour < 24 && minute < 60 && second < 60
   );
 }
 
@@ -2512,7 +2546,8 @@ function isValidUnicode(value) {
     const unit = value.charCodeAt(index);
     if (unit >= 0xd800 && unit <= 0xdbff) {
       const next = value.charCodeAt(index + 1);
-      if (next < 0xdc00 || next > 0xdfff) {
+      // At end of string next is NaN, which must also refuse the pair.
+      if (!(next >= 0xdc00 && next <= 0xdfff)) {
         return false;
       }
       index += 1;

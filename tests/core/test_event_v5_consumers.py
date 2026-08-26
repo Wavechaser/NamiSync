@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from copy import deepcopy
+from dataclasses import asdict
 from datetime import datetime
 import json
 from pathlib import Path
@@ -11,10 +12,13 @@ import pytest
 from _event_v5_fixtures import (
     OPERATION_RECORDING_CASES,
     SESSION_ID,
+    UTC_TIMESTAMP_CASES,
+    UNICODE_TEXT_CASES,
     bodies,
     cancellation_terminal_cases,
     envelope,
     integrity_item_body,
+    maximum_non_ascii_reliable_envelope,
     maximum_reliable_envelope,
     operation_item_body,
     review_limit_terminal_summary,
@@ -52,6 +56,8 @@ from namisync.core.session import (
     SessionId,
     SessionState,
 )
+
+from namisync.workflows.views import session_event_view as project_session_event
 
 
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -575,3 +581,70 @@ def test_v5_terminal_cancellation_truth(
                 session_event_view("Terminal", body={"result": summary}),
                 expected_session_id=SESSION_ID,
             )
+
+@pytest.mark.parametrize("route", ("envelope", "decoder", "public-view"))
+@pytest.mark.parametrize(
+    ("name", "timestamp", "accepted"),
+    UTC_TIMESTAMP_CASES,
+    ids=[case[0] for case in UTC_TIMESTAMP_CASES],
+)
+def test_v5_timestamp_grammar_and_calendar_are_exact(
+    route: str, name: str, timestamp: object, accepted: bool
+) -> None:
+    value = envelope("PhaseChanged")
+    if route == "public-view":
+        value = asdict(project_session_event(envelope_from_dict(value)))
+    value["at"] = timestamp
+    with nullcontext() if accepted else pytest.raises((TypeError, ValueError)):
+        if route == "envelope":
+            validate_event_v5_envelope(value)
+        elif route == "decoder":
+            envelope_from_dict(value)
+        else:
+            validate_session_event_view_v5(value, expected_session_id=SESSION_ID)
+
+
+@pytest.mark.parametrize(
+    "factory",
+    (maximum_reliable_envelope, maximum_non_ascii_reliable_envelope),
+    ids=("escaped-ascii", "mixed-unicode"),
+)
+def test_public_v5_view_enforces_canonical_envelope_byte_ceiling(factory) -> None:
+    raw = factory()
+    canonical = json.dumps(
+        raw, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    assert len(canonical) == 1_048_576
+    view = asdict(project_session_event(envelope_from_dict(raw)))
+    assert view == {**{key: value for key, value in raw.items() if key != "seq"}, "sequence": raw["seq"]}
+    # The view's longer key is not the persistence-envelope accounting unit.
+    assert len(json.dumps(view, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")) == 1_048_581
+    validate_session_event_view_v5(view, expected_session_id=SESSION_ID)
+
+    oversized = deepcopy(view)
+    oversized["body"]["path"] += "x"
+    with pytest.raises(ValueError, match="canonical byte ceiling"):
+        validate_session_event_view_v5(oversized, expected_session_id=SESSION_ID)
+
+@pytest.mark.parametrize("route", ("envelope", "public-view"))
+@pytest.mark.parametrize("field", ("path", "detail-message", "recording_detail"))
+@pytest.mark.parametrize(
+    ("name", "value", "accepted"),
+    UNICODE_TEXT_CASES,
+    ids=[case[0] for case in UNICODE_TEXT_CASES],
+)
+def test_reliable_v5_canonical_bytes_require_real_unicode(
+    route: str, field: str, name: str, value: str, accepted: bool
+) -> None:
+    event = envelope("ItemOutcome")
+    if route == "public-view":
+        event = asdict(project_session_event(envelope_from_dict(event)))
+    if field == "detail-message":
+        event["body"]["detail"] = {"message": value}
+    else:
+        event["body"][field] = value
+    with nullcontext() if accepted else pytest.raises(ValueError, match="valid Unicode"):
+        if route == "envelope":
+            validate_event_v5_envelope(event)
+        else:
+            validate_session_event_view_v5(event, expected_session_id=SESSION_ID)

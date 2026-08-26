@@ -243,6 +243,21 @@ queue, replay, or history mutation. Reliable `PhaseChanged.phase` is an exact
 nonempty string, matching the phase authority required by Progress consumers
 rather than allowing an empty phase token below the browser boundary.
 
+Event/service timestamps use the exact ASCII grammar
+`YYYY-MM-DDTHH:MM:SS[.ffffff]+00:00`: four-digit years 0001–9999, a real
+Gregorian calendar date and time, and either no fraction or exactly six digits.
+Other offsets, `Z`, alternative ISO spellings, rollover dates, and trailing
+characters refuse. Python constructs the datetime after checking grammar;
+the browser checks the same calendar fields without permissive date parsing.
+
+The Python event-view validator reconstructs the persistence envelope and
+delegates to its authority. The browser validates all reliable body fields
+before counting compact UTF-8 JSON bytes for that same envelope, with `seq`
+rather than the longer view key `sequence`. Property ordering does not change
+the byte count of these closed v5 primitives. Both reject unpaired UTF-16
+surrogates; valid non-ASCII and supplementary characters retain their actual
+UTF-8 byte lengths. Progress remains exempt from the reliable-event ceiling.
+
 ### Progress v5 shape
 
 Version 5 makes every Progress body an exact eleven-key object:

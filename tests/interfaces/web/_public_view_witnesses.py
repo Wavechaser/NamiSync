@@ -324,7 +324,7 @@ OPERATION_RESULT_JSON = {
 SESSION_EVENT = SessionEventView(
     SESSION_ID,
     9,
-    "2026-08-13T10:15:00Z",
+    "2026-08-13T10:15:00+00:00",
     5,
     "Progress",
     MappingProxyType(
@@ -346,7 +346,7 @@ SESSION_EVENT = SessionEventView(
 SESSION_EVENT_JSON = {
     "session_id": SESSION_ID,
     "sequence": 9,
-    "at": "2026-08-13T10:15:00Z",
+    "at": "2026-08-13T10:15:00+00:00",
     "schema_version": 5,
     "body_type": "Progress",
     "body": {
@@ -366,7 +366,7 @@ SESSION_EVENT_JSON = {
 HISTORY_RECORDED_EVENT = HistoryEventView(
     SESSION_ID,
     9,
-    "2026-08-13T10:15:00Z",
+    "2026-08-13T10:15:00+00:00",
     5,
     "ItemOutcome",
     "recorded",
@@ -379,7 +379,7 @@ HISTORY_RECORDED_EVENT = HistoryEventView(
 HISTORY_RECORDED_EVENT_JSON = {
     "session_id": SESSION_ID,
     "sequence": 9,
-    "at": "2026-08-13T10:15:00Z",
+    "at": "2026-08-13T10:15:00+00:00",
     "schema_version": 5,
     "body_type": "ItemOutcome",
     "disposition": "recorded",
@@ -392,7 +392,7 @@ HISTORY_RECORDED_EVENT_JSON = {
 HISTORY_REJECTED_EVENT = HistoryEventView(
     SESSION_ID,
     10,
-    "2026-08-13T10:16:00Z",
+    "2026-08-13T10:16:00+00:00",
     5,
     "IntegrityOutcome",
     "rejected",
@@ -405,7 +405,7 @@ HISTORY_REJECTED_EVENT = HistoryEventView(
 HISTORY_REJECTED_EVENT_JSON = {
     "session_id": SESSION_ID,
     "sequence": 10,
-    "at": "2026-08-13T10:16:00Z",
+    "at": "2026-08-13T10:16:00+00:00",
     "schema_version": 5,
     "body_type": "IntegrityOutcome",
     "disposition": "rejected",
@@ -420,8 +420,8 @@ NONTERMINAL_RECORD = SessionRecordView(
     PLAN_KIND,
     "running",
     False,
-    "2026-08-13T10:00:00Z",
-    "2026-08-13T10:00:01Z",
+    "2026-08-13T10:00:00+00:00",
+    "2026-08-13T10:00:01+00:00",
     None,
     None,
 )
@@ -430,8 +430,8 @@ NONTERMINAL_RECORD_JSON = {
     "kind": "sync-plan",
     "state": "running",
     "supports_pause": False,
-    "created_at": "2026-08-13T10:00:00Z",
-    "started_at": "2026-08-13T10:00:01Z",
+    "created_at": "2026-08-13T10:00:00+00:00",
+    "started_at": "2026-08-13T10:00:01+00:00",
     "ended_at": None,
     "result": None,
 }
@@ -440,9 +440,9 @@ TERMINAL_RECORD = SessionRecordView(
     PLAN_KIND,
     "completed",
     False,
-    "2026-08-13T10:00:00Z",
-    "2026-08-13T10:00:01Z",
-    "2026-08-13T10:15:00Z",
+    "2026-08-13T10:00:00+00:00",
+    "2026-08-13T10:00:01+00:00",
+    "2026-08-13T10:15:00+00:00",
     OPERATION_RESULT,
 )
 TERMINAL_RECORD_JSON = {
@@ -450,9 +450,9 @@ TERMINAL_RECORD_JSON = {
     "kind": "sync-plan",
     "state": "completed",
     "supports_pause": False,
-    "created_at": "2026-08-13T10:00:00Z",
-    "started_at": "2026-08-13T10:00:01Z",
-    "ended_at": "2026-08-13T10:15:00Z",
+    "created_at": "2026-08-13T10:00:00+00:00",
+    "started_at": "2026-08-13T10:00:01+00:00",
+    "ended_at": "2026-08-13T10:15:00+00:00",
     "result": OPERATION_RESULT_JSON,
 }
 TASK_EVENT_UPDATE = TaskEventUpdateView("event", SESSION_EVENT)

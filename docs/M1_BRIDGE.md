@@ -354,8 +354,11 @@ absence. Free-form diagnostics are already bounded before construction.
   inferred. `SessionRecordView` = `{session_id:HexId,
   kind:SessionRef.kind,state:SessionRef.state,supports_pause:boolean,
   created_at:string,started_at:string|null,ended_at:string|null,
-  result:ResultSummary|null}`. Event and record timestamps are bounded service-
-  produced ISO-8601 strings; filesystem text never enters them.
+  result:ResultSummary|null}`. Event and record timestamps use the exact ASCII
+  service grammar `YYYY-MM-DDTHH:MM:SS[.ffffff]+00:00`, with a real calendar
+  date/time, four-digit years 0001–9999, and absent or exactly six fractional
+  digits (25 or 32 characters). `Z`, alternative ISO spellings, other offsets,
+  and rollover dates refuse; filesystem text never enters timestamps.
 - A drain update is exactly `{update_type:"event",event:SessionEventView}` or
   `{update_type:"record",record:SessionRecordView}`.
 - `TaskDetail` = `{summary:TaskSummary, setup:PlanSetupOptions|null,

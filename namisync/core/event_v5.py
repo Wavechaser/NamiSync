@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from .evidence import Outcome, RecordingStatus
 from .execution import (
     ExecutionReason,
@@ -32,6 +32,10 @@ MAX_DIAGNOSTIC_UTF8_BYTES = 1_024
 MAX_PATH_UTF16_UNITS = 32_767
 
 _HEX_ID = re.compile(r"[0-9a-f]{32}\Z")
+_UTC_TIMESTAMP = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]{6})?\+00:00"
+)
 _TERMINAL_STATES = frozenset(
     state.value
     for state in (
@@ -280,16 +284,17 @@ def validate_session_event_view_v5(
     session_id = _hex_id(event["session_id"], "session event session_id")
     if expected_session_id is not None and session_id != expected_session_id:
         raise ValueError("session event belongs to another session")
-    sequence = _positive_safe_int(event["sequence"], "session event sequence")
-    _utc_timestamp(event["at"], "session event timestamp")
-    if type(event["schema_version"]) is not int or event["schema_version"] != 5:
-        raise ValueError("session event schema_version must be exactly 5")
-    body_type = _closed_text(
-        event["body_type"],
-        frozenset({*_RELIABLE_BODY_TYPES, "Progress"}),
-        "session event body_type",
+    # Reliable bytes belong to the persistence envelope, whose key is "seq".
+    validate_event_v5_envelope(
+        {
+            "session_id": session_id,
+            "seq": event["sequence"],
+            "at": event["at"],
+            "schema_version": event["schema_version"],
+            "body_type": event["body_type"],
+            "body": event["body"],
+        }
     )
-    _validate_body(body_type, event["body"], sequence)
 
 
 def _validate_body(body_type: str, value: object, sequence: int) -> None:
@@ -749,16 +754,12 @@ def _path(value: object, context: str) -> str:
 def _utc_timestamp(value: object, context: str) -> datetime:
     if type(value) is not str:
         raise TypeError(f"{context} must be text")
+    if _UTC_TIMESTAMP.fullmatch(value) is None:
+        raise ValueError(f"{context} must use the exact UTC service grammar")
     try:
-        parsed = datetime.fromisoformat(value)
+        return datetime.fromisoformat(value)
     except ValueError as error:
-        raise ValueError(f"{context} must be ISO-8601") from error
-    if (
-        parsed.tzinfo is None
-        or parsed.utcoffset() != timezone.utc.utcoffset(parsed)
-    ):
-        raise ValueError(f"{context} must be UTC")
-    return parsed
+        raise ValueError(f"{context} must be a real calendar datetime") from error
 
 
 def _boolean(value: object, context: str) -> bool:

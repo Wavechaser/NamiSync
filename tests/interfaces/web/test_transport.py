@@ -13,9 +13,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from _event_v5_fixtures import maximum_non_ascii_reliable_envelope, maximum_reliable_envelope
+
 import namisync.interfaces.web.bridge as bridge_module
 import namisync.interfaces.web.drain as drain_module
-from namisync.core.events import ItemOutcome, PhaseChanged, Progress
+from namisync.core.events import ItemOutcome, PhaseChanged, Progress, envelope_from_dict
 from namisync.core.planning import OperationKind
 from namisync.core.session import RunContext, SessionId, SessionState
 from namisync.dispatcher.event_bus import EventHub
@@ -793,8 +795,13 @@ def test_br_g_36_node_drain_validates_progress_before_batch_delivery(
     probe = Path(__file__).parents[2] / "assets" / "drain_manager_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
     producer_fixture = tmp_path / "executor-progress.json"
+    fixture = _real_deferred_mkdir_drain_fixture(tmp_path)
+    fixture["reliable_size_events"] = [
+        asdict(session_event_view(envelope_from_dict(factory())))
+        for factory in (maximum_reliable_envelope, maximum_non_ascii_reliable_envelope)
+    ]
     producer_fixture.write_text(
-        json.dumps(_real_deferred_mkdir_drain_fixture(tmp_path)),
+        json.dumps(fixture),
         encoding="utf-8",
     )
 
