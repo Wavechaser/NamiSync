@@ -254,9 +254,8 @@ Commits, in order:
 ### 3R. Remediate independent checkpoint-review findings
 
 Checkpoint 3.3 is blocked until the authorized remediation sequence closes and
-Reviewer S5 has a user-approved disposition: an implemented design or an
-explicitly accepted deferral/residual recorded in its owning authorities. The
-findings were reported after checkpoints 1–3.2 had already landed, so this
+Reviewer S5's approved payload-free storage design is implemented and verified.
+The findings were reported after checkpoints 1–3.2 had already landed, so this
 sequence repairs those delivered boundaries without folding the work into the
 legacy-removal commit or changing checkpoints 4–12.
 
@@ -270,9 +269,11 @@ gates rerun before the row is committed. Review the staged snapshot and run
 partly implemented later row into that snapshot. Matching component docs and
 causal `BUGS.md` entries travel with the behavior they describe. At every safe
 stop, replace HANDOFF's operational sections with the completed row, exact
-verification, dirty-file ownership, and next command; retain the appended raw
-review reports as the active finding source through this sequence. The final
-row reconciles cross-cutting status, changelog, and integrated evidence.
+verification, dirty-file ownership, and next command. Remove completed findings
+once their causal BUGS entries and component documentation have landed; retain
+only actionable unfinished findings. The original reports remain in Git at
+`d7673b7:docs/HANDOFF.md`. The final row reconciles cross-cutting status,
+changelog, and integrated evidence.
 
 Finding ownership is exact at the aspect level:
 
@@ -291,7 +292,7 @@ Finding ownership is exact at the aspect level:
 | F13, S16 | 3R.14 file-identity codecs |
 | F14 | 3R.7 scalar/file-id boundary |
 | S1 | 3R.3 retained committed settlement |
-| S5 | explicit design hold; no implementation row |
+| S5 | 3R.S5 payload-free session storage |
 | S6 | 3R.5 diagnostic containment |
 | S9, S13 | 3R.10 live task-update/custody boundary |
 | S10, S11 | 3R.8 exact event operation truth |
@@ -303,6 +304,19 @@ Finding ownership is exact at the aspect level:
 | S18 timestamp/size/logical-byte Node corpora | 3R.9 timestamp/size boundary |
 | S18 legacy Progress/vocabulary/live-route gates | 3R.11 source gates |
 | S18 active-document drift | 3R.15 documentation closure |
+| Follow-up cancellation ignores retained settlement | 3R.13a cancellation replay |
+| Follow-up repeated full-file database admission | 3R.13b runtime reader lifetime |
+| Follow-up private database snapshot placement | 3R.13c local snapshot placement |
+| Timestamp comment and live schema constant naming | 3R.15a browser naming cleanup |
+
+The 2026-08-26 follow-up decision orders the remaining work as 3R.13a,
+3R.13b, 3R.13c, 3R.S5, revised 3R.14, 3R.15a, and 3R.15. The already delivered
+3R.0–3R.13 commits remain unchanged. New regressions precede each behavioral
+fix, and each row retains its own independent review and commit. The protected
+settlement oracle, baseline, and existing assertions are not editable in these
+rows. The installed-wheel event-diagnostic fixture migration and the separately
+noted pre-entry workflow emission issue remain unassigned, not hidden inside
+the two small browser cleanups.
 
 #### 3R.0 Ratify the remediation sequence
 
@@ -545,30 +559,132 @@ Commit: `fix(database): validate complete pairs without mutation`
   department and ordinary suite, updated DATABASE docs/bug records, and
   independent schema/TOCTOU/temp-ownership review.
 
-#### 3R.14 Keep file identity textual in generic JSON
+#### 3R.13a Replay retained settlement on cancellation
 
-Commit: `fix(identity): encode FileIndex128 as canonical JSON text`
+Commit: `fix(executor): replay pending settlement on cancellation`
+
+- **Acceptance:** Cancellation reuses an already retained settlement unchanged,
+  including recorder receipt and degradation reason, before deriving a new
+  cancellation outcome. Cover both the current operation and deferred directory
+  settlement after `current` has advanced. Preserve the journal equality guard,
+  reliable-delivery-before-acceptance ordering, and existing external-error
+  precedence; do not invent accepted items when every delivery attempt fails.
+- **Tests/review:** Failed-before/passed-after current and deferred cases,
+  byte/non-byte success and degradation, pending failure, subsequent unstarted
+  cancellation, single recording/delivery, retained evidence under persistent
+  refusal, executor/workflows/dispatcher neighborhood, ordinary suite,
+  three-run protected oracle, and independent settlement review.
+
+#### 3R.13b Bound repeated admission to runtime reader lifetime
+
+Commit: `perf(database): reuse admitted runtime readers`
+
+- **Acceptance:** Repeated inventory/history read requests reuse a bounded set
+  of admitted reader handles under an explicit runtime owner and serialization.
+  Keep fresh per-request SQLite transactions, visibility of committed updates,
+  close/reopen ownership, and full admission for every newly opened handle.
+  Do not cache validation by path/stamp, remove same-stamp hash checks, or bypass
+  standalone repository/pair/initializer admission. First-open validation remains
+  proportional to main/WAL size; this is amortization, not constant-time admission.
+- **Tests/review:** Repeated-request admission counts, fresh committed data,
+  concurrent read/close behavior, failed-open/retry and close ownership, database/
+  workflows/interfaces neighborhood and ordinary suite. DATABASE documents the
+  exact fixtures, main/WAL/request-count scaling axes, logical I/O and scratch
+  space, retained artifacts, and rerun triggers as diagnostics, with no invented
+  database-size or latency acceptance wall. Independent lifetime/TOCTOU review.
+
+#### 3R.13c Keep validation snapshots on local database storage
+
+Commit: `fix(database): keep private snapshots beside local databases`
+
+- **Acceptance:** Private main/WAL validation copies use an explicit owned
+  temporary child of the database directory, inheriting the app database's
+  required local, non-cloud-synced placement instead of ambient system-temp
+  selection. Refuse if that private directory cannot be created. Document the
+  writable-parent requirement, full main/WAL contents, temporary disk cost,
+  normal cleanup, and possible crash leftovers. Never mutate or recover source
+  main/WAL/SHM/journal artifacts; do not claim the parent directory is unchanged.
+- **Tests/review:** Hostile ambient temp selection, both database roles,
+  unavailable private-directory creation and cleanup faults, existing source
+  no-mutation/drift tests, database department, ordinary suite, and independent
+  temporary-ownership review. No new filesystem-placement detection framework.
+
+#### 3R.S5 Keep continuation outside the session-store contract
+
+Commit: `fix(dispatcher): persist payload-free session projections`
+
+- **Acceptance:** Keep live `SessionRecord` and its payload invariants unchanged.
+  Introduce a separate frozen stored-record type with no payload field or live-
+  record reference. Explicitly project both admission and subsequent writes;
+  `SessionStore` and its concrete implementation accept only that shape. Retain
+  complete ordinary result axes and the result-free intermediate terminal record.
+  The current-process queue, latest-snapshot pause/resume, cancellation, and
+  custody semantics stay unchanged. Terminal live-record scrubbing remains
+  required but is no longer the store's continuation-retention guarantee.
+- **M2 constraint:** The metadata store is not a recovery store. DISPATCHER and
+  ARCHITECTURE must say durable restart/resume needs a separate protected
+  continuation/recovery contract and fresh authority/custody reconciliation;
+  replacing the metadata store with SQLite is insufficient. No M2 recovery,
+  cryptography, all-reference erasure claim, or ledger/history epoch change is
+  part of S5. Future projections cannot retroactively scrub incompatible old
+  stores; M1's supported in-memory store is fresh on restart.
+- **Tests/review:** Inspect every supplied and retained store value from
+  admission onward under accept-first/reject-later faults, reject accidental
+  live-record storage, preserve latest pause snapshots, cancel and terminal
+  result axes, admission rollback and cleanup-pending ownership. Run core/
+  dispatcher/workflows/database/interfaces consumers and ordinary/import gates,
+  classify the new retained fields against existing measurement authority, and
+  obtain independent storage/lifecycle review.
+
+#### 3R.14 Hash explicit closed canonical projections
+
+Commit: `fix(identity): hash explicit canonical projections`
 
 - **Findings:** F13 and S16.
-- **Acceptance:** Core plan serialization/fingerprinting and recorder
-  idempotency hashing recognize `FileIdentity` before generic dataclass descent
-  and emit canonical quoted `FileIndex128`; unrelated integers stay numeric.
+- **Acceptance:** Owner-defined plan and recorder projections replace generic
+  dataclass descent. A closed JSON encoder refuses unsupported types, non-string
+  keys, and non-finite numbers; no field-name guessing or fallback coercion.
+  Remove `asdict(plan)` before hashing. The explicit `FileIdentity` projection
+  emits canonical quoted `FileIndex128`; ordinary projected integers stay
+  numeric. Preserve complete declared hash inputs, existing field names, sequence
+  and set ordering, byte/date encodings, custom destination-policy name/version
+  semantics, and identityless hash bytes. Projection-coverage tests force review
+  of new domain fields/types. This corrects canonical consistency and latent
+  portability risk, not a demonstrated Python integer-precision defect.
   Preserve and explicitly pin the existing low-32-bit uppercase volume-serial
   normalization that makes `FILE_ID_INFO` evidence comparable with
   `GetVolumeInformationW` `VolumeId`; it is separate from the full 128-bit file
-  index. Trace every persisted fingerprint/idempotency consumer and record an
-  explicit compatibility conclusion before implementation. If an existing
-  checkpoint-3.2 hash can be revalidated or replayed under the same current
-  markers with different semantics, stop for a coordinated epoch/reset
-  decision rather than silently changing that durable contract.
+  index. The approved compatibility cut advances shared data epoch 5 to 6 and
+  the ledger contract id, while retaining ledger-v4/history-v6 shapes and the
+  history contract id. Old pairs refuse with explicit archive/reset guidance;
+  never delete user databases automatically. Execution-v6 keeps its wire shape;
+  old identity-bearing commitments fail re-fingerprinting, not a blanket version
+  ban. Reset discards app receipts/evidence/history, not source or target files.
+  Keep the explicit lossless surrogate-escaping rule: JSON escapes a literal
+  backslash before UTF-8 encoding, so the reported raw-encoding collision does
+  not occur in these hashes. Pin that distinction in recorder tests and retain
+  diagnostic tolerance; do not turn malformed diagnostic text into lost scan
+  observations under a nonexistent collision rationale.
 - **Tests/review:** Exact maximum file index through nested plans/inventory/
-  evidence and recorder hashes, an ordinary nested-dataclass integer that must
-  remain a JSON number, deterministic fingerprint coverage, exact persisted-
+  evidence and recorder hashes, ordinary integers in known projected types,
+  refusal of unknown nested dataclasses/types and coercive keys, projection
+  completeness, deterministic byte/fingerprint vectors, exact persisted-
   consumer compatibility evidence, and an old-current-marker numeric-
   fingerprint execution-v6 continuation decoded and re-fingerprinted by new
   workflow code. Run core, planner, database, and workflows departments plus
   the ordinary suite; update owning docs/bug record; and obtain independent
   codec-compatibility review.
+
+#### 3R.15a Align browser comments and live constant naming
+
+Commit: `refactor(web): clarify live event schema naming`
+
+- **Acceptance:** Correct the non-multiline JavaScript end-anchor comment and
+  rename the live event version constant to `CORE_EVENT_SCHEMA_VERSION` together
+  with its exact source/name/count gate. Preserve all validator behavior and the
+  unreachable private legacy decoder reserved for checkpoint 3.3.
+- **Tests/review:** Focused source gates, required Node timestamp/decoder corpus,
+  interfaces department, exact diff inspection, and independent narrow review.
 
 #### 3R.15 Reconcile remediation evidence and active documentation
 
@@ -578,29 +694,22 @@ Commit: `docs: reconcile independent checkpoint remediation`
 - **Acceptance:** Reconcile M1_SHELL, M1_BRIDGE, DATABASE, ARCHITECTURE, CORE,
   TESTS, component documents, README, CHANGELOG, BUGS, and HANDOFF with the
   delivered behavior and exact safe stop. Remove stale active-v4/history-v5/
-  checkpoint status claims without rewriting historical evidence. Require and
-  record the user-approved S5 disposition before this row can complete; an
-  accepted deferral keeps an open causal BUGS entry, a DEFENSE residual/model-
-  reopen disposition, truthful noncategorical DISPATCHER wording, and exact
-  HANDOFF status. Migrate lasting causal dispositions and evidence from the raw
-  review reports into BUGS, CHANGELOG, and owning documents. A completed 3R.15
-  always replaces HANDOFF in full without the raw appendices; an intermediate
-  safe stop retains them only while 3R.15 remains incomplete. Keep checkpoint
-  3.3 unstarted and the private decoder seam intact.
+  checkpoint status claims without rewriting historical evidence. Require the
+  approved S5 checkpoint and all authorized follow-ups to be implemented and
+  verified before this row completes. Keep lasting causal dispositions and
+  evidence in BUGS, CHANGELOG, and owning documents, removing their completed
+  finding entries from HANDOFF as each fix lands. HANDOFF contains current
+  verification, exact safe stop, and only actionable remaining work, not raw
+  reports already preserved in Git. Keep checkpoint 3.3 unstarted and the
+  private decoder seam intact.
 - **Tests/review:** All affected departments, ordinary suite with required
   bundled Node, import architecture, three-run settlement oracle, exact source
   scans, `git diff --check`, and final independent requirement/security review.
 
-**Design hold — not authorized by this sequence:** Reviewer S5 identifies a
-failed terminal store write that can leave an older continuation-bearing row in
-an arbitrary `SessionStore`. The current `put/load_all/drop` protocol cannot
-guarantee scrubbing after its mutator rejects the scrubbed record, and a best-
-effort `drop` would not make that guarantee true. Resolving it requires an
-explicit storage design: keep continuation bytes solely under dispatcher-owned
-process memory and persist only redacted records; add a stronger atomic storage
-contract; or introduce separately revocable protected continuation storage.
-Do not change this boundary without a user decision; absent that decision,
-3R.15 and checkpoint 3.3 remain blocked after all authorized fixes land.
+**Decisions ratified:** The user approved the memory-only continuation/separate
+stored-projection design and the coordinated identity-hash epoch/reset. These
+are no longer design holds. Checkpoint 3.3 remains blocked on delivery and
+independent verification of the remediation, not on another design decision.
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
