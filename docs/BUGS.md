@@ -116,6 +116,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-26). Exception-bound recording attribution.
+  A safely refused UPDATE could report recording clean when owned-temp cleanup
+  replaced its flush error or a retained-backup retry settled through the
+  durable-effect reducer. Cause: prerequisite attribution lived on dynamic
+  exception fields, while filesystem settlement could select another error.
+  Fixed by retaining the typed cause in the operation journal and composing it
+  before reliable settlement; reducer-proven unrecorded mutation takes
+  precedence without changing filesystem truth. A successful retry barrier
+  clears the cause, and a newly refused barrier replaces its diagnostic.
+  Accepted-journal validation is guarded once: inconsistency preserves the
+  original external error and retained evidence rather than retiring it.
 - SEVERE - FIXED (2026-08-26). Reliable-sink settlement receipt loss. A
   successful recorder transaction lived only in a transient settlement while
   its item outcome was offered, so sink rejection sent the exception backstop

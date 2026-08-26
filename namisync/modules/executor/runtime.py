@@ -423,11 +423,17 @@ _ByteEffect = _CopyContinuation | _UpdateContinuation | _MoveUpdateContinuation
 
 
 @dataclass(frozen=True, slots=True)
+class _RecordingPrerequisiteFailure:
+    detail: str
+
+
+@dataclass(frozen=True, slots=True)
 class _EffectSnapshot:
     byte: _ByteEffect | None = None
     mutation: _MutationAttempt | None = None
     retry_error: Exception | None = None
     temporary_path: Path | None = None
+    recording_prerequisite_failure: _RecordingPrerequisiteFailure | None = None
 
 
 @dataclass(slots=True)
@@ -436,6 +442,7 @@ class _EffectJournalEntry:
     mutation: _MutationAttempt | None = None
     retry_error: Exception | None = None
     temporary_path: Path | None = None
+    recording_prerequisite_failure: _RecordingPrerequisiteFailure | None = None
     pending_settlement: _Settled | None = None
     settled: bool = False
 
@@ -492,6 +499,17 @@ class _EffectJournal:
         if not isinstance(error, Exception):
             raise TypeError("executor retry error must be an exception")
         self._active_entry(op_id).retry_error = error
+
+    def set_recording_prerequisite_failure(
+        self,
+        op_id: OpId,
+        failure: _RecordingPrerequisiteFailure | None,
+    ) -> None:
+        if failure is not None and not isinstance(failure, _RecordingPrerequisiteFailure):
+            raise TypeError("executor recording prerequisite has an unsupported type")
+        if failure is None and op_id not in self._entries:
+            return
+        self._active_entry(op_id).recording_prerequisite_failure = failure
 
     def retain_pending_settlement(
         self,
@@ -564,6 +582,7 @@ class _EffectJournal:
             mutation=entry.mutation,
             retry_error=entry.retry_error,
             temporary_path=entry.temporary_path,
+            recording_prerequisite_failure=entry.recording_prerequisite_failure,
         )
 
     def settle(self, op_id: OpId) -> None:
@@ -1329,58 +1348,54 @@ def _backstop_operation(
     operation: PlanOperation,
     escaped: Exception,
 ) -> None:
+    if operation.op_id not in xset.status:
+        try:
+            pending = state.effects.pending_settlement(operation.op_id)
+            if pending is not None:
+                _settle(xset, state, progress, ctx, operation, pending)
+            else:
+                snapshot = state.effects.snapshot(operation.op_id)
+                _settle_ordinary_failure(
+                    xset,
+                    ctx,
+                    fs,
+                    target_root,
+                    state,
+                    progress,
+                    operation,
+                    snapshot.retry_error or escaped,
+                )
+        except Exception as settlement_error:
+            escaped.add_note(
+                "executor exception backstop also failed: "
+                f"{logical_error_text(settlement_error)}"
+            )
+    if not state.effects.has_active_entry(operation.op_id):
+        return
+    if (
+        operation.op_id not in xset.status
+        and state.effects.pending_settlement(operation.op_id) is not None
+    ):
+        return
+
+    # Acceptance may precede a Progress failure. Validate once before retirement;
+    # a failed validation must leave the retained evidence and original error intact.
     try:
         if operation.op_id in xset.status:
-            cleanup_error = _cleanup_inflight(state, fs, operation.op_id)
-            if cleanup_error is not None:
-                escaped.add_note(
-                    "executor terminal cleanup also failed: "
-                    f"{logical_error_text(cleanup_error)}"
-                )
-            state.effects.settle(operation.op_id)
-            state.effects.retire(operation.op_id)
-            return
-        pending = state.effects.pending_settlement(operation.op_id)
-        if pending is not None:
-            _settle(
-                xset,
-                state,
-                progress,
-                ctx,
-                operation,
-                pending,
+            _validate_accepted_settlement(xset, state, operation.op_id)
+        cleanup_error = _cleanup_inflight(state, fs, operation.op_id)
+        if cleanup_error is not None:
+            escaped.add_note(
+                "executor terminal cleanup also failed: "
+                f"{logical_error_text(cleanup_error)}"
             )
-            return
-        snapshot = state.effects.snapshot(operation.op_id)
-        _settle_ordinary_failure(
-            xset,
-            ctx,
-            fs,
-            target_root,
-            state,
-            progress,
-            operation,
-            snapshot.retry_error or escaped,
-        )
+        state.effects.settle(operation.op_id)
+        state.effects.retire(operation.op_id)
     except Exception as settlement_error:
         escaped.add_note(
             "executor exception backstop also failed: "
             f"{logical_error_text(settlement_error)}"
         )
-        if state.effects.has_active_entry(operation.op_id):
-            if (
-                operation.op_id not in xset.status
-                and state.effects.pending_settlement(operation.op_id) is not None
-            ):
-                return
-            cleanup_error = _cleanup_inflight(state, fs, operation.op_id)
-            if cleanup_error is not None:
-                escaped.add_note(
-                    "executor terminal cleanup also failed: "
-                    f"{logical_error_text(cleanup_error)}"
-                )
-            state.effects.settle(operation.op_id)
-            state.effects.retire(operation.op_id)
 
 
 def _execute_operation(
@@ -2141,7 +2156,7 @@ def _update(
         raise RuntimeError("executor continuation kind does not match update")
 
     if not continuation.published:
-        _flush_before_destructive(recorder)
+        _flush_before_destructive(recorder, state, operation.op_id)
         _revalidate_source_root(fs, xset, source_root)
         _revalidate_target_root(fs, xset, target_root)
         if continuation.backup is not None:
@@ -2326,7 +2341,7 @@ def _move(
             "move operation lacks source evidence",
         )
     old_rel, old_expected = _prior_target(operation)
-    _flush_before_destructive(recorder)
+    _flush_before_destructive(recorder, state, operation.op_id)
     _revalidate_source_root(fs, xset, source_root)
     _revalidate_target_root(fs, xset, target_root)
     _guard_present(
@@ -2413,7 +2428,7 @@ def _recase(
             ExecutionReason.UNSAFE_PATH,
             "recase paths must differ only by Windows filename casing",
         )
-    _flush_before_destructive(recorder)
+    _flush_before_destructive(recorder, state, operation.op_id)
     _revalidate_source_root(fs, xset, source_root)
     _revalidate_target_root(fs, xset, target_root)
     _guard_present(
@@ -2477,6 +2492,7 @@ def _recase(
 
 def _finish_move_update_filesystem(
     continuation: _MoveUpdateContinuation,
+    op_id: OpId,
     xset: ExecutionSet,
     recorder: Recorder,
     fs: ExecutorFileSystem,
@@ -2506,7 +2522,7 @@ def _finish_move_update_filesystem(
     )
     trash_actual = _stat_target_path(fs, xset, target_root, trash)
     if old_actual is not None:
-        _flush_before_destructive(recorder)
+        _flush_before_destructive(recorder, state, op_id)
         _revalidate_target_root(fs, xset, target_root)
         old_actual = fs.stat(target_root, continuation.old_relative_path)
         fs.revalidate_trash_destination(
@@ -2675,6 +2691,7 @@ def _move_update(
         resumed_published=resumed_published,
         finish_filesystem=lambda: _finish_move_update_filesystem(
             continuation,
+            operation.op_id,
             xset,
             recorder,
             fs,
@@ -2705,7 +2722,7 @@ def _trash(
     destination = fs.trash_destination(
         target_root, xset.run_id, operation.target_rel_path
     )
-    _flush_before_destructive(recorder)
+    _flush_before_destructive(recorder, state, operation.op_id)
     _revalidate_target_root(fs, xset, target_root)
     source_actual = _guard_present(
         fs,
@@ -2785,7 +2802,7 @@ def _delete(
         operation.target_expected.kind is EntryKind.DIRECTORY
         and operation.reason is OperationReason.DIRECTORY_CLEANUP
     )
-    _flush_before_destructive(recorder)
+    _flush_before_destructive(recorder, state, operation.op_id)
     _revalidate_target_root(fs, xset, target_root)
     target_actual = _guard_present(
         fs,
@@ -3128,6 +3145,44 @@ def _dependencies_succeeded(
     )
 
 
+def _compose_recording_cause(
+    settled: _Settled,
+    prerequisite: _RecordingPrerequisiteFailure | None,
+) -> _Settled:
+    if prerequisite is None or settled.outcome is not Outcome.FAILED:
+        return settled
+    if settled.recording_reason is ItemRecordingReason.UNRECORDED_MUTATION:
+        return settled
+    if settled.recording_reason not in {
+        None, ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    }:
+        raise RuntimeError("unsupported executor recording-cause composition")
+    return replace(
+        settled,
+        recording_reason=ItemRecordingReason.RECORDING_PREREQUISITE_FAILED,
+        recording_detail=prerequisite.detail,
+    )
+
+
+def _validate_accepted_settlement(
+    xset: ExecutionSet,
+    state: _ExecutionState,
+    op_id: OpId,
+) -> None:
+    pending = state.effects.pending_settlement(op_id)
+    if pending is None:
+        raise RuntimeError("accepted settlement lacks retained journal evidence")
+    if (
+        pending != _compose_recording_cause(
+            pending, state.effects.snapshot(op_id).recording_prerequisite_failure
+        )
+        or pending.outcome is not xset.status[op_id]
+        or pending.recording_reason is not xset.recording_reasons.get(op_id)
+        or pending.published_evidence != xset.published_evidence.get(op_id)
+    ):
+        raise RuntimeError("accepted settlement disagrees with retained journal evidence")
+
+
 def _settle(
     xset: ExecutionSet,
     state: _ExecutionState,
@@ -3137,9 +3192,11 @@ def _settle(
     settled: _Settled,
 ) -> None:
     if operation.op_id in xset.status:
-        state.effects.settle(operation.op_id)
-        state.effects.retire(operation.op_id)
-        return
+        raise RuntimeError("executor operation is already settled")
+    settled = _compose_recording_cause(
+        settled,
+        state.effects.snapshot(operation.op_id).recording_prerequisite_failure,
+    )
     byte_producing = operation.kind in {
         OperationKind.COPY,
         OperationKind.UPDATE,
@@ -3212,22 +3269,10 @@ def _settle_failure(
 
 def _failure_settlement(error: Exception) -> _Settled:
     reason, detail = _failure_reason_and_message(error)
-    recording_reason = (
-        getattr(error, "_recording_reason", None)
-        if isinstance(error, OperationFailure)
-        else None
-    )
-    recording_detail = (
-        getattr(error, "_recording_detail", None)
-        if recording_reason is not None
-        else None
-    )
     return _Settled(
         Outcome.FAILED,
         reason,
         {"error_type": type(error).__name__, "message": detail},
-        recording_reason=recording_reason,
-        recording_detail=recording_detail,
     )
 
 
@@ -4044,23 +4089,16 @@ def _reduce_effect_settlement(
             mutation_reduction.settled,
             detail=publication_detail,
         )
-    recording_reasons = {
-        reason
-        for reason in (
-            publication_reduction.recording_reason,
-            mutation_reduction.recording_reason,
-        )
-        if reason is not None
-    }
-    if len(recording_reasons) > 1:
-        raise RuntimeError("settlement reducers disagree on recording cause")
     recording_detail = (
         publication_reduction.recording_detail
         or mutation_reduction.recording_detail
     )
     return _SettlementReduction(
         settled=settled,
-        recording_reason=next(iter(recording_reasons), None),
+        recording_reason=(
+            publication_reduction.recording_reason
+            or mutation_reduction.recording_reason
+        ),
         recording_detail=recording_detail,
     )
 
@@ -4828,20 +4866,23 @@ def _record(
     )
 
 
-def _flush_before_destructive(recorder: Recorder) -> None:
+def _flush_before_destructive(
+    recorder: Recorder,
+    state: _ExecutionState,
+    op_id: OpId,
+) -> None:
     try:
         recorder.flush()
     except Exception as error:
-        failure = OperationFailure(
+        state.effects.set_recording_prerequisite_failure(
+            op_id, _RecordingPrerequisiteFailure(_recording_error_detail(error))
+        )
+        raise OperationFailure(
             ExecutionReason.RECORDER_FAILED,
             "recorder flush failed before destructive operation",
             cause=error,
-        )
-        failure._recording_reason = (
-            ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
-        )
-        failure._recording_detail = _recording_error_detail(error)
-        raise failure from error
+        ) from error
+    state.effects.set_recording_prerequisite_failure(op_id, None)
 
 
 def _recording_error_detail(error: BaseException) -> str:

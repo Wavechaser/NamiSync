@@ -605,6 +605,134 @@ class CleanupDiagnosticFileSystem(NativeFileSystem):
         super().remove_owned_temp(path)
 
 
+class RefusingFlushRecorder(FakeRecorder):
+    def __init__(self, *refusals: int) -> None:
+        super().__init__()
+        self.refusals = refusals
+
+    def flush(self) -> None:
+        self.flushes += 1
+        if self.flushes in self.refusals:
+            raise RuntimeError(f"flush {self.flushes} refused")
+
+
+def test_prerequisite_refusal_survives_cleanup_substitution(tmp_path: Path) -> None:
+    source, target = _roots(tmp_path)
+    fs = CleanupDiagnosticFileSystem(fail_finalize=False)
+    operation, live = _reviewed_byte_operation(
+        OperationKind.UPDATE, source, target, fs
+    )
+    xset = _xset(_plan(source, target, (operation,), trash_on_update=False))
+    recorder = RefusingFlushRecorder(1)
+
+    result, events, _ = _run(xset, fs=fs, recorder=recorder)
+
+    item = _item_outcome(events)
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == ExecutionReason.CLEANUP_FAILED.value
+    assert item.recording_reason is (
+        ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    )
+    assert item.recording_detail == "RuntimeError: flush 1 refused"
+    assert result.status is SessionState.FAILED
+    assert result.recording is item.recording is RecordingStatus.DEGRADED
+    assert xset.recording_reasons == {
+        operation.op_id: ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    }
+    assert xset.recording_issues == ()
+    assert xset.published_evidence == {}
+    assert recorder.flushes == 2
+    assert recorder.calls == []
+    assert live.read_bytes() == b"old-version"
+    assert (target / f"file.bin.synctmp-{RUN_ID}-{operation.op_id}").exists()
+
+
+@pytest.mark.parametrize("second_refuses", [False, True])
+def test_prerequisite_retry_barrier_clears_or_replaces_cause(
+    tmp_path: Path, second_refuses: bool
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _nonbyte_mutation_operation(
+        source, target, fs, OperationKind.DELETE
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    recorder = RefusingFlushRecorder(*((1, 2) if second_refuses else (1,)))
+
+    result, events, _ = _run(
+        xset,
+        fs=fs,
+        recorder=recorder,
+        policies=_policies(
+            failure=RetryThenStopPolicy(),
+            sleep=lambda _: (target / "old.bin").unlink(),
+        ),
+    )
+
+    item = _item_outcome(events)
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == (
+        ExecutionReason.RECORDER_FAILED
+        if second_refuses else ExecutionReason.TARGET_MISSING
+    ).value
+    assert item.recording_reason is (
+        ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+        if second_refuses else None
+    )
+    assert item.recording_detail == (
+        "RuntimeError: flush 2 refused" if second_refuses else None
+    )
+    assert result.recording is item.recording is (
+        RecordingStatus.DEGRADED if second_refuses else RecordingStatus.OK
+    )
+    assert xset.recording_issues == ()
+    assert recorder.flushes == 3
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("control", [PauseRequested, Canceled])
+def test_prerequisite_only_retry_does_not_latch_control(
+    tmp_path: Path, control: type[Exception]
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _nonbyte_mutation_operation(
+        source, target, fs, OperationKind.DELETE
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    recorder = RefusingFlushRecorder(1)
+    events: list[object] = []
+    sleeps: list[float] = []
+
+    def checkpoint() -> None:
+        if recorder.flushes == 1:
+            raise control()
+
+    with pytest.raises(control):
+        execute(
+            xset,
+            RunContext(events.append, checkpoint),
+            recorder,
+            _policies(failure=RetryThenStopPolicy(), sleep=sleeps.append),
+            fs,
+        )
+
+    assert sleeps == []
+    assert xset.recording is RecordingStatus.OK
+    assert xset.recording_reasons == {}
+    assert xset.recording_issues == ()
+    assert recorder.flushes == 2
+    assert recorder.calls == []
+    assert (target / "old.bin").read_bytes() == b"reviewed"
+    if control is PauseRequested:
+        assert xset.status == {}
+        assert not any(isinstance(event, ItemOutcome) for event in events)
+    else:
+        assert xset.status == {operation.op_id: Outcome.CANCELED}
+        assert _item_outcome(events).recording is RecordingStatus.OK
+
+
 class PublishCancelCleanupDiagnosticFileSystem(CleanupDiagnosticFileSystem):
     def __init__(self) -> None:
         super().__init__(fail_finalize=False)
@@ -1663,6 +1791,58 @@ def test_update_retry_recognizes_replace_that_committed_before_error(
     assert (target / "file.bin").read_bytes() == b"new-version"
     assert (target / ".synctrash" / str(RUN_ID) / "file.bin").read_bytes() == b"old-version"
     assert _recorder_names(recorder) == ["updated"]
+
+
+@pytest.mark.parametrize("published", [False, True])
+def test_retained_update_retry_preserves_recording_cause(
+    tmp_path: Path, published: bool
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = (
+        ReplaceSharingAfterCommitFileSystem()
+        if published else ReplaceSharingOnceFileSystem()
+    )
+    operation, live = _reviewed_byte_operation(
+        OperationKind.UPDATE, source, target, fs
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    recorder = RefusingFlushRecorder(2)
+
+    result, events, _ = _run(xset, fs=fs, recorder=recorder)
+
+    item = _item_outcome(events)
+    expected_reason = (
+        ItemRecordingReason.UNRECORDED_MUTATION
+        if published else ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    )
+    assert result.status is SessionState.FAILED
+    assert item.outcome is Outcome.FAILED
+    assert item.reason == ExecutionReason.RECORDER_FAILED.value
+    assert item.detail["publish_state"] == (
+        "published" if published else "not-published"
+    )
+    assert item.detail["durable_state"] == (
+        "target-published-with-backup" if published else "backup-retained"
+    )
+    assert result.recording is item.recording is RecordingStatus.DEGRADED
+    assert item.recording_reason is expected_reason
+    assert item.recording_detail == (
+        "published filesystem mutation failed before ledger settlement"
+        if published else "RuntimeError: flush 2 refused"
+    )
+    assert xset.recording_reasons == {operation.op_id: expected_reason}
+    assert xset.recording_issues == ()
+    assert xset.published_evidence == {}
+    assert recorder.flushes == 3
+    assert recorder.calls == []
+    assert fs.attempts == 1
+    backup = target / ".synctrash" / str(RUN_ID) / "file.bin"
+    assert backup.read_bytes() == b"old-version"
+    assert live.read_bytes() == (b"new-version" if published else b"old-version")
+    if not published:
+        assert item.detail["backup_state"] == "retained"
+        assert os.path.samefile(live, backup)
+    assert not list(target.glob("*.synctmp-*"))
 
 
 class BackupSharingAfterCommitFileSystem(NativeFileSystem):
@@ -3755,6 +3935,173 @@ def test_collaborator_escape_settles_committed_move_from_original_error(
     assert (target / "new.bin").read_bytes() == b"reviewed"
 
 
+@pytest.mark.parametrize("pending_present", [False, True])
+def test_backstop_validation_failure_preserves_original_error_and_journal(
+    tmp_path: Path, pending_present: bool
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _nonbyte_mutation_operation(
+        source, target, fs, OperationKind.DELETE
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    xset.status[operation.op_id] = Outcome.FAILED
+    state = executor_runtime._ExecutionState(xset, {})
+    state.effects.remember_retry_error(operation.op_id, OSError("prior retry"))
+    pending = None
+    if pending_present:
+        pending = state.effects.retain_pending_settlement(
+            operation.op_id,
+            executor_runtime._Settled(
+                Outcome.FAILED,
+                recording_reason=ItemRecordingReason.RECORDING_PREREQUISITE_FAILED,
+                recording_detail="flush refused",
+            ),
+        )
+    before = state.effects.snapshot(operation.op_id)
+    events: list[object] = []
+    context = RunContext(events.append, lambda: None)
+    progress = executor_runtime._ProgressTracker(xset, context, _policies())
+    primary = RuntimeError("original external error")
+
+    with pytest.raises(RuntimeError) as caught:
+        try:
+            raise primary
+        except RuntimeError as escaped:
+            executor_runtime._backstop_operation(
+                xset, context, fs, target, state, progress, operation, escaped
+            )
+            raise
+
+    assert caught.value is primary
+    assert len(primary.__notes__) == 1
+    assert "accepted settlement" in primary.__notes__[0]
+    assert state.effects.has_active_entry(operation.op_id)
+    assert state.effects.snapshot(operation.op_id) == before
+    assert state.effects.pending_settlement(operation.op_id) is pending
+    assert xset.status == {operation.op_id: Outcome.FAILED}
+    assert xset.recording_reasons == {}
+    assert xset.published_evidence == {}
+    assert events == []
+    assert (target / "old.bin").read_bytes() == b"reviewed"
+
+
+def test_backstop_retry_error_and_validation_failure_preserve_pending(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _nonbyte_mutation_operation(
+        source, target, fs, OperationKind.DELETE
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    state = executor_runtime._ExecutionState(xset, {})
+    state.effects.set_recording_prerequisite_failure(
+        operation.op_id, executor_runtime._RecordingPrerequisiteFailure("refused")
+    )
+    state.effects.remember_retry_error(
+        operation.op_id,
+        executor_runtime.OperationFailure(ExecutionReason.RECORDER_FAILED, "retry refused"),
+    )
+    events: list[object] = []
+    offered: list[executor_runtime._Settled] = []
+    secondary = OSError("progress failed after acceptance")
+    primary = RuntimeError("original external error")
+
+    def emit(event: object) -> None:
+        events.append(event)
+        if isinstance(event, ItemOutcome):
+            pending = state.effects.pending_settlement(operation.op_id)
+            assert pending is not None
+            offered.append(pending)
+        if isinstance(event, Progress) and event.items_done == 1:
+            del xset.recording_reasons[operation.op_id]
+            raise secondary
+
+    context = RunContext(emit, lambda: None)
+    progress = executor_runtime._ProgressTracker(xset, context, _policies())
+    progress.start(operation)
+    with pytest.raises(RuntimeError) as caught:
+        try:
+            raise primary
+        except RuntimeError as escaped:
+            executor_runtime._backstop_operation(
+                xset, context, fs, target, state, progress, operation, escaped
+            )
+            raise
+
+    assert caught.value is primary
+    assert len(primary.__notes__) == 2
+    assert "progress failed after acceptance" in primary.__notes__[0]
+    assert "accepted settlement" in primary.__notes__[1]
+    item = _item_outcome(events)
+    assert item.reason == ExecutionReason.RECORDER_FAILED.value
+    assert item.detail["message"] == "retry refused"
+    assert item.recording_reason is ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    assert item.recording_detail == "refused"
+    assert len(offered) == 1
+    assert state.effects.pending_settlement(operation.op_id) is offered[0]
+    assert state.effects.has_active_entry(operation.op_id)
+    assert xset.status == {operation.op_id: Outcome.FAILED}
+    assert xset.recording_reasons == {}
+    assert (target / "old.bin").read_bytes() == b"reviewed"
+
+
+def test_accepted_prerequisite_backstop_preserves_external_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, target = _roots(tmp_path)
+    fs = NativeFileSystem()
+    operation = _nonbyte_mutation_operation(
+        source, target, fs, OperationKind.DELETE
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    events: list[object] = []
+    retired: list[executor_runtime._EffectJournal] = []
+    original_retire = executor_runtime._EffectJournal.retire
+    primary = OSError("accepted item progress failed")
+
+    class LongRefusalRecorder(FakeRecorder):
+        def flush(self) -> None:
+            self.flushes += 1
+            if self.flushes == 1:
+                raise RuntimeError("x" * 1_025)
+
+    def retire(journal: executor_runtime._EffectJournal, op_id: OpId) -> None:
+        pending = journal.pending_settlement(op_id)
+        assert pending is not None
+        assert pending.recording_reason is (
+            ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+        )
+        retired.append(journal)
+        original_retire(journal, op_id)
+
+    def emit(event: object) -> None:
+        events.append(event)
+        if isinstance(event, Progress) and event.items_done == 1:
+            raise primary
+
+    monkeypatch.setattr(executor_runtime._EffectJournal, "retire", retire)
+    with pytest.raises(OSError) as caught:
+        execute(
+            xset, RunContext(emit, lambda: None), LongRefusalRecorder(), _policies(), fs
+        )
+
+    assert caught.value is primary
+    item = _item_outcome(events)
+    assert item.recording_reason is ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    assert item.recording_detail is None
+    assert item.detail_omitted_count == 1
+    assert xset.status == {operation.op_id: Outcome.FAILED}
+    assert xset.recording_reasons == {
+        operation.op_id: ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+    }
+    assert len(retired) == 1
+    assert not retired[0].has_active_entry(operation.op_id)
+    assert all("accepted settlement" not in note for note in primary.__notes__)
+    assert (target / "old.bin").read_bytes() == b"reviewed"
+
+
 def test_checkpoint_exception_finalizes_pending_mkdir_before_propagating(
     tmp_path: Path,
 ) -> None:
@@ -5290,6 +5637,78 @@ def test_effect_journal_rejects_pending_settlement_replacement() -> None:
     journal.settle(op_id)
     journal.retire(op_id)
     assert journal.pending_settlement(op_id) is None
+
+
+def test_prerequisite_composition_is_closed_and_keeps_filesystem_truth() -> None:
+    prerequisite = executor_runtime._RecordingPrerequisiteFailure("latest refusal")
+    for outcome, reason in (
+        (Outcome.FAILED, None),
+        (Outcome.FAILED, ItemRecordingReason.RECORDING_PREREQUISITE_FAILED),
+        (Outcome.FAILED, ItemRecordingReason.UNRECORDED_MUTATION),
+        (Outcome.CANCELED, None),
+        (Outcome.SUCCEEDED, ItemRecordingReason.RECORD_WRITE_FAILED),
+    ):
+        settled = executor_runtime._Settled(
+            outcome, ExecutionReason.IO_ERROR, {"message": "filesystem truth"},
+            recording_reason=reason,
+            recording_detail=None if reason is None else "original detail",
+        )
+        actual = executor_runtime._compose_recording_cause(settled, prerequisite)
+        assert actual.outcome is outcome
+        assert actual.reason is settled.reason
+        assert actual.detail is settled.detail
+        if outcome is Outcome.FAILED and reason is not ItemRecordingReason.UNRECORDED_MUTATION:
+            assert actual.recording_reason is ItemRecordingReason.RECORDING_PREREQUISITE_FAILED
+            assert actual.recording_detail == "latest refusal"
+        else:
+            assert actual is settled
+
+    with pytest.raises(RuntimeError, match="recording.cause"):
+        executor_runtime._compose_recording_cause(
+            executor_runtime._Settled(
+                Outcome.FAILED,
+                recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+            ),
+            prerequisite,
+        )
+
+
+@pytest.mark.parametrize("pending_present", [False, True])
+def test_duplicate_settle_rejects_without_rewriting_or_retiring(
+    tmp_path: Path, pending_present: bool
+) -> None:
+    source, target = _roots(tmp_path)
+    operation = _nonbyte_mutation_operation(
+        source, target, NativeFileSystem(), OperationKind.DELETE
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    xset.status[operation.op_id] = Outcome.FAILED
+    state = executor_runtime._ExecutionState(xset, {})
+    state.effects.remember_retry_error(operation.op_id, OSError("prior"))
+    pending = (
+        state.effects.retain_pending_settlement(
+            operation.op_id, executor_runtime._Settled(Outcome.FAILED)
+        )
+        if pending_present else None
+    )
+    events: list[object] = []
+    context = RunContext(events.append, lambda: None)
+    progress = executor_runtime._ProgressTracker(xset, context, _policies())
+
+    with pytest.raises(RuntimeError, match="already settled"):
+        executor_runtime._settle(
+            xset, state, progress, context, operation,
+            executor_runtime._Settled(
+                Outcome.FAILED,
+                recording_reason=ItemRecordingReason.UNRECORDED_MUTATION,
+            ),
+        )
+
+    assert xset.status == {operation.op_id: Outcome.FAILED}
+    assert xset.recording_reasons == {}
+    assert state.effects.has_active_entry(operation.op_id)
+    assert state.effects.pending_settlement(operation.op_id) is pending
+    assert events == []
 
 
 def test_effect_journal_retires_after_terminal_item_and_progress(

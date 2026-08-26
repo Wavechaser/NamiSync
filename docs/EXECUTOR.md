@@ -26,9 +26,16 @@ acceptance moves status, publication evidence, and recording reason into
 continuation state. A one-shot rejection is retried from that exact retained
 settlement, including any committed recorder receipt; persistent rejection
 leaves both journal retirement and continuation settlement pending. Publication
-and non-byte mutation reducers attach `unrecorded-mutation` centrally, and a
-pre-destructive flush refusal attaches `recording-prerequisite-failed` only to
-the refused operation.
+and non-byte mutation reducers attach `unrecorded-mutation` centrally.
+A pre-destructive flush refusal retains a typed, operation-local prerequisite
+cause in the journal, independent of the exception selected for filesystem
+settlement. It survives retry, cleanup substitution, and backstop error choice.
+Before retaining a pending settlement, terminal composition adds
+`recording-prerequisite-failed` to a failed item unless a reducer-proven
+`unrecorded-mutation` already takes precedence. Filesystem outcome/reason/detail
+are unchanged. Each new refused barrier replaces the diagnostic; a successful
+barrier clears the prior cause. The cause alone is not a durable effect and
+never turns an otherwise canceled or successful item into a failed item.
 
 Publication evidence remains success-only and process-local. An identityless
 attestation is valid only beside that same operation's
@@ -437,7 +444,14 @@ finalizes pending directories without replaying their filesystem or recorder
 actions. A retained settlement is offered once through the exception backstop;
 accepted delivery advances continuation state and retires the entry, while
 persistent reliable rejection leaves both pending under the original sink
-error.
+error. If acceptance precedes a later Progress failure, the backstop validates
+the raw retained settlement against its journal cause and continuation
+outcome/recording/evidence before cleanup and retirement. Missing or
+contradictory accepted evidence is noted on the original external error and
+left intact. Validation and retirement share one guarded phase; its failure
+handler never retries validation. Bounded presentation diagnostics are not
+reinterpreted by this check. A duplicate direct settlement request refuses
+without changing already-accepted truth or retiring its evidence.
 
 The same durable-state rule applies when a confirmed publish is followed by a
 non-cancellation failure such as metadata repair exhaustion. The item remains
@@ -479,18 +493,21 @@ suppresses that subordinate marker even when the retained backup is reported.
 
 Runtime now stores those process-local facts in one private typed effect journal
 entry per operation. The entry independently holds a COPY/UPDATE/MOVE_UPDATE
-byte continuation, a non-byte mutation marker, the last retry error, and an
-optional owned temporary path. After a valid terminal item is constructed, the
-same entry also retains its complete pending `_Settled` value until reliable
-acceptance permits retirement. Failure and cancellation take one immutable
-effect snapshot before cleanup; owned-temp cleanup releases the claim before
-deletion. A retry error, temporary claim, or pending settlement alone is not a
+byte continuation, a non-byte mutation marker, the last retry error, a typed
+recording-prerequisite refusal, and an optional owned temporary path. After a
+fully attributed valid terminal item is constructed, the same entry also
+retains its complete pending `_Settled` value until reliable acceptance permits
+retirement. Failure and cancellation take one immutable effect snapshot before
+cleanup; owned-temp cleanup releases the claim before deletion. A retry error,
+prerequisite cause, temporary claim, or pending settlement alone is not a
 durable effect and therefore does not latch pause. Runtime observers now perform
 the failure-only filesystem probes
 and return typed publication and mutation verdicts. One pure reducer consumes
-those verdicts plus an ordinary-failure or cancellation cause; it alone selects
-precedence, outcome/reason vocabulary, detail composition, and recording
-degradation. Ordinary failure, cancellation, and both immediate and deferred
+those verdicts plus an ordinary-failure or cancellation cause; it selects
+durable-effect precedence, outcome/reason vocabulary, detail composition, and
+unrecorded-mutation attribution. Final recording-cause composition follows the
+Recording Settlement policy above without changing those filesystem axes.
+Ordinary failure, cancellation, and both immediate and deferred
 MKDIR failures use that same reduction path. Confirmed publication suppresses
 subordinate mutation evidence; otherwise unchanged mutation is ignored while
 durable, ambiguous, and unreadable mutation classifications degrade recording.
