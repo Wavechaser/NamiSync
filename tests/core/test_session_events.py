@@ -3,8 +3,10 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import FrozenInstanceError, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
+import gc
 import subprocess
 import sys
+from weakref import ref
 
 import pytest
 from xxhash import xxh3_128
@@ -64,6 +66,8 @@ from namisync.core.session import (
     PhaseResult,
     PhaseStatus,
     ResourceId,
+    ResultItem,
+    RunOutcome,
     SessionId,
     SessionRecord,
     SessionState,
@@ -76,6 +80,19 @@ from namisync.core.session import (
 )
 from namisync.core.scalars import MAX_SAFE_INTEGER
 from namisync.dispatcher.store import InMemorySessionStore
+
+
+class _PrivateExceptionFrameValue:
+    pass
+
+
+def _raise_with_private_frame(
+    error: BaseException,
+    references: list[ref[_PrivateExceptionFrameValue]],
+) -> None:
+    private = _PrivateExceptionFrameValue()
+    references.append(ref(private))
+    raise error
 
 
 def test_transition_table_accepts_exactly_the_declared_edges() -> None:
@@ -1257,6 +1274,130 @@ def test_runner_audit_failure_degrades_only_audit_axis() -> None:
     assert outcome.result.status is SessionState.COMPLETED
     assert outcome.result.recording is RecordingStatus.OK
     assert outcome.result.audit is RecordingStatus.DEGRADED
+
+
+@pytest.mark.parametrize("owner", ("work", "emit", "pause", "cancel", "audit"))
+def test_runner_retires_consumed_callback_exception_frames(owner: str) -> None:
+    if owner == "pause":
+        failure: BaseException = PauseRequested("pause")
+    elif owner == "cancel":
+        failure = Canceled("cancel")
+    else:
+        failure = RuntimeError(f"{owner} failed")
+    references: list[ref[_PrivateExceptionFrameValue]] = []
+
+    def work(context) -> OperationResult:
+        if owner in {"work", "pause", "cancel"}:
+            _raise_with_private_frame(failure, references)
+        if owner == "emit":
+            context.emit(PhaseChanged("scan"))
+        return OperationResult(SessionState.COMPLETED)
+
+    def emit(body: object) -> None:
+        if owner == "emit" and isinstance(body, PhaseChanged):
+            _raise_with_private_frame(failure, references)
+
+    def finalize(result: OperationResult) -> RecordingStatus:
+        del result
+        if owner == "audit":
+            _raise_with_private_frame(failure, references)
+        return RecordingStatus.OK
+
+    outcome = run_session(
+        work,
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=finalize,
+        publish_result=lambda result: None,
+    )
+
+    if owner == "pause":
+        assert outcome == RunOutcome(paused=True, result=None)
+    else:
+        assert outcome.result is not None
+        if owner == "cancel":
+            assert outcome.result.status is SessionState.CANCELED
+            assert outcome.result.canceled
+        elif owner == "audit":
+            assert outcome.result.status is SessionState.COMPLETED
+            assert outcome.result.audit is RecordingStatus.DEGRADED
+        else:
+            assert outcome.result.status is SessionState.FAILED
+            assert outcome.result.error == FailureDetail(
+                "RuntimeError",
+                f"{owner} failed",
+            )
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_runner_retires_consumed_exception_group_members() -> None:
+    references: list[ref[_PrivateExceptionFrameValue]] = []
+
+    try:
+        _raise_with_private_frame(RuntimeError("leaf failed"), references)
+    except RuntimeError as error:
+        leaf = error
+    failure = ExceptionGroup("work failed", (leaf, leaf))
+
+    def work(context) -> OperationResult:
+        del context
+        raise failure
+
+    outcome = run_session(
+        work,
+        emit=lambda body: None,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.error is not None
+    assert outcome.result.error.type_name == "ExceptionGroup"
+    assert BaseExceptionGroup.exceptions.__get__(
+        failure,
+        BaseExceptionGroup,
+    ) == (leaf, leaf)
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_runner_retires_emitter_failure_superseded_by_accumulator_truth() -> None:
+    primary = RuntimeError("emitter failed")
+    references: list[ref[_PrivateExceptionFrameValue]] = []
+    injected = ItemOutcome("7" * 32, "copy", "injected.txt", Outcome.FAILED)
+    offered = ItemOutcome("8" * 32, "copy", "offered.txt", Outcome.SUCCEEDED)
+    items: list[ResultItem] = []
+
+    def emit(body: object) -> None:
+        if body is offered:
+            items.append(injected)
+            _raise_with_private_frame(primary, references)
+
+    outcome = run_session(
+        lambda context: context.emit(offered)
+        or OperationResult(SessionState.COMPLETED),
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: RecordingStatus.OK,
+        publish_result=lambda result: None,
+        item_accumulator=items,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.error == FailureDetail(
+        "RuntimeError",
+        "session result item accumulator changed during emission",
+    )
+    assert outcome.result.items == ()
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
 
 
 def test_runner_cancel_with_unknown_progress_total_keeps_truthful_counts() -> None:

@@ -59,8 +59,11 @@ The simplicity review removed the broad workflow/planner exception rewrite.
 Checkpoint 4 must eliminate or finitely charge these exact live owners before
 accepting its model; it may not assume their traceback release:
 
-- `core.session.run_session`: emitter mutation-plus-raise and work/control
-  errors superseded by accumulator or settlement truth.
+`core.session.run_session` is now closed for consumed work, emitter, audit,
+pause, cancellation, and accumulator-superseded errors, including nested
+exception-group member frames. Unsuperseded process-fatal exceptions and their
+custom state leave with the caller rather than becoming session artifacts.
+
 - `workflows.sync.run_execution` / `_run_execution`: cancellation provenance,
   exclusion re-offer, and save/preflight/executor/verifier callback overlap.
 - `workflows.sync.run_plan`, `_validated_roots`, `_ordinary_logical_root`, and

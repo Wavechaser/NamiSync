@@ -25,6 +25,10 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Close checkpoint-4 finite-model prerequisites (2026-08-27)
 
+- Retired callback traceback, cause, and context links whenever the core runner
+  consumes or supersedes an error. Nested exception-group members are traversed
+  identity-once, while escaping process-fatal and custom exception state remains
+  caller-owned rather than entering retained session artifacts.
 - Bound public verifier chunks to exact integer sizes from one byte through the
   existing 4 MiB default. The Windows reader's per-file transient is now
   finitely chargeable as one aligned native buffer plus one Python bytes copy,

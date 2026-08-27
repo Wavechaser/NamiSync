@@ -231,6 +231,16 @@ state and `CANCELED` for every unreached selected item. The same finalizer emits
 nothing for unreached work on `PauseRequested`, because that work remains
 pending for resume.
 
+When the runner consumes an ordinary failure, pause, cancellation, audit
+failure, or an emitter error superseded by accumulator truth, it first removes
+the raw exception's traceback, cause, and context links. Nested built-in
+exception groups receive the same lifecycle cleanup for every identity-distinct
+member without invoking subclass lifecycle attributes. This releases runner-
+owned callback frames before settlement while preserving the typed terminal
+projection. An unsuperseded process-fatal exception still escapes to its caller;
+custom exception attributes, slots, arguments, and notes remain caller-owned
+state rather than bounded session artifacts.
+
 The runner accepts a dispatcher-owned item accumulator. It is retained across
 pause attempts and cleared only after terminal settlement, so a resumed session
 that later cancels or fails includes reliable outcomes earned before the pause.

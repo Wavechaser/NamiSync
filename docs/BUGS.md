@@ -1631,12 +1631,14 @@ defect, and move implementation-level test choreography out of the log.
 - MODERATE - OPEN (2026-08-27). Phase exception-frame retention. Session,
   planning, execution, recording, dispatcher, history, bridge, and document
   callbacks still consume, chain, or rethrow raw errors while request, scan,
-  plan, result, or callback graphs remain in traceback frames. Arbitrary
-  exception state has no finite analytical allowance. Cause: bounded public
-  failure projection did not consistently retire the caught graph before the
-  next ownership transition. Checkpoint 4 must preserve public type/message/
-  identity where required while structurally releasing traceback, cause,
-  context, notes, phase locals, and discarded collaborator values.
+  plan, result, or callback graphs remain in traceback frames. The core runner
+  now retires consumed lifecycle links, including nested exception-group
+  members, without changing terminal truth. Planning, execution, dispatcher,
+  history, bridge, document, and path-formatting seams remain open. Cause:
+  bounded public failure projection did not consistently retire the caught
+  graph before the next ownership transition. Checkpoint 4 must preserve public
+  behavior while closing every remaining app-owned raw exception reference;
+  arbitrary caller-owned attributes are not bounded task artifacts.
 - MODERATE - FIXED (2026-08-27). Review-limit provenance spoofing. An event,
   policy, or nested scanner/observer collaborator could raise the planner's
   capacity exception and make ordinary failure appear as `REFUSED+UNRUN`;

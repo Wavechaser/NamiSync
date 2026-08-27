@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Callable, NewType, Protocol, Sequence
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.evidence import RecordingStatus
 from namisync.core.execution import TaskRecordingIssue
 from namisync.core.review import ReviewFactLimitExceeded
@@ -543,13 +544,14 @@ def run_session(
             expected_length = admitted_item_count
             try:
                 emit(body)
-            except BaseException:
+            except BaseException as error:
                 if len(items) != expected_length:
                     set_boundary_failure(
                         _RESULT_ITEM_MUTATION_TYPE,
                         _RESULT_ITEM_MUTATION_MESSAGE,
                     )
                     repair_accumulator_length(expected_length)
+                    retire_exception_graph(error)
                     raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE) from None
                 raise
             if len(items) != expected_length:
@@ -603,14 +605,16 @@ def run_session(
                 if not isinstance(returned, OperationResult):
                     raise TypeError("workflow must return OperationResult")
                 result = replace(returned, items=tuple(items))
-        except PauseRequested:
+        except PauseRequested as error:
             detect_accumulator_mutation()
+            retire_exception_graph(error)
             if boundary_failure_type is None:
                 settle(SessionState.PAUSED, None)
                 return RunOutcome(paused=True, result=None)
             result = boundary_failure_result()
-        except Canceled:
+        except Canceled as error:
             detect_accumulator_mutation()
+            retire_exception_graph(error)
             if boundary_failure_type is not None:
                 result = boundary_failure_result()
             else:
@@ -631,6 +635,7 @@ def run_session(
         except Exception as error:
             detect_accumulator_mutation()
             if boundary_failure_type is not None:
+                retire_exception_graph(error)
                 result = boundary_failure_result()
             else:
                 bytes_done = latest_progress.bytes_done if latest_progress else 0
@@ -640,11 +645,15 @@ def run_session(
                     else bytes_done
                 )
                 try:
-                    detail = _bounded_failure_detail(
-                        FailureDetail(type(error).__name__, str(error))
-                    )
-                except Exception:
-                    detail = None
+                    try:
+                        detail = _bounded_failure_detail(
+                            FailureDetail(type(error).__name__, str(error))
+                        )
+                    except Exception as diagnostic_error:
+                        retire_exception_graph(diagnostic_error)
+                        detail = None
+                finally:
+                    retire_exception_graph(error)
                 result = OperationResult(
                     status=SessionState.FAILED,
                     disposition=disposition,
@@ -654,10 +663,11 @@ def run_session(
                     error=detail,
                     omitted_detail_count=1 if detail is None else 0,
                 )
-        except BaseException:
+        except BaseException as error:
             detect_accumulator_mutation()
             if boundary_failure_type is None:
                 raise
+            retire_exception_graph(error)
             result = boundary_failure_result()
 
     recording = (
@@ -674,7 +684,8 @@ def run_session(
     settle(result_terminal_state(result), result)
     try:
         audit = finalize_audit(result)
-    except Exception:
+    except Exception as error:
+        retire_exception_graph(error)
         audit = RecordingStatus.DEGRADED
     final_result = replace(result, audit=audit)
     publish_result(final_result)

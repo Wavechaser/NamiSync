@@ -402,9 +402,12 @@ Checkpoint 4 must treat the following live seams as mandatory model inputs. It
 may eliminate an owner before downstream work or charge its exact simultaneous
 graph with a finite retirement condition; no acceptance may assume release:
 
-- `core.session.run_session`: `observed_emit` mutation-plus-raise, work errors
-  superseded by accumulator truth, and consumed `PauseRequested`, `Canceled`,
-  or process-fatal controls during settlement.
+`core.session.run_session` is now structurally closed for emitter mutation-plus-
+raise, work errors superseded by accumulator truth, consumed pause/cancel, and
+audit failures. It retires traceback/cause/context for nested exception-group
+members too. Unsuperseded process-fatal exceptions and arbitrary custom
+exception state leave with their caller and are not retained task artifacts.
+
 - `workflows.sync.run_execution` / `_run_execution`: cancellation provenance,
   repeated exclusion-sink offers, and save/preflight/executor/verifier work
   performed while a consumed control remains active.
