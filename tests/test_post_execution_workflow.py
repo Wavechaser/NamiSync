@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import gc
 import os
 from contextlib import contextmanager
 from dataclasses import replace
@@ -126,6 +127,19 @@ from tests.modules._verifier_fixtures import (
 
 
 NOW = datetime(2026, 7, 25, tzinfo=timezone.utc)
+
+
+class _PrivateWorkflowFrameValue:
+    pass
+
+
+def _raise_with_private_workflow_frame(
+    error: BaseException,
+    references: list[ref[_PrivateWorkflowFrameValue]],
+) -> None:
+    private = _PrivateWorkflowFrameValue()
+    references.append(ref(private))
+    raise error
 
 
 def _stat(size: int, mtime_ns: int = 10) -> FileStat:
@@ -1435,6 +1449,8 @@ def test_continuation_sink_failure_finishes_once_as_execute_failure() -> None:
     operation = _operation(62, 9)
     xset = _execution_set(operation)
     recordings: list[_Recording] = []
+    failure = RuntimeError("continuation publication failed")
+    references: list[ref[_PrivateWorkflowFrameValue]] = []
 
     def executor(execution_set, context, recorder, policies, fs):
         del recorder, policies, fs
@@ -1454,7 +1470,7 @@ def test_continuation_sink_failure_finishes_once_as_execute_failure() -> None:
 
     def reject_continuation(value) -> None:
         del value
-        raise RuntimeError("continuation publication failed")
+        _raise_with_private_workflow_frame(failure, references)
 
     result = run_execution(
         ExecuteContinuation(xset, verify_after_execute=True),
@@ -1477,6 +1493,95 @@ def test_continuation_sink_failure_finishes_once_as_execute_failure() -> None:
     assert recordings[0].finishes == [
         (SessionState.FAILED, RecordingStatus.OK)
     ]
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+@pytest.mark.parametrize(
+    "owner",
+    ("execution-details", "observer", "preflight", "executor", "verifier"),
+)
+def test_execution_retires_consumed_callback_failure_frames(owner: str) -> None:
+    operation = _operation(83, 9)
+    xset = _execution_set(operation)
+    if owner == "execution-details":
+        xset = replace(xset, commitment=None)
+    failure = RuntimeError(f"{owner} failed")
+    references: list[ref[_PrivateWorkflowFrameValue]] = []
+    recordings: list[_Recording] = []
+
+    def fail(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        _raise_with_private_workflow_frame(failure, references)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        if owner == "executor":
+            fail()
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=9,
+            bytes_total=9,
+        )
+
+    deps = _deps(
+        executor=executor,
+        verifier=fail if owner == "verifier" else _verify_all,
+        recordings=recordings,
+    )
+    if owner == "execution-details":
+        deps.save_execution_details = fail
+    elif owner == "observer":
+        deps.observer = fail
+    elif owner == "preflight":
+        deps.preflight = fail
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=owner == "verifier"),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+    )
+
+    assert result.status is (
+        SessionState.COMPLETED if owner == "verifier" else SessionState.FAILED
+    )
+    assert result.error == FailureDetail("RuntimeError", f"{owner} failed")
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_execution_retires_consumed_cancellation_frames() -> None:
+    operation = _operation(84, 9)
+    xset = _execution_set(operation)
+    cancellation = Canceled("executor canceled")
+    references: list[ref[_PrivateWorkflowFrameValue]] = []
+
+    def cancel_executor(*args: object) -> None:
+        del args
+        _raise_with_private_workflow_frame(cancellation, references)
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda body: None, lambda: None),
+        _deps(
+            executor=cancel_executor,
+            verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+            recordings=[],
+        ),
+    )
+
+    assert result.status is SessionState.CANCELED
+    assert result.canceled
+    assert result.disposition is Disposition.RAN
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
 
 
 def test_noncompound_execute_exception_uses_execution_continuation_bytes() -> None:
@@ -1568,6 +1673,7 @@ def test_compound_exclusion_close_failure_retains_terminal_truth(
         _UnrenderableRecordingError() if hostile_sink
         else RuntimeError("first exclusion sink failure")
     )
+    references: list[ref[_PrivateWorkflowFrameValue]] = []
     rejected_calls = 0
 
     def executor(execution_set, context, *args):
@@ -1590,7 +1696,7 @@ def test_compound_exclusion_close_failure_retains_terminal_truth(
         if isinstance(body, ItemOutcome) and body.item_id == str(rejected.op_id):
             rejected_calls += 1
             if rejected_calls == 1:
-                raise primary
+                _raise_with_private_workflow_frame(primary, references)
             raise RuntimeError("later exclusion sink failure")
         events.append(body)
 
@@ -1648,6 +1754,8 @@ def test_compound_exclusion_close_failure_retains_terminal_truth(
     assert terminals[0].result == TerminalSummary.from_result(result)
     assert published == [result]
     assert recording.finishes == [(SessionState.FAILED, RecordingStatus.OK)]
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
 
 
 @pytest.mark.parametrize("verify_after_execute", [False, True])
@@ -1932,6 +2040,48 @@ class _UnrenderableRecordingError(RuntimeError):
         raise ValueError("recording filename unavailable")
 
 
+class _FatalRecordingDiagnosticError(RuntimeError):
+    def __init__(
+        self,
+        diagnostic: str,
+        failure: BaseException,
+        references: list[ref[_PrivateWorkflowFrameValue]],
+    ) -> None:
+        super().__init__("recorder failed")
+        self.diagnostic = diagnostic
+        self.failure = failure
+        self.references = references
+
+    def __str__(self) -> str:
+        if self.diagnostic == "str":
+            _raise_with_private_workflow_frame(
+                self.failure,
+                self.references,
+            )
+        return super().__str__()
+
+    @property
+    def filename(self) -> str:
+        if self.diagnostic == "filename":
+            _raise_with_private_workflow_frame(
+                self.failure,
+                self.references,
+            )
+        return "recording.db"
+
+
+class _HostileNotePause(PauseRequested):
+    def add_note(self, note: str) -> None:
+        del note
+        raise AssertionError("dynamic add_note was invoked")
+
+
+class _CorruptNotesPause(PauseRequested):
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.__notes__ = "caller-owned corrupt notes"
+
+
 @pytest.mark.parametrize("diagnostic", ["str", "logical"])
 @pytest.mark.parametrize("boundary", ["factory", "enter", "finish", "exit"])
 def test_recording_diagnostic_failure_preserves_workflow_truth(
@@ -1940,27 +2090,28 @@ def test_recording_diagnostic_failure_preserves_workflow_truth(
     xset = _execution_set(_operation(65, 9))
     xset.note_bytes_done(4)
     primary = _UnrenderableRecordingError(diagnostic)
+    references: list[ref[_PrivateWorkflowFrameValue]] = []
 
     class Recording(_Recording):
         def __enter__(self):
             if boundary == "enter":
-                raise primary
+                _raise_with_private_workflow_frame(primary, references)
             return self
 
         def __exit__(self, exc_type, exc, traceback) -> None:
             if boundary == "exit":
-                raise primary
+                _raise_with_private_workflow_frame(primary, references)
 
         def finish(self, status, recording_status) -> None:
             super().finish(status, recording_status)
             if boundary == "finish":
-                raise primary
+                _raise_with_private_workflow_frame(primary, references)
 
     recording = Recording()
 
     def open_recording(execution_set):
         if boundary == "factory":
-            raise primary
+            _raise_with_private_workflow_frame(primary, references)
         return recording
 
     def executor(execution_set, *args):
@@ -2003,6 +2154,136 @@ def test_recording_diagnostic_failure_preserves_workflow_truth(
         assert result.error is not None
         assert result.error.type_name == type(primary).__name__
         assert result.error.message == "recording diagnostic unavailable"
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+@pytest.mark.parametrize("diagnostic", ["str", "filename"])
+def test_recording_process_fatal_diagnostic_cannot_mask_primary(
+    diagnostic: str,
+) -> None:
+    xset = _execution_set(_operation(65, 9))
+    xset.note_bytes_done(4)
+    primary_references: list[ref[_PrivateWorkflowFrameValue]] = []
+    diagnostic_references: list[ref[_PrivateWorkflowFrameValue]] = []
+    diagnostic_failure = KeyboardInterrupt("diagnostic interrupted")
+    primary = _FatalRecordingDiagnosticError(
+        diagnostic,
+        diagnostic_failure,
+        diagnostic_references,
+    )
+
+    def fail_open(*args: object) -> None:
+        del args
+        _raise_with_private_workflow_frame(primary, primary_references)
+
+    deps = _deps(
+        executor=lambda *args: pytest.fail("execution unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+        recordings=[],
+    )
+    deps.open_recording = fail_open
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+        resumed=True,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.error == FailureDetail(
+        "_FatalRecordingDiagnosticError",
+        "recording diagnostic unavailable",
+    )
+    assert result.recording is RecordingStatus.DEGRADED
+    assert tuple((issue.reason, issue.detail) for issue in result.recording_issues) == (
+        (TaskRecordingIssueReason.RECORDING_OPEN_FAILED, None),
+    )
+    gc.collect()
+    assert primary_references and all(
+        reference() is None for reference in primary_references
+    )
+    assert diagnostic_references and all(
+        reference() is None for reference in diagnostic_references
+    )
+
+
+def test_recording_exit_truth_tests_once_and_retires_suppressed_failure() -> None:
+    xset = _execution_set(_operation(66, 8))
+    primary = KeyboardInterrupt("suppressed finish failure")
+    references: list[ref[_PrivateWorkflowFrameValue]] = []
+    truth_tests = 0
+
+    class Truthy:
+        def __bool__(self) -> bool:
+            nonlocal truth_tests
+            truth_tests += 1
+            return True
+
+    class Recording(_Recording):
+        def finish(self, status, recording_status) -> None:
+            del status, recording_status
+            _raise_with_private_workflow_frame(primary, references)
+
+        def __exit__(self, exc_type, exc, traceback) -> object:
+            assert exc is primary
+            return Truthy()
+
+    result = settle_canceled_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        Disposition.RAN,
+        SimpleNamespace(open_recording=lambda execution_set: Recording()),
+    )
+
+    assert result.status is SessionState.CANCELED
+    assert result.error is None
+    assert truth_tests == 1
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_recording_exit_truthiness_failure_preserves_python_behavior() -> None:
+    xset = _execution_set(_operation(67, 8))
+    primary = PauseRequested("execution paused")
+    truth_failure = LookupError("recording exit truthiness failed")
+    references: list[ref[_PrivateWorkflowFrameValue]] = []
+    truth_tests = 0
+
+    class HostileTruth:
+        def __bool__(self) -> bool:
+            nonlocal truth_tests
+            truth_tests += 1
+            _raise_with_private_workflow_frame(truth_failure, references)
+
+    class Recording(_Recording):
+        def __exit__(self, exc_type, exc, traceback) -> object:
+            assert exc is primary
+            return HostileTruth()
+
+    def pause_executor(*args: object) -> None:
+        del args
+        raise primary
+
+    deps = _deps(
+        executor=pause_executor,
+        verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+        recordings=[],
+    )
+    deps.open_recording = lambda execution_set: Recording()
+
+    with pytest.raises(LookupError) as raised:
+        run_execution(
+            ExecuteContinuation(xset, verify_after_execute=False),
+            RunContext(lambda body: None, lambda: None),
+            deps,
+        )
+
+    assert raised.value is truth_failure
+    assert truth_tests == 1
+    assert truth_failure.__context__ is None
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
 
 
 def test_recording_close_diagnostic_failure_preserves_primary_filesystem_error() -> None:
@@ -2033,19 +2314,23 @@ def test_recording_close_diagnostic_failure_preserves_primary_filesystem_error()
     )
 
 
-@pytest.mark.parametrize("primary_type", [PauseRequested, KeyboardInterrupt])
+@pytest.mark.parametrize(
+    "primary_type",
+    [PauseRequested, _HostileNotePause, _CorruptNotesPause, KeyboardInterrupt],
+)
 def test_recording_diagnostic_failure_cannot_mask_escaping_primary(
     primary_type: type[BaseException],
 ) -> None:
     xset = _execution_set(_operation(65))
     primary = primary_type("primary execution failure")
+    references: list[ref[_PrivateWorkflowFrameValue]] = []
 
     class Recording(_Recording):
         def __exit__(self, exc_type, exc, traceback) -> None:
             raise _UnrenderableRecordingError()
 
     def executor(*args):
-        raise primary
+        _raise_with_private_workflow_frame(primary, references)
 
     def capture(value):
         if value.execution_set.recording is RecordingStatus.DEGRADED:
@@ -2066,12 +2351,17 @@ def test_recording_diagnostic_failure_cannot_mask_escaping_primary(
     assert tuple((issue.reason, issue.detail) for issue in xset.recording_issues) == (
         (TaskRecordingIssueReason.RECORDING_CLOSE_FAILED, None),
     )
-    assert primary.__notes__ == [
-        "recording degradation continuation capture also failed: "
-        "_UnrenderableRecordingError: recording diagnostic unavailable",
-        "recording context exit also failed: "
-        "_UnrenderableRecordingError: recording diagnostic unavailable",
-    ]
+    if isinstance(primary, _CorruptNotesPause):
+        assert primary.__notes__ == "caller-owned corrupt notes"
+    else:
+        assert primary.__notes__ == [
+            "recording degradation continuation capture also failed: "
+            "_UnrenderableRecordingError: recording diagnostic unavailable",
+            "recording context exit also failed: "
+            "_UnrenderableRecordingError: recording diagnostic unavailable",
+        ]
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
 
 
 @pytest.mark.parametrize("boundary", ["enter", "finish", "exit"])

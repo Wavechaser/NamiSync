@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import gc
 import os
 import stat as stat_module
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from weakref import ref
 
 import pytest
 
@@ -57,6 +59,7 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.core.preflight import Refusal, RefusalCode, Verdict
+from namisync.core.root_authority import RootAuthorityError, RootAuthorityIssue
 from namisync.workflows.selection import ExclusionReason, derive_execution_selection
 from namisync.workflows.sync import run_execution, validate_sync_paths
 from namisync.workflows.models import (
@@ -70,6 +73,10 @@ from namisync.workflows.payloads import decode_execution_request
 
 
 NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
+
+
+class _PrivatePathFrameValue:
+    pass
 
 
 def test_runtime_derives_correspondence_bounds_only_from_current_file_scans(
@@ -283,6 +290,70 @@ def test_sync_path_validation_admits_both_roots_before_physical_overlap(
         ("physical", str(source)),
         ("physical", str(target)),
     ]
+
+
+def test_sync_path_validation_retires_root_authority_exception_frames(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    failure = RootAuthorityError(
+        RootAuthorityIssue.ANCHOR_UNAVAILABLE,
+        str(source),
+        "root authority unavailable",
+    )
+    cause = OSError("anchor probe failed")
+    references: list[ref[_PrivatePathFrameValue]] = []
+
+    def fail_admission(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        private = _PrivatePathFrameValue()
+        references.append(ref(private))
+        try:
+            raise cause
+        except OSError:
+            raise failure from cause
+
+    monkeypatch.setattr(sync_workflow, "admit_root_chain", fail_admission)
+
+    with pytest.raises(ValueError, match="^anchor probe failed$") as raised:
+        validate_sync_paths(str(source), str(target))
+
+    assert raised.value.__cause__ is raised.value.__context__ is None
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_sync_path_validation_retires_physical_resolution_frames(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    failure = OSError("physical resolution failed")
+    references: list[ref[_PrivatePathFrameValue]] = []
+
+    monkeypatch.setattr(
+        sync_workflow,
+        "admit_root_chain",
+        lambda *args, **kwargs: None,
+    )
+
+    def fail_resolution(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        private = _PrivatePathFrameValue()
+        references.append(ref(private))
+        raise failure
+
+    monkeypatch.setattr(Path, "resolve", fail_resolution)
+
+    with pytest.raises(ValueError, match="^physical resolution failed$") as raised:
+        validate_sync_paths(str(source), str(target))
+
+    assert raised.value.__cause__ is raised.value.__context__ is None
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
 
 
 def _empty_plan() -> Plan:

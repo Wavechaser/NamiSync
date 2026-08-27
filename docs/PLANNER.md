@@ -97,11 +97,14 @@ classifies an unissued review-limit signal as ordinary failure. Reviewed
 fingerprinting uses the one captured policy identity instead of rereading
 hostile policy properties.
 
-Checkpoint 4 must eliminate or finitely charge ordinary escapes from
-`snapshot_plan_options`, `plan`, and `snapshot_plan_candidate`. Property,
-assignment, fingerprint, and validation failures can retain stage-dependent
-policy, callback, detached scan/file, and input frames through public unwind.
-Preserve their existing public type, identity, and behavior.
+`snapshot_plan_options`, `plan`, and `snapshot_plan_candidate` now isolate their
+public call frame and retire traceback/cause/context links before an error
+escapes. Property, assignment, fingerprint, and validation failures therefore
+preserve their existing public type, identity, and behavior without retaining
+stage-dependent policy, callback, detached scan/file, or input frames. The one
+required logical-byte `ReviewFactLimitError` cause remains by identity after its
+own frames retire. Arbitrary custom exception state leaves with the caller and
+is not retained planner custody.
 
 Those counters establish the planning-source wall, not the checkpoint-4
 complete retained-graph model. Policy and planning construction temporaries,

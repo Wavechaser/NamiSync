@@ -15,6 +15,7 @@ from weakref import ref
 import pytest
 
 import namisync.core.review as review_module
+import namisync.modules.planner as planner_module
 import namisync.workflows.sync as sync_workflow_module
 from namisync.core.execution import ExecutionSet, validated_run_id
 from namisync.core.models import (
@@ -56,6 +57,20 @@ PROFILE = CapabilityProfile("NTFS", 100, True, False, 32_767, False, True)
 NOW = datetime(2026, 8, 27, 12, 0, tzinfo=timezone.utc)
 SOURCE_ROOT = Root(r"C:\source", "source")
 TARGET_ROOT = Root(r"D:\target", "target")
+
+
+class _PrivatePlanFrameValue:
+    pass
+
+
+def _raise_with_private_plan_frame(
+    error: BaseException,
+    references: list[ref[_PrivatePlanFrameValue]],
+) -> None:
+    private = _PrivatePlanFrameValue()
+    references.append(ref(private))
+    raise error
+
 
 def _volume(root: Root) -> VolumeId:
     return VolumeId(root.root_id.upper(), "NTFS")
@@ -501,6 +516,30 @@ def test_mapping_and_plan_snapshots_drop_hidden_graphs_and_preserve_semantics() 
             SyncOptions(),
         )
 
+
+def test_plan_candidate_failure_keeps_identity_after_frame_retirement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _scan(SOURCE_ROOT, files=(_file("source.bin"),))
+    target = _scan(TARGET_ROOT)
+    raw_plan = _planned(source, target)
+    failure = ValueError("fingerprint callback failed")
+    references: list[ref[_PrivatePlanFrameValue]] = []
+
+    def fail_fingerprint(value: object) -> str:
+        del value
+        _raise_with_private_plan_frame(failure, references)
+
+    monkeypatch.setattr(planner_module, "plan_fingerprint", fail_fingerprint)
+
+    with pytest.raises(ValueError) as raised:
+        snapshot_plan_candidate(raw_plan, source, target, SyncOptions())
+
+    assert raised.value is failure
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
 def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() -> None:
     source = _scan(SOURCE_ROOT)
     target = _scan(TARGET_ROOT, files=(_file("obsolete.bin"),))
@@ -919,6 +958,51 @@ def _run(deps: object) -> object:
         RunContext(lambda event: None, lambda: None),
         deps,  # type: ignore[arg-type]
     )
+
+
+@pytest.mark.parametrize(
+    "owner",
+    (
+        "event",
+        "scanner",
+        "correspondence",
+        "planner",
+        "observer",
+        "preflight",
+        "save",
+    ),
+)
+def test_run_plan_retires_phase_failure_frames_without_changing_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    owner: str,
+) -> None:
+    _patch_workflow_roots(monkeypatch)
+    saved: list[PlanArtifact] = []
+    deps = _workflow_dependencies(saved)
+    failure = RuntimeError(f"{owner} failed")
+    references: list[ref[_PrivatePlanFrameValue]] = []
+
+    def fail(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        _raise_with_private_plan_frame(failure, references)
+
+    if owner != "event":
+        attribute = "save_plan" if owner == "save" else owner
+        setattr(deps, attribute, fail)
+    emit = fail if owner == "event" else lambda event: None
+
+    with pytest.raises(RuntimeError) as raised:
+        run_plan(
+            _workflow_request(),
+            RunContext(emit, lambda: None),
+            deps,
+        )
+
+    assert raised.value is failure
+    assert saved == []
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
 
 @pytest.mark.parametrize(
     ("population", "limit"),

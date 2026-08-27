@@ -64,20 +64,14 @@ pause, cancellation, and accumulator-superseded errors, including nested
 exception-group member frames. Unsuperseded process-fatal exceptions and their
 custom state leave with the caller rather than becoming session artifacts.
 
-- `workflows.sync.run_execution` / `_run_execution`: cancellation provenance,
-  exclusion re-offer, and save/preflight/executor/verifier callback overlap.
-- `workflows.sync.run_plan`, `_validated_roots`, `_ordinary_logical_root`, and
-  `_physical_logical_root`: root/path adaptation, phase, scanner,
-  correspondence, planner, observer, preflight, invalid/unissued fact demotion,
-  and save failures can retain stage-dependent request/root/options/scan/plan/
-  world/verdict locals plus chained `RootAuthorityError` or `OSError` causes.
-- `modules.planner.snapshot_plan_options`, `plan`, and
-  `snapshot_plan_candidate`: ordinary policy identity/property, assignment,
-  fingerprint, and validation failures can retain policy/options, detached
-  callback scans/files, and input frames. Preserve existing public type,
-  message, and identity behavior where applicable.
-- Recording exit/capture/diagnostic/note overlap, including hostile dynamic
-  `add_note` and simultaneous primary/secondary errors.
+Planner and sync-workflow phase frames are now closed across path adaptation,
+planning collaborators, execution callbacks, exclusion delivery, and recording
+open/finish/exit. Public exception identity/type/message and required scalar
+cause behavior remain intact; consumed errors retain only typed detail/issue
+truth. Hostile truthiness, diagnostic, and note paths cannot replace a primary.
+Path-message construction remains a separately chargeable checkpoint-4
+transient.
+
 - Dispatcher audit-factory, admission cleanup, persistence, custody-release,
   stale-lease, and other drop-only callback catches.
 - Web task replay/start/compensation overlap in `TaskRegistry.replay_start`,

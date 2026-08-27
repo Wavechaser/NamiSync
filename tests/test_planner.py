@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import gc
 import random
 from dataclasses import dataclass, replace
+from weakref import ref
 
 import pytest
 
@@ -50,13 +52,26 @@ from namisync.core.planning import (
     policy_fingerprint,
     serialize_plan,
 )
-from namisync.modules.planner import plan
+from namisync.modules.planner import plan, snapshot_plan_options
 from namisync.workflows.selection import ExclusionReason, derive_execution_selection
 
 
 META = MetadataSnapshot(0, 100)
 SOURCE_VOLUME = VolumeId("SRC", "NTFS")
 TARGET_VOLUME = VolumeId("DST", "NTFS")
+
+
+class _PrivatePlannerFrameValue:
+    pass
+
+
+def _raise_with_private_planner_frame(
+    error: BaseException,
+    references: list[ref[_PrivatePlannerFrameValue]],
+) -> None:
+    private = _PrivatePlannerFrameValue()
+    references.append(ref(private))
+    raise error
 
 
 def _profile(*, hardlinks: bool = True, stable: bool = True, granularity: int = 100) -> CapabilityProfile:
@@ -899,13 +914,14 @@ def test_destination_policy_ordinary_failure_keeps_identity(
     reviewed: bool,
 ) -> None:
     failure = ValueError("ordinary policy failure")
+    references: list[ref[_PrivatePlannerFrameValue]] = []
 
     class FailingPolicy:
         name = "failure"
         version = "1"
 
         def assign(self, *_args):
-            raise failure
+            _raise_with_private_planner_frame(failure, references)
 
     source = _scan("source", SOURCE_VOLUME)
     target = _scan("target", TARGET_VOLUME)
@@ -920,6 +936,62 @@ def test_destination_policy_ordinary_failure_keeps_identity(
         )
 
     assert raised.value is failure
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_destination_policy_inspection_retires_transformed_exception_frames() -> None:
+    failure = AttributeError("private policy property failure")
+    references: list[ref[_PrivatePlannerFrameValue]] = []
+
+    class FailingPolicy:
+        version = "1"
+
+        @property
+        def name(self) -> str:
+            _raise_with_private_planner_frame(failure, references)
+
+        def assign(self, *_args) -> Assignment:
+            return Assignment("failure", "1", ())
+
+    with pytest.raises(
+        TypeError,
+        match="^destination policy has an incomplete contract$",
+    ) as raised:
+        snapshot_plan_options(
+            SyncOptions(destination_policy=FailingPolicy())  # type: ignore[arg-type]
+        )
+
+    assert raised.value.__cause__ is raised.value.__context__ is None
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
+
+
+def test_destination_policy_process_fatal_keeps_identity_after_frame_retirement() -> None:
+    failure = KeyboardInterrupt("policy interrupted")
+    references: list[ref[_PrivatePlannerFrameValue]] = []
+
+    class FailingPolicy:
+        name = "failure"
+        version = "1"
+
+        def assign(self, *_args) -> Assignment:
+            _raise_with_private_planner_frame(failure, references)
+
+    source = _scan("source", SOURCE_VOLUME)
+    target = _scan("target", TARGET_VOLUME)
+    with pytest.raises(KeyboardInterrupt) as raised:
+        plan(
+            source,
+            target,
+            MappingSnapshot.empty(source.volume_id, target.volume_id),
+            SyncOptions(destination_policy=FailingPolicy()),  # type: ignore[arg-type]
+            Scope.everything(),
+        )
+
+    assert raised.value is failure
+    gc.collect()
+    assert references and all(reference() is None for reference in references)
 
 
 def test_destination_policy_collision_is_deterministic_unique_and_reviewable() -> None:

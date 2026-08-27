@@ -8,6 +8,7 @@ from itertools import chain
 from pathlib import PureWindowsPath
 from typing import Callable, Iterable, Mapping, Sequence
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.models import (
     CapabilityProfile,
     DirRecord,
@@ -59,9 +60,11 @@ from namisync.core.planning import (
 from namisync.core.review import (
     PLAN_SOURCE_REFERENCE_BYTES,
     PlanReviewAdmission,
+    ReviewFactLimitError,
     snapshot_plan_file_records,
     snapshot_plan_scan_result,
 )
+from namisync.core.scalars import ScalarDomainError
 
 
 @dataclass(frozen=True, slots=True)
@@ -112,7 +115,8 @@ def _capture_destination_policy(
         version = value.version  # type: ignore[attr-defined]
         callback = value.assign  # type: ignore[attr-defined]
     except AttributeError as error:
-        raise TypeError("destination policy has an incomplete contract") from error
+        retire_exception_graph(error)
+        raise TypeError("destination policy has an incomplete contract") from None
     validate_assignment(Assignment(name, version, ()))
     if not callable(callback):
         raise TypeError("destination policy assign must be callable")
@@ -140,7 +144,7 @@ def _copy_sync_options(value: object, destination_policy: object) -> SyncOptions
     )
 
 
-def snapshot_plan_options(value: object) -> tuple[SyncOptions, SyncOptions]:
+def _snapshot_plan_options(value: object) -> tuple[SyncOptions, SyncOptions]:
     """Capture disposable callback options and a callback-free retained copy."""
 
     if type(value) is not SyncOptions:
@@ -156,6 +160,17 @@ def snapshot_plan_options(value: object) -> tuple[SyncOptions, SyncOptions]:
         ),
         _copy_sync_options(value, retained_identity),
     )
+
+
+def snapshot_plan_options(value: object) -> tuple[SyncOptions, SyncOptions]:
+    """Capture options after retiring rejected collaborator traceback links."""
+
+    try:
+        return _snapshot_plan_options(value)
+    except BaseException as error:
+        retire_exception_graph(error)
+        del value
+        raise
 
 
 def _snapshot_retained_options(value: object) -> SyncOptions:
@@ -545,7 +560,7 @@ def _move_pair(
     return pair, old_target
 
 
-def plan(
+def _plan(
     source: ScanResult,
     target: ScanResult,
     correspondence: MappingSnapshot,
@@ -1043,6 +1058,50 @@ def plan(
     return result
 
 
+def plan(
+    source: ScanResult,
+    target: ScanResult,
+    correspondence: MappingSnapshot,
+    options: SyncOptions,
+    scope: Scope,
+    *,
+    review_admission: PlanReviewAdmission | None = None,
+) -> Plan:
+    """Plan after retiring owned traceback links from rejected inputs."""
+
+    try:
+        return _plan(
+            source,
+            target,
+            correspondence,
+            options,
+            scope,
+            review_admission=review_admission,
+        )
+    except BaseException as error:
+        cause = BaseException.__cause__.__get__(error, BaseException)
+        context = BaseException.__context__.__get__(error, BaseException)
+        preserve_scalar_cause = (
+            type(error) is ReviewFactLimitError
+            and type(cause) is ScalarDomainError
+            and context is cause
+        )
+        if preserve_scalar_cause:
+            retire_exception_graph(cause)
+        else:
+            if isinstance(cause, BaseException):
+                retire_exception_graph(cause)
+            if isinstance(context, BaseException) and context is not cause:
+                retire_exception_graph(context)
+        retire_exception_graph(error)
+        if preserve_scalar_cause:
+            BaseException.__cause__.__set__(error, cause)
+            BaseException.__context__.__set__(error, context)
+        del source, target, correspondence, options, scope, review_admission
+        del cause, context, preserve_scalar_cause
+        raise
+
+
 def _snapshot_root(value: object) -> Root:
     if type(value) is not Root:
         raise TypeError("plan root has the wrong type")
@@ -1150,7 +1209,7 @@ def _snapshot_operation(
     return snapshot
 
 
-def snapshot_plan_candidate(
+def _snapshot_plan_candidate(
     value: object,
     source: ScanResult,
     target: ScanResult,
@@ -1322,6 +1381,30 @@ def snapshot_plan_candidate(
     if snapshot != value:
         raise ValueError("plan candidate is not canonical")
     return snapshot
+
+
+def snapshot_plan_candidate(
+    value: object,
+    source: ScanResult,
+    target: ScanResult,
+    options: SyncOptions,
+    *,
+    review_admission: PlanReviewAdmission | None = None,
+) -> Plan:
+    """Validate a candidate after retiring rejected input traceback links."""
+
+    try:
+        return _snapshot_plan_candidate(
+            value,
+            source,
+            target,
+            options,
+            review_admission=review_admission,
+        )
+    except BaseException as error:
+        retire_exception_graph(error)
+        del value, source, target, options, review_admission
+        raise
 
 
 def admit_retained_plan_candidate(

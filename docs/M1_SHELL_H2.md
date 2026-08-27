@@ -408,23 +408,14 @@ audit failures. It retires traceback/cause/context for nested exception-group
 members too. Unsuperseded process-fatal exceptions and arbitrary custom
 exception state leave with their caller and are not retained task artifacts.
 
-- `workflows.sync.run_execution` / `_run_execution`: cancellation provenance,
-  repeated exclusion-sink offers, and save/preflight/executor/verifier work
-  performed while a consumed control remains active.
-- `workflows.sync.run_plan`, `_validated_roots`, `_ordinary_logical_root`, and
-  `_physical_logical_root`: root/path adaptation, phase, scanner,
-  correspondence, planner, observer, preflight, invalid/unissued fact demotion,
-  and save failures can retain stage-dependent request/root/options/scan/plan/
-  world/verdict locals. Path adaptation can also chain raw `RootAuthorityError`
-  or `OSError` causes even though review-limit signals are retired.
-- `modules.planner.snapshot_plan_options`, `plan`, and
-  `snapshot_plan_candidate`: ordinary policy identity/property, assignment,
-  fingerprint, and validation failures can retain policy/options, detached
-  callback scans/files, and input frames. Preserve their current public type,
-  message, and identity behavior where applicable.
-- `_ContainedRecordingContext.__exit__` / `preserve_exit_failure`: simultaneous
-  body, exit, continuation-capture, diagnostic, and note failures, including
-  hostile dynamic `add_note` dispatch.
+Planner and sync-workflow phase frames are now structurally closed too.
+Escaping public identities keep their established types/messages, the one
+required logical-byte cause survives without its frames, consumed execution
+errors become typed details, and recording keeps only closed issue state.
+Truthy context suppression, hostile diagnostics/notes, path-cause projection,
+and repeated exclusion delivery have independent regressions. Path-message and
+other callback/construction transients remain checkpoint-4 model inputs.
+
 - Dispatcher admission, cleanup, persistence, and custody release: audit-
   factory fallback, rollback/stream/hub/store cleanup, thread-start failure,
   stale-lease release, and drop-only catches that can retain external aliases.

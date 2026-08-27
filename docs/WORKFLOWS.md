@@ -204,17 +204,19 @@ This is the planning-source ownership prerequisite for checkpoint 4. Its row
 and shallow-reference counters are not a reservation formula, heap estimate,
 or complete task-artifact validator. Construction/container capacity,
 sorting/index storage, selection/previews, complete projections,
-callback/exception frames, serialization, native/browser copies, and
+callback copies, serialization, native/browser copies, and
 multi-session owners still need separate closure or charge before the
 checkpoint-4 model can freeze.
 
-Checkpoint 4 must eliminate or finitely charge ordinary `run_plan` escapes and
-their stage-dependent live frame: root/path adaptation, phase delivery,
-scanner, correspondence, planner, observer, preflight, invalid/unissued fact
-demotion, and plan save can retain request, root, options, admitted scan, plan,
-world, and verdict owners. Root adaptation can also chain raw
-`RootAuthorityError` or `OSError` causes. Preserve public type, message, identity,
-and path-redaction behavior while closing those owners.
+`run_plan` now isolates its phase frame and retires traceback/cause/context
+before any ordinary or process-fatal error escapes. Root/path adapters project
+their existing logical, redacted message and raise a fresh unchained
+`ValueError`; phase delivery, scanner, correspondence, planner, observer,
+preflight, invalid/unissued-fact demotion, and save failures preserve their
+existing public type and identity without retaining request/root/options/scan/
+plan/world/verdict locals. This closes raw exception ownership, not path-message
+construction or the other complete construction/callback costs assigned to the
+checkpoint-4 model.
 
 1. Lexically normalize and validate distinct non-nested roots and request
    semantics without following filesystem links. The shared core chain-only
@@ -519,6 +521,16 @@ All terminal paths after recorder entry share one finish-once boundary.
 boundary likewise remains a control transition: pause escapes for custody
 snapshotting, while cancellation projects authoritative continuation counters
 without reopening the recording factory or consulting lossy Progress.
+A consumed callback failure is converted immediately to its bounded
+`FailureDetail` or closed recording issue, then its traceback/cause/context is
+retired before another callback runs. Exclusion delivery retains only that
+closed first-failure value rather than the raw exception. Recording contexts
+evaluate a collaborator's exit truth exactly once; every truthy value suppresses
+and retires the body exception, while a truth-test failure follows normal Python
+propagation. Secondary diagnostic rendering and note attachment catch their own
+hostile `BaseException` and cannot replace the primary. An escaping primary
+keeps its identity and caller-owned custom state without keeping the execution
+phase frame.
 A resumed execution canceled at the dispatcher's entry checkpoint is settled
 from its retained payload before `invocation.run()`, so the same finish-once
 ledger boundary runs. Once that exact cancellation settlement is elected, its

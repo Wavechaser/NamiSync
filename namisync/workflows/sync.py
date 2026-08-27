@@ -130,6 +130,12 @@ class RunRecording(Protocol):
     ) -> None: ...
 
 
+@dataclass(frozen=True, slots=True)
+class _ClosedRecordingFailure:
+    detail: FailureDetail
+    issue_detail: str | None
+
+
 class _ContainedRecordingContext:
     def __init__(
         self,
@@ -145,15 +151,19 @@ class _ContainedRecordingContext:
         except (PauseRequested, Canceled):
             raise
         except Exception as error:
-            self._boundary.enter_error = error
+            self._boundary.enter_failure = _close_recording_failure(error)
             raise
 
-    def __exit__(self, exc_type, exc, traceback) -> bool | None:
+    def __exit__(self, exc_type, exc, traceback) -> bool:
         try:
-            return self._context.__exit__(exc_type, exc, traceback)
+            suppressed = self._context.__exit__(exc_type, exc, traceback)
         except Exception as error:
-            self._boundary.exit_error = error
+            self._boundary.exit_failure = _close_recording_failure(error)
             return False
+        is_suppressed = bool(suppressed)
+        if is_suppressed and isinstance(exc, BaseException):
+            retire_exception_graph(exc)
+        return is_suppressed
 
 
 class _RecordingBoundary:
@@ -164,8 +174,8 @@ class _RecordingBoundary:
         ],
     ) -> None:
         self._factory = factory
-        self.enter_error: Exception | None = None
-        self.exit_error: Exception | None = None
+        self.enter_failure: _ClosedRecordingFailure | None = None
+        self.exit_failure: _ClosedRecordingFailure | None = None
 
     def open(
         self, execution_set: ExecutionSet
@@ -175,7 +185,7 @@ class _RecordingBoundary:
         except (PauseRequested, Canceled):
             raise
         except Exception as error:
-            self.enter_error = error
+            self.enter_failure = _close_recording_failure(error)
             raise
         return _ContainedRecordingContext(context, self)
 
@@ -330,7 +340,7 @@ def _disposable_plan_preview(
     )
 
 
-def run_plan(
+def _run_plan(
     request: PlanRequest,
     ctx: RunContext,
     deps: SyncDependencies,
@@ -560,7 +570,22 @@ def run_plan(
     return OperationResult(status=SessionState.COMPLETED)
 
 
-def run_execution(
+def run_plan(
+    request: PlanRequest,
+    ctx: RunContext,
+    deps: SyncDependencies,
+) -> OperationResult:
+    """Run planning after retiring rejected phase traceback links."""
+
+    try:
+        return _run_plan(request, ctx, deps)
+    except BaseException as error:
+        retire_exception_graph(error)
+        del request, ctx, deps
+        raise
+
+
+def _run_execution_with_recording(
     continuation: ExecutionContinuation | ExecutionSet,
     ctx: RunContext,
     deps: SyncDependencies,
@@ -599,14 +624,16 @@ def run_execution(
     boundary = _RecordingBoundary(recording_factory)
 
     def preserve_exit_failure(error: BaseException) -> None:
-        if boundary.exit_error is None:
+        if boundary.exit_failure is None:
             return
+        retire_exception_graph(error)
+
         active = current[0]
         try:
-            _note_task_recording_issue(
+            _note_closed_recording_issue(
                 active.execution_set,
                 TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
-                boundary.exit_error,
+                boundary.exit_failure,
             )
             if isinstance(active, VerifyContinuation):
                 if active.recording is RecordingStatus.OK:
@@ -614,14 +641,16 @@ def run_execution(
             capture(active)
         except Exception as continuation_error:
             failure = _recording_failure_detail(continuation_error)
-            error.add_note(
+            _try_add_exception_note(
+                error,
                 "recording degradation continuation capture also failed: "
-                f"{failure.type_name}: {failure.message}"
+                f"{failure.type_name}: {failure.message}",
             )
-        failure = _recording_failure_detail(boundary.exit_error)
-        error.add_note(
+        failure = boundary.exit_failure.detail
+        _try_add_exception_note(
+            error,
             "recording context exit also failed: "
-            f"{failure.type_name}: {failure.message}"
+            f"{failure.type_name}: {failure.message}",
         )
 
     try:
@@ -636,7 +665,8 @@ def run_execution(
     except PauseRequested as error:
         preserve_exit_failure(error)
         raise
-    except Canceled:
+    except Canceled as error:
+        retire_exception_graph(error)
         result = _recording_entry_canceled_result(
             current[0], ctx, deps
         )
@@ -646,19 +676,25 @@ def run_execution(
         )
     except BaseException as error:
         preserve_exit_failure(error)
-        if boundary.enter_error is None or error is not boundary.enter_error:
+        if boundary.enter_failure is None:
             raise
+        retire_exception_graph(error)
         current = (
             ExecuteContinuation(continuation)
             if isinstance(continuation, ExecutionSet)
             else continuation
         )
-        result = _recording_open_failure_result(current, ctx, deps, error)
+        result = _recording_open_failure_result(
+            current,
+            ctx,
+            deps,
+            boundary.enter_failure,
+        )
         return _result_with_execution_recording(
             result,
             current.execution_set,
         )
-    if boundary.exit_error is None:
+    if boundary.exit_failure is None:
         return _result_with_execution_recording(
             result,
             current[0].execution_set,
@@ -668,10 +704,10 @@ def run_execution(
         if isinstance(continuation, ExecutionSet)
         else continuation.execution_set
     )
-    _note_task_recording_issue(
+    _note_closed_recording_issue(
         execution_set,
         TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
-        boundary.exit_error,
+        boundary.exit_failure,
     )
     result = replace(
         result,
@@ -679,10 +715,34 @@ def run_execution(
         error=(
             result.error
             if result.error is not None
-            else _recording_failure_detail(boundary.exit_error)
+            else boundary.exit_failure.detail
         ),
     )
     return _result_with_execution_recording(result, execution_set)
+
+
+def run_execution(
+    continuation: ExecutionContinuation | ExecutionSet,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
+    resumed: bool = False,
+) -> OperationResult:
+    """Execute while preserving identity after retiring phase traceback links."""
+
+    try:
+        return _run_execution_with_recording(
+            continuation,
+            ctx,
+            deps,
+            continuation_sink=continuation_sink,
+            resumed=resumed,
+        )
+    except BaseException as error:
+        retire_exception_graph(error)
+        del continuation, ctx, deps, continuation_sink
+        raise
 
 
 def _run_execution(
@@ -715,9 +775,10 @@ def _run_execution(
                 user_deselected=xset.user_deselected,
             )
         except (TypeError, ValueError) as error:
+            failure = _retired_failure_detail(error)
             commitment_error = (
                 "reviewed selection provenance is invalid: "
-                f"{type(error).__name__}: {logical_error_text(error)}"
+                f"{failure.type_name}: {failure.message}"
             )
             exclusion_items = ()
         else:
@@ -728,29 +789,26 @@ def _run_execution(
             )
             exclusion_items = _exclusion_items(xset.plan, decision)
     except Exception as error:
+        failure = _retired_failure_detail(error)
         if isinstance(current, VerifyContinuation):
             return _settle_verify_incomplete(
                 current,
                 deps,
-                FailureDetail(
-                    type(error).__name__, logical_error_text(error)
-                ),
+                failure,
             )
         if resumed:
             return _settle_execute_resume_failure(
                 current,
                 ctx,
                 deps,
-                FailureDetail(
-                    type(error).__name__, logical_error_text(error)
-                ),
+                failure,
                 (),
             )
         return _settle_fresh_execute_boundary(
             current,
             ctx,
             (),
-            error=FailureDetail(type(error).__name__, logical_error_text(error)),
+            error=failure,
         )
     if commitment_error is not None:
         try:
@@ -762,7 +820,8 @@ def _run_execution(
             )
         except PauseRequested:
             raise
-        except Canceled:
+        except Canceled as error:
+            retire_exception_graph(error)
             if isinstance(current, VerifyContinuation) or resumed:
                 return settle_canceled_execution(
                     current,
@@ -776,31 +835,26 @@ def _run_execution(
                 status=SessionState.CANCELED,
             )
         except Exception as error:
+            failure = _retired_failure_detail(error)
             if isinstance(current, VerifyContinuation):
                 return _settle_verify_incomplete(
                     current,
                     deps,
-                    FailureDetail(
-                        type(error).__name__, logical_error_text(error)
-                    ),
+                    failure,
                 )
             if resumed:
                 return _settle_execute_resume_failure(
                     current,
                     ctx,
                     deps,
-                    FailureDetail(
-                        type(error).__name__, logical_error_text(error)
-                    ),
+                    failure,
                     exclusion_items,
                 )
             return _settle_fresh_execute_boundary(
                 current,
                 ctx,
                 exclusion_items,
-                error=FailureDetail(
-                    type(error).__name__, logical_error_text(error)
-                ),
+                error=failure,
             )
         if isinstance(current, VerifyContinuation):
             return _settle_verify_incomplete(
@@ -835,7 +889,8 @@ def _run_execution(
         deps.save_execution_details(ExecutionDetails(str(xset.run_id), refusals))
     except PauseRequested:
         raise
-    except Canceled:
+    except Canceled as error:
+        retire_exception_graph(error)
         if isinstance(current, VerifyContinuation) or resumed:
             return settle_canceled_execution(
                 current,
@@ -849,29 +904,26 @@ def _run_execution(
             status=SessionState.CANCELED,
         )
     except Exception as error:
+        failure = _retired_failure_detail(error)
         if isinstance(current, VerifyContinuation):
             return _settle_verify_incomplete(
                 current,
                 deps,
-                FailureDetail(
-                    type(error).__name__, logical_error_text(error)
-                ),
+                failure,
             )
         if resumed:
             return _settle_execute_resume_failure(
                 current,
                 ctx,
                 deps,
-                FailureDetail(
-                    type(error).__name__, logical_error_text(error)
-                ),
+                failure,
                 exclusion_items,
             )
         return _settle_fresh_execute_boundary(
             current,
             ctx,
             exclusion_items,
-            error=FailureDetail(type(error).__name__, logical_error_text(error)),
+            error=failure,
         )
     if not verdict.ok:
         if isinstance(current, VerifyContinuation):
@@ -933,41 +985,40 @@ def _run_execution(
         if isinstance(current, ExecuteContinuation):
             verify_after_execute = current.verify_after_execute
             accepted_exclusions: list[ItemOutcome] = []
-            exclusion_error: Exception | None = None
+            exclusion_failure: FailureDetail | None = None
 
-            def emit_exclusions() -> None:
-                nonlocal exclusion_error
-                if exclusion_error is not None:
-                    raise exclusion_error
+            def emit_exclusions() -> FailureDetail | None:
+                nonlocal exclusion_failure
+                if exclusion_failure is not None:
+                    return exclusion_failure
                 for item in exclusion_items[len(accepted_exclusions):]:
                     try:
                         ctx.emit(item)
                     except (PauseRequested, Canceled):
                         raise
                     except Exception as error:
-                        # Failed projection retains the first sink error without
-                        # replaying accepted siblings or re-offering this failure.
-                        exclusion_error = error
-                        raise
+                        # Retain closed first-failure truth without replaying
+                        # accepted siblings or re-offering this failure.
+                        exclusion_failure = _recording_failure_detail(error)
+                        return exclusion_failure
                     accepted_exclusions.append(item)
+                return None
 
-            def failed_execution_result(error: Exception) -> OperationResult:
+            def failed_execution_result(
+                failure: FailureDetail,
+            ) -> OperationResult:
                 recording_status = finish_once(
                     SessionState.FAILED,
                     xset.recording,
                 )
-                try:
-                    emit_exclusions()
-                except (PauseRequested, Canceled):
-                    raise
-                except Exception as emission_error:
-                    error = emission_error
+                emission_failure = emit_exclusions()
+                if emission_failure is not None:
+                    failure = emission_failure
                 execution_items = _merge_operation_results(
                     xset.plan,
                     tuple(emitted_execution_items),
                     tuple(accepted_exclusions),
                 )
-                failure = _recording_failure_detail(error)
                 phase = _execute_continuation_phase(
                     xset,
                     PhaseStatus.FAILED,
@@ -997,7 +1048,9 @@ def _run_execution(
                     deps.executor_policies,
                     deps.executor_fs,
                 )
-                emit_exclusions()
+                failure = emit_exclusions()
+                if failure is not None:
+                    return failed_execution_result(failure)
                 result = replace(
                     result,
                     items=_merge_operation_results(
@@ -1041,13 +1094,11 @@ def _run_execution(
                 sink(current)
             except PauseRequested:
                 raise
-            except Canceled:
-                try:
-                    emit_exclusions()
-                except (PauseRequested, Canceled):
-                    raise
-                except Exception as error:
-                    return failed_execution_result(error)
+            except Canceled as error:
+                retire_exception_graph(error)
+                failure = emit_exclusions()
+                if failure is not None:
+                    return failed_execution_result(failure)
                 execution_items = _merge_operation_results(
                     xset.plan,
                     tuple(emitted_execution_items),
@@ -1073,7 +1124,9 @@ def _run_execution(
                     bytes_total=phase.bytes_total or phase.bytes_done,
                 )
             except Exception as error:
-                return failed_execution_result(error)
+                return failed_execution_result(
+                    _recording_failure_detail(error)
+                )
 
         observed_recording = [current.recording]
         verification_items: list[IntegrityOutcome] = []
@@ -1174,7 +1227,8 @@ def _run_execution(
             )
         except PauseRequested:
             raise
-        except Canceled:
+        except Canceled as error:
+            retire_exception_graph(error)
             current_recording = _combined_recording(
                 current.recording,
                 observed_recording[0],
@@ -1205,6 +1259,7 @@ def _run_execution(
                 ),
             )
         except Exception as error:
+            failure = _retired_failure_detail(error)
             current_recording = _combined_recording(
                 current.recording,
                 observed_recording[0],
@@ -1215,8 +1270,8 @@ def _run_execution(
                 items_done_floor=len(observed_verification_ids),
                 incomplete=True,
                 error=(
-                    f"{type(error).__name__}: "
-                    f"{logical_error_text(error)}"
+                    f"{failure.type_name}: "
+                    f"{failure.message}"
                 ),
             )
             recording_status = finish_once(
@@ -1235,9 +1290,7 @@ def _run_execution(
                     if current.execute_phase.bytes_total is not None
                     else current.execute_phase.bytes_done
                 ),
-                error=FailureDetail(
-                    type(error).__name__, logical_error_text(error)
-                ),
+                error=failure,
             )
 
 
@@ -1279,7 +1332,7 @@ def settle_canceled_execution(
         )
 
     boundary = _RecordingBoundary(deps.open_recording)
-    recording_error: Exception | None = None
+    recording_failure: _ClosedRecordingFailure | None = None
     try:
         with boundary.open(xset) as recording:
             recording_status = _finish_recording(
@@ -1289,11 +1342,14 @@ def settle_canceled_execution(
                 recording_status,
             )
     except Exception as error:
-        recording_error = error
-        _note_task_recording_issue(
+        recording_failure = (
+            boundary.enter_failure or _close_recording_failure(error)
+        )
+        retire_exception_graph(error)
+        _note_closed_recording_issue(
             xset,
             TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
-            boundary.enter_error or error,
+            recording_failure,
         )
         recording_status = xset.recording
         recording_status = _finish_recording_without_open(
@@ -1302,12 +1358,12 @@ def settle_canceled_execution(
             filesystem_status,
             recording_status,
         )
-    if boundary.exit_error is not None:
-        recording_error = boundary.exit_error
-        _note_task_recording_issue(
+    if boundary.exit_failure is not None:
+        recording_failure = boundary.exit_failure
+        _note_closed_recording_issue(
             xset,
             TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
-            boundary.exit_error,
+            boundary.exit_failure,
         )
         recording_status = xset.recording
     execute_phase = (
@@ -1331,8 +1387,8 @@ def settle_canceled_execution(
         ),
         error=(
             None
-            if recording_error is None
-            else _recording_failure_detail(recording_error)
+            if recording_failure is None
+            else recording_failure.detail
         ),
     )
 
@@ -1461,7 +1517,8 @@ def _execute_result_phase(
     try:
         status = PhaseStatus(result.status.value)
     except ValueError as error:
-        raise ValueError("execution returned invalid compound filesystem truth") from error
+        retire_exception_graph(error)
+        raise ValueError("execution returned invalid compound filesystem truth") from None
     error_text = (
         None
         if result.error is None
@@ -1619,17 +1676,15 @@ def _settle_fresh_execute_boundary(
     try:
         _emit_items(ctx, exclusion_items)
     except Exception as emit_error:
+        emit_failure = _retired_failure_detail(emit_error)
         emitted_items = ()
         if error is None:
-            error = FailureDetail(
-                type(emit_error).__name__,
-                logical_error_text(emit_error),
-            )
+            error = emit_failure
         else:
             error = FailureDetail(
                 error.type_name,
                 f"{error.message}; outcome emission also failed: "
-                f"{type(emit_error).__name__}: {logical_error_text(emit_error)}",
+                f"{emit_failure.type_name}: {emit_failure.message}",
             )
     phase = _execute_continuation_phase(
         continuation.execution_set,
@@ -1660,17 +1715,17 @@ def _recording_open_failure_result(
     continuation: ExecutionContinuation,
     ctx: RunContext,
     deps: SyncDependencies,
-    error: BaseException,
+    failure: _ClosedRecordingFailure,
 ) -> OperationResult:
     """Project an unavailable run recording from authoritative continuation."""
 
     xset = continuation.execution_set
-    _note_task_recording_issue(
+    _note_closed_recording_issue(
         xset,
         TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
-        error,
+        failure,
     )
-    failure = _recording_failure_detail(error)
+    detail = failure.detail
     if isinstance(continuation, VerifyContinuation):
         _finish_recording_without_open(
             deps,
@@ -1681,7 +1736,7 @@ def _recording_open_failure_result(
         phase = _verify_phase(
             continuation,
             incomplete=True,
-            error=f"{failure.type_name}: {failure.message}",
+            error=f"{detail.type_name}: {detail.message}",
         )
         return OperationResult(
             status=continuation.filesystem_status,
@@ -1694,7 +1749,7 @@ def _recording_open_failure_result(
                 if continuation.execute_phase.bytes_total is not None
                 else continuation.execute_phase.bytes_done
             ),
-            error=failure,
+            error=detail,
         )
 
     _finish_recording_without_open(
@@ -1714,12 +1769,12 @@ def _recording_open_failure_result(
         emit_failure = _recording_failure_detail(emit_error)
         error_context = f"{emit_failure.type_name}: {emit_failure.message}"
         phase_error = (
-            f"{failure.type_name}: {failure.message}; "
+            f"{detail.type_name}: {detail.message}; "
             f"outcome emission also failed: {error_context}"
         )
         exclusion_items = ()
     else:
-        phase_error = f"{failure.type_name}: {failure.message}"
+        phase_error = f"{detail.type_name}: {detail.message}"
     phase = _execute_continuation_phase(
         xset,
         PhaseStatus.FAILED,
@@ -1737,7 +1792,7 @@ def _recording_open_failure_result(
             if phase.bytes_total is not None
             else phase.bytes_done
         ),
-        error=failure,
+        error=detail,
     )
 
 
@@ -1761,10 +1816,7 @@ def _recording_entry_canceled_result(
                 ctx.emit(item)
                 emitted_items.append(item)
         except Exception as error:
-            emission_error = FailureDetail(
-                type(error).__name__,
-                logical_error_text(error),
-            )
+            emission_error = _retired_failure_detail(error)
         phase = _execute_continuation_phase(
             xset,
             PhaseStatus.CANCELED,
@@ -1822,7 +1874,10 @@ def _settle_execute_resume_failure(
     try:
         _emit_items(ctx, exclusion_items)
     except Exception as emit_error:
-        error = FailureDetail(type(emit_error).__name__, str(emit_error))
+        try:
+            error = FailureDetail(type(emit_error).__name__, str(emit_error))
+        finally:
+            retire_exception_graph(emit_error)
     phase = _execute_continuation_phase(
         continuation.execution_set,
         PhaseStatus.FAILED,
@@ -1922,16 +1977,17 @@ def _finish_existing_recording(
                 recording_status,
             )
     except Exception as error:
-        _note_task_recording_issue(
+        failure = boundary.enter_failure or _close_recording_failure(error)
+        _note_closed_recording_issue(
             xset,
             TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
-            boundary.enter_error or error,
+            failure,
         )
-    if boundary.exit_error is not None:
-        _note_task_recording_issue(
+    if boundary.exit_failure is not None:
+        _note_closed_recording_issue(
             xset,
             TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
-            boundary.exit_error,
+            boundary.exit_failure,
         )
     return _combined_recording(recording_status, xset.recording)
 
@@ -1973,32 +2029,71 @@ def _finish_recording(
     return _combined_recording(recording_status, xset.recording)
 
 
+def _retired_failure_detail(error: BaseException) -> FailureDetail:
+    try:
+        return FailureDetail(type(error).__name__, logical_error_text(error))
+    finally:
+        retire_exception_graph(error)
+
+
+def _try_add_exception_note(error: BaseException, note: str) -> None:
+    """Add secondary diagnostics without replacing the escaping primary."""
+
+    try:
+        BaseException.add_note(error, note)
+    except BaseException as note_error:
+        retire_exception_graph(note_error)
+
+
 def _note_task_recording_issue(
     xset: ExecutionSet,
     reason: TaskRecordingIssueReason,
     error: BaseException,
 ) -> None:
+    _note_closed_recording_issue(
+        xset,
+        reason,
+        _close_recording_failure(error),
+    )
+
+
+def _note_closed_recording_issue(
+    xset: ExecutionSet,
+    reason: TaskRecordingIssueReason,
+    failure: _ClosedRecordingFailure,
+) -> None:
     issue = TaskRecordingIssue(reason)
-    message = _recording_error_message(error)
     xset.note_task_recording_issue(
         issue.reason,
-        None if message is None else f"{type(error).__name__}: {message}",
+        failure.issue_detail,
     )
 
 
 def _recording_error_message(error: BaseException) -> str | None:
     try:
         return logical_error_text(error)
-    except Exception:
+    except BaseException as diagnostic_error:
+        retire_exception_graph(diagnostic_error)
         return None
 
 
+def _close_recording_failure(error: BaseException) -> _ClosedRecordingFailure:
+    try:
+        type_name = type(error).__name__
+        message = _recording_error_message(error)
+        return _ClosedRecordingFailure(
+            FailureDetail(
+                type_name,
+                "recording diagnostic unavailable" if message is None else message,
+            ),
+            None if message is None else f"{type_name}: {message}",
+        )
+    finally:
+        retire_exception_graph(error)
+
+
 def _recording_failure_detail(error: BaseException) -> FailureDetail:
-    message = _recording_error_message(error)
-    return FailureDetail(
-        type(error).__name__,
-        "recording diagnostic unavailable" if message is None else message,
-    )
+    return _close_recording_failure(error).detail
 
 
 def _result_with_execution_recording(
@@ -2039,21 +2134,26 @@ def _ordinary_logical_root(path: str) -> Path:
             anchor_probe=current_volume_anchor,
         )
     except RootAuthorityError as error:
-        if error.issue in {
-            RootAuthorityIssue.PLACEHOLDER_COMPONENT,
-            RootAuthorityIssue.REPARSE_COMPONENT,
-            RootAuthorityIssue.NON_DIRECTORY_COMPONENT,
-        }:
-            detail = (
-                "location root chain contains a nonordinary directory: "
-                f"{error.logical_path}"
-            )
-        else:
-            cause = error.__cause__
-            detail = logical_error_text(
-                cause if isinstance(cause, OSError) else error
-            )
-        raise ValueError(detail) from error
+        cause = BaseException.__cause__.__get__(error, BaseException)
+        try:
+            if error.issue in {
+                RootAuthorityIssue.PLACEHOLDER_COMPONENT,
+                RootAuthorityIssue.REPARSE_COMPONENT,
+                RootAuthorityIssue.NON_DIRECTORY_COMPONENT,
+            }:
+                detail = (
+                    "location root chain contains a nonordinary directory: "
+                    f"{error.logical_path}"
+                )
+            else:
+                detail = logical_error_text(
+                    cause if isinstance(cause, OSError) else error
+                )
+        finally:
+            if isinstance(cause, BaseException):
+                retire_exception_graph(cause)
+            retire_exception_graph(error)
+        raise ValueError(detail) from None
     return Path(logical)
 
 
@@ -2063,11 +2163,15 @@ def _physical_logical_root(path: Path) -> Path:
             strict=True
         )
     except OSError as error:
-        raise ValueError(logical_error_text(error)) from error
+        try:
+            detail = logical_error_text(error)
+        finally:
+            retire_exception_graph(error)
+        raise ValueError(detail) from None
     return Path(from_extended_length_path(str(resolved)))
 
 
-def validate_sync_paths(
+def _validate_sync_paths(
     source_path: str,
     target_path: str,
 ) -> tuple[Path, Path]:
@@ -2079,11 +2183,26 @@ def validate_sync_paths(
     target_key = os.path.normcase(str(_physical_logical_root(target)))
     try:
         common = os.path.normcase(os.path.commonpath((source_key, target_key)))
-    except ValueError:
+    except ValueError as error:
+        retire_exception_graph(error)
         common = ""
     if common in {source_key, target_key}:
         raise ValueError("source and target must be distinct, non-nested directories")
     return source, target
+
+
+def validate_sync_paths(
+    source_path: str,
+    target_path: str,
+) -> tuple[Path, Path]:
+    """Resolve an interface path pair without retaining failed path frames."""
+
+    try:
+        return _validate_sync_paths(source_path, target_path)
+    except BaseException as error:
+        retire_exception_graph(error)
+        del source_path, target_path
+        raise
 
 
 def _validated_roots(source_path: str, target_path: str) -> tuple[Root, Root]:

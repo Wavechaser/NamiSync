@@ -29,6 +29,10 @@ claims explicit, independently reviewable, and regression-backed.
   consumes or supersedes an error. Nested exception-group members are traversed
   identity-once, while escaping process-fatal and custom exception state remains
   caller-owned rather than entering retained session artifacts.
+- Isolated planner and sync-workflow public frames, replacing consumed callback
+  and recording errors with closed typed truth before later work. Public
+  identity/message behavior, path redaction, cancellation, exclusion ordering,
+  and ordinary scanner/planner/preflight policy remain unchanged.
 - Bound public verifier chunks to exact integer sizes from one byte through the
   existing 4 MiB default. The Windows reader's per-file transient is now
   finitely chargeable as one aligned native buffer plus one Python bytes copy,
