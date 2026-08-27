@@ -14,6 +14,7 @@ from namisync.core.planning import (
     Plan,
     quarantined_operation_ids,
 )
+from namisync.core.review import PlanReviewAdmission
 
 
 class ExclusionReason(StrEnum):
@@ -84,6 +85,88 @@ def derive_execution_selection(
             if operation.op_id in exclusions
         ),
     )
+
+
+def derive_plan_review_selection(
+    plan: Plan,
+    *,
+    review_admission: PlanReviewAdmission,
+) -> frozenset[OpId]:
+    """Derive only the initial plan selection under producer ownership.
+
+    Plan review does not consume exclusion presentation. Avoid constructing
+    that otherwise unretained detail graph while preserving the exact selected
+    operation set used by ``derive_execution_selection``.
+    """
+
+    if type(review_admission) is not PlanReviewAdmission:
+        raise TypeError("plan selection review admission has the wrong type")
+
+    construction_admission = review_admission.fork()
+    quarantine_stage = construction_admission.fork()
+    quarantined = quarantined_operation_ids(
+        plan.operations,
+        review_admission=quarantine_stage,
+    )
+    # The quarantine producer covered allocation of this result. Charge its
+    # returned owner into the following construction stage after the producer's
+    # internal sets have retired.
+    construction_admission.admit_domain_shape(
+        reference_slots=len(quarantined),
+        rows=0,
+    )
+
+    excluded: set[OpId] = set()
+
+    def exclude(op_id: OpId) -> None:
+        if op_id in excluded:
+            return
+        construction_admission.require_source_rows(len(excluded) + 1)
+        construction_admission.admit_domain_shape(
+            reference_slots=1,
+            rows=0,
+        )
+        excluded.add(op_id)
+
+    for operation in plan.operations:
+        if operation.blocked:
+            exclude(operation.op_id)
+    for op_id in quarantined:
+        exclude(op_id)
+    if not plan.source_complete or not plan.target_complete:
+        for operation in plan.operations:
+            if operation.kind in _INCOMPLETE_SCAN_UNSAFE:
+                exclude(operation.op_id)
+
+    changed = True
+    while changed:
+        changed = False
+        for operation in plan.operations:
+            if operation.op_id in excluded:
+                continue
+            if any(dependency in excluded for dependency in operation.dependencies):
+                exclude(operation.op_id)
+                changed = True
+
+    selected: set[OpId] = set()
+    for operation in plan.operations:
+        if operation.op_id in excluded:
+            continue
+        construction_admission.require_source_rows(len(selected) + 1)
+        construction_admission.admit_domain_shape(
+            reference_slots=1,
+            rows=0,
+        )
+        selected.add(operation.op_id)
+    construction_admission.admit_domain_shape(
+        reference_slots=len(selected),
+        rows=0,
+    )
+    review_admission.admit_domain_shape(
+        reference_slots=len(selected),
+        rows=0,
+    )
+    return frozenset(selected)
 
 
 def apply_selection_mutation(

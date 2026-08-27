@@ -5,9 +5,10 @@ removes the unused worker-count field from the immutable plan contract.
 Stage 5.5 relocates the planner's three relative hierarchy helpers to
 `core.pathing` without changing planning behavior. Later scopes, content
 evidence, ingest policies, replay, repair, and undo reuse the same plan shape.
-The signed-64 scalar boundary is active from Stage 6 checkpoint 3.2. The
-complete Setup snapshot and bounded retained-graph plan-review contract below
-remain accepted targets until their implementation checkpoints close. The
+The signed-64 scalar boundary is active from Stage 6 checkpoint 3.2, and the
+pre-model planning-source admission is active. The complete Setup snapshot and
+complete task-artifact retained-graph contract below remain accepted targets
+until their implementation checkpoints close. The
 100,000-operation shape is a performance fixture, not the production maximum.
 
 ## Purpose
@@ -22,7 +23,8 @@ or executes/repairs anything.
 ```python
 plan(source: ScanResult, target: ScanResult,
      correspondence: MappingSnapshot, options: SyncOptions,
-     scope: Scope) -> Plan
+     scope: Scope, *,
+     review_admission: PlanReviewAdmission | None = None) -> Plan
 ```
 
 ## Implemented M0 Surface
@@ -65,6 +67,24 @@ The exact Setup and filter contracts are owned by
 
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
+
+Planning workflow supplies an exact workflow-owned admission. Planner first
+reconstructs the declared scan, mapping, options, assignment, and plan shapes
+instead of trusting frozen/slotted appearance or copying undeclared instance
+state. Destination-policy callbacks receive detached typed snapshots; only the
+callback-free policy identity is retained. Raw mapping and assignment
+populations are independently gated before construction, new operations charge
+cumulative semantic rows before publication, and unavoidable builder/final
+container overlap charges shallow references on disposable producer forks.
+The outer workflow owner receives the final exact plan once, after producer
+aliases retire. First excess raises the shared typed review-limit error without
+publishing a partial plan.
+
+Those counters establish the planning-source wall, not the checkpoint-4
+complete retained-graph model. Policy implementation temporaries, generic
+container allocation, serialization/codec copies, native views, and task
+retention require the later predeclared reservation model and independent
+validator.
 
 Core policy admission bounds the raw shape before canonicalization. A filter
 snapshot is an exact tuple of at most 64 nonempty valid-Unicode patterns, each

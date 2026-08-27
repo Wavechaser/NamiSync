@@ -3,7 +3,8 @@
 Status: M0 observation and pure judgment implementation complete, with M1
 Stage 1's immutable reviewed-policy semantics and shared ephemeral root
 authority. Fresh preflight remains mandatory immediately before every
-managed-data mutation, on resume, and on queued wakeup.
+managed-data mutation, on resume, and on queued wakeup. Stage 6's pre-model
+plan-review source/refusal admission is active for workflow-supplied review.
 
 At the active checkpoint-3.2 scalar cutover, preflight uses the capacity-observation and
 refusal contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
@@ -14,8 +15,10 @@ refusal contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
 Preflight separates current-world observation from pure judgment:
 
 ```python
-observe(xset: ExecutionSet, fs: FileSystem) -> ObservedWorld
-preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict
+observe(xset: ExecutionSet, fs: FileSystem, *,
+        review_admission: PlanReviewAdmission | None = None) -> ObservedWorld
+preflight(xset: ExecutionSet, world: ObservedWorld, *,
+          review_admission: PlanReviewAdmission | None = None) -> Verdict
 ```
 
 ## Implemented M0 Surface
@@ -40,6 +43,21 @@ commitment exists.
 drops, cleans, or executes operations. Admitted execution uses the immutable
 reviewed policy snapshot already bound into the plan; it never reinterprets the
 run from newer global defaults.
+
+During plan review, workflow supplies exact disposable admission forks to both
+functions. Observation gates selected subjects, target parents, roots, paths,
+stats, and backend-returned map populations before those values escape their
+producer. Workflow then reconstructs the declared `ObservedWorld` graph and
+rejects raw mapping wrappers or undeclared object state. Judgment deduplicates
+typed refusals through a bounded collector, charges each unique refusal once as
+an informational semantic row, and accounts for the simultaneous key/dict and
+sorted-tuple references before retaining the final verdict. A first excess is
+the shared no-partial review refusal; it never becomes an incomplete ordinary
+verdict.
+
+These source and retained-reference checks are inputs to checkpoint 4. They do
+not freeze its complete-object constants or account for later task,
+serialization, native, or browser copies.
 
 ## Observation Boundary
 

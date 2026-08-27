@@ -353,6 +353,19 @@ task-condition reconciliation; closed failure state preserves only cleanup,
 generation, interruption, and retry truth. This remains a prerequisite fix,
 not a reservation-model acceptance.
 
+The planning-source ownership wall is now structurally closed across both
+scans, prior correspondence, planner policy/assignment/operations, exact
+selection, observation, and preflight. Independent raw populations fail before
+construction, semantic facts accumulate once across the session, declared
+typed graphs are reconstructed instead of deep-copying undeclared state, and
+simultaneously retained builder/copy/final references are charged on disposable
+forks before the final owner is committed. First excess is a typed
+`REFUSED+UNRUN` with no saved or partial plan. These source counters and
+reference slots are prerequisite enforcement only; they are not checkpoint
+4's complete-object constants, formula, fixture, validator, or BR-G-45
+evidence. Remaining raw callback/workflow/dispatcher exception owners still
+require separate closure before the first mandatory model commit.
+
 - Linked execution can retain both 120,000 operation and 120,000 integrity
   outcomes, plus the dispatcher accumulator and shallow audit/store wrappers.
   Full-result header diagnostics now share the terminal summary's whole-value
@@ -387,10 +400,11 @@ not a reservation-model acceptance.
   Continuation codecs still project or parse the complete graph before any
   whole-envelope ceiling; derive their pre-projection and pre-parse ceilings
   from the frozen occurrence model.
-- Root/profile/evidence/filter/assignment/mount values still need source-backed
-  typed admission wherever they escape the enclosing graph wall. Runtime
-  `_inventory_details` also needs exact task/session retirement or a separately
-  charged bounded owner before completion capacity can be released.
+- Planning roots/profiles/evidence/filter/assignment values now have
+  source-backed typed admission at their producer/copy/retained transitions.
+  Other task paths, mount/inventory values, and runtime `_inventory_details`
+  still need exact task/session retirement or a separately charged bounded
+  owner before completion capacity can be released.
 
 These are source-derived counterexamples and enforcement prerequisites, not
 memory measurements or a substitute maximum fixture. No numerical model,

@@ -1582,6 +1582,19 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - FIXED (2026-08-27). Prepublication source-owner escape. Plan review
+  could accumulate scanner builders, correspondence maps, policy assignments,
+  operations, observation maps, and refusal copies without one enforceable
+  owner wall; generic copying could also retain undeclared instance state. A
+  sufficiently large admitted tree or hostile collaborator could exhaust the
+  headed process before any later task reservation or typed refusal. Cause:
+  scalar/final-shape validation did not cover raw populations or simultaneously
+  live producer, copy, and final containers. Fixed with exact typed
+  reconstruction, independent source gates, cumulative semantic-row counters,
+  and pre-allocation eight-byte reference-slot charges on disposable forks;
+  first excess is `REFUSED+UNRUN` and saves no partial plan. Complete-object,
+  callback/exception, native, browser, and multi-session owners remain separate
+  checkpoint-4 prerequisites rather than accepted by this fix.
 - MODERATE - FIXED (2026-08-27). Verify-continuation diagnostic retention.
   Linked execution bounded failure type and message separately, then retained
   their unchecked concatenation in paused verify custody. The continuation also

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator, ValuesView
+from datetime import datetime, timezone
 import os
+from pathlib import Path, PureWindowsPath
 import shutil
 import stat as stat_module
-from datetime import datetime, timezone
-from pathlib import Path, PureWindowsPath
 from typing import Protocol
 
 from namisync.core.evidence import Outcome
@@ -33,6 +34,7 @@ from namisync.core.pathing import (
     validate_relative_path,
 )
 from namisync.core.planning import (
+    OpId,
     OperationKind,
     PlanOperation,
     calculate_required_bytes,
@@ -59,7 +61,55 @@ from namisync.core.root_authority import (
     is_reparse_stat,
     observe_native_volume,
 )
+from namisync.core.review import PlanReviewAdmission
 from namisync.core.scalars import checked_add_signed_64, require_signed_64
+
+
+_RefusalKey = tuple[RefusalCode, OpId | None, Subject | None, str]
+
+
+class _PlanRefusalCollector:
+    """Retain each raw canonical refusal once after source admission."""
+
+    __slots__ = ("_admission", "_by_key", "_raw_count")
+
+    def __init__(self, admission: PlanReviewAdmission | None) -> None:
+        if admission is not None and type(admission) is not PlanReviewAdmission:
+            raise TypeError("preflight review admission has the wrong type")
+        self._admission = admission
+        self._by_key: dict[_RefusalKey, Refusal] = {}
+        self._raw_count = 0
+
+    def append(self, refusal: Refusal) -> None:
+        if type(refusal) is not Refusal:
+            raise TypeError("preflight refusals must contain Refusal values")
+        next_raw_count = self._raw_count + 1
+        if self._admission is not None:
+            self._admission.require_informational_source_rows(next_raw_count)
+            key_owner = self._admission.fork()
+            key_owner.admit_informational_shape(
+                reference_slots=4,
+                rows=0,
+            )
+        key = (
+            refusal.code,
+            refusal.op_id,
+            refusal.subject,
+            refusal.detail,
+        )
+        if key in self._by_key:
+            # Preserve the former dict-comprehension rule: the last equal
+            # refusal supplies the retained value without adding another row.
+            self._by_key[key] = refusal
+            self._raw_count = next_raw_count
+            return
+        if self._admission is not None:
+            self._admission.admit_informational_shape(reference_slots=6)
+        self._by_key[key] = refusal
+        self._raw_count = next_raw_count
+
+    def values(self) -> ValuesView[Refusal]:
+        return self._by_key.values()
 
 
 class ObservationFileSystem(Protocol):
@@ -402,40 +452,126 @@ class LocalObservationFileSystem:
         return datetime.now(timezone.utc)
 
 
-def _operation_subjects(xset: ExecutionSet) -> tuple[dict[Subject, tuple[Root, str, CapabilityProfile]], frozenset[str]]:
+def _iter_remaining_operations(
+    xset: ExecutionSet,
+) -> Iterator[PlanOperation]:
+    for operation in xset.plan.operations:
+        if (
+            operation.op_id in xset.selection
+            and operation.op_id not in xset.status
+        ):
+            yield operation
+
+
+def _operation_subjects(
+    xset: ExecutionSet,
+    *,
+    review_admission: PlanReviewAdmission | None = None,
+) -> tuple[
+    dict[Subject, tuple[Root, str, CapabilityProfile]],
+    frozenset[str],
+]:
+    if (
+        review_admission is not None
+        and type(review_admission) is not PlanReviewAdmission
+    ):
+        raise TypeError("preflight review admission has the wrong type")
     subjects: dict[Subject, tuple[Root, str, CapabilityProfile]] = {}
     target_parents: set[str] = set()
     plan = xset.plan
-    for operation in xset.remaining():
+
+    def retain_subject(
+        subject: Subject,
+        value: tuple[Root, str, CapabilityProfile],
+        *,
+        replace_existing: bool = True,
+    ) -> None:
+        if subject not in subjects:
+            if review_admission is not None:
+                review_admission.require_source_rows(len(subjects) + 1)
+                review_admission.admit_domain_shape(reference_slots=2)
+        elif not replace_existing:
+            return
+        subjects[subject] = value
+
+    def retain_parent(parent: str) -> None:
+        if parent in target_parents:
+            return
+        if review_admission is not None:
+            review_admission.require_source_rows(len(target_parents) + 1)
+            review_admission.admit_domain_shape(reference_slots=1)
+        target_parents.add(parent)
+
+    for operation in _iter_remaining_operations(xset):
         if operation.source_rel_path is not None:
             subject = Subject(plan.source_root.root_id, normalize_relative_path(operation.source_rel_path))
-            subjects[subject] = (plan.source_root, operation.source_rel_path, plan.source_profile)
+            retain_subject(
+                subject,
+                (
+                    plan.source_root,
+                    operation.source_rel_path,
+                    plan.source_profile,
+                ),
+            )
         target_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.target_rel_path))
-        subjects[target_subject] = (plan.target_root, operation.target_rel_path, plan.target_profile)
+        retain_subject(
+            target_subject,
+            (
+                plan.target_root,
+                operation.target_rel_path,
+                plan.target_profile,
+            ),
+        )
         parent = str(PureWindowsPath(operation.target_rel_path).parent)
         parent = "" if parent == "." else parent
-        target_parents.add(parent)
+        retain_parent(parent)
         if parent:
             parent_subject = Subject(plan.target_root.root_id, normalize_relative_path(parent))
-            subjects.setdefault(parent_subject, (plan.target_root, parent, plan.target_profile))
+            retain_subject(
+                parent_subject,
+                (plan.target_root, parent, plan.target_profile),
+                replace_existing=False,
+            )
         if operation.prior_target_rel_path is not None:
             prior_subject = Subject(plan.target_root.root_id, normalize_relative_path(operation.prior_target_rel_path))
-            subjects[prior_subject] = (plan.target_root, operation.prior_target_rel_path, plan.target_profile)
+            retain_subject(
+                prior_subject,
+                (
+                    plan.target_root,
+                    operation.prior_target_rel_path,
+                    plan.target_profile,
+                ),
+            )
             prior_parent = str(PureWindowsPath(operation.prior_target_rel_path).parent)
             prior_parent = "" if prior_parent == "." else prior_parent
-            target_parents.add(prior_parent)
+            retain_parent(prior_parent)
             if prior_parent:
                 parent_subject = Subject(plan.target_root.root_id, normalize_relative_path(prior_parent))
-                subjects.setdefault(parent_subject, (plan.target_root, prior_parent, plan.target_profile))
+                retain_subject(
+                    parent_subject,
+                    (plan.target_root, prior_parent, plan.target_profile),
+                    replace_existing=False,
+                )
+    if review_admission is not None:
+        review_admission.admit_domain_shape(
+            reference_slots=len(target_parents)
+        )
     return subjects, frozenset(target_parents)
 
 
 def observe(
     xset: ExecutionSet,
     fs: ObservationFileSystem,
+    *,
+    review_admission: PlanReviewAdmission | None = None,
 ) -> ObservedWorld:
     """Read the current scoped world without making any safety decision."""
 
+    if (
+        review_admission is not None
+        and type(review_admission) is not PlanReviewAdmission
+    ):
+        raise TypeError("preflight review admission has the wrong type")
     plan = xset.plan
 
     def authority_for(root: Root) -> RootAuthority:
@@ -455,13 +591,22 @@ def observe(
     authorities: dict[str, RootAuthority] = {}
     admitted_roots: dict[str, bool] = {}
 
+    def retain_root(root_id: str, observation: RootObservation) -> None:
+        if root_id not in roots and review_admission is not None:
+            review_admission.require_source_rows(len(roots) + 1)
+            review_admission.admit_domain_shape(reference_slots=2)
+        roots[root_id] = observation
+
     def reject_root(root: Root, error: RootAuthorityError) -> None:
-        roots[root.root_id] = RootObservation(
-            None,
-            None,
-            None,
-            logical_error_text(error),
-            error.issue,
+        retain_root(
+            root.root_id,
+            RootObservation(
+                None,
+                None,
+                None,
+                logical_error_text(error),
+                error.issue,
+            ),
         )
         admitted_roots[root.root_id] = False
 
@@ -476,20 +621,27 @@ def observe(
             observation = RootObservation(
                 None, None, None, logical_error_text(error)
             )
-            roots[root.root_id] = observation
+            retain_root(root.root_id, observation)
             admitted_roots[root.root_id] = False
         else:
-            roots[root.root_id] = observation
+            retain_root(root.root_id, observation)
             admitted_roots[root.root_id] = _classify_root_facts(
                 authority.expected_volume_id,
                 authority.reviewed_anchor,
                 observation,
             ) is None
 
-    subjects, target_parents = _operation_subjects(xset)
+    subjects, target_parents = _operation_subjects(
+        xset,
+        review_admission=review_admission,
+    )
     stats: dict[Subject, StatObservation] = {}
     paths: dict[Subject, str] = {}
     for subject, (root, rel_path, profile) in sorted(subjects.items()):
+        if review_admission is not None:
+            review_admission.require_source_rows(len(paths) + 1)
+            review_admission.require_source_rows(len(stats) + 1)
+            review_admission.admit_domain_shape(reference_slots=4)
         paths[subject] = rel_path
         if not admitted_roots.get(root.root_id, False):
             root_observation = roots.get(root.root_id)
@@ -546,14 +698,13 @@ def observe(
             reclaimable = 0
     else:
         reclaimable = 0
-    remaining = xset.remaining()
     needs_trash = any(
         operation.kind is OperationKind.TRASH
         or (
             xset.plan.trash_on_update
             and operation.kind in {OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
         )
-        for operation in remaining
+        for operation in _iter_remaining_operations(xset)
     )
     if needs_trash and admitted_roots.get(target.root_id, False):
         try:
@@ -606,7 +757,7 @@ def _paths_overlap(first: str, second: str) -> bool:
 
 
 def _add_stat_refusals(
-    refusals: list[Refusal],
+    refusals: _PlanRefusalCollector,
     operation: PlanOperation,
     subject: Subject,
     observation: StatObservation | None,
@@ -648,11 +799,27 @@ def _add_stat_refusals(
         refusals.append(Refusal(RefusalCode.METADATA_CHANGED, operation.op_id, subject))
 
 
-def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
+def preflight(
+    xset: ExecutionSet,
+    world: ObservedWorld,
+    *,
+    review_admission: PlanReviewAdmission | None = None,
+) -> Verdict:
     """Purely judge all applicable refusal reasons for an execution set."""
 
+    published_admission = review_admission
+    if (
+        published_admission is not None
+        and type(published_admission) is not PlanReviewAdmission
+    ):
+        raise TypeError("preflight review admission has the wrong type")
+    construction_admission = (
+        None
+        if published_admission is None
+        else published_admission.fork()
+    )
+    refusals = _PlanRefusalCollector(construction_admission)
     plan = xset.plan
-    refusals: list[Refusal] = []
     source_root = world.roots.get(plan.source_root.root_id)
     target_root = world.roots.get(plan.target_root.root_id)
     for expected, reviewed_evidence, observed in (
@@ -718,7 +885,13 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
         refusals.append(Refusal(RefusalCode.ROOTS_OVERLAP))
 
     operations_by_id = {operation.op_id: operation for operation in plan.operations}
-    remaining = xset.remaining()
+    remaining_count = sum(1 for _ in _iter_remaining_operations(xset))
+    if construction_admission is not None:
+        construction_admission.require_source_rows(remaining_count)
+        construction_admission.admit_domain_shape(
+            reference_slots=remaining_count
+        )
+    remaining = tuple(_iter_remaining_operations(xset))
     remaining_ids = {operation.op_id for operation in remaining}
     quarantined = quarantined_operation_ids(plan.operations)
     direct_target_subjects: set[Subject] = set()
@@ -865,12 +1038,15 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
             if not trash.reparse_safe:
                 refusals.append(Refusal(RefusalCode.TRASH_REPARSE))
 
-    unique = {
-        (refusal.code, refusal.op_id, refusal.subject, refusal.detail): refusal for refusal in refusals
-    }
+    retained_count = len(refusals.values())
+    if construction_admission is not None:
+        construction_admission.admit_informational_shape(
+            reference_slots=2 * retained_count,
+            rows=0,
+        )
     ordered = tuple(
         sorted(
-            unique.values(),
+            refusals.values(),
             key=lambda refusal: (
                 refusal.code.value,
                 str(refusal.op_id or ""),
@@ -879,4 +1055,11 @@ def preflight(xset: ExecutionSet, world: ObservedWorld) -> Verdict:
             ),
         )
     )
-    return Verdict(not ordered, ordered, world)
+    verdict = Verdict(not ordered, ordered, world)
+    if published_admission is not None:
+        published_admission.require_informational_source_rows(len(ordered))
+        published_admission.admit_informational_shape(
+            reference_slots=len(ordered),
+            rows=len(ordered),
+        )
+    return verdict

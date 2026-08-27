@@ -1,6 +1,6 @@
 # Workflows Module
 
-Status (2026-08-22): M0 reviewed sync/history plus M1 Stages 1-5.5 are
+Status (2026-08-27): M0 reviewed sync/history plus M1 Stages 1-5.5 are
 implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
@@ -11,11 +11,12 @@ commands. Stage 5.5's workflow-owned selection semantics are now implemented:
 direct user deselection remains distinct from safety exclusion, execution
 re-derives the authoritative set, and plan payload v5 plus execution payload v6
 preserve that provenance and executor continuation truth.
-Stage 5.5 facade integration is complete;
+Stage 5.5 facade integration is complete; Stage 6's pre-model planning-source
+ownership wall is active without freezing the checkpoint-4 reservation model;
 Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
-## Stage 6 Second-Half Workflow Contract (Checkpoints 2 And 3.2 Active)
+## Stage 6 Second-Half Workflow Contract (Checkpoints 2–3.3 And The Checkpoint-4 Source Prerequisite Active)
 
 The checkpoint sequence is owned by
 [M1_SHELL_H2.md](M1_SHELL_H2.md); exact event/result and task protocols live in
@@ -169,6 +170,24 @@ reprojects a staged candidate after publication.
 
 ### Plan session
 
+The plan session owns one `PlanReviewAdmission` ledger. Each scanner,
+correspondence query, planner, observer, and preflight call receives a
+disposable producer fork; declared typed output is reconstructed on a capture
+fork, the raw producer owner is retired, and the exact final fact graph is then
+charged once to the outer owner. Independent raw populations refuse before
+construction, cumulative semantic rows cannot reset between stages, and
+unavoidable simultaneously live container references are charged at their
+actual transition. Forged mapping wrappers, undeclared instance dictionaries,
+and mutation between production and capture are rejected rather than retained.
+The workflow maps the first `ReviewFactLimitError` to `REFUSED+UNRUN` without
+saving a plan or exposing a partial result.
+
+This is the planning-source ownership prerequisite for checkpoint 4. Its row
+and shallow-reference counters are not a reservation formula, heap estimate,
+or complete task-artifact validator; callback/exception frames and the later
+serialization, native, browser, and multi-session owners still need separate
+closure or charge before the checkpoint-4 model can freeze.
+
 1. Lexically normalize and validate distinct non-nested roots and request
    semantics without following filesystem links. The shared core chain-only
    admission obtains the current native anchor and uses extended spelling only
@@ -178,7 +197,8 @@ reprojects a staged candidate after publication.
    root names, and never persists or displays a `\\?\` prefix.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
-3. Scan both roots with the same role-free observation contract.
+3. Scan both roots with the same role-free observation contract and independent
+   raw source-population forks; retain only reconstructed exact scan records.
 4. Read immutable prior correspondence through a source-derived bounded ledger
    query: current target file keys and current source/target file identities are
    the complete query scope, with all 400-subject batches and disqualification
@@ -192,8 +212,9 @@ reprojects a staged candidate after publication.
    incomplete.
 7. Observe/preflight that exact selection for review information.
 8. Return the immutable plan/verdict with reviewed authority and typed warning/
-   refusal facts intact; terminate and release locks. Stage 6 projects those
-   facts as inert notices rather than flattening or dropping them.
+   refusal facts intact after all disposable producer/copy owners retire;
+   terminate and release locks. Stage 6 projects those facts as inert notices
+   rather than flattening or dropping them.
 
 ### Execution session
 

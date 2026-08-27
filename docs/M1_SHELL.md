@@ -42,8 +42,11 @@ checkpoint 0 is complete after final documentation, three independent bounded
 reviews, link/anchor validation, manifest-backed test collection, stale-contract
 searches, and diff validation. Checkpoints 1–3, including private legacy decoder
 removal and the independently reviewed 3R remediation, are complete.
-Checkpoint 4 is in its pre-model ownership audit; checkpoints 5–12 remain
-pending. NamiSync remains version
+Checkpoint 4 is in its pre-model ownership audit. Its planning-source wall now
+bounds raw populations, cumulative semantic facts, and simultaneously retained
+references without freezing a reservation model; remaining exception and
+task-artifact owners still precede the first mandatory model commit.
+Checkpoints 5–12 remain pending. NamiSync remains version
 `0.1.0` until
 M1 is complete. Finishing M1 makes the product beta-ready; any later version
 change is a separate release decision.

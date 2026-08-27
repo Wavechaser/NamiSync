@@ -1,8 +1,9 @@
 # Scanner Module
 
 Status: M0 walking and exact-path scanning plus M1 Stage 5.5 recursive subtree
-scanning are implemented. Incremental and network-aware sources remain later
-implementations of the same contract.
+scanning are implemented. Stage 6's pre-model plan-source admission is active
+for workflow-supplied scans. Incremental and network-aware sources remain
+later implementations of the same contract.
 
 ## Purpose
 
@@ -21,8 +22,25 @@ scan(
     scope: ScanScope | None = None,
     *,
     trusted_anchor: str | None = None,
+    review_admission: PlanReviewAdmission | None = None,
 ) -> ScanResult
 ```
+
+The optional admission is workflow-owned and exact-type-only. Ordinary scanner
+callers may omit it. A planning caller supplies one disposable fork for the
+scan's raw directory-entry populations and working builders, then retains only
+the exact typed `ScanResult` in its outer plan-review owner. Source-population
+limits are checked before append or diagnostic joining; cumulative file,
+directory, and unsupported populations become retained domain references,
+while warnings alone become cumulative informational semantic rows.
+Builder-to-sort and sort-to-tuple reference overlap is charged while both
+owners exist. A first excess raises the shared typed review-limit error and no
+partial `ScanResult` is published.
+
+This admission closes the planning-source owner boundary. It is not the
+checkpoint-4 complete-object reservation model: text/codec/native copies,
+container allocation, and task/result retention remain governed by that later
+model and validator.
 
 ## Implemented M0 Surface
 

@@ -55,8 +55,13 @@ from namisync.core.root_authority import (
     is_reparse_stat,
     observe_native_volume,
 )
+from namisync.core.review import (
+    PlanReviewAdmission,
+    admit_retained_plan_scan,
+)
 from namisync.core.session import RunContext
 from namisync.core.scalars import (
+    MAX_DIAGNOSTIC_UTF8_BYTES,
     ScalarDomainError,
     require_utf16_path,
 )
@@ -64,6 +69,56 @@ from namisync.core.scalars import (
 
 FILE_NAMED_STREAMS = 0x00040000
 FILE_SUPPORTS_HARD_LINKS = 0x00400000
+
+
+class _PlanScanCollectors:
+    """Share plan-source row gates across one scanner result."""
+
+    __slots__ = ("admission", "domain_count", "informational_count")
+
+    def __init__(self, admission: PlanReviewAdmission) -> None:
+        self.admission = admission
+        self.domain_count = 0
+        self.informational_count = 0
+
+    def admit_domain(self, value: object) -> None:
+        if type(value) not in (FileRecord, DirRecord, UnsupportedRecord):
+            raise TypeError("plan scan domain collector received an invalid value")
+        next_count = self.domain_count + 1
+        self.admission.require_source_rows(next_count)
+        self.admission.admit_domain_shape(reference_slots=1, rows=0)
+        self.domain_count = next_count
+
+    def admit_warning(self, value: object) -> None:
+        if type(value) is not ScanWarning:
+            raise TypeError("plan scan warning collector received an invalid value")
+        next_count = self.informational_count + 1
+        self.admission.require_informational_source_rows(next_count)
+        self.admission.admit_informational_shape(reference_slots=1)
+        self.informational_count = next_count
+
+
+class _PlanScanList(list):
+    """Append-only plan scanner list that gates its shared population."""
+
+    __slots__ = ("_collectors", "_informational")
+
+    def __init__(
+        self,
+        collectors: _PlanScanCollectors,
+        *,
+        informational: bool,
+    ) -> None:
+        super().__init__()
+        self._collectors = collectors
+        self._informational = informational
+
+    def append(self, value: object) -> None:
+        if self._informational:
+            self._collectors.admit_warning(value)
+        else:
+            self._collectors.admit_domain(value)
+        super().append(value)
 
 
 @dataclass(frozen=True)
@@ -114,6 +169,24 @@ class DirectoryEntry(Protocol):
     def is_file(self, *, follow_symlinks: bool = True) -> bool: ...
 
     def stat(self, *, follow_symlinks: bool = True) -> os.stat_result: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanDirectoryEntry:
+    """Plan-only entry whose name and path are captured exactly once."""
+
+    name: str
+    path: str
+    entry: DirectoryEntry
+
+    def is_dir(self, *, follow_symlinks: bool = True) -> bool:
+        return self.entry.is_dir(follow_symlinks=follow_symlinks)
+
+    def is_file(self, *, follow_symlinks: bool = True) -> bool:
+        return self.entry.is_file(follow_symlinks=follow_symlinks)
+
+    def stat(self, *, follow_symlinks: bool = True) -> os.stat_result:
+        return self.entry.stat(follow_symlinks=follow_symlinks)
 
 
 class ScannerBackend(Protocol):
@@ -299,12 +372,18 @@ class WalkingScanner:
         scope: ScanScope | None = None,
         *,
         trusted_anchor: str | None = None,
+        review_admission: PlanReviewAdmission | None = None,
     ) -> ScanResult:
         if type(root) is not Root:
             raise TypeError("scanner root requires Root")
         root = Root(root.path, root.root_id)
         if type(ignores) is not IgnoreSet:
             raise TypeError("scanner ignores require IgnoreSet")
+        if (
+            review_admission is not None
+            and type(review_admission) is not PlanReviewAdmission
+        ):
+            raise TypeError("plan review admission has the wrong type")
         requested_scope = (
             ScanScope.full()
             if scope is None
@@ -324,7 +403,11 @@ class WalkingScanner:
                 )
         except (OSError, PermissionError) as error:
             return self._offline_result(
-                root, requested_scope, error, ScanWarningCode.ROOT_UNAVAILABLE
+                root,
+                requested_scope,
+                error,
+                ScanWarningCode.ROOT_UNAVAILABLE,
+                review_admission=review_admission,
             )
 
         resolved_root = Root(resolved, root.root_id)
@@ -336,6 +419,7 @@ class WalkingScanner:
                 requested_scope,
                 error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
+                review_admission=review_admission,
             )
         root_error = self._root_error(resolved, reviewed_anchor)
         if root_error is not None:
@@ -344,6 +428,7 @@ class WalkingScanner:
                 requested_scope,
                 root_error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
+                review_admission=review_admission,
             )
         try:
             volume = validate_volume_snapshot(
@@ -355,6 +440,7 @@ class WalkingScanner:
                 requested_scope,
                 error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
+                review_admission=review_admission,
             )
         root_error = self._root_error(resolved, reviewed_anchor)
         if root_error is not None:
@@ -363,6 +449,7 @@ class WalkingScanner:
                 requested_scope,
                 root_error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
+                review_admission=review_admission,
             )
         binding_error = self._binding_error(
             resolved,
@@ -375,6 +462,7 @@ class WalkingScanner:
                 requested_scope,
                 binding_error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
+                review_admission=review_admission,
             )
         device_anchor = volume.evidence.device_id
         # The reviewed mount may itself be a folder-volume reparse point. A
@@ -399,10 +487,20 @@ class WalkingScanner:
             )
         )
 
-        files: list[FileRecord] = []
-        directories: list[DirRecord] = []
-        unsupported: list[UnsupportedRecord] = []
-        warnings: list[ScanWarning] = []
+        published_admission = review_admission
+        if published_admission is not None:
+            review_admission = published_admission.fork()
+        if review_admission is None:
+            files: list[FileRecord] = []
+            directories: list[DirRecord] = []
+            unsupported: list[UnsupportedRecord] = []
+            warnings: list[ScanWarning] = []
+        else:
+            collectors = _PlanScanCollectors(review_admission)
+            files = _PlanScanList(collectors, informational=False)
+            directories = _PlanScanList(collectors, informational=False)
+            unsupported = _PlanScanList(collectors, informational=False)
+            warnings = _PlanScanList(collectors, informational=True)
         if requested_scope.kind is ScanScopeKind.FULL:
             complete = self._scan_full(
                 volume,
@@ -414,6 +512,7 @@ class WalkingScanner:
                 warnings,
                 starting_points=((resolved, ""),),
                 trusted_mount_root=trusted_mount_root,
+                review_admission=review_admission,
             )
         elif requested_scope.kind is ScanScopeKind.PATHS:
             assert authority is not None
@@ -465,6 +564,7 @@ class WalkingScanner:
                 unsupported,
                 warnings,
                 starting_points=tuple(starting_points),
+                review_admission=review_admission,
             )
             complete = (
                 selected_complete
@@ -479,11 +579,15 @@ class WalkingScanner:
         complete = complete and collision_complete
         root_error = self._root_error(resolved, reviewed_anchor)
         if root_error is not None:
+            del files, directories, unsupported, warnings, review_admission
+            if published_admission is not None:
+                del collectors
             return self._offline_result(
                 resolved_root,
                 requested_scope,
                 root_error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
+                review_admission=published_admission,
             )
         binding_error = self._binding_error(
             resolved,
@@ -491,13 +595,31 @@ class WalkingScanner:
             volume.volume_id,
         )
         if binding_error is not None:
+            del files, directories, unsupported, warnings, review_admission
+            if published_admission is not None:
+                del collectors
             return self._offline_result(
                 resolved_root,
                 requested_scope,
                 binding_error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
+                review_admission=published_admission,
             )
-        return ScanResult(
+        if review_admission is not None:
+            review_admission.admit_domain_shape(
+                # ``tuple(sorted(builder))`` briefly retains both the sorted
+                # list and the returned tuple while the admitted builders are
+                # still live.  Charge both new owners before either allocates.
+                reference_slots=2 * (
+                    len(files) + len(directories) + len(unsupported)
+                ),
+                rows=0,
+            )
+            review_admission.admit_informational_shape(
+                reference_slots=2 * len(warnings),
+                rows=0,
+            )
+        result = ScanResult(
             root=resolved_root,
             volume_id=volume.volume_id,
             volume_evidence=volume.evidence,
@@ -509,6 +631,9 @@ class WalkingScanner:
             scope=requested_scope,
             complete=complete,
         )
+        if published_admission is not None:
+            admit_retained_plan_scan(result, published_admission)
+        return result
 
     def _scan_full(
         self,
@@ -522,6 +647,7 @@ class WalkingScanner:
         *,
         starting_points: tuple[tuple[str, str], ...],
         trusted_mount_root: str | None = None,
+        review_admission: PlanReviewAdmission | None = None,
     ) -> bool:
         visited: set[FileIdentity] = set()
         pending: list[tuple[str, str]] = []
@@ -735,7 +861,19 @@ class WalkingScanner:
                     try:
                         for entry in entries:
                             ctx.checkpoint()
-                            ordered.append(entry)
+                            if review_admission is None:
+                                ordered.append(entry)
+                                continue
+                            review_admission.require_source_rows(
+                                len(ordered) + 1
+                            )
+                            ordered.append(
+                                _PlanDirectoryEntry(
+                                    entry.name,
+                                    entry.path,
+                                    entry,
+                                )
+                            )
                     except (OSError, PermissionError) as error:
                         enumeration_error = error
             except (OSError, PermissionError) as error:
@@ -1189,7 +1327,14 @@ class WalkingScanner:
             distinct = sorted(set(paths))
             if len(distinct) > 1:
                 warnings.append(
-                    ScanWarning(ScanWarningCode.CASE_COLLISION, distinct[0], " | ".join(distinct))
+                    ScanWarning(
+                        ScanWarningCode.CASE_COLLISION,
+                        distinct[0],
+                        WalkingScanner._joined_warning_detail(
+                            warnings,
+                            distinct,
+                        ),
+                    )
                 )
                 complete = False
         return complete
@@ -1208,8 +1353,45 @@ class WalkingScanner:
             if len(paths) > 1:
                 ordered = sorted(paths)
                 warnings.append(
-                    ScanWarning(ScanWarningCode.DUPLICATE_IDENTITY, ordered[0], " | ".join(ordered))
+                    ScanWarning(
+                        ScanWarningCode.DUPLICATE_IDENTITY,
+                        ordered[0],
+                        WalkingScanner._joined_warning_detail(
+                            warnings,
+                            ordered,
+                        ),
+                    )
                 )
+
+    @staticmethod
+    def _joined_warning_detail(
+        warnings: list[ScanWarning],
+        paths: list[str],
+    ) -> str:
+        """Preflight plan diagnostics while preserving ordinary construction."""
+
+        if not isinstance(warnings, _PlanScanList):
+            return " | ".join(paths)
+
+        total = 3 * (len(paths) - 1)
+        if total > MAX_DIAGNOSTIC_UTF8_BYTES:
+            return ""
+        for path in paths:
+            for character in path:
+                ordinal = ord(character)
+                if ordinal <= 0x7F:
+                    total += 1
+                elif ordinal <= 0x7FF:
+                    total += 2
+                elif 0xD800 <= ordinal <= 0xDFFF:
+                    return ""
+                elif ordinal <= 0xFFFF:
+                    total += 3
+                else:
+                    total += 4
+                if total > MAX_DIAGNOSTIC_UTF8_BYTES:
+                    return ""
+        return " | ".join(paths)
 
     @staticmethod
     def _warning_sort_key(warning: ScanWarning) -> tuple[str, str, str]:
@@ -1222,7 +1404,12 @@ class WalkingScanner:
         scope: ScanScope,
         error: OSError,
         code: ScanWarningCode,
+        *,
+        review_admission: PlanReviewAdmission | None = None,
     ) -> ScanResult:
+        if review_admission is not None:
+            review_admission.require_informational_source_rows(1)
+            review_admission.admit_informational_shape(reference_slots=1)
         return ScanResult(
             root=root,
             volume_id=None,
@@ -1244,6 +1431,7 @@ def scan(
     scope: ScanScope | None = None,
     *,
     trusted_anchor: str | None = None,
+    review_admission: PlanReviewAdmission | None = None,
 ) -> ScanResult:
     return WalkingScanner().scan(
         root,
@@ -1251,4 +1439,5 @@ def scan(
         ctx,
         scope,
         trusted_anchor=trusted_anchor,
+        review_admission=review_admission,
     )

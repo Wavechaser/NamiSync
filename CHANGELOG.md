@@ -23,6 +23,21 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Bound checkpoint-4 planning source ownership (2026-08-27)
+
+- Added one workflow-owned plan-review admission across scanning, prior
+  correspondence, planning, selection, observation, and preflight. Independent
+  raw populations, cumulative semantic facts, and simultaneous shallow
+  reference owners now fail before first-excess construction; no partial plan
+  is saved.
+- Reconstructed declared typed callback results instead of deep-copying hidden
+  state, detached policy inputs, pinned request identity before callback access,
+  and revalidated the callback observation after return. Dependency/refusal
+  keys and builder-to-final transitions are charged before allocation.
+- Kept the source wall separate from checkpoint 4's complete-object
+  reservation constants, fixtures, and BR-G-45 evidence. Raw exception frames
+  and later task/native/browser owners remain explicit prerequisites.
+
 #### Remediate independent H2 checkpoint reviews (2026-08-26 – 2026-08-27)
 
 - Restored settlement-gate authority and pinned continuation invariants before

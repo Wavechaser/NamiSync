@@ -16,6 +16,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/core/test_scalar_identity_contracts.py",
         "tests/core/test_session_events.py",
         "tests/test_core_scanplan.py",
+        "tests/test_plan_review_limits.py",
     ),
     "scanner": ("tests/test_scanner.py",),
     "planner": ("tests/test_planner.py",),

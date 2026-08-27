@@ -46,11 +46,19 @@ from namisync.core.planning import (
 )
 from namisync.core.preflight import (
     ObservedWorld,
+    Refusal,
     RefusalCode,
     RootObservation,
     StatObservation,
     Subject,
     TrashObservation,
+)
+from namisync.core.review import (
+    MAX_PLAN_REVIEW_ROWS,
+    PLAN_SOURCE_REFERENCE_BYTES,
+    PlanReviewAdmission,
+    ReviewFactLimitError,
+    ReviewFactLimitExceeded,
 )
 from namisync.core.root_authority import (
     NativeVolumeInfo,
@@ -491,6 +499,62 @@ def test_pure_preflight_accepts_matching_snapshot_without_filesystem() -> None:
     verdict = preflight(xset, _world(xset))
     assert verdict.ok
     assert verdict.refusals == ()
+
+
+def test_preflight_admission_charges_final_unique_refusals() -> None:
+    xset = _xset()
+    world = replace(_world(xset), free_space=None)
+    admission = PlanReviewAdmission()
+
+    verdict = preflight(xset, world, review_admission=admission)
+
+    assert len(verdict.refusals) == 1
+    assert admission.informational_rows == 1
+    assert admission.informational_bytes == PLAN_SOURCE_REFERENCE_BYTES
+
+
+def test_duplicate_refusals_consume_raw_rows_but_one_final_row() -> None:
+    admission = PlanReviewAdmission()
+    collector = preflight_module._PlanRefusalCollector(admission)
+    duplicate = Refusal(RefusalCode.ROOTS_OVERLAP)
+
+    for _ in range(MAX_PLAN_REVIEW_ROWS):
+        collector.append(duplicate)
+
+    assert tuple(collector.values()) == (duplicate,)
+    assert collector._raw_count == MAX_PLAN_REVIEW_ROWS
+    assert admission.informational_rows == 1
+    # Each unique owner retains a four-slot canonical key plus the mapping's
+    # key and value slots; duplicates add no retained owner.
+    assert admission.informational_bytes == 6 * PLAN_SOURCE_REFERENCE_BYTES
+
+    with pytest.raises(ReviewFactLimitError) as caught:
+        collector.append(duplicate)
+
+    assert (
+        caught.value.fact
+        == ReviewFactLimitExceeded.plan_informational_rows()
+    )
+    assert collector._raw_count == MAX_PLAN_REVIEW_ROWS
+    assert admission.informational_rows == 1
+
+
+def test_unique_refusal_admission_failure_does_not_commit_collector_state() -> None:
+    admission = PlanReviewAdmission()
+    admission.admit(informational_rows=MAX_PLAN_REVIEW_ROWS)
+    collector = preflight_module._PlanRefusalCollector(admission)
+
+    with pytest.raises(ReviewFactLimitError) as caught:
+        collector.append(Refusal(RefusalCode.ROOTS_OVERLAP))
+
+    assert (
+        caught.value.fact
+        == ReviewFactLimitExceeded.plan_informational_rows()
+    )
+    assert collector._raw_count == 0
+    assert tuple(collector.values()) == ()
+    assert admission.informational_rows == MAX_PLAN_REVIEW_ROWS
+    assert admission.informational_bytes == 0
 
 
 def test_execution_preflight_has_no_live_settings_drift_path() -> None:

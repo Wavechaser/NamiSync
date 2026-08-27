@@ -10,6 +10,9 @@ review-limit fact, and full-width Windows file identity.
 Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
 shared workflow tree substrate without changing their semantics, and makes
 recursive inventory scope an explicit core contract.
+The checkpoint-4 pre-model prerequisite adds finite plan-source admission and
+exact typed scan reconstruction; it does not activate the later task-artifact
+reservation model.
 
 The remaining accepted-but-inactive Stage 6 second-half contract is mapped in
 `M1_BRIDGE.md`; its scalar and retention hard walls are owned by
@@ -68,6 +71,20 @@ attestation format.
   failures rather than cached or persisted authorization.
 - Pure shared calculations such as capacity requirements and deterministic
   operation identifiers when those rules cross module boundaries.
+- Typed plan-review limit facts, exact counter admission, and declared scan
+  snapshots. `PlanReviewAdmission` keeps independent raw source-population
+  gates separate from cumulative semantic domain/informational rows, and
+  translates each simultaneously retained shallow container reference into
+  the fixed eight-byte reference-slot charge. Producer forks isolate
+  disposable high-water checks; only final facts commit to the outer owner.
+
+`core/review.py` is the canonical source for those constructors, limits,
+counter order, and snapshot rules. The source admission deliberately does not
+walk or size a complete Python object graph. It rejects undeclared scan state
+by reconstructing exact declared types, but checkpoint 4 must separately freeze
+and validate object/container allocation, strings, codecs, native/browser
+copies, callbacks, and multi-session retention before any task reservation is
+accepted.
 
 The M0 scan/plan/preflight portion is implemented in `core/pathing.py`,
 `core/root_authority.py`, `core/models.py`, `core/planning.py`, and
