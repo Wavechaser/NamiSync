@@ -496,9 +496,9 @@ def test_fresh_integrity_selection_filters_rows_by_mode(
     selections: list[tuple[str, ...]] = []
 
     def runner(selection, context, recorder):
-        del context, recorder
+        del recorder
         selections.append(tuple(item.display_path for item in selection.items))
-        return IntegrityRunResult((), RecordingStatus.OK)
+        return _settle_all(selection, context, mode)
 
     runtime, location_id, _scanner = _mixed_integrity_runtime(
         tmp_path,
@@ -575,7 +575,7 @@ def test_resumed_baseline_keeps_frozen_order_after_evidence_changes(
     selections: list[tuple[tuple[str, ...], dict[str, int], int]] = []
 
     def runner(selection, context, recorder):
-        del context, recorder
+        del recorder
         selections.append(
             (
                 tuple(item.item_id for item in selection.items),
@@ -583,7 +583,7 @@ def test_resumed_baseline_keeps_frozen_order_after_evidence_changes(
                 selection.processed_bytes,
             )
         )
-        return IntegrityRunResult((), RecordingStatus.OK)
+        return _settle_all(selection, context, IntegrityMode.BASELINE)
 
     runtime, location_id, _scanner = _mixed_integrity_runtime(
         tmp_path,
@@ -631,9 +631,9 @@ def test_resumed_integrity_runtime_queries_only_frozen_row_ids(
     selections: list[tuple[str, ...]] = []
 
     def runner(selection, context, recorder):
-        del context, recorder
+        del recorder
         selections.append(tuple(item.item_id for item in selection.items))
-        return IntegrityRunResult((), RecordingStatus.OK)
+        return _settle_all(selection, context, IntegrityMode.VERIFY)
 
     runtime, location_id, _scanner = _mixed_integrity_runtime(
         tmp_path,

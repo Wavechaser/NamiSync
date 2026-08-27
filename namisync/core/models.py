@@ -202,6 +202,51 @@ class FileStat:
         MetadataSnapshot(self.metadata.attributes, self.metadata.created_ns)
 
 
+def snapshot_file_stat(value: object) -> FileStat:
+    """Detach one exact filesystem-stat graph from a collaborator."""
+
+    if type(value) is not FileStat:
+        raise TypeError("file stat must have the exact public shape")
+    identity = value.file_identity
+    metadata = value.metadata
+    if identity is not None and type(identity) is not FileIdentity:
+        raise TypeError("file stat identity has the wrong type")
+    if type(metadata) is not MetadataSnapshot:
+        raise TypeError("file stat metadata has the wrong type")
+    return FileStat(
+        value.kind,
+        value.size,
+        value.mtime_ns,
+        (
+            None
+            if identity is None
+            else FileIdentity(identity.volume_serial, identity.file_index)
+        ),
+        value.nlink,
+        MetadataSnapshot(metadata.attributes, metadata.created_ns),
+    )
+
+
+def file_stat_fact(
+    value: object,
+) -> tuple[EntryKind, int, int, str | None, int | None, int, int, int | None]:
+    """Flatten an exact stat into unshared immutable comparison leaves."""
+
+    snapshot = snapshot_file_stat(value)
+    identity = snapshot.file_identity
+    metadata = snapshot.metadata
+    return (
+        snapshot.kind,
+        snapshot.size,
+        snapshot.mtime_ns,
+        None if identity is None else str(identity.volume_serial),
+        None if identity is None else identity.file_index,
+        snapshot.nlink,
+        metadata.attributes,
+        metadata.created_ns,
+    )
+
+
 @dataclass(frozen=True)
 class Root:
     path: str

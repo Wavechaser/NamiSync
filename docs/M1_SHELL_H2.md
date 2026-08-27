@@ -5,10 +5,12 @@
 > sequence; this file is the newest checkpoint reslice and owns the detailed
 > acceptance, review, and test boundary for checkpoints 0-12.
 
-Delivery status (2026-08-27): checkpoints 0–3 and the independently reviewed
+Delivery status (2026-08-28): checkpoints 0–3 and the independently reviewed
 3R remediation are complete, including the separately reviewed checkpoint-3.3
-legacy-source removal. Checkpoint 4 is in its pre-model ownership audit;
-checkpoints 5–12 remain pending. No checkpoint-4 command or control is active.
+legacy-source removal. The checkpoint-4 prerequisites are stabilized at their
+behavioral boundary; checkpoint 4 itself has not started and its draft model is
+quarantined outside the working tree. Checkpoints 5–12 remain pending. No
+checkpoint-4 command or control is active.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
@@ -432,6 +434,13 @@ Truthy context suppression, hostile diagnostics/notes, path-cause projection,
 and repeated exclusion delivery have independent regressions. Path-message and
 other callback/construction transients remain checkpoint-4 model inputs.
 
+The final bounded prerequisite review also closes three terminal truth gaps.
+Cursor custody advances locally before hostile capture, fresh-refusal control
+stays `REFUSED+UNRUN` with its accepted prefix, and recording mutation projects
+items, counters, phases, and the original integrity failure from pre-finish
+authority. Paused cancellation and fallback finishing use the same rule; later
+reconciliation cannot substitute a mutated alias or generic mismatch.
+
 - Dispatcher admission, cleanup, persistence, custody release, subscription,
   audit-pump, and session-worker start owners are now structurally closed.
   Provably unstarted attempts settle through the ordinary lifecycle, accepted
@@ -485,14 +494,13 @@ not freeze private counters, handler timing, or callback choreography.
   caches, all declared detail entries, and native/browser serialization copies.
   The frozen transport instrument is not that validator and remains untouched.
 - Standalone integrity now has a separately named 120,000-row/192-MiB candidate
-  wall with honest post-refresh `FAILED+RAN` policy, but repository, workflow,
-  service, and retirement enforcement remain incomplete. Enforce it before
-  receipt, tree, repository, resolver, native, or result work; stale unions and
-  saved resume selections must refuse as complete populations rather than
-  truncate.
+  wall with honest post-refresh `FAILED+RAN` policy and exact row-level
+  repository/workflow admission. Its complete retained-byte, task-service, and
+  retirement ownership remain checkpoint-4 model work; stale unions and saved
+  resume selections refuse as complete populations rather than truncate.
 - `VerifyContinuation.execute_phase` now owns a fresh exact base snapshot;
   executor diagnostics and their combined phase value use the existing
-  whole-value policy with exact omission accounting. Construction, v6 encode/
+  whole-value policy with exact omission accounting. Construction, v7 encode/
   decode, direct workflow entry, and canceled settlement revalidate that
   boundary, and the raw executor result retires before the continuation sink.
   Continuation codecs still project or parse the complete graph before any
@@ -505,6 +513,20 @@ not freeze private counters, handler timing, or callback choreography.
   paths, mount/inventory values, and runtime `_inventory_details` still need
   exact task/session retirement or a separately charged bounded owner before
   completion capacity can be released.
+- The next consolidation/model pass owns the cost and placement review for
+  full-graph revalidation on every callback/checkpoint, disposable fact-graph
+  construction, duplicate operation/candidate maps and settlement snapshots,
+  the currently unused `ExecutionOperationFact.content_bytes`, verifier
+  aggregate-versus-stream confirmation, and standardized four-string record
+  identities. It also owns unslotted/custom nested Python values, result
+  projection containers, EventHub envelope/body subscriber aliases,
+  SessionStore live-record aliases, and process-restart durability of the item
+  accumulator and exclusion receipt.
+- Checkpoint 4 must still model or eliminate complete tree projection,
+  codec/text estimates, disposable construction transients, sorting/index
+  storage, callback overlap, native/browser copies, container capacity, and
+  every speculative owner before it becomes production policy. None of these
+  deferred concerns justifies widening the stabilized workflow contracts.
 
 These are source-derived counterexamples and enforcement prerequisites, not
 memory measurements or a substitute maximum fixture. No numerical model,

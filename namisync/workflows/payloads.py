@@ -116,7 +116,7 @@ from ._json_envelope import (
 
 
 _PLAN_SCHEMA_VERSION = 5
-_EXECUTION_SCHEMA_VERSION = 6
+_EXECUTION_SCHEMA_VERSION = 7
 
 _PATH_UTF8_LIMIT = MAX_PATH_UTF16_UNITS * 3
 _VOLUME_TEXT_UTF8_LIMIT = MAX_VOLUME_TEXT_UTF16_UNITS * 3
@@ -242,7 +242,13 @@ _PHASE_RESULT_LAYOUT = object_layout(
     "phase", "status", "items_done", "items_total", "bytes_done", "bytes_total", "error"
 )
 _EXECUTE_LAYOUT = object_layout(
-    "schema_version", "kind", "phase", "execution_set", "started_at", "verify_after_execute"
+    "schema_version",
+    "kind",
+    "phase",
+    "execution_set",
+    "started_at",
+    "verify_after_execute",
+    "reported_exclusion_count",
 )
 _VERIFY_LAYOUT = object_layout(
     "schema_version",
@@ -517,7 +523,7 @@ _EXECUTE_MAX_OCCURRENCE_CHARGE = (
     + model_text_charge(len(ExecuteContinuation.phase))
     + _max_execution_set_charge()
     + _optional_max(model_text_charge(_TIMESTAMP_UTF8_LIMIT))
-    + JSON_SCALAR_CHARGE
+    + 2 * JSON_SCALAR_CHARGE
 )
 _VERIFY_MAX_OCCURRENCE_CHARGE = (
     model_object_charge(_VERIFY_LAYOUT)
@@ -1366,6 +1372,14 @@ def _charge_execution_request(request: object) -> JsonEnvelopeCounter:
     _charge_datetime(counter, request.started_at, "execution started_at", allow_none=True)
     if type(continuation) is ExecuteContinuation:
         counter.boolean(continuation.verify_after_execute, "verify_after_execute")
+        require_safe_int(
+            continuation.reported_exclusion_count,
+            "reported_exclusion_count",
+        )
+        counter.integer(
+            continuation.reported_exclusion_count,
+            "reported_exclusion_count",
+        )
         counter.require_within(_EXECUTE_MAX_OCCURRENCE_CHARGE, "execute continuation")
         return counter
     _charge_post_copy_selection(counter, continuation.candidates, "verify continuation.candidates")
@@ -2568,6 +2582,9 @@ def encode_execution_request(request: ExecutionRequest) -> bytes:
     }
     if isinstance(continuation, ExecuteContinuation):
         value["verify_after_execute"] = continuation.verify_after_execute
+        value["reported_exclusion_count"] = (
+            continuation.reported_exclusion_count
+        )
     else:
         value.update(
             {
@@ -2618,7 +2635,7 @@ def decode_execution_request(payload: bytes) -> ExecutionRequest:
     if phase == ExecuteContinuation.phase:
         _expect_keys(
             item,
-            common | {"verify_after_execute"},
+            common | {"verify_after_execute", "reported_exclusion_count"},
             "execute continuation",
         )
         continuation = ExecuteContinuation(
@@ -2626,6 +2643,13 @@ def decode_execution_request(payload: bytes) -> ExecutionRequest:
             verify_after_execute=_boolean(
                 item["verify_after_execute"],
                 "execute continuation.verify_after_execute",
+            ),
+            reported_exclusion_count=require_safe_int(
+                _integer(
+                    item["reported_exclusion_count"],
+                    "execute continuation.reported_exclusion_count",
+                ),
+                "execute continuation.reported_exclusion_count",
             ),
         )
     elif phase == VerifyContinuation.phase:

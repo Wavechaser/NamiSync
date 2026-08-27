@@ -2034,8 +2034,11 @@ def test_br_g_29_folder_verify_continues_past_one_unreadable_frozen_subject(
             )
             for item in selection.items
         )
-        for outcome in outcomes:
+        for item, outcome in zip(selection.items, outcomes, strict=True):
+            size = 0 if item.expected_stat is None else item.expected_stat.size
+            selection.note_bytes_processed(size)
             context.run.emit(outcome)
+            selection.mark_completed(item.item_id, size)
         return IntegrityRunResult(
             outcomes,
             RecordingStatus.OK,

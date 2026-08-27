@@ -13,7 +13,7 @@ from namisync.core.integrity import PostCopySelection
 from namisync.core.models import ScanResult
 from namisync.core.planning import OperationKind, Plan, SyncOptions
 from namisync.core.preflight import Verdict
-from namisync.core.scalars import bounded_utf8_text
+from namisync.core.scalars import bounded_utf8_text, require_safe_int
 from namisync.core.session import PhaseResult, PhaseStatus, SessionState
 from namisync.workflows.views import (
     PhaseResultView,
@@ -40,12 +40,17 @@ class ExecuteContinuation:
 
     execution_set: ExecutionSet
     verify_after_execute: bool = False
+    reported_exclusion_count: int = 0
 
     def __post_init__(self) -> None:
         if not isinstance(self.execution_set, ExecutionSet):
             raise TypeError("execute continuation requires an ExecutionSet")
         if not isinstance(self.verify_after_execute, bool):
             raise TypeError("verify_after_execute must be a bool")
+        require_safe_int(
+            self.reported_exclusion_count,
+            "reported exclusion count",
+        )
 
 
 @dataclass(frozen=True, slots=True)

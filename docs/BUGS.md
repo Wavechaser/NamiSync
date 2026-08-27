@@ -1320,14 +1320,14 @@ defect, and move implementation-level test choreography out of the log.
   partial work. Synthetic tree/index and candidate construction, their finite
   preprocessing transients, old/new task generations, and the complete byte
   authority remain checkpoint-4.1 owners.
-- SEVERE - OPEN (2026-08-28). Hostile resolution alias revalidation gap. The
-  inventory workflow validates a binding before calling the resolver, then
-  retains exact resolver-returned mount/evidence objects across later resolver
-  callbacks without a detached snapshot and final correspondence check. A
-  mutating collaborator can therefore change the root or volume facts used by
-  scan and recording after admission. Checkpoint 4.1 must snapshot and
-  revalidate the exact resolved graph before any callback or ledger effect;
-  this preexisting path issue is not part of the row prerequisite.
+- SEVERE - FIXED (2026-08-28). Hostile resolution alias mutation. Inventory
+  retained resolver-returned mount/evidence objects across the later root probe,
+  so callback mutation could change the root or volume facts used for scan and
+  recording after admission. Cause: frozen outer values were treated as deep
+  snapshots and the mounted population was observed only once. Fixed by exact
+  binding/mount/evidence reconstruction, a second detached mounted-population
+  observation after root admission, correspondence comparison, and downstream
+  use of only the resolved binding. A changed population retries before effects.
 - MODERATE - FIXED (2026-08-27). Historical correspondence amplification.
   Every plan loaded all retained pairs and identity aliases for a mapping's two
   locations, so a small current scan could materialize an arbitrarily large
@@ -1711,6 +1711,39 @@ defect, and move implementation-level test choreography out of the log.
   scan/plan/world/verdict slots. Excess is `REFUSED+UNRUN` and saves no plan.
   Construction, sorting/index storage, previews, codecs, native/browser copies,
   complete graphs, exceptions, and multi-session owners remain checkpoint 4.
+- SEVERE - FIXED (2026-08-28). Reliable result custody aliasing. The generic
+  runner, execution workflow, and integrity workflow could give a callback the
+  same item/result graph retained for terminal truth, or run a later validator
+  before retaining an item whose emission had already returned. Mutation or a
+  later mismatch could therefore rewrite or omit an accepted outcome. Fixed
+  with separate exact public/private snapshots, private pause accumulation,
+  accepted-prefix retention before later seams, and distinct settle, audit,
+  publication, summary, and returned-result graphs.
+- SEVERE - FIXED (2026-08-28). Exclusion delivery replay. A pause during
+  plan-exclusion delivery retained no acceptance position, so resume began at
+  the first exclusion and replayed already accepted reliable outcomes. Cause:
+  the count was local choreography rather than continuation custody. Exact
+  execution v7 now requires `reported_exclusion_count`, advances it after each
+  accepted plan-ordered exclusion before hostile cursor capture, refuses v6,
+  and emits only the remaining suffix. Cursor cancellation cannot replay the
+  accepted item; terminal refusal/failure/cancellation cannot become resumable
+  midway. Crash-atomic publication is deferred.
+- MODERATE - FIXED (2026-08-28). Terminal refusal control escape. Fresh
+  preflight refusal emitted reviewed exclusions through a terminal-only helper,
+  but a pause or cancellation raised there escaped direct workflow settlement
+  and could become generic `FAILED+RAN` under dispatcher handling. Cause: the
+  terminal control conversion had no typed refusal owner. Fixed by containing
+  it as the error of a phase-free `REFUSED+UNRUN` result while retaining only
+  the normally accepted exclusion prefix and opening no recorder or executor.
+- SEVERE - FIXED (2026-08-28). Recording boundary authority mutation. Recording
+  `finish`, fallback finishing, and context exit received mutable execution-set
+  aliases, while linked recording owners could also retain candidate aliases.
+  A hostile collaborator could alter settlement, progress, identity, or
+  candidate truth after the last workflow check and produce false terminal
+  success or overwrite the detected mutation with a later reconciliation error.
+  Fixed with exact pre/post authorities, pre-finish terminal projection, and
+  typed failed/incomplete results from saved facts across ordinary, paused-
+  cancellation, fallback-finish, and exit paths.
 - MODERATE - FIXED (2026-08-27). Verify-continuation diagnostic retention.
   Linked execution bounded failure type and message separately, then retained
   their unchecked concatenation in paused verify custody. The continuation also
@@ -1719,7 +1752,7 @@ defect, and move implementation-level test choreography out of the log.
   terminal normalization ran only at final publication and no canonical owner
   existed for the intermediate whole value. Fixed by bounding executor inputs,
   counting each omission once, snapshotting an exact validated phase at
-  admission, and reconstructing the exact continuation again at v6 encoding,
+  admission, and reconstructing the exact continuation again at v7 encoding,
   public execution, and canceled settlement. Pause/resume, cancellation, and
   terminal counters retain the same truth.
 - MODERATE - FIXED (2026-08-26). Exceptional terminal attribution loss.

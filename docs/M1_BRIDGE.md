@@ -3908,7 +3908,7 @@ The table remains as ownership context for its gates; delivery status is in
 | --- | --- | --- | --- |
 | **A — Tree substrate** | `core/pathing.py`, `workflows/node_tree.py`, `modules/planner.py` | Shared path helpers, hierarchy/index, scoped ids, pure tree tests | — |
 | **B — Scan scope** | `core/models.py`, scanner, recorder, inventory workflow | `SUBTREES`, shared walk, literal reconciliation range, inventory v2/warnings | — |
-| **C — Selection semantics** | Selection, execution/payload/view/sync workflows | Deselection provenance, payload v4, re-derivation, closure, `all-noop` truth | — |
+| **C — Selection semantics** | Selection, execution/payload/view/sync workflows | Deselection provenance, execution payload v7, re-derivation, closure, `all-noop` truth | — |
 | **D — Facade** | Service and workflow runtime | Revisions/commitment, inventory lifts, opaque-id commands, receipts, preview | A, B, C |
 
 A, B, and C could land independently; D was the integration point. The table
@@ -4039,11 +4039,14 @@ headings are organizational, not lane ownership.
 
 **Lane C — selection semantics**
 
-- **BR-G-10 — Provenance survives the payload.** Current execution payload v6 round-trips
+- **BR-G-10 — Provenance survives the payload.** Current execution payload v7 round-trips
   `user_deselected` and validated `bytes_done_high_water` through a real pause
   and resume; direct choices settle `SKIPPED` and dependency fallout settles
-  `DEFERRED` **after** the round trip, not only before it; execution versions 1-5
+  `DEFERRED` **after** the round trip, not only before it; execution versions 1-6
   are rejected. Plan payloads retain their independent v5 contract.
+  The execute-only `reported_exclusion_count` likewise survives the real
+  snapshot/reopen path: accepted plan exclusions are not replayed, and verify
+  continuations reject that field.
   *Not satisfied by* asserting a field
   encodes and decodes, which a payload that is never consulted also satisfies.
   Additionally: a continuation whose `selection` differs by one operation from

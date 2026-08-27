@@ -16,8 +16,14 @@ from pathlib import Path
 from time import monotonic
 from typing import Callable, ClassVar, Iterator, Mapping, Protocol, runtime_checkable
 
-from .evidence import Attestation, HasherFactory, Provenance, RecordingStatus
-from .models import FileStat
+from .evidence import (
+    Attestation,
+    HasherFactory,
+    Provenance,
+    RecordingStatus,
+    attestation_fact,
+)
+from .models import FileStat, file_stat_fact
 from .pathing import normalize_relative_path, validate_relative_path
 from .root_authority import RootAuthority
 from .session import ResultItem, RunContext
@@ -28,6 +34,9 @@ from .scalars import (
     require_signed_64,
     require_utf16_path,
 )
+
+
+_PLATFORM_PATH_TYPE = type(Path())
 
 
 class InventoryState(StrEnum):
@@ -269,7 +278,7 @@ class PostCopyCandidate:
                 )
 
 
-@dataclass
+@dataclass(slots=True)
 class PostCopySelection:
     """Transient candidates plus mutable, lossless pause continuation state."""
 
@@ -380,7 +389,7 @@ class PostCopySelection:
         self._completed_bytes[item_id] = bytes_read
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IntegritySelectionItem:
     """Immutable row and evidence snapshot supplied by an inventory workflow."""
 
@@ -422,7 +431,7 @@ class IntegritySelectionItem:
             raise TypeError("integrity selection invalidation has the wrong type")
 
 
-@dataclass
+@dataclass(slots=True)
 class IntegritySelection:
     """Selected immutable rows plus the mutable pause continuation."""
 
@@ -514,7 +523,355 @@ class IntegritySelection:
         self._completed_bytes[item_id] = bytes_read
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
+class IntegritySelectionItemFact:
+    """Flattened workflow authority for one standalone verifier candidate."""
+
+    item_id: str
+    row_id: str
+    location_id: str
+    root_path: str
+    rel_path_key: str
+    display_path: str
+    expected_state: InventoryState
+    expected_stat: tuple[object, ...] | None
+    baseline: tuple[object, ...] | None
+    scope_token: str
+    reappeared_at: str | None
+    invalidation: tuple[str, VerificationInvalidationReason] | None
+
+
+@dataclass(frozen=True, slots=True)
+class IntegritySelectionAuthority:
+    """Exact admitted facts kept private from selection collaborators."""
+
+    items: tuple[IntegritySelectionItemFact, ...]
+    completed_bytes: tuple[tuple[str, int], ...]
+    processed_bytes: int
+    bytes_total_high_water: int
+
+
+@dataclass(frozen=True, slots=True)
+class PostCopyCandidateFact:
+    """Flattened workflow authority for one linked verifier candidate."""
+
+    item_id: str
+    root_path: str
+    display_path: str
+    expected_stat: tuple[object, ...]
+    copy_attestation: tuple[object, ...]
+    recorded_identity: tuple[str, str, str, str] | None
+
+
+@dataclass(frozen=True, slots=True)
+class PostCopySelectionAuthority:
+    """Exact admitted facts kept private from linked-verifier collaborators."""
+
+    candidates: tuple[PostCopyCandidateFact, ...]
+    completed_bytes: tuple[tuple[str, int], ...]
+    processed_bytes: int
+
+
+def _datetime_fact(value: object, field_name: str) -> str:
+    if type(value) is not datetime:
+        raise TypeError(f"{field_name} must be an exact datetime")
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError(f"{field_name} must be timezone-aware")
+    if value.utcoffset().total_seconds() != 0:
+        raise ValueError(f"{field_name} must be UTC")
+    return value.isoformat()
+
+
+def integrity_selection_item_fact(value: object) -> IntegritySelectionItemFact:
+    """Snapshot one selection row without retaining collaborator objects."""
+
+    if type(value) is not IntegritySelectionItem:
+        raise TypeError("integrity selection requires exact item values")
+    for field_name, field_value in (
+        ("item id", value.item_id),
+        ("row id", value.row_id),
+        ("location id", value.location_id),
+        ("relative path key", value.rel_path_key),
+        ("display path", value.display_path),
+        ("scope token", value.scope_token),
+    ):
+        if type(field_value) is not str:
+            raise TypeError(f"integrity selection {field_name} must be exact text")
+    if type(value.expected_state) is not InventoryState:
+        raise TypeError("integrity selection state has the wrong type")
+    if type(value.root) is not _PLATFORM_PATH_TYPE:
+        raise TypeError("integrity selection root has the wrong type")
+    if value.expected_stat is not None and type(value.expected_stat) is not FileStat:
+        raise TypeError("integrity expected stat has the wrong type")
+    if value.baseline is not None and type(value.baseline) is not Attestation:
+        raise TypeError("integrity baseline has the wrong type")
+    if (
+        value.reappeared_at is not None
+        and type(value.reappeared_at) is not datetime
+    ):
+        raise TypeError("integrity reappearance time has the wrong type")
+    if (
+        value.invalidation is not None
+        and type(value.invalidation) is not VerificationInvalidation
+    ):
+        raise TypeError("integrity selection invalidation has the wrong type")
+    root_path = str(value.root)
+    if type(root_path) is not str:
+        raise TypeError("integrity selection root must project to exact text")
+    reappeared = (
+        None
+        if value.reappeared_at is None
+        else _datetime_fact(value.reappeared_at, "integrity reappearance time")
+    )
+    invalidation = value.invalidation
+    if invalidation is not None:
+        if type(invalidation) is not VerificationInvalidation:
+            raise TypeError("integrity selection invalidation has the wrong type")
+        if type(invalidation.reason) is not VerificationInvalidationReason:
+            raise TypeError("integrity invalidation reason has the wrong type")
+        invalidation_fact = (
+            _datetime_fact(invalidation.at, "integrity invalidation time"),
+            invalidation.reason,
+        )
+    else:
+        invalidation_fact = None
+    expected_stat = (
+        None
+        if value.expected_stat is None
+        else file_stat_fact(value.expected_stat)
+    )
+    baseline = (
+        None if value.baseline is None else attestation_fact(value.baseline)
+    )
+    IntegritySelectionItem.__post_init__(value)
+    return IntegritySelectionItemFact(
+        value.item_id,
+        value.row_id,
+        value.location_id,
+        root_path,
+        value.rel_path_key,
+        value.display_path,
+        value.expected_state,
+        expected_stat,
+        baseline,
+        value.scope_token,
+        reappeared,
+        invalidation_fact,
+    )
+
+
+def post_copy_candidate_fact(value: object) -> PostCopyCandidateFact:
+    """Snapshot one linked candidate without retaining collaborator objects."""
+
+    if type(value) is not PostCopyCandidate:
+        raise TypeError("post-copy selection requires exact candidate values")
+    for field_name, field_value in (
+        ("item id", value.item_id),
+        ("display path", value.display_path),
+    ):
+        if type(field_value) is not str:
+            raise TypeError(f"post-copy candidate {field_name} must be exact text")
+    if type(value.root) is not _PLATFORM_PATH_TYPE:
+        raise TypeError("post-copy candidate root has the wrong type")
+    if type(value.expected_stat) is not FileStat:
+        raise TypeError("post-copy expected stat has the wrong type")
+    if type(value.copy_attestation) is not Attestation:
+        raise TypeError("post-copy attestation has the wrong type")
+    recorded = value.recorded_identity
+    if recorded is not None:
+        if type(recorded) is not PostCopyRecordIdentity:
+            raise TypeError("post-copy recorded identity has the wrong type")
+        fields = (
+            recorded.row_id,
+            recorded.location_id,
+            recorded.scope_token,
+            recorded.rel_path_key,
+        )
+        if any(type(field_value) is not str for field_value in fields):
+            raise TypeError("post-copy recorded identity fields must be exact text")
+        PostCopyRecordIdentity.__post_init__(recorded)
+        recorded_fact = fields
+    else:
+        recorded_fact = None
+    expected_stat = file_stat_fact(value.expected_stat)
+    copy_attestation = attestation_fact(value.copy_attestation)
+    PostCopyCandidate.__post_init__(value)
+    return PostCopyCandidateFact(
+        value.item_id,
+        str(value.root),
+        value.display_path,
+        expected_stat,
+        copy_attestation,
+        recorded_fact,
+    )
+
+
+def snapshot_integrity_selection_authority(
+    value: object,
+) -> IntegritySelectionAuthority:
+    """Capture exact standalone-selection facts before exposing the selection."""
+
+    if type(value) is not IntegritySelection:
+        raise TypeError("integrity selection must have the exact public shape")
+    if type(value.items) is not tuple:
+        raise TypeError("integrity selection items must be an exact tuple")
+    if any(type(item) is not IntegritySelectionItem for item in value.items):
+        raise TypeError("integrity selection items have the wrong type")
+    if type(value._completed_bytes) is not dict:
+        raise TypeError("integrity completion state must be an exact dict")
+    if any(
+        type(item_id) is not str or type(completed) is not int
+        for item_id, completed in value._completed_bytes.items()
+    ):
+        raise TypeError("integrity completion facts have the wrong type")
+    if type(value._processed_bytes) is not int:
+        raise TypeError("integrity processed bytes have the wrong type")
+    if type(value._bytes_total_high_water) is not int:
+        raise TypeError("integrity byte total has the wrong type")
+    item_facts = tuple(integrity_selection_item_fact(item) for item in value.items)
+    IntegritySelection.__post_init__(value)
+    return IntegritySelectionAuthority(
+        item_facts,
+        tuple(value._completed_bytes.items()),
+        value._processed_bytes,
+        value._bytes_total_high_water,
+    )
+
+
+def revalidate_integrity_selection_authority(
+    value: object,
+    authority: object,
+    *,
+    allow_progress: bool,
+) -> None:
+    """Revalidate fixed selection facts and the allowed mutable progress delta."""
+
+    if type(authority) is not IntegritySelectionAuthority:
+        raise TypeError("integrity selection authority has the wrong type")
+    if type(value) is not IntegritySelection:
+        raise TypeError("integrity selection must have the exact public shape")
+    if type(value.items) is not tuple or len(value.items) != len(authority.items):
+        raise ValueError("integrity selection items changed during collaboration")
+    if any(type(item) is not IntegritySelectionItem for item in value.items):
+        raise TypeError("integrity selection items have the wrong type")
+    if type(value._completed_bytes) is not dict:
+        raise TypeError("integrity completion state must be an exact dict")
+    if any(
+        type(item_id) is not str or type(completed) is not int
+        for item_id, completed in value._completed_bytes.items()
+    ):
+        raise TypeError("integrity completion facts have the wrong type")
+    if type(value._processed_bytes) is not int:
+        raise TypeError("integrity processed bytes have the wrong type")
+    if type(value._bytes_total_high_water) is not int:
+        raise TypeError("integrity byte total has the wrong type")
+    item_facts = tuple(integrity_selection_item_fact(item) for item in value.items)
+    IntegritySelection.__post_init__(value)
+    for item, expected in zip(item_facts, authority.items, strict=True):
+        if item != expected:
+            raise ValueError("integrity selection item changed during collaboration")
+    for item_id, completed_bytes in authority.completed_bytes:
+        if value._completed_bytes.get(item_id) != completed_bytes:
+            raise ValueError("integrity prior completion changed during collaboration")
+    if allow_progress:
+        if value._processed_bytes < authority.processed_bytes:
+            raise ValueError("integrity processed bytes regressed")
+        if value._bytes_total_high_water < authority.bytes_total_high_water:
+            raise ValueError("integrity byte total regressed")
+        return
+    if (
+        value._completed_bytes != dict(authority.completed_bytes)
+        or value._processed_bytes != authority.processed_bytes
+        or value._bytes_total_high_water != authority.bytes_total_high_water
+    ):
+        raise ValueError("integrity selection changed during capture")
+
+
+def snapshot_post_copy_selection_authority(
+    value: object,
+) -> PostCopySelectionAuthority:
+    """Capture exact linked-selection facts before exposing the selection."""
+
+    if type(value) is not PostCopySelection:
+        raise TypeError("post-copy selection must have the exact public shape")
+    if type(value.candidates) is not tuple:
+        raise TypeError("post-copy candidates must be an exact tuple")
+    if any(type(item) is not PostCopyCandidate for item in value.candidates):
+        raise TypeError("post-copy candidates have the wrong type")
+    if type(value._completed_bytes) is not dict:
+        raise TypeError("post-copy completion state must be an exact dict")
+    if any(
+        type(item_id) is not str or type(completed) is not int
+        for item_id, completed in value._completed_bytes.items()
+    ):
+        raise TypeError("post-copy completion facts have the wrong type")
+    if type(value._processed_bytes) is not int:
+        raise TypeError("post-copy processed bytes have the wrong type")
+    candidate_facts = tuple(
+        post_copy_candidate_fact(item) for item in value.candidates
+    )
+    PostCopySelection.__post_init__(value)
+    return PostCopySelectionAuthority(
+        candidate_facts,
+        tuple(value._completed_bytes.items()),
+        value._processed_bytes,
+    )
+
+
+def revalidate_post_copy_selection_authority(
+    value: object,
+    authority: object,
+    *,
+    allow_progress: bool,
+) -> None:
+    """Revalidate fixed linked facts and the allowed mutable progress delta."""
+
+    if type(authority) is not PostCopySelectionAuthority:
+        raise TypeError("post-copy selection authority has the wrong type")
+    if type(value) is not PostCopySelection:
+        raise TypeError("post-copy selection must have the exact public shape")
+    if (
+        type(value.candidates) is not tuple
+        or len(value.candidates) != len(authority.candidates)
+    ):
+        raise ValueError("post-copy candidates changed during collaboration")
+    if any(type(item) is not PostCopyCandidate for item in value.candidates):
+        raise TypeError("post-copy candidates have the wrong type")
+    if type(value._completed_bytes) is not dict:
+        raise TypeError("post-copy completion state must be an exact dict")
+    if any(
+        type(item_id) is not str or type(completed) is not int
+        for item_id, completed in value._completed_bytes.items()
+    ):
+        raise TypeError("post-copy completion facts have the wrong type")
+    if type(value._processed_bytes) is not int:
+        raise TypeError("post-copy processed bytes have the wrong type")
+    candidate_facts = tuple(
+        post_copy_candidate_fact(item) for item in value.candidates
+    )
+    PostCopySelection.__post_init__(value)
+    for candidate, expected in zip(
+        candidate_facts,
+        authority.candidates,
+        strict=True,
+    ):
+        if candidate != expected:
+            raise ValueError("post-copy candidate changed during collaboration")
+    for item_id, completed_bytes in authority.completed_bytes:
+        if value._completed_bytes.get(item_id) != completed_bytes:
+            raise ValueError("post-copy prior completion changed during collaboration")
+    if allow_progress:
+        if value._processed_bytes < authority.processed_bytes:
+            raise ValueError("post-copy processed bytes regressed")
+        return
+    if (
+        value._completed_bytes != dict(authority.completed_bytes)
+        or value._processed_bytes != authority.processed_bytes
+    ):
+        raise ValueError("post-copy selection changed during capture")
+
+
+@dataclass(frozen=True, slots=True)
 class IntegrityOutcome(ResultItem):
     """Reliable typed event for one selected inventory row."""
 
@@ -534,17 +891,43 @@ class IntegrityOutcome(ResultItem):
     detail_omitted_count: int = 0
 
     def __post_init__(self) -> None:
+        if type(self.item_id) is not str:
+            raise TypeError("integrity outcome item id must be text")
         if not self.item_id:
             raise ValueError("integrity outcome item id must be non-empty")
+        if self.row_id is not None and type(self.row_id) is not str:
+            raise TypeError("integrity outcome row id must be text or None")
+        if self.location_id is not None and type(self.location_id) is not str:
+            raise TypeError("integrity outcome location id must be text or None")
         if (self.row_id is None) != (self.location_id is None):
             raise ValueError(
                 "integrity outcome row and location ids must both be present or absent"
             )
         if self.row_id is not None and (not self.row_id or not self.location_id):
             raise ValueError("integrity outcome ledger ids must be non-empty")
+        if type(self.path) is not str:
+            raise TypeError("integrity outcome path must be text")
         if not self.path:
             raise ValueError("integrity outcome path must be non-empty")
         require_utf16_path(self.path, "integrity outcome path")
+        if type(self.result) is not IntegrityResult:
+            raise TypeError("integrity outcome result has the wrong type")
+        if self.reason is not None and type(self.reason) is not IntegrityReason:
+            raise TypeError("integrity outcome reason has the wrong type")
+        if (
+            self.read_strategy is not None
+            and type(self.read_strategy) is not ReadStrategy
+        ):
+            raise TypeError("integrity outcome read strategy has the wrong type")
+        if type(self.recording) is not RecordingStatus:
+            raise TypeError("integrity outcome recording has the wrong type")
+        if (
+            self.record_disposition is not None
+            and type(self.record_disposition) is not RecordDisposition
+        ):
+            raise TypeError("integrity outcome record disposition has the wrong type")
+        if type(self.phase) is not str:
+            raise TypeError("integrity outcome phase must be text")
         if self.phase not in {mode.value for mode in IntegrityMode}:
             raise ValueError("integrity outcome phase must name its integrity mode")
         require_safe_int(
@@ -564,7 +947,43 @@ class IntegrityOutcome(ResultItem):
             )
 
 
-@dataclass(frozen=True)
+def snapshot_integrity_outcome(
+    value: object,
+    *,
+    item_id: str,
+    row_id: str | None,
+    location_id: str | None,
+    path: str,
+    phase: str,
+) -> IntegrityOutcome:
+    """Detach producer facts while binding workflow-owned subject identity."""
+
+    if not isinstance(value, IntegrityOutcome):
+        raise TypeError("integrity outcome must be an IntegrityOutcome")
+    result = value.result
+    reason = value.reason
+    detail = value.detail
+    read_strategy = value.read_strategy
+    recording = value.recording
+    record_disposition = value.record_disposition
+    omitted = value.detail_omitted_count
+    return IntegrityOutcome(
+        item_id=item_id,
+        row_id=row_id,
+        location_id=location_id,
+        path=path,
+        result=result,
+        reason=reason,
+        detail=detail,
+        read_strategy=read_strategy,
+        recording=recording,
+        record_disposition=record_disposition,
+        phase=phase,
+        detail_omitted_count=omitted,
+    )
+
+
+@dataclass(frozen=True, slots=True)
 class IntegrityRunResult:
     """Verifier-owned aggregate derived only from emitted item outcomes."""
 
@@ -572,6 +991,12 @@ class IntegrityRunResult:
     recording: RecordingStatus
 
     def __post_init__(self) -> None:
+        if type(self.outcomes) is not tuple:
+            raise TypeError("run outcomes must be an exact tuple")
+        if any(not isinstance(outcome, IntegrityOutcome) for outcome in self.outcomes):
+            raise TypeError("run outcomes must contain IntegrityOutcome values")
+        if type(self.recording) is not RecordingStatus:
+            raise TypeError("run recording status has the wrong type")
         expected = (
             RecordingStatus.DEGRADED
             if any(
@@ -586,6 +1011,52 @@ class IntegrityRunResult:
     @property
     def counts(self) -> Mapping[IntegrityResult, int]:
         return dict(Counter(outcome.result for outcome in self.outcomes))
+
+
+def validate_integrity_run_result(
+    value: object,
+    emitted_outcomes: list[ResultItem] | tuple[ResultItem, ...],
+    *,
+    start: int = 0,
+) -> RecordingStatus:
+    """Validate one verifier aggregate against accepted reliable outcomes."""
+
+    if not isinstance(value, IntegrityRunResult):
+        raise TypeError("integrity runner must return IntegrityRunResult")
+    if type(emitted_outcomes) not in {list, tuple}:
+        raise TypeError("emitted integrity outcomes require an owned sequence")
+    if type(start) is not int:
+        raise TypeError("integrity outcome start must be an integer")
+    if start < 0 or start > len(emitted_outcomes):
+        raise ValueError("integrity outcome start is outside the owned sequence")
+    outcomes = value.outcomes
+    recording = value.recording
+    if type(outcomes) is not tuple:
+        raise TypeError("integrity runner outcomes must be a tuple")
+    if type(recording) is not RecordingStatus:
+        raise TypeError("integrity runner recording has the wrong type")
+    if len(outcomes) != len(emitted_outcomes) - start:
+        raise ValueError("integrity runner outcomes must match emitted outcomes")
+    expected_recording = RecordingStatus.OK
+    for offset, source in enumerate(outcomes):
+        if not isinstance(source, IntegrityOutcome):
+            raise TypeError("integrity runner outcomes have the wrong type")
+        authoritative = emitted_outcomes[start + offset]
+        snapshot = snapshot_integrity_outcome(
+            source,
+            item_id=source.item_id,
+            row_id=source.row_id,
+            location_id=source.location_id,
+            path=source.path,
+            phase=source.phase,
+        )
+        if type(authoritative) is not IntegrityOutcome or snapshot != authoritative:
+            raise ValueError("integrity runner outcomes must match emitted outcomes")
+        if authoritative.recording is RecordingStatus.DEGRADED:
+            expected_recording = RecordingStatus.DEGRADED
+    if recording is not expected_recording:
+        raise ValueError("integrity runner recording must derive from emitted outcomes")
+    return recording
 
 
 @dataclass(frozen=True)
@@ -770,6 +1241,33 @@ class VerifierContext:
                 self.post_copy_bytes_total,
                 "post-copy byte budget",
             )
+
+
+def bind_verifier_context(
+    value: object,
+    run: RunContext,
+    *,
+    root_authority: RootAuthority,
+    post_copy_items_total: int | None = None,
+    post_copy_bytes_total: int | None = None,
+) -> VerifierContext:
+    """Detach factory policy while retaining workflow-owned run controls."""
+
+    if type(value) is not VerifierContext:
+        raise TypeError("verification context factory must return VerifierContext")
+    if type(run) is not RunContext:
+        raise TypeError("verification run controls must have the exact public shape")
+    return VerifierContext(
+        run=run,
+        clock=value.clock,
+        hasher_factory=value.hasher_factory,
+        monotonic=value.monotonic,
+        chunk_size=value.chunk_size,
+        progress_interval_seconds=value.progress_interval_seconds,
+        root_authority=root_authority,
+        post_copy_items_total=post_copy_items_total,
+        post_copy_bytes_total=post_copy_bytes_total,
+    )
 
 
 class UnsupportedVerification(OSError):

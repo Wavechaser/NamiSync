@@ -249,7 +249,7 @@ def test_tree_refuses_first_excess_member() -> None:
     assert raised.value.tree_kind is NodeTreeKind.INVENTORY
 
 
-def test_tree_does_not_charge_synthetic_nodes_as_source_members(
+def test_tree_member_wall_does_not_charge_synthetic_ancestors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(node_tree_module, "NODE_TREE_ROW_LIMIT", 2)
@@ -258,20 +258,23 @@ def test_tree_does_not_charge_synthetic_nodes_as_source_members(
         tree_kind=NodeTreeKind.PLAN,
         scope_identity="bounded-plan",
         members=(
-            _member("one", "one"),
-            _member("two", "two"),
+            _member("one", r"shared\one"),
+            _member("two", r"shared\two"),
         ),
     )
 
     assert tuple(node.rel_path_key for node in tree.nodes) == (
         "",
-        "ONE",
-        "TWO",
+        "SHARED",
+        r"SHARED\ONE",
+        r"SHARED\TWO",
     )
+    assert tree.nodes[0].subtree_member_count == 2
+    assert tree.nodes[1].synthetic
 
 
 @pytest.mark.parametrize("malformed_kind", ("object", "duplicate", "subclass", "forged"))
-def test_malformed_first_excess_member_keeps_structural_error_precedence(
+def test_first_excess_member_is_refused_before_collaborator_access(
     monkeypatch: pytest.MonkeyPatch,
     malformed_kind: str,
 ) -> None:
@@ -279,22 +282,18 @@ def test_malformed_first_excess_member_keeps_structural_error_precedence(
 
     if malformed_kind == "object":
         malformed: object = object()
-        error = TypeError
     elif malformed_kind == "duplicate":
         malformed = _member("valid", "")
-        error = ValueError
     elif malformed_kind == "subclass":
         class HostileMember(NodeTreeMember):
             pass
 
         malformed = HostileMember("hostile", "", "")
-        error = TypeError
     else:
         malformed = _member("hostile", "")
         object.__setattr__(malformed, "rel_path_key", "not-canonical")
-        error = ValueError
 
-    with pytest.raises(error):
+    with pytest.raises(NodeTreePopulationLimitError):
         build_node_tree(
             tree_kind=NodeTreeKind.INVENTORY,
             scope_identity="hostile-member",

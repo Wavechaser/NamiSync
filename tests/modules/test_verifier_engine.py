@@ -2312,7 +2312,11 @@ def test_reliable_outcome_count_survives_continuation_update_failure(
     def fail_continuation_update(*_args) -> None:
         raise original
 
-    monkeypatch.setattr(selection, "mark_completed", fail_continuation_update)
+    monkeypatch.setattr(
+        type(selection),
+        "mark_completed",
+        fail_continuation_update,
+    )
 
     with pytest.raises(RuntimeError) as raised:
         invoke()

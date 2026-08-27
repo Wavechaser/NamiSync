@@ -28,7 +28,7 @@ NODE_TREE_ROW_LIMIT = MAX_PLAN_REVIEW_ROWS
 
 
 class NodeTreePopulationLimitError(ValueError):
-    """Raised before a tree builder retains its first excess domain row."""
+    """Raised before a tree builder retains its first excess source member."""
 
     def __init__(self, tree_kind: NodeTreeKind) -> None:
         super().__init__(f"{tree_kind.value} node tree exceeds its row limit")
@@ -161,9 +161,10 @@ def build_node_tree(
     direct_member_ids: dict[str, list[str]] = {}
     explicit_containers: set[str] = set()
     seen_member_ids: set[str] = set()
-    member_count = 0
 
-    for member in members:
+    for source_index, member in enumerate(members):
+        if source_index == NODE_TREE_ROW_LIMIT:
+            raise NodeTreePopulationLimitError(tree_kind)
         if type(member) is not NodeTreeMember:
             raise TypeError("members must contain exact NodeTreeMember values")
         member = NodeTreeMember(
@@ -174,9 +175,6 @@ def build_node_tree(
         )
         if member.member_id in seen_member_ids:
             raise ValueError(f"duplicate member_id: {member.member_id}")
-        if member_count == NODE_TREE_ROW_LIMIT:
-            raise NodeTreePopulationLimitError(tree_kind)
-        member_count += 1
         seen_member_ids.add(member.member_id)
         direct_member_ids.setdefault(member.rel_path_key, []).append(
             member.member_id

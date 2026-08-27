@@ -139,7 +139,9 @@ restore it through the dataclass constructor, `replace()` preserves it, and it
 participates in equality because it changes later progress behavior. The
 selected-content bound remains a derived, non-comparing validation cache. The
 workflow continuation wire key remains `bytes_done_high_water`; plan payloads
-remain exact v5 while execution payloads are exact v6.
+remain exact v5 while execution payloads are exact v7. The execute-only
+`reported_exclusion_count` is a nonnegative JavaScript-safe integer; v6 has no
+compatibility decoder.
 `ExecutionSet.recording_reasons` sparsely maps only settled degraded operation
 ids to the closed `ItemRecordingReason`, and `recording_issues` retains the
 first bounded `TaskRecordingIssue` for each reason in observation order. Its
@@ -241,8 +243,10 @@ projection. An unsuperseded process-fatal exception still escapes to its caller;
 custom exception attributes, slots, arguments, and notes remain caller-owned
 state rather than bounded session artifacts.
 
-The runner accepts a dispatcher-owned item accumulator. It is retained across
-pause attempts and cleared only after terminal settlement, so a resumed session
+The runner accepts a dispatcher-owned item accumulator. It snapshots prior
+items into private custody and clears the externally reachable list while work
+runs, then republishes detached copies before paused settlement and at every
+exit. The logical accumulator is retained across pause attempts, so a resumed session
 that later cancels or fails includes reliable outcomes earned before the pause.
 The accumulator is an exact list and admits at most 240,000 ordered occurrences
 over that complete paused/resumed lifetime. This is the closed maximum of one
@@ -254,14 +258,21 @@ is respectively `TypeError` plus `item accumulator must be an exact list`,
 `ValueError` plus `session result items exceed their session bound`, and no
 untrusted accumulator items enter the result. During work, a separate admitted-
 occurrence counter checks the next nominal item before downstream emission and
-verifies the exact list's length again before appending. An emitter-side alias
-append is removed, the accepted event is retained once within the wall, and the
+requires that the external list remain empty before and after every callback.
+An emitter-side alias mutation is removed, the accepted event is retained once
+within the wall, and the
 runner owns `RuntimeError: session result item accumulator changed during
 emission`. The first producer excess similarly becomes runner-owned
 `RuntimeError: session result items exceed their session bound`. These sticky
 internal failures override an intercepted return, pause, or cancellation; they
 do not truncate or relabel prior admitted ran work, nor publish the excess
 occurrence.
+Each admitted item and Progress event has a private runner snapshot and a
+separate disposable emitter snapshot. Settlement, audit finalization, result
+publication, terminal-summary construction, and the returned `RunOutcome` also
+receive distinct exact `OperationResult` graphs. A callback may mutate its own
+copy, but cannot rewrite another owner's item, phase, diagnostic, recording, or
+counter truth.
 Before settlement, audit finalization, or result publication, the runner applies
 the terminal summary's existing whole-value diagnostic rules to the full result
 header too. An oversized or invalid-Unicode phase error becomes null; an invalid
@@ -590,11 +601,11 @@ bytes distinguish a surrogate escape from literal backslash text; the former
 raw-encoding collision claim was not a collision in these JSON hashes.
 
 Identity-bearing durable hashes change at the coordinated epoch-6 boundary.
-The ledger contract id changes, but ledger/history schema versions, the history
-contract id, and plan-v5/execution-v6 wire shapes do not. Database admission and
-the explicit reset boundary are owned by [DATABASE.md](DATABASE.md); existing
-workflow commitment/refingerprint checks, not a blanket execution-v6 ban,
-govern old continuation compatibility in [WORKFLOWS.md](WORKFLOWS.md).
+At that cutover the ledger contract id changed while ledger/history schema
+versions, the history contract id, and plan-v5/execution-v6 wire shapes did not.
+Prerequisite stabilization later advances only execution custody to exact v7;
+v6 is now refused before workflow admission. Database admission and the explicit
+reset boundary remain owned by [DATABASE.md](DATABASE.md).
 
 ## Time And Evidence
 

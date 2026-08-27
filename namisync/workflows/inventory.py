@@ -13,7 +13,7 @@ from typing import Callable, Iterator, Mapping, Protocol
 
 from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import PhaseChanged
-from namisync.core.evidence import RecordingStatus
+from namisync.core.evidence import RecordingStatus, snapshot_attestation
 from namisync.core.execution import (
     TaskRecordingIssue,
     TaskRecordingIssueReason,
@@ -27,10 +27,18 @@ from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityRunResult,
     IntegritySelection,
+    IntegritySelectionAuthority,
+    IntegritySelectionItemFact,
     IntegritySelectionItem,
     InventoryState,
     RecordDisposition,
+    VerificationInvalidation,
     VerifierContext,
+    bind_verifier_context,
+    revalidate_integrity_selection_authority,
+    snapshot_integrity_selection_authority,
+    snapshot_integrity_outcome,
+    validate_integrity_run_result,
 )
 from namisync.core.models import (
     MAX_VOLUME_TEXT_UTF16_UNITS,
@@ -45,6 +53,7 @@ from namisync.core.models import (
     SCAN_SCOPE_ENTRY_LIMIT,
     VolumeEvidence,
     VolumeId,
+    snapshot_file_stat,
     snapshot_ignore_set,
 )
 from namisync.core.pathing import (
@@ -283,29 +292,50 @@ def _require_mounted_volume_fields(value: MountedVolume) -> None:
     )
 
 
-def _require_mounted_volumes(value: object) -> tuple[MountedVolume, ...]:
-    if type(value) is not tuple:
-        raise TypeError("mounted-volume result must be a tuple")
-    if len(value) > MAX_VOLUME_RESOLUTION_CANDIDATES:
-        raise ValueError("mounted-volume result exceeds the candidate limit")
-    keys: set[str] = set()
-    for item in value:
-        if type(item) is not MountedVolume:
-            raise TypeError("mounted-volume result contains an invalid value")
-        _require_mounted_volume_fields(item)
-        key = _path_key(item.mount_path)
-        if key in keys:
-            raise ValueError("mounted-volume result contains duplicate paths")
-        keys.add(key)
-    return value
-
-
 class MountedVolumeResolver(Protocol):
     def mounted_volumes(
         self, volume_id: VolumeId, hints: tuple[str, ...] = ()
     ) -> tuple[MountedVolume, ...]: ...
 
     def probe_root(self, root_path: str) -> None: ...
+
+
+def _mounted_volume_snapshot(
+    resolver: MountedVolumeResolver,
+    volume_id: VolumeId,
+    hints: tuple[str, ...],
+) -> tuple[MountedVolume, ...]:
+    value = resolver.mounted_volumes(
+        VolumeId(volume_id.serial, volume_id.fs_type),
+        hints=hints,
+    )
+    if type(value) is not tuple:
+        raise TypeError("mounted-volume result must be a tuple")
+    if len(value) > MAX_VOLUME_RESOLUTION_CANDIDATES:
+        raise ValueError("mounted-volume result exceeds the candidate limit")
+    keys: set[str] = set()
+    mounted: list[MountedVolume] = []
+    for item in value:
+        if type(item) is not MountedVolume:
+            raise TypeError("mounted-volume result contains an invalid value")
+        evidence = item.evidence
+        if type(evidence) is not VolumeEvidence:
+            raise TypeError("mounted volume evidence has the wrong type")
+        snapshot = MountedVolume(
+            item.mount_path,
+            VolumeEvidence(
+                evidence.label,
+                evidence.device_id,
+                evidence.clone_ambiguous,
+            ),
+        )
+        key = _path_key(snapshot.mount_path)
+        if key in keys:
+            raise ValueError("mounted-volume result contains duplicate paths")
+        keys.add(key)
+        mounted.append(snapshot)
+    del value, keys
+    return tuple(mounted)
 
 
 class VolumeBindingBackend(Protocol):
@@ -371,6 +401,32 @@ def _require_location_binding_fields(
         require_safe_int(value.location_id, "location binding id")
         if value.location_id < 1:
             raise ValueError("location binding id must be positive")
+
+
+def _snapshot_location_binding(value: object) -> LocationBinding:
+    if type(value) is not LocationBinding:
+        raise TypeError("volume resolution requires LocationBinding")
+    volume_id = value.volume_id
+    relative = value.volume_relative_path
+    selected_mount = value.selected_mount
+    expected_mounts = value.expected_mounts
+    explicit_choice = value.explicit_ambiguity_choice
+    location_id = value.location_id
+    if type(volume_id) is not VolumeId:
+        raise TypeError("location binding volume has the wrong type")
+    if type(expected_mounts) is not tuple:
+        raise TypeError("location binding mount candidates must be a tuple")
+    snapshot = LocationBinding(
+        VolumeId(volume_id.serial, volume_id.fs_type),
+        relative,
+        selected_mount,
+        expected_mounts,
+        explicit_choice,
+        location_id,
+    )
+    if snapshot.volume_relative_path != relative:
+        raise ValueError("location binding relative path is not canonical")
+    return snapshot
 
 
 @dataclass(frozen=True, slots=True)
@@ -908,13 +964,11 @@ def bind_integrity_request(
 def resolve_binding(
     binding: LocationBinding, resolver: MountedVolumeResolver
 ) -> VolumeResolution:
-    if type(binding) is not LocationBinding:
-        raise TypeError("volume resolution requires LocationBinding")
-    _require_location_binding_fields(binding)
-    mounted = _require_mounted_volumes(
-        resolver.mounted_volumes(
-            binding.volume_id, hints=binding.expected_mounts
-        )
+    binding = _snapshot_location_binding(binding)
+    mounted = _mounted_volume_snapshot(
+        resolver,
+        binding.volume_id,
+        binding.expected_mounts,
     )
     candidates = tuple(item.mount_path for item in mounted)
     if not mounted:
@@ -1018,6 +1072,22 @@ def resolve_binding(
             candidates=candidates,
             detail=logical_error_text(error),
         )
+    current_mounted = _mounted_volume_snapshot(
+        resolver,
+        binding.volume_id,
+        binding.expected_mounts,
+    )
+    if len(current_mounted) != len(mounted) or any(
+        item not in current_mounted for item in mounted
+    ):
+        return VolumeResolution(
+            VolumeResolutionState.ROOT_UNAVAILABLE,
+            binding,
+            root_path=root_path,
+            evidence=selected.evidence,
+            candidates=tuple(item.mount_path for item in current_mounted),
+            detail="mounted volume set changed during root admission; retry",
+        )
     return VolumeResolution(
         VolumeResolutionState.RESOLVED,
         binding,
@@ -1063,7 +1133,7 @@ def run_inventory(
             host_id, location_id, scan = _register_and_scan(
                 request.request_id,
                 scope_token,
-                request.binding,
+                resolution.binding,
                 resolution,
                 request.selected_paths,
                 request.subtree_roots,
@@ -1194,7 +1264,7 @@ def run_integrity(
             host_id, location_id, scan = _register_and_scan(
                 request.request_id,
                 scope_token,
-                request.binding,
+                resolution.binding,
                 resolution,
                 request.selected_paths,
                 (),
@@ -1251,10 +1321,38 @@ def run_integrity(
                     request.selection_item_ids,
                     frozenset(item_id for item_id, _ in request.completed_bytes),
                 )
+            del repository
             _require_integrity_candidate_rows(rows)
             selection = _integrity_selection(request, rows, root)
+            del rows
+            selection_authority = snapshot_integrity_selection_authority(
+                selection
+            )
             if selection_sink is not None:
-                selection_sink(selection)
+                try:
+                    selection_sink(selection)
+                except Exception:
+                    revalidate_integrity_selection_authority(
+                        selection,
+                        selection_authority,
+                        allow_progress=False,
+                    )
+                    raise
+            revalidate_integrity_selection_authority(
+                selection,
+                selection_authority,
+                allow_progress=False,
+            )
+            initial_completed_ids = frozenset(
+                item_id
+                for item_id, _completed_bytes in selection_authority.completed_bytes
+            )
+            observed_ids = set(initial_completed_ids)
+            pending_by_id = {
+                item.item_id: item
+                for item in selection_authority.items
+                if item.item_id not in observed_ids
+            }
             ctx.emit(PhaseChanged(request.mode.value))
             runner = deps.runners.get(request.mode)
             if runner is None:
@@ -1264,26 +1362,110 @@ def run_integrity(
 
             def observe_verification(body: object) -> None:
                 nonlocal observed_recording
-                ctx.emit(body)
                 if not isinstance(body, IntegrityOutcome):
+                    ctx.emit(body)
+                    revalidate_integrity_selection_authority(
+                        selection,
+                        selection_authority,
+                        allow_progress=True,
+                    )
                     return
-                observed_outcomes.append(body)
-                if body.recording is RecordingStatus.DEGRADED:
+                item_id = body.item_id
+                if type(item_id) is not str:
+                    raise TypeError("integrity outcome item id must be text")
+                if item_id in observed_ids:
+                    raise ValueError("integrity runner emitted a duplicate outcome")
+                candidate = pending_by_id.get(item_id)
+                if candidate is None:
+                    raise ValueError(
+                        "integrity runner emitted an outcome outside its selection"
+                    )
+                snapshot = snapshot_integrity_outcome(
+                    body,
+                    item_id=candidate.item_id,
+                    row_id=candidate.row_id,
+                    location_id=candidate.location_id,
+                    path=candidate.display_path,
+                    phase=request.mode.value,
+                )
+                ctx.emit(
+                    snapshot_integrity_outcome(
+                        snapshot,
+                        item_id=snapshot.item_id,
+                        row_id=snapshot.row_id,
+                        location_id=snapshot.location_id,
+                        path=snapshot.path,
+                        phase=snapshot.phase,
+                    )
+                )
+                revalidate_integrity_selection_authority(
+                    selection,
+                    selection_authority,
+                    allow_progress=True,
+                )
+                observed_outcomes.append(snapshot)
+                observed_ids.add(item_id)
+                pending_by_id.pop(item_id)
+                if snapshot.recording is RecordingStatus.DEGRADED:
                     observed_recording = RecordingStatus.DEGRADED
 
-            verification_context = replace(
-                deps.verifier_context(
-                    RunContext(observe_verification, ctx.checkpoint)
-                ),
+            def checkpoint_verification() -> None:
+                ctx.checkpoint()
+                revalidate_integrity_selection_authority(
+                    selection,
+                    selection_authority,
+                    allow_progress=True,
+                )
+
+            owned_run = RunContext(
+                observe_verification,
+                checkpoint_verification,
+            )
+            raw_verification_context = deps.verifier_context(owned_run)
+            revalidate_integrity_selection_authority(
+                selection,
+                selection_authority,
+                allow_progress=True,
+            )
+            verification_context = bind_verifier_context(
+                raw_verification_context,
+                owned_run,
                 root_authority=RootAuthority(
                     logical_root=resolution.root_path,
                     reviewed_anchor=resolution.selected_mount,
-                    expected_volume_id=request.binding.volume_id,
+                    expected_volume_id=resolution.binding.volume_id,
                 ),
             )
-            result = runner(selection, verification_context, recorder)
-            if not isinstance(result, IntegrityRunResult):
-                raise TypeError("integrity runner must return IntegrityRunResult")
+            del raw_verification_context
+            try:
+                result = runner(selection, verification_context, recorder)
+            except Exception:
+                revalidate_integrity_selection_authority(
+                    selection,
+                    selection_authority,
+                    allow_progress=True,
+                )
+                raise
+            try:
+                aggregate_recording = validate_integrity_run_result(
+                    result,
+                    observed_outcomes,
+                )
+                _validate_integrity_runner_completion(
+                    selection,
+                    selection_authority,
+                    observed_ids,
+                    pending_by_id,
+                )
+            except Exception:
+                revalidate_integrity_selection_authority(
+                    selection,
+                    selection_authority,
+                    allow_progress=True,
+                )
+                raise
+            finally:
+                del result
     except PauseRequested:
         recording, recording_issues, omitted_detail_count = (
             _integrity_recording_truth(
@@ -1369,14 +1551,18 @@ def run_integrity(
 
     recording, recording_issues, omitted_detail_count = _integrity_recording_truth(
         request,
-        _integrity_recording(observed_recording, result.recording, has_task_issue=False),
+        _integrity_recording(
+            observed_recording,
+            aggregate_recording,
+            has_task_issue=False,
+        ),
         recorder_observation[0],
     )
     return _integrity_terminal_result(
         selection,
         SessionState.COMPLETED,
         recording=recording,
-        items=result.outcomes,
+        items=tuple(observed_outcomes),
         recording_issues=recording_issues,
         omitted_detail_count=omitted_detail_count,
     )
@@ -2197,15 +2383,17 @@ def _binding_from_identity(
     location_id: int | None,
     resolver: MountedVolumeResolver,
 ) -> LocationBinding:
+    if type(volume_id) is not VolumeId:
+        raise TypeError("volume binding requires VolumeId")
+    volume_id = VolumeId(volume_id.serial, volume_id.fs_type)
     if mount_hint is not None:
         require_utf16_path(mount_hint, "persisted mount hint")
     if selected_mount is not None:
         require_utf16_path(selected_mount, "selected volume mount")
     hints = () if mount_hint is None else (mount_hint,)
-    mounted = _require_mounted_volumes(
-        resolver.mounted_volumes(volume_id, hints)
-    )
+    mounted = _mounted_volume_snapshot(resolver, volume_id, hints)
     candidates = tuple(item.mount_path for item in mounted)
+    del mounted
     if not candidates:
         unresolved_mount = mount_hint or "<unmounted>"
         provisional = LocationBinding(
@@ -2251,7 +2439,7 @@ def _binding_from_identity(
     resolution = resolve_binding(binding, resolver)
     if resolution.state != VolumeResolutionState.RESOLVED:
         raise VolumeResolutionRequired(resolution)
-    return binding
+    return resolution.binding
 
 
 def _require_inventory_scan_count(count: object, field_name: str) -> int:
@@ -2443,8 +2631,9 @@ def _integrity_selection(
 ) -> IntegritySelection:
     completed = dict(request.completed_bytes)
     shared_root = Path(root)
-    items = tuple(
-        IntegritySelectionItem(
+
+    def owned_item(row: InventorySnapshot) -> IntegritySelectionItem:
+        return IntegritySelectionItem(
             item_id=f"{row.location_id}:{row.row_id}",
             row_id=row.row_id,
             location_id=str(row.location_id),
@@ -2452,12 +2641,30 @@ def _integrity_selection(
             rel_path_key=row.rel_path_key,
             display_path=row.rel_path,
             expected_state=InventoryState(row.presence.value),
-            expected_stat=row.observed,
-            baseline=row.attestation,
+            expected_stat=(
+                None if row.observed is None else snapshot_file_stat(row.observed)
+            ),
+            baseline=(
+                None if row.attestation is None else snapshot_attestation(row.attestation)
+            ),
             scope_token=row.scope_token,
-            reappeared_at=row.reappeared_at,
-            invalidation=row.invalidation,
+            reappeared_at=(
+                None
+                if row.reappeared_at is None
+                else datetime.fromisoformat(row.reappeared_at.isoformat())
+            ),
+            invalidation=(
+                None
+                if row.invalidation is None
+                else VerificationInvalidation(
+                    datetime.fromisoformat(row.invalidation.at.isoformat()),
+                    row.invalidation.reason,
+                )
+            ),
         )
+
+    items = tuple(
+        owned_item(row)
         for row in rows
     )
     pending_admission = request.processed_bytes
@@ -2481,6 +2688,27 @@ def _integrity_selection(
             pending_admission,
         ),
     )
+
+
+def _validate_integrity_runner_completion(
+    selection: IntegritySelection,
+    authority: IntegritySelectionAuthority,
+    observed_ids: set[str],
+    pending_by_id: dict[str, IntegritySelectionItemFact],
+) -> None:
+    """Require successful verifier completion to match accepted item truth."""
+
+    revalidate_integrity_selection_authority(
+        selection,
+        authority,
+        allow_progress=True,
+    )
+    if frozenset(selection.completed_bytes) != frozenset(observed_ids):
+        raise ValueError(
+            "integrity runner completion must match its emitted outcomes"
+        )
+    if pending_by_id:
+        raise ValueError("integrity runner returned with pending candidates")
 
 
 def _require_integrity_candidate_rows(

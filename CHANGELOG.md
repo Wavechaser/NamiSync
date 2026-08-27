@@ -96,6 +96,29 @@ claims explicit, independently reviewable, and regression-backed.
 - Narrowed the dormant task-surface runtime premise from the whole CPython 3.13
   patch family to the exact 3.13.14 final release used for checkpoint-4 object
   coefficients; unsupported patch or prerelease builds refuse before task state.
+- Detached reliable session items, progress, terminal results, inventory
+  selections, execution evidence, and verifier contexts at every hostile owner
+  seam. An accepted item is retained before later reconciliation, while forged
+  collaborator aggregates and workflow-owned executor phases fail without
+  replacing the reliable stream.
+- Advanced the exact process-local execution continuation to v7 with a required
+  plan-ordered exclusion acceptance cursor and removed the v6 compatibility
+  path. Resume emits only the unaccepted suffix; the local cursor advances
+  before hostile capture so sink cancellation cannot replay an accepted item,
+  and terminal refusal/failure/cancellation cannot pause into replay. Fresh
+  refusal control remains a typed phase-free `REFUSED+UNRUN` accepted prefix.
+- Revalidated exact execution and post-copy authority across recording finish,
+  fallback finish, and context exit. Hostile mutation now yields failed execution
+  or incomplete verification from pre-finish items, counters, phases, and
+  mutation provenance, including paused cancellation and fallback settlement,
+  rather than false success or mutated terminal truth.
+- Detached resolver binding/mount/evidence results, reobserved the mounted set
+  after root admission, and refused changed resolution before inventory or
+  integrity effects. Kept the complete-graph and optimization concerns assigned
+  to the next consolidation/model pass.
+- Quarantined the uncommitted checkpoint-4 model draft and stopped before model
+  work. Focused and departmental verification plus a bounded independent
+  correctness review close this prerequisite commit.
 
 #### Reject premature checkpoint-4 reservation model (2026-08-27)
 

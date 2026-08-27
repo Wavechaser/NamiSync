@@ -1,196 +1,140 @@
 # Session Handoff
 
-Status (2026-08-27): power-loss recovery remains safely anchored and the
-checkpoint-4 planning-source prerequisite has been reduced to its current
-narrow ownership contract. Checkpoint 4 is still before its first mandatory
-reservation-model commit. Production still has exactly nine commands; no task
-lifecycle, model constant, fixture, validator hash, measurement, or BR-G-45
-acceptance has activated. A fresh checkpoint-4.1 model attempt was independently
-rejected and removed before staging; none of its totals is authority.
+Status (2026-08-28): the checkpoint-4 prerequisite stabilization is complete
+in the commit containing this handoff. Checkpoint 4 itself has not started. No
+reservation constant, formula, model fixture, validator, lifecycle surface, or
+BR-G-45 acceptance from the rejected draft is production authority.
 
-The inventory-side row prerequisite is implemented in the working lineage:
-scan append, actual repository results, and exact tree input members stop before
-first excess; integrity checks the exact candidate-row tuple before its direct
-workflow construction. Initial inventory returns `REFUSED+UNRUN` without
-publication, while integrity returns `FAILED+RAN` without a partial selection
-or verifier start. Requested paths, row ids, and mapping identities now stop at
-their independent raw 120,000-occurrence walls before preprocessing, closing
-the inherited path-key off-by-one while preserving within-wall absent-result
-semantics. The finite preprocessing transients, synthetic tree/index and
-candidate construction, retained bytes, and hostile resolver-return aliases
-remain explicit checkpoint-4.1 owners in `BUGS.md`.
+The work stopped at the requested boundary: every already-open P1 gap that
+could produce false success, false refusal, replay, lost reliable truth,
+mutation misreporting, or partial persistence is closed and regression-backed.
+Consolidation, abstraction, optimization, and new checkpoint-4 design work are
+deferred.
 
-Desktop task/session attachment is also structural in the working lineage.
-Production requires every session start to attach its exact unpublished task
-reservation and observer before scheduling. Dispatcher alone retries an
-incomplete rollback; capacity remains charged until the exact observer/detail
-owners retire and the callback detaches the reservation. Malformed successful
-returns clean the attached session without gaining plan-drop authority. The CLI
-keeps optional attachment and its ordinary behavior.
+## Safe repository state
 
-Production document publication is now structurally bounded before the model:
-one channel survives reload and owns at most one acknowledged in-flight post,
-one required readiness post, one replaceable appearance post, and one queued
-native dispatch. Exact page echoes retire readiness or appearance identities;
-replacement/close invalidates the epoch and terminally releases stale callbacks.
-Bridge response occurrence capture and the separately owned pywebview/CLR/
-WebView2/browser copies remain checkpoint-4.1 model work.
-
-## Recovery and safe lineage
-
-- The complete interrupted 19-path state remains preserved at Git object
+- The active branch is `milestone1`. The commit immediately before this
+  stabilization was `c2b1150` (`fix(web): bound bridge response custody`).
+- The checkpoint-4 draft is quarantined under the stash named
+  `checkpoint 4 model draft before prerequisite consolidation` (currently
+  `stash@{0}`). It contains only:
+  `namisync/interfaces/web/task_retention_model.py`,
+  `tests/_departments.py`,
+  `tests/interfaces/web/fixtures/task_retention_model_v1.json`,
+  `tests/interfaces/web/test_task_retention_model.py`,
+  `tools/task_retention_model_oracle.py`, and
+  `tools/task_retention_model_v1.json`.
+- Do not pop that stash wholesale. After the consolidation pass, inspect it by
+  name and rederive any useful model work from current source and frozen
+  requirements. Its numbers and hashes are not accepted evidence.
+- Older recovery stashes remain under their descriptive names: `safety:
+  pre-simplicity exception audit 2026-08-27`, `recovery: paused exception
+  retirement for source-wall simplicity audit 2026-08-27`, and `recovery:
+  interrupted checkpoint-4 audit 2026-08-27`.
+- The complete interrupted tree also remains at object
   `33f699448b5940b2aa4b0464b3a238297c68ab86` on branch
-  `codex/recovery-power-loss-20260827`. Do not delete it until checkpoint 4 is
-  safely past its first model commit.
-- The paused broad exception-retirement attempt remains at
-  `8a639ab77cae98ea3ae0b8db2dc41c328c1b1391`. The pre-simplification audit tree
-  is separately preserved at `5adbe65a2ed318943429aaeeb439b5918d71b6ad`.
-  Neither stash is authority for checkpoint-4 constants or code; keep both only
-  as recovery evidence through the first model commit.
-- Recovery restarted from `b457ef9`; adapter exception retirement landed at
-  `1e52fb9`; the canonical plan vector landed at `a8be549`; and the first source
-  wall landed at `5256f3f`. Source admission was simplified at `09e140a`, and
-  dispatcher pre-run exception ownership closed separately at `74135b5`.
-  Shared descriptor-safe exception retirement was centralized at `6892712`.
-- Recovered provisional model totals, formulas, fixtures, and hashes remain
-  non-authoritative and must not be reused.
+  `codex/recovery-power-loss-20260827`. Preserve the recovery evidence until a
+  later, explicitly reviewed cleanup.
 
-## Narrow planning-source closure
+## Stabilized prerequisite behavior
 
-- Independent raw scanner, mapping, assignment, operation, observation, and
-  refusal populations stop at their first excess without accumulating
-  disposable construction costs.
-- Declared scans, correspondence, policy inputs and results, the plan, observed
-  world, and verdict are detached exactly and revalidated at their distinct
-  hostile seams. Correspondence queries are structurally bounded by admitted
-  scans, and hostile correspondence output is captured exactly once. Callback
-  input copies remain disposable.
-- The retained ledger charges only final operation and information rows plus
-  unavoidable simultaneous shallow slots in final scans, plan operations,
-  dependencies, assignments, required volumes, world maps, and verdict
-  refusals. Ordinary selection and exclusion behavior remains unchanged and is
-  not a retained owner.
-- An exact `ReviewFactLimitError` issued by the current run's opaque admission
-  family becomes typed `REFUSED + UNRUN`; the plan saver is not called and no
-  partial artifact is published. Phase delivery, correspondence, nested module
-  collaborators, destination policy, and mutated preflight input fail
-  ordinarily; cross-family signals, malformed facts, wrong tree kinds, and
-  exception subtypes cannot create a false refusal.
-- This prerequisite does not price construction, sorting or indexes, selection
-  or previews, callback overlap, codecs or text, native or browser copies,
-  object headers or container capacity, complete projections, exceptions, task
-  artifacts, or multi-session retention. Checkpoint 4 owns those costs.
+- Planning and inventory now admit each independent source population at its
+  first excess, before normalization, omission, sorting, indexing, or retained
+  artifact construction. Initial plan/inventory excess is typed
+  `REFUSED+UNRUN` with no partial save; standalone-integrity excess remains
+  honest `FAILED+RAN` with no partial selection or verifier start.
+- Declared scans, correspondence, policy inputs and results, observed world,
+  verdicts, inventory resolver output, mounted-set evidence, and retained
+  selections/results are captured as exact typed snapshots and revalidated at
+  their distinct hostile seams. Reliable private truth never shares the public
+  callback graph.
+- Only unavoidable simultaneously retained reference slots are charged by the
+  prerequisite ledger. Disposable previews, selections, callback inputs, and
+  construction graphs are not treated as retained owners.
+- Session item, progress, continuation, settlement, audit, publication, and
+  returned-result custody are distinct. Accepted reliable truth is retained
+  before later hostile work, and malformed collaborator aggregates cannot
+  replace it.
+- Execution continuation is exact v7. Its required plan-ordered exclusion
+  cursor advances locally after reliable acceptance and before hostile cursor
+  capture, so pause/resume and cancellation cannot replay an accepted
+  exclusion. The v6 compatibility branch is removed and v6 payloads are
+  rejected.
+- Fresh preflight-refusal control failures stay phase-free
+  `REFUSED+UNRUN`, retain only the accepted exclusion prefix, and open neither
+  recording nor executor work.
+- Recording finish, fallback finish, and context exit receive exact execution
+  and candidate authorities. Hostile mutation returns failed execution or
+  incomplete verification from saved pre-finish items, counters, phases, and
+  mutation provenance, including paused-cancellation and fallback paths. Later
+  reconciliation cannot turn that finding into success or replace it with a
+  generic mismatch.
+- Ordinary scanner, planner, preflight, CLI/service, dispatcher, and verifier
+  behavior remains unchanged outside these exact safety boundaries. No new
+  public compatibility contract was added.
 
-## Mandatory checkpoint-4 exception inputs
+## Bounded correctness review
 
-The simplicity review removed the broad workflow/planner exception rewrite.
-Checkpoint 4 must eliminate or finitely charge these exact live owners before
-accepting its model; it may not assume their traceback release:
+The independent final reviewer challenged false refusal, replay, mutation
+misreporting, lost truth, and unnecessary ownership. It found three P1 gaps:
 
-`core.session.run_session` is now closed for consumed work, emitter, audit,
-pause, cancellation, and accumulator-superseded errors, including nested
-exception-group member frames. Unsuperseded process-fatal exceptions and their
-custom state leave with the caller rather than becoming session artifacts.
+1. recording finish/context-exit mutation could rebuild counters or provenance
+   from corrupted aliases, including cancellation and fallback paths;
+2. cancellation from hostile continuation custody could replay an already
+   accepted exclusion; and
+3. pause/cancel during fresh-refusal exclusion delivery could escape the typed
+   `REFUSED+UNRUN` boundary.
 
-Planner and sync-workflow phase frames are now closed across path adaptation,
-planning collaborators, execution callbacks, exclusion delivery, and recording
-open/finish/exit. Public exception identity/type/message and required scalar
-cause behavior remain intact; consumed errors retain only typed detail/issue
-truth. Hostile truthiness, diagnostic, and note paths cannot replace a primary.
-Path-message construction remains a separately chargeable checkpoint-4
-transient.
-
-Web task start and compensation no longer overlap raw failure ownership.
-Replay, release, close, and shutdown-unsubscribe retain only existing retry/
-cleanup truth after a dependency failure, and normal service path refusal
-clears the workflow validation graph before the unchanged unchained public
-error. Bridge/host consumption of an escaping adapter frame and path-message
-construction remain open.
-
-Dispatcher admission, audit, store, custody, subscription, and session-worker
-start owners are now structurally closed. A provably unstarted attempt uses the
-ordinary terminal path, an already accepted cancel wins, resumed cancellation
-stays `RAN`, and a start that assigned a thread identity keeps real-thread
-ownership. Never-started attempts and audit pumps release their exact owners;
-public close/shutdown and later scheduling remain usable. Scheduler construction
-occurs before task admission, while nonreturning observer cleanup, arbitrary
-custom exception state, and an independently injected simultaneous settlement
-fault remain outside this narrow closure.
-
-History event, flush, finalization, replay-busy, and receipt-reader-close
-exception owners are now structurally closed. Public fail-stop identity,
-pending-window contents, retry timing, and durable watermarks remain unchanged;
-a secondary receipt-reader-close failure cannot mask the initiating receipt
-failure. Store construction/existing-run reader failures, delayed audit
-payloads, and queue/callback copies remain separate checkpoint-4 model inputs.
-
-Preserve current public status, item order, counters, exception identity where
-it propagates, cleanup/retry truth, and path redaction. Regressions retain raw
-external aliases and assert release after the public call; they do not encode
-private handler timing or callback choreography.
-
-## Checkpoint-4.1 audit decision
-
-Three independent reviews blocked the first analytical draft. It multiplied
-the aggregate plan graph walls across aliases, summed sequential construction
-seams, priced retained events as canonical bytes, used unproved codec/native/
-browser copy constants, and hid several large costs in opaque fixed values.
-The calculator also ignored roots, lifetimes, obligations, fixtures, and two
-refusal families. The draft files were deleted and must not be reconstructed
-from session context or the recovery stashes.
-
-Before another model attempt, close or enforce an exact desktop-only premise
-for every OPEN checkpoint-4 owner now recorded in [BUGS.md](BUGS.md): raw phase
-exception graphs; dispatcher/runtime/service owner counts and shutdown; raw
-inventory scan/query/tree construction; standalone-integrity retained bytes;
-and complete bridge/native/browser response custody. Document-post count and
-acknowledgment lifetimes are closed structurally, but their encoded/native copy
-charges remain model inputs. The direct
-verifier seam is already closed at an exact 4 MiB public maximum, allowing one
-native buffer plus one Python bytes copy to be charged. The one plan-domain and
-one plan-information wall apply once to the aggregate identity-deduplicated
-artifact. Sequential phase peaks use a maximum union, not an all-call sum;
-queue/container slots remain separate.
-
-Successful workflow-runtime shutdown now clears plan artifacts and execution-
-start claims as well as both detail maps. A failed dependency close preserves
-all four maps for retry. This closes the unconditional post-close leak; task-
-wide admission and service/dispatcher owner counts remain model prerequisites.
-
-The task-surface runtime gate now admits only CPython 3.13.14 final rather than
-every 3.13 patch release. This supplies a narrow production premise for the
-object-layout coefficients; the first model commit must still independently
-validate every coefficient it uses.
+All three were fixed. The reviewer's bounded closure matrix passed all eleven
+regressions and found no remaining blocker within the frozen prerequisite
+scope. Earlier review concerns about repeated full-graph scans, disposable fact
+construction, duplicate maps, and aggregate confirmation are recorded below;
+they did not justify another redesign during stabilization.
 
 ## Verification
 
-- Exact exception-helper, review-wall, planner, and preflight focus:
-  `175 passed`.
-- Exact `core`, `scanner`, `planner`, `preflight`, and `workflows` department
-  union: `2,191 passed, 1 skipped, 2,711 deselected`.
-- Exact dispatcher/interfaces consumer union with bundled Node:
-  `1,509 passed, 3,394 deselected`.
-- Ordinary repository suite with bundled Node:
-  `4,871 passed, 4 skipped, 28 deselected`.
-- Import architecture: `11 kept, 0 broken`.
-- Executor settlement oracle remains at all 30 scenarios across three identical
-  runs from the immediately preceding checkpoint audit; this closeout does not
-  change executor code or settlement policy.
-- `git diff --check` and targeted stale-term review passed. Two independent
-  post-simplification audits found no remaining false refusal, double charging,
-  unnecessary copy, redundant validation, misplaced policy, private-counter
-  test coupling, or ordinary-behavior drift.
+- Expanded changed-file suite: `1,103 passed`.
+- Affected `core`, `scanner`, `planner`, `preflight`, `executor`, `verifier`,
+  `database`, `workflows`, `dispatcher`, and `interfaces` department union:
+  `4,765 passed, 1 skipped, 336 deselected`.
+- Ordinary repository suite with the bundled Node runtime:
+  `5,070 passed, 4 skipped, 28 deselected`.
+- Independent final closure matrix: `11 passed, 153 deselected`.
+- The final static closeout included `git diff --check`, a current-versus-
+  historical execution-version terminology review, and a worktree/stash
+  inventory proving checkpoint-4
+  model artifacts are absent from the stabilization commit.
 
-## Next safe work
+## Deferred consolidation and checkpoint-4 owners
 
-1. Proceed through checkpoint 4 in order, using the mandatory exception inputs
-   above when deriving the complete occurrence/retirement model. Structural
-   prerequisite fixes now precede the first frozen model commit:
-   `test(web): pin task artifact reservation model`,
-   `feat(web): install dormant task lifecycle`, then
-   `feat(web): retain multi-session task artifacts`.
-2. Derive a fresh complete ownership graph and validator from active source and
-   `docs/M1_BRIDGE.md` plus `docs/DEFENSE.md`, never from the recovery snapshot.
-   The second commit preserves the nine-row command table and one-session
-   behavior. Only the third activates the 12-row map and six task rows. BR-G-45
-   and SH-G-15 remain open until their owning acceptance work closes them.
+The active ledger is `docs/BUGS.md`; `docs/M1_SHELL_H2.md` owns the delivery
+boundary. The next consolidation/model pass must review or price these owners
+without widening the stabilized workflow contracts:
+
+- repeated full-graph revalidation at callback/checkpoint seams and its
+  disposable fact graphs;
+- duplicate operation/candidate maps and settlement snapshots;
+- the unused `ExecutionOperationFact.content_bytes` field;
+- verifier aggregate-versus-reliable-stream confirmation and standardized
+  four-string record identities;
+- unslotted or custom nested Python values, result projection containers,
+  EventHub envelope/body subscriber aliases, and SessionStore live-record
+  aliases;
+- process-restart durability for the item accumulator and exclusion receipt;
+- remaining host/document exception owners, history construction/read-open
+  failures, path-message construction, and complete path/codec copies;
+- complete tree projection, codec/text estimates, construction transients,
+  sorting/index storage, callback overlap, native/browser copies, mutable
+  container capacity, and every speculative future owner.
+
+These are logged design/model inputs, not accepted constants or permission to
+add compatibility branches. Only a newly proved correctness consequence in the
+user's bounded classes should reopen prerequisite behavior.
+
+## Next safe action
+
+Perform the requested consolidation/abstraction pass against this committed
+baseline. Reconcile the deferred ledger and inspect the quarantined draft
+without applying it. Only after that review should checkpoint 4 derive and
+freeze a fresh ownership model from active source, `docs/M1_BRIDGE.md`,
+`docs/DEFENSE.md`, and the current plan.

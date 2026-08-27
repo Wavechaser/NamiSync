@@ -76,7 +76,7 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.core.pathing import normalize_relative_path, to_extended_length_path
-from namisync.core.preflight import Refusal, RefusalCode, Verdict
+from namisync.core.preflight import ObservedWorld, Refusal, RefusalCode, Verdict
 from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
     Canceled,
@@ -214,6 +214,7 @@ def _evidence(
     operation: PlanOperation,
     *,
     recorded: bool = True,
+    scope_token: str = "a" * 32,
 ) -> PublishedCopyEvidence:
     assert operation.intended is not None
     attestation = Attestation(
@@ -230,7 +231,7 @@ def _evidence(
         RecordedCopyIdentity(
             row_id=str(int(str(operation.op_id), 16)),
             location_id="9",
-            scope_token="a" * 32,
+            scope_token=scope_token,
             rel_path_key=normalize_relative_path(operation.target_rel_path),
         )
         if recorded
@@ -287,17 +288,26 @@ def _settle(
     *,
     outcome: Outcome = Outcome.SUCCEEDED,
     evidence: PublishedCopyEvidence | None = None,
+    recording_reason: ItemRecordingReason | None = None,
 ) -> ItemOutcome:
-    if evidence is not None:
-        xset.published_evidence[operation.op_id] = evidence
-    xset.status[operation.op_id] = outcome
     item = ItemOutcome(
         str(operation.op_id),
         operation.kind.value,
         operation.target_rel_path,
         outcome,
+        recording=(
+            RecordingStatus.DEGRADED
+            if recording_reason is not None
+            else RecordingStatus.OK
+        ),
+        recording_reason=recording_reason,
     )
     context.emit(item)
+    if evidence is not None:
+        xset.published_evidence[operation.op_id] = evidence
+    xset.status[operation.op_id] = outcome
+    if recording_reason is not None:
+        xset.note_item_recording_failure(operation.op_id, recording_reason)
     return item
 
 
@@ -368,6 +378,19 @@ class _FileSystem:
         return None
 
 
+def _observed_world() -> ObservedWorld:
+    return ObservedWorld(
+        {},
+        {},
+        frozenset(),
+        {},
+        None,
+        0,
+        None,
+        NOW,
+    )
+
+
 def _deps(
     *,
     executor,
@@ -375,7 +398,7 @@ def _deps(
     recordings: list[_Recording],
     verdict: Verdict | None = None,
 ):
-    world = SimpleNamespace(paths={}, target_parent_paths=frozenset({""}))
+    world = _observed_world()
     return SimpleNamespace(
         save_execution_details=lambda value: None,
         observer=lambda *args: world,
@@ -588,17 +611,6 @@ def test_execute_diagnostic_omissions_survive_verify_pause_resume_once() -> None
         return OperationResult(
             SessionState.FAILED,
             items=(item,),
-            phases=(
-                PhaseResult(
-                    "executor-detail",
-                    PhaseStatus.COMPLETED,
-                    1,
-                    1,
-                    9,
-                    9,
-                    "x" * 1025,
-                ),
-            ),
             bytes_done=9,
             bytes_total=9,
             error=FailureDetail("T", "x" * 1025),
@@ -618,12 +630,12 @@ def test_execute_diagnostic_omissions_survive_verify_pause_resume_once() -> None
 
     paused = captured[-1]
     assert paused.execute_phase.error is None
-    assert paused.execution_set.omitted_detail_count == 4
+    assert paused.execution_set.omitted_detail_count == 3
     restored = decode_execution_request(
         encode_execution_request(ExecutionRequest(paused, NOW))
     ).continuation
     assert isinstance(restored, VerifyContinuation)
-    assert restored.execution_set.omitted_detail_count == 4
+    assert restored.execution_set.omitted_detail_count == 3
 
     result = run_execution(
         restored,
@@ -638,7 +650,7 @@ def test_execute_diagnostic_omissions_survive_verify_pause_resume_once() -> None
 
     assert result.status is SessionState.FAILED
     assert result.phases[0].error is None
-    assert result.omitted_detail_count == 4
+    assert result.omitted_detail_count == 3
 
 
 def test_verify_continuation_refuses_executor_omission_count_mismatch() -> None:
@@ -682,26 +694,13 @@ def test_verify_continuation_refuses_executor_omission_count_mismatch() -> None:
 
 
 def test_normalized_executor_result_is_released_before_continuation_sink(
-    monkeypatch,
 ) -> None:
     class TrackableResult(OperationResult):
         pass
 
     operation = _operation(82, 6)
     xset = _execution_set(operation)
-    normalized_refs = []
-    normalize = sync_workflow.normalize_result_diagnostics
-
-    def track_normalized(result):
-        normalized = normalize(result)
-        normalized_refs.append(ref(normalized))
-        return normalized
-
-    monkeypatch.setattr(
-        sync_workflow,
-        "normalize_result_diagnostics",
-        track_normalized,
-    )
+    producer_refs = []
 
     def executor(execution_set, context, recorder, policies, fs):
         del recorder, policies, fs
@@ -711,16 +710,19 @@ def test_normalized_executor_result_is_released_before_continuation_sink(
             operation,
             evidence=_evidence(operation),
         )
-        return TrackableResult(
+        result = TrackableResult(
             SessionState.COMPLETED,
             items=(item,),
             bytes_done=6,
             bytes_total=6,
         )
+        producer_refs.append(ref(result))
+        return result
 
     def inspect_continuation(value):
         assert isinstance(value, VerifyContinuation)
-        assert normalized_refs[-1]() is None
+        gc.collect()
+        assert producer_refs[-1]() is None
 
     result = run_execution(
         ExecuteContinuation(xset, verify_after_execute=True),
@@ -730,6 +732,1309 @@ def test_normalized_executor_result_is_released_before_continuation_sink(
     )
 
     assert result.status is SessionState.COMPLETED
+
+
+def test_executor_outcome_is_detached_and_bound_to_reviewed_plan_facts() -> None:
+    class HiddenOutcome(ItemOutcome):
+        pass
+
+    operation = _operation(85, 6)
+    xset = _execution_set(operation)
+    producer_refs: list[ref[_PrivateWorkflowFrameValue]] = []
+    events: list[object] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        hidden = _PrivateWorkflowFrameValue()
+        producer_refs.append(ref(hidden))
+        item = HiddenOutcome(
+            item_id=str(operation.op_id),
+            kind=OperationKind.DELETE,
+            path="producer-forged.txt",
+            outcome=Outcome.SUCCEEDED,
+        )
+        object.__setattr__(item, "hidden_graph", hidden)
+        context.emit(item)
+        object.__setattr__(item, "path", "producer-mutated.txt")
+        execution_set.status[operation.op_id] = Outcome.SUCCEEDED
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(events.append, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    operation_events = [body for body in events if isinstance(body, ItemOutcome)]
+    assert len(operation_events) == 1
+    assert result.items == tuple(operation_events)
+    assert type(result.items[0]) is ItemOutcome
+    assert result.items[0].item_id == str(operation.op_id)
+    assert result.items[0].kind is operation.kind
+    assert result.items[0].path == operation.target_rel_path
+    gc.collect()
+    assert producer_refs and all(reference() is None for reference in producer_refs)
+
+
+def test_executor_duplicate_refuses_before_reading_hostile_detail() -> None:
+    class HostileDuplicate(ItemOutcome):
+        def __getattribute__(self, name: str):
+            if name == "detail" and object.__getattribute__(
+                self, "__dict__"
+            ).get("hostile", False):
+                raise AssertionError("duplicate detail was read")
+            return super().__getattribute__(name)
+
+    operation = _operation(88, 3)
+    xset = _execution_set(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        first = ItemOutcome(
+            str(operation.op_id),
+            operation.kind,
+            operation.target_rel_path,
+            Outcome.SUCCEEDED,
+        )
+        context.emit(first)
+        execution_set.status[operation.op_id] = Outcome.SUCCEEDED
+        duplicate = HostileDuplicate(
+            str(operation.op_id),
+            operation.kind,
+            operation.target_rel_path,
+            Outcome.SUCCEEDED,
+        )
+        duplicate.hostile = True
+        context.emit(duplicate)
+        raise AssertionError("duplicate outcome was accepted")
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert len(result.items) == 1
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor emitted a duplicate operation outcome",
+    )
+
+
+def test_executor_must_emit_each_newly_settled_operation() -> None:
+    operation = _operation(86, 4)
+    xset = _execution_set(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del context, recorder, policies, fs
+        execution_set.status[operation.op_id] = Outcome.SUCCEEDED
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(
+                ItemOutcome(
+                    item_id=str(operation.op_id),
+                    kind=operation.kind,
+                    path=operation.target_rel_path,
+                    outcome=Outcome.SUCCEEDED,
+                ),
+            ),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.items == ()
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor omitted an outcome for a pending operation",
+    )
+
+
+def test_executor_normal_return_must_emit_every_initially_pending_operation() -> None:
+    first = _operation(92, 4)
+    second = _operation(93, 5)
+    xset = _execution_set(first, second)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, first)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=first.content_bytes,
+            bytes_total=first.content_bytes + second.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert [item.item_id for item in result.items] == [str(first.op_id)]
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor omitted an outcome for a pending operation",
+    )
+
+
+def test_execute_resume_does_not_require_or_reemit_initial_settlements() -> None:
+    operation = _operation(96, 4)
+    xset = _execution_set(operation)
+    xset.status[operation.op_id] = Outcome.SUCCEEDED
+    events: list[object] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del context, recorder, policies, fs
+        assert execution_set.remaining() == ()
+        return OperationResult(
+            SessionState.COMPLETED,
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(events.append, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        resumed=True,
+    )
+
+    assert not any(isinstance(event, ItemOutcome) for event in events)
+    assert [(item.item_id, item.outcome) for item in result.items] == [
+        (str(operation.op_id), Outcome.SUCCEEDED)
+    ]
+
+
+def test_execute_rejects_a_settlement_ahead_of_its_outward_outcome() -> None:
+    first = _operation(97, 4)
+    second = _operation(98, 5)
+    xset = _execution_set(first, second)
+    recordings: list[_Recording] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        _settle(execution_set, context, first)
+        execution_set.status[second.op_id] = Outcome.SUCCEEDED
+        context.emit(
+            ItemOutcome(
+                str(second.op_id),
+                second.kind,
+                second.target_rel_path,
+                Outcome.SUCCEEDED,
+            )
+        )
+        pytest.fail("rejected operation outcome unexpectedly returned")
+
+    def pause_on_second(body: object) -> None:
+        if isinstance(body, ItemOutcome) and body.item_id == str(second.op_id):
+            raise PauseRequested()
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(pause_on_second, lambda: None),
+        _deps(
+            executor=executor,
+            verifier=_verify_all,
+            recordings=recordings,
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert [item.item_id for item in result.items] == [str(first.op_id)]
+    assert result.error is not None
+    assert "settlement" in result.error.message
+    assert recordings[0].finishes == [
+        (SessionState.FAILED, RecordingStatus.OK)
+    ]
+
+
+def test_execute_resume_reports_only_the_unaccepted_exclusion_suffix() -> None:
+    selected = _operation(113, 4)
+    excluded = (_operation(114, 2), _operation(115, 3))
+    initial = _execution_set(selected, *excluded)
+    selection = frozenset({selected.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        user_deselected=frozenset(item.op_id for item in excluded),
+        commitment=Commitment(
+            initial.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    captured: list[ExecuteContinuation] = []
+    first_events: list[ItemOutcome] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, selected)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=selected.content_bytes,
+            bytes_total=selected.content_bytes,
+        )
+
+    def pause_on_second_exclusion(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            if body.item_id == str(excluded[1].op_id):
+                raise PauseRequested()
+            first_events.append(body)
+
+    first_recordings: list[_Recording] = []
+    with pytest.raises(PauseRequested):
+        run_execution(
+            ExecuteContinuation(xset),
+            RunContext(pause_on_second_exclusion, lambda: None),
+            _deps(
+                executor=executor,
+                verifier=_verify_all,
+                recordings=first_recordings,
+            ),
+            continuation_sink=captured.append,
+        )
+
+    assert [item.item_id for item in first_events] == [
+        str(selected.op_id),
+        str(excluded[0].op_id),
+    ]
+    assert captured[-1].reported_exclusion_count == 1
+    restored = decode_execution_request(
+        encode_execution_request(ExecutionRequest(captured[-1], NOW))
+    ).continuation
+    assert isinstance(restored, ExecuteContinuation)
+
+    resumed_events: list[ItemOutcome] = []
+    resumed_executor_calls = 0
+
+    def resumed_executor(execution_set, context, recorder, policies, fs):
+        nonlocal resumed_executor_calls
+        del context, recorder, policies, fs
+        resumed_executor_calls += 1
+        assert not execution_set.remaining()
+        return OperationResult(
+            SessionState.COMPLETED,
+            bytes_done=selected.content_bytes,
+            bytes_total=selected.content_bytes,
+        )
+
+    result = run_execution(
+        restored,
+        RunContext(
+            lambda body: resumed_events.append(body)
+            if isinstance(body, ItemOutcome)
+            else None,
+            lambda: None,
+        ),
+        _deps(
+            executor=resumed_executor,
+            verifier=_verify_all,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert resumed_executor_calls == 1
+    assert [item.item_id for item in resumed_events] == [
+        str(excluded[1].op_id)
+    ]
+    assert [item.item_id for item in result.items] == [
+        str(selected.op_id),
+        str(excluded[0].op_id),
+        str(excluded[1].op_id),
+    ]
+
+
+def test_terminal_exclusion_control_becomes_failure_without_replay() -> None:
+    selected, excluded = _operation(116, 4), _operation(117, 2)
+    initial = _execution_set(selected, excluded)
+    selection = frozenset({selected.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        user_deselected=frozenset({excluded.op_id}),
+        commitment=Commitment(
+            initial.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    executor_calls = 0
+    captured: list[ExecuteContinuation] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        nonlocal executor_calls
+        del recorder, policies, fs
+        executor_calls += 1
+        _settle(execution_set, context, selected)
+        raise RuntimeError("executor stopped")
+
+    def pause_on_exclusion(body: object) -> None:
+        if isinstance(body, ItemOutcome) and body.item_id == str(excluded.op_id):
+            raise PauseRequested()
+
+    result = run_execution(
+        ExecuteContinuation(xset),
+        RunContext(pause_on_exclusion, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        continuation_sink=captured.append,
+    )
+
+    assert executor_calls == 1
+    assert not captured
+    assert result.status is SessionState.FAILED
+    assert [item.item_id for item in result.items] == [str(selected.op_id)]
+    assert result.error == FailureDetail(
+        "RuntimeError",
+        "control cannot interrupt terminal exclusion settlement",
+    )
+
+
+@pytest.mark.parametrize("control", (PauseRequested, Canceled))
+def test_fresh_preflight_refusal_contains_terminal_exclusion_control(
+    control: type[BaseException],
+) -> None:
+    selected = _operation(126, 4)
+    excluded = (_operation(127, 2), _operation(128, 3))
+    initial = _execution_set(selected, *excluded)
+    selection = frozenset({selected.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        user_deselected=frozenset(item.op_id for item in excluded),
+        commitment=Commitment(
+            initial.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    events: list[ItemOutcome] = []
+    recordings: list[_Recording] = []
+    executor_calls = 0
+
+    def executor(*args: object) -> None:
+        nonlocal executor_calls
+        del args
+        executor_calls += 1
+
+    def interrupt_second(body: object) -> None:
+        if not isinstance(body, ItemOutcome):
+            return
+        if body.item_id == str(excluded[1].op_id):
+            raise control()
+        events.append(body)
+
+    world = _observed_world()
+    result = run_execution(
+        ExecuteContinuation(xset),
+        RunContext(interrupt_second, lambda: None),
+        _deps(
+            executor=executor,
+            verifier=_verify_all,
+            recordings=recordings,
+            verdict=Verdict(
+                False,
+                (Refusal(RefusalCode.ROOT_UNAVAILABLE, detail="refused"),),
+                world,
+            ),
+        ),
+    )
+
+    assert result.status is SessionState.REFUSED
+    assert result.disposition is Disposition.UNRUN
+    assert result.phases == ()
+    assert [item.item_id for item in events] == [str(excluded[0].op_id)]
+    assert [item.item_id for item in result.items] == [str(excluded[0].op_id)]
+    assert result.error == FailureDetail(
+        "RuntimeError",
+        "control cannot interrupt terminal exclusion settlement",
+    )
+    assert executor_calls == 0
+    assert recordings == []
+
+
+def test_exclusion_cursor_capture_failure_stops_later_siblings() -> None:
+    selected = _operation(118, 4)
+    excluded = (_operation(119, 2), _operation(120, 3))
+    initial = _execution_set(selected, *excluded)
+    selection = frozenset({selected.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        user_deselected=frozenset(item.op_id for item in excluded),
+        commitment=Commitment(
+            initial.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    events: list[ItemOutcome] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, selected)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=selected.content_bytes,
+            bytes_total=selected.content_bytes,
+        )
+
+    def emit(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            events.append(body)
+
+    def reject_capture(value: object) -> None:
+        assert isinstance(value, ExecuteContinuation)
+        assert value.reported_exclusion_count == 1
+        raise OSError("cursor custody unavailable")
+
+    result = run_execution(
+        ExecuteContinuation(xset),
+        RunContext(emit, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        continuation_sink=reject_capture,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert [item.item_id for item in events] == [
+        str(selected.op_id),
+        str(excluded[0].op_id),
+    ]
+    assert [item.item_id for item in result.items] == [
+        str(selected.op_id),
+        str(excluded[0].op_id),
+    ]
+    assert result.error == FailureDetail(
+        "OSError",
+        "cursor custody unavailable",
+    )
+
+
+def test_exclusion_cursor_cancellation_never_replays_an_accepted_item() -> None:
+    selected = _operation(129, 4)
+    excluded = (_operation(130, 2), _operation(131, 3))
+    initial = _execution_set(selected, *excluded)
+    selection = frozenset({selected.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        user_deselected=frozenset(item.op_id for item in excluded),
+        commitment=Commitment(
+            initial.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    events: list[ItemOutcome] = []
+    captured_counts: list[int] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, selected)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=selected.content_bytes,
+            bytes_total=selected.content_bytes,
+        )
+
+    def capture(value: object) -> None:
+        assert isinstance(value, ExecuteContinuation)
+        captured_counts.append(value.reported_exclusion_count)
+        if value.reported_exclusion_count == 1:
+            raise Canceled()
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(
+            lambda body: events.append(body)
+            if isinstance(body, ItemOutcome)
+            else None,
+            lambda: None,
+        ),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        continuation_sink=capture,
+    )
+
+    expected_ids = [
+        str(selected.op_id),
+        str(excluded[0].op_id),
+        str(excluded[1].op_id),
+    ]
+    assert result.status is SessionState.CANCELED
+    assert result.canceled
+    assert captured_counts == [1, 2]
+    assert [item.item_id for item in events] == expected_ids
+    assert [item.item_id for item in result.items] == expected_ids
+
+
+@pytest.mark.parametrize(
+    ("reported_count", "resumed", "expected_status"),
+    (
+        (1, False, SessionState.REFUSED),
+        (2, True, SessionState.FAILED),
+    ),
+)
+def test_invalid_exclusion_cursor_stops_before_domain_collaborators(
+    reported_count: int,
+    resumed: bool,
+    expected_status: SessionState,
+) -> None:
+    selected, excluded = _operation(124, 4), _operation(125, 2)
+    initial = _execution_set(selected, excluded)
+    selection = frozenset({selected.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        user_deselected=frozenset({excluded.op_id}),
+        commitment=Commitment(
+            initial.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    calls = {"observer": 0, "preflight": 0, "executor": 0}
+    dependencies = _deps(
+        executor=lambda *args: calls.__setitem__(
+            "executor", calls["executor"] + 1
+        ),
+        verifier=_verify_all,
+        recordings=[],
+    )
+    dependencies.observer = lambda *args: calls.__setitem__(
+        "observer", calls["observer"] + 1
+    )
+    dependencies.preflight = lambda *args: calls.__setitem__(
+        "preflight", calls["preflight"] + 1
+    )
+
+    result = run_execution(
+        ExecuteContinuation(
+            xset,
+            reported_exclusion_count=reported_count,
+        ),
+        RunContext(lambda _body: None, lambda: None),
+        dependencies,
+        resumed=resumed,
+    )
+
+    assert result.status is expected_status
+    assert result.disposition is (
+        Disposition.RAN if resumed else Disposition.UNRUN
+    )
+    assert calls == {"observer": 0, "preflight": 0, "executor": 0}
+
+
+def test_execute_retains_an_accepted_item_when_later_reconciliation_fails() -> None:
+    operation = _operation(121, 4)
+    xset = _execution_set(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, operation)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    def mutate_after_accept(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            xset.recording_reasons[operation.op_id] = (
+                ItemRecordingReason.RECORD_WRITE_FAILED
+            )
+
+    result = run_execution(
+        ExecuteContinuation(xset),
+        RunContext(mutate_after_accept, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert [item.item_id for item in result.items] == [str(operation.op_id)]
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor outcome disagrees with execution-set settlement",
+    )
+
+
+def test_verify_retains_an_accepted_item_when_revalidation_fails() -> None:
+    operation = _operation(122, 5)
+    continuation = _verify_continuation_fixture(operation)
+
+    def mutate_after_accept(body: object) -> None:
+        if isinstance(body, IntegrityOutcome):
+            object.__setattr__(
+                continuation.candidates.candidates[0],
+                "display_path",
+                "mutated.txt",
+            )
+
+    result = run_execution(
+        continuation,
+        RunContext(mutate_after_accept, lambda: None),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=_verify_all,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert [item.item_id for item in result.items] == [str(operation.op_id)]
+    assert result.items[0].path == operation.target_rel_path
+    assert result.error == FailureDetail(
+        "ValueError",
+        "post-copy recorded identity does not match its display path",
+    )
+
+
+@pytest.mark.parametrize("owner", ("execute", "verify"))
+@pytest.mark.parametrize("seam", ("finish", "exit"))
+def test_recording_boundary_mutation_cannot_overwrite_reliable_truth(
+    owner: str,
+    seam: str,
+) -> None:
+    operation = _operation(123, 5)
+    if owner == "execute":
+        continuation: ExecuteContinuation | VerifyContinuation = (
+            ExecuteContinuation(_execution_set(operation))
+        )
+    else:
+        continuation = _verify_continuation_fixture(operation)
+
+    def mutate() -> None:
+        if owner == "execute":
+            continuation.execution_set.status.clear()
+            continuation.execution_set.bytes_done_high_water = 0
+        else:
+            assert isinstance(continuation, VerifyContinuation)
+            continuation.candidates._completed_bytes.clear()
+            continuation.candidates._processed_bytes = 0
+
+    class MutatingRecording(_Recording):
+        def finish(
+            self,
+            status: SessionState,
+            recording: RecordingStatus,
+        ) -> None:
+            super().finish(status, recording)
+            if seam == "finish":
+                mutate()
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            if seam == "exit":
+                mutate()
+            return super().__exit__(exc_type, exc, traceback)
+
+    recording = MutatingRecording()
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, operation)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    dependencies = _deps(
+        executor=(
+            executor
+            if owner == "execute"
+            else lambda *args: pytest.fail("execution phase repeated")
+        ),
+        verifier=_verify_all,
+        recordings=[],
+    )
+    dependencies.open_recording = lambda _execution_set: recording
+
+    result = run_execution(
+        continuation,
+        RunContext(lambda _body: None, lambda: None),
+        dependencies,
+        resumed=owner == "verify",
+    )
+
+    assert [item.item_id for item in result.items] == [str(operation.op_id)]
+    assert result.items[0].path == operation.target_rel_path
+    assert result.error is not None
+    assert result.error.type_name == "ValueError"
+    if owner == "execute":
+        assert result.status is SessionState.FAILED
+        assert result.bytes_done == operation.content_bytes
+        assert result.bytes_total == operation.content_bytes
+        assert result.error.message == "executor changed an existing settlement"
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+        assert result.phases[-1].items_done == 1
+        assert result.phases[-1].bytes_done == operation.content_bytes
+        assert result.phases[-1].bytes_total == operation.content_bytes
+        assert result.error.message == (
+            "post-copy prior completion changed during collaboration"
+        )
+
+
+@pytest.mark.parametrize("owner", ("execute", "verify"))
+@pytest.mark.parametrize("route", ("paused-cancel", "fallback-finish"))
+def test_recording_finish_mutation_preserves_canceled_and_fallback_truth(
+    owner: str,
+    route: str,
+) -> None:
+    operation = _operation(132, 5)
+    if owner == "execute":
+        xset = _execution_set(operation)
+        xset.status[operation.op_id] = Outcome.SUCCEEDED
+        xset.note_bytes_done(operation.content_bytes)
+        continuation: ExecuteContinuation | VerifyContinuation = ExecuteContinuation(
+            xset,
+            verify_after_execute=True,
+        )
+    else:
+        continuation = _verify_continuation_fixture(operation)
+        continuation.candidates.note_bytes_processed(operation.content_bytes)
+        continuation.candidates.mark_completed(
+            str(operation.op_id),
+            operation.content_bytes,
+        )
+        xset = continuation.execution_set
+
+    def mutate() -> None:
+        if owner == "execute":
+            xset.status.clear()
+            xset.bytes_done_high_water = 0
+        else:
+            assert isinstance(continuation, VerifyContinuation)
+            continuation.candidates._completed_bytes.clear()
+            continuation.candidates._processed_bytes = 0
+
+    if route == "paused-cancel":
+        class MutatingRecording(_Recording):
+            def finish(self, status, recording):
+                super().finish(status, recording)
+                mutate()
+
+        result = settle_canceled_execution(
+            continuation,
+            Disposition.RAN,
+            SimpleNamespace(
+                open_recording=lambda execution_set: MutatingRecording()
+            ),
+        )
+    else:
+        dependencies = _deps(
+            executor=lambda *args: pytest.fail("execution unexpectedly started"),
+            verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+            recordings=[],
+        )
+        dependencies.observer = lambda *args: (_ for _ in ()).throw(
+            OSError("preflight unavailable")
+        )
+        dependencies.finish_existing_recording = (
+            lambda execution_set, status, recording: mutate()
+        )
+        result = run_execution(
+            continuation,
+            RunContext(lambda _body: None, lambda: None),
+            dependencies,
+            resumed=True,
+        )
+
+    assert not result.canceled
+    assert result.error is not None
+    assert result.error.type_name == "ValueError"
+    if owner == "execute":
+        assert result.status is SessionState.FAILED
+        assert result.phases[-1].status is PhaseStatus.FAILED
+        assert result.phases[-1].items_done == 1
+        assert result.phases[-1].bytes_done == operation.content_bytes
+        assert result.bytes_done == operation.content_bytes
+        assert result.error.message == "executor changed an existing settlement"
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+        assert result.phases[-1].items_done == 1
+        assert result.phases[-1].bytes_done == operation.content_bytes
+        assert result.error.message == (
+            "post-copy prior completion changed during collaboration"
+        )
+
+
+def test_executor_cannot_return_refused_unrun_after_execution_started() -> None:
+    operation = _operation(99, 4)
+    xset = _execution_set(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, operation)
+        return OperationResult(
+            SessionState.REFUSED,
+            disposition=Disposition.UNRUN,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor returned an invalid terminal status",
+    )
+
+
+def test_executor_cannot_change_fixed_execution_authority() -> None:
+    operation = _operation(105, 4)
+    xset = _execution_set(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, operation)
+        execution_set.run_id = validated_run_id("b" * 32)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor changed the execution run identity",
+    )
+
+
+@pytest.mark.parametrize("corruption", ["outcome", "recording"])
+def test_executor_emission_must_match_retained_settlement(corruption: str) -> None:
+    operation = _operation(94, 4)
+    xset = _execution_set(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        emitted = ItemOutcome(
+            str(operation.op_id),
+            operation.kind,
+            operation.target_rel_path,
+            Outcome.SUCCEEDED,
+        )
+        context.emit(emitted)
+        execution_set.status[operation.op_id] = (
+            Outcome.FAILED if corruption == "outcome" else Outcome.SUCCEEDED
+        )
+        if corruption == "recording":
+            execution_set.note_item_recording_failure(
+                operation.op_id,
+                ItemRecordingReason.RECORD_WRITE_FAILED,
+            )
+        return OperationResult(
+            SessionState.FAILED if corruption == "outcome" else SessionState.COMPLETED,
+            recording=execution_set.recording,
+            items=(emitted,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert len(result.items) == 1
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor outcome disagrees with execution-set settlement",
+    )
+
+
+def test_executor_aggregate_recording_must_match_execution_settlement() -> None:
+    operation = _operation(91, 4)
+    xset = _execution_set(operation)
+    recordings: list[_Recording] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, operation)
+        return OperationResult(
+            SessionState.COMPLETED,
+            recording=RecordingStatus.DEGRADED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(
+            executor=executor,
+            verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+            recordings=recordings,
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert len(result.items) == 1
+    assert result.recording is RecordingStatus.OK
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor result recording must match execution-set recording",
+    )
+    assert recordings[0].finishes == [
+        (SessionState.FAILED, RecordingStatus.OK)
+    ]
+
+
+def test_verifier_rejects_aggregate_outcome_missing_from_reliable_emission() -> None:
+    class HiddenIntegrityOutcome(IntegrityOutcome):
+        pass
+
+    class HiddenRunResult(IntegrityRunResult):
+        pass
+
+    class InspectRecording(_Recording):
+        def finish(
+            self,
+            status: SessionState,
+            recording: RecordingStatus,
+        ) -> None:
+            gc.collect()
+            assert aggregate_refs[-1]() is None
+            super().finish(status, recording)
+
+    operation = _operation(87, 5)
+    continuation = _verify_continuation_fixture(operation)
+    producer_refs: list[ref[_PrivateWorkflowFrameValue]] = []
+    aggregate_refs: list[ref[HiddenRunResult]] = []
+    events: list[object] = []
+
+    def verifier(selection, context, recorder):
+        del recorder
+        candidate = selection.pending[0]
+        hidden = _PrivateWorkflowFrameValue()
+        producer_refs.append(ref(hidden))
+        item = HiddenIntegrityOutcome(
+            item_id=candidate.item_id,
+            row_id="forged-row",
+            location_id="forged-location",
+            path="producer-forged.txt",
+            result=IntegrityResult.VERIFIED,
+            read_strategy=ReadStrategy.WINDOWS_UNBUFFERED,
+            record_disposition=RecordDisposition.APPLIED,
+        )
+        object.__setattr__(item, "hidden_graph", hidden)
+        selection.note_bytes_processed(candidate.expected_stat.size)
+        context.run.emit(item)
+        object.__setattr__(item, "path", "producer-mutated.txt")
+        selection.mark_completed(candidate.item_id, candidate.expected_stat.size)
+        unreported = IntegrityOutcome(
+            item_id="unreported",
+            row_id=None,
+            location_id=None,
+            path="unreported.txt",
+            result=IntegrityResult.ERROR,
+            recording=RecordingStatus.DEGRADED,
+        )
+        aggregate = HiddenRunResult(
+            (unreported,),
+            RecordingStatus.DEGRADED,
+        )
+        aggregate_refs.append(ref(aggregate))
+        return aggregate
+
+    recordings: list[_Recording] = []
+    dependencies = _deps(
+        executor=lambda *args: pytest.fail("execution phase repeated"),
+        verifier=verifier,
+        recordings=recordings,
+    )
+    dependencies.open_recording = lambda _execution_set: (
+        recordings.append(InspectRecording()) or recordings[-1]
+    )
+    result = run_execution(
+        continuation,
+        RunContext(events.append, lambda: None),
+        dependencies,
+        resumed=True,
+    )
+
+    integrity_events = [
+        body for body in events if isinstance(body, IntegrityOutcome)
+    ]
+    assert len(integrity_events) == 1
+    assert result.items == tuple(integrity_events)
+    item = result.items[0]
+    assert type(item) is IntegrityOutcome
+    assert item.item_id == continuation.candidates.candidates[0].item_id
+    assert item.path == operation.target_rel_path
+    identity = continuation.candidates.candidates[0].recorded_identity
+    assert identity is not None
+    assert (item.row_id, item.location_id) == (
+        identity.row_id,
+        identity.location_id,
+    )
+    assert item.phase == "verify"
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert result.error == FailureDetail(
+        "ValueError",
+        "integrity runner outcomes must match emitted outcomes",
+    )
+    assert result.recording is RecordingStatus.OK
+    gc.collect()
+    assert producer_refs and all(reference() is None for reference in producer_refs)
+    assert aggregate_refs and all(reference() is None for reference in aggregate_refs)
+
+
+def test_verifier_aggregate_cannot_erase_emitted_recording_degradation() -> None:
+    operation = _operation(90, 5)
+    continuation = _verify_continuation_fixture(operation)
+
+    def verifier(selection, context, recorder):
+        del recorder
+        candidate = selection.pending[0]
+        outcome = _integrity_outcome(
+            candidate,
+            recording=RecordingStatus.DEGRADED,
+            disposition=RecordDisposition.STALE,
+        )
+        selection.note_bytes_processed(candidate.expected_stat.size)
+        context.run.emit(outcome)
+        selection.mark_completed(candidate.item_id, candidate.expected_stat.size)
+        aggregate = IntegrityRunResult(
+            (outcome,),
+            RecordingStatus.DEGRADED,
+        )
+        object.__setattr__(aggregate, "recording", RecordingStatus.OK)
+        return aggregate
+
+    recordings: list[_Recording] = []
+    result = run_execution(
+        continuation,
+        RunContext(lambda _body: None, lambda: None),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=verifier,
+            recordings=recordings,
+        ),
+        resumed=True,
+    )
+
+    assert len(result.items) == 1
+    assert result.items[0].recording is RecordingStatus.DEGRADED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert result.error == FailureDetail(
+        "ValueError",
+        "integrity runner recording must derive from emitted outcomes",
+    )
+    assert recordings[0].finishes == [
+        (SessionState.COMPLETED, RecordingStatus.DEGRADED)
+    ]
+
+
+@pytest.mark.parametrize("corruption", ["missing-completion", "silent-completion"])
+def test_verifier_success_requires_exact_emitted_completion(
+    corruption: str,
+) -> None:
+    operation = _operation(95, 5)
+    continuation = _verify_continuation_fixture(operation)
+
+    def verifier(selection, context, recorder):
+        del recorder
+        candidate = selection.pending[0]
+        if corruption == "silent-completion":
+            selection.note_bytes_processed(candidate.expected_stat.size)
+            selection.mark_completed(candidate.item_id, candidate.expected_stat.size)
+            return IntegrityRunResult((), RecordingStatus.OK)
+        outcome = _integrity_outcome(candidate)
+        context.run.emit(outcome)
+        return IntegrityRunResult((outcome,), RecordingStatus.OK)
+
+    result = run_execution(
+        continuation,
+        RunContext(lambda _body: None, lambda: None),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=verifier,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert result.error == FailureDetail(
+        "ValueError",
+        "post-copy verifier completion must match its emitted outcomes",
+    )
+
+
+def test_verifier_pause_cannot_silently_complete_an_unemitted_candidate() -> None:
+    operation = _operation(103, 5)
+    continuation = _verify_continuation_fixture(operation)
+
+    def verifier(selection, context, recorder):
+        del context, recorder
+        candidate = selection.pending[0]
+        selection.note_bytes_processed(candidate.expected_stat.size)
+        selection.mark_completed(candidate.item_id, candidate.expected_stat.size)
+        raise PauseRequested()
+
+    result = run_execution(
+        continuation,
+        RunContext(lambda _body: None, lambda: None),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=verifier,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert result.error == FailureDetail(
+        "ValueError",
+        "post-copy verifier completion must match its emitted outcomes",
+    )
+
+
+def test_verify_handoff_rejects_candidate_mutation_before_verifier_entry() -> None:
+    operation = _operation(104, 5)
+    xset = _execution_set(operation)
+    verifier_calls = 0
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    def mutate_handoff(value):
+        if not isinstance(value, VerifyContinuation):
+            return
+        candidate = value.candidates.candidates[0]
+        object.__setattr__(
+            candidate.expected_stat,
+            "mtime_ns",
+            candidate.expected_stat.mtime_ns + 1,
+        )
+
+    def verifier(*args):
+        nonlocal verifier_calls
+        verifier_calls += 1
+        pytest.fail("mutated verification candidate was admitted")
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=verifier, recordings=[]),
+        continuation_sink=mutate_handoff,
+    )
+
+    assert verifier_calls == 0
+    assert result.status is SessionState.COMPLETED
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert result.error == FailureDetail(
+        "ValueError",
+        "post-copy candidate changed during collaboration",
+    )
+
+
+def test_verifier_duplicate_refuses_before_reading_hostile_detail() -> None:
+    class HostileDuplicate(IntegrityOutcome):
+        def __getattribute__(self, name: str):
+            if name == "detail" and object.__getattribute__(
+                self, "__dict__"
+            ).get("hostile", False):
+                raise AssertionError("duplicate detail was read")
+            return super().__getattribute__(name)
+
+    operation = _operation(89, 3)
+    continuation = _verify_continuation_fixture(operation)
+
+    def verifier(selection, context, recorder):
+        del recorder
+        candidate = selection.pending[0]
+        first = _integrity_outcome(candidate)
+        selection.note_bytes_processed(candidate.expected_stat.size)
+        context.run.emit(first)
+        selection.mark_completed(candidate.item_id, candidate.expected_stat.size)
+        identity = candidate.recorded_identity
+        assert identity is not None
+        duplicate = HostileDuplicate(
+            candidate.item_id,
+            identity.row_id,
+            identity.location_id,
+            candidate.display_path,
+            IntegrityResult.VERIFIED,
+        )
+        duplicate.hostile = True
+        context.run.emit(duplicate)
+        raise AssertionError("duplicate outcome was accepted")
+
+    result = run_execution(
+        continuation,
+        RunContext(lambda _body: None, lambda: None),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=verifier,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert len(result.items) == 1
+    assert result.error == FailureDetail(
+        "ValueError",
+        "verifier emitted a duplicate integrity outcome",
+    )
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
 
 
 @pytest.mark.parametrize("corruption", ["mutated", "forged"])
@@ -820,7 +2125,7 @@ def test_post_copy_verifier_binds_volume_without_optional_device_hint() -> None:
             execution_set,
             context,
             operation,
-            evidence=_evidence(operation),
+            evidence=_evidence(operation, scope_token="b" * 32),
         )
         return OperationResult(
             SessionState.COMPLETED,
@@ -1136,10 +2441,7 @@ def test_rowless_matching_readback_keeps_filesystem_success_and_degrades_recordi
             context,
             operation,
             evidence=evidence,
-        )
-        execution_set.note_item_recording_failure(
-            operation.op_id,
-            ItemRecordingReason.RECORD_WRITE_FAILED,
+            recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
         )
         return OperationResult(
             SessionState.COMPLETED,
@@ -1185,10 +2487,7 @@ def test_executor_result_degradation_is_frozen_before_verify_handoff() -> None:
             context,
             operation,
             evidence=_evidence(operation, recorded=False),
-        )
-        execution_set.note_item_recording_failure(
-            operation.op_id,
-            ItemRecordingReason.RECORD_WRITE_FAILED,
+            recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
         )
         return OperationResult(
             SessionState.COMPLETED,
@@ -1256,8 +2555,7 @@ def test_verify_exception_is_phase_visible_without_rewriting_filesystem() -> Non
     assert result.phases[1].status is PhaseStatus.INCOMPLETE
     assert result.phases[1].items_done == 0
     assert result.phases[1].error == "RuntimeError: readback exploded"
-    assert result.error is not None
-    assert result.error.type_name == "RuntimeError"
+    assert result.error == FailureDetail("RuntimeError", "readback exploded")
     assert recordings[0].finishes == [
         (SessionState.COMPLETED, RecordingStatus.OK)
     ]
@@ -1303,8 +2601,10 @@ def test_verify_phase_counts_reliable_outcome_before_continuation_failure() -> N
     assert result.phases[1].status is PhaseStatus.INCOMPLETE
     assert result.phases[1].items_done == 1
     assert result.phases[1].items_total == 1
-    assert result.error is not None
-    assert result.error.type_name == "RuntimeError"
+    assert result.error == FailureDetail(
+        "ValueError",
+        "post-copy verifier completion must match its emitted outcomes",
+    )
 
 
 def test_degraded_outcome_snapshot_failure_keeps_progress_and_phase_aligned() -> None:
@@ -1388,7 +2688,7 @@ def test_degraded_outcome_snapshot_failure_keeps_progress_and_phase_aligned() ->
     ("fault", "message"),
     [
         ("context", "verifier context failed"),
-        ("result", "post-copy verifier must return IntegrityRunResult"),
+        ("result", "integrity runner must return IntegrityRunResult"),
     ],
 )
 def test_verify_setup_and_result_errors_finish_once_with_visible_phase(
@@ -1971,11 +3271,13 @@ def test_recording_boundary_failure_preserves_execution_truth(boundary: str) -> 
 
     def executor(execution_set, context, recorder, policies, fs):
         nonlocal executor_calls
-        del context, recorder, policies, fs
+        del recorder, policies, fs
         executor_calls += 1
+        item = _settle(execution_set, context, operation)
         execution_set.note_bytes_done(9)
         return OperationResult(
             SessionState.COMPLETED,
+            items=(item,),
             bytes_done=9,
             bytes_total=9,
         )
@@ -2114,9 +3416,16 @@ def test_recording_diagnostic_failure_preserves_workflow_truth(
             _raise_with_private_workflow_frame(primary, references)
         return recording
 
-    def executor(execution_set, *args):
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, xset.plan.operations[0])
         execution_set.note_bytes_done(9)
-        return OperationResult(SessionState.COMPLETED, bytes_done=9, bytes_total=9)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=9,
+            bytes_total=9,
+        )
 
     deps = _deps(
         executor=executor,
@@ -3243,7 +4552,7 @@ def test_resumed_verify_preflight_refusal_finishes_as_incomplete() -> None:
                 detail="target root changed before resume",
             ),
         ),
-        SimpleNamespace(paths={}, target_parent_paths=frozenset({""})),
+        _observed_world(),
     )
     result = run_execution(
         captured[-1],
@@ -3292,7 +4601,7 @@ def test_resumed_execute_preflight_failure_finishes_as_ran_failure(
                     detail="target changed during pause",
                 ),
             ),
-            SimpleNamespace(paths={}, target_parent_paths=frozenset({""})),
+            _observed_world(),
         ),
     )
     if preflight_fault == "exception":
@@ -3542,10 +4851,11 @@ def test_running_execute_cancel_preserves_degraded_recording_status(
 
     def cancel_executor(execution_set, context, recorder, policies, fs):
         del recorder, policies, fs
-        _settle(execution_set, context, operation)
-        execution_set.note_item_recording_failure(
-            operation.op_id,
-            ItemRecordingReason.RECORD_WRITE_FAILED,
+        _settle(
+            execution_set,
+            context,
+            operation,
+            recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
         )
         raise Canceled()
 

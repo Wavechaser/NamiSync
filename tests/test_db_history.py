@@ -2792,7 +2792,7 @@ def test_summary_classification_objects_are_bounded_for_many_exact_items(
     assert summary.classification.selected_other_operation_count == 300
 
 
-def test_terminal_phase_count_is_bounded_before_persistence(tmp_path: Path) -> None:
+def test_terminal_phase_count_is_bounded_by_the_result_contract(tmp_path: Path) -> None:
     accepted = tuple(
         PhaseResult(f"phase-{index}", PhaseStatus.COMPLETED, 0, 0, 0, 0)
         for index in range(MAX_HISTORY_PHASES)
@@ -2807,11 +2807,17 @@ def test_terminal_phase_count_is_bounded_before_persistence(tmp_path: Path) -> N
         allowed.finalize(
             OperationResult(SessionState.COMPLETED, phases=accepted)
         )
-        observer = store.observer(record, HistoryContext("run-rejected", "host-1"))
-        with pytest.raises(HistoryIntegrityError, match="terminal phases"):
-            observer.finalize(
-                OperationResult(SessionState.COMPLETED, phases=rejected)
-            )
+        forged = OperationResult(SessionState.COMPLETED, phases=accepted)
+        object.__setattr__(forged, "phases", rejected)
+        refused = store.observer(
+            record,
+            HistoryContext("run-rejected", "host-1"),
+        )
+        with pytest.raises(
+            HistoryIntegrityError,
+            match="supports at most",
+        ):
+            refused.finalize(forged)
         with HistoryRepository(store.path) as repository:
             assert (
                 len(repository.get_summary("run-allowed").phases)

@@ -438,7 +438,7 @@ M2 restart recovery is not enabled by swapping in a SQLite metadata store.
 It requires a separately designed protected continuation/recovery-store
 contract, explicit recovery and retention rules, unique durable queue ownership,
 and fresh workflow authority/custody reconciliation before pending re-admission
-or `RUNNING`→`INTERRUPTED` recovery. The current execution-v6 continuation and
+or `RUNNING`→`INTERRUPTED` recovery. The current execution-v7 continuation and
 its transient attestations are not a durable recovery format. Exact active
 continuation and event/database checkpoint versions remain owned by
 [M1_BRIDGE.md](M1_BRIDGE.md); none changes for this metadata boundary.

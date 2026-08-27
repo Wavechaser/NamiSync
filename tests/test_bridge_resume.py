@@ -92,6 +92,10 @@ def _selection_fixture(*, tampered: bool) -> ExecutionSet:
         reason=OperationReason.METADATA_MATCH,
     )
     plan_value = plan((folder, child, noop))
+    plan_value = replace(
+        plan_value,
+        fingerprint=plan_fingerprint(plan_value),
+    )
     user_deselected = frozenset({folder.op_id})
     selection = derive_execution_selection(
         plan_value,

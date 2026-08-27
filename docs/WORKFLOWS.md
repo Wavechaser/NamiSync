@@ -9,7 +9,7 @@ verification, compound history/views, generic history reads, semantic-settings
 snapshot/patch translation, and the shared facade used by the location CLI
 commands. Stage 5.5's workflow-owned selection semantics are now implemented:
 direct user deselection remains distinct from safety exclusion, execution
-re-derives the authoritative set, and plan payload v5 plus execution payload v6
+re-derives the authoritative set, and plan payload v5 plus execution payload v7
 preserve that provenance and executor continuation truth.
 Stage 5.5 facade integration is complete; Stage 6's pre-model planning-source
 ownership wall is active without freezing the checkpoint-4 reservation model;
@@ -25,10 +25,13 @@ The checkpoint sequence is owned by
 treating a continuation version as a global epoch or receiving an
 interface-owned task claim.
 
-Execution continuation is opaque process-local custody. Its exact v6 codec now
+Execution continuation is opaque process-local custody. Its exact v7 codec now
 carries sparse operation recording reasons, ordered task issues, aggregate byte
 high-water, and transient publication evidence needed for same-session
-pause/resume or automatic linked verification; payload v5 is refused. The plan
+pause/resume or automatic linked verification. Execute continuations also carry
+the exact count of plan-ordered exclusion outcomes already accepted by the
+reliable session sink. Execution payload v6 and every older version are refused;
+there is no compatibility branch. The plan
 codec remains exact v5. Transient evidence never becomes history, ledger,
 desktop artifact, or JavaScript state. Dispatcher terminal settlement clears
 the current live record's opaque reference, and its separate metadata-store
@@ -56,7 +59,7 @@ text occurrence; this codec use does not freeze or validate BR-G-45.
 The raw decoder wall is twice that source-maximum occurrence charge: the text
 term covers the six-byte canonical escape of a one-byte control scalar and the
 remaining coefficients dominate scalar and container spelling. This yields
-2,818,330 bytes for plan v5 and 327,820,141,609,094 bytes for execution v6.
+2,818,330 bytes for plan v5 and 327,820,141,609,094 bytes for execution v7.
 Exact `bytes` and raw length are checked before UTF-8 decoding or `json.loads`;
 encoding rechecks the counted canonical length after serialization. The very
 large execution maximum is an honest consequence of the current duplicated
@@ -333,14 +336,12 @@ test exercises the codec over every operation kind and optional field, so a
 dropped or renormalized field fails the build instead of silently refusing every
 execution.
 
-The identity-hash correction does not change execution-v6's wire shape. An old
-identity-bearing v6 continuation still decodes structurally, but its numeric-era
-fingerprint fails recomputation before observer, preflight, or executor entry.
-A resumed run settles as failed/ran with its prior operation state and byte
-high-water retained; decoding the payload alone does not reconstruct previously
-delivered item history. Identityless v6 commitments remain compatible rather
-than being rejected by a blanket version ban. This adds no process-restart
-recovery; the live continuation and store boundary remain as described above.
+The identity-hash correction did not change the then-current execution-v6 wire
+shape. Checkpoint-4 prerequisite stabilization later advances execution custody
+to exact v7 for the exclusion acceptance cursor, so every v6 continuation is now
+rejected at schema admission rather than entering fingerprint or domain work.
+This adds no process-restart recovery; the live continuation and store boundary
+remain as described above.
 
 Stage 1 advanced the opaque plan/execution codec to version 2 and removed
 `worker_count` from `SyncOptions`, `Plan`, fingerprints, and both payloads
@@ -355,7 +356,9 @@ execution set, and refuses versions 1-4 rather than resetting a resumed task's
 aggregate bar. Stage 6 checkpoint 2 then keeps plan payload v5 and advances only
 the process-local execution payload to exact v6 for sparse recording reasons,
 ordered task issues, and transient attestation consistency; execution payload
-v5 is refused. Inventory request payloads advance to version 2 for recursive
+v5 is refused. Prerequisite stabilization advances only execution to exact v7
+for the required reliable-exclusion cursor and refuses v6 without a legacy
+fallback. Inventory request payloads advance to version 2 for recursive
 subtree scope. The independent standalone-integrity continuation also advances
 to strict version 2 to retain its physical-read total high-water and aggregate
 recording status; the shared validator remains kind-aware rather than treating
@@ -429,7 +432,7 @@ and checked again as one whole value. Individually bounded components do not
 exempt an oversized combined value. An invalid or oversized combination is
 omitted with one additional witness. `VerifyContinuation` reconstructs every
 execute-phase field into a fresh exact `PhaseResult`, so subclasses, forged
-counters, invalid text, and caller aliases cannot enter custody; the exact v6
+counters, invalid text, and caller aliases cannot enter custody; the exact v7
 decoder inherits the same refusal. Encoding repeats that reconstruction before
 projection, and both public execution entry points do the same before workflow
 or canceled-settlement use. Reflective post-admission corruption is therefore
@@ -479,9 +482,22 @@ ordinary sink failure takes precedence over cancellation. A secondary recording
 close failure is then attached before the generic runner publishes terminal
 and dispatcher clears its live continuation reference. This needs no
 domain-specific generic runner hook or change to dispatcher custody.
+After each accepted exclusion, the execute continuation advances its exact v7
+`reported_exclusion_count` before invoking the hostile continuation sink, then
+publishes that custody before another sibling is offered. Sink cancellation
+therefore continues from the next suffix item rather than replaying the accepted
+one. Resume re-derives the same plan-ordered exclusions, skips the retained
+prefix, and reconstructs the direct result in reviewed plan order. A terminal
+refusal, failure, or cancellation cannot be interrupted into a resumable state;
+cooperative control at that point becomes the terminal emission failure. Event
+publication and continuation capture remain separate process-live actions, so a
+process crash between them is not an exactly-once guarantee and belongs to the
+future protected recovery design.
 Fresh commitment or preflight failure/cancellation does the same before the
 executor or run recording opens, retaining `UNRUN` disposition and the
-phase-free result shape while still reporting the reviewed byte budget.
+phase-free result shape while still reporting the reviewed byte budget. Control
+during a fresh refusal's exclusion suffix is contained in that same typed
+`REFUSED+UNRUN` result with only its normally accepted item prefix.
 Plain execution retains its phase-free result shape; linked execution adds the
 execute phase summary. Failure to enter the run-recording context likewise
 returns continuation-derived counters with degraded recording, while a context
@@ -510,6 +526,16 @@ continuation-bookkeeping failure cannot erase an already-published settlement.
 Executor advances operation status, recording reason, and transient evidence
 only after reliable item emission returns; a sink failure therefore leaves no
 continuation-only settlement. Candidate completion follows the same ordering.
+Workflow retains the canonical item immediately after that normal emission
+return, before any later reconciliation can fail. Executor and verifier
+aggregate returns may confirm their own terminal axes but cannot contribute
+workflow-owned phases or replace the accepted stream. Recorder `finish` and
+context exit receive exact hostile-boundary snapshots of the execution set and,
+when present, the post-copy selection; mutation is reported as failed execution
+or incomplete verification while the already accepted item prefix is preserved.
+Terminal items, counters, and phases are projected before `finish`; mutation
+provenance and those saved facts also govern paused cancellation and fallback
+finishing, so later reconciliation cannot replace them with corrupted aliases.
 
 Fresh preflight still runs on every resume. If an already-started execute
 continuation is refused or faults there, workflow reopens the same run only to

@@ -56,6 +56,7 @@ from namisync.core.integrity import (
 from namisync.core.models import EntryKind, FileStat, MetadataSnapshot
 from namisync.core.session import (
     LEGAL_TRANSITIONS,
+    MAX_OPERATION_RESULT_PHASES,
     MAX_SESSION_RESULT_ITEMS,
     Canceled,
     Disposition,
@@ -321,7 +322,7 @@ def test_runner_accumulates_result_item_only_after_emitter_accepts_it() -> None:
     accepted: list[object] = []
 
     def emit(body: object) -> None:
-        if body is rejected:
+        if isinstance(body, ItemOutcome) and body.item_id == rejected.item_id:
             raise RuntimeError("outcome rejected")
         accepted.append(body)
 
@@ -404,7 +405,7 @@ def test_runner_uses_only_emitter_accepted_progress_as_fallback() -> None:
     accepted: list[object] = []
 
     def emit(body: object) -> None:
-        if body is rejected:
+        if isinstance(body, Progress) and body.bytes_done == rejected.bytes_done:
             raise RuntimeError("progress rejected")
         accepted.append(body)
 
@@ -450,6 +451,35 @@ def test_runner_pause_has_no_terminal_and_settles_paused() -> None:
     assert outcome.result is None
     assert settled == [(SessionState.PAUSED, None)]
     assert not any(isinstance(body, Terminal) for body in emitted)
+
+
+def test_runner_republishes_reliable_items_before_paused_settlement() -> None:
+    prior = ItemOutcome("1" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
+    current = ItemOutcome("2" * 32, "copy", "current.txt", Outcome.SUCCEEDED)
+    accumulator = [prior]
+    seen_during_settle: list[tuple[ResultItem, ...]] = []
+
+    def work(context: RunContext) -> OperationResult:
+        context.emit(current)
+        raise PauseRequested()
+
+    outcome = run_session(
+        work,
+        emit=lambda _body: None,
+        checkpoint=lambda: None,
+        settle=lambda state, result: seen_during_settle.append(tuple(accumulator)),
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+        item_accumulator=accumulator,
+    )
+
+    assert outcome.paused
+    assert [item.item_id for item in seen_during_settle[0]] == [
+        prior.item_id,
+        current.item_id,
+    ]
+    assert accumulator == list(seen_during_settle[0])
+    assert all(item is not source for item, source in zip(accumulator, (prior, current)))
 
 
 def test_compound_cancel_preserves_filesystem_truth_and_projects_lifecycle() -> None:
@@ -971,6 +1001,215 @@ def test_runner_rejects_structural_item_guessing_and_retains_nominal_integrity()
     assert isinstance(outcome.result.items[0], IntegrityOutcome)
 
 
+def test_item_outcome_rejects_nonexact_producer_scalars() -> None:
+    class Text(str):
+        pass
+
+    with pytest.raises(TypeError, match="item_id must be text"):
+        ItemOutcome(Text("item"), "copy", "file", Outcome.SUCCEEDED)
+    with pytest.raises(TypeError, match="outcome has the wrong type"):
+        ItemOutcome("item", "copy", "file", "succeeded")  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="reason must be text"):
+        ItemOutcome(
+            "item",
+            "copy",
+            "file",
+            Outcome.SKIPPED,
+            reason=Text("user-deselected"),
+        )
+
+
+def test_operation_result_admits_at_most_three_phases() -> None:
+    phases = tuple(
+        PhaseResult(
+            f"phase-{index}",
+            PhaseStatus.COMPLETED,
+            0,
+            0,
+            0,
+            0,
+        )
+        for index in range(MAX_OPERATION_RESULT_PHASES + 1)
+    )
+
+    assert len(OperationResult(SessionState.COMPLETED, phases=phases[:3]).phases) == 3
+    with pytest.raises(ValueError, match="phases exceed their bound"):
+        OperationResult(SessionState.COMPLETED, phases=phases)
+
+
+def test_runner_detaches_producer_items_and_exact_result_headers() -> None:
+    class HiddenItem(ItemOutcome):
+        pass
+
+    class HiddenPhase(PhaseResult):
+        pass
+
+    class HiddenResult(OperationResult):
+        pass
+
+    producer_refs: list[ref[_PrivateExceptionFrameValue]] = []
+    release_checks: list[bool] = []
+    emitted: list[object] = []
+
+    def work(context: RunContext) -> OperationResult:
+        item_graph = _PrivateExceptionFrameValue()
+        producer_refs.append(ref(item_graph))
+        item = HiddenItem(
+            "6" * 32,
+            "copy",
+            "reviewed.txt",
+            Outcome.SUCCEEDED,
+        )
+        object.__setattr__(item, "hidden_graph", item_graph)
+        context.emit(item)
+        object.__setattr__(item, "path", "producer-mutated.txt")
+
+        phase_graph = _PrivateExceptionFrameValue()
+        producer_refs.append(ref(phase_graph))
+        phase = HiddenPhase(
+            "execute",
+            PhaseStatus.COMPLETED,
+            1,
+            1,
+            7,
+            7,
+        )
+        object.__setattr__(phase, "hidden_graph", phase_graph)
+        result_graph = _PrivateExceptionFrameValue()
+        producer_refs.append(ref(result_graph))
+        result = HiddenResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            phases=(phase,),
+            bytes_done=7,
+            bytes_total=7,
+        )
+        object.__setattr__(result, "hidden_graph", result_graph)
+        return result
+
+    def settle(_state: SessionState, result: OperationResult | None) -> None:
+        assert result is not None
+        gc.collect()
+        release_checks.append(all(reference() is None for reference in producer_refs))
+
+    outcome = run_session(
+        work,
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=settle,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert outcome.result is not None
+    assert release_checks == [True]
+    assert type(outcome.result) is OperationResult
+    assert type(outcome.result.phases[0]) is PhaseResult
+    assert type(outcome.result.items[0]) is ItemOutcome
+    assert outcome.result.items[0].path == "reviewed.txt"
+    assert emitted[0] == outcome.result.items[0]
+    assert emitted[0] is not outcome.result.items[0]
+
+
+def test_runner_releases_a_result_that_fails_snapshot_revalidation() -> None:
+    class HiddenResult(OperationResult):
+        pass
+
+    producer_refs: list[ref[HiddenResult]] = []
+    release_checks: list[bool] = []
+
+    def work(_context: RunContext) -> OperationResult:
+        result = HiddenResult(SessionState.COMPLETED)
+        producer_refs.append(ref(result))
+        object.__setattr__(result, "status", SessionState.RUNNING)
+        return result
+
+    def settle(_state: SessionState, _result: OperationResult | None) -> None:
+        gc.collect()
+        release_checks.append(producer_refs[-1]() is None)
+
+    outcome = run_session(
+        work,
+        emit=lambda _body: None,
+        checkpoint=lambda: None,
+        settle=settle,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.error == FailureDetail(
+        "ValueError",
+        "operation result status must be terminal",
+    )
+    assert release_checks == [True]
+
+
+def test_runner_uses_a_detached_progress_snapshot_for_terminal_fallback() -> None:
+    progress = Progress("execute", 1, 2, 5, 9, "reviewed.txt")
+    emitted: list[object] = []
+
+    def work(context: RunContext) -> OperationResult:
+        context.emit(progress)
+        object.__setattr__(progress, "bytes_done", 9)
+        raise Canceled()
+
+    outcome = run_session(
+        work,
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda _state, _result: None,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert outcome.result is not None
+    assert (outcome.result.bytes_done, outcome.result.bytes_total) == (5, 9)
+    assert type(emitted[0]) is Progress
+    assert emitted[0].bytes_done == 5
+
+
+def test_runner_keeps_private_item_and_progress_truth_from_the_emitter() -> None:
+    item = ItemOutcome("3" * 32, "copy", "reviewed.txt", Outcome.SUCCEEDED)
+    progress = Progress("execute", 1, 1, 5, 9, "reviewed.txt")
+    public: list[object] = []
+
+    def emit(body: object) -> None:
+        public.append(body)
+        if isinstance(body, ItemOutcome):
+            object.__setattr__(body, "path", "emitter-mutated.txt")
+        elif isinstance(body, Progress):
+            object.__setattr__(body, "bytes_done", 9)
+
+    def work(context: RunContext) -> OperationResult:
+        context.emit(item)
+        context.emit(progress)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=5,
+            bytes_total=9,
+        )
+
+    outcome = run_session(
+        work,
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda _state, _result: None,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.items[0].path == "reviewed.txt"
+    assert (outcome.result.bytes_done, outcome.result.bytes_total) == (5, 9)
+    assert isinstance(public[0], ItemOutcome)
+    assert public[0].path == "emitter-mutated.txt"
+    assert isinstance(public[1], Progress)
+    assert public[1].bytes_done == 9
+
+
 def test_runner_seeds_cancel_result_from_prior_pause_items() -> None:
     prior = [ItemOutcome("3" * 32, "copy", "file", Outcome.SUCCEEDED)]
     outcome = run_session(
@@ -1110,7 +1349,8 @@ def test_runner_allows_the_last_item_and_refuses_only_the_first_excess() -> None
     )
     assert last_item in emitted
     assert excess_item not in emitted
-    assert prior[-1] is last_item
+    assert prior[-1] == last_item
+    assert prior[-1] is not last_item
 
 
 @pytest.mark.parametrize(
@@ -1174,7 +1414,7 @@ def test_runner_repairs_emitter_alias_append_and_owns_the_failure() -> None:
 
     def emit(body: object) -> None:
         emitted.append(body)
-        if body is accepted_item:
+        if isinstance(body, ItemOutcome) and body.item_id == accepted_item.item_id:
             prior.append(injected_item)
 
     outcome = run_session(
@@ -1195,9 +1435,42 @@ def test_runner_repairs_emitter_alias_append_and_owns_the_failure() -> None:
         "session result item accumulator changed during emission",
     )
     assert len(outcome.result.items) == MAX_SESSION_RESULT_ITEMS
-    assert prior[-1] is accepted_item
+    assert prior[-1] == accepted_item
+    assert prior[-1] is not accepted_item
     assert injected_item not in prior
-    assert emitted[0] is accepted_item
+    assert emitted[0] == accepted_item
+    assert emitted[0] is not prior[-1]
+
+
+def test_runner_preserves_prior_truth_when_emitter_clears_alias_then_raises() -> None:
+    prior_item = ItemOutcome("7" * 32, "copy", "prior.txt", Outcome.SUCCEEDED)
+    offered_item = ItemOutcome("8" * 32, "copy", "offered.txt", Outcome.SUCCEEDED)
+    injected_item = ItemOutcome("9" * 32, "copy", "injected.txt", Outcome.SUCCEEDED)
+    accumulator = [prior_item]
+
+    def emit(body: object) -> None:
+        if isinstance(body, ResultItem):
+            accumulator.append(injected_item)
+            accumulator.clear()
+            raise OSError("publication failed")
+
+    outcome = run_session(
+        lambda context: context.emit(offered_item)
+        or OperationResult(SessionState.COMPLETED),
+        emit=emit,
+        checkpoint=lambda: None,
+        settle=lambda _state, _result: None,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+        item_accumulator=accumulator,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.items == (prior_item,)
+    assert outcome.result.error == FailureDetail("OSError", "publication failed")
+    assert accumulator == [prior_item]
+    assert accumulator[0] is not prior_item
 
 
 def test_runner_normalizes_a_nonexact_accumulator_before_work() -> None:
@@ -1249,6 +1522,55 @@ def test_runner_normalizes_invalid_accumulator_content_before_work() -> None:
     )
 
 
+def test_runner_admits_resume_items_atomically_before_replacing_sources() -> None:
+    class HostileItem(ItemOutcome):
+        def __getattribute__(self, name: str):
+            if name == "item_id" and object.__getattribute__(
+                self, "__dict__"
+            ).get("hostile", False):
+                raise RuntimeError("hostile item getter")
+            return super().__getattribute__(name)
+
+    calls: list[str] = []
+    first = ItemOutcome(
+        "5" * 32,
+        "copy",
+        "first.txt",
+        Outcome.SUCCEEDED,
+    )
+    hostile = HostileItem(
+        "6" * 32,
+        "copy",
+        "hostile.txt",
+        Outcome.SUCCEEDED,
+    )
+    hostile.hostile = True
+    prior = [first, hostile]
+    outcome = run_session(
+        lambda context: calls.append("work")
+        or OperationResult(SessionState.COMPLETED),
+        emit=lambda body: None,
+        checkpoint=lambda: None,
+        settle=lambda state, result: calls.append("settle"),
+        finalize_audit=lambda result: (
+            calls.append("audit") or RecordingStatus.OK
+        ),
+        publish_result=lambda result: calls.append("publish"),
+        item_accumulator=prior,
+    )
+
+    assert calls == ["settle", "audit", "publish"]
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.FAILED
+    assert outcome.result.items == ()
+    assert outcome.result.error == FailureDetail(
+        "TypeError",
+        "item accumulator must contain only ResultItem values",
+    )
+    assert prior[0] is first
+    assert prior[1] is hostile
+
+
 def test_operation_result_rejects_non_nominal_items() -> None:
     with pytest.raises(TypeError, match="must be a tuple"):
         OperationResult(SessionState.COMPLETED, items=[])  # type: ignore[arg-type]
@@ -1274,6 +1596,23 @@ def test_runner_audit_failure_degrades_only_audit_axis() -> None:
     assert outcome.result.status is SessionState.COMPLETED
     assert outcome.result.recording is RecordingStatus.OK
     assert outcome.result.audit is RecordingStatus.DEGRADED
+
+
+def test_runner_contains_an_invalid_audit_result() -> None:
+    emitted: list[object] = []
+    outcome = run_session(
+        lambda context: OperationResult(SessionState.COMPLETED),
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda state, result: None,
+        finalize_audit=lambda result: "ok",  # type: ignore[return-value]
+        publish_result=lambda result: None,
+    )
+
+    assert outcome.result is not None
+    assert outcome.result.status is SessionState.COMPLETED
+    assert outcome.result.audit is RecordingStatus.DEGRADED
+    assert emitted == [Terminal(TerminalSummary.from_result(outcome.result))]
 
 
 @pytest.mark.parametrize("owner", ("work", "emit", "pause", "cancel", "audit"))
@@ -1374,7 +1713,7 @@ def test_runner_retires_emitter_failure_superseded_by_accumulator_truth() -> Non
     items: list[ResultItem] = []
 
     def emit(body: object) -> None:
-        if body is offered:
+        if isinstance(body, ItemOutcome) and body.item_id == offered.item_id:
             items.append(injected)
             _raise_with_private_frame(primary, references)
 
@@ -1790,20 +2129,22 @@ def test_runner_normalizes_full_result_headers_before_every_owner(
     )
 
     assert len(owned) == 3
-    assert owned[0] is owned[1]
-    assert outcome.result is owned[2]
+    assert len({id(value) for value in (*owned, outcome.result)}) == 4
     for retained in owned:
         assert retained == expected_full
-        assert retained.items[0] is item
-        assert retained.recording_issues is original.recording_issues
+        assert type(retained.items[0]) is ItemOutcome
+        assert retained.items[0] == emitted[0]
+        assert retained.items[0] is not emitted[0]
+        assert retained.items[0] is not item
+        assert retained.recording_issues == original.recording_issues
+        assert retained.recording_issues is not original.recording_issues
         if not phase_omitted:
-            assert retained.phases[0] is phase
+            assert type(retained.phases[0]) is PhaseResult
+            assert retained.phases[0] is not phase
         if expected_full.error is not None:
-            assert retained.error is original_error
+            assert retained.error == original_error
+            assert retained.error is not original_error
         assert TerminalSummary.from_result(retained) == expected
-        if header_omissions == 0:
-            assert retained.phases is original.phases
-            assert retained.error is original.error
     assert expected.omitted_detail_count == 5 + header_omissions
     assert emitted == [item, Terminal(expected)]
     assert original.phases == (phase,)
@@ -1811,6 +2152,40 @@ def test_runner_normalizes_full_result_headers_before_every_owner(
     assert original.error is original_error
     assert original_error == FailureDetail(type_name, message)
     assert original.omitted_detail_count == 3
+
+
+def test_runner_gives_each_terminal_owner_a_disposable_result_copy() -> None:
+    item = ItemOutcome("7" * 32, "copy", "reviewed.txt", Outcome.SUCCEEDED)
+    owner_paths: list[str] = []
+    emitted: list[object] = []
+
+    def mutate(result: OperationResult, path: str) -> None:
+        object.__setattr__(result.items[0], "path", path)
+        owner_paths.append(result.items[0].path)
+
+    def work(context: RunContext) -> OperationResult:
+        context.emit(item)
+        return OperationResult(SessionState.COMPLETED, items=(item,))
+
+    outcome = run_session(
+        work,
+        emit=emitted.append,
+        checkpoint=lambda: None,
+        settle=lambda _state, result: mutate(result, "settle-mutated.txt"),
+        finalize_audit=lambda result: (
+            mutate(result, "audit-mutated.txt") or RecordingStatus.OK
+        ),
+        publish_result=lambda result: mutate(result, "publish-mutated.txt"),
+    )
+
+    assert owner_paths == [
+        "settle-mutated.txt",
+        "audit-mutated.txt",
+        "publish-mutated.txt",
+    ]
+    assert outcome.result is not None
+    assert outcome.result.items[0].path == "reviewed.txt"
+    assert emitted[-1] == Terminal(TerminalSummary.from_result(outcome.result))
 
 
 def test_runner_contains_exception_diagnostic_failure_without_losing_items() -> None:

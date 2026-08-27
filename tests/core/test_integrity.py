@@ -16,6 +16,8 @@ from namisync.core.integrity import (
     IntegrityCandidateLimitAxis,
     IntegrityCandidateLimitError,
     IntegrityCandidateLimitExceeded,
+    IntegrityOutcome,
+    IntegrityResult,
     IntegritySelection,
     PostCopySelection,
     VerifierContext,
@@ -64,6 +66,37 @@ def test_integrity_candidate_limit_facts_are_exact_and_typed() -> None:
     assert IntegrityCandidateLimitError(retained_bytes).args == (
         INTEGRITY_CANDIDATE_RETAINED_BYTES_MESSAGE,
     )
+
+
+def test_integrity_outcome_has_an_exact_slotted_shape() -> None:
+    class Text(str):
+        pass
+
+    outcome = IntegrityOutcome(
+        item_id="item",
+        row_id="row",
+        location_id="location",
+        path="file.bin",
+        result=IntegrityResult.VERIFIED,
+    )
+
+    assert not hasattr(outcome, "__dict__")
+    with pytest.raises(TypeError, match="item id must be text"):
+        IntegrityOutcome(
+            Text("item"),
+            "row",
+            "location",
+            "file.bin",
+            IntegrityResult.VERIFIED,
+        )
+    with pytest.raises(TypeError, match="result has the wrong type"):
+        IntegrityOutcome(
+            "item",
+            "row",
+            "location",
+            "file.bin",
+            "verified",  # type: ignore[arg-type]
+        )
 
 
 @pytest.mark.parametrize(

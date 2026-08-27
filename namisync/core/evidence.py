@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Literal, Protocol, TypeAlias
 
-from namisync.core.models import FileStat
+from namisync.core.models import FileStat, file_stat_fact, snapshot_file_stat
 from namisync.core.scalars import require_signed_64
 
 
@@ -138,3 +138,64 @@ class Attestation:
             raise TypeError("attestation subject must be FileStat evidence")
         if self.content.size != self.subject.size:
             raise ValueError("attestation content size must match its subject")
+
+
+def snapshot_content_evidence(value: object) -> ContentEvidence:
+    """Detach one exact content-evidence graph from a collaborator."""
+
+    if type(value) is not ContentEvidence:
+        raise TypeError("content evidence must have the exact public shape")
+    if type(value.algorithm) is not str:
+        raise TypeError("content evidence algorithm must be text")
+    if type(value.digest) is not bytes:
+        raise TypeError("content evidence digest must be exact bytes")
+    if type(value.provenance) is not Provenance:
+        raise TypeError("content evidence provenance has the wrong type")
+    if type(value.observed_at) is not datetime:
+        raise TypeError("content evidence time must be an exact datetime")
+    return ContentEvidence(
+        value.algorithm,
+        bytes(value.digest),
+        value.size,
+        value.provenance,
+        datetime.fromisoformat(value.observed_at.isoformat()),
+    )
+
+
+def snapshot_attestation(value: object) -> Attestation:
+    """Detach one exact attestation and its complete subject evidence."""
+
+    if type(value) is not Attestation:
+        raise TypeError("attestation must have the exact public shape")
+    return Attestation(
+        snapshot_content_evidence(value.content),
+        snapshot_file_stat(value.subject),
+    )
+
+
+def content_evidence_fact(
+    value: object,
+) -> tuple[str, bytes, int, Provenance, str]:
+    """Flatten exact content evidence into immutable comparison leaves."""
+
+    snapshot = snapshot_content_evidence(value)
+    return (
+        str(snapshot.algorithm),
+        bytes(snapshot.digest),
+        snapshot.size,
+        snapshot.provenance,
+        snapshot.observed_at.isoformat(),
+    )
+
+
+def attestation_fact(
+    value: object,
+) -> tuple[
+    tuple[str, bytes, int, Provenance, str],
+    tuple[object, ...],
+]:
+    """Flatten an exact attestation without retaining collaborator objects."""
+
+    if type(value) is not Attestation:
+        raise TypeError("attestation must have the exact public shape")
+    return content_evidence_fact(value.content), file_stat_fact(value.subject)

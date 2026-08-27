@@ -129,12 +129,21 @@ details or partial inventory; malformed hostile output keeps structural-error
 precedence. Integrity refresh has already started the request and therefore
 settles the same valid excess as `FAILED+RAN` without selection or verifier work.
 
-The row prerequisite does not close the preexisting resolver-alias seam.
-`resolve_binding` still carries exact returned mount/evidence objects across
-later resolver callbacks rather than first detaching and finally revalidating
-the complete resolution. That path issue remains OPEN for checkpoint 4.1 in
-`BUGS.md`; current documentation does not treat a frozen dataclass as a lasting
-authorization token.
+Resolution now snapshots the exact binding, mount, and volume-evidence fields
+before retaining them. After the no-follow root probe it obtains and snapshots a
+second mounted-volume population; any membership change returns retryable
+`root_unavailable` before scan, recorder, or verifier work. Inventory and
+integrity pass only the detached resolved binding downstream. A frozen
+dataclass is still evidence rather than a lasting authorization token, so the
+scanner and verifier keep their own fresh native admission.
+
+Integrity selection similarly reconstructs candidate stats, attestations,
+record identities, and invalidation facts into one workflow-owned graph. The
+selection is revalidated after sinks, context construction, events, and runner
+return; public outcomes and verifier context are detached exact base values.
+An accepted outcome is retained before a later hostile seam can fail, so the
+terminal result reports the accepted prefix while classification remains
+`FAILED+RAN` for standalone integrity work.
 
 Inventory scan scopes independently charge the combined raw selected-path and
 subtree-root population against 120,000 before canonical path dictionaries,

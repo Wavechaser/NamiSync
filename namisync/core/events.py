@@ -266,6 +266,8 @@ class ItemOutcome(ResultItem):
     detail_omitted_count: int = 0
 
     def __post_init__(self) -> None:
+        if type(self.item_id) is not str:
+            raise TypeError("item_id must be text")
         if not self.item_id:
             raise ValueError("item_id must be non-empty")
         kind = self.kind
@@ -278,8 +280,13 @@ class ItemOutcome(ResultItem):
         if not isinstance(kind, OperationKind):
             raise TypeError("operation item kind must be OperationKind")
         require_utf16_path(self.path, "operation path")
-        if self.reason is not None and self.reason not in _OPERATION_REASONS:
-            raise ValueError("operation item reason is unsupported")
+        if type(self.outcome) is not Outcome:
+            raise TypeError("operation item outcome has the wrong type")
+        if self.reason is not None:
+            if type(self.reason) is not str:
+                raise TypeError("operation item reason must be text or None")
+            if self.reason not in _OPERATION_REASONS:
+                raise ValueError("operation item reason is unsupported")
         projection, omitted = project_detail(self.detail)
         object.__setattr__(self, "detail", projection)
         require_safe_int(
@@ -310,6 +317,31 @@ class ItemOutcome(ResultItem):
             validate_item_recording_outcome(self.outcome, self.recording_reason)
         else:
             raise TypeError("operation recording has the wrong type")
+
+
+def snapshot_item_outcome(
+    value: object,
+    *,
+    item_id: str,
+    kind: OperationKind | str,
+    path: str,
+) -> ItemOutcome:
+    """Detach producer facts while binding workflow-owned operation identity."""
+
+    if not isinstance(value, ItemOutcome):
+        raise TypeError("operation outcome must be an ItemOutcome")
+    return ItemOutcome(
+        item_id=item_id,
+        kind=kind,
+        path=path,
+        outcome=value.outcome,
+        reason=value.reason,
+        detail=value.detail,
+        recording=value.recording,
+        recording_reason=value.recording_reason,
+        recording_detail=value.recording_detail,
+        detail_omitted_count=value.detail_omitted_count,
+    )
 
 
 @dataclass(frozen=True, slots=True)

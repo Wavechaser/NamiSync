@@ -263,6 +263,33 @@ def _context() -> RunContext:
     return RunContext(lambda _body: None, lambda: None)
 
 
+def _complete_integrity_selection(
+    selection,
+    verifier_context,
+    _recorder=None,
+    *,
+    result_for=None,
+) -> IntegrityRunResult:
+    outcomes = []
+    for item in selection.pending:
+        outcome = IntegrityOutcome(
+            item_id=item.item_id,
+            row_id=item.row_id,
+            location_id=item.location_id,
+            path=item.display_path,
+            result=(
+                IntegrityResult.VERIFIED
+                if result_for is None
+                else result_for(item)
+            ),
+            phase=IntegrityMode.VERIFY.value,
+        )
+        verifier_context.run.emit(outcome)
+        selection.mark_completed(item.item_id, 0)
+        outcomes.append(outcome)
+    return IntegrityRunResult(tuple(outcomes), RecordingStatus.OK)
+
+
 class _IntegrityRepositorySpy:
     def __init__(self, rows, *, stale=()) -> None:
         self.rows = {row.row_id: row for row in rows}
@@ -934,6 +961,200 @@ def test_resolve_binding_admits_chain_before_accessibility_probe(
     assert calls == ["chain", "probe"]
 
 
+def test_resolve_binding_owns_admitted_collaborator_values(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    other = tmp_path / "other"
+    (mount / "managed").mkdir(parents=True)
+    admitted_volume = VolumeId("admitted-volume", "NTFS")
+    binding = LocationBinding(
+        admitted_volume,
+        "managed",
+        str(mount),
+        (str(mount),),
+        False,
+        7,
+    )
+    raw_evidence = VolumeEvidence("Admitted", str(mount))
+    raw_mount = MountedVolume(str(mount), raw_evidence)
+
+    class HostileResolver:
+        first_lookup = True
+
+        def mounted_volumes(
+            self,
+            volume_id: VolumeId,
+            hints: tuple[str, ...] = (),
+        ) -> tuple[MountedVolume, ...]:
+            assert volume_id == admitted_volume
+            assert hints == (str(mount),)
+            object.__setattr__(volume_id, "serial", "callback-forged")
+            if self.first_lookup:
+                self.first_lookup = False
+                object.__setattr__(
+                    binding,
+                    "volume_id",
+                    VolumeId("caller-forged", "NTFS"),
+                )
+                object.__setattr__(binding, "selected_mount", str(other))
+                object.__setattr__(binding, "expected_mounts", (str(other),))
+                return (raw_mount,)
+            return (
+                MountedVolume(
+                    str(mount),
+                    VolumeEvidence("Admitted", str(mount)),
+                ),
+            )
+
+        def probe_root(self, root_path: str) -> None:
+            assert root_path == str(mount / "managed")
+            object.__setattr__(raw_mount, "mount_path", str(other))
+            object.__setattr__(raw_evidence, "label", "Forged")
+
+    resolution = resolve_binding(binding, HostileResolver())
+
+    assert resolution.state is VolumeResolutionState.RESOLVED
+    assert resolution.binding is not binding
+    assert resolution.binding == LocationBinding(
+        admitted_volume,
+        "managed",
+        str(mount),
+        (str(mount),),
+        False,
+        7,
+    )
+    assert resolution.binding.volume_id is not admitted_volume
+    assert resolution.selected_mount == str(mount)
+    assert resolution.evidence == VolumeEvidence("Admitted", str(mount))
+    assert resolution.evidence is not raw_evidence
+
+
+def test_resolve_binding_revalidates_mounted_values_as_an_unordered_set(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    clone = tmp_path / "clone"
+    (mount / "managed").mkdir(parents=True)
+    clone.mkdir()
+    order = [mount, clone]
+
+    class ReorderingResolver:
+        def mounted_volumes(
+            self,
+            volume_id: VolumeId,
+            hints: tuple[str, ...] = (),
+        ) -> tuple[MountedVolume, ...]:
+            assert volume_id == VOLUME_ID
+            assert hints == (str(mount), str(clone))
+            return tuple(
+                MountedVolume(str(path), EVIDENCE) for path in order
+            )
+
+        def probe_root(self, root_path: str) -> None:
+            assert root_path == str(mount / "managed")
+            order.reverse()
+
+    binding = LocationBinding(
+        VOLUME_ID,
+        "managed",
+        str(mount),
+        (str(mount), str(clone)),
+        True,
+    )
+
+    resolution = resolve_binding(binding, ReorderingResolver())
+
+    assert resolution.state is VolumeResolutionState.RESOLVED
+    assert resolution.candidates == (str(mount), str(clone))
+
+
+@pytest.mark.parametrize("workflow", ["inventory", "integrity"])
+@pytest.mark.parametrize("drift", ["mount", "evidence"])
+def test_mounted_volume_drift_refuses_before_workflow_effects(
+    tmp_path: Path,
+    workflow: str,
+    drift: str,
+) -> None:
+    mount = tmp_path / "mount"
+    other = tmp_path / "other"
+    (mount / "managed").mkdir(parents=True)
+    (other / "managed").mkdir(parents=True)
+
+    class DriftingResolver:
+        current_mount = mount
+        current_evidence = VolumeEvidence("Admitted", str(mount))
+
+        def mounted_volumes(
+            self,
+            volume_id: VolumeId,
+            hints: tuple[str, ...] = (),
+        ) -> tuple[MountedVolume, ...]:
+            assert volume_id == VOLUME_ID
+            assert hints == (str(mount),)
+            return (
+                MountedVolume(
+                    str(self.current_mount),
+                    self.current_evidence,
+                ),
+            )
+
+        def probe_root(self, root_path: str) -> None:
+            assert root_path == str(mount / "managed")
+            if drift == "mount":
+                self.current_mount = other
+            else:
+                self.current_evidence = VolumeEvidence(
+                    "Changed",
+                    str(mount),
+                )
+
+    ledger_path = tmp_path / "ledger.db"
+    scanner = _Scanner()
+    details: list[InventoryDetails] = []
+    resolver = DriftingResolver()
+    request_binding = _binding(mount)
+    if workflow == "inventory":
+        result = run_inventory(
+            InventoryWorkflowRequest("resolver-drift", request_binding),
+            _context(),
+            _dependencies(
+                ledger_path,
+                scanner,
+                resolver,  # type: ignore[arg-type]
+                details,
+            ),
+        )
+    else:
+        result = run_integrity(
+            IntegrityWorkflowRequest(
+                "resolver-drift",
+                request_binding,
+                IntegrityMode.VERIFY,
+            ),
+            _context(),
+            IntegrityDependencies(
+                ledger_path=ledger_path,
+                scanner=scanner,
+                resolver=resolver,
+                clock=FakeClock(),
+                host_key="host",
+                host_name="Host",
+                save_details=details.append,
+            ),
+        )
+
+    assert result.status is SessionState.REFUSED
+    assert result.disposition is Disposition.UNRUN
+    assert scanner.calls == []
+    assert not ledger_path.exists()
+    assert len(details) == 1
+    assert details[0].resolution.state is not VolumeResolutionState.RESOLVED
+    assert details[0].resolution.detail is not None
+    assert "changed during root admission" in details[0].resolution.detail
+    assert details[0].resolution.binding is not request_binding
+
+
 def test_native_resolver_probe_uses_scanner_backend(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1203,20 +1424,7 @@ def test_inventory_remount_uses_current_mount_and_preserves_location_identity(
 
     def runner(selection, verifier_context, _recorder):
         verifier_contexts.append(verifier_context)
-        return IntegrityRunResult(
-            tuple(
-                IntegrityOutcome(
-                    item_id=item.item_id,
-                    row_id=item.row_id,
-                    location_id=item.location_id,
-                    path=item.display_path,
-                    result=IntegrityResult.VERIFIED,
-                    phase=IntegrityMode.VERIFY.value,
-                )
-                for item in selection.items
-            ),
-            RecordingStatus.OK,
-        )
+        return _complete_integrity_selection(selection, verifier_context)
 
     integrity = run_integrity(
         IntegrityWorkflowRequest(
@@ -1714,24 +1922,14 @@ def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
         selected_states.extend(
             item.expected_state for item in selection.items
         )
-        return IntegrityRunResult(
-            tuple(
-                IntegrityOutcome(
-                    item_id=item.item_id,
-                    row_id=item.row_id,
-                    location_id=item.location_id,
-                    path=item.display_path,
-                    result=(
-                        IntegrityResult.UNSUPPORTED
-                        if item.expected_state
-                        is InventoryState.UNSUPPORTED
-                        else IntegrityResult.VERIFIED
-                    ),
-                    phase=IntegrityMode.VERIFY.value,
-                )
-                for item in selection.items
+        return _complete_integrity_selection(
+            selection,
+            verifier_context,
+            result_for=lambda item: (
+                IntegrityResult.UNSUPPORTED
+                if item.expected_state is InventoryState.UNSUPPORTED
+                else IntegrityResult.VERIFIED
             ),
-            RecordingStatus.OK,
         )
 
     result = run_integrity(
@@ -1774,6 +1972,124 @@ def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
         IntegrityResult.VERIFIED,
     ]
     assert details[-1].warnings == (warning,)
+
+
+def test_integrity_uses_emitted_snapshot_when_returned_outcome_mutates(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    run_inventory(prepared, _context(), inventory_deps)
+
+    def runner(selection, verifier_context, _recorder):
+        item = selection.pending[0]
+        outcome = IntegrityOutcome(
+            item_id=item.item_id,
+            row_id=item.row_id,
+            location_id=item.location_id,
+            path=item.display_path,
+            result=IntegrityResult.VERIFIED,
+            phase=IntegrityMode.VERIFY.value,
+        )
+        verifier_context.run.emit(outcome)
+        selection.mark_completed(item.item_id, 0)
+        object.__setattr__(outcome, "path", "invented.txt")
+        return IntegrityRunResult((outcome,), RecordingStatus.OK)
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "hostile-result",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=inventory_deps.ledger_path,
+            scanner=inventory_deps.scanner,
+            resolver=inventory_deps.resolver,
+            clock=inventory_deps.clock,
+            host_key=inventory_deps.host_key,
+            host_name=inventory_deps.host_name,
+            save_details=inventory_deps.save_details,
+            verifier_context=lambda context: VerifierContext(
+                run=context,
+                clock=inventory_deps.clock,
+                hasher_factory=xxh3_128,
+            ),
+            runners={IntegrityMode.VERIFY: runner},
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert len(result.items) == 1
+    assert result.items[0].path == "file.txt"
+    assert result.error is not None
+    assert result.error.type_name == "ValueError"
+
+
+def test_integrity_success_requires_every_pending_outcome(tmp_path: Path) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=(_file(),))
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db", scanner, _Resolver(mount), details
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    run_inventory(prepared, _context(), inventory_deps)
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "missing-outcome",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        IntegrityDependencies(
+            ledger_path=inventory_deps.ledger_path,
+            scanner=inventory_deps.scanner,
+            resolver=inventory_deps.resolver,
+            clock=inventory_deps.clock,
+            host_key=inventory_deps.host_key,
+            host_name=inventory_deps.host_name,
+            save_details=inventory_deps.save_details,
+            verifier_context=lambda context: VerifierContext(
+                run=context,
+                clock=inventory_deps.clock,
+                hasher_factory=xxh3_128,
+            ),
+            runners={
+                IntegrityMode.VERIFY: lambda *_args: IntegrityRunResult(
+                    (), RecordingStatus.OK
+                )
+            },
+        ),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert result.items == ()
+    assert result.error is not None
+    assert result.error.type_name == "ValueError"
 
 
 @pytest.mark.parametrize(
@@ -1970,7 +2286,10 @@ def test_integrity_recorder_close_failure_preserves_primary_authority(
             raise Canceled("cancel wins")
         if runner_exit == "pause":
             raise PauseRequested("pause wins")
-        return IntegrityRunResult((), RecordingStatus.OK)
+        return _complete_integrity_selection(
+            selection,
+            _verifier_context,
+        )
 
     recording_observations: list[
         tuple[RecordingStatus, tuple[TaskRecordingIssue, ...], int]
@@ -2494,11 +2813,7 @@ def test_integrity_resume_uses_a_new_inventory_refresh_receipt(tmp_path: Path) -
                     clock=inventory_deps.clock,
                     hasher_factory=xxh3_128,
                 ),
-            runners={
-                IntegrityMode.VERIFY: lambda *_args: IntegrityRunResult(
-                    (), RecordingStatus.OK
-                )
-            },
+                runners={IntegrityMode.VERIFY: _complete_integrity_selection},
         ),
     )
 

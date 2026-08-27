@@ -2,18 +2,36 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 import re
+from types import MappingProxyType
 from typing import BinaryIO, NewType, Protocol, TypeAlias
 
-from .evidence import Attestation, Outcome, Provenance, RecordingStatus
-from .models import EntryKind, FileStat, VolumeId
+from .evidence import (
+    Attestation,
+    Outcome,
+    Provenance,
+    RecordingStatus,
+    attestation_fact,
+)
+from .models import (
+    EntryKind,
+    FileStat,
+    VolumeId,
+)
 from .pathing import normalize_relative_path
-from .planning import OpId, OperationKind, Plan, PlanFingerprint, PlanOperation
+from .planning import (
+    OpId,
+    OperationKind,
+    Plan,
+    PlanFingerprint,
+    PlanOperation,
+    plan_fingerprint,
+)
 from .scalars import (
     bounded_utf8_text,
     checked_add_signed_64,
@@ -267,6 +285,7 @@ class ExecutionSet:
         for op_id, evidence in self.published_evidence.items():
             if not isinstance(evidence, PublishedCopyEvidence):
                 raise TypeError("published evidence values have the wrong type")
+            _published_evidence_fact(evidence)
             operation = operations[op_id]
             if operation.kind not in byte_kinds:
                 raise ValueError(
@@ -385,6 +404,301 @@ class ExecutionSet:
             for operation in self.plan.operations
             if operation.op_id in self.selection and operation.op_id not in self.status
         )
+
+
+def validate_execution_set(value: object) -> None:
+    """Revalidate the exact mutable execution continuation in place."""
+
+    if type(value) is not ExecutionSet:
+        raise TypeError("execution continuation must be an exact ExecutionSet")
+    if type(value.plan) is not Plan or type(value.plan.operations) is not tuple:
+        raise TypeError("execution continuation plan has the wrong shape")
+    if any(type(operation) is not PlanOperation for operation in value.plan.operations):
+        raise TypeError("execution plan must contain exact PlanOperation values")
+    if type(value.plan.fingerprint) is not str:
+        raise TypeError("execution plan fingerprint must be exact text")
+    if type(value.selection) is not frozenset:
+        raise TypeError("execution selection must be an exact frozenset")
+    if type(value.user_deselected) is not frozenset:
+        raise TypeError("execution user deselection must be an exact frozenset")
+    if type(value.run_id) is not str:
+        raise TypeError("execution run id must be exact text")
+    if value.commitment is not None and type(value.commitment) is not Commitment:
+        raise TypeError("execution commitment must have the exact public shape")
+    if type(value.status) is not dict:
+        raise TypeError("execution status must be an exact dict")
+    if any(type(outcome) is not Outcome for outcome in value.status.values()):
+        raise TypeError("execution status values have the wrong type")
+    if type(value.published_evidence) is not dict:
+        raise TypeError("execution published evidence must be an exact dict")
+    if any(
+        type(evidence) is not PublishedCopyEvidence
+        for evidence in value.published_evidence.values()
+    ):
+        raise TypeError("execution published evidence values have the wrong type")
+    if type(value.recording_reasons) is not dict:
+        raise TypeError("execution recording reasons must be an exact dict")
+    if any(
+        type(reason) is not ItemRecordingReason
+        for reason in value.recording_reasons.values()
+    ):
+        raise TypeError("execution recording reasons have the wrong type")
+    if type(value.recording_issues) is not tuple:
+        raise TypeError("execution recording issues must be an exact tuple")
+    if any(type(issue) is not TaskRecordingIssue for issue in value.recording_issues):
+        raise TypeError("execution recording issues have the wrong type")
+    for population in (
+        value.selection,
+        value.user_deselected,
+        value.status,
+        value.published_evidence,
+        value.recording_reasons,
+    ):
+        if any(
+            type(op_id) is not str or _FIXED_ID.fullmatch(op_id) is None
+            for op_id in population
+        ):
+            raise TypeError("execution operation identities must be exact ids")
+    Plan.__post_init__(value.plan)
+    ExecutionSet.__post_init__(value)
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionOperationFact:
+    """Immutable operation fields needed to bind reliable executor outcomes."""
+
+    kind: OperationKind
+    target_rel_path: str
+    content_bytes: int
+
+    def __post_init__(self) -> None:
+        if type(self.kind) is not OperationKind:
+            raise TypeError("execution operation fact kind has the wrong type")
+        if type(self.target_rel_path) is not str:
+            raise TypeError("execution operation fact path must be text")
+        normalize_relative_path(self.target_rel_path)
+        require_signed_64(self.content_bytes, "execution operation fact bytes")
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionSettlementFact:
+    """One settlement that existed before an executor invocation."""
+
+    outcome: Outcome
+    recording_reason: ItemRecordingReason | None
+    evidence: tuple[object, ...] | None
+
+    def __post_init__(self) -> None:
+        if type(self.outcome) is not Outcome:
+            raise TypeError("execution settlement outcome has the wrong type")
+        if (
+            self.recording_reason is not None
+            and type(self.recording_reason) is not ItemRecordingReason
+        ):
+            raise TypeError("execution settlement recording reason has the wrong type")
+        if self.evidence is not None and type(self.evidence) is not tuple:
+            raise TypeError("execution settlement evidence must be an exact tuple")
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionSetAuthority:
+    """Closed pre-call facts for one mutable executor continuation."""
+
+    plan_fingerprint: str
+    operations: Mapping[str, ExecutionOperationFact]
+    run_id: str
+    commitment: tuple[str, bytes, str] | None
+    user_deselected: frozenset[str]
+    settlements: Mapping[str, ExecutionSettlementFact]
+    recording_issues: tuple[TaskRecordingIssue, ...]
+    omitted_detail_count: int
+    bytes_done_high_water: int
+
+
+def _operation_fact(value: object) -> ExecutionOperationFact:
+    if type(value) is not PlanOperation:
+        raise TypeError("execution plan must contain exact PlanOperation values")
+    return ExecutionOperationFact(
+        value.kind,
+        value.target_rel_path,
+        value.content_bytes,
+    )
+
+
+def _commitment_fact(value: object | None) -> tuple[str, bytes, str] | None:
+    if value is None:
+        return None
+    if type(value) is not Commitment:
+        raise TypeError("execution commitment must have the exact public shape")
+    selection = value.selection_digest
+    committed_at = value.committed_at
+    if type(selection) is not bytes:
+        raise TypeError("execution commitment digest must be exact bytes")
+    if type(committed_at) is not datetime:
+        raise TypeError("execution commitment time must be an exact datetime")
+    Commitment(value.plan_fingerprint, selection, committed_at)
+    return str(value.plan_fingerprint), bytes(selection), committed_at.isoformat()
+
+
+def _published_evidence_fact(value: object) -> tuple[object, ...]:
+    if type(value) is not PublishedCopyEvidence:
+        raise TypeError("published evidence must have the exact public shape")
+    PublishedCopyEvidence.__post_init__(value)
+    Attestation.__post_init__(value.attestation)
+    attestation = attestation_fact(value.attestation)
+    recorded = value.recorded_identity
+    if recorded is not None and type(recorded) is not RecordedCopyIdentity:
+        raise TypeError("recorded copy identity has the wrong type")
+    if recorded is not None and any(
+        type(field_value) is not str
+        for field_value in (
+            recorded.row_id,
+            recorded.location_id,
+            recorded.scope_token,
+            recorded.rel_path_key,
+        )
+    ):
+        raise TypeError("recorded copy identity fields must be exact text")
+    recorded_snapshot = (
+        None
+        if recorded is None
+        else RecordedCopyIdentity(
+            recorded.row_id,
+            recorded.location_id,
+            recorded.scope_token,
+            recorded.rel_path_key,
+        )
+    )
+    return attestation, recorded_snapshot
+
+
+def _recording_issue_snapshot(value: object) -> TaskRecordingIssue:
+    if type(value) is not TaskRecordingIssue:
+        raise TypeError("task recording issue must have the exact public shape")
+    if type(value.reason) is not TaskRecordingIssueReason:
+        raise TypeError("task recording issue reason has the wrong type")
+    detail = value.detail
+    if detail is not None and type(detail) is not str:
+        raise TypeError("task recording issue detail must be exact text")
+    return TaskRecordingIssue(value.reason, detail)
+
+
+def snapshot_execution_set_authority(value: object) -> ExecutionSetAuthority:
+    """Capture immutable pre-call facts while leaving mutable deltas explicit."""
+
+    validate_execution_set(value)
+    assert type(value) is ExecutionSet
+    plan = value.plan
+    computed_fingerprint = str(plan_fingerprint(plan))
+    if str(plan.fingerprint) != computed_fingerprint:
+        raise ValueError("execution continuation plan fingerprint is invalid")
+
+    selection = frozenset(str(op_id) for op_id in value.selection)
+    operations = MappingProxyType(
+        {
+            str(operation.op_id): _operation_fact(operation)
+            for operation in plan.operations
+            if str(operation.op_id) in selection
+        }
+    )
+    user_deselected = frozenset(str(op_id) for op_id in value.user_deselected)
+    settlements = MappingProxyType(
+        {
+            str(op_id): ExecutionSettlementFact(
+                outcome,
+                value.recording_reasons.get(op_id),
+                (
+                    _published_evidence_fact(value.published_evidence[op_id])
+                    if op_id in value.published_evidence
+                    else None
+                ),
+            )
+            for op_id, outcome in value.status.items()
+        }
+    )
+    issues = tuple(_recording_issue_snapshot(issue) for issue in value.recording_issues)
+    return ExecutionSetAuthority(
+        computed_fingerprint,
+        operations,
+        str(value.run_id),
+        _commitment_fact(value.commitment),
+        user_deselected,
+        settlements,
+        issues,
+        value.omitted_detail_count,
+        value.bytes_done_high_water,
+    )
+
+
+def revalidate_execution_set_authority(
+    value: object,
+    authority: object,
+    *,
+    allow_progress: bool,
+) -> None:
+    """Require fixed facts and prior settlements to survive a collaborator call."""
+
+    if type(authority) is not ExecutionSetAuthority:
+        raise TypeError("execution authority has the wrong type")
+    if type(allow_progress) is not bool:
+        raise TypeError("execution authority progress policy must be a boolean")
+    validate_execution_set(value)
+    assert type(value) is ExecutionSet
+    plan = value.plan
+    if str(plan_fingerprint(plan)) != authority.plan_fingerprint:
+        raise ValueError("executor changed the reviewed plan")
+    if str(plan.fingerprint) != authority.plan_fingerprint:
+        raise ValueError("executor changed the declared plan fingerprint")
+    if len(value.selection) != len(authority.operations) or any(
+        str(op_id) not in authority.operations for op_id in value.selection
+    ):
+        raise ValueError("executor changed the reviewed selection")
+    if str(value.run_id) != authority.run_id:
+        raise ValueError("executor changed the execution run identity")
+    if _commitment_fact(value.commitment) != authority.commitment:
+        raise ValueError("executor changed the execution commitment")
+    if (
+        frozenset(str(op_id) for op_id in value.user_deselected)
+        != authority.user_deselected
+    ):
+        raise ValueError("executor changed reviewed user deselection")
+
+    op_id_by_text = {str(op_id): op_id for op_id in value.selection}
+    for item_id, settlement in authority.settlements.items():
+        op_id = op_id_by_text.get(item_id)
+        if op_id is None or value.status.get(op_id) is not settlement.outcome:
+            raise ValueError("executor changed an existing settlement")
+        if value.recording_reasons.get(op_id) is not settlement.recording_reason:
+            raise ValueError("executor changed existing settlement recording")
+        evidence = (
+            _published_evidence_fact(value.published_evidence[op_id])
+            if op_id in value.published_evidence
+            else None
+        )
+        if evidence != settlement.evidence:
+            raise ValueError("executor changed existing publication evidence")
+    current_issues = tuple(
+        _recording_issue_snapshot(issue) for issue in value.recording_issues
+    )
+    if not allow_progress:
+        if len(value.status) != len(authority.settlements):
+            raise ValueError("execution settlement changed before execution")
+        if current_issues != authority.recording_issues:
+            raise ValueError("execution recording issues changed before execution")
+        if value.omitted_detail_count != authority.omitted_detail_count:
+            raise ValueError("execution omission witness changed before execution")
+        if value.bytes_done_high_water != authority.bytes_done_high_water:
+            raise ValueError("execution byte progress changed before execution")
+        return
+    if len(current_issues) < len(authority.recording_issues) or any(
+        issue != expected
+        for issue, expected in zip(current_issues, authority.recording_issues)
+    ):
+        raise ValueError("executor changed existing task recording issues")
+    if value.omitted_detail_count < authority.omitted_detail_count:
+        raise ValueError("executor reduced the omission witness")
+    if value.bytes_done_high_water < authority.bytes_done_high_water:
+        raise ValueError("executor regressed execution byte progress")
 
 
 class ExecutionReason(StrEnum):

@@ -71,7 +71,7 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.core.pathing import normalize_relative_path
-from namisync.core.scalars import MAX_FILE_INDEX_128
+from namisync.core.scalars import MAX_FILE_INDEX_128, MAX_SAFE_INTEGER
 from namisync.core.session import PhaseResult, PhaseStatus, SessionState
 from namisync.workflows.models import (
     ExecuteContinuation,
@@ -90,14 +90,14 @@ from namisync.workflows.sync import _commitment_error
 
 NOW = datetime(2026, 7, 19, 12, 30, tzinfo=timezone.utc)
 
-_EXECUTION_V6_ITEM_RECORDING_REASONS = frozenset(
+_EXECUTION_V7_ITEM_RECORDING_REASONS = frozenset(
     {
         "record-write-failed",
         "unrecorded-mutation",
         "recording-prerequisite-failed",
     }
 )
-_EXECUTION_V6_TASK_RECORDING_ISSUE_REASONS = frozenset(
+_EXECUTION_V7_TASK_RECORDING_ISSUE_REASONS = frozenset(
     {
         "recording-open-failed",
         "final-flush-failed",
@@ -174,7 +174,7 @@ def test_old_workflow_payload_is_refused_after_contract_change(
         decode_plan_request(json.dumps(value).encode("utf-8"))
 
 
-def test_plan_v5_and_execution_v6_are_independent_exact_payloads() -> None:
+def test_plan_v5_and_execution_v7_are_independent_exact_payloads() -> None:
     plan_value = json.loads(
         encode_plan_request(
             PlanRequest("request", r"C:\source", r"D:\target")
@@ -185,9 +185,9 @@ def test_plan_v5_and_execution_v6_are_independent_exact_payloads() -> None:
     )
 
     assert plan_value["schema_version"] == 5
-    assert execution_value["schema_version"] == 6
+    assert execution_value["schema_version"] == 7
 
-    execution_value["schema_version"] = 5
+    execution_value["schema_version"] = 6
     with pytest.raises(ValueError, match="unsupported workflow payload schema"):
         decode_execution_request(
             json.dumps(execution_value).encode("utf-8")
@@ -684,6 +684,35 @@ def test_execution_payload_is_a_lossless_round_trip() -> None:
     assert str(decoded.execution_set.run_id) == str(original.execution_set.run_id)
 
 
+def test_execution_v7_round_trips_the_reported_exclusion_count() -> None:
+    original = _rich_execution_request()
+    continuation = replace(
+        original.continuation,
+        reported_exclusion_count=2,
+    )
+    request = ExecutionRequest(continuation, original.started_at)
+
+    decoded = decode_execution_request(encode_execution_request(request))
+
+    assert isinstance(decoded.continuation, ExecuteContinuation)
+    assert decoded.continuation.reported_exclusion_count == 2
+    assert encode_execution_request(decoded) == encode_execution_request(request)
+
+
+@pytest.mark.parametrize(
+    "value",
+    (True, 1.5, "1", -1, MAX_SAFE_INTEGER + 1),
+)
+def test_execution_v7_rejects_invalid_reported_exclusion_counts(
+    value: object,
+) -> None:
+    payload = json.loads(encode_execution_request(_rich_execution_request()))
+    payload["reported_exclusion_count"] = value
+
+    with pytest.raises((TypeError, ValueError)):
+        decode_execution_request(json.dumps(payload).encode("utf-8"))
+
+
 def test_execution_payload_preserves_full_width_file_identity_as_text() -> None:
     plan = _rich_plan(identity_index=MAX_FILE_INDEX_128)
     encoded = encode_execution_request(_rich_execution_request(plan=plan))
@@ -839,11 +868,11 @@ def test_execution_payload_requires_exact_byte_high_water_field(
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
-def test_execution_payload_v6_keeps_progress_and_recording_attribution() -> None:
+def test_execution_payload_v7_keeps_progress_and_recording_attribution() -> None:
     encoded = encode_execution_request(_rich_execution_request())
     value = json.loads(encoded)
 
-    assert value["schema_version"] == 6
+    assert value["schema_version"] == 7
     assert set(value["execution_set"]) == {
         "plan",
         "selection",
@@ -872,18 +901,18 @@ def test_execution_payload_v6_keeps_progress_and_recording_attribution() -> None
     )
 
 
-def test_execution_payload_v6_pins_closed_recording_reason_vocabularies() -> None:
-    assert len(_EXECUTION_V6_ITEM_RECORDING_REASONS) == 3
+def test_execution_payload_v7_pins_closed_recording_reason_vocabularies() -> None:
+    assert len(_EXECUTION_V7_ITEM_RECORDING_REASONS) == 3
     assert {
         reason.value for reason in ItemRecordingReason
-    } == _EXECUTION_V6_ITEM_RECORDING_REASONS
-    assert len(_EXECUTION_V6_TASK_RECORDING_ISSUE_REASONS) == 5
+    } == _EXECUTION_V7_ITEM_RECORDING_REASONS
+    assert len(_EXECUTION_V7_TASK_RECORDING_ISSUE_REASONS) == 5
     assert {
         reason.value for reason in TaskRecordingIssueReason
-    } == _EXECUTION_V6_TASK_RECORDING_ISSUE_REASONS
+    } == _EXECUTION_V7_TASK_RECORDING_ISSUE_REASONS
 
 
-def test_execution_payload_v6_rejects_unknown_raw_item_recording_reason() -> None:
+def test_execution_payload_v7_rejects_unknown_raw_item_recording_reason() -> None:
     value = json.loads(encode_execution_request(_rich_verify_request()))
     move_update_id = str(_op_id(5))
     value["execution_set"]["recording_reasons"][move_update_id] = (
@@ -894,7 +923,7 @@ def test_execution_payload_v6_rejects_unknown_raw_item_recording_reason() -> Non
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
-def test_execution_payload_v6_rejects_unknown_raw_task_recording_reason() -> None:
+def test_execution_payload_v7_rejects_unknown_raw_task_recording_reason() -> None:
     value = json.loads(encode_execution_request(_rich_execution_request()))
     value["execution_set"]["recording_issues"][0]["reason"] = (
         "unknown-task-recording-reason"
@@ -904,7 +933,7 @@ def test_execution_payload_v6_rejects_unknown_raw_task_recording_reason() -> Non
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
-def test_execution_payload_v6_rejects_aggregate_recording_contradictions() -> None:
+def test_execution_payload_v7_rejects_aggregate_recording_contradictions() -> None:
     task_attribution = json.loads(
         encode_execution_request(_rich_execution_request())
     )
@@ -1045,6 +1074,7 @@ def test_execute_and_verify_payloads_have_exact_phase_branches() -> None:
         "execution_set",
         "started_at",
         "verify_after_execute",
+        "reported_exclusion_count",
     }
     assert set(verify) == {
         "schema_version",
@@ -1061,6 +1091,13 @@ def test_execute_and_verify_payloads_have_exact_phase_branches() -> None:
 
 
 def test_execution_payload_rejects_missing_unknown_and_contradictory_phase_fields() -> None:
+    execute = json.loads(
+        encode_execution_request(_rich_execution_request())
+    )
+    del execute["reported_exclusion_count"]
+    with pytest.raises((KeyError, ValueError), match="reported_exclusion_count|missing"):
+        decode_execution_request(json.dumps(execute).encode("utf-8"))
+
     execute = json.loads(
         encode_execution_request(_rich_execution_request())
     )
@@ -1081,6 +1118,11 @@ def test_execution_payload_rejects_missing_unknown_and_contradictory_phase_field
     execute["candidates"] = {}
     with pytest.raises(ValueError, match="unexpected"):
         decode_execution_request(json.dumps(execute).encode("utf-8"))
+
+    verify = json.loads(encode_execution_request(_rich_verify_request()))
+    verify["reported_exclusion_count"] = 0
+    with pytest.raises(ValueError, match="unexpected"):
+        decode_execution_request(json.dumps(verify).encode("utf-8"))
 
     verify = json.loads(encode_execution_request(_rich_verify_request()))
     del verify["execute_phase"]
@@ -1159,7 +1201,7 @@ def test_verify_continuation_accepts_only_a_bounded_canonical_execute_error() ->
                 error="\ud800",
             ),
         )
-    with pytest.raises(TypeError, match="execute phase error"):
+    with pytest.raises(TypeError, match="error"):
         replace(
             continuation,
             execute_phase=replace(continuation.execute_phase, error=object()),
@@ -1279,7 +1321,7 @@ def test_execution_encoder_revalidates_mutated_verify_phase() -> None:
 
 
 @pytest.mark.parametrize("error", ["x" * 1025, "\ud800", 7])
-def test_execution_v6_refuses_hostile_verify_execute_errors(error: object) -> None:
+def test_execution_v7_refuses_hostile_verify_execute_errors(error: object) -> None:
     value = json.loads(encode_execution_request(_rich_verify_request()))
     value["execute_phase"]["error"] = error
 

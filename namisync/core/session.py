@@ -10,7 +10,10 @@ from typing import Callable, NewType, Protocol, Sequence
 from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.evidence import RecordingStatus
 from namisync.core.execution import TaskRecordingIssue
-from namisync.core.review import ReviewFactLimitExceeded
+from namisync.core.review import (
+    ReviewFactLimitExceeded,
+    snapshot_review_fact_limit,
+)
 from namisync.core.scalars import (
     bounded_utf8_text,
     require_safe_int,
@@ -19,6 +22,7 @@ from namisync.core.scalars import (
 
 SessionId = NewType("SessionId", str)
 MAX_SESSION_RESULT_ITEMS = 240_000
+MAX_OPERATION_RESULT_PHASES = 3
 
 _RESULT_ITEM_ACCUMULATOR_TYPE = "TypeError"
 _RESULT_ITEM_EXACT_LIST_MESSAGE = "item accumulator must be an exact list"
@@ -155,6 +159,12 @@ class FailureDetail:
     type_name: str
     message: str
 
+    def __post_init__(self) -> None:
+        if type(self.type_name) is not str:
+            raise TypeError("failure type name must be text")
+        if type(self.message) is not str:
+            raise TypeError("failure message must be text")
+
 
 @dataclass(frozen=True, slots=True)
 class PhaseResult:
@@ -169,8 +179,14 @@ class PhaseResult:
     error: str | None = None
 
     def __post_init__(self) -> None:
+        if type(self.phase) is not str:
+            raise TypeError("phase result name must be text")
         if not self.phase:
             raise ValueError("phase result name must be non-empty")
+        if type(self.status) is not PhaseStatus:
+            raise TypeError("phase result status has the wrong type")
+        if self.error is not None and type(self.error) is not str:
+            raise TypeError("phase result error must be text or None")
         require_safe_int(self.items_done, "phase items_done")
         require_signed_64(self.bytes_done, "phase bytes_done")
         if self.items_total is not None:
@@ -245,8 +261,16 @@ class OperationResult:
     review_fact_limit: ReviewFactLimitExceeded | None = None
 
     def __post_init__(self) -> None:
-        if not is_terminal(self.status):
+        if type(self.status) is not SessionState or not is_terminal(self.status):
             raise ValueError("operation result status must be terminal")
+        if type(self.recording) is not RecordingStatus:
+            raise TypeError("operation result recording has the wrong type")
+        if type(self.audit) is not RecordingStatus:
+            raise TypeError("operation result audit has the wrong type")
+        if type(self.disposition) is not Disposition:
+            raise TypeError("operation result disposition has the wrong type")
+        if type(self.canceled) is not bool:
+            raise TypeError("operation result canceled must be a boolean")
         if not isinstance(self.items, tuple):
             raise TypeError("operation result items must be a tuple")
         if any(not isinstance(item, ResultItem) for item in self.items):
@@ -255,6 +279,8 @@ class OperationResult:
             raise TypeError("operation result phases must be a tuple")
         if any(not isinstance(phase, PhaseResult) for phase in self.phases):
             raise TypeError("operation result phases must contain PhaseResult values")
+        if len(self.phases) > MAX_OPERATION_RESULT_PHASES:
+            raise ValueError("operation result phases exceed their bound")
         phase_names = [phase.phase for phase in self.phases]
         if len(phase_names) != len(set(phase_names)):
             raise ValueError("operation result phases must be unique")
@@ -306,6 +332,149 @@ class OperationResult:
             and self.recording is RecordingStatus.OK
         ):
             raise ValueError("review fact limit contradicts result truth")
+
+
+def _snapshot_phase_result(value: object) -> PhaseResult:
+    if not isinstance(value, PhaseResult):
+        raise TypeError("operation result phases must contain PhaseResult values")
+    phase = value.phase
+    status = value.status
+    items_done = value.items_done
+    items_total = value.items_total
+    bytes_done = value.bytes_done
+    bytes_total = value.bytes_total
+    error = value.error
+    return PhaseResult(
+        phase,
+        status,
+        items_done,
+        items_total,
+        bytes_done,
+        bytes_total,
+        error,
+    )
+
+
+def _snapshot_failure_detail(value: object | None) -> FailureDetail | None:
+    if value is None:
+        return None
+    if not isinstance(value, FailureDetail):
+        raise TypeError("operation result error must be FailureDetail or None")
+    type_name = value.type_name
+    message = value.message
+    return FailureDetail(type_name, message)
+
+
+def _snapshot_recording_issue(value: object) -> TaskRecordingIssue:
+    if not isinstance(value, TaskRecordingIssue):
+        raise TypeError(
+            "result recording_issues must contain TaskRecordingIssue values"
+        )
+    reason = value.reason
+    detail = value.detail
+    return TaskRecordingIssue(reason, detail)
+
+
+def snapshot_result_item(value: object) -> ResultItem:
+    """Detach one supported producer item into its exact public base shape."""
+
+    from namisync.core.events import ItemOutcome, snapshot_item_outcome
+    from namisync.core.integrity import IntegrityOutcome
+
+    if isinstance(value, ItemOutcome):
+        return snapshot_item_outcome(
+            value,
+            item_id=value.item_id,
+            kind=value.kind,
+            path=value.path,
+        )
+    if isinstance(value, IntegrityOutcome):
+        phase = value.phase
+        from namisync.core.integrity import snapshot_integrity_outcome
+
+        return snapshot_integrity_outcome(
+            value,
+            item_id=value.item_id,
+            row_id=value.row_id,
+            location_id=value.location_id,
+            path=value.path,
+            phase=phase,
+        )
+    raise TypeError(f"unsupported result item: {type(value).__name__}")
+
+
+def snapshot_operation_result(
+    value: object,
+    *,
+    emitted_items: tuple[ResultItem, ...] | None = None,
+) -> OperationResult:
+    """Return exact terminal truth detached from a producer-owned result graph.
+
+    ``emitted_items`` is reserved for a boundary's already-detached reliable
+    stream. Those exact objects remain the authority instead of being copied a
+    second time from a collaborator's return tuple.
+    """
+
+    if not isinstance(value, OperationResult):
+        raise TypeError("workflow must return OperationResult")
+    status = value.status
+    recording = value.recording
+    audit = value.audit
+    disposition = value.disposition
+    canceled = value.canceled
+    source_items = value.items if emitted_items is None else emitted_items
+    phases = value.phases
+    bytes_done = value.bytes_done
+    bytes_total = value.bytes_total
+    error = value.error
+    recording_issues = value.recording_issues
+    omitted_detail_count = value.omitted_detail_count
+    review_fact_limit = value.review_fact_limit
+    if type(source_items) is not tuple:
+        raise TypeError("operation result items must be a tuple")
+    if len(source_items) > MAX_SESSION_RESULT_ITEMS:
+        raise ValueError(_RESULT_ITEM_LIMIT_MESSAGE)
+    if type(phases) is not tuple:
+        raise TypeError("operation result phases must be a tuple")
+    if len(phases) > MAX_OPERATION_RESULT_PHASES:
+        raise ValueError("operation result phases exceed their bound")
+    if type(recording_issues) is not tuple:
+        raise TypeError("result recording_issues must be a tuple")
+    if len(recording_issues) > 5:
+        raise ValueError("result recording issues exceed their bound")
+    if emitted_items is None:
+        owned_items = tuple(snapshot_result_item(item) for item in source_items)
+    else:
+        from namisync.core.events import ItemOutcome
+        from namisync.core.integrity import IntegrityOutcome
+
+        if any(
+            type(item) not in {ItemOutcome, IntegrityOutcome}
+            for item in source_items
+        ):
+            raise TypeError("emitted result items must have exact public shapes")
+        owned_items = source_items
+    return OperationResult(
+        status=status,
+        recording=recording,
+        audit=audit,
+        disposition=disposition,
+        canceled=canceled,
+        items=owned_items,
+        phases=tuple(_snapshot_phase_result(phase) for phase in phases),
+        bytes_done=bytes_done,
+        bytes_total=bytes_total,
+        error=_snapshot_failure_detail(error),
+        recording_issues=tuple(
+            _snapshot_recording_issue(issue) for issue in recording_issues
+        ),
+        omitted_detail_count=omitted_detail_count,
+        review_fact_limit=(
+            None
+            if review_fact_limit is None
+            else snapshot_review_fact_limit(review_fact_limit)
+        ),
+    )
 
 
 def _bounded_failure_detail(error: FailureDetail | None) -> FailureDetail | None:
@@ -487,6 +656,7 @@ def run_session(
 
     boundary_failure_type: str | None = None
     boundary_failure_message: str | None = None
+    external_items: list[ResultItem] | None = None
     if item_accumulator is None:
         items: list[ResultItem] = []
     elif type(item_accumulator) is not list:
@@ -502,7 +672,17 @@ def run_session(
         boundary_failure_type = _RESULT_ITEM_ACCUMULATOR_TYPE
         boundary_failure_message = _RESULT_ITEM_CONTENT_MESSAGE
     else:
-        items = item_accumulator
+        external_items = item_accumulator
+        try:
+            items = [snapshot_result_item(item) for item in external_items]
+        except Exception as error:
+            retire_exception_graph(error)
+            items = []
+            external_items = None
+            boundary_failure_type = _RESULT_ITEM_ACCUMULATOR_TYPE
+            boundary_failure_message = _RESULT_ITEM_CONTENT_MESSAGE
+        else:
+            external_items.clear()
     admitted_item_count = len(items)
     latest_progress: Progress | None = None
 
@@ -512,19 +692,20 @@ def run_session(
             boundary_failure_type = type_name
             boundary_failure_message = message
 
-    def repair_accumulator_length(expected: int) -> None:
-        if len(items) > expected:
-            del items[expected:]
-
     def detect_accumulator_mutation() -> bool:
-        if len(items) == admitted_item_count:
+        if external_items is None or not external_items:
             return False
         set_boundary_failure(
             _RESULT_ITEM_MUTATION_TYPE,
             _RESULT_ITEM_MUTATION_MESSAGE,
         )
-        repair_accumulator_length(admitted_item_count)
+        external_items.clear()
         return True
+
+    def republish_accumulator() -> None:
+        if external_items is None:
+            return
+        external_items[:] = [snapshot_result_item(item) for item in items]
 
     def observed_emit(body: object) -> None:
         nonlocal admitted_item_count, latest_progress
@@ -541,35 +722,55 @@ def run_session(
                     _RESULT_ITEM_LIMIT_MESSAGE,
                 )
                 raise RuntimeError(_RESULT_ITEM_LIMIT_MESSAGE)
-            expected_length = admitted_item_count
+            snapshot = snapshot_result_item(body)
+            public_snapshot = snapshot_result_item(snapshot)
             try:
-                emit(body)
+                emit(public_snapshot)
             except BaseException as error:
-                if len(items) != expected_length:
-                    set_boundary_failure(
-                        _RESULT_ITEM_MUTATION_TYPE,
-                        _RESULT_ITEM_MUTATION_MESSAGE,
-                    )
-                    repair_accumulator_length(expected_length)
+                if detect_accumulator_mutation():
                     retire_exception_graph(error)
                     raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE) from None
                 raise
-            if len(items) != expected_length:
-                set_boundary_failure(
-                    _RESULT_ITEM_MUTATION_TYPE,
-                    _RESULT_ITEM_MUTATION_MESSAGE,
-                )
-                repair_accumulator_length(expected_length)
-                items.append(body)
-                admitted_item_count += 1
-                raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE)
-            items.append(body)
+            accumulator_mutated = detect_accumulator_mutation()
+            items.append(snapshot)
             admitted_item_count += 1
+            if accumulator_mutated:
+                raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE)
         elif isinstance(body, Progress):
-            emit(body)
-            latest_progress = body
+            snapshot = Progress(
+                phase=body.phase,
+                items_done=body.items_done,
+                items_total=body.items_total,
+                bytes_done=body.bytes_done,
+                bytes_total=body.bytes_total,
+                current_path=body.current_path,
+                item_id=body.item_id,
+                item_type=body.item_type,
+                item_attempt_id=body.item_attempt_id,
+                item_bytes_done=body.item_bytes_done,
+                item_bytes_total=body.item_bytes_total,
+            )
+            public_snapshot = Progress(
+                phase=snapshot.phase,
+                items_done=snapshot.items_done,
+                items_total=snapshot.items_total,
+                bytes_done=snapshot.bytes_done,
+                bytes_total=snapshot.bytes_total,
+                current_path=snapshot.current_path,
+                item_id=snapshot.item_id,
+                item_type=snapshot.item_type,
+                item_attempt_id=snapshot.item_attempt_id,
+                item_bytes_done=snapshot.item_bytes_done,
+                item_bytes_total=snapshot.item_bytes_total,
+            )
+            emit(public_snapshot)
+            latest_progress = snapshot
+            if detect_accumulator_mutation():
+                raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE)
         else:
             emit(body)
+            if detect_accumulator_mutation():
+                raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE)
 
     def boundary_failure_result() -> OperationResult:
         assert boundary_failure_type is not None
@@ -600,16 +801,25 @@ def run_session(
             returned = work(context)
             detect_accumulator_mutation()
             if boundary_failure_type is not None:
+                del returned
                 result = boundary_failure_result()
             else:
-                if not isinstance(returned, OperationResult):
-                    raise TypeError("workflow must return OperationResult")
-                result = replace(returned, items=tuple(items))
+                try:
+                    result = snapshot_operation_result(
+                        returned,
+                        emitted_items=tuple(items),
+                    )
+                finally:
+                    del returned
         except PauseRequested as error:
             detect_accumulator_mutation()
             retire_exception_graph(error)
             if boundary_failure_type is None:
-                settle(SessionState.PAUSED, None)
+                republish_accumulator()
+                try:
+                    settle(SessionState.PAUSED, None)
+                finally:
+                    republish_accumulator()
                 return RunOutcome(paused=True, result=None)
             result = boundary_failure_result()
         except Canceled as error:
@@ -666,6 +876,7 @@ def run_session(
         except BaseException as error:
             detect_accumulator_mutation()
             if boundary_failure_type is None:
+                republish_accumulator()
                 raise
             retire_exception_graph(error)
             result = boundary_failure_result()
@@ -681,13 +892,31 @@ def run_session(
     )
     result = normalize_result_diagnostics(replace(result, recording=recording))
 
-    settle(result_terminal_state(result), result)
     try:
-        audit = finalize_audit(result)
-    except Exception as error:
-        retire_exception_graph(error)
-        audit = RecordingStatus.DEGRADED
-    final_result = replace(result, audit=audit)
-    publish_result(final_result)
-    emit(Terminal(TerminalSummary.from_result(final_result)))
-    return RunOutcome(paused=False, result=final_result)
+        settled_view = snapshot_operation_result(result)
+        settle(result_terminal_state(result), settled_view)
+        del settled_view
+        try:
+            audit_view = snapshot_operation_result(result)
+            try:
+                audit = finalize_audit(audit_view)
+            finally:
+                del audit_view
+            if type(audit) is not RecordingStatus:
+                raise TypeError("audit finalizer must return RecordingStatus")
+        except Exception as error:
+            retire_exception_graph(error)
+            audit = RecordingStatus.DEGRADED
+        final_result = replace(result, audit=audit)
+        published_view = snapshot_operation_result(final_result)
+        publish_result(published_view)
+        del published_view
+        summary_view = snapshot_operation_result(final_result)
+        try:
+            summary = TerminalSummary.from_result(summary_view)
+        finally:
+            del summary_view
+        emit(Terminal(summary))
+        return RunOutcome(paused=False, result=final_result)
+    finally:
+        republish_accumulator()

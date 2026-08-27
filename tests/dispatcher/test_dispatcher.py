@@ -2635,7 +2635,8 @@ def test_store_failures_keep_latest_successive_pause_for_resume_or_cancel(
     assert terminal.result.canceled is (final_action == "cancel")
     assert terminal.result.disposition is Disposition.RAN
     assert terminal.result.items == earned
-    assert terminal.result.phases is result.phases
+    assert terminal.result.phases == result.phases
+    assert terminal.result.phases is not result.phases
     assert terminal.result.bytes_done == terminal.result.bytes_total == 7
     assert sum(row.state is SessionState.PAUSED for row in store.attempted) == 2
     assert all(type(row) is StoredSessionRecord for row in store.attempted)
@@ -2646,7 +2647,7 @@ def test_store_failures_keep_latest_successive_pause_for_resume_or_cancel(
 
 
 @pytest.mark.parametrize("filesystem_status", [SessionState.COMPLETED, SessionState.FAILED])
-def test_stored_record_preserves_full_compound_result_axes_and_identity(
+def test_stored_record_preserves_full_compound_result_axes_without_producer_aliases(
     filesystem_status: SessionState,
 ) -> None:
     store = RecordingSessionStore()
@@ -2727,15 +2728,22 @@ def test_stored_record_preserves_full_compound_result_axes_and_identity(
         omitted_detail_count=3,
         review_fact_limit=None,
     )
-    assert result.items[0] is item
-    assert result.phases is phases
-    assert result.error is error
-    assert result.recording_issues is issues
+    assert result.items[0] == item
+    assert result.items[0] is not item
+    assert result.phases == phases
+    assert result.phases is not phases
+    assert all(actual is not source for actual, source in zip(result.phases, phases))
+    assert result.error == error
+    if error is not None:
+        assert result.error is not error
+    assert result.recording_issues == issues
+    assert result.recording_issues is not issues
+    assert result.recording_issues[0] is not issues[0]
     assert all(type(row) is StoredSessionRecord for row in store.attempted)
     assert all(not hasattr(row, "payload") for row in store.attempted)
 
 
-def test_stored_record_preserves_review_limit_refusal_witness_and_identity() -> None:
+def test_stored_record_preserves_detached_review_limit_refusal_witness() -> None:
     store = RecordingSessionStore()
     witness = ReviewFactLimitExceeded.plan_logical_bytes()
 
@@ -2764,7 +2772,8 @@ def test_stored_record_preserves_review_limit_refusal_witness_and_identity() -> 
         disposition=Disposition.UNRUN,
         review_fact_limit=witness,
     )
-    assert result.review_fact_limit is witness
+    assert result.review_fact_limit == witness
+    assert result.review_fact_limit is not witness
     assert all(type(row) is StoredSessionRecord for row in store.attempted)
     assert all(not hasattr(row, "payload") for row in store.attempted)
 

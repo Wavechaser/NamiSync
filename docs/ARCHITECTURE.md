@@ -288,7 +288,7 @@ retained Progress.
 Version numbers are boundary-specific, not one global product number. The
 active core event envelope is exact v5; the desktop bridge command/response
 envelope remains v1, plan continuation remains v5, execution continuation is
-v6, and the persistence cut is ledger v4/history v6 at data epoch 6. The exact
+v7, and the persistence cut is ledger v4/history v6 at data epoch 6. The exact
 browser-facing `SessionEventView` carries nested core version 5, and current
 history cannot contain another event version. No private compatibility decoder
 or positive older-version fixture remains.
