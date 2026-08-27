@@ -60,6 +60,10 @@ claims explicit, independently reviewable, and regression-backed.
   and task-recovery reconciliation. Closed failure categories now raise fresh
   fixed errors without carrying private tracebacks or current views, while join,
   stale-unsubscribe, generation, and cleanup-retry truth remain explicit.
+- Corrected the stale canonical-plan SHA-256 vector left when the shared test
+  fixture's invalid policy fingerprint was replaced with valid hexadecimal text.
+  Independent canonical projection reproduced both the old and corrected hashes;
+  production identity behavior is unchanged.
 - Specified future checkpoint-7/9 server-owned sibling sorting with initial/
   reset path-key order and unchanged selection/execution authority, plus
   checkpoint-10 null-evidence rebaseline with unconditional fresh hash-and-

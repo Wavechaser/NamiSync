@@ -29,14 +29,19 @@ fixture, hash, or acceptance result has been frozen.
 - `INTERFACES.md` and `BUGS.md` describe the active mechanism and causal fix.
   The checkpoint plan and changelog now record this prerequisite closure without
   claiming checkpoint-4 model acceptance.
+- The required-Node interfaces gate exposed a stale package identity vector from
+  `b457ef9`: its fixture had changed from invalid `p` digits to valid hexadecimal
+  `a` digits without updating the pinned SHA-256. Independent canonical JSON and
+  `hashlib.sha256` calculation reproduced both values; only the expected test
+  vector changed.
 
 ## Verification
 
 - Final focused adapter files: **191 passed**.
-- Interfaces department with its required Node gate: **1,368 passed**, with one
-  fingerprint-vector failure. The same failure was reproduced unchanged against
-  the archived `b457ef9` baseline, so it is inherited rather than introduced by
-  this adapter batch.
+- The first interfaces-department run passed **1,368** tests and exposed the one
+  inherited fingerprint-vector failure unchanged in archived `b457ef9`.
+- After correcting that stale vector, the required-Node interfaces department
+  passes **1,371 tests** with **3,455 deselected**.
 - No checkpoint-4 model, task lifecycle, command-map, or product-surface claim
   is inferred from this verification.
 

@@ -93,7 +93,7 @@ def test_only_runtime_composition_imports_the_concrete_xxh3_constructor() -> Non
 
 def test_identity_hash_vectors_remain_sha256_and_ignore_content_factory() -> None:
     assert plan_fingerprint(plan(())) == (
-        "b95a910f52dcbfcd2eb04bf7f7df373c51b351be9f324ee488cf53b5826fa758"
+        "c8eaf989697f59389d39ff8617fc20bdfda94ee880967d5e5b2e579432ee186f"
     )
     assert selection_digest(
         frozenset(
