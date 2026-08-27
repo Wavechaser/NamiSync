@@ -26,6 +26,14 @@ owners retire and the callback detaches the reservation. Malformed successful
 returns clean the attached session without gaining plan-drop authority. The CLI
 keeps optional attachment and its ordinary behavior.
 
+Production document publication is now structurally bounded before the model:
+one channel survives reload and owns at most one acknowledged in-flight post,
+one required readiness post, one replaceable appearance post, and one queued
+native dispatch. Exact page echoes retire readiness or appearance identities;
+replacement/close invalidates the epoch and terminally releases stale callbacks.
+Bridge response occurrence capture and the separately owned pywebview/CLR/
+WebView2/browser copies remain checkpoint-4.1 model work.
+
 ## Recovery and safe lineage
 
 - The complete interrupted 19-path state remains preserved at Git object
@@ -133,7 +141,9 @@ Before another model attempt, close or enforce an exact desktop-only premise
 for every OPEN checkpoint-4 owner now recorded in [BUGS.md](BUGS.md): raw phase
 exception graphs; dispatcher/runtime/service owner counts and shutdown; raw
 inventory scan/query/tree construction; standalone-integrity retained bytes;
-and complete bridge/document/native/browser response custody. The direct
+and complete bridge/native/browser response custody. Document-post count and
+acknowledgment lifetimes are closed structurally, but their encoded/native copy
+charges remain model inputs. The direct
 verifier seam is already closed at an exact 4 MiB public maximum, allowing one
 native buffer plus one Python bytes copy to be charged. The one plan-domain and
 one plan-information wall apply once to the aggregate identity-deduplicated

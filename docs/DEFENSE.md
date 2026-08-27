@@ -203,6 +203,14 @@ assets, CPython and pinned Python dependencies, WebView2 and its native host
 stack when the desktop is used, Windows, and the documented behavior of the
 filesystem primitives on which an operation relies.
 
+The production document channel's atomic current-document send relies on the
+pinned WebView2 `PostWebMessageAsJson` call not synchronously re-entering a
+NamiSync acknowledgment, reload, or close callback before it returns. The host
+holds the channel gate across that native call so document replacement cannot
+win between the final epoch check and the send. Any observed synchronous
+re-entry reopens this premise and the document-custody model; a timeout is not
+treated as proof that the call returned.
+
 The desktop task-artifact containment claim has a narrower executable premise:
 64-bit CPython 3.13 on Windows x64, a release build with the standard GIL,
 pymalloc compiled in, and no nonstandard `PYTHONMALLOC` override. The host checks

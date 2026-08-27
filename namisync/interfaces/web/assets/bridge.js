@@ -432,10 +432,20 @@ export function startTaskDrain(
   };
 }
 
-export async function readCosmeticSection() {
+export async function readCosmeticSection(appliedPresentationRevision = null) {
+  if (
+    appliedPresentationRevision !== null
+    && (
+      !Number.isSafeInteger(appliedPresentationRevision)
+      || appliedPresentationRevision < 0
+    )
+  ) {
+    throw new TypeError("Applied appearance revision is invalid");
+  }
   const payload = Object.freeze({
     section: APPEARANCE_SECTION,
     value_version: APPEARANCE_VALUE_VERSION,
+    applied_presentation_revision: appliedPresentationRevision,
   });
   try {
     return await readCosmeticSectionAttempt(payload);

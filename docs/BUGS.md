@@ -729,13 +729,29 @@ defect, and move implementation-level test choreography out of the log.
 
 - MODERATE - OPEN (2026-08-27). Response-copy ownership gap. The bridge caps
   request bytes and admitted handlers, but complete response projection has no
-  preconstruction wall, outstanding document posts have no count ceiling, and
-  CLR/WebView2/browser copies lack an acknowledgment-based retirement witness.
-  Cause: ingress and Python-worker bounds were reused as if they also bounded
-  output occurrence graphs and renderer custody. Checkpoint 4 must derive the
-  exact reachable response shapes, bound outstanding copies, and keep native
-  and browser ownership distinct; SH-G-15 still owns later whole-runtime
-  evidence.
+  active preconstruction wall and CLR/WebView2/browser copies have no derived
+  byte charge. Production document posts are now separately bounded to one
+  in-flight, one required, one replaceable, and one native dispatch, with exact
+  page acknowledgment and generation retirement. Cause: ingress and Python-
+  worker bounds were reused as if they also bounded output occurrence graphs
+  and renderer custody. Checkpoint 4 must finish the response graph and keep
+  native/browser ownership distinct; SH-G-15 owns later runtime evidence.
+- MODERATE - FIXED (2026-08-28). Document-generation custody accumulation. A
+  reload reconstructed the post helper while queued callbacks, encoded values,
+  and sent appearance/readiness values had no page-acknowledged retirement, so
+  repeated generations could retain stale native and Python owners or post into
+  a successor document. Cause: dispatch completion stood in for browser receipt
+  and document identity was sampled too late. Fixed with one reused epoch-bound
+  channel, exact required/replaceable acknowledgment shapes, one in-flight plus
+  two queued slots, synchronous replacement retirement, and hostile stale-sink
+  regressions. Native/browser byte charges remain in the OPEN entry above.
+- MINOR - FIXED (2026-08-28). Surface-settlement waiter abandonment. Repeated
+  readiness requests replaced an unresolved appearance waiter without invoking
+  it, while close and partial attachment simply cleared the last callback.
+  Cause: a callback list was narrowed to one slot without a terminal supersede
+  contract. Fixed by completing every superseded, closed, or aborted waiter
+  once with a stale outcome outside the controller lock; only the latest waiter
+  remains retained until settlement.
 - MODERATE - FIXED (2026-08-27). Observation stream accumulation. Repeated
   Gap recovery retained every closed stream until the session observation was
   removed, so valid long-running sessions grew with recovery count. Cause: a

@@ -22,6 +22,7 @@ from namisync.core.events import (
 )
 from namisync.interfaces import service as service_module
 from namisync.interfaces.ui_state import (
+    MAX_JAVASCRIPT_SAFE_INTEGER,
     AppearanceValue,
     CosmeticDisposition,
     CosmeticReplaceResult,
@@ -403,6 +404,7 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
         "cosmetics",
         "shell_ready",
         "readiness_echo",
+        "appearance_acknowledged",
     )
     assert all(
         parameter.kind is inspect.Parameter.KEYWORD_ONLY
@@ -419,6 +421,7 @@ def test_br_g_32_command_composition_is_constructor_only() -> None:
         signature.parameters["readiness_echo"].default
         is inspect.Parameter.empty
     )
+    assert signature.parameters["appearance_acknowledged"].default is None
     assert signature.parameters["cosmetics"].default is inspect.Parameter.empty
 
 
@@ -453,7 +456,11 @@ def test_br_g_46_cosmetic_rows_use_only_the_typed_cosmetic_authority() -> None:
 
     assert _invoke(
         commands["read_cosmetic_section"],
-        {"section": "appearance", "value_version": 1},
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "applied_presentation_revision": None,
+        },
     ) == {
         "section": "appearance",
         "value_version": 1,
@@ -491,6 +498,31 @@ def test_br_g_46_cosmetic_rows_use_only_the_typed_cosmetic_authority() -> None:
     assert slots.resolved == []
     assert service.calls == []
     assert service.replays == []
+
+
+def test_read_cosmetic_section_reports_only_an_exact_applied_revision() -> None:
+    acknowledgments: list[int] = []
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=_Service(),
+        cosmetics=_Cosmetics(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+        appearance_acknowledged=acknowledgments.append,
+    )
+
+    for revision in (23, MAX_JAVASCRIPT_SAFE_INTEGER, None):
+        _invoke(
+            commands["read_cosmetic_section"],
+            {
+                "section": "appearance",
+                "value_version": 1,
+                "applied_presentation_revision": revision,
+            },
+        )
+
+    assert acknowledgments == [23, MAX_JAVASCRIPT_SAFE_INTEGER]
 
 
 @pytest.mark.parametrize(
@@ -553,6 +585,23 @@ class _PayloadDict(dict[object, object]):
         {"section": "appearance", "value_version": True},
         {"section": "appearance", "value_version": 1.0},
         {"section": "appearance", "value_version": 2},
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "applied_presentation_revision": True,
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "applied_presentation_revision": -1,
+        },
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "applied_presentation_revision": (
+                MAX_JAVASCRIPT_SAFE_INTEGER + 1
+            ),
+        },
         _PayloadDict(section="appearance", value_version=1),
     ],
 )
@@ -766,7 +815,11 @@ def test_br_g_46_cosmetic_rows_reject_invalid_authority_results(
         readiness_echo=lambda _generation, _challenge: False,
     )
     payload = (
-        {"section": "appearance", "value_version": 1}
+        {
+            "section": "appearance",
+            "value_version": 1,
+            "applied_presentation_revision": None,
+        }
         if command == "read_cosmetic_section"
         else {
             "section": "appearance",
@@ -785,7 +838,11 @@ def test_br_g_46_cosmetic_rows_reject_invalid_authority_results(
     [
         (
             "read_cosmetic_section",
-            {"section": "appearance", "value_version": 1},
+            {
+                "section": "appearance",
+                "value_version": 1,
+                "applied_presentation_revision": None,
+            },
         ),
         (
             "replace_cosmetic_section",
@@ -1085,6 +1142,9 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
 
         def start_plan(self, source, target, **kwargs):
             self.calls.append((source, target, kwargs["command_id"]))
+            attachment = kwargs["session_attachment"]
+            assert callable(attachment)
+            assert callable(attachment("9" * 32))
             return PlanSession("8" * 32, "9" * 32)
 
         def unsubscribe(self, session_id):

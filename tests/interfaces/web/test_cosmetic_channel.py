@@ -94,7 +94,11 @@ def test_br_g_46_native_bridge_round_trips_only_typed_cosmetic_state(
         read = dispatcher.dispatch(
             _request(
                 "read_cosmetic_section",
-                {"section": "appearance", "value_version": 1},
+                {
+                    "section": "appearance",
+                    "value_version": 1,
+                    "applied_presentation_revision": None,
+                },
                 request_id="11" * 16,
             )
         )
@@ -253,7 +257,10 @@ def test_br_g_46_browser_cosmetic_rows_are_exact_and_locally_bounded() -> None:
         "phase": "open",
     }
     assert '"local-5-seconds": 5000' in source
-    assert "export async function readCosmeticSection()" in source
+    assert (
+        "export async function readCosmeticSection("
+        "appliedPresentationRevision = null)" in source
+    )
     assert (
         "export function replaceCosmeticSection(expectedRevision, theme)"
         in source

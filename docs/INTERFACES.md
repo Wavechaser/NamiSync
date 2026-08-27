@@ -703,8 +703,23 @@ exact-checks the context and phase before payload validation. Exact-document
 trust and the bridge's 64-handler reservation remain transport-owned; service
 session admission remains a separate domain-blind dispatcher concern.
 `interfaces/web/document_channel.py` alone canonicalizes, bounds, schedules,
-currentness-checks, and posts production WebView2 messages. Appearance and
-readiness share that sink without sharing domain state.
+currentness-checks, and posts production WebView2 messages. Production reuses
+one acknowledgment-enabled channel across document generations. It owns at
+most one sent post awaiting acknowledgment, one queued required readiness post,
+one queued replaceable appearance post, and one queued native dispatch. A
+required acknowledgment is exactly a JavaScript-safe generation plus a
+32-lowercase-hex challenge; a replaceable acknowledgment is exactly one
+nonnegative JavaScript-safe presentation revision. Replacement and close
+invalidate the document epoch and terminally complete stale owners; repeated
+replacement cannot enqueue another native dispatch. The final epoch check and
+`PostWebMessageAsJson` are atomic under the channel gate, using the pinned
+non-reentrancy premise in `DEFENSE.md`. Local nonproduction callers that do not
+request acknowledgment retain the ordinary independent-post behavior.
+Appearance and readiness share that sink without sharing domain state.
+Production revokes appearance publication before every document replacement
+and enables it only after the current readiness challenge opens the desktop,
+so an appearance acknowledgment can never be required to make readiness
+reachable.
 NamiSync application code never constructs JavaScript or calls `evaluate_js`,
 `run_js`, or `Window.state` to carry application data. Pinned pywebview does
 construct JavaScript internally for its exposed-function return transport;
@@ -749,8 +764,11 @@ monotonic revision filtering. The page selector starts only after `OPEN`,
 serializes replacements, and leaves an unchanged post-uncertainty revision
 disabled rather than claiming settlement. Each validated native appearance
 publication asks an already-open selector to refresh through the same typed
-read, allowing a healthy new document to converge a late prior-document
-mutation without widening the bridge.
+read. That read carries either null or the exact presentation revision the page
+just applied; host composition uses it only to retire the matching replaceable
+document post before returning the cosmetic snapshot. A stale or mismatched
+revision retires nothing. This lets a healthy new document converge a late
+prior-document mutation without widening bridge or cosmetic authority.
 
 GUI Break 1's icon helper is presentation-only and never becomes another bridge
 or asset-authority surface. It resolves one exact visual glyph name through a

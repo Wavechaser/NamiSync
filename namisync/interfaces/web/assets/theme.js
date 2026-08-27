@@ -395,7 +395,7 @@ export function installThemeSelector(
     select.disabled = true;
   };
 
-  const open = async () => {
+  const open = async (appliedPresentationRevision = null) => {
     if (closed) {
       return false;
     }
@@ -414,7 +414,7 @@ export function installThemeSelector(
           return false;
         }
       }
-      const snapshot = await read();
+      const snapshot = await read(appliedPresentationRevision);
       observeRevision(snapshot.revision);
       if (!accept(state, snapshot)) {
         return false;
@@ -445,11 +445,11 @@ export function installThemeSelector(
     },
     invalidate,
     open,
-    async refresh() {
+    async refresh(appliedPresentationRevision = null) {
       if (closed || current === null) {
         return false;
       }
-      return open();
+      return open(appliedPresentationRevision);
     },
   });
 }

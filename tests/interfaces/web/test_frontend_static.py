@@ -362,6 +362,7 @@ def test_supplemental_node_appearance_receiver_accepts_latest_envelope() -> None
         "resolvedBeforeNewRevision": False,
         "resolvedAfterNewRevision": True,
         "observerCalls": 2,
+        "observerRevisions": [2, 7],
         "listenerRemoved": True,
     }
 
@@ -1357,13 +1358,13 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
     assert "if (!acknowledged)" in startup
     assert "appearance.whenAppliedAfter" not in startup
     assert startup.index("markBridgeOperational()") < startup.index(
-        "void theme.open();"
+        "void theme.open(appliedPresentationRevision);"
     )
-    assert startup.index("void theme.open();") < startup.index(
-        'renderText(status, "Ready");'
-    )
+    assert startup.index(
+        "void theme.open(appliedPresentationRevision);"
+    ) < startup.index('renderText(status, "Ready");')
     assert "await theme.open()" not in startup
-    assert "void theme.refresh();" in app
+    assert "void theme.refresh(revision);" in app
     assert 'window.addEventListener("pywebviewready"' in app
     assert "theme.invalidate();" in app
     assert "startupRerunReadinessBaseline = readinessBaseline;" in app

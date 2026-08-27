@@ -26,11 +26,13 @@ if (
 const readiness = installReadinessReceiver(window.chrome.webview);
 const themeCombobox = installThemeCombobox(themeSelector);
 const theme = installThemeSelector(themeCombobox);
+let appliedPresentationRevision = null;
 installAppearanceReceiver(
   window.chrome.webview,
   document.documentElement,
-  () => {
-    void theme.refresh();
+  (revision) => {
+    appliedPresentationRevision = revision;
+    void theme.refresh(revision);
   },
 );
 
@@ -85,7 +87,7 @@ async function finishStartup(epoch, readinessBaseline) {
     );
   }
   markBridgeOperational();
-  void theme.open();
+  void theme.open(appliedPresentationRevision);
   if (status.textContent === "Starting...") {
     renderText(status, "Ready");
   }

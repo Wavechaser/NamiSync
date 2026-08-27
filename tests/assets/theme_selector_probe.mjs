@@ -134,17 +134,20 @@ async function flushTurns() {
   const select = new SelectFake();
   let server = section("system", 0);
   let reads = 0;
+  const appliedRevisions = [];
   const controller = installThemeSelector(select, {
-    read: async () => {
+    read: async (appliedRevision) => {
       reads += 1;
+      appliedRevisions.push(appliedRevision);
       return server;
     },
     replace: async () => assert.fail("no selector replacement is expected"),
   });
-  await controller.open();
+  await controller.open(2);
   server = section("dark", 1);
-  assert.equal(await controller.refresh(), true);
+  assert.equal(await controller.refresh(7), true);
   assert.equal(reads, 2);
+  assert.deepEqual(appliedRevisions, [2, 7]);
   assert.equal(select.value, "dark");
   assert.equal(select.disabled, false);
 }

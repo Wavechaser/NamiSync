@@ -14,12 +14,18 @@ from typing import Callable, Literal, Protocol
 
 from namisync.interfaces.ui_state import (
     APPEARANCE_VALUE_VERSION,
+    MAX_JAVASCRIPT_SAFE_INTEGER,
     AppearanceValue,
     CosmeticSectionSnapshot,
     CosmeticSubscription,
     ThemeMode,
 )
-from namisync.interfaces.web.document_channel import DocumentChannel
+from namisync.interfaces.web.document_channel import (
+    DocumentChannel,
+    DocumentPostKind,
+    DocumentRetiredError,
+    DocumentStaleError,
+)
 
 
 _DWMWA_USE_IMMERSIVE_DARK_MODE = 20
@@ -525,12 +531,16 @@ class WindowAppearanceController:
         self._native = native
         self._native_window: object | None = None
         self._document_channel: DocumentChannel | None = None
+        self._owns_document_channel = False
+        self._document_publication_open = True
+        self._document_publication_generation: int | None = None
         self._lock = Lock()
         self._attempted = False
         self._closed = False
         self._loaded = False
         self._presentation: _Presentation | None = None
         self._presentation_revision = 0
+        self._presentation_revision_exhausted = False
         self._surface_safety_failure: UnsafeSurfaceError | None = None
         self._unsubscribe: Callable[[], None] | None = None
         self._cosmetic_subscription: CosmeticSubscription | None = None
@@ -541,15 +551,15 @@ class WindowAppearanceController:
             self._theme_mode = _cosmetic_theme(initial_cosmetic)
             self._cosmetic_revision = initial_cosmetic.revision
         self._observation_active = False
-        self._observation_generation = 0
+        self._observation_token = object()
         self._observation_scheduled = False
         self._initial_observation_pending = False
         self._surface_settlement_known = False
-        self._surface_settlement_callbacks: list[
-            Callable[[Exception | None], None]
-        ] = []
-        self._document_generation = 0
-        self._publication_in_flight: tuple[int, int] | None = None
+        self._surface_settlement_callback: (
+            Callable[[Exception | None], None] | None
+        ) = None
+        self._document_epoch = object()
+        self._publication_in_flight: tuple[object, int] | None = None
 
     @property
     def surface_safety_failure(self) -> UnsafeSurfaceError | None:
@@ -578,6 +588,47 @@ class WindowAppearanceController:
             return
         self._on_cosmetic_changed(subscription.snapshot)
 
+    def _bind_document_channel(self, channel: DocumentChannel) -> None:
+        """Use the host's sole document-post owner for this window."""
+
+        if type(channel) is not DocumentChannel:
+            raise TypeError("appearance document channel has the wrong type")
+        with self._lock:
+            if self._closed:
+                raise RuntimeError("appearance controller is closed")
+            if self._document_channel is not None:
+                if self._document_channel is channel:
+                    return
+                raise RuntimeError("appearance document channel is already bound")
+            self._document_channel = channel
+            self._document_publication_open = False
+            self._document_publication_generation = None
+
+    def _open_document_publication(self, generation: int) -> bool:
+        """Allow the current acknowledged document to receive appearance."""
+
+        if type(generation) is not int or generation < 0:
+            return False
+        with self._lock:
+            if (
+                self._closed
+                or generation != self._document_publication_generation
+            ):
+                return False
+            self._document_publication_open = True
+        self._schedule_publish()
+        return True
+
+    def _revoke_document_publication(self, generation: int) -> None:
+        """Prevent prior-document appearance from entering a successor."""
+
+        if type(generation) is not int or generation < 0:
+            raise ValueError("document publication generation is invalid")
+        with self._lock:
+            if self._document_channel is not None and not self._owns_document_channel:
+                self._document_publication_open = False
+                self._document_publication_generation = generation
+
     def attach(self) -> None:
         before_attached = False
         try:
@@ -600,11 +651,26 @@ class WindowAppearanceController:
             cosmetic_subscription = self._cosmetic_subscription
             self._cosmetic_subscription = None
             self._observation_active = False
-            self._observation_generation += 1
+            self._observation_token = object()
             self._observation_scheduled = False
             self._initial_observation_pending = False
             self._publication_in_flight = None
-            self._surface_settlement_callbacks.clear()
+            surface_callback = self._surface_settlement_callback
+            self._surface_settlement_callback = None
+            owned_channel = (
+                self._document_channel if self._owns_document_channel else None
+            )
+            self._document_channel = None
+            self._owns_document_channel = False
+        if owned_channel is not None:
+            owned_channel.close()
+        if surface_callback is not None:
+            self._notify_surface_settlement(
+                surface_callback,
+                DocumentStaleError(
+                    "appearance controller closed before surface settlement"
+                ),
+            )
         if cosmetic_subscription is not None:
             self._close_cosmetic_subscription(cosmetic_subscription)
         if unsubscribe is not None:
@@ -618,9 +684,25 @@ class WindowAppearanceController:
     def _abort_attachment(self) -> None:
         with self._lock:
             self._closed = True
-            self._observation_generation += 1
+            self._observation_token = object()
+            surface_callback = self._surface_settlement_callback
+            self._surface_settlement_callback = None
             subscription = self._cosmetic_subscription
             self._cosmetic_subscription = None
+            owned_channel = (
+                self._document_channel if self._owns_document_channel else None
+            )
+            self._document_channel = None
+            self._owns_document_channel = False
+        if owned_channel is not None:
+            owned_channel.close()
+        if surface_callback is not None:
+            self._notify_surface_settlement(
+                surface_callback,
+                DocumentStaleError(
+                    "appearance attachment failed before surface settlement"
+                ),
+            )
         if subscription is not None:
             self._close_cosmetic_subscription(subscription)
 
@@ -646,10 +728,19 @@ class WindowAppearanceController:
                 raise RuntimeError("appearance controller is closed")
             if self._surface_settlement_known:
                 outcome = self._surface_safety_failure
+                superseded = None
             else:
-                self._surface_settlement_callbacks.append(callback)
+                superseded = self._surface_settlement_callback
+                self._surface_settlement_callback = callback
                 outcome = None
                 callback = None
+        if superseded is not None:
+            self._notify_surface_settlement(
+                superseded,
+                DocumentStaleError(
+                    "surface settlement waiter was superseded"
+                ),
+            )
         if callback is not None:
             self._notify_surface_settlement(callback, outcome)
 
@@ -657,14 +748,24 @@ class WindowAppearanceController:
         with self._lock:
             if self._closed:
                 return
-            self._document_generation += 1
+            self._document_epoch = object()
             self._loaded = False
-            if self._attempted:
+            if self._document_channel is not None and not self._owns_document_channel:
+                self._document_publication_open = False
+            already_attempted = self._attempted
+            report_exhaustion = False
+            if already_attempted:
                 if self._presentation is not None:
-                    self._presentation_revision += 1
+                    _advanced, report_exhaustion = (
+                        self._advance_presentation_revision_locked()
+                    )
                 self._publication_in_flight = None
-                return
-            self._attempted = True
+            else:
+                self._attempted = True
+        if report_exhaustion:
+            self._report_presentation_revision_exhausted()
+        if already_attempted:
+            return
         try:
             native_window = self._window.native
             if native_window.InvokeRequired:
@@ -680,12 +781,14 @@ class WindowAppearanceController:
             if self._closed:
                 return
             self._native_window = native_window
-            self._document_channel = DocumentChannel(
-                native_window,
-                invoke=self._native.invoke,
-            )
+            if self._document_channel is None:
+                self._document_channel = DocumentChannel(
+                    native_window,
+                    invoke=self._native.invoke,
+                )
+                self._owns_document_channel = True
             self._observation_active = True
-            self._observation_generation += 1
+            self._observation_token = object()
             self._observation_scheduled = True
             self._initial_observation_pending = True
 
@@ -748,13 +851,13 @@ class WindowAppearanceController:
         native_window, generation = dispatch
         self._dispatch_observation(native_window, generation, deferred=False)
 
-    def _advance_observation_locked(self) -> tuple[object, int] | None:
-        self._observation_generation += 1
+    def _advance_observation_locked(self) -> tuple[object, object] | None:
+        self._observation_token = object()
         if self._observation_scheduled:
             return None
         self._observation_scheduled = True
         native_window = self._native_window
-        generation = self._observation_generation
+        generation = self._observation_token
         if native_window is None:
             self._observation_scheduled = False
             return None
@@ -763,7 +866,7 @@ class WindowAppearanceController:
     def _dispatch_observation(
         self,
         native_window: object,
-        generation: int,
+        generation: object,
         *,
         deferred: bool,
         retry_newer: bool = True,
@@ -781,12 +884,12 @@ class WindowAppearanceController:
                 newer = (
                     not self._closed
                     and self._observation_active
-                    and generation != self._observation_generation
+                    and generation is not self._observation_token
                 )
                 self._observation_scheduled = False
                 if newer and retry_newer:
                     self._observation_scheduled = True
-                    retry_generation = self._observation_generation
+                    retry_generation = self._observation_token
                 else:
                     retry_generation = None
                 settle_safe = (
@@ -810,7 +913,7 @@ class WindowAppearanceController:
             if self._closed or not self._observation_active:
                 self._observation_scheduled = False
                 return
-            generation = self._observation_generation
+            generation = self._observation_token
             cosmetic_revision = self._cosmetic_revision
             theme_mode = self._theme_mode
             initial = self._initial_observation_pending
@@ -864,7 +967,7 @@ class WindowAppearanceController:
             if self._closed or not self._observation_active:
                 self._observation_scheduled = False
                 return
-            if generation == self._observation_generation:
+            if generation is self._observation_token:
                 self._observation_scheduled = False
                 self._initial_observation_pending = False
                 publish = self._loaded
@@ -1018,16 +1121,36 @@ class WindowAppearanceController:
                 else material
             )
             self._presentation = _Presentation(system, presented_material)
-            self._presentation_revision += 1
-            should_publish = publish and self._loaded
+            advanced, report_exhaustion = (
+                self._advance_presentation_revision_locked()
+            )
+            should_publish = advanced and publish and self._loaded
+        if report_exhaustion:
+            self._report_presentation_revision_exhausted()
         if should_publish:
             self._schedule_publish()
 
+    def _advance_presentation_revision_locked(self) -> tuple[bool, bool]:
+        if self._presentation_revision >= MAX_JAVASCRIPT_SAFE_INTEGER:
+            report = not self._presentation_revision_exhausted
+            self._presentation_revision_exhausted = True
+            return False, report
+        self._presentation_revision += 1
+        return True, False
+
+    @staticmethod
+    def _report_presentation_revision_exhausted() -> None:
+        logging.getLogger("namisync").error(
+            "appearance.presentation_revision_exhausted"
+        )
+
     def _schedule_publish(self) -> None:
         with self._lock:
-            generation = self._document_generation
+            generation = self._document_epoch
             if (
                 self._closed
+                or self._presentation_revision_exhausted
+                or not self._document_publication_open
                 or self._publication_in_flight is not None
                 or not self._loaded
                 or self._initial_observation_pending
@@ -1068,21 +1191,29 @@ class WindowAppearanceController:
                 revision,
                 error,
             ),
+            kind=DocumentPostKind.REPLACEABLE,
+            acknowledgment=revision,
         )
 
-    def _publication_is_current(self, generation: int, revision: int) -> bool:
+    def _publication_is_current(
+        self,
+        generation: object,
+        revision: int,
+    ) -> bool:
         with self._lock:
             return (
                 not self._closed
+                and not self._presentation_revision_exhausted
+                and self._document_publication_open
                 and self._loaded
-                and generation == self._document_generation
+                and generation is self._document_epoch
                 and revision == self._presentation_revision
                 and self._publication_in_flight == (generation, revision)
             )
 
     def _publication_finished(
         self,
-        generation: int,
+        generation: object,
         revision: int,
         error: Exception | None,
     ) -> None:
@@ -1092,10 +1223,17 @@ class WindowAppearanceController:
             self._publication_in_flight = None
             retry_current = (
                 not self._closed
-                and generation == self._document_generation
+                and not self._presentation_revision_exhausted
+                and self._document_publication_open
+                and generation is self._document_epoch
                 and revision != self._presentation_revision
+                and not isinstance(error, DocumentRetiredError)
             )
-        if error is not None and not retry_current:
+        if (
+            error is not None
+            and not retry_current
+            and not isinstance(error, DocumentRetiredError)
+        ):
             _log_failure("appearance.document_publish_failed", error)
         if retry_current:
             self._schedule_publish()
@@ -1111,9 +1249,9 @@ class WindowAppearanceController:
                 self._surface_safety_failure = error
             self._surface_settlement_known = True
             outcome = self._surface_safety_failure
-            callbacks = tuple(self._surface_settlement_callbacks)
-            self._surface_settlement_callbacks.clear()
-        for callback in callbacks:
+            callback = self._surface_settlement_callback
+            self._surface_settlement_callback = None
+        if callback is not None:
             self._notify_surface_settlement(callback, outcome)
 
     def _notify_surface_settlement(

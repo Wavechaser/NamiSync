@@ -723,15 +723,22 @@ def run_desktop(
     failure: Exception | None = None
 
     def close_appearance() -> None:
-        nonlocal appearance_controller
+        nonlocal appearance_controller, document_channel
         controller = appearance_controller
-        if controller is None:
-            return
         appearance_controller = None
-        try:
-            controller.close()
-        except Exception as error:
-            _log_presentation_failure("appearance.cleanup_failed", error)
+        channel = document_channel
+        document_channel = None
+        if controller is not None:
+            try:
+                controller.close()
+            except Exception as error:
+                _log_presentation_failure("appearance.cleanup_failed", error)
+        close_channel = getattr(channel, "close", None)
+        if callable(close_channel):
+            try:
+                close_channel()
+            except Exception as error:
+                _log_presentation_failure("document_channel.cleanup_failed", error)
 
     try:
         admission = acquire_desktop_instance(identity, native=instance_native)
@@ -770,6 +777,29 @@ def run_desktop(
         initial_appearance = _read_initial_appearance(cosmetics)
         startup_gate = DesktopReadinessGate(startup_deadline_scheduler)
 
+        def acknowledge_readiness(generation: int, challenge: str) -> bool:
+            channel = document_channel
+            if channel is not None:
+                from .document_channel import DocumentPostKind
+
+                acknowledge = getattr(channel, "acknowledge", None)
+                if callable(acknowledge):
+                    acknowledge(
+                        DocumentPostKind.REQUIRED,
+                        (generation, challenge),
+                    )
+            return startup_gate.acknowledge_echo(generation, challenge)
+
+        def acknowledge_appearance(revision: int) -> None:
+            channel = document_channel
+            if channel is None:
+                return
+            from .document_channel import DocumentPostKind
+
+            acknowledge = getattr(channel, "acknowledge", None)
+            if callable(acknowledge):
+                acknowledge(DocumentPostKind.REPLACEABLE, revision)
+
         document = _pending_document()
         slots = _folder_slots()
         picker = _NativeFolderPicker(webview_module)
@@ -779,6 +809,8 @@ def run_desktop(
             registry=registry,
             cosmetics=cosmetics,
             startup_gate=startup_gate,
+            readiness_echo=acknowledge_readiness,
+            appearance_acknowledged=acknowledge_appearance,
         )
         dispatcher = _bridge_dispatcher(document, commands, startup_gate)
         window = webview_module.create_window(
@@ -846,10 +878,46 @@ def run_desktop(
 
             def bind_document_channel() -> None:
                 nonlocal document_channel
-                document_channel = None
+                channel = None
                 try:
-                    channel = _document_channel(window)
+                    generation = startup_gate.command_context().generation
+                    revoke_publication = getattr(
+                        appearance_controller,
+                        "_revoke_document_publication",
+                        None,
+                    )
+                    if document_channel is None:
+                        channel = _document_channel(window)
+                        bind_appearance_channel = getattr(
+                            appearance_controller,
+                            "_bind_document_channel",
+                            None,
+                        )
+                        if callable(bind_appearance_channel):
+                            bind_appearance_channel(channel)
+                    if callable(revoke_publication):
+                        revoke_publication(generation)
+                    if channel is not None:
+                        document_channel = channel
+                        return
+                    replace_document = getattr(
+                        document_channel,
+                        "replace_document",
+                        None,
+                    )
+                    if callable(replace_document):
+                        replace_document()
+                    return
                 except Exception as error:
+                    close_channel = getattr(channel, "close", None)
+                    if callable(close_channel):
+                        try:
+                            close_channel()
+                        except Exception as close_error:
+                            _log_presentation_failure(
+                                "document_channel.cleanup_failed",
+                                close_error,
+                            )
                     _log_presentation_failure(
                         "readiness.document_channel_bind_failed",
                         error,
@@ -860,7 +928,6 @@ def run_desktop(
                         )
                     )
                     return
-                document_channel = channel
 
             window.events.before_load += bind_document_channel
             try:
@@ -902,12 +969,45 @@ def run_desktop(
                         challenge,
                     ),
                     completion=callback,
+                    kind=_required_document_post_kind(),
+                    acknowledgment=(generation, challenge),
                 )
+
+            def open_desktop(generation: int) -> bool:
+                opened = close_controller._mark_loaded()
+                if not opened:
+                    return False
+                controller = appearance_controller
+                open_publication = getattr(
+                    controller,
+                    "_open_document_publication",
+                    None,
+                )
+                if callable(open_publication):
+                    try:
+                        publication_opened = open_publication(generation)
+                    except Exception as error:
+                        _log_presentation_failure(
+                            "appearance.document_publication_failed",
+                            error,
+                        )
+                    else:
+                        if type(publication_opened) is not bool:
+                            _log_presentation_failure(
+                                "appearance.document_publication_failed",
+                                TypeError(
+                                    "appearance publication returned invalid data"
+                                ),
+                            )
+                            return False
+                        if not publication_opened:
+                            return False
+                return True
 
             startup_gate.bind(
                 request_surface_settlement=request_surface_settlement,
                 request_challenge_post=request_challenge_post,
-                open_desktop=close_controller._mark_loaded,
+                open_desktop=open_desktop,
                 refuse_desktop=refuse_startup,
             )
             window.events.loaded += loaded_watchdog
@@ -1068,6 +1168,8 @@ def _production_commands(
     registry: object,
     cosmetics: object,
     startup_gate: DesktopReadinessGate,
+    readiness_echo: Callable[[int, str], bool] | None = None,
+    appearance_acknowledged: Callable[[int], None] | None = None,
 ):
     from .commands import production_command_specs
 
@@ -1077,7 +1179,12 @@ def _production_commands(
         registry=registry,
         cosmetics=cosmetics,
         shell_ready=startup_gate.acknowledge_shell,
-        readiness_echo=startup_gate.acknowledge_echo,
+        readiness_echo=(
+            startup_gate.acknowledge_echo
+            if readiness_echo is None
+            else readiness_echo
+        ),
+        appearance_acknowledged=appearance_acknowledged,
     )
 
 
@@ -1141,7 +1248,13 @@ def _expose_bridge_api(window: object, dispatcher: object) -> None:
 def _document_channel(window: object):
     from .document_channel import DocumentChannel
 
-    return DocumentChannel(window.native)
+    return DocumentChannel(window.native, require_acknowledgment=True)
+
+
+def _required_document_post_kind():
+    from .document_channel import DocumentPostKind
+
+    return DocumentPostKind.REQUIRED
 
 
 def _desktop_close_hooks(

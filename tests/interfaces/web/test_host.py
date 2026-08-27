@@ -30,6 +30,10 @@ from namisync.interfaces.web.commands import (
     FieldRequirement,
     PickerUnavailableError,
 )
+from namisync.interfaces.web.document_channel import (
+    DocumentChannel,
+    DocumentPostKind,
+)
 from namisync.interfaces.web.host import (
     DesktopInstanceAdmission,
     DesktopInstanceIdentity,
@@ -339,7 +343,9 @@ def test_shared_host_handshake_driver_owns_one_complete_generation() -> None:
                 completion=callback,
             ),
         )[-1],
-        open_desktop=lambda: order.append("open") or opened.append(True) or True,
+        open_desktop=lambda _generation: (
+            order.append("open") or opened.append(True) or True
+        ),
         refuse_desktop=lambda error: pytest.fail(str(error)),
     )
 
@@ -1128,7 +1134,7 @@ def test_host_admission_uses_the_final_composed_command_mapping() -> None:
         request_challenge_post=lambda generation, challenge, callback: posts.append(
             (generation, challenge, callback)
         ),
-        open_desktop=lambda: True,
+        open_desktop=lambda _generation: True,
         refuse_desktop=lambda error: pytest.fail(str(error)),
     )
     gate.acknowledge_shell(0)
@@ -1179,7 +1185,7 @@ def test_open_composition_admits_only_exact_readiness_echo_replay() -> None:
         request_challenge_post=lambda generation, challenge, callback: posts.append(
             (generation, challenge, callback)
         ),
-        open_desktop=lambda: True,
+        open_desktop=lambda _generation: True,
         refuse_desktop=lambda error: pytest.fail(str(error)),
     )
     gate.native_loaded()
@@ -1686,10 +1692,9 @@ def test_appearance_configuration_failure_keeps_opaque_safe_baseline(
     assert "appearance.configuration_failed" in caplog.text
 
 
-def test_reload_channel_rebind_failure_revokes_the_previous_channel(
+def test_reload_reuses_the_single_document_channel_owner(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
     channel_constructions = 0
     first_channel: StartupHandshakeDocumentChannel | None = None
@@ -1699,7 +1704,6 @@ def test_reload_channel_rebind_failure_revokes_the_previous_channel(
         on_initialized()
         drive_startup_handshake(webview.window)
         webview.window.events.before_load.emit()
-        assert webview.window.destroyed.wait(1.0)
 
     paths, _order, webview, _document, reports = _patch_primary(
         monkeypatch,
@@ -1710,8 +1714,8 @@ def test_reload_channel_rebind_failure_revokes_the_previous_channel(
     def channel_factory(window: object) -> object:
         nonlocal channel_constructions, first_channel
         channel_constructions += 1
-        if channel_constructions == 2:
-            raise RuntimeError("injected channel rebind failure")
+        if channel_constructions != 1:
+            raise AssertionError("document channel was reconstructed on reload")
         first_channel = StartupHandshakeDocumentChannel(window)
         return first_channel
 
@@ -1719,12 +1723,165 @@ def test_reload_channel_rebind_failure_revokes_the_previous_channel(
 
     result = run_desktop(paths, _identity(), startup_error=reports.append)
 
-    assert result == 1
-    assert reports == ["NamiSync could not bind its document channel"]
-    assert channel_constructions == 2
+    assert result == 0
+    assert reports == []
+    assert channel_constructions == 1
     assert first_channel is not None
     assert len(first_channel.posts) == 1
-    assert "readiness.document_channel_bind_failed" in caplog.text
+
+
+def test_host_readiness_acknowledgment_is_exact_and_reload_retires_prior_post(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Core:
+        def __init__(self) -> None:
+            self.encoded: list[str] = []
+
+        def PostWebMessageAsJson(self, value: str) -> None:
+            self.encoded.append(value)
+
+    class RecordingChannel(DocumentChannel):
+        def __init__(self, native_window: object) -> None:
+            super().__init__(native_window, require_acknowledgment=True)
+            self.acknowledgments: list[tuple[DocumentPostKind, object, bool]] = []
+
+        def acknowledge(
+            self,
+            kind: DocumentPostKind,
+            acknowledgment: object,
+        ) -> bool:
+            accepted = super().acknowledge(kind, acknowledgment)
+            self.acknowledgments.append((kind, acknowledgment, accepted))
+            return accepted
+
+    core = Core()
+    native_window = SimpleNamespace(
+        InvokeRequired=False,
+        browser=SimpleNamespace(
+            webview=SimpleNamespace(CoreWebView2=core),
+        ),
+    )
+    channel = RecordingChannel(native_window)
+    captured: dict[str, object] = {}
+    publication_openings: list[object] = []
+    generation_order: list[str] = []
+
+    original_replace_document = channel.replace_document
+
+    def replace_document() -> None:
+        generation_order.append("replace")
+        original_replace_document()
+
+    channel.replace_document = replace_document
+
+    def start(webview, *, on_initialized, storage_path) -> None:
+        del storage_path
+        on_initialized()
+        gate = webview.window.startup_gate
+        readiness_echo = captured["readiness_echo"]
+        appearance_acknowledged = captured["appearance_acknowledged"]
+
+        webview.window.events.before_load.emit()
+        generation = gate.command_context().generation
+        gate.acknowledge_shell(generation)
+        webview.window.events.loaded.emit()
+        challenge = json.loads(core.encoded[-1])["challenge"]
+        wrong_challenge = ("0" if challenge[0] != "0" else "1") + challenge[1:]
+        assert publication_openings == []
+
+        appearance_acknowledged(generation)
+        assert channel.acknowledgments[-1] == (
+            DocumentPostKind.REPLACEABLE,
+            generation,
+            False,
+        )
+        assert not gate.is_open()
+        assert not readiness_echo(generation, wrong_challenge)
+        assert channel.acknowledgments[-1] == (
+            DocumentPostKind.REQUIRED,
+            (generation, wrong_challenge),
+            False,
+        )
+        assert not gate.is_open()
+        assert readiness_echo(generation, challenge)
+        assert channel.acknowledgments[-1] == (
+            DocumentPostKind.REQUIRED,
+            (generation, challenge),
+            True,
+        )
+        assert gate.is_open()
+        assert publication_openings == [channel]
+
+        webview.window.events.before_load.emit()
+        stale_generation = gate.command_context().generation
+        assert generation_order[-2:] == ["revoke", "replace"]
+        gate.acknowledge_shell(stale_generation)
+        webview.window.events.loaded.emit()
+        stale_challenge = json.loads(core.encoded[-1])["challenge"]
+        webview.window.events.before_load.emit()
+
+        assert not readiness_echo(stale_generation, stale_challenge)
+        assert channel.acknowledgments[-1] == (
+            DocumentPostKind.REQUIRED,
+            (stale_generation, stale_challenge),
+            False,
+        )
+        assert not gate.is_open()
+        assert publication_openings == [channel]
+
+        current_generation = gate.command_context().generation
+        gate.acknowledge_shell(current_generation)
+        webview.window.events.loaded.emit()
+        current_challenge = json.loads(core.encoded[-1])["challenge"]
+        assert readiness_echo(current_generation, current_challenge)
+        assert gate.is_open()
+        assert publication_openings == [channel, channel]
+
+    paths, _order, webview, _document, reports = _patch_primary(
+        monkeypatch,
+        tmp_path,
+        start=start,
+    )
+    original_commands = host._production_commands
+
+    def capture_commands(**dependencies: object) -> object:
+        captured.update(dependencies)
+        return original_commands(**dependencies)
+
+    class Appearance:
+        def __init__(self) -> None:
+            self.channel: object | None = None
+
+        def _bind_document_channel(self, bound: object) -> None:
+            self.channel = bound
+
+        def request_initial_surface_settlement(self, callback: object) -> None:
+            callback(None)
+
+        def _open_document_publication(self, _generation: int) -> bool:
+            publication_openings.append(self.channel)
+            return True
+
+        def _revoke_document_publication(self, _generation: int) -> None:
+            generation_order.append("revoke")
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(host, "_production_commands", capture_commands)
+    monkeypatch.setattr(host, "_document_channel", lambda _window: channel)
+    monkeypatch.setattr(
+        host,
+        "_configure_window_appearance",
+        lambda *_args: Appearance(),
+    )
+
+    result = run_desktop(paths, _identity(), startup_error=reports.append)
+
+    assert result == 0
+    assert reports == []
+    assert webview.window.destroy_count == 0
 
 
 def test_initial_channel_bind_failure_uses_startup_refusal(
@@ -2549,7 +2706,7 @@ def test_reload_handshake_reopens_with_the_existing_close_controller() -> None:
         request_challenge_post=lambda generation, challenge, callback: posts.append(
             (generation, challenge, callback)
         ),
-        open_desktop=controller._mark_loaded,
+        open_desktop=lambda _generation: controller._mark_loaded(),
         refuse_desktop=pytest.fail,
     )
     gate.begin_generation()

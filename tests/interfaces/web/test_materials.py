@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import ctypes
+import gc
 import inspect
 import json
 import sys
 from threading import Event, Thread, get_ident
 from types import SimpleNamespace
+from weakref import ref
 
 import pytest
 
@@ -22,6 +24,11 @@ from namisync.interfaces.web.appearance import (
     SystemAppearance,
     configure_window_appearance,
     opaque_window_background,
+)
+from namisync.interfaces.web.document_channel import (
+    DocumentChannel,
+    DocumentPostKind,
+    DocumentStaleError,
 )
 
 
@@ -1237,7 +1244,7 @@ def test_deferred_initial_refresh_latches_unconfirmed_surface_failure() -> None:
     controller.close()
 
 
-def test_reload_before_surface_settlement_completes_all_generation_waiters() -> None:
+def test_reload_before_surface_settlement_replaces_the_stale_generation_waiter() -> None:
     window = _window()
     native = _FakeNative(_system(accent="#111111"))
     deferred: list[object] = []
@@ -1262,13 +1269,48 @@ def test_reload_before_surface_settlement_completes_all_generation_waiters() -> 
 
     window.events.before_load.emit()
     second = _request_initial(controller)
-    assert first == []
+    assert len(first) == 1
+    assert isinstance(first[0], DocumentStaleError)
     assert second == []
     deferred[0]()
 
-    assert first == [None]
+    assert len(first) == 1
     assert second == [None]
     controller.close()
+
+
+def test_unsettled_surface_completes_and_releases_superseded_waiters() -> None:
+    window = _window()
+    controller = configure_window_appearance(
+        window,
+        native=_FakeNative(_system()),
+    )
+    retained = []
+
+    outcomes: list[Exception | None] = []
+
+    class Waiter:
+        def __call__(self, error: Exception | None) -> None:
+            outcomes.append(error)
+
+    for _ in range(8):
+        waiter = Waiter()
+        retained.append(ref(waiter))
+        controller.request_initial_surface_settlement(waiter)
+        del waiter
+        gc.collect()
+        assert all(reference() is None for reference in retained[:-1])
+        assert retained[-1]() is not None
+        assert all(
+            isinstance(error, DocumentStaleError)
+            for error in outcomes
+        )
+
+    controller.close()
+    gc.collect()
+    assert all(reference() is None for reference in retained)
+    assert len(outcomes) == 8
+    assert all(isinstance(error, DocumentStaleError) for error in outcomes)
 
 
 def test_reload_automatically_publishes_to_the_new_receiver() -> None:
@@ -1313,15 +1355,11 @@ def test_reload_invalidates_a_queued_prior_generation_publication() -> None:
     assert len(window.appearance_messages.messages) == 1
     queue_posts = True
 
-    window.events.before_load.emit()
-    window.events.loaded.emit()
-    assert len(queued) == 1
-    window.events.before_load.emit()
-    window.events.loaded.emit()
-    assert len(queued) == 2
-
-    queued[0]()
-    queued[1]()
+    for _reload in range(2):
+        window.events.before_load.emit()
+        window.events.loaded.emit()
+    while queued:
+        queued.pop(0)()
 
     assert len(window.appearance_messages.messages) == 2
     controller.close()
@@ -1708,18 +1746,181 @@ def test_queued_stale_publication_is_ignored_and_latest_revision_wins() -> None:
     window.events.loaded.emit()
     native.system = _system(dark=True, accent="#222222")
     native.emit_preference_change()
-    assert len(queued) == 2
-    queued[1]()
-    assert len(queued) == 2
-    assert results == [None]
-    queued[0]()
-    assert len(queued) == 3
-    assert results == [None]
-    queued[2]()
+    queued.pop()()
+    queued.pop(0)()
+    while queued:
+        queued.pop(0)()
 
     assert [value["revision"] for value in window.appearance_messages.messages] == [2]
     assert window.appearance_messages.messages[0]["accentFill"] == "#222222"
     assert results == [None]
+    controller.close()
+
+
+def test_reload_retirement_does_not_publish_appearance_before_readiness(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    channel = DocumentChannel(
+        window.native,
+        invoke=native.invoke,
+        require_acknowledgment=True,
+    )
+    controller = configure_window_appearance(window, native=native)
+    controller._bind_document_channel(channel)
+    controller._revoke_document_publication(1)
+    _request_initial(controller)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    assert window.appearance_messages.messages == []
+    initial_readiness: list[Exception | None] = []
+    channel.post(
+        {"kind": "namisync.readiness.v1", "challenge": "0" * 32},
+        still_current=lambda: True,
+        completion=initial_readiness.append,
+        kind=DocumentPostKind.REQUIRED,
+        acknowledgment=(1, "0" * 32),
+    )
+    assert [message["kind"] for message in window.appearance_messages.messages] == [
+        "namisync.readiness.v1"
+    ]
+    assert channel.acknowledge(
+        DocumentPostKind.REQUIRED,
+        (1, "0" * 32),
+    )
+    assert controller._open_document_publication(1)
+    assert [message["kind"] for message in window.appearance_messages.messages] == [
+        "namisync.readiness.v1",
+        "namisync.appearance.v2",
+    ]
+    native.system = _system(dark=True, accent="#222222")
+    native.emit_preference_change()
+
+    controller._revoke_document_publication(2)
+    channel.replace_document()
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    assert not controller._open_document_publication(1)
+    assert [message["kind"] for message in window.appearance_messages.messages] == [
+        "namisync.readiness.v1",
+        "namisync.appearance.v2",
+    ]
+    readiness: list[Exception | None] = []
+    channel.post(
+        {"kind": "namisync.readiness.v1", "challenge": "a" * 32},
+        still_current=lambda: True,
+        completion=readiness.append,
+        kind=DocumentPostKind.REQUIRED,
+        acknowledgment=(2, "a" * 32),
+    )
+
+    assert [message["kind"] for message in window.appearance_messages.messages] == [
+        "namisync.readiness.v1",
+        "namisync.appearance.v2",
+        "namisync.readiness.v1",
+    ]
+    assert readiness == []
+    assert channel.acknowledge(
+        DocumentPostKind.REQUIRED,
+        (2, "a" * 32),
+    )
+    assert readiness == [None]
+    assert controller._open_document_publication(2)
+    assert window.appearance_messages.messages[-1]["kind"] == (
+        "namisync.appearance.v2"
+    )
+    assert "appearance.document_publish_failed" not in caplog.text
+    controller.close()
+    channel.close()
+
+
+def test_delayed_stale_open_cannot_enable_successor_appearance() -> None:
+    window = _window()
+    native = _FakeNative(_system())
+    channel = DocumentChannel(
+        window.native,
+        invoke=native.invoke,
+        require_acknowledgment=True,
+    )
+    controller = configure_window_appearance(window, native=native)
+    controller._bind_document_channel(channel)
+    controller._revoke_document_publication(1)
+    _request_initial(controller)
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    entered = Event()
+    release = Event()
+    original_schedule = controller._schedule_publish
+    delay_once = True
+
+    def delayed_schedule() -> None:
+        nonlocal delay_once
+        if not delay_once:
+            original_schedule()
+            return
+        delay_once = False
+        entered.set()
+        assert release.wait(1.0)
+        original_schedule()
+
+    controller._schedule_publish = delayed_schedule
+    results: list[bool] = []
+    stale_open = Thread(
+        target=lambda: results.append(controller._open_document_publication(1))
+    )
+    stale_open.start()
+    assert entered.wait(1.0)
+
+    controller._revoke_document_publication(2)
+    channel.replace_document()
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    release.set()
+    stale_open.join(1.0)
+
+    assert not stale_open.is_alive()
+    assert results == [True]
+    assert window.appearance_messages.messages == []
+    channel.post(
+        {"kind": "namisync.readiness.v1", "challenge": "a" * 32},
+        still_current=lambda: True,
+        completion=lambda _error: None,
+        kind=DocumentPostKind.REQUIRED,
+        acknowledgment=(2, "a" * 32),
+    )
+    assert [message["kind"] for message in window.appearance_messages.messages] == [
+        "namisync.readiness.v1"
+    ]
+    controller.close()
+    channel.close()
+
+
+def test_presentation_revision_exhaustion_stops_publication_without_reuse(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    monkeypatch.setattr(appearance, "MAX_JAVASCRIPT_SAFE_INTEGER", 1)
+    window = _window()
+    native = _FakeNative(_system(accent="#111111"))
+    controller = configure_window_appearance(window, native=native)
+    _request_initial(controller)
+
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+    native.system = _system(accent="#222222")
+    native.emit_preference_change()
+    native.system = _system(accent="#333333")
+    native.emit_preference_change()
+    window.events.before_load.emit()
+    window.events.loaded.emit()
+
+    assert [
+        value["revision"] for value in window.appearance_messages.messages
+    ] == [1]
+    assert caplog.text.count("appearance.presentation_revision_exhausted") == 1
     controller.close()
 
 

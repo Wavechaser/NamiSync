@@ -32,6 +32,7 @@ class StartupHandshakeDocumentChannel:
         *,
         still_current: Callable[[], bool],
         completion: Callable[[Exception | None], None],
+        **_ownership: object,
     ) -> None:
         if (
             type(payload) is not dict
@@ -194,6 +195,7 @@ def headed_command_extension(
         registry: object,
         cosmetics: object,
         startup_gate: object,
+        **callbacks: object,
     ) -> Mapping[str, object]:
         production = original_commands(
             picker=picker,
@@ -201,6 +203,7 @@ def headed_command_extension(
             registry=registry,
             cosmetics=cosmetics,
             startup_gate=startup_gate,
+            **callbacks,
         )
         captured.update(
             commands=production,

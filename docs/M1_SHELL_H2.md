@@ -355,8 +355,10 @@ The same audit found finite-model prerequisites beyond the earlier path list:
 the desktop task cap does not yet bind dispatcher subscribers/sessions or all
 runtime/service maps; inventory scan/query/tree construction precedes complete
 admission; the standalone-integrity retained-byte wall is declared but not
-enforced; and bridge response projection, outstanding document posts, and
-CLR/WebView2/browser copies lack one complete bound and retirement witness.
+enforced; and bridge response projection plus CLR/WebView2/browser copies lack
+one complete bound and retirement witness. Production document posts now have
+one in-flight, one required, one replaceable, and one native-dispatch owner with
+exact generation acknowledgment; their encoded/native byte charges remain.
 The direct verifier chunk seam found in the same audit is now closed by one
 exact public 4 MiB maximum, so the model charges at most one aligned native
 buffer and one Python bytes copy per open stream. The remaining blockers are

@@ -339,6 +339,7 @@ class _ReleaseTerminalSessionPayload:
 class _ReadCosmeticSectionPayload:
     section: str
     value_version: int
+    applied_presentation_revision: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -357,6 +358,7 @@ def production_command_specs(
     cosmetics: CosmeticStateAuthority,
     shell_ready: Callable[[int], None],
     readiness_echo: Callable[[int, str], bool],
+    appearance_acknowledged: Callable[[int], None] | None = None,
 ) -> Mapping[str, CommandSpec]:
     """Bind the exact production rows to process-local dependencies."""
 
@@ -366,6 +368,10 @@ def production_command_specs(
         raise TypeError("shell readiness callback must be callable")
     if not callable(readiness_echo):
         raise TypeError("readiness echo callback must be callable")
+    if appearance_acknowledged is not None and not callable(
+        appearance_acknowledged
+    ):
+        raise TypeError("appearance acknowledgment callback must be callable")
 
     def acknowledge_shell(invocation: object) -> object:
         if (
@@ -523,6 +529,11 @@ def production_command_specs(
             raise TypeError(
                 "read_cosmetic_section received an unvalidated payload"
             )
+        if (
+            payload.applied_presentation_revision is not None
+            and appearance_acknowledged is not None
+        ):
+            appearance_acknowledged(payload.applied_presentation_revision)
         result = cosmetics.read_section(payload.section, payload.value_version)
         return _cosmetic_snapshot_to_wire(result)
 
@@ -739,18 +750,31 @@ def _validate_release_terminal_session(
 def _validate_read_cosmetic_section(
     value: object,
 ) -> _ReadCosmeticSectionPayload:
-    if type(value) is not dict or set(value) != {"section", "value_version"}:
+    if type(value) is not dict or set(value) != {
+        "section",
+        "value_version",
+        "applied_presentation_revision",
+    }:
         raise CommandPayloadError("read_cosmetic_section payload is invalid")
     section = value["section"]
     value_version = value["value_version"]
+    applied_revision = value["applied_presentation_revision"]
     if (
         type(section) is not str
         or section != "appearance"
         or type(value_version) is not int
         or value_version != APPEARANCE_VALUE_VERSION
+        or (
+            applied_revision is not None
+            and not _is_javascript_safe_integer(applied_revision)
+        )
     ):
         raise CommandPayloadError("read_cosmetic_section payload is invalid")
-    return _ReadCosmeticSectionPayload(section, value_version)
+    return _ReadCosmeticSectionPayload(
+        section,
+        value_version,
+        applied_revision,
+    )
 
 
 def _validate_replace_cosmetic_section(

@@ -35,7 +35,7 @@ def _bind(
         request_challenge_post=lambda generation, challenge, callback: posts.append(
             (generation, challenge, callback)
         ),
-        open_desktop=lambda: opens.append("open") or True,
+        open_desktop=lambda _generation: opens.append("open") or True,
         refuse_desktop=refusals.append,
     )
 
@@ -267,7 +267,7 @@ def test_open_callback_decline_keeps_admission_closed(
         request_challenge_post=lambda generation, challenge, callback: posts.append(
             (generation, challenge, callback)
         ),
-        open_desktop=lambda: False,
+        open_desktop=lambda _generation: False,
         refuse_desktop=lambda _error: pytest.fail("declined open was reported"),
     )
     gate.native_loaded()
@@ -294,7 +294,8 @@ def test_callbacks_are_reentrant_and_never_run_under_gate_lock(
         observed.append(gate.command_context())
         callback(None)
 
-    def open_desktop() -> bool:
+    def open_desktop(generation: int) -> bool:
+        observed.append(generation)
         observed.append(gate.command_context())
         return True
 
@@ -307,7 +308,8 @@ def test_callbacks_are_reentrant_and_never_run_under_gate_lock(
     gate.native_loaded()
     gate.acknowledge_shell(0)
     assert gate.acknowledge_echo(0, _CHALLENGE)
-    assert len(observed) == 3
+    assert len(observed) == 4
+    assert observed[-2] == 0
 
 
 def test_concurrent_exact_echo_opens_at_most_once(
@@ -321,7 +323,7 @@ def test_concurrent_exact_echo_opens_at_most_once(
     opens: list[str] = []
     opens_lock = Lock()
 
-    def open_desktop() -> bool:
+    def open_desktop(_generation: int) -> bool:
         with opens_lock:
             opens.append("open")
         entered.set()

@@ -155,7 +155,7 @@ assert.equal(timers.size, 0);
 testWindow.enqueue(() => Promise.reject(new Error("uncertain read delivery")));
 testWindow.enqueue((request) => success(request, readResult({ revision: 2 })));
 const readStart = testWindow.requests.length;
-assert.deepEqual(await bridge.readCosmeticSection(), readResult({ revision: 2 }));
+assert.deepEqual(await bridge.readCosmeticSection(17), readResult({ revision: 2 }));
 const readAttempts = testWindow.requests.slice(readStart);
 assert.equal(readAttempts.length, 2);
 assert.notEqual(readAttempts[0].request_id, readAttempts[1].request_id);
@@ -164,6 +164,7 @@ for (const request of readAttempts) {
   assert.deepEqual(request.payload, {
     section: "appearance",
     value_version: 1,
+    applied_presentation_revision: 17,
   });
 }
 assert.deepEqual(readAttempts[0].payload, readAttempts[1].payload);

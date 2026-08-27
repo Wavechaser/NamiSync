@@ -83,7 +83,7 @@ export function installAppearanceReceiver(webview, root, onApplied = null) {
     for (const waiter of ready) waiter.resolve();
     if (onApplied !== null) {
       try {
-        onApplied();
+        onApplied(revision);
       } catch {
         // Appearance application remains independently degradable.
       }

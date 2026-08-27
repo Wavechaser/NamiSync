@@ -3594,12 +3594,15 @@ facade. The v1 appearance value is exactly `{"theme":"system"}`,
 
 | Command | Exact payload | Exact success `result` | Identity / revision | Availability, deadline, and retry |
 | --- | --- | --- | --- | --- |
-| `read_cosmetic_section` | `{"section":"appearance","value_version":1}` | `{"section":"appearance","value_version":1,"revision":N,"dirty":false-or-true,"value":{"theme":"system-or-light-or-dark"}}` | `READ_ONLY`; `command_id` and request revision metadata forbidden; returns a nonnegative JavaScript-safe process-local section revision | `OPEN`; local 5,000 ms; after transport uncertainty or timeout, at most one retry with the identical payload and a fresh request id |
+| `read_cosmetic_section` | `{"section":"appearance","value_version":1,"applied_presentation_revision":N-or-null}` | `{"section":"appearance","value_version":1,"revision":N,"dirty":false-or-true,"value":{"theme":"system-or-light-or-dark"}}` | `READ_ONLY`; `command_id` and request revision metadata forbidden; the optional nonnegative JavaScript-safe presentation revision acknowledges only the exact appearance message already applied by this page; returns a nonnegative JavaScript-safe process-local section revision | `OPEN`; local 5,000 ms; after transport uncertainty or timeout, at most one retry with the identical payload and a fresh request id |
 | `replace_cosmetic_section` | `{"section":"appearance","value_version":1,"expected_revision":N,"value":{"theme":"system-or-light-or-dark"}}` | the read result plus `"disposition":"applied-or-noop-or-conflict"` | `MUTATING`; `command_id` forbidden and request revision metadata required; `expected_revision` is a non-Boolean JavaScript-safe integer | `OPEN`; local 5,000 ms; no automatic replay; after transport uncertainty or timeout, reconcile through `read_cosmetic_section` before another replacement |
 
 Every object is exact: missing or unknown members, another section, a
-`value_version` other than the non-Boolean integer `1`, an invalid theme, or a negative, fractional, Boolean, or
-greater-than-`9007199254740991` expected revision is `invalid_payload`. No new
+`value_version` other than the non-Boolean integer `1`, an invalid theme, or a
+negative, fractional, Boolean, or greater-than-`9007199254740991` expected or
+applied presentation revision is `invalid_payload`. Null is accepted only for
+`applied_presentation_revision`; it means that this page has not yet applied a
+host appearance message. No new
 bridge error code is added. Each loaded section starts at revision zero;
 accepted value changes advance its process-local revision by one and also
 advance one private process-local document generation. The document generation

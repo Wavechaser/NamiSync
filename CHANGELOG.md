@@ -43,6 +43,13 @@ claims explicit, independently reviewable, and regression-backed.
   attached session. Only an exact returned-session match grants plan-drop
   authority, preventing hostile return ids and hidden failed reservations from
   corrupting another plan or exhausting capacity.
+- Reused one current-document post owner across reloads and bounded production
+  custody to one acknowledged in-flight value, one required readiness value,
+  one replaceable appearance value, and one native dispatch. Exact page echoes
+  retire their matching identities; replacement, close, and supersession
+  terminally release stale callbacks without changing the nine-command map.
+  Required readiness always dispatches first: appearance publication remains
+  revoked until the exact current challenge opens the document.
 
 - Retired callback traceback, cause, and context links whenever the core runner
   consumes or supersedes an error. Nested exception-group members are traversed

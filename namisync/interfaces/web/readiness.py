@@ -79,7 +79,7 @@ class DesktopReadinessGate:
             ]
             | None
         ) = None
-        self._open_desktop: Callable[[], bool] | None = None
+        self._open_desktop: Callable[[int], bool] | None = None
         self._refuse_desktop: Callable[[Exception], None] | None = None
 
     def is_open(self) -> bool:
@@ -145,7 +145,7 @@ class DesktopReadinessGate:
         request_challenge_post: Callable[
             [int, str, Callable[[Exception | None], None]], None
         ],
-        open_desktop: Callable[[], bool],
+        open_desktop: Callable[[int], bool],
         refuse_desktop: Callable[[Exception], None],
     ) -> None:
         if not all(
@@ -394,7 +394,7 @@ class DesktopReadinessGate:
         try:
             if open_desktop is None:
                 raise RuntimeError("readiness gate has no open callback")
-            opened = open_desktop()
+            opened = open_desktop(generation)
             if type(opened) is not bool:
                 raise TypeError("startup open callback must return Boolean")
         except Exception as error:

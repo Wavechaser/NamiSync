@@ -25,8 +25,10 @@ const root = new HTMLElementFake();
 const moduleUrl = pathToFileURL(process.argv[2]).href;
 const { installAppearanceReceiver } = await import(moduleUrl);
 let observerCalls = 0;
-const receiver = installAppearanceReceiver(webview, root, () => {
+const observerRevisions = [];
+const receiver = installAppearanceReceiver(webview, root, (revision) => {
   observerCalls += 1;
+  observerRevisions.push(revision);
 });
 const receive = listeners.get("message");
 let applied = false;
@@ -74,6 +76,7 @@ const result = {
   resolvedBeforeNewRevision,
   resolvedAfterNewRevision: reapplied,
   observerCalls,
+  observerRevisions,
 };
 receiver.close();
 result.listenerRemoved = !listeners.has("message");
