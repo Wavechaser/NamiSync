@@ -171,23 +171,34 @@ reprojects a staged candidate after publication.
 ### Plan session
 
 The plan session owns one retained `PlanReviewAdmission` ledger. Scanner,
-planner, observer, and preflight calls receive fresh disposable admissions, as
-does each exact-copy seam. Correspondence keeps its ordinary two-argument
-protocol; its concrete database query is structurally bounded by admitted scan
-keys and identities, then workflow captures the hostile result under a fresh
-admission. Each raw population has a stateless first-excess gate; declared
-collaborator output is reconstructed into an exact detached graph, and hostile
-callback inputs are separate from authoritative retained state. Forged
-wrappers, undeclared instance dictionaries, and callback mutation are rejected
-rather than retained.
+planner, observer, preflight, and exact-copy gates receive zeroed disposable
+admissions that share only the workflow-owned opaque issuer. Correspondence
+keeps its ordinary two-argument protocol; its concrete database query is
+structurally bounded by admitted scan keys and identities, then workflow
+captures the hostile result under a fresh family admission. Each raw population
+has a stateless first-excess gate; declared collaborator output is reconstructed
+into an exact detached graph, and hostile callback inputs are separate from
+authoritative retained state. Forged wrappers, undeclared instance dictionaries,
+and callback mutation are rejected rather than retained.
 
 Only unavoidable shallow slots that coexist in the final scans, plan,
 observed world, and verdict commit to the retained ledger, together with the
 final operation and informational rows. Construction builders, sorting and
 indexes, selection/exclusion derivation, previews, callback copies, and other
 sequential temporaries are not retained owners. The workflow maps the first
-`ReviewFactLimitError` to `REFUSED+UNRUN` without saving a plan or exposing a
-partial result.
+issued `ReviewFactLimitError` to `REFUSED+UNRUN` without saving a plan or
+exposing a partial result.
+
+The retained ledger and every zeroed producer or snapshot admission share one
+opaque issuer for that plan run and no source graph. The mapping accepts only
+an exact base error carrying that issuer, reconstructs a fresh exact PLAN fact,
+and retires the raw exception before returning. A subtype, malformed fact,
+wrong tree kind, or independently issued signal fails ordinarily, as does the
+same signal from phase delivery, correspondence, a nested scanner/observer
+collaborator, or destination policy. Preflight callback-world revalidation uses
+an unrelated bounded admission so mutation cannot become capacity refusal.
+Ordinary scanner, planner, selection, observer, and preflight behavior is
+unchanged.
 
 This is the planning-source ownership prerequisite for checkpoint 4. Its row
 and shallow-reference counters are not a reservation formula, heap estimate,
@@ -196,6 +207,14 @@ sorting/index storage, selection/previews, complete projections,
 callback/exception frames, serialization, native/browser copies, and
 multi-session owners still need separate closure or charge before the
 checkpoint-4 model can freeze.
+
+Checkpoint 4 must eliminate or finitely charge ordinary `run_plan` escapes and
+their stage-dependent live frame: root/path adaptation, phase delivery,
+scanner, correspondence, planner, observer, preflight, invalid/unissued fact
+demotion, and plan save can retain request, root, options, admitted scan, plan,
+world, and verdict owners. Root adaptation can also chain raw
+`RootAuthorityError` or `OSError` causes. Preserve public type, message, identity,
+and path-redaction behavior while closing those owners.
 
 1. Lexically normalize and validate distinct non-nested roots and request
    semantics without following filesystem links. The shared core chain-only

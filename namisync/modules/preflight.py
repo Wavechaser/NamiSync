@@ -995,16 +995,21 @@ def snapshot_plan_verdict(
         raise TypeError("preflight must return an exact Verdict snapshot")
     if type(admission) is not PlanReviewAdmission:
         raise TypeError("plan review admission has the wrong type")
+    comparison_admission = PlanReviewAdmission()
     revalidate_plan_observed_world(
         callback_world,
         authoritative_world,
         xset,
-        admission,
+        comparison_admission,
     )
     observed = (
         authoritative_world
         if value.observed is callback_world
-        else snapshot_plan_observed_world(value.observed, xset, admission)
+        else snapshot_plan_observed_world(
+            value.observed,
+            xset,
+            comparison_admission,
+        )
     )
     if observed != authoritative_world:
         raise ValueError("preflight verdict observed a different world")

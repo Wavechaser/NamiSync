@@ -103,6 +103,11 @@ schemas; other active documents point here instead of reproducing these limits.
   the plan-domain ceiling per value; the checkpoint-4 completed-plan graph wall
   must still admit their combined retained occurrences before publication.
   Neither boundary is claimed as an empirical source-primitive maximum.
+- A plan-capacity refusal requires an exact PLAN fact issued by the current
+  workflow's opaque admission family. Workflow copies that fact, consumes its
+  issuer marker, retires the raw exception, and saves no plan. An unissued,
+  malformed, wrong-tree, or subtype signal is an ordinary internal failure,
+  including when it escapes a nested collaborator inside an admitted module.
 - Reachability determines whether the signed-domain guard is a product branch
   or an assertion; the two are not presented as equivalent risks:
 

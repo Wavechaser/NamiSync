@@ -74,14 +74,18 @@ attestation format.
 - Typed plan-review limit facts, stateless independent raw source-population
   gates, exact declared scan snapshots, and cumulative admission only for final
   domain/informational rows and unavoidable simultaneously retained shallow
-  references. Each final reference slot uses the fixed eight-byte charge;
-  disposable construction owners do not enter that ledger.
+  references. Fresh admissions for one plan share only an opaque refusal issuer;
+  an exact fact from another issuer is not plan-capacity authority. Each final
+  reference slot uses the fixed eight-byte charge; disposable construction
+  owners do not enter that ledger.
 
 `core/review.py` is the canonical source for those constructors, limits,
 counter order, and snapshot rules. Source gates test each independent raw
 population before its first excess; exact reconstruction rejects undeclared scan
 state at hostile boundaries. The retained ledger charges only final shallow
-slots. It deliberately does not walk or size a complete Python object graph:
+slots. Workflow consumes the issuer marker once, reconstructs an exact PLAN
+fact, and retains neither the raw exception nor admission in its result. It
+deliberately does not walk or size a complete Python object graph:
 checkpoint 4 must separately freeze and validate construction and container
 capacity, sorting/index storage, selection and preview values, strings/codecs,
 native/browser copies, callbacks, and multi-session retention before any task

@@ -88,6 +88,21 @@ workflow policy and is neither copied nor charged by this prerequisite. First
 excess raises the shared typed review-limit error without publishing a partial
 plan.
 
+Review-limit authority belongs to the workflow's current admission family;
+planner receives one zeroed member. Planner logical-byte accumulation and
+candidate revalidation issue their limit through that member. Destination
+policy has no such authority: its identity, assignment, or unreviewed
+fingerprint error propagates unchanged from a direct planner call and workflow
+classifies an unissued review-limit signal as ordinary failure. Reviewed
+fingerprinting uses the one captured policy identity instead of rereading
+hostile policy properties.
+
+Checkpoint 4 must eliminate or finitely charge ordinary escapes from
+`snapshot_plan_options`, `plan`, and `snapshot_plan_candidate`. Property,
+assignment, fingerprint, and validation failures can retain stage-dependent
+policy, callback, detached scan/file, and input frames through public unwind.
+Preserve their existing public type, identity, and behavior.
+
 Those counters establish the planning-source wall, not the checkpoint-4
 complete retained-graph model. Policy and planning construction temporaries,
 sorting/index storage, selection and preview values, additional complete-tree

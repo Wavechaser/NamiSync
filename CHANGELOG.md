@@ -34,6 +34,10 @@ claims explicit, independently reviewable, and regression-backed.
   final scan, plan, observed-world, and verdict graphs. Capacity failure is a
   typed `REFUSED+UNRUN` result and never saves a partial plan; ordinary scanner,
   planner, selection, and preflight policy remains unchanged.
+- Bound exact review-limit facts to one opaque issuer shared only by the current
+  plan's fresh admissions. Phase delivery, correspondence, nested module
+  collaborators, destination policy, mutated preflight input, malformed facts,
+  and subtypes cannot spoof a typed refusal; they fail without a plan save.
 - Kept the source wall separate from checkpoint 4's complete-object
   reservation constants, fixtures, and BR-G-45 evidence. Construction,
   sorting/index storage, selection and preview values, codec/native/browser

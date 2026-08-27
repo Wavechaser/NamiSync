@@ -333,7 +333,7 @@ Commits, in order:
 **In progress (2026-08-27), before the first mandatory commit.** Independent
 source audits found that the current complete graph cannot yet justify a
 frozen reservation floor. The dispatcher exception-retention prerequisite
-is fixed separately in `ff23af9`; the native reply lifetime prerequisite now
+is fixed separately in `74135b5`; the native reply lifetime prerequisite now
 passes all eight installed transport/native-host witnesses. The independent
 standalone-integrity candidate wall is ratified in `2818686`, and the linked
 verify-continuation diagnostic boundary is now closed without selecting a
@@ -367,9 +367,51 @@ storage, selection/exclusion and preview values, callback overlap, codec/text
 and native/browser copies, complete-tree projection, and speculative future
 owners. Those costs, complete-object constants, formula, fixture, validator,
 and BR-G-45 evidence remain checkpoint 4. Dispatcher pre-run and cancellation-
-settlement exception owners are now closed independently; remaining raw
-callback, workflow, and planner owners still require separate closure before
-the first mandatory model commit.
+settlement exception owners are now closed independently. Refusal authority is
+also closed narrowly: only an exact PLAN fact issued by the current workflow's
+opaque admission family becomes `REFUSED+UNRUN`; workflow takes a fresh core
+snapshot, consumes the issuer, retires the raw signal, and saves no artifact.
+Phase delivery, correspondence, nested module collaborators, destination
+policy, and mutated preflight input cannot claim that authority. Ordinary
+exception ownership is deliberately not claimed by this prerequisite.
+
+Checkpoint 4 must treat the following live seams as mandatory model inputs. It
+may eliminate an owner before downstream work or charge its exact simultaneous
+graph with a finite retirement condition; no acceptance may assume release:
+
+- `core.session.run_session`: `observed_emit` mutation-plus-raise, work errors
+  superseded by accumulator truth, and consumed `PauseRequested`, `Canceled`,
+  or process-fatal controls during settlement.
+- `workflows.sync.run_execution` / `_run_execution`: cancellation provenance,
+  repeated exclusion-sink offers, and save/preflight/executor/verifier work
+  performed while a consumed control remains active.
+- `workflows.sync.run_plan`, `_validated_roots`, `_ordinary_logical_root`, and
+  `_physical_logical_root`: root/path adaptation, phase, scanner,
+  correspondence, planner, observer, preflight, invalid/unissued fact demotion,
+  and save failures can retain stage-dependent request/root/options/scan/plan/
+  world/verdict locals. Path adaptation can also chain raw `RootAuthorityError`
+  or `OSError` causes even though review-limit signals are retired.
+- `modules.planner.snapshot_plan_options`, `plan`, and
+  `snapshot_plan_candidate`: ordinary policy identity/property, assignment,
+  fingerprint, and validation failures can retain policy/options, detached
+  callback scans/files, and input frames. Preserve their current public type,
+  message, and identity behavior where applicable.
+- `_ContainedRecordingContext.__exit__` / `preserve_exit_failure`: simultaneous
+  body, exit, continuation-capture, diagnostic, and note failures, including
+  hostile dynamic `add_note` dispatch.
+- Dispatcher admission, cleanup, persistence, and custody release: audit-
+  factory fallback, rollback/stream/hub/store cleanup, thread-start failure,
+  stale-lease release, and drop-only catches that can retain external aliases.
+- `TaskRegistry.replay_start`, `_start_owner`, and `_attempt_compensation`:
+  primary start failure overlapping cleanup, compensation, or retry truth.
+- `NamiSyncService.start_plan` and `Dispatcher.subscribe`: public chained path/
+  subscription exceptions that retain raw causes. Preserve current public
+  types, messages, path redaction, custody, and retry truth while eliminating
+  or charging them.
+
+Checkpoint-4 regressions for these seams assert public status, item, counter,
+retry, and identity behavior plus externally held lifecycle release. They do
+not freeze private counters, handler timing, or callback choreography.
 
 - Linked execution can retain both 120,000 operation and 120,000 integrity
   outcomes, plus the dispatcher accumulator and shallow audit/store wrappers.

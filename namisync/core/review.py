@@ -54,13 +54,16 @@ class ReviewFactLimitExceeded:
     byte_limit: int | None
 
     def __post_init__(self) -> None:
-        if self.reason != "review_fact_limit_exceeded":
+        if (
+            type(self.reason) is not str
+            or self.reason != "review_fact_limit_exceeded"
+        ):
             raise ValueError("review fact reason is invalid")
-        if not isinstance(self.tree_kind, ReviewTreeKind):
+        if type(self.tree_kind) is not ReviewTreeKind:
             raise TypeError("review tree_kind has the wrong type")
-        if not isinstance(self.population, ReviewPopulation):
+        if type(self.population) is not ReviewPopulation:
             raise TypeError("review population has the wrong type")
-        if not isinstance(self.axis, ReviewLimitAxis):
+        if type(self.axis) is not ReviewLimitAxis:
             raise TypeError("review axis has the wrong type")
         if self.row_limit is not None:
             require_safe_int(self.row_limit, "review row_limit")
@@ -155,6 +158,21 @@ class ReviewFactLimitError(ValueError):
         self.fact = fact
 
 
+def snapshot_review_fact_limit(value: object) -> ReviewFactLimitExceeded:
+    """Return one fresh exact review refusal fact."""
+
+    if type(value) is not ReviewFactLimitExceeded:
+        raise TypeError("review fact limit must be exact")
+    return ReviewFactLimitExceeded(
+        value.reason,
+        value.tree_kind,
+        value.population,
+        value.axis,
+        value.row_limit,
+        value.byte_limit,
+    )
+
+
 MAX_PLAN_REVIEW_ROWS = 120_000
 MAX_PLAN_DOMAIN_RETAINED_BYTES = 134_217_728
 MAX_PLAN_INFORMATIONAL_RETAINED_BYTES = 201_326_592
@@ -171,17 +189,32 @@ class PlanReviewAdmission:
     """
 
     __slots__ = (
+        "_issuer",
         "_domain_rows",
         "_domain_bytes",
         "_informational_rows",
         "_informational_bytes",
     )
 
-    def __init__(self) -> None:
+    def __init__(self, *, _issuer: object | None = None) -> None:
+        self._issuer = object() if _issuer is None else _issuer
         self._domain_rows = 0
         self._domain_bytes = 0
         self._informational_rows = 0
         self._informational_bytes = 0
+
+    def fresh(self) -> "PlanReviewAdmission":
+        """Return an empty admission in the same refusal-authority family."""
+
+        return PlanReviewAdmission(_issuer=self._issuer)
+
+    def _limit_error(
+        self,
+        fact: ReviewFactLimitExceeded,
+    ) -> ReviewFactLimitError:
+        error = ReviewFactLimitError(fact)
+        error._plan_review_issuer = self._issuer
+        return error
 
     def admit(
         self,
@@ -209,22 +242,22 @@ class PlanReviewAdmission:
             self._informational_bytes + informational_bytes
         )
         if next_domain_rows > MAX_PLAN_REVIEW_ROWS:
-            raise ReviewFactLimitError(
+            raise self._limit_error(
                 ReviewFactLimitExceeded.plan_domain_rows()
             )
         if next_domain_bytes > MAX_PLAN_DOMAIN_RETAINED_BYTES:
-            raise ReviewFactLimitError(
+            raise self._limit_error(
                 ReviewFactLimitExceeded.plan_domain_retained_bytes()
             )
         if next_informational_rows > MAX_PLAN_REVIEW_ROWS:
-            raise ReviewFactLimitError(
+            raise self._limit_error(
                 ReviewFactLimitExceeded.plan_informational_rows()
             )
         if (
             next_informational_bytes
             > MAX_PLAN_INFORMATIONAL_RETAINED_BYTES
         ):
-            raise ReviewFactLimitError(
+            raise self._limit_error(
                 ReviewFactLimitExceeded.plan_informational_retained_bytes()
             )
 
@@ -238,7 +271,7 @@ class PlanReviewAdmission:
 
         _require_nonnegative_int(count, "plan source row count")
         if count > MAX_PLAN_REVIEW_ROWS:
-            raise ReviewFactLimitError(
+            raise self._limit_error(
                 ReviewFactLimitExceeded.plan_domain_rows()
             )
 
@@ -247,9 +280,29 @@ class PlanReviewAdmission:
 
         _require_nonnegative_int(count, "plan informational source row count")
         if count > MAX_PLAN_REVIEW_ROWS:
-            raise ReviewFactLimitError(
+            raise self._limit_error(
                 ReviewFactLimitExceeded.plan_informational_rows()
             )
+
+
+def consume_plan_review_fact_limit(
+    error: object,
+    admission: object,
+) -> ReviewFactLimitExceeded | None:
+    """Copy one issued plan fact, or return ``None`` for another issuer."""
+
+    if type(error) is not ReviewFactLimitError:
+        raise TypeError("plan review limit error must be exact")
+    if type(admission) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    issuer = error.__dict__.pop("_plan_review_issuer", None)
+    fact = snapshot_review_fact_limit(error.fact)
+    if fact.tree_kind is not ReviewTreeKind.PLAN:
+        raise ValueError("plan review limit fact has the wrong tree kind")
+    if issuer is not admission._issuer:
+        return None
+    return fact
+
 
 def snapshot_plan_scan_result(
     result: ScanResult,

@@ -24,7 +24,11 @@ from namisync.core.models import (
     VolumeId,
 )
 from namisync.core.pathing import PathValidationError, normalize_relative_path
-from namisync.core.review import ReviewFactLimitError, ReviewFactLimitExceeded
+from namisync.core.review import (
+    PlanReviewAdmission,
+    ReviewFactLimitError,
+    ReviewFactLimitExceeded,
+)
 from namisync.core.scalars import MAX_SIGNED_64
 from namisync.core.planning import (
     Assignment,
@@ -807,6 +811,115 @@ class CollidingPolicy:
                 for record in sorted(records, key=lambda item: item.rel_path_key)
             ),
         )
+
+
+@pytest.mark.parametrize(
+    ("failure_site", "reviewed"),
+    (
+        ("inspection", True),
+        ("assignment", False),
+        ("assignment", True),
+        ("fingerprint", False),
+    ),
+)
+def test_destination_policy_review_limit_keeps_ordinary_identity(
+    failure_site: str,
+    reviewed: bool,
+) -> None:
+    raw_error = ReviewFactLimitError(
+        ReviewFactLimitExceeded.plan_domain_rows()
+    )
+
+    class SpoofingPolicy:
+        version = "1"
+
+        @property
+        def name(self) -> str:
+            if failure_site in {"inspection", "fingerprint"}:
+                raise raw_error
+            return "spoof"
+
+        def assign(self, *_args) -> Assignment:
+            if failure_site == "assignment":
+                raise raw_error
+            return Assignment("spoof", "1", ())
+
+    source = _scan("source", SOURCE_VOLUME)
+    target = _scan("target", TARGET_VOLUME)
+    with pytest.raises(ReviewFactLimitError) as raised:
+        plan(
+            source,
+            target,
+            MappingSnapshot.empty(source.volume_id, target.volume_id),
+            SyncOptions(destination_policy=SpoofingPolicy()),  # type: ignore[arg-type]
+            Scope.everything(),
+            review_admission=PlanReviewAdmission() if reviewed else None,
+        )
+
+    assert raised.value is raw_error
+
+
+def test_reviewed_plan_fingerprint_uses_captured_policy_identity() -> None:
+    inspected = False
+
+    class ChangingPolicy:
+        version = "1"
+
+        @property
+        def name(self) -> str:
+            nonlocal inspected
+            if inspected:
+                raise AssertionError("captured policy identity was read again")
+            inspected = True
+            return "captured"
+
+        def assign(self, *_args) -> Assignment:
+            return Assignment("captured", "1", ())
+
+    source = _scan("source", SOURCE_VOLUME)
+    target = _scan("target", TARGET_VOLUME)
+    result = plan(
+        source,
+        target,
+        MappingSnapshot.empty(source.volume_id, target.volume_id),
+        SyncOptions(destination_policy=ChangingPolicy()),  # type: ignore[arg-type]
+        Scope.everything(),
+        review_admission=PlanReviewAdmission(),
+    )
+
+    assert result.policy_fingerprint == policy_fingerprint(
+        SyncOptions(
+            destination_policy=IdentityDestinationPolicy("captured", "1")
+        )
+    )
+
+
+@pytest.mark.parametrize("reviewed", [False, True])
+def test_destination_policy_ordinary_failure_keeps_identity(
+    reviewed: bool,
+) -> None:
+    failure = ValueError("ordinary policy failure")
+
+    class FailingPolicy:
+        name = "failure"
+        version = "1"
+
+        def assign(self, *_args):
+            raise failure
+
+    source = _scan("source", SOURCE_VOLUME)
+    target = _scan("target", TARGET_VOLUME)
+    with pytest.raises(ValueError) as raised:
+        plan(
+            source,
+            target,
+            MappingSnapshot.empty(source.volume_id, target.volume_id),
+            SyncOptions(destination_policy=FailingPolicy()),  # type: ignore[arg-type]
+            Scope.everything(),
+            review_admission=PlanReviewAdmission() if reviewed else None,
+        )
+
+    assert raised.value is failure
 
 
 def test_destination_policy_collision_is_deterministic_unique_and_reviewable() -> None:

@@ -1005,11 +1005,17 @@ def plan(
         operations,
         target_profile=target.profile,
         trash_on_update=options.trash_on_update,
+        review_admission=admission,
     )
     required_volumes = frozenset(
         volume
         for volume in (source.volume_id, target.volume_id)
         if volume is not None
+    )
+    fingerprint_options = (
+        options
+        if policy_identity is None
+        else _copy_sync_options(options, policy_identity)
     )
     placeholder = Plan(
         source_root=source.root,
@@ -1028,7 +1034,7 @@ def plan(
         filter_snapshot=options.filters,
         deletion_policy=options.deletion_policy,
         trash_on_update=options.trash_on_update,
-        policy_fingerprint=policy_fingerprint(options),
+        policy_fingerprint=policy_fingerprint(fingerprint_options),
         required_volumes=required_volumes,
         required_bytes=required_bytes,
         fingerprint=PlanFingerprint("0" * 64),
@@ -1279,6 +1285,7 @@ def snapshot_plan_candidate(
         operations,
         target_profile=target_profile,
         trash_on_update=retained_options.trash_on_update,
+        review_admission=admission,
     )
     if value.required_bytes != required_bytes:
         raise ValueError("plan required bytes do not match operations")

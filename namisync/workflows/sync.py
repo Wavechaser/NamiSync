@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import ItemOutcome, PhaseChanged
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import (
@@ -57,8 +58,10 @@ from namisync.core.preflight import (
 )
 from namisync.core.review import (
     PlanReviewAdmission,
+    ReviewFactLimitExceeded,
     ReviewFactLimitError,
     admit_retained_plan_scan,
+    consume_plan_review_fact_limit,
     snapshot_plan_scan_result,
 )
 from namisync.core.root_authority import (
@@ -259,11 +262,13 @@ class SyncDependencies:
     ignores: IgnoreSet = IgnoreSet()
 
 
-def _review_limit_refusal(error: ReviewFactLimitError) -> OperationResult:
+def _review_limit_refusal(
+    fact: ReviewFactLimitExceeded,
+) -> OperationResult:
     return OperationResult(
         status=SessionState.REFUSED,
         disposition=Disposition.UNRUN,
-        review_fact_limit=error.fact,
+        review_fact_limit=fact,
     )
 
 
@@ -308,6 +313,7 @@ def _disposable_plan_preview(
     options: SyncOptions,
     selection: frozenset[str],
     run_id: str,
+    review_admission: PlanReviewAdmission,
 ) -> ExecutionSet:
     """Detach the mutable execution shell and its plan for one collaborator."""
 
@@ -317,7 +323,7 @@ def _disposable_plan_preview(
             source,
             target,
             options,
-            review_admission=PlanReviewAdmission(),
+            review_admission=review_admission,
         ),
         selection,
         run_id,
@@ -352,6 +358,9 @@ def run_plan(
         target_path,
     )
     retained_admission = PlanReviewAdmission()
+    review_limit_fact: ReviewFactLimitExceeded | None = None
+    invalid_review_limit = False
+    unadmitted_review_limit = False
     try:
         live_options, retained_options = snapshot_plan_options(request_options)
         retained_request = PlanRequest(
@@ -368,12 +377,12 @@ def run_plan(
             Root(source_root.path, source_root.root_id),
             source_ignores,
             ctx,
-            review_admission=PlanReviewAdmission(),
+            review_admission=retained_admission.fresh(),
         )
         source_scan = _snapshot_scanner_result(
             raw_source_scan,
             source_root,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         del raw_source_scan, source_ignores
         admit_retained_plan_scan(source_scan, retained_admission)
@@ -384,12 +393,12 @@ def run_plan(
             Root(target_root.path, target_root.root_id),
             target_ignores,
             ctx,
-            review_admission=PlanReviewAdmission(),
+            review_admission=retained_admission.fresh(),
         )
         target_scan = _snapshot_scanner_result(
             raw_target_scan,
             target_root,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         del raw_target_scan, target_ignores, source_root, target_root
         admit_retained_plan_scan(target_scan, retained_admission)
@@ -397,11 +406,11 @@ def run_plan(
         ctx.emit(PhaseChanged("plan"))
         correspondence_source = snapshot_plan_scan_result(
             source_scan,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         correspondence_target = snapshot_plan_scan_result(
             target_scan,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         raw_correspondence = deps.correspondence(
             correspondence_source,
@@ -409,17 +418,17 @@ def run_plan(
         )
         correspondence = snapshot_mapping_snapshot(
             raw_correspondence,
-            review_admission=PlanReviewAdmission(),
+            review_admission=retained_admission.fresh(),
         )
         del raw_correspondence, correspondence_source, correspondence_target
 
         planner_source = snapshot_plan_scan_result(
             source_scan,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         planner_target = snapshot_plan_scan_result(
             target_scan,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         raw_plan = deps.planner(
             planner_source,
@@ -427,14 +436,14 @@ def run_plan(
             correspondence,
             live_options,
             Scope.everything(),
-            review_admission=PlanReviewAdmission(),
+            review_admission=retained_admission.fresh(),
         )
         plan = snapshot_plan_candidate(
             raw_plan,
             source_scan,
             target_scan,
             retained_options,
-            review_admission=PlanReviewAdmission(),
+            review_admission=retained_admission.fresh(),
         )
         del (
             raw_plan,
@@ -458,16 +467,17 @@ def run_plan(
             retained_options,
             selection,
             run_id,
+            retained_admission.fresh(),
         )
         raw_world = deps.observer(
             observer_preview,
             deps.observation_fs,
-            review_admission=PlanReviewAdmission(),
+            review_admission=retained_admission.fresh(),
         )
         world = snapshot_plan_observed_world(
             raw_world,
             authoritative_xset,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         del raw_world, observer_preview
         admit_retained_plan_observed_world(world, retained_admission)
@@ -479,23 +489,24 @@ def run_plan(
             retained_options,
             selection,
             run_id,
+            retained_admission.fresh(),
         )
         preflight_world = snapshot_plan_observed_world(
             world,
             authoritative_xset,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         raw_verdict = deps.preflight(
             preflight_preview,
             preflight_world,
-            review_admission=PlanReviewAdmission(),
+            review_admission=retained_admission.fresh(),
         )
         verdict = snapshot_plan_verdict(
             raw_verdict,
             preflight_world,
             world,
             authoritative_xset,
-            PlanReviewAdmission(),
+            retained_admission.fresh(),
         )
         del (
             raw_verdict,
@@ -516,7 +527,26 @@ def run_plan(
             verdict,
         )
     except ReviewFactLimitError as error:
-        return _review_limit_refusal(error)
+        if type(error) is not ReviewFactLimitError:
+            invalid_review_limit = True
+        else:
+            try:
+                review_limit_fact = consume_plan_review_fact_limit(
+                    error,
+                    retained_admission,
+                )
+                unadmitted_review_limit = review_limit_fact is None
+            except (AttributeError, TypeError, ValueError) as fact_error:
+                retire_exception_graph(fact_error)
+                invalid_review_limit = True
+        retire_exception_graph(error)
+
+    if invalid_review_limit:
+        raise RuntimeError("plan review limit failure is invalid")
+    if unadmitted_review_limit:
+        raise RuntimeError("unadmitted collaborator raised a review fact limit")
+    if review_limit_fact is not None:
+        return _review_limit_refusal(review_limit_fact)
 
     del (
         retained_request,

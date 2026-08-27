@@ -54,9 +54,11 @@ width Windows file-identity, and coordinated persistence epoch are active;
 the plan session now refuses independent raw-population excess and final
 retained shallow-reference excess before publishing a partial plan. Hostile
 module results are detached and revalidated at their distinct workflow seams;
-the resulting capacity error is typed `REFUSED+UNRUN` and saves no plan. This
-narrow prerequisite does not price construction, sorting, indexes, previews,
-codecs, native/browser copies, or complete task graphs; those remain
+only an exact PLAN fact carried by an exact error issued by the current plan
+admission family becomes typed `REFUSED+UNRUN`. Unissued, cross-family, or
+invalid signals fail without saving a plan.
+This narrow prerequisite does not price construction, sorting, indexes,
+previews, codecs, native/browser copies, or complete task graphs; those remain
 checkpoint-4 model work alongside the product surfaces and task lifecycle.
 
 Accepted H2 work also includes server-owned filename/size/mtime sibling sorting
