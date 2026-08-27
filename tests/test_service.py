@@ -2235,28 +2235,38 @@ def test_workflow_runtime_retains_a_store_whose_close_failed() -> None:
     runtime._closing = False
     runtime._closed = False
     runtime._history_store = store
+    plan = Details()
     execution_details = Details()
     inventory_details = Details()
+    plan_ref = ref(plan)
     execution_ref = ref(execution_details)
     inventory_ref = ref(inventory_details)
+    runtime._plans = {"request": plan}
     runtime._execution_details = {"run": execution_details}
     runtime._inventory_details = {"request": inventory_details}
-    del execution_details, inventory_details
+    runtime._execution_started = {"run": NOW}
+    del plan, execution_details, inventory_details
 
     with pytest.raises(RuntimeError, match="writer close failed"):
         runtime.close()
     assert not runtime._closed
     assert runtime._history_store is store
+    assert tuple(runtime._plans) == ("request",)
     assert tuple(runtime._execution_details) == ("run",)
     assert tuple(runtime._inventory_details) == ("request",)
+    assert runtime._execution_started == {"run": NOW}
+    assert plan_ref() is not None
     assert execution_ref() is not None
     assert inventory_ref() is not None
 
     runtime.close()
     assert runtime._closed
     assert runtime._history_store is None
+    assert runtime._plans == {}
     assert runtime._execution_details == {}
     assert runtime._inventory_details == {}
+    assert runtime._execution_started == {}
+    assert plan_ref() is None
     assert execution_ref() is None
     assert inventory_ref() is None
     assert attempts == 2
@@ -2289,8 +2299,10 @@ def test_concurrent_workflow_runtime_close_waits_for_failed_attempt() -> None:
     runtime._closing = False
     runtime._closed = False
     runtime._history_store = store
+    runtime._plans = {}
     runtime._execution_details = {}
     runtime._inventory_details = {}
+    runtime._execution_started = {}
     first_errors: list[Exception] = []
 
     def first_close() -> None:

@@ -29,6 +29,9 @@ claims explicit, independently reviewable, and regression-backed.
   existing 4 MiB default. The Windows reader's per-file transient is now
   finitely chargeable as one aligned native buffer plus one Python bytes copy,
   while every ordinary runtime configuration remains unchanged.
+- Made successful workflow-runtime shutdown release retained plans and
+  execution-start claims alongside execution and inventory details. A failed
+  dependency close preserves all four custody maps for one coherent retry.
 
 #### Reject premature checkpoint-4 reservation model (2026-08-27)
 

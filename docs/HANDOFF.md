@@ -108,6 +108,11 @@ one plan-information wall apply once to the aggregate identity-deduplicated
 artifact. Sequential phase peaks use a maximum union, not an all-call sum;
 queue/container slots remain separate.
 
+Successful workflow-runtime shutdown now clears plan artifacts and execution-
+start claims as well as both detail maps. A failed dependency close preserves
+all four maps for retry. This closes the unconditional post-close leak; task-
+wide admission and service/dispatcher owner counts remain model prerequisites.
+
 ## Verification
 
 - Exact exception-helper, review-wall, planner, and preflight focus:

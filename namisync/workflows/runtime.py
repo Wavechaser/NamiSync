@@ -962,8 +962,10 @@ class LocalWorkflowRuntime:
                     self._history_reader.close()
                     self._history_reader = None
             with self._lock:
+                self._plans.clear()
                 self._execution_details.clear()
                 self._inventory_details.clear()
+                self._execution_started.clear()
                 self._closed = True
 
     def _resolve_volume(self, path: str) -> VolumeId:

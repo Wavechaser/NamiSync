@@ -118,8 +118,10 @@ details, with the runtime drop performed after leaving dispatcher and service
 locks. Timeout, self-close, and other dispatcher-close failures preserve both
 objects for retry and cannot affect another session's details. Service shutdown
 leaves all owners intact after an incomplete dispatcher result or failed runtime
-close. A successful runtime close clears both detail maps, after which the
-service clears the now-ownerless session relation.
+close. A successful runtime close clears retained plans and execution-start
+claims together with both detail maps, after which the service clears the now-
+ownerless session relation. A dependency-close failure preserves all four maps
+for the same serialized retry.
 
 `start_plan` delegates root resolution to the shared workflow gate before
 admission. That gate performs directory I/O with extended-length native
