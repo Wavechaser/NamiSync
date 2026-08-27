@@ -77,7 +77,9 @@ claims explicit, independently reviewable, and regression-backed.
   and task-recovery reconciliation. Dispatcher now also projects pre-run lock,
   continuation-open, and canceled-settlement failures before the core runner,
   retiring raw and diagnostic graphs before terminal storage while preserving
-  process-fatal propagation and retry truth.
+  process-fatal propagation and retry truth. Consolidated their duplicate
+  lifecycle cleanup behind one descriptor-safe core primitive without widening
+  ordinary runner, planner, or workflow exception policy.
 - Corrected the stale canonical-plan SHA-256 vector left when the shared test
   fixture's invalid policy fingerprint was replaced with valid hexadecimal text.
   Independent canonical projection reproduced both the old and corrected hashes;

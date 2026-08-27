@@ -9,7 +9,6 @@ from hashlib import sha256
 from pathlib import Path
 from threading import Event, Lock, Thread, current_thread
 from time import monotonic
-from traceback import clear_frames
 from typing import Callable, Never
 from uuid import uuid4
 
@@ -17,6 +16,7 @@ from namisync.dispatcher import (
     Dispatcher,
     EventStream,
     PreparedSession,
+    retire_exception_graph,
     SessionCleanupPending,
     SessionNotFound,
     WorkflowRegistration,
@@ -93,15 +93,6 @@ _SERVICE_OBSERVER_CLEANUP_FAILURE = "service observer cleanup failed"
 _SERVICE_OBSERVER_CLEANUP_INTERRUPTED = (
     "service observer cleanup was interrupted"
 )
-
-
-def _retire_adapter_exception(error: BaseException) -> None:
-    raw_traceback = BaseException.__getattribute__(error, "__traceback__")
-    if raw_traceback is not None:
-        clear_frames(raw_traceback)
-    BaseException.with_traceback(error, None)
-    BaseException.__setattr__(error, "__cause__", None)
-    BaseException.__setattr__(error, "__context__", None)
 
 
 _OBSERVER_FAILURE_ORDINARY = "ordinary"
@@ -563,7 +554,7 @@ class SessionObserver:
                     )
                     return
         except BaseException as error:
-            _retire_adapter_exception(error)
+            retire_exception_graph(error)
             observation.failed = True
         finally:
             if self._close_streams((observation,)):
@@ -590,7 +581,7 @@ class SessionObserver:
             try:
                 stream.close()
             except BaseException as error:
-                _retire_adapter_exception(error)
+                retire_exception_graph(error)
                 observation.failed = True
                 failed = True
         return failed
@@ -622,7 +613,7 @@ class SessionObserver:
             self._join_threads(observations)
         except BaseException as error:
             join_failure = _classify_observer_join_failure(error)
-            _retire_adapter_exception(error)
+            retire_exception_graph(error)
         finally:
             self._retire_stopped_observations(observations)
         return join_failure
@@ -1405,7 +1396,7 @@ class NamiSyncService:
                 self._observer.close()
             except BaseException as error:
                 observer_failure_interrupted = not isinstance(error, Exception)
-                _retire_adapter_exception(error)
+                retire_exception_graph(error)
             else:
                 with self._lock:
                     self._observer_closed = True

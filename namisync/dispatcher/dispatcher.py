@@ -7,10 +7,10 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from threading import Condition, Event, Lock, Thread, current_thread
 from time import monotonic
-from traceback import clear_frames
 from typing import Callable
 from uuid import uuid4
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.evidence import RecordingStatus
 from namisync.core.events import StateChanged
 from namisync.core.session import (
@@ -82,15 +82,6 @@ def _stored_record(record: SessionRecord) -> StoredSessionRecord:
     )
 
 
-def _retire_dispatcher_exception(error: BaseException) -> None:
-    traceback = BaseException.__getattribute__(error, "__traceback__")
-    if traceback is not None:
-        clear_frames(traceback)
-    BaseException.with_traceback(error, None)
-    BaseException.__setattr__(error, "__cause__", None)
-    BaseException.__setattr__(error, "__context__", None)
-
-
 def _project_worker_exception(
     error: Exception,
     disposition: Disposition,
@@ -111,18 +102,18 @@ def _project_worker_exception(
                 )
             )
         except Exception as diagnostic_error:
-            _retire_dispatcher_exception(diagnostic_error)
+            retire_exception_graph(diagnostic_error)
             result = OperationResult(
                 status=SessionState.FAILED,
                 disposition=disposition,
                 omitted_detail_count=1,
             )
         except BaseException as diagnostic_fatal:
-            _retire_dispatcher_exception(diagnostic_fatal)
+            retire_exception_graph(diagnostic_fatal)
             raise
         return result, False
     finally:
-        _retire_dispatcher_exception(error)
+        retire_exception_graph(error)
 
 
 class _Control:

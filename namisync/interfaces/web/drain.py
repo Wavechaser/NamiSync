@@ -9,11 +9,11 @@ from dataclasses import dataclass, field
 from math import isfinite
 from threading import Condition, Lock, get_ident
 from time import monotonic
-from traceback import clear_frames
 from types import MappingProxyType
 from typing import Never, Protocol
 from uuid import uuid4
 
+from namisync.dispatcher import retire_exception_graph
 from namisync.interfaces.service import PlanSession, SessionUpdate
 from namisync.workflows.views import (
     SessionEventView, SessionRecordView, validate_session_event_view,
@@ -120,15 +120,6 @@ def _classify_recovery_failure(error: BaseException) -> str:
     if not isinstance(error, Exception):
         return _RECOVERY_FAILURE_INTERRUPTED
     return _RECOVERY_FAILURE_GENERIC
-
-
-def _retire_adapter_exception(error: BaseException) -> None:
-    raw_traceback = BaseException.__getattribute__(error, "__traceback__")
-    if raw_traceback is not None:
-        clear_frames(raw_traceback)
-    BaseException.with_traceback(error, None)
-    BaseException.__setattr__(error, "__cause__", None)
-    BaseException.__setattr__(error, "__context__", None)
 
 
 def _raise_recovery_failure(failure_code: str) -> Never:
@@ -757,7 +748,7 @@ class TaskRegistry:
                 terminal = current
         except BaseException as error:
             failure_code = _classify_recovery_failure(error)
-            _retire_adapter_exception(error)
+            retire_exception_graph(error)
         finally:
             current = None
 
@@ -791,7 +782,7 @@ class TaskRegistry:
                         self._service.unsubscribe(session_id)
                     except BaseException as error:
                         failure_code = _classify_recovery_failure(error)
-                        _retire_adapter_exception(error)
+                        retire_exception_graph(error)
                     else:
                         with task.condition:
                             task.observation_unsubscribed = True
