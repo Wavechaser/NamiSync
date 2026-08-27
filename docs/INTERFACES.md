@@ -642,6 +642,13 @@ exposes one versioned, size-bounded, allowlisted function named `dispatch`.
 It rechecks the native committed origin on every call, accepts one
 strict JSON request object, rejects duplicate keys, non-integer schema
 discriminators, and invalid Unicode, and returns a JSON-safe structured result.
+The complete success envelope is counted during approved-view projection using
+the target canonical JSON definition and cannot exceed 8,388,608 UTF-8 bytes.
+The counter charges containers, punctuation, escaped keys, strings, and scalar
+forms before retaining each projected child, so first excess cannot allocate an
+unbounded second response graph. The current nine-row surface reports that
+otherwise unreachable breach as its fixed `internal_error`; checkpoint 4's
+activation owns the more specific `response_too_large` row and pagination.
 Each pywebview injection starts a host-owned closed document generation. The
 fixed `shell_ready` and `readiness_echo` rows are the only bootstrap-phase
 commands; composition captures that generation with admission and rejects a

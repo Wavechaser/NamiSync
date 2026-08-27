@@ -17,6 +17,7 @@ from namisync.interfaces.web.bridge import (
     BridgeOriginError,
     BridgeProtocolError,
     ExactOrigin,
+    MAX_BRIDGE_RESPONSE_BYTES,
     NativeDocumentState,
     WebView2Unavailable,
     configure_pywebview2_security,
@@ -1431,6 +1432,64 @@ def test_bridge_rejects_nonstandard_json_and_non_json_handler_results() -> None:
         }
     )
     assert bridge.dispatch(bad_result)["error"]["code"] == "internal_error"
+
+
+def test_bridge_bounds_the_complete_canonical_response_before_native_return() -> None:
+    prefix = '"\\\b\x01雪😀'
+    empty = {
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "ok": True,
+        "result": prefix,
+    }
+    base_size = len(
+        json.dumps(
+            empty,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    exact_result = prefix + "x" * (MAX_BRIDGE_RESPONSE_BYTES - base_size)
+    bridge = _dispatcher(
+        _trusted_document(),
+        {
+            "exact": lambda _payload: exact_result,
+            "excess": lambda _payload: exact_result + "x",
+        },
+    )
+
+    exact = bridge.dispatch(
+        json.dumps(
+            {
+                "schema_version": BRIDGE_SCHEMA_VERSION,
+                "request_id": _REQUEST_ID,
+                "command": "exact",
+                "payload": {},
+            }
+        )
+    )
+    encoded = json.dumps(
+        exact,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    assert exact["ok"] is True
+    assert len(encoded) == MAX_BRIDGE_RESPONSE_BYTES
+
+    excess = bridge.dispatch(
+        json.dumps(
+            {
+                "schema_version": BRIDGE_SCHEMA_VERSION,
+                "request_id": _REQUEST_ID,
+                "command": "excess",
+                "payload": {},
+            }
+        )
+    )
+    assert excess["ok"] is False
+    assert excess["error"]["code"] == "internal_error"
 
 
 @pytest.mark.parametrize(

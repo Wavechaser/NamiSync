@@ -102,6 +102,10 @@ schemas; other active documents point here instead of reproducing these limits.
   may simultaneously own one aligned native buffer and one Python `bytes`
   materialization at that maximum; a runtime default is not accepted as a
   substitute for this public component bound.
+- A complete canonical bridge success envelope is at most 8,388,608 UTF-8
+  bytes. The approved-view projection counts the exact compact, sorted-key,
+  `ensure_ascii=False` representation incrementally and stops before the first
+  excess instead of constructing an oversized duplicate graph.
 - Destination-policy name/version and optional assignment annotations have no
   narrower production grammar yet. Constructors and projections enforce only
   the plan-domain ceiling per value; the checkpoint-4 completed-plan graph wall

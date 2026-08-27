@@ -726,15 +726,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
-- MODERATE - OPEN (2026-08-27). Response-copy ownership gap. The bridge caps
-  request bytes and admitted handlers, but complete response projection has no
-  preconstruction wall, outstanding document posts have no count ceiling, and
-  CLR/WebView2/browser copies lack an acknowledgment-based retirement witness.
-  Cause: ingress and Python-worker bounds were reused as if they also bounded
-  output occurrence graphs and renderer custody. Checkpoint 4 must derive the
-  exact reachable response shapes, bound outstanding copies, and keep native
-  and browser ownership distinct; SH-G-15 still owns later whole-runtime
-  evidence.
+- MODERATE - OPEN (2026-08-27). Response-copy ownership gap. Complete canonical
+  success projection is now incrementally capped at 8 MiB, so the Python
+  duplicate stops at first excess. Outstanding document posts still lack a
+  count ceiling, and CLR/WebView2/browser copies lack an acknowledgment-based
+  retirement witness. Cause: ingress and Python-worker bounds were reused as
+  if they also bounded every native and renderer occurrence. Checkpoint 4 must
+  close those remaining owners and keep each copy distinct; SH-G-15 still owns
+  later whole-runtime evidence.
 - MODERATE - FIXED (2026-08-27). Observation stream accumulation. Repeated
   Gap recovery retained every closed stream until the session observation was
   removed, so valid long-running sessions grew with recovery count. Cause: a

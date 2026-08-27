@@ -35,6 +35,9 @@ claims explicit, independently reviewable, and regression-backed.
 - Narrowed the dormant task-surface runtime premise from the whole CPython 3.13
   patch family to the exact 3.13.14 final release used for checkpoint-4 object
   coefficients; unsupported patch or prerelease builds refuse before task state.
+- Added an incremental exact counter for the complete canonical bridge success
+  envelope. Projection stops before exceeding 8 MiB, so an oversized handler
+  value cannot first create an unbounded duplicate response graph.
 
 #### Reject premature checkpoint-4 reservation model (2026-08-27)
 
