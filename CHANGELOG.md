@@ -23,6 +23,22 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Reject premature checkpoint-4 reservation model (2026-08-27)
+
+- Independently rejected and deleted an uncommitted analytical draft that
+  multiplied aggregate plan walls across aliases, summed sequential phase
+  transients, substituted wire bytes for retained graphs, and selected opaque
+  codec/native/browser costs. None of its internally consistent totals became
+  contract or evidence.
+- Recorded the source-derived blockers that must close before the first model
+  commit: phase exception graphs, task-adjacent owner counts and shutdown,
+  inventory/query/tree preconstruction, standalone candidate bytes, verifier
+  buffers, and complete response/callback/native/browser custody.
+- Clarified that each complete-graph wall charges its aggregate
+  identity-deduplicated population once, phase construction uses reachable
+  maximum unions, and aliasing containers remain separately charged. The
+  production nine-command surface and ordinary behavior are unchanged.
+
 #### Bound checkpoint-4 planning source ownership (2026-08-27)
 
 - Added independent first-excess gates to raw scanner, mapping, assignment,

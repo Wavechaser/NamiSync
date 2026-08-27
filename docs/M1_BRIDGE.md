@@ -1067,6 +1067,17 @@ and manual-post-copy replacement each charge both old and new result-summary
 and overlay generations until replacement write intent has excluded new pins,
 the last old-generation pin has drained, and the atomic swap releases the old
 generation.
+
+Each complete-graph wall above is one aggregate identity-deduplicated allowance
+for its named artifact population. It is not a fresh allowance for every scan,
+plan, observed-world, verdict, wrapper, or alias inside that population.
+Construction phases charge only owners simultaneously reachable at that seam
+and take a maximum across sequential seams; they do not sum every builder that
+appears during the whole call. Queue slots and container capacity that alias an
+artifact remain separate charges, while the artifact itself is charged once.
+Canonical wire bytes likewise cannot substitute for Python event graphs,
+native copies, or renderer custody.
+
 Standalone-integrity candidate custody has an independent 120,000-row and
 201,326,592-byte wall even when the task already retains the matching inventory
 tree. Its complete identity-deduplicated root set is the frozen scope and

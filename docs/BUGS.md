@@ -459,6 +459,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-08-27). Task-adjacent owner-count gap. The desktop
+  registry caps live cards, but dispatcher sessions/subscribers, runtime plans
+  and detail maps, service receipts/selections/observers, and close-time retry
+  owners do not yet share one enforced task lifetime. A numerical process
+  budget could therefore assume a 48-task ceiling while lower layers retain
+  more complete graphs or survive shutdown. Cause: each layer acquired and
+  released its own session-era maps without a task-wide admission and teardown
+  contract. Checkpoint 4 must bind or cap every owner and prove exact cleanup;
+  no formula may treat composition convention or timeout as retirement.
 - MODERATE - FIXED (2026-08-27). Pre-run exception closure retention. Lock
   acquisition, continuation open, and canceled-session settlement passed a raw
   collaborator exception through a nested runner callback, keeping its
@@ -717,6 +726,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - OPEN (2026-08-27). Response-copy ownership gap. The bridge caps
+  request bytes and admitted handlers, but complete response projection has no
+  preconstruction wall, outstanding document posts have no count ceiling, and
+  CLR/WebView2/browser copies lack an acknowledgment-based retirement witness.
+  Cause: ingress and Python-worker bounds were reused as if they also bounded
+  output occurrence graphs and renderer custody. Checkpoint 4 must derive the
+  exact reachable response shapes, bound outstanding copies, and keep native
+  and browser ownership distinct; SH-G-15 still owns later whole-runtime
+  evidence.
 - MODERATE - FIXED (2026-08-27). Observation stream accumulation. Repeated
   Gap recovery retained every closed stream until the session observation was
   removed, so valid long-running sessions grew with recovery count. Cause: a
@@ -1256,6 +1274,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - OPEN (2026-08-27). Preconstruction inventory amplification.
+  Inventory scanning and general repository reads can build complete raw
+  populations before row admission, node-tree construction can synthesize
+  every missing ancestor, and the declared standalone-integrity retained-byte
+  fact is not enforced. A supported inventory or integrity run can therefore
+  exhaust process memory before a typed refusal. Cause: row limits were added
+  to candidate queries without one incremental complete-graph gate spanning
+  scan, database rows, tree builders, candidates, and old/new generations.
+  Checkpoint 4 must close these roots before using them in a finite task model.
 - MODERATE - FIXED (2026-08-27). Historical correspondence amplification.
   Every plan loaded all retained pairs and identity aliases for a mapping's two
   locations, so a small current scan could materialize an arbitrarily large
@@ -1375,6 +1402,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-08-27). Unbounded verifier buffer policy. The ordinary
+  runtime selects a 4 MiB chunk, but public `VerifierContext` accepts any
+  positive size and the Windows reader simultaneously owns that aligned native
+  buffer and a Python bytes copy. A direct supported component caller can thus
+  bypass any finite task-transient charge. Cause: a composition default stood
+  in for a contract maximum. Checkpoint 4 must enforce one public upper bound
+  or establish a narrower enforced production premise before freezing native
+  copy costs.
 - MODERATE - FIXED (2026-08-22). Verify-phase admission split. Linked
   post-copy Progress admitted only readable candidates while its terminal
   `PhaseResult` also counted selected items with missing evidence, allowing a
@@ -1592,6 +1627,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - OPEN (2026-08-27). Phase exception-frame retention. Session,
+  planning, execution, recording, dispatcher, history, bridge, and document
+  callbacks still consume, chain, or rethrow raw errors while request, scan,
+  plan, result, or callback graphs remain in traceback frames. Arbitrary
+  exception state has no finite analytical allowance. Cause: bounded public
+  failure projection did not consistently retire the caught graph before the
+  next ownership transition. Checkpoint 4 must preserve public type/message/
+  identity where required while structurally releasing traceback, cause,
+  context, notes, phase locals, and discarded collaborator values.
 - MODERATE - FIXED (2026-08-27). Review-limit provenance spoofing. An event,
   policy, or nested scanner/observer collaborator could raise the planner's
   capacity exception and make ordinary failure appear as `REFUSED+UNRUN`;

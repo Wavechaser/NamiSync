@@ -341,6 +341,27 @@ codec or task-reservation ceiling. None of these changes freezes the model or
 closes BR-G-45. Resolve
 the following before accepting the first model commit:
 
+A fresh checkpoint-4.1 derivation was rejected and discarded before commit.
+It multiplied the one aggregate plan-domain and informational walls across
+several aliases, summed sequential scanner/planner/observer/preflight peaks as
+simultaneous owners, priced retained event graphs as wire bytes, and selected
+codec/native/browser constants without a source-derived representation. Its
+internally consistent totals are invalid and must not be recovered from Git,
+session context, or interruption stashes. The next derivation must split actual
+phase unions, identity-deduplicate aggregate artifacts, use named limits rather
+than repeated literals, and reject every unused constant and opaque fixed blob.
+
+The same audit found finite-model prerequisites beyond the earlier path list:
+the desktop task cap does not yet bind dispatcher subscribers/sessions or all
+runtime/service maps; inventory scan/query/tree construction precedes complete
+admission; the standalone-integrity retained-byte wall is declared but not
+enforced; direct verifier chunk size is only positive-bounded; and bridge
+response projection, outstanding document posts, and CLR/WebView2/browser
+copies lack one complete bound and retirement witness. These are now OPEN in
+[BUGS.md](BUGS.md). Close them structurally or place them behind an exact
+enforced desktop-only premise before freezing numerical charges. A timeout or
+composition convention is not a retirement witness.
+
 Canonical typed-detail admission is now structurally closed: exact-base
 construction validates the complete bounded shape, admission takes a fresh
 base snapshot, duplicate raw items refuse before omission, and wire projection

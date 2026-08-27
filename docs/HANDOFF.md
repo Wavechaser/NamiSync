@@ -5,7 +5,8 @@ checkpoint-4 planning-source prerequisite has been reduced to its current
 narrow ownership contract. Checkpoint 4 is still before its first mandatory
 reservation-model commit. Production still has exactly nine commands; no task
 lifecycle, model constant, fixture, validator hash, measurement, or BR-G-45
-acceptance has activated.
+acceptance has activated. A fresh checkpoint-4.1 model attempt was independently
+rejected and removed before staging; none of its totals is authority.
 
 ## Recovery and safe lineage
 
@@ -86,6 +87,25 @@ it propagates, cleanup/retry truth, and path redaction. Regressions retain raw
 external aliases and assert release after the public call; they do not encode
 private handler timing or callback choreography.
 
+## Checkpoint-4.1 audit decision
+
+Three independent reviews blocked the first analytical draft. It multiplied
+the aggregate plan graph walls across aliases, summed sequential construction
+seams, priced retained events as canonical bytes, used unproved codec/native/
+browser copy constants, and hid several large costs in opaque fixed values.
+The calculator also ignored roots, lifetimes, obligations, fixtures, and two
+refusal families. The draft files were deleted and must not be reconstructed
+from session context or the recovery stashes.
+
+Before another model attempt, close or enforce an exact desktop-only premise
+for every OPEN checkpoint-4 owner now recorded in [BUGS.md](BUGS.md): raw phase
+exception graphs; dispatcher/runtime/service owner counts and shutdown; raw
+inventory scan/query/tree construction; standalone-integrity retained bytes;
+the direct verifier chunk maximum; and complete bridge/document/native/browser
+response custody. The one plan-domain and one plan-information wall apply once
+to the aggregate identity-deduplicated artifact. Sequential phase peaks use a
+maximum union, not an all-call sum; queue/container slots remain separate.
+
 ## Verification
 
 - Exact exception-helper, review-wall, planner, and preflight focus:
@@ -108,7 +128,8 @@ private handler timing or callback choreography.
 ## Next safe work
 
 1. Proceed through checkpoint 4 in order, using the mandatory exception inputs
-   above when deriving the complete occurrence/retirement model:
+   above when deriving the complete occurrence/retirement model. Structural
+   prerequisite fixes now precede the first frozen model commit:
    `test(web): pin task artifact reservation model`,
    `feat(web): install dormant task lifecycle`, then
    `feat(web): retain multi-session task artifacts`.
