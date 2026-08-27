@@ -118,12 +118,6 @@ every 3.13 patch release. This supplies a narrow production premise for the
 object-layout coefficients; the first model commit must still independently
 validate every coefficient it uses.
 
-Complete bridge success projection now has its target 8 MiB canonical wall and
-an incremental exact counter. Oversize values stop before the first excess;
-the current nine-row surface reports the existing fixed `internal_error` until
-checkpoint 4 activates the target `response_too_large` row. Outstanding
-document posts and post-Python native/browser copies remain prerequisites.
-
 ## Verification
 
 - Exact exception-helper, review-wall, planner, and preflight focus:

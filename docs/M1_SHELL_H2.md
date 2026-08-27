@@ -364,12 +364,6 @@ OPEN in [BUGS.md](BUGS.md). Close them structurally or place them behind an
 exact enforced desktop-only premise before freezing numerical charges. A
 timeout or composition convention is not a retirement witness.
 
-The response side is now partially closed: approved-view projection counts the
-complete canonical success envelope incrementally and refuses before exceeding
-the target 8 MiB wall. This removes the unbounded Python projection duplicate;
-document-post count and post-Python native/browser custody still require exact
-owners and retirement witnesses before the model can freeze.
-
 Canonical typed-detail admission is now structurally closed: exact-base
 construction validates the complete bounded shape, admission takes a fresh
 base snapshot, duplicate raw items refuse before omission, and wire projection

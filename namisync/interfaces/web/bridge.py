@@ -49,7 +49,6 @@ _VIEW_VALIDATORS = {
 
 BRIDGE_SCHEMA_VERSION = 1
 _MAX_COMMAND_BYTES = 64 * 1024
-MAX_BRIDGE_RESPONSE_BYTES = 8 * 1024 * 1024
 # Sized for one ordinary long poll per each of 48 retained tasks plus 16 shared
 # calls. Positions are neither partitioned nor reserved; saturation is
 # `bridge_busy`.
@@ -680,19 +679,15 @@ class BridgeDispatcher:
             except BaseException:
                 return self._failure(request_id, name, "internal_error")
             try:
-                response = to_primitive_view(
-                    {
-                        "schema_version": BRIDGE_SCHEMA_VERSION,
-                        "request_id": request_id,
-                        "ok": True,
-                        "result": result,
-                    }
-                )
+                result = to_primitive_view(result)
             except BaseException:
                 return self._failure(request_id, name, "internal_error")
-            if type(response) is not dict:
-                return self._failure(request_id, name, "internal_error")
-            return response
+            return {
+                "schema_version": BRIDGE_SCHEMA_VERSION,
+                "request_id": request_id,
+                "ok": True,
+                "result": result,
+            }
         except BaseException:
             return self._failure(None, None, "internal_error")
         finally:
@@ -787,7 +782,7 @@ class BridgeDispatcher:
 
 
 def to_primitive_view(value: object) -> object:
-    """Encode approved views within the complete canonical response wall."""
+    """Recursively encode only approved public views as JSON-native data."""
 
     from .commands import PUBLIC_VIEW_DATACLASSES, PUBLIC_VIEW_ENUMS
 
@@ -796,7 +791,6 @@ def to_primitive_view(value: object) -> object:
         set(),
         PUBLIC_VIEW_DATACLASSES,
         PUBLIC_VIEW_ENUMS,
-        _CanonicalJsonBudget(MAX_BRIDGE_RESPONSE_BYTES),
     )
 
 
@@ -805,38 +799,18 @@ def _to_primitive_view(
     active: set[int],
     approved_dataclasses: frozenset[type[object]],
     approved_enums: frozenset[type[object]],
-    budget: "_CanonicalJsonBudget",
 ) -> object:
-    if value is None:
-        budget.charge(4)
-        return value
-    if type(value) is bool:
-        budget.charge(4 if value else 5)
-        return value
-    if type(value) is int:
-        try:
-            encoded = str(value)
-        except ValueError as error:
-            raise BridgeProtocolError(
-                "structured bridge integer cannot be represented"
-            ) from error
-        budget.charge(len(encoded))
-        return value
-    if type(value) is str:
-        budget.charge_string(value)
+    if value is None or type(value) in {bool, int, str}:
+        if type(value) is str:
+            try:
+                value.encode("utf-8")
+            except UnicodeEncodeError as error:
+                raise BridgeProtocolError(
+                    "structured bridge data contains invalid Unicode"
+                ) from error
         return value
     if type(value) is float:
         if math.isfinite(value):
-            budget.charge(
-                len(
-                    json.dumps(
-                        value,
-                        ensure_ascii=False,
-                        allow_nan=False,
-                        separators=(",", ":"),
-                    ).encode("utf-8")
-                )
-            )
             return value
         raise BridgeProtocolError(
             "structured bridge data contains a non-finite number"
@@ -846,9 +820,7 @@ def _to_primitive_view(
             raise BridgeProtocolError(
                 "structured bridge data contains a naive datetime"
             )
-        encoded = value.isoformat()
-        budget.charge_string(encoded)
-        return encoded
+        return value.isoformat()
     if isinstance(value, Enum):
         if type(value) not in approved_enums:
             raise BridgeProtocolError(
@@ -861,7 +833,6 @@ def _to_primitive_view(
             active,
             approved_dataclasses,
             approved_enums,
-            budget,
         )
 
     identity = id(value)
@@ -880,43 +851,37 @@ def _to_primitive_view(
                 raise BridgeProtocolError("structured bridge view is invalid") from error
         active.add(identity)
         try:
-            encoded: dict[str, object] = {}
-            budget.charge(2)
-            for index, field in enumerate(fields(value)):
-                if index:
-                    budget.charge(1)
-                budget.charge_string(field.name)
-                budget.charge(1)
-                encoded[field.name] = _to_primitive_view(
+            return {
+                field.name: _to_primitive_view(
                     getattr(value, field.name),
                     active,
                     approved_dataclasses,
                     approved_enums,
-                    budget,
                 )
-            return encoded
+                for field in fields(value)
+            }
         finally:
             active.remove(identity)
     if isinstance(value, Mapping):
         active.add(identity)
         try:
             encoded: dict[str, object] = {}
-            budget.charge(2)
-            for index, (key, item) in enumerate(value.items()):
+            for key, item in value.items():
                 if type(key) is not str:
                     raise BridgeProtocolError(
                         "structured bridge data contains a non-string object key"
                     )
-                if index:
-                    budget.charge(1)
-                budget.charge_string(key)
-                budget.charge(1)
+                try:
+                    key.encode("utf-8")
+                except UnicodeEncodeError as error:
+                    raise BridgeProtocolError(
+                        "structured bridge data contains invalid Unicode"
+                    ) from error
                 encoded[key] = _to_primitive_view(
                     item,
                     active,
                     approved_dataclasses,
                     approved_enums,
-                    budget,
                 )
             return encoded
         finally:
@@ -924,62 +889,18 @@ def _to_primitive_view(
     if isinstance(value, (list, tuple)):
         active.add(identity)
         try:
-            encoded: list[object] = []
-            budget.charge(2)
-            for index, item in enumerate(value):
-                if index:
-                    budget.charge(1)
-                encoded.append(
-                    _to_primitive_view(
-                        item,
-                        active,
-                        approved_dataclasses,
-                        approved_enums,
-                        budget,
-                    )
+            return [
+                _to_primitive_view(
+                    item,
+                    active,
+                    approved_dataclasses,
+                    approved_enums,
                 )
-            return encoded
+                for item in value
+            ]
         finally:
             active.remove(identity)
     raise BridgeProtocolError("structured bridge data is not JSON-compatible")
-
-
-class _CanonicalJsonBudget:
-    """Count the exact compact UTF-8 representation without building text."""
-
-    __slots__ = ("_limit", "_used")
-
-    def __init__(self, limit: int) -> None:
-        self._limit = limit
-        self._used = 0
-
-    def charge(self, amount: int) -> None:
-        if self._used + amount > self._limit:
-            raise BridgeProtocolError(
-                "structured bridge response exceeds the 8388608-byte ceiling"
-            )
-        self._used += amount
-
-    def charge_string(self, value: str) -> None:
-        self.charge(2)
-        for character in value:
-            codepoint = ord(character)
-            if character in {'"', "\\"} or codepoint in {8, 9, 10, 12, 13}:
-                self.charge(2)
-            elif codepoint < 0x20:
-                self.charge(6)
-            elif 0xD800 <= codepoint <= 0xDFFF:
-                raise BridgeProtocolError(
-                    "structured bridge data contains invalid Unicode"
-                )
-            elif codepoint < 0x80:
-                self.charge(1)
-            elif codepoint < 0x800:
-                self.charge(2)
-            elif codepoint < 0x10000:
-                self.charge(3)
-            else:
-                self.charge(4)
 
 
 def _recover_request_id(value: object) -> str | None:
