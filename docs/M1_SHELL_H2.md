@@ -416,9 +416,13 @@ Truthy context suppression, hostile diagnostics/notes, path-cause projection,
 and repeated exclusion delivery have independent regressions. Path-message and
 other callback/construction transients remain checkpoint-4 model inputs.
 
-- Dispatcher admission, cleanup, persistence, and custody release: audit-
-  factory fallback, rollback/stream/hub/store cleanup, thread-start failure,
-  stale-lease release, and drop-only catches that can retain external aliases.
+- Dispatcher admission, cleanup, persistence, custody release, subscription,
+  audit-pump, and session-worker start owners are now structurally closed.
+  Provably unstarted attempts settle through the ordinary lifecycle, accepted
+  cancellation wins, resumed cancellation remains `RAN`, and accepted-before-
+  raise threads keep actual ownership. Scheduler construction and an
+  independently injected second settlement failure escape to their caller or
+  thread hook before becoming retained task artifacts.
 - `TaskRegistry.replay_start`, `_start_owner`, and `_attempt_compensation`:
   primary start failure overlapping cleanup, compensation, or retry truth.
 - `NamiSyncService.start_plan` and `Dispatcher.subscribe`: public chained path/

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import gc
 from datetime import datetime, timezone
 from threading import Condition, Event, Thread
 from time import monotonic, sleep
+from weakref import ref
 
 import pytest
 
@@ -961,3 +963,175 @@ def test_audit_close_spends_one_deadline_across_enqueue_and_join(
     assert not pump.close(0.1)
     assert pump._queue.timeouts == [pytest.approx(0.075)]
     assert pump._thread.timeouts == [pytest.approx(0.025)]
+
+
+@pytest.mark.parametrize("stage", ("event", "flush", "finalize", "close"))
+def test_audit_failure_retires_traceback_and_cause_before_public_degradation(
+    stage: str,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+    errors = []
+    failed = Event()
+
+    def fail() -> None:
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        try:
+            cause = LookupError("private audit cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = RuntimeError("audit collaborator failed")
+            errors.append(error)
+            failed.set()
+            raise error from cause
+
+    class FailingObserver(Observer):
+        def on_event(self, envelope) -> RecordingStatus:
+            if stage == "event":
+                fail()
+            return super().on_event(envelope)
+
+        def flush(self) -> None:
+            if stage == "flush":
+                fail()
+            super().flush()
+
+        def finalize(self, result) -> RecordingStatus:
+            if stage == "finalize":
+                fail()
+            return super().finalize(result)
+
+        def close(self) -> None:
+            if stage == "close":
+                fail()
+            super().close()
+
+    gc.collect()
+    collection_was_enabled = gc.isenabled()
+    gc.disable()
+    hub = make_hub(observer=FailingObserver(), audit_timeout=0.5)
+    try:
+        if stage == "event":
+            hub.emit(PhaseChanged("retire-event-error"))
+            assert failed.wait(2)
+            assert (
+                hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+                is RecordingStatus.DEGRADED
+            )
+        elif stage == "flush":
+            hub.emit(StateChanged(SessionState.PAUSED))
+            assert failed.wait(2)
+        elif stage == "finalize":
+            assert (
+                hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+                is RecordingStatus.DEGRADED
+            )
+            assert failed.wait(2)
+        else:
+            assert hub.close(0.5) is EventHubCloseStatus.COMPLETE
+            assert failed.wait(2)
+
+        assert hub.audit_degraded
+        assert len(errors) == 1
+        assert errors[0].__traceback__ is None
+        assert errors[0].__cause__ is None
+        assert errors[0].__context__ is None
+        assert retained[0]() is None
+    finally:
+        hub.close(0.5)
+        if collection_was_enabled:
+            gc.enable()
+
+
+@pytest.mark.parametrize("accepted_before_failure", (False, True))
+def test_audit_thread_start_failure_preserves_actual_start_ownership(
+    monkeypatch,
+    accepted_before_failure: bool,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+    errors = []
+    thread_graph_references = []
+    observer = Observer()
+    original_start = event_bus.Thread.start
+
+    def fail() -> None:
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        try:
+            cause = LookupError("private start cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = OSError("audit thread start failed")
+            errors.append(error)
+            raise error from cause
+
+    def start(thread) -> None:
+        if thread.name == "namisync-audit":
+            thread_graph = PrivateGraph()
+            thread.private_graph = thread_graph
+            thread_graph_references.append(ref(thread_graph))
+            if accepted_before_failure:
+                original_start(thread)
+            fail()
+        original_start(thread)
+
+    monkeypatch.setattr(event_bus.Thread, "start", start)
+    if accepted_before_failure:
+        hub = make_hub(observer=observer)
+        try:
+            assert (
+                hub.finalize_audit(OperationResult(SessionState.COMPLETED))
+                is RecordingStatus.OK
+            )
+            assert hub.close(0.5) is EventHubCloseStatus.COMPLETE
+        finally:
+            hub.close(0.5)
+    else:
+        with pytest.raises(OSError, match="audit thread start failed") as raised:
+            make_hub(observer=observer)
+        assert raised.value is errors[0]
+
+    assert len(errors) == 1
+    assert errors[0].__cause__ is None
+    assert errors[0].__context__ is None
+    assert retained[0]() is None
+    assert observer.close_count == 1
+    if not accepted_before_failure:
+        assert thread_graph_references[0]() is None
+
+
+def test_audit_thread_start_failure_preserves_primary_over_close_failure(
+    monkeypatch,
+) -> None:
+    class FailingCloseObserver(Observer):
+        def close(self) -> None:
+            error = OSError("audit observer close failed")
+            close_errors.append(error)
+            raise error
+
+    primary = OSError("audit thread start failed")
+    close_errors = []
+    original_start = event_bus.Thread.start
+
+    def start(thread) -> None:
+        if thread.name == "namisync-audit":
+            raise primary
+        original_start(thread)
+
+    monkeypatch.setattr(event_bus.Thread, "start", start)
+    with pytest.raises(OSError, match="audit thread start failed") as raised:
+        make_hub(observer=FailingCloseObserver())
+
+    assert raised.value is primary
+    assert len(close_errors) == 1
+    assert close_errors[0].__traceback__ is None
+    assert close_errors[0].__cause__ is None
+    assert close_errors[0].__context__ is None

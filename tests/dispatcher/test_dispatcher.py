@@ -2400,20 +2400,26 @@ def test_later_store_failure_does_not_leak_custody_or_duplicate_terminal() -> No
 
 
 @pytest.mark.parametrize("failure_owner", ("store", "custody"))
-def test_contained_failure_does_not_retain_exception_owned_graph_after_close(
+def test_contained_failure_retires_traceback_and_cause_graph_after_close(
     failure_owner: str,
 ) -> None:
     class PrivateGraph:
         pass
 
     retained = []
+    errors = []
 
     def fail() -> None:
         graph = PrivateGraph()
         retained.append(ref(graph))
-        error = OSError("contained dependency failure")
-        error.private_graph = graph
-        raise error
+        try:
+            cause = LookupError("private contained cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = OSError("contained dependency failure")
+            errors.append(error)
+            raise error from cause
 
     class FailingStore(InMemorySessionStore):
         def put(self, record):
@@ -2449,8 +2455,10 @@ def test_contained_failure_does_not_retain_exception_owned_graph_after_close(
     finally:
         assert dispatcher.shutdown().complete
 
-    assert retained
-    gc.collect()
+    assert errors
+    assert all(error.__traceback__ is None for error in errors)
+    assert all(error.__cause__ is None for error in errors)
+    assert all(error.__context__ is None for error in errors)
     assert all(graph() is None for graph in retained)
 
 
@@ -3759,16 +3767,33 @@ def test_shutdown_racing_observed_attach_rolls_back_without_scheduling() -> None
 
 
 def test_pending_emission_failure_preserves_error_and_rolls_back_attach() -> None:
+    class PrivateGraph:
+        pass
+
     rollback_attempts = 0
     calls = 0
     attached_session_ids = []
+    errors = []
+    retained = []
+
+    def fail(error_type, message: str) -> None:
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        try:
+            cause = LookupError("private admission cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = error_type(message)
+            errors.append(error)
+            raise error from cause
 
     class FailingClock:
         def now(self):
             nonlocal calls
             calls += 1
             if calls == 2:
-                raise RuntimeError("pending clock failed")
+                fail(RuntimeError, "pending clock failed")
             return datetime.now(timezone.utc)
 
     def attach(session_id, stream):
@@ -3778,7 +3803,7 @@ def test_pending_emission_failure_preserves_error_and_rolls_back_attach() -> Non
             nonlocal rollback_attempts
             rollback_attempts += 1
             if rollback_attempts < 3:
-                raise OSError("rollback cleanup failed")
+                fail(OSError, "rollback cleanup failed")
             stream.close()
 
         return rollback
@@ -3790,9 +3815,13 @@ def test_pending_emission_failure_preserves_error_and_rolls_back_attach() -> Non
         clock=FailingClock(),
     )
 
-    with pytest.raises(RuntimeError, match="pending clock failed"):
+    with pytest.raises(RuntimeError, match="pending clock failed") as raised:
         dispatcher.submit("observed", b"payload", attach=attach)
 
+    assert raised.value is errors[0]
+    assert all(error.__cause__ is None for error in errors)
+    assert all(error.__context__ is None for error in errors)
+    assert all(owner() is None for owner in retained)
     assert rollback_attempts == 1
     assert dispatcher.list() == ()
     assert store.snapshot() == ()
@@ -3804,6 +3833,55 @@ def test_pending_emission_failure_preserves_error_and_rolls_back_attach() -> Non
     assert dispatcher.shutdown(timeout=2).complete
     assert rollback_attempts == 3
     assert dispatcher._admission_cleanups == {}
+    assert all(error.__cause__ is None for error in errors)
+    assert all(error.__context__ is None for error in errors)
+    assert all(owner() is None for owner in retained)
+
+
+def test_admission_cleanup_join_failure_does_not_replace_initiating_error(
+    monkeypatch,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    primary = RuntimeError("attach failed")
+    join_errors = []
+    retained = []
+    original_join = Thread.join
+
+    def join(thread, timeout=None) -> None:
+        if thread.name.startswith("namisync-admission-cleanup-"):
+            graph = PrivateGraph()
+            retained.append(ref(graph))
+            try:
+                cause = LookupError("private cleanup join cause")
+                cause.graph = graph
+                raise cause
+            except LookupError as cause:
+                error = OSError("cleanup join failed")
+                join_errors.append(error)
+                raise error from cause
+        original_join(thread, timeout)
+
+    def reject(_session_id, _stream) -> None:
+        raise primary
+
+    monkeypatch.setattr(Thread, "join", join)
+    dispatcher = Dispatcher({"observed": registration(lambda payload: completed)})
+    try:
+        with pytest.raises(RuntimeError, match="attach failed") as raised:
+            dispatcher.submit("observed", b"payload", attach=reject)
+
+        assert raised.value is primary
+        assert dispatcher.list() == ()
+        assert len(join_errors) == 1
+        assert join_errors[0].__traceback__ is None
+        assert join_errors[0].__cause__ is None
+        assert join_errors[0].__context__ is None
+        assert retained[0]() is None
+    finally:
+        monkeypatch.setattr(Thread, "join", original_join)
+        assert dispatcher.shutdown().complete
 
 
 def test_shutdown_reports_inflight_admission_and_waits_for_cleanup() -> None:
@@ -3981,15 +4059,21 @@ def test_observer_factory_failure_degrades_audit_without_aborting_admission() ->
         pass
 
     retained = []
+    errors = []
     entered = Event()
     release = Event()
 
     def unavailable_history(record):
         graph = PrivateGraph()
         retained.append(ref(graph))
-        error = OSError("history database cannot be opened")
-        error.private_graph = graph
-        raise error
+        try:
+            cause = LookupError("private observer factory cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = OSError("history database cannot be opened")
+            errors.append(error)
+            raise error from cause
 
     def run(context):
         entered.set()
@@ -4003,9 +4087,11 @@ def test_observer_factory_failure_degrades_audit_without_aborting_admission() ->
     try:
         session_id = dispatcher.submit("observed", b"payload")
         assert entered.wait(2)
-        gc.collect()
         assert len(retained) == 1
         assert retained[0]() is None
+        assert errors[0].__traceback__ is None
+        assert errors[0].__cause__ is None
+        assert errors[0].__context__ is None
         release.set()
         record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
 
@@ -4334,3 +4420,305 @@ def test_shutdown_reports_canceled_acquisition_until_owner_retires() -> None:
     assert complete.complete
     assert complete.custody_released
     assert complete.unfinished == ()
+
+
+@pytest.mark.parametrize("accepted_before_failure", (False, True))
+def test_worker_thread_start_failure_settles_or_preserves_actual_ownership(
+    monkeypatch,
+    accepted_before_failure: bool,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+    errors = []
+    error_references = []
+    thread_graph_references = []
+    opened = []
+    first_entered = Event()
+    follower_entered = Event()
+    release_first = Event()
+    original_start = Thread.start
+    start_failed = False
+    resource = ResourceId("volume", "thread-start-retirement")
+
+    def fail_start() -> None:
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        try:
+            cause = LookupError("private worker-start cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = OSError("worker thread start failed")
+            if accepted_before_failure:
+                errors.append(error)
+            else:
+                error_graph = PrivateGraph()
+                error.private_graph = error_graph
+                error_references.append(ref(error_graph))
+            raise error from cause
+
+    def start(thread) -> None:
+        nonlocal start_failed
+        if thread.name.startswith("namisync-session-") and not start_failed:
+            start_failed = True
+            thread_graph = PrivateGraph()
+            thread.private_graph = thread_graph
+            thread_graph_references.append(ref(thread_graph))
+            if accepted_before_failure:
+                original_start(thread)
+            fail_start()
+        original_start(thread)
+
+    def run_for(payload):
+        opened.append(payload)
+        if payload == b"first":
+            def hold(context):
+                del context
+                first_entered.set()
+                assert release_first.wait(2)
+                return OperationResult(SessionState.COMPLETED)
+
+            return hold
+
+        def follow(context):
+            del context
+            follower_entered.set()
+            return OperationResult(SessionState.COMPLETED)
+
+        return follow
+
+    monkeypatch.setattr(Thread, "start", start)
+    dispatcher = Dispatcher(
+        {"work": registration(run_for, resources=(resource,))}
+    )
+    first = dispatcher.submit("work", b"first")
+    first_closed = False
+
+    try:
+        if accepted_before_failure:
+            assert first_entered.wait(2)
+            follower = dispatcher.submit("work", b"follower")
+            assert not follower_entered.wait(0.05)
+            release_first.set()
+            first_record = wait_for(
+                dispatcher,
+                first,
+                SessionState.COMPLETED,
+            )
+        else:
+            first_record = wait_for(dispatcher, first, SessionState.FAILED)
+            assert not first_entered.is_set()
+            assert b"first" not in opened
+            assert first_record.started_at is None
+            assert first_record.result is not None
+            assert first_record.result.disposition is Disposition.UNRUN
+            assert first_record.result.error == FailureDetail(
+                "RuntimeError",
+                "session worker could not start",
+            )
+            dispatcher.close(first)
+            first_closed = True
+            assert error_references[0]() is None
+            assert thread_graph_references[0]() is None
+            follower = dispatcher.submit("work", b"follower")
+            assert follower_entered.wait(2)
+
+        assert first_record.result is not None
+        follower_record = wait_for(
+            dispatcher,
+            follower,
+            SessionState.COMPLETED,
+        )
+        assert follower_record.result is not None
+        if not first_closed:
+            dispatcher.close(first)
+        dispatcher.close(follower)
+        shutdown = dispatcher.shutdown(2)
+        assert shutdown.complete
+        assert shutdown.custody_released
+        assert shutdown.unfinished == ()
+    finally:
+        release_first.set()
+        dispatcher.shutdown(2)
+
+    if accepted_before_failure:
+        assert len(errors) == 1
+        assert errors[0].__traceback__ is None
+        assert errors[0].__cause__ is None
+        assert errors[0].__context__ is None
+    else:
+        assert len(error_references) == 1
+        assert error_references[0]() is None
+    assert retained[0]() is None
+    assert thread_graph_references[0]() is None
+
+
+def test_canceling_a_provably_unstarted_worker_settles_canceled_unrun(
+    monkeypatch,
+) -> None:
+    start_entered = Event()
+    release_start = Event()
+    opened = []
+    original_start = Thread.start
+    failed = False
+
+    def start(thread) -> None:
+        nonlocal failed
+        if thread.name.startswith("namisync-session-") and not failed:
+            failed = True
+            start_entered.set()
+            assert release_start.wait(2)
+            raise OSError("worker thread start failed")
+        original_start(thread)
+
+    def open_work(payload):
+        opened.append(payload)
+        return completed
+
+    monkeypatch.setattr(Thread, "start", start)
+    dispatcher = Dispatcher({"work": registration(open_work)})
+    session_id = dispatcher.submit("work", b"payload")
+    stream = dispatcher.subscribe(session_id, from_seq=1)
+    try:
+        assert start_entered.wait(2)
+        assert dispatcher.cancel(session_id).code is ControlCode.ACCEPTED
+        release_start.set()
+        record = wait_for(dispatcher, session_id, SessionState.CANCELED)
+
+        assert opened == []
+        assert record.started_at is None
+        assert record.result is not None
+        assert record.result.disposition is Disposition.UNRUN
+        assert record.result.canceled
+        terminals = []
+        while True:
+            try:
+                envelope = stream.next(0.05)
+            except (TimeoutError, StopIteration):
+                break
+            if isinstance(envelope.body, Terminal):
+                terminals.append(envelope.body)
+        assert len(terminals) == 1
+        assert terminals[0].result == TerminalSummary.from_result(record.result)
+        dispatcher.close(session_id)
+        assert dispatcher.shutdown(2).complete
+    finally:
+        release_start.set()
+        dispatcher.shutdown(2)
+
+
+def test_canceling_a_resumed_unstarted_worker_preserves_ran_settlement(
+    monkeypatch,
+) -> None:
+    first_entered = Event()
+    start_entered = Event()
+    release_start = Event()
+    settled = []
+
+    def pauseable(context):
+        first_entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    def settle_canceled(payload, disposition):
+        settled.append((payload, disposition))
+        return OperationResult(
+            SessionState.CANCELED,
+            disposition=disposition,
+            canceled=True,
+        )
+
+    dispatcher = Dispatcher(
+        {
+            "work": registration(
+                lambda _payload: pauseable,
+                supports_pause=True,
+                settle_canceled=settle_canceled,
+            )
+        }
+    )
+    session_id = dispatcher.submit("work", b"payload")
+    try:
+        assert first_entered.wait(2)
+        assert dispatcher.pause(session_id).code is ControlCode.ACCEPTED
+        wait_for(dispatcher, session_id, SessionState.PAUSED)
+
+        original_start = Thread.start
+        failed = False
+
+        def start(thread) -> None:
+            nonlocal failed
+            if thread.name.startswith("namisync-session-") and not failed:
+                failed = True
+                start_entered.set()
+                assert release_start.wait(2)
+                raise OSError("resumed worker thread start failed")
+            original_start(thread)
+
+        monkeypatch.setattr(Thread, "start", start)
+        assert dispatcher.resume(session_id).code is ControlCode.ACCEPTED
+        assert start_entered.wait(2)
+        assert dispatcher.cancel(session_id).code is ControlCode.ACCEPTED
+        release_start.set()
+        record = wait_for(dispatcher, session_id, SessionState.CANCELED)
+
+        assert settled == [(b"continued", Disposition.RAN)]
+        assert record.result is not None
+        assert record.result.disposition is Disposition.RAN
+        assert record.result.canceled
+        dispatcher.close(session_id)
+        assert dispatcher.shutdown(2).complete
+    finally:
+        release_start.set()
+        dispatcher.shutdown(2)
+
+
+def test_subscribe_translation_retires_hub_traceback_and_cause_without_chaining(
+    monkeypatch,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+    errors = []
+    entered = Event()
+    release = Event()
+
+    def run(context):
+        del context
+        entered.set()
+        assert release.wait(2)
+        return OperationResult(SessionState.COMPLETED)
+
+    def fail_subscribe(from_seq=None):
+        del from_seq
+        graph = PrivateGraph()
+        retained.append(ref(graph))
+        try:
+            cause = LookupError("private subscribe cause")
+            cause.graph = graph
+            raise cause
+        except LookupError as cause:
+            error = RuntimeError("event hub is closed")
+            errors.append(error)
+            raise error from cause
+
+    dispatcher = Dispatcher({"work": registration(lambda _payload: run)})
+    session_id = dispatcher.submit("work", b"payload")
+    assert entered.wait(2)
+    monkeypatch.setattr(dispatcher._hubs[session_id], "subscribe", fail_subscribe)
+    try:
+        with pytest.raises(SessionNotFound) as raised:
+            dispatcher.subscribe(session_id)
+        assert raised.value.__cause__ is None
+        assert raised.value.__context__ is None
+        assert errors[0].__cause__ is None
+        assert errors[0].__context__ is None
+        assert retained[0]() is None
+    finally:
+        release.set()
+        wait_for(dispatcher, session_id, SessionState.COMPLETED)
+        assert dispatcher.shutdown(2).complete

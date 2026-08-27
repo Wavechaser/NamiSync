@@ -374,7 +374,8 @@ class Dispatcher:
         )
         try:
             observer = self._audit_factory(record)
-        except BaseException:
+        except BaseException as error:
+            retire_exception_graph(error)
             observer = _DegradedAuditObserver()
         hub = EventHub(
             session_id=session_id,
@@ -433,7 +434,8 @@ class Dispatcher:
                         self._records.pop(session_id, None)
                         raise
                     self._condition.notify_all()
-        except BaseException:
+        except BaseException as error:
+            retire_exception_graph(error)
             cleanup = _AdmissionCleanup(
                 session_id=session_id,
                 hub=hub,
@@ -449,10 +451,13 @@ class Dispatcher:
                 self._condition.notify_all()
             attempt = self._start_admission_cleanup_worker(self._audit_timeout)
             if attempt is not None:
-                self._join_admission_cleanup_worker(
-                    attempt,
-                    monotonic() + max(0.0, self._audit_timeout),
-                )
+                try:
+                    self._join_admission_cleanup_worker(
+                        attempt,
+                        monotonic() + max(0.0, self._audit_timeout),
+                    )
+                except BaseException as cleanup_error:
+                    retire_exception_graph(cleanup_error)
             raise
         return session_id
 
@@ -464,22 +469,25 @@ class Dispatcher:
         if cleanup.rollback is not None:
             try:
                 cleanup.rollback()
-            except BaseException:
+            except BaseException as error:
                 cleanup.failure_seen = True
+                retire_exception_graph(error)
             else:
                 cleanup.rollback = None
         if cleanup.stream is not None:
             try:
                 cleanup.stream.close()
-            except BaseException:
+            except BaseException as error:
                 cleanup.failure_seen = True
+                retire_exception_graph(error)
             else:
                 cleanup.stream = None
         if cleanup.hub is not None:
             try:
                 close_status = cleanup.hub.close(timeout)
-            except BaseException:
+            except BaseException as error:
                 cleanup.failure_seen = True
+                retire_exception_graph(error)
             else:
                 if close_status is EventHubCloseStatus.COMPLETE:
                     cleanup.hub = None
@@ -488,8 +496,9 @@ class Dispatcher:
         if cleanup.store_pending:
             try:
                 self._store.drop(cleanup.session_id)
-            except BaseException:
+            except BaseException as error:
                 cleanup.failure_seen = True
+                retire_exception_graph(error)
             else:
                 cleanup.store_pending = False
 
@@ -518,9 +527,10 @@ class Dispatcher:
             self._admission_cleanup_attempt = attempt
         try:
             thread.start()
-        except BaseException:
+        except BaseException as error:
             cleanup.failure_seen = True
             started = thread.ident is not None
+            retire_exception_graph(error)
             with self._condition:
                 if not started and self._admission_cleanup_attempt is attempt:
                     self._admission_cleanup_attempt = None
@@ -591,10 +601,10 @@ class Dispatcher:
 
     def get(self, session_id: SessionId) -> SessionRecord:
         with self._condition:
-            try:
-                return self._records[session_id]
-            except KeyError:
-                raise SessionNotFound(str(session_id)) from None
+            record = self._records.get(session_id)
+        if record is None:
+            raise SessionNotFound(str(session_id))
+        return record
 
     def list(
         self, query: Callable[[SessionRecord], bool] | None = None
@@ -632,7 +642,8 @@ class Dispatcher:
             try:
                 return hub.subscribe(from_seq)
             except RuntimeError as error:
-                raise SessionNotFound(str(session_id)) from error
+                retire_exception_graph(error)
+            raise SessionNotFound(str(session_id)) from None
 
     def pause(self, session_id: SessionId) -> ControlResult:
         publication_lock = self._publication_lock_for(session_id)
@@ -863,9 +874,19 @@ class Dispatcher:
                     "session cannot close from its own worker; "
                     f"retry after retirement: {session_id}"
                 )
-            if attempt.thread.ident is not None:
+            if attempt.thread.ident is None:
+                with self._condition:
+                    while self._workers.get(key) is attempt:
+                        remaining = deadline - monotonic()
+                        if remaining <= 0:
+                            raise TimeoutError(
+                                "session worker retirement is pending; "
+                                f"cleanup did not start: {session_id}"
+                            )
+                        self._condition.wait(remaining)
+            else:
                 attempt.thread.join(max(0.0, deadline - monotonic()))
-            if attempt.thread.ident is None or attempt.thread.is_alive():
+            if attempt.thread.ident is not None and attempt.thread.is_alive():
                 raise TimeoutError(
                     "session worker retirement is pending; "
                     f"cleanup did not start: {session_id}"
@@ -1169,7 +1190,47 @@ class Dispatcher:
                             if self._retiring_workers else None
                         )
             for attempt in launches:
-                attempt.thread.start()
+                unstarted = False
+                try:
+                    attempt.thread.start()
+                except BaseException as error:
+                    started = attempt.thread.ident is not None
+                    retire_exception_graph(error)
+                    unstarted = not started
+                if unstarted:
+                    self._complete_unstarted_attempt(attempt)
+            del attempt
+
+    def _complete_unstarted_attempt(
+        self,
+        attempt: _WorkerAttempt,
+    ) -> None:
+        with self._condition:
+            record = self._require_current_worker_locked(attempt.key)
+            registration = self._registry[record.kind]
+        try:
+            if record.state is SessionState.CANCELING:
+                self._run_canceled(attempt.key, registration, record)
+            else:
+                result = OperationResult(
+                    status=SessionState.FAILED,
+                    disposition=self._disposition(record),
+                    error=FailureDetail(
+                        "RuntimeError",
+                        "session worker could not start",
+                    ),
+                )
+                self._run_core(
+                    attempt.key,
+                    attempt.resources,
+                    registration,
+                    invocation=None,
+                    disposition=result.disposition,
+                    fixed_result=result,
+                )
+        finally:
+            self._release_custody(attempt.key, attempt.resources)
+            self._worker_done(attempt.key)
 
     def _run_worker(
         self,
@@ -1191,7 +1252,8 @@ class Dispatcher:
                 lease = self._lock_provider.acquire(
                     resources, control.cancel_requested
                 )
-            except Canceled:
+            except Canceled as error:
+                retire_exception_graph(error)
                 with self._condition:
                     current = self._require_current_worker_locked(key)
                 self._run_canceled(key, registration, current)
@@ -1224,7 +1286,8 @@ class Dispatcher:
             if stale:
                 try:
                     lease.release()
-                except BaseException:
+                except BaseException as error:
+                    retire_exception_graph(error)
                     with self._condition:
                         self._custody_failed = True
                 return
@@ -1475,8 +1538,9 @@ class Dispatcher:
     def _persist_locked(self, record: SessionRecord) -> None:
         try:
             self._store.put(_stored_record(record))
-        except BaseException:
+        except BaseException as error:
             self._store_failed = True
+            retire_exception_graph(error)
 
     def _release_custody(
         self,
@@ -1488,7 +1552,8 @@ class Dispatcher:
         try:
             if lease is not None:
                 lease.release()
-        except BaseException:
+        except BaseException as error:
+            retire_exception_graph(error)
             with self._condition:
                 self._custody_failed = True
         finally:
@@ -1503,8 +1568,7 @@ class Dispatcher:
         publication_lock = self._publication_lock_for(session_id)
         if publication_lock is None:
             with self._condition:
-                if key in self._workers:
-                    self._retiring_workers.add(key)
+                self._mark_worker_done_locked(key)
                 self._condition.notify_all()
             return
         transition: tuple[SessionRecord, EventHub] | None = None
@@ -1536,14 +1600,25 @@ class Dispatcher:
                     hub.emit(StateChanged(updated.state))
             finally:
                 with self._condition:
-                    if key in self._workers:
-                        self._retiring_workers.add(key)
+                    self._mark_worker_done_locked(key)
                     self._condition.notify_all()
+
+    def _mark_worker_done_locked(self, key: _WorkerKey) -> None:
+        attempt = self._workers.get(key)
+        if attempt is None:
+            return
+        if attempt.thread.ident is None:
+            if self._current_workers.get(key.session_id) == key:
+                self._current_workers.pop(key.session_id)
+            self._workers.pop(key)
+            self._retiring_workers.discard(key)
+            return
+        self._retiring_workers.add(key)
 
     def _reap_retired_workers_locked(self) -> None:
         for key in tuple(self._retiring_workers):
             attempt = self._workers[key]
-            # Registered-but-unstarted threads also report not alive.
+            # Registered-but-unstarted threads are retired synchronously.
             if attempt.thread.ident is None or attempt.thread.is_alive():
                 continue
             if self._current_workers.get(key.session_id) == key:

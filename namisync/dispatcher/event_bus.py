@@ -11,6 +11,7 @@ from threading import Condition, Event, Lock, Thread
 from time import monotonic
 from typing import Callable
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.evidence import RecordingStatus
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
@@ -226,8 +227,19 @@ class _AuditPump:
         self._submission_condition = Condition()
         self._accepting = True
         self._active_submissions = 0
-        self._thread = Thread(target=self._run, name="namisync-audit", daemon=True)
-        self._thread.start()
+        thread = Thread(target=self._run, name="namisync-audit", daemon=True)
+        try:
+            thread.start()
+        except BaseException as error:
+            started = thread.ident is not None
+            retire_exception_graph(error)
+            if not started:
+                try:
+                    self._observer.close()
+                except BaseException as close_error:
+                    retire_exception_graph(close_error)
+                raise
+        self._thread = thread
 
     @property
     def degraded(self) -> bool:
@@ -380,9 +392,10 @@ class _AuditPump:
                             raise TypeError(
                                 "audit observer returned an invalid status"
                             )
-                    except BaseException:
+                    except BaseException as error:
                         self._degraded.set()
                         self._prefix_broken.set()
+                        retire_exception_graph(error)
                         return
                     if status is RecordingStatus.DEGRADED:
                         self._degraded.set()
@@ -403,8 +416,9 @@ class _AuditPump:
                 self._drain_queue()
             try:
                 self._observer.close()
-            except BaseException:
+            except BaseException as error:
                 self._degraded.set()
+                retire_exception_graph(error)
             finally:
                 self._closed.set()
 
@@ -423,9 +437,10 @@ class _AuditPump:
     def _flush(self) -> bool:
         try:
             self._observer.flush()
-        except BaseException:
+        except BaseException as error:
             self._degraded.set()
             self._prefix_broken.set()
+            retire_exception_graph(error)
             return False
         return True
 
@@ -441,9 +456,10 @@ class _AuditPump:
             status = self._observer.finalize(result)
             if not isinstance(status, RecordingStatus):
                 raise TypeError("audit observer returned an invalid status")
-        except BaseException:
+        except BaseException as error:
             self._degraded.set()
             self._prefix_broken.set()
+            retire_exception_graph(error)
         else:
             command.recording = (
                 RecordingStatus.DEGRADED

@@ -172,7 +172,7 @@ admission, window flush, terminal projection, and terminal commit preserve the
 established public exception identity where it already escapes, while clearing
 its traceback, cause, and context before returning control. Replay lookup keeps
 no raw SQLite busy error between attempts; timeout retains only the fixed
-bounded recording detail. If receipt validation is already failing, a reader
+bounded recording detail. If receipt validation is already failing, a
 receipt-reader close failure is retired and cannot replace that initiating
 failure. The pending-window and durable-watermark rules above are unchanged.
 Arbitrary caller-owned exception attributes remain outside history custody.

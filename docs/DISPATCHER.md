@@ -206,14 +206,29 @@ again under the session publication lock and enqueues any surviving
 PENDING/CANCELING handoff.
 That worker then marks its exact attempt as retiring; the current-generation
 fence and thread ownership remain until the thread is no longer alive. The
-scheduler reaps only started, marked attempts and uses a short bounded wait
-only while retirement is pending. A registered thread that has not started is
-never mistaken for a finished attempt. This includes the remaining worker and
+The scheduler reaps only started, marked attempts and uses a short bounded wait
+only while retirement is pending. A registered thread whose `start()` call is
+still unresolved is never mistaken for a finished attempt; a start call that
+has returned by raising with no thread identity is instead settled and removed
+synchronously as described below. This includes the remaining worker and
 handoff frames and a still-running thread exception hook. Shutdown reports a
 still-live retiring worker as unfinished even when its terminal result is
 already visible. Core `BaseException` propagation is unchanged; an external
 exception hook that saves an exception after returning remains a separate
 caller-owned reference, not a dispatcher retirement guarantee.
+
+If `Thread.start()` raises before a session worker receives an OS thread
+identity, no workflow invocation exists. Dispatcher retires the raw start
+failure before entering audit/settlement, publishes one fixed `FAILED + UNRUN`
+result through the ordinary state/result/Terminal path, releases the exact
+reservation, removes the never-started attempt synchronously, and continues
+scheduling. A cancel already accepted while `start()` was blocked instead uses
+ordinary cancellation settlement; a resumed session therefore preserves
+`RAN`. If `start()` raised after assigning an identity, that real thread keeps
+ownership through exit and the scheduler does not manufacture another result.
+Public close waits for either form's exact retirement. The scheduler loop drops
+its launch reference before waiting, so neither a never-started `Thread` target
+nor a completed attempt becomes an idle owner.
 
 Cross-process physical-volume exclusion is required before any M0 mutation,
 using a named OS mutex or lock file keyed deterministically by volume serial
@@ -356,6 +371,12 @@ stops producer backpressure after the injected timeout by setting
 `audit=DEGRADED`. Failure while the composition root constructs or opens the
 observer is isolated the same way: admission continues with a degraded-audit
 sentinel, so history availability cannot decide whether domain work runs.
+If the audit thread never receives an identity, its observer is closed once and
+the original start failure escapes; a secondary close failure is retired and
+cannot replace it. If the thread did start before `start()` raised, that thread
+keeps the observer and performs the normal exactly-once close. Internal empty/
+full queue control signals remain ordinary local control flow rather than
+general exception-graph owners.
 Pump shutdown spends one monotonic deadline across both enqueueing its stop
 command and joining the worker; queue delay cannot silently grant a second full
 join allowance.
@@ -451,6 +472,12 @@ frames.
 Caller-owned exceptions and audit observers
 may still reference earlier records; this boundary does not promise
 whole-process or secure-memory erasure. BR-G-45 remains open.
+
+Dispatcher construction occurs before any desktop task exists. An
+unsuccessful scheduler-thread construction and an independently injected second
+fault inside the otherwise contained fixed-result settlement escape to their
+caller or thread hook; they are not retained task artifacts and this boundary
+does not convert them into synthetic lifecycle truth.
 
 Queued execution carries the exact core `Commitment` defined by
 [M1_BRIDGE.md](M1_BRIDGE.md). Workflow admission validates it and freshly

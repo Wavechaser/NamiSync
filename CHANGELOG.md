@@ -37,6 +37,11 @@ claims explicit, independently reviewable, and regression-backed.
   identity, retry timing, pending windows, and durable watermarks. Busy retries
   retain no raw SQLite error, and receipt-reader-close failure cannot replace
   an initiating receipt failure.
+- Retired dispatcher admission, audit, store, custody, subscription, and worker-
+  start frames without moving task policy into the dispatcher. A provably
+  unstarted worker now settles once through public `FAILED + UNRUN` behavior,
+  accepted cancellation wins, real started threads keep ownership, and later
+  scheduling, close, and shutdown remain usable.
 - Bound public verifier chunks to exact integer sizes from one byte through the
   existing 4 MiB default. The Windows reader's per-file transient is now
   finitely chargeable as one aligned native buffer plus one Python bytes copy,

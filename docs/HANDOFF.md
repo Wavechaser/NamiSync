@@ -72,12 +72,19 @@ truth. Hostile truthiness, diagnostic, and note paths cannot replace a primary.
 Path-message construction remains a separately chargeable checkpoint-4
 transient.
 
-- Dispatcher audit-factory, admission cleanup, persistence, custody-release,
-  stale-lease, and other drop-only callback catches.
 - Web task replay/start/compensation overlap in `TaskRegistry.replay_start`,
   `_start_owner`, and `_attempt_compensation`.
-- Chained path/subscription errors in `NamiSyncService.start_plan` and
-  `Dispatcher.subscribe`.
+- Chained path errors in `NamiSyncService.start_plan`.
+
+Dispatcher admission, audit, store, custody, subscription, and session-worker
+start owners are now structurally closed. A provably unstarted attempt uses the
+ordinary terminal path, an already accepted cancel wins, resumed cancellation
+stays `RAN`, and a start that assigned a thread identity keeps real-thread
+ownership. Never-started attempts and audit pumps release their exact owners;
+public close/shutdown and later scheduling remain usable. Scheduler construction
+occurs before task admission, while nonreturning observer cleanup, arbitrary
+custom exception state, and an independently injected simultaneous settlement
+fault remain outside this narrow closure.
 
 History event, flush, finalization, replay-busy, and receipt-reader-close
 exception owners are now structurally closed. Public fail-stop identity,
