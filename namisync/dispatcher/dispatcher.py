@@ -7,6 +7,7 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from threading import Condition, Event, Lock, Thread, current_thread
 from time import monotonic
+from traceback import clear_frames
 from typing import Callable
 from uuid import uuid4
 
@@ -15,6 +16,7 @@ from namisync.core.events import StateChanged
 from namisync.core.session import (
     Canceled,
     Disposition,
+    FailureDetail,
     OperationResult,
     PauseRequested,
     ResourceId,
@@ -25,6 +27,7 @@ from namisync.core.session import (
     SessionStore,
     StoredSessionRecord,
     is_terminal,
+    normalize_result_diagnostics,
     require_transition,
     result_terminal_state,
     run_session,
@@ -77,6 +80,49 @@ def _stored_record(record: SessionRecord) -> StoredSessionRecord:
         ended_at=record.ended_at,
         result=record.result,
     )
+
+
+def _retire_dispatcher_exception(error: BaseException) -> None:
+    traceback = BaseException.__getattribute__(error, "__traceback__")
+    if traceback is not None:
+        clear_frames(traceback)
+    BaseException.with_traceback(error, None)
+    BaseException.__setattr__(error, "__cause__", None)
+    BaseException.__setattr__(error, "__context__", None)
+
+
+def _project_worker_exception(
+    error: Exception,
+    disposition: Disposition,
+) -> tuple[OperationResult | None, bool]:
+    """Replace a raw pre-run failure with fixed terminal or control truth."""
+
+    try:
+        if isinstance(error, Canceled):
+            return None, False
+        if isinstance(error, PauseRequested):
+            return None, True
+        try:
+            result = normalize_result_diagnostics(
+                OperationResult(
+                    status=SessionState.FAILED,
+                    disposition=disposition,
+                    error=FailureDetail(type(error).__name__, str(error)),
+                )
+            )
+        except Exception as diagnostic_error:
+            _retire_dispatcher_exception(diagnostic_error)
+            result = OperationResult(
+                status=SessionState.FAILED,
+                disposition=disposition,
+                omitted_detail_count=1,
+            )
+        except BaseException as diagnostic_fatal:
+            _retire_dispatcher_exception(diagnostic_fatal)
+            raise
+        return result, False
+    finally:
+        _retire_dispatcher_exception(error)
 
 
 class _Control:
@@ -1149,6 +1195,7 @@ class Dispatcher:
             if record.state is SessionState.CANCELING:
                 self._run_canceled(key, registration, record)
                 return
+            projected_failure = None
             try:
                 lease = self._lock_provider.acquire(
                     resources, control.cancel_requested
@@ -1158,14 +1205,21 @@ class Dispatcher:
                     current = self._require_current_worker_locked(key)
                 self._run_canceled(key, registration, current)
                 return
-            except BaseException as error:
+            except Exception as error:
+                projected_failure = _project_worker_exception(
+                    error,
+                    Disposition.UNRUN,
+                )
+            if projected_failure is not None:
+                fixed_result, pre_run_pause = projected_failure
                 self._run_core(
                     key,
                     resources,
                     registration,
                     invocation=None,
                     disposition=Disposition.UNRUN,
-                    failure=error,
+                    fixed_result=fixed_result,
+                    pre_run_pause=pre_run_pause,
                 )
                 return
             with self._condition:
@@ -1187,20 +1241,28 @@ class Dispatcher:
             if current.state is SessionState.CANCELING:
                 self._run_canceled(key, registration, current)
                 return
+            projected_failure = None
             try:
                 if current.payload is None:
                     raise RuntimeError(
                         "nonterminal session lost its continuation payload"
                     )
                 invocation = registration.open(current.payload)
-            except BaseException as error:
+            except Exception as error:
+                projected_failure = _project_worker_exception(
+                    error,
+                    Disposition.UNRUN,
+                )
+            if projected_failure is not None:
+                fixed_result, pre_run_pause = projected_failure
                 self._run_core(
                     key,
                     resources,
                     registration,
                     invocation=None,
                     disposition=Disposition.UNRUN,
-                    failure=error,
+                    fixed_result=fixed_result,
+                    pre_run_pause=pre_run_pause,
                 )
                 return
             resumed_attempt = current.started_at is not None
@@ -1225,7 +1287,6 @@ class Dispatcher:
                 registration,
                 invocation=invocation,
                 disposition=Disposition.RAN,
-                failure=None,
                 settle_pre_run_canceled=resumed_attempt,
             )
         except _StaleWorkerAttempt:
@@ -1244,24 +1305,27 @@ class Dispatcher:
         with self._condition:
             self._require_current_worker_locked(key)
         disposition = self._disposition(record)
-        failure = None
         try:
-            canceled_result = self._settled_cancellation(
+            fixed_result = self._settled_cancellation(
                 registration,
                 record,
                 disposition,
             )
         except Exception as error:
-            canceled_result = None
-            failure = error
+            fixed_result, pre_run_pause = _project_worker_exception(
+                error,
+                disposition,
+            )
+        else:
+            pre_run_pause = False
         self._run_core(
             key,
             record.resources,
             registration,
             invocation=None,
             disposition=disposition,
-            failure=failure,
-            canceled_result=canceled_result,
+            fixed_result=fixed_result,
+            pre_run_pause=pre_run_pause,
         )
 
     def _run_core(
@@ -1272,8 +1336,8 @@ class Dispatcher:
         *,
         invocation: WorkflowInvocation | None,
         disposition: Disposition,
-        failure: BaseException | None,
-        canceled_result: OperationResult | None = None,
+        fixed_result: OperationResult | None = None,
+        pre_run_pause: bool = False,
         settle_pre_run_canceled: bool = False,
     ) -> None:
         session_id = key.session_id
@@ -1283,10 +1347,10 @@ class Dispatcher:
             hub = self._hubs[session_id]
 
         def work(context):
-            if canceled_result is not None:
-                return canceled_result
-            if failure is not None:
-                raise failure
+            if fixed_result is not None:
+                return fixed_result
+            if pre_run_pause:
+                raise PauseRequested()
             try:
                 try:
                     context.checkpoint()

@@ -74,9 +74,10 @@ claims explicit, independently reviewable, and regression-backed.
   deferred diagnostic and inspection notes and open headed/resource acceptance
   gates remain separate.
 - Retired residual adapter exception graphs before observer dependency shutdown
-  and task-recovery reconciliation. Closed failure categories now raise fresh
-  fixed errors without carrying private tracebacks or current views, while join,
-  stale-unsubscribe, generation, and cleanup-retry truth remain explicit.
+  and task-recovery reconciliation. Dispatcher now also projects pre-run lock,
+  continuation-open, and canceled-settlement failures before the core runner,
+  retiring raw and diagnostic graphs before terminal storage while preserving
+  process-fatal propagation and retry truth.
 - Corrected the stale canonical-plan SHA-256 vector left when the shared test
   fixture's invalid policy fingerprint was replaced with valid hexadecimal text.
   Independent canonical projection reproduced both the old and corrected hashes;

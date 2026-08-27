@@ -2783,6 +2783,201 @@ def test_lock_acquisition_failure_is_failed_unrun_terminal() -> None:
     assert dispatcher.shutdown().custody_released
 
 
+@pytest.mark.parametrize(
+    ("failure_stage", "hostile_diagnostic"),
+    (
+        ("acquire", False),
+        ("open", False),
+        ("settle", False),
+        ("acquire", True),
+    ),
+)
+def test_pre_run_failure_retires_raw_graph_before_terminal_store(
+    failure_stage: str,
+    hostile_diagnostic: bool,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    retained = []
+    raw_errors = []
+    retirement = []
+    collected = []
+
+    class DiagnosticFailure(Exception):
+        pass
+
+    class CauseFailure(Exception):
+        pass
+
+    class RawFailure(Exception):
+        def __str__(self) -> str:
+            if not hostile_diagnostic:
+                return "fixed public detail"
+            graph = PrivateGraph()
+            error = DiagnosticFailure("diagnostic rendering failed")
+            error.private_graph = graph
+            retained.extend((ref(error), ref(graph)))
+            raise error
+
+    def fail() -> None:
+        graph = PrivateGraph()
+        cause = CauseFailure("private cause")
+        error = RawFailure()
+        error.private_graph = graph
+        raw_errors.append(error)
+        retained.extend((ref(error), ref(graph), ref(cause)))
+        try:
+            raise LookupError("private context")
+        except LookupError:
+            raise error from cause
+
+    class WitnessStore(InMemorySessionStore):
+        def put(self, record):
+            if record.state is SessionState.FAILED:
+                error = raw_errors.pop()
+                retirement.append(
+                    (
+                        error.__traceback__ is None,
+                        error.__cause__ is None,
+                        error.__context__ is None,
+                    )
+                )
+                del error
+                gc.collect()
+                collected.append(all(owner() is None for owner in retained))
+            super().put(record)
+
+    class LockProvider:
+        def __init__(self) -> None:
+            self._delegate = InProcessResourceLockProvider()
+
+        def acquire(self, resources, canceled):
+            if failure_stage == "acquire":
+                fail()
+            return self._delegate.acquire(resources, canceled)
+
+    entered = Event()
+
+    def run(context):
+        if failure_stage != "settle":
+            return OperationResult(SessionState.COMPLETED)
+        entered.set()
+        while True:
+            context.checkpoint()
+            sleep(0.005)
+
+    def open_invocation(payload):
+        if failure_stage == "open":
+            fail()
+        return Invocation(run)
+
+    def settle_canceled(payload, disposition):
+        del payload, disposition
+        if failure_stage == "settle":
+            fail()
+        return None
+
+    dispatcher = Dispatcher(
+        {
+            "broken": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(
+                    b"opaque",
+                    frozenset({ResourceId("volume", "raw-pre-run-failure")}),
+                ),
+                open=open_invocation,
+                supports_pause=failure_stage == "settle",
+                settle_canceled=settle_canceled,
+            )
+        },
+        store=WitnessStore(),
+        lock_provider=LockProvider(),
+    )
+    session_id = dispatcher.submit("broken", object())
+    if failure_stage == "settle":
+        assert entered.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        wait_for(dispatcher, session_id, SessionState.PAUSED)
+        assert dispatcher.cancel(session_id).accepted
+    record = wait_for(dispatcher, session_id, SessionState.FAILED)
+
+    assert retirement == [(True, True, True)]
+    assert collected == [True]
+    assert record.result is not None
+    assert record.result.disposition is (
+        Disposition.RAN if failure_stage == "settle" else Disposition.UNRUN
+    )
+    if hostile_diagnostic:
+        assert record.result.error is None
+        assert record.result.omitted_detail_count == 1
+    else:
+        assert record.result.error == FailureDetail(
+            "RawFailure", "fixed public detail"
+        )
+    assert dispatcher.shutdown().complete
+
+
+@pytest.mark.parametrize("failure_stage", ("acquire", "open"))
+def test_pre_run_process_fatal_is_not_normalized_and_retries(
+    monkeypatch,
+    failure_stage: str,
+) -> None:
+    class WorkerExit(BaseException):
+        pass
+
+    fatal = WorkerExit("stop worker")
+    fault_calls = 0
+    fatal_seen = Event()
+    hook_values = []
+
+    def fail_once() -> None:
+        nonlocal fault_calls
+        fault_calls += 1
+        if fault_calls == 1:
+            raise fatal
+
+    class LockProvider:
+        def __init__(self) -> None:
+            self._delegate = InProcessResourceLockProvider()
+
+        def acquire(self, resources, canceled):
+            if failure_stage == "acquire":
+                fail_once()
+            return self._delegate.acquire(resources, canceled)
+
+    def open_invocation(payload):
+        if failure_stage == "open":
+            fail_once()
+        return Invocation(completed)
+
+    def exception_hook(args) -> None:
+        hook_values.append((args.exc_type, args.exc_value))
+        fatal_seen.set()
+
+    monkeypatch.setattr(threading, "excepthook", exception_hook)
+    dispatcher = Dispatcher(
+        {
+            "work": WorkflowRegistration(
+                prepare=lambda request: PreparedSession(
+                    b"opaque",
+                    frozenset({ResourceId("volume", "fatal-pre-run-failure")}),
+                ),
+                open=open_invocation,
+            )
+        },
+        lock_provider=LockProvider(),
+    )
+    session_id = dispatcher.submit("work", object())
+
+    assert fatal_seen.wait(2)
+    record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    assert hook_values == [(WorkerExit, fatal)]
+    assert fault_calls == 2
+    assert record.result is not None
+    assert record.result.error is None
+    assert dispatcher.shutdown().complete
+
+
 def test_workflow_exception_is_contained_as_one_failed_terminal() -> None:
     def broken(context):
         raise RuntimeError("broken")

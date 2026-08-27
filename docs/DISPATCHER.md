@@ -123,6 +123,15 @@ resolution, and exactly-one terminal emission. Modules return typed opaque
 results and emit only nonterminal events through `RunContext`; dispatcher owns
 custody around the runner and releases it in every exit path.
 
+Failures raised before invocation entry by lock acquisition, continuation open,
+or retained-payload cancellation settlement are projected to fixed terminal or
+control truth before the core runner is called. Dispatcher clears the caught
+exception's traceback, cause, and context after bounded diagnostic projection,
+so the runner closure and terminal store cannot retain collaborator frames or
+attached private graphs. A failing diagnostic renderer omits the detail rather
+than retaining either failure. Process-fatal `BaseException` propagation and
+worker retry behavior remain unchanged.
+
 Each process-local runner attempt has a monotonically increasing private
 generation key. A session has at most one current generation; every resource
 reservation and acquired lease is owned by that exact key, and state/result/

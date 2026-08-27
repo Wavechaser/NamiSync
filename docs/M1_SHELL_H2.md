@@ -366,9 +366,10 @@ This prerequisite deliberately excludes construction builders, sorting/index
 storage, selection/exclusion and preview values, callback overlap, codec/text
 and native/browser copies, complete-tree projection, and speculative future
 owners. Those costs, complete-object constants, formula, fixture, validator,
-and BR-G-45 evidence remain checkpoint 4. Remaining raw callback/workflow/
-dispatcher exception owners still require separate closure before the first
-mandatory model commit.
+and BR-G-45 evidence remain checkpoint 4. Dispatcher pre-run and cancellation-
+settlement exception owners are now closed independently; remaining raw
+callback, workflow, and planner owners still require separate closure before
+the first mandatory model commit.
 
 - Linked execution can retain both 120,000 operation and 120,000 integrity
   outcomes, plus the dispatcher accumulator and shallow audit/store wrappers.

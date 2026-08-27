@@ -459,6 +459,16 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-27). Pre-run exception closure retention. Lock
+  acquisition, continuation open, and canceled-session settlement passed a raw
+  collaborator exception through a nested runner callback, keeping its
+  traceback, cause, context, and attached graph live through terminal storage.
+  Cause: exception containment was reused as delayed projection across the
+  dispatcher-to-runner call boundary. Fixed by projecting bounded terminal or
+  control truth first, retiring both primary and diagnostic exceptions, and
+  passing only the fixed value into the runner. Process-fatal propagation and
+  retry semantics are unchanged; hostile-rendering and weak-reference
+  regressions cover all three admitted failure seams.
 - MODERATE - FIXED (2026-08-27). Worker retirement ownership gap. Terminal
   publication and retirement handoff could expose a session as closable while
   its exact worker, invocation frame, or exception hook was still live. Cause:

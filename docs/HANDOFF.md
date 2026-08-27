@@ -52,6 +52,8 @@ acceptance has activated.
   `4,842 passed, 4 skipped, 28 deselected`.
 - Import architecture: `11 kept, 0 broken`.
 - Executor settlement oracle: all 30 scenarios passed three identical runs.
+- Dispatcher exception-ownership regressions: `8 passed`; full dispatcher
+  department: `138 passed, 4,747 deselected`.
 - `git diff --check` and targeted stale-term review passed. An independent
   post-simplification audit found no false refusals, double charging,
   unnecessary copies, redundant validation, misplaced policy, private-counter
@@ -61,11 +63,11 @@ acceptance has activated.
 
 1. Close the remaining raw exception owners before starting the reservation
    model: workflow recording `enter_error` and `exit_error`; planner and
-   destination-policy failures that escape with producer frames; callback retry
-   closures that retain first raw failures; and dispatcher worker or
-   cancellation `BaseException` objects. Keep causal fixes in separate commits
-   with weak-reference or traceback regressions and ordinary parity; do not mix
-   them with model constants.
+   destination-policy failures that escape with producer frames; and callback
+   retry closures that retain first raw failures. Dispatcher pre-run and
+   cancellation-settlement owners are closed and verified. Keep causal fixes in
+   separate commits with weak-reference or traceback regressions and ordinary
+   parity; do not mix them with model constants.
 2. Proceed through checkpoint 4 in order:
    `test(web): pin task artifact reservation model`,
    `feat(web): install dormant task lifecycle`, then
