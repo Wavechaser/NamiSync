@@ -150,10 +150,35 @@ def _identity(serial: str | None, index: str | None) -> FileIdentity | None:
 def _identity_query_values(
     identities: Iterable[FileIdentity],
 ) -> tuple[tuple[str, str], ...]:
+    values: set[FileIdentity] = set()
+    for occurrence, identity in enumerate(identities):
+        if occurrence == INVENTORY_POPULATION_ROW_LIMIT:
+            raise InventoryPopulationLimitError()
+        values.add(identity)
+    ordered = list(values)
+    del values
+    ordered.sort()
     return tuple(
         (identity.volume_serial, file_index_128_to_text(identity.file_index))
-        for identity in sorted(set(identities))
+        for identity in ordered
     )
+
+
+def _bounded_normalized_path_keys(
+    paths: Iterable[str],
+    *,
+    limit: int,
+    limit_error: Callable[[], ValueError],
+) -> tuple[str, ...]:
+    keys: set[str] = set()
+    for occurrence, path in enumerate(paths):
+        if occurrence == limit:
+            raise limit_error()
+        keys.add(normalize_relative_path(path))
+    ordered = list(keys)
+    del keys
+    ordered.sort()
+    return tuple(ordered)
 
 
 def _mapping_pair(row: sqlite3.Row) -> MappingPair:
@@ -264,29 +289,23 @@ def _append_inventory_snapshots(
 
 
 def _bounded_integrity_path_keys(paths: Iterable[str]) -> tuple[str, ...]:
-    keys: set[str] = set()
-    for path in paths:
-        key = normalize_relative_path(path)
-        if key in keys:
-            continue
-        if len(keys) == INTEGRITY_CANDIDATE_ROW_LIMIT + 1:
-            raise _integrity_row_limit_error()
-        keys.add(key)
-    return tuple(sorted(keys))
+    return _bounded_normalized_path_keys(
+        paths,
+        limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+        limit_error=_integrity_row_limit_error,
+    )
 
 
 def _bounded_integrity_row_ids(row_ids: Iterable[str]) -> tuple[str, ...]:
-    requested: list[str] = []
-    seen: set[str] = set()
-    for row_id in row_ids:
-        if len(requested) == INTEGRITY_CANDIDATE_ROW_LIMIT:
+    requested: dict[str, None] = {}
+    for occurrence, row_id in enumerate(row_ids):
+        if occurrence == INTEGRITY_CANDIDATE_ROW_LIMIT:
             raise _integrity_row_limit_error()
         if not isinstance(row_id, str) or not row_id:
             raise ValueError("integrity inventory row id is invalid")
-        if row_id in seen:
+        if row_id in requested:
             raise ValueError("integrity inventory row ids must be unique")
-        seen.add(row_id)
-        requested.append(row_id)
+        requested[row_id] = None
     return tuple(requested)
 
 
@@ -360,8 +379,10 @@ class LedgerRepository:
             )
             _append_inventory_snapshots(snapshots, cursor)
         else:
-            keys = tuple(
-                sorted({normalize_relative_path(path) for path in path_keys})
+            keys = _bounded_normalized_path_keys(
+                path_keys,
+                limit=INVENTORY_POPULATION_ROW_LIMIT,
+                limit_error=InventoryPopulationLimitError,
             )
             if keys:
                 self._connection.execute("BEGIN")
@@ -384,6 +405,7 @@ class LedgerRepository:
                         _append_inventory_snapshots(snapshots, cursor)
                 finally:
                     self._connection.rollback()
+            del keys
         return tuple(snapshots)
 
     def get_inventory_by_row_ids(
@@ -391,19 +413,21 @@ class LedgerRepository:
     ) -> tuple[InventorySnapshot, ...]:
         """Return location-owned rows in first-requested canonical ID order."""
 
-        requested: list[str] = []
-        seen: set[str] = set()
-        for row_id in row_ids:
+        requested_keys: dict[str, None] = {}
+        for occurrence, row_id in enumerate(row_ids):
+            if occurrence == INVENTORY_POPULATION_ROW_LIMIT:
+                raise InventoryPopulationLimitError()
             if (
                 not isinstance(row_id, str)
                 or not row_id.isascii()
                 or not row_id.isdecimal()
                 or row_id.startswith("0")
-                or row_id in seen
+                or row_id in requested_keys
             ):
                 continue
-            seen.add(row_id)
-            requested.append(row_id)
+            requested_keys[row_id] = None
+        requested = tuple(requested_keys)
+        del requested_keys
 
         rows_by_id: dict[str, InventorySnapshot] = {}
         if requested:
@@ -568,6 +592,7 @@ class LedgerRepository:
             raise RuntimeError(
                 "saved integrity progress references missing inventory rows"
             )
+        del found_completed
 
         predicate = _integrity_eligibility_sql(mode)
         cursor = self._connection.execute(
@@ -817,8 +842,10 @@ class LedgerRepository:
 
         source_key = normalize_relative_path(source_relative_root, allow_root=True)
         target_key = normalize_relative_path(target_relative_root, allow_root=True)
-        current_target_keys = tuple(
-            sorted({normalize_relative_path(path) for path in target_path_keys})
+        current_target_keys = _bounded_normalized_path_keys(
+            target_path_keys,
+            limit=INVENTORY_POPULATION_ROW_LIMIT,
+            limit_error=InventoryPopulationLimitError,
         )
         current_source_identities = _identity_query_values(source_identities)
         current_target_identities = _identity_query_values(target_identities)

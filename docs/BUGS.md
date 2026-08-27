@@ -1293,13 +1293,13 @@ defect, and move implementation-level test choreography out of the log.
 
 - SEVERE - OPEN (2026-08-27). Inventory complete-graph admission gap. Raw scan
   rows, returned repository rows, and tree input members now stop before first
-  excess; integrity checks the exact candidate-row tuple before construction,
-  and no valid excess publishes partial work. Still unbounded are requested
-  path-key/id preprocessing and sorting, the inherited path-key `limit + 1`
-  check after retention, synthetic tree/index and candidate construction, and
-  old/new task generations. Checkpoint 4.1 must eliminate or charge those
-  owners and install the identity-deduplicated byte authority before accepting
-  the finite task model.
+  excess; requested paths, row ids, and mapping identities independently stop
+  before their first raw excess and before normalization/deduplication/sorting,
+  closing the inherited path-key `limit + 1` error. Integrity checks the exact
+  candidate-row tuple before construction, and no valid excess publishes
+  partial work. Synthetic tree/index and candidate construction, their finite
+  preprocessing transients, old/new task generations, and the complete byte
+  authority remain checkpoint-4.1 owners.
 - SEVERE - OPEN (2026-08-28). Hostile resolution alias revalidation gap. The
   inventory workflow validates a binding before calling the resolver, then
   retains exact resolver-returned mount/evidence objects across later resolver

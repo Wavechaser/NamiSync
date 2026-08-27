@@ -318,7 +318,12 @@ selections are queried in bounded 400-subject chunks inside one read
 transaction, so a concurrent commit cannot split one selection across different
 database snapshots. Row-ID lookups are location-scoped, deduplicate in
 first-requested order, and omit malformed or missing identifiers rather than
-broadening the query.
+broadening the query. Every supplied path, row-id, and mapping-identity
+occurrence also consumes its independent 120,000-entry request wall before
+normalization, deduplication, sorting, or query construction. Thus duplicates,
+malformed ids, and absent keys within the wall preserve their established
+result semantics, while the first raw excess refuses without consuming another
+value or starting SQL work.
 
 History version 6 creates a provisional `history_runs` row at the first durable
 window and appends disposition-bound reliable receipts to `history_events`.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 import sqlite3
 
@@ -37,6 +38,11 @@ from _db_fixtures import (
     plan,
     setup_recorder,
 )
+
+
+def _first_excess(*values: object) -> Iterator[object]:
+    yield from values
+    raise AssertionError("repository read beyond the first excess request")
 
 
 def _insert_minimal_inventory_rows(
@@ -246,11 +252,12 @@ def test_integrity_candidate_reader_enforces_complete_population_row_wall(
                 setup.source_location_id,
                 IntegrityMode.REBASELINE,
             ) == ()
-            assert repository.get_integrity_candidates(
-                setup.source_location_id,
-                IntegrityMode.REBASELINE,
-                path_keys=excess_paths,
-            ) == ()
+            with pytest.raises(IntegrityCandidateLimitError):
+                repository.get_integrity_candidates(
+                    setup.source_location_id,
+                    IntegrityMode.REBASELINE,
+                    path_keys=excess_paths,
+                )
     finally:
         setup.recorder.close()
 
@@ -273,7 +280,7 @@ def test_general_inventory_readers_refuse_first_excess_population(
                 repository.get_inventory(setup.source_location_id)
             assert repository.get_inventory(
                 setup.source_location_id,
-                ("absent-a.bin", "absent-b.bin", "absent-c.bin"),
+                ("absent-a.bin", "absent-b.bin"),
             ) == ()
             with pytest.raises(InventoryPopulationLimitError):
                 repository.get_inventory(
@@ -286,7 +293,7 @@ def test_general_inventory_readers_refuse_first_excess_population(
                 )
             assert repository.get_inventory_by_row_ids(
                 setup.source_location_id,
-                ("9001", "9002", "9003"),
+                ("9001", "9002"),
             ) == ()
             with pytest.raises(InventoryPopulationLimitError):
                 repository.get_inventory_by_row_ids(
@@ -316,6 +323,103 @@ def test_general_inventory_readers_refuse_first_excess_population(
                 repository.get_unacknowledged_missing(
                     setup.source_location_id
                 )
+    finally:
+        setup.recorder.close()
+
+
+def test_requested_inventory_scopes_refuse_the_first_raw_excess(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    monkeypatch.setattr(repository_module, "INVENTORY_POPULATION_ROW_LIMIT", 2)
+
+    try:
+        with LedgerRepository(setup.recorder.path) as repository:
+            assert repository.get_inventory(
+                setup.source_location_id,
+                ("absent.bin", "absent.bin"),
+            ) == ()
+            with pytest.raises(InventoryPopulationLimitError):
+                repository.get_inventory(
+                    setup.source_location_id,
+                    _first_excess("absent.bin", "absent.bin", "absent.bin"),
+                )
+
+            assert repository.get_inventory_by_row_ids(
+                setup.source_location_id,
+                ("999999", "999999"),
+            ) == ()
+            with pytest.raises(InventoryPopulationLimitError):
+                repository.get_inventory_by_row_ids(
+                    setup.source_location_id,
+                    _first_excess("999999", "999999", "999999"),
+                )
+    finally:
+        setup.recorder.close()
+
+
+def test_integrity_request_preprocessing_refuses_the_first_raw_excess(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    monkeypatch.setattr(repository_module, "INTEGRITY_CANDIDATE_ROW_LIMIT", 2)
+
+    try:
+        with LedgerRepository(setup.recorder.path) as repository:
+            assert repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.VERIFY,
+                path_keys=("absent.bin", "absent.bin"),
+            ) == ()
+            with pytest.raises(IntegrityCandidateLimitError):
+                repository.get_integrity_candidates(
+                    setup.source_location_id,
+                    IntegrityMode.VERIFY,
+                    path_keys=_first_excess(
+                        "absent.bin", "absent.bin", "absent.bin"
+                    ),
+                )
+            with pytest.raises(IntegrityCandidateLimitError):
+                repository.get_integrity_candidates(
+                    setup.source_location_id,
+                    IntegrityMode.VERIFY,
+                    saved_row_ids=_first_excess("1", "2", "3"),
+                )
+    finally:
+        setup.recorder.close()
+
+
+def test_mapping_request_preprocessing_refuses_first_raw_excess(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    monkeypatch.setattr(repository_module, "INVENTORY_POPULATION_ROW_LIMIT", 2)
+    identity = FileIdentity("source-serial", 1)
+
+    common = {
+        "source_volume": VolumeId("source-serial", "NTFS"),
+        "source_relative_root": "source",
+        "target_volume": VolumeId("target-serial", "NTFS"),
+        "target_relative_root": "target",
+    }
+    try:
+        with LedgerRepository(setup.recorder.path) as repository:
+            requests = (
+                (_first_excess("a.bin", "a.bin", "a.bin"), (), ()),
+                ((), _first_excess(identity, identity, identity), ()),
+                ((), (), _first_excess(identity, identity, identity)),
+            )
+            for target_paths, source_ids, target_ids in requests:
+                with pytest.raises(InventoryPopulationLimitError):
+                    repository.find_current_mapping(
+                        **common,
+                        target_path_keys=target_paths,
+                        source_identities=source_ids,
+                        target_identities=target_ids,
+                    )
     finally:
         setup.recorder.close()
 

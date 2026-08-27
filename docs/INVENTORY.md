@@ -45,13 +45,15 @@ select candidates without mutating them.
 
 General inventory, stale, missing, and row-id readers stream directly into
 `InventorySnapshot` values and stop before retaining the first returned row
-beyond 120,000. The bound applies to rows that actually exist and qualify, not
-to requested path keys or ids: absent or ineligible request values can still
-produce an empty result without a false capacity refusal. Chunked reads retain
-their one-snapshot ordering and do not accumulate raw `sqlite3.Row` shells
-beside the typed result. This returned-row prerequisite does not bound the
-requested-key/id normalization, sorting, or index slots that precede the read;
-checkpoint 4.1 must eliminate or charge those construction owners.
+beyond 120,000. Requested paths, row ids, and mapping identities have a
+separate raw 120,000-occurrence wall applied before normalization,
+deduplication, sorting, or SQL construction. Absent or ineligible values within
+that wall can still produce an empty result; duplicates and malformed row ids
+retain their existing selection semantics, but none bypasses raw request
+admission. Chunked reads retain their one-snapshot ordering and do not
+accumulate raw `sqlite3.Row` shells beside the typed result. Checkpoint 4.1
+charges the now-finite normalized sets, ordered copies, sort scratch, query
+slices, and final tuples.
 
 The inventory workflow re-resolves stable volume identity before each
 invocation, registers first locations in the exact order host -> volume

@@ -13,10 +13,12 @@ scan append, actual repository results, and exact tree input members stop before
 first excess; integrity checks the exact candidate-row tuple before its direct
 workflow construction. Initial inventory returns `REFUSED+UNRUN` without
 publication, while integrity returns `FAILED+RAN` without a partial selection
-or verifier start. Requested-key/id preprocessing, its inherited path-key
-off-by-one, synthetic tree/index and candidate construction, retained bytes,
-and hostile resolver-return aliases remain explicit checkpoint-4.1 owners in
-`BUGS.md`.
+or verifier start. Requested paths, row ids, and mapping identities now stop at
+their independent raw 120,000-occurrence walls before preprocessing, closing
+the inherited path-key off-by-one while preserving within-wall absent-result
+semantics. The finite preprocessing transients, synthetic tree/index and
+candidate construction, retained bytes, and hostile resolver-return aliases
+remain explicit checkpoint-4.1 owners in `BUGS.md`.
 
 Desktop task/session attachment is also structural in the working lineage.
 Production requires every session start to attach its exact unpublished task

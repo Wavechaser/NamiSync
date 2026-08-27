@@ -32,9 +32,12 @@ claims explicit, independently reviewable, and regression-backed.
   remains `FAILED+RAN`, both without partial downstream artifacts.
 - Streamed repository rows directly into immutable snapshots and applied the
   population ceiling to actual returned rows rather than absent requested keys
-  or ids. Candidate construction stays in the workflow after an exact tuple
-  boundary; checkpoint 4.1 still owns requested-key/id preprocessing,
-  synthetic tree/index construction, and the complete retained-byte authority.
+  or ids. Every requested path, row-id, and file-identity population now also
+  stops at its independent raw 120,000-occurrence wall before normalization,
+  deduplication, sorting, or SQL batching; the inherited 120,001-path admission
+  is closed while requested-but-absent values within the wall still return no
+  rows. Checkpoint 4.1 still owns the finite preprocessing transients,
+  synthetic tree/index construction, and complete retained-byte authority.
 - Made every production desktop session attach its exact task reservation and
   observation before scheduling. Dispatcher retains the sole retryable rollback
   authority; an observer timeout keeps capacity charged until exact retirement,
