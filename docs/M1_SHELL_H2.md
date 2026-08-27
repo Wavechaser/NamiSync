@@ -441,11 +441,14 @@ not freeze private counters, handler timing, or callback choreography.
   Keep this future-copy liability separate from the identity-deduplicated
   retained-domain walls; a constant multiple of those walls alone is unsound.
 - Original history-observer payloads, delayed audit finalization, callback
-  retry, and remaining exception tracebacks are real owners. Observation-stream
-  history and dispatcher worker frames now have explicit release witnesses;
-  exact worker retirement remains fenced through thread exit. Every remaining
-  owner needs an explicit finite charge and retirement condition, or structural
-  elimination, before a completion reservation may be released.
+  retry, and queue copies are real owners. History callback, replay-busy, and
+  receipt-reader-close exception frames now retire without changing fail-stop
+  or pending-window truth. Store construction and existing-run reader failures
+  remain outside that narrow closure. Observation-stream history and dispatcher
+  worker frames have explicit release witnesses; exact worker retirement remains
+  fenced through thread exit. Every remaining owner needs an explicit finite
+  charge and retirement condition, or structural elimination, before a
+  completion reservation may be released.
 - The complete-graph validator must classify non-slotted instance dictionaries,
   mapping-proxy backing stores, mutable-container high-water capacity, `Path`
   caches, all declared detail entries, and native/browser serialization copies.

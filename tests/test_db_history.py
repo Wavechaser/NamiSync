@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import timedelta
 import json
 from pathlib import Path
+from weakref import ref
 
 import pytest
 
@@ -64,6 +65,22 @@ from namisync.db.writer import RecordingError, TokenConflictError
 from namisync.workflows.views import operation_result_view
 
 from _db_fixtures import FakeClock, NOW
+
+
+def _raise_private_history_failure(errors, retained, message: str) -> None:
+    class PrivateGraph:
+        pass
+
+    graph = PrivateGraph()
+    retained.append(ref(graph))
+    try:
+        cause = LookupError("private history cause")
+        cause.graph = graph
+        raise cause
+    except LookupError as cause:
+        error = RecordingError(message)
+        errors.append(error)
+        raise error from cause
 
 
 def _record(
@@ -1073,8 +1090,13 @@ def test_same_window_conflicting_item_identity_rolls_back_the_window(
 def test_replay_lookup_retries_transient_busy_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    class PrivateGraph:
+        pass
+
     record = _record()
     path = tmp_path / "history.db"
+    errors = []
+    retained = []
     with HistoryStore(
         path,
         clock=FakeClock(),
@@ -1092,13 +1114,167 @@ def test_replay_lookup_retries_transient_busy_read(
             nonlocal attempts
             attempts += 1
             if attempts == 1:
-                raise sqlite3.OperationalError("database is locked")
+                graph = PrivateGraph()
+                retained.append(ref(graph))
+                try:
+                    cause = LookupError("private busy-read cause")
+                    cause.graph = graph
+                    raise cause
+                except LookupError as cause:
+                    error = sqlite3.OperationalError("database is locked")
+                    errors.append(error)
+                    raise error from cause
             return connect(*args, **kwargs)
 
         monkeypatch.setattr(history_module, "connect_history_reader", transient)
         assert observer.on_event(event) is RecordingStatus.OK
 
     assert attempts == 2
+    assert errors[0].__traceback__ is None
+    assert errors[0].__cause__ is None
+    assert errors[0].__context__ is None
+    assert retained[0]() is None
+
+
+def test_replay_lookup_close_failure_cannot_replace_receipt_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    record = _record()
+    path = tmp_path / "history-close-precedence.db"
+    primary = HistoryIntegrityError("private receipt failure")
+    primary_errors = []
+    close_errors = []
+    retained = []
+    with HistoryStore(
+        path,
+        clock=FakeClock(),
+        window_policy=HistoryWindowPolicy(max_events=1),
+    ) as store:
+        event = _envelope(record, 1, _item(1))
+        store.observer(
+            record,
+            HistoryContext("run-close-precedence", "host-1"),
+        ).on_event(event)
+        replay = store.observer(
+            record,
+            HistoryContext("run-close-precedence", "host-1"),
+        )
+        connect = history_module.connect_history_reader
+
+        class CloseFailingReader:
+            def __init__(self, connection) -> None:
+                self._connection = connection
+
+            def execute(self, *args, **kwargs):
+                return self._connection.execute(*args, **kwargs)
+
+            def close(self) -> None:
+                self._connection.close()
+                graph = PrivateGraph()
+                retained.append(ref(graph))
+                try:
+                    cause = LookupError("private reader-close cause")
+                    cause.graph = graph
+                    raise cause
+                except LookupError as cause:
+                    error = OSError("reader close failed")
+                    close_errors.append(error)
+                    raise error from cause
+
+        def connect_with_failing_close(*args, **kwargs):
+            return CloseFailingReader(connect(*args, **kwargs))
+
+        def fail_receipt(row):
+            del row
+            graph = PrivateGraph()
+            retained.append(ref(graph))
+            try:
+                cause = LookupError("private receipt cause")
+                cause.graph = graph
+                raise cause
+            except LookupError as cause:
+                primary_errors.append(primary)
+                raise primary from cause
+
+        monkeypatch.setattr(
+            history_module,
+            "connect_history_reader",
+            connect_with_failing_close,
+        )
+        monkeypatch.setattr(history_module, "_validated_receipt", fail_receipt)
+
+        with pytest.raises(
+            HistoryIntegrityError,
+            match="private receipt failure",
+        ) as raised:
+            replay.on_event(event)
+
+    assert raised.value is primary
+    assert primary_errors == [primary]
+    assert len(close_errors) == 1
+    assert primary.__cause__ is None
+    assert primary.__context__ is None
+    assert close_errors[0].__traceback__ is None
+    assert close_errors[0].__cause__ is None
+    assert close_errors[0].__context__ is None
+    assert retained and all(reference() is None for reference in retained)
+
+
+def test_replay_lookup_retires_a_failed_sqlite_diagnostic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    class HostileOperationalError(sqlite3.OperationalError):
+        def __str__(self) -> str:
+            graph = PrivateGraph()
+            retained.append(ref(graph))
+            diagnostic = LookupError("private sqlite diagnostic")
+            diagnostics.append(diagnostic)
+            raise diagnostic
+
+    record = _record()
+    path = tmp_path / "history-diagnostic.db"
+    original = HostileOperationalError("private sqlite failure")
+    retained = []
+    diagnostics = []
+    with HistoryStore(
+        path,
+        clock=FakeClock(),
+        window_policy=HistoryWindowPolicy(max_events=1),
+    ) as store:
+        event = _envelope(record, 1, _item(1))
+        store.observer(
+            record,
+            HistoryContext("run-diagnostic", "host-1"),
+        ).on_event(event)
+        replay = store.observer(
+            record,
+            HistoryContext("run-diagnostic", "host-1"),
+        )
+
+        def fail_connect(*args, **kwargs):
+            del args, kwargs
+            raise original
+
+        monkeypatch.setattr(history_module, "connect_history_reader", fail_connect)
+
+        with pytest.raises(LookupError, match="private sqlite diagnostic") as raised:
+            replay.on_event(event)
+
+    assert raised.value is diagnostics[0]
+    assert original.__traceback__ is None
+    assert original.__cause__ is None
+    assert original.__context__ is None
+    assert diagnostics[0].__cause__ is None
+    assert diagnostics[0].__context__ is None
+    assert retained[0]() is None
 
 
 @pytest.mark.parametrize(
@@ -3053,3 +3229,80 @@ def test_history_failure_does_not_mutate_domain_result(tmp_path: Path) -> None:
     assert result.status is SessionState.COMPLETED
     assert result.recording is RecordingStatus.OK
     assert result.audit is RecordingStatus.OK
+
+
+def test_history_event_failure_retires_traceback_and_cause_before_propagating_identity(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    errors = []
+    retained = []
+    record = _record()
+    store = HistoryStore(tmp_path / "history.db", clock=FakeClock())
+    observer = store.observer(record, HistoryContext("run-event-error", "host-1"))
+
+    def fail_projection(envelope):
+        del envelope
+        _raise_private_history_failure(
+            errors,
+            retained,
+            "history event projection failed",
+        )
+
+    monkeypatch.setattr(history_module, "envelope_to_dict", fail_projection)
+    try:
+        with pytest.raises(
+            RecordingError,
+            match="history event projection failed",
+        ) as raised:
+            observer.on_event(_envelope(record, 1, PhaseChanged("scan")))
+
+        assert raised.value is errors[0]
+        assert errors[0].__cause__ is None
+        assert errors[0].__context__ is None
+        assert retained[0]() is None
+        assert observer.pending_event_count == 0
+        with pytest.raises(HistoryIntegrityError, match="observer is degraded"):
+            observer.on_event(_envelope(record, 1, PhaseChanged("scan")))
+    finally:
+        observer.close()
+        store.close()
+
+
+def test_history_flush_failure_preserves_window_and_retires_traceback_and_cause(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    errors = []
+    retained = []
+    record = _record()
+    store = HistoryStore(tmp_path / "history.db", clock=FakeClock())
+    observer = store.observer(record, HistoryContext("run-flush-error", "host-1"))
+    observer.on_event(_envelope(record, 1, PhaseChanged("scan")))
+
+    def fail_transaction(operation):
+        del operation
+        _raise_private_history_failure(
+            errors,
+            retained,
+            "history window commit failed",
+        )
+
+    monkeypatch.setattr(store._writer, "transact", fail_transaction)
+    try:
+        with pytest.raises(
+            RecordingError,
+            match="history window commit failed",
+        ) as raised:
+            observer.flush()
+
+        assert raised.value is errors[0]
+        assert errors[0].__cause__ is None
+        assert errors[0].__context__ is None
+        assert retained[0]() is None
+        assert observer.pending_event_count == 1
+        with pytest.raises(HistoryIntegrityError, match="observer is degraded"):
+            observer.flush()
+    finally:
+        observer.close()
+        store.close()

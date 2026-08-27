@@ -167,6 +167,18 @@ further admission/finalization so no unauthenticated tail is recorded.
 Successful durable finalization is settled before cleanup, so a later close
 error cannot rewrite persisted or live terminal truth.
 
+History releases app-owned callback frames at that fail-stop boundary. Event
+admission, window flush, terminal projection, and terminal commit preserve the
+established public exception identity where it already escapes, while clearing
+its traceback, cause, and context before returning control. Replay lookup keeps
+no raw SQLite busy error between attempts; timeout retains only the fixed
+bounded recording detail. If receipt validation is already failing, a reader
+receipt-reader close failure is retired and cannot replace that initiating
+failure. The pending-window and durable-watermark rules above are unchanged.
+Arbitrary caller-owned exception attributes remain outside history custody.
+Store construction and existing-run reader failures retain their separate
+behavior and are not covered by this callback boundary.
+
 ## Admission, Idempotency, And Hashes
 
 History JSON/hash encoding requires Unicode scalar strings and keys and uses

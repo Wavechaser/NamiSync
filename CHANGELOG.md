@@ -33,6 +33,10 @@ claims explicit, independently reviewable, and regression-backed.
   and recording errors with closed typed truth before later work. Public
   identity/message behavior, path redaction, cancellation, exclusion ordering,
   and ordinary scanner/planner/preflight policy remain unchanged.
+- Retired history callback and replay-reader frames while preserving fail-stop
+  identity, retry timing, pending windows, and durable watermarks. Busy retries
+  retain no raw SQLite error, and receipt-reader-close failure cannot replace
+  an initiating receipt failure.
 - Bound public verifier chunks to exact integer sizes from one byte through the
   existing 4 MiB default. The Windows reader's per-file transient is now
   finitely chargeable as one aligned native buffer plus one Python bytes copy,

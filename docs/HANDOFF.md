@@ -79,6 +79,13 @@ transient.
 - Chained path/subscription errors in `NamiSyncService.start_plan` and
   `Dispatcher.subscribe`.
 
+History event, flush, finalization, replay-busy, and receipt-reader-close
+exception owners are now structurally closed. Public fail-stop identity,
+pending-window contents, retry timing, and durable watermarks remain unchanged;
+a secondary receipt-reader-close failure cannot mask the initiating receipt
+failure. Store construction/existing-run reader failures, delayed audit
+payloads, and queue/callback copies remain separate checkpoint-4 model inputs.
+
 Preserve current public status, item order, counters, exception identity where
 it propagates, cleanup/retry truth, and path redaction. Regressions retain raw
 external aliases and assert release after the public call; they do not encode

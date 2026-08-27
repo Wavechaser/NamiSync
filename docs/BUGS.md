@@ -1635,8 +1635,9 @@ defect, and move implementation-level test choreography out of the log.
   now retires consumed lifecycle links, including nested exception-group
   members, without changing terminal truth. Planner and sync workflow now do
   the same across paths, collaborators, execution, exclusion delivery, and
-  recording overlap. Dispatcher, history, bridge, document, and path-message
-  construction remain open. Cause:
+  recording overlap. History now retires callback and replay-reader frames
+  without changing prefix, retry, or pending-window truth. Dispatcher, bridge,
+  document, and path-message construction remain open. Cause:
   bounded public failure projection did not consistently retire the caught
   graph before the next ownership transition. Checkpoint 4 must preserve public
   behavior while closing every remaining app-owned raw exception reference;

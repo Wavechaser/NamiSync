@@ -13,6 +13,7 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
     Envelope,
@@ -341,11 +342,6 @@ def _json_bytes(value: object) -> bytes:
 
 def _hash(value: object) -> bytes:
     return hashlib.sha256(_json_bytes(value)).digest()
-
-
-def _sqlite_busy(error: sqlite3.OperationalError) -> bool:
-    message = str(error).lower()
-    return "locked" in message or "busy" in message
 
 
 def _advance_event_chain(chain: bytes, receipt_hash: bytes) -> bytes:
@@ -797,7 +793,6 @@ class HistoryStore:
     ) -> tuple[bytes, HistoryEventDisposition] | None:
         deadline = time.monotonic() + self._retry_timeout_seconds
         attempted = False
-        last_busy: sqlite3.OperationalError | None = None
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0 and (
@@ -806,8 +801,9 @@ class HistoryStore:
                 raise RecordingError(
                     "history replay lookup remained busy for "
                     f"{self._retry_timeout_seconds:.3f}s"
-                ) from last_busy
+                ) from None
             connection: sqlite3.Connection | None = None
+            failure_in_flight = False
             try:
                 connection = connect_history_reader(
                     self.path,
@@ -831,26 +827,50 @@ class HistoryStore:
                     receipt.disposition,
                 )
             except sqlite3.OperationalError as error:
-                if not _sqlite_busy(error):
-                    raise RecordingError(str(error)) from error
+                failure_in_flight = True
+                try:
+                    detail = str(error)
+                finally:
+                    retire_exception_graph(error)
+                normalized_detail = detail.lower()
+                busy = "locked" in normalized_detail or "busy" in normalized_detail
+                del normalized_detail
+                if not busy:
+                    raise RecordingError(detail) from None
+                del detail
                 attempted = True
-                last_busy = error
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
                     raise RecordingError(
                         "history replay lookup remained busy for "
                         f"{self._retry_timeout_seconds:.3f}s"
-                    ) from error
+                    ) from None
                 time.sleep(min(self._retry_interval_seconds, remaining))
+                failure_in_flight = False
             except (TypeError, ValueError) as error:
+                failure_in_flight = True
+                retire_exception_graph(error)
                 raise HistoryIntegrityError(
                     "history replay receipt is invalid"
-                ) from error
+                ) from None
             except sqlite3.Error as error:
-                raise RecordingError(str(error)) from error
+                failure_in_flight = True
+                try:
+                    detail = str(error)
+                finally:
+                    retire_exception_graph(error)
+                raise RecordingError(detail) from None
+            except BaseException:
+                failure_in_flight = True
+                raise
             finally:
                 if connection is not None:
-                    connection.close()
+                    try:
+                        connection.close()
+                    except BaseException as close_error:
+                        retire_exception_graph(close_error)
+                        if not failure_in_flight:
+                            raise
 
     def close(self) -> None:
         self._writer.close()
@@ -907,8 +927,9 @@ class HistoryObserver:
         self._require_accepting()
         try:
             return self._admit(envelope)
-        except BaseException:
+        except BaseException as error:
             self._failed = True
+            retire_exception_graph(error)
             raise
 
     def _admit(self, envelope: Envelope) -> RecordingStatus:
@@ -1044,8 +1065,9 @@ class HistoryObserver:
             return
         try:
             self._commit_window(None)
-        except BaseException:
+        except BaseException as error:
             self._failed = True
+            retire_exception_graph(error)
             raise
         self._accept_commit()
 
@@ -1065,12 +1087,15 @@ class HistoryObserver:
         except BaseException as error:
             self._failed = True
             if isinstance(error, HistoryIntegrityError):
+                retire_exception_graph(error)
                 raise
-            raise HistoryIntegrityError("history terminal summary is invalid") from error
+            retire_exception_graph(error)
+            raise HistoryIntegrityError("history terminal summary is invalid") from None
         try:
             _, payload_hash, audit = self._commit_window(result)
-        except BaseException:
+        except BaseException as error:
             self._failed = True
+            retire_exception_graph(error)
             raise
         self._accept_commit()
         self._existing_terminal_hash = payload_hash
