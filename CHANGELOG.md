@@ -23,6 +23,13 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Close checkpoint-4 finite-model prerequisites (2026-08-27)
+
+- Bound public verifier chunks to exact integer sizes from one byte through the
+  existing 4 MiB default. The Windows reader's per-file transient is now
+  finitely chargeable as one aligned native buffer plus one Python bytes copy,
+  while every ordinary runtime configuration remains unchanged.
+
 #### Reject premature checkpoint-4 reservation model (2026-08-27)
 
 - Independently rejected and deleted an uncommitted analytical draft that

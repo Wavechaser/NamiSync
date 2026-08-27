@@ -12,6 +12,7 @@ from typing import Iterator
 
 from namisync.core.file_identity import file_identity_from_windows_handle
 from namisync.core.integrity import (
+    MAX_VERIFIER_CHUNK_SIZE,
     ReadStrategy,
     UnsupportedVerification,
 )
@@ -449,6 +450,10 @@ class _WindowsStream:
         if subject_size == 0:
             return
         aligned_size = _align_up(chunk_size, self._sector_size)
+        if aligned_size > MAX_VERIFIER_CHUNK_SIZE:
+            raise UnsupportedVerification(
+                "verification alignment exceeds the chunk allocation limit"
+            )
         address = self._api.allocate(aligned_size)
         total = 0
         try:

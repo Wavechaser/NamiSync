@@ -16,6 +16,7 @@ from namisync.core.integrity import (
     IntegrityReason,
     IntegrityResult,
     IntegritySelection,
+    MAX_VERIFIER_CHUNK_SIZE,
     ReadStrategy,
     UnsupportedVerification,
     VerifierContext,
@@ -36,6 +37,25 @@ from _verifier_fixtures import (
     _native_context,
     _stat,
 )
+
+
+def test_windows_stream_refuses_alignment_above_public_chunk_ceiling() -> None:
+    class _Api:
+        def stat(self, handle: int) -> FileStat:
+            assert handle == 73
+            return _stat(size=1, mtime_ns=1, identity=None)
+
+        def allocate(self, size: int) -> int:
+            raise AssertionError(f"unexpected native allocation: {size}")
+
+    stream = verifier_native._WindowsStream(
+        _Api(),
+        73,
+        MAX_VERIFIER_CHUNK_SIZE + 1,
+    )
+
+    with pytest.raises(UnsupportedVerification, match="allocation limit"):
+        next(stream.iter_chunks(1))
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows cache-honest integration")
 def test_windows_reader_uses_read_only_share_and_cache_honest_flags(

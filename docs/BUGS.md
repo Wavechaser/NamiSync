@@ -1402,14 +1402,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - OPEN (2026-08-27). Unbounded verifier buffer policy. The ordinary
+- MODERATE - FIXED (2026-08-27). Unbounded verifier buffer policy. The ordinary
   runtime selects a 4 MiB chunk, but public `VerifierContext` accepts any
   positive size and the Windows reader simultaneously owns that aligned native
   buffer and a Python bytes copy. A direct supported component caller can thus
   bypass any finite task-transient charge. Cause: a composition default stood
-  in for a contract maximum. Checkpoint 4 must enforce one public upper bound
-  or establish a narrower enforced production premise before freezing native
-  copy costs.
+  in for a contract maximum. Fixed by admitting only exact integer chunk sizes
+  from one byte through 4 MiB, keeping the existing default as the maximum.
+  The task model can now charge one native buffer plus one Python chunk without
+  narrowing ordinary runtime behavior.
 - MODERATE - FIXED (2026-08-22). Verify-phase admission split. Linked
   post-copy Progress admitted only readable candidates while its terminal
   `PhaseResult` also counted selected items with missing evidence, allowing a

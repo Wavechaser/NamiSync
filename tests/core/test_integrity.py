@@ -12,6 +12,7 @@ from namisync.core.integrity import (
     INTEGRITY_CANDIDATE_ROW_LIMIT,
     INTEGRITY_CANDIDATE_RETAINED_BYTES_MESSAGE,
     INTEGRITY_CANDIDATE_ROWS_MESSAGE,
+    MAX_VERIFIER_CHUNK_SIZE,
     IntegrityCandidateLimitAxis,
     IntegrityCandidateLimitError,
     IntegrityCandidateLimitExceeded,
@@ -167,6 +168,21 @@ def _verifier_context(**changes: object) -> VerifierContext:
 def test_post_copy_progress_admission_is_paired() -> None:
     with pytest.raises(ValueError, match="admission must be paired"):
         _verifier_context(post_copy_items_total=1)
+
+
+def test_verifier_chunk_size_has_one_public_allocation_ceiling() -> None:
+    assert MAX_VERIFIER_CHUNK_SIZE == 4 * 1024 * 1024
+    assert (
+        _verifier_context(chunk_size=MAX_VERIFIER_CHUNK_SIZE).chunk_size
+        == MAX_VERIFIER_CHUNK_SIZE
+    )
+
+    for value in (True, 1.0, 0, -1, MAX_VERIFIER_CHUNK_SIZE + 1):
+        with pytest.raises(
+            (TypeError, ValueError),
+            match="verification chunk size",
+        ):
+            _verifier_context(chunk_size=value)
 
 
 @pytest.mark.parametrize(

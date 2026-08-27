@@ -87,6 +87,7 @@ class IntegrityMode(StrEnum):
 
 INTEGRITY_CANDIDATE_ROW_LIMIT = 120_000
 INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT = 201_326_592
+MAX_VERIFIER_CHUNK_SIZE = 4 * 1024 * 1024
 INTEGRITY_CANDIDATE_ROWS_MESSAGE = (
     "This integrity scope contains more than 120,000 items. Narrow the selected "
     "folders, then try again."
@@ -734,7 +735,7 @@ class VerifierContext:
     clock: Clock
     hasher_factory: HasherFactory
     monotonic: Callable[[], float] = monotonic
-    chunk_size: int = 4 * 1024 * 1024
+    chunk_size: int = MAX_VERIFIER_CHUNK_SIZE
     progress_interval_seconds: float = 0.1
     root_authority: RootAuthority | None = None
     post_copy_items_total: int | None = None
@@ -743,8 +744,12 @@ class VerifierContext:
     def __post_init__(self) -> None:
         if not callable(self.hasher_factory):
             raise TypeError("verification hasher factory must be callable")
-        if self.chunk_size <= 0:
-            raise ValueError("verification chunk size must be positive")
+        if type(self.chunk_size) is not int:
+            raise TypeError("verification chunk size must be an integer")
+        if not 1 <= self.chunk_size <= MAX_VERIFIER_CHUNK_SIZE:
+            raise ValueError(
+                "verification chunk size must be between 1 and 4194304 bytes"
+            )
         if self.progress_interval_seconds < 0:
             raise ValueError("progress interval cannot be negative")
         if self.root_authority is not None and not isinstance(

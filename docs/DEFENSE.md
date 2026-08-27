@@ -98,6 +98,10 @@ schemas; other active documents point here instead of reproducing these limits.
   valid Unicode and use a mechanically derived byte ceiling: the request-id
   maximum plus the UTF-8 lengths of the longest inventory namespace/suffix and
   the decimal width of `MAX_SAFE_INTEGER`.
+- Verifier read chunks are exact integers in `1..4,194,304`. The Windows reader
+  may simultaneously own one aligned native buffer and one Python `bytes`
+  materialization at that maximum; a runtime default is not accepted as a
+  substitute for this public component bound.
 - Destination-policy name/version and optional assignment annotations have no
   narrower production grammar yet. Constructors and projections enforce only
   the plan-domain ceiling per value; the checkpoint-4 completed-plan graph wall

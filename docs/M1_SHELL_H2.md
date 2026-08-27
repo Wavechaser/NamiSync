@@ -355,12 +355,14 @@ The same audit found finite-model prerequisites beyond the earlier path list:
 the desktop task cap does not yet bind dispatcher subscribers/sessions or all
 runtime/service maps; inventory scan/query/tree construction precedes complete
 admission; the standalone-integrity retained-byte wall is declared but not
-enforced; direct verifier chunk size is only positive-bounded; and bridge
-response projection, outstanding document posts, and CLR/WebView2/browser
-copies lack one complete bound and retirement witness. These are now OPEN in
-[BUGS.md](BUGS.md). Close them structurally or place them behind an exact
-enforced desktop-only premise before freezing numerical charges. A timeout or
-composition convention is not a retirement witness.
+enforced; and bridge response projection, outstanding document posts, and
+CLR/WebView2/browser copies lack one complete bound and retirement witness.
+The direct verifier chunk seam found in the same audit is now closed by one
+exact public 4 MiB maximum, so the model charges at most one aligned native
+buffer and one Python bytes copy per open stream. The remaining blockers are
+OPEN in [BUGS.md](BUGS.md). Close them structurally or place them behind an
+exact enforced desktop-only premise before freezing numerical charges. A
+timeout or composition convention is not a retirement witness.
 
 Canonical typed-detail admission is now structurally closed: exact-base
 construction validates the complete bounded shape, admission takes a fresh

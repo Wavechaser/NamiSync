@@ -101,10 +101,12 @@ Before another model attempt, close or enforce an exact desktop-only premise
 for every OPEN checkpoint-4 owner now recorded in [BUGS.md](BUGS.md): raw phase
 exception graphs; dispatcher/runtime/service owner counts and shutdown; raw
 inventory scan/query/tree construction; standalone-integrity retained bytes;
-the direct verifier chunk maximum; and complete bridge/document/native/browser
-response custody. The one plan-domain and one plan-information wall apply once
-to the aggregate identity-deduplicated artifact. Sequential phase peaks use a
-maximum union, not an all-call sum; queue/container slots remain separate.
+and complete bridge/document/native/browser response custody. The direct
+verifier seam is already closed at an exact 4 MiB public maximum, allowing one
+native buffer plus one Python bytes copy to be charged. The one plan-domain and
+one plan-information wall apply once to the aggregate identity-deduplicated
+artifact. Sequential phase peaks use a maximum union, not an all-call sum;
+queue/container slots remain separate.
 
 ## Verification
 

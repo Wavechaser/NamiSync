@@ -163,8 +163,11 @@ old subject. Pre- and post-read stats come from that same handle.
 
 The aligned native allocation is created once per opened file and freed when
 that stream ends. Each yielded chunk is still materialized as a Python `bytes`
-object for the current hasher protocol. That allocation is a performance seam,
-not a correctness defect; change the stream/hasher lifetime contract only after
+object for the current hasher protocol. `VerifierContext.chunk_size` is an
+exact integer from 1 through 4,194,304 bytes; the default and public maximum are
+both 4 MiB. One open Windows stream therefore owns at most one 4 MiB aligned
+native buffer and one 4 MiB Python chunk at the same time. Smaller configured
+chunks remain supported. Change the stream/hasher lifetime contract only after
 a profile shows chunk materialization is the limiting cost.
 
 There is deliberately no buffered fallback. A non-Windows host, reparse
