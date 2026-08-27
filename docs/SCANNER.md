@@ -27,20 +27,18 @@ scan(
 ```
 
 The optional admission is workflow-owned and exact-type-only. Ordinary scanner
-callers may omit it. A planning caller supplies one disposable fork for the
-scan's raw directory-entry populations and working builders, then retains only
-the exact typed `ScanResult` in its outer plan-review owner. Source-population
-limits are checked before append or diagnostic joining; cumulative file,
-directory, and unsupported populations become retained domain references,
-while warnings alone become cumulative informational semantic rows.
-Builder-to-sort and sort-to-tuple reference overlap is charged while both
-owners exist. A first excess raises the shared typed review-limit error and no
-partial `ScanResult` is published.
+callers may omit it. A planning caller supplies a fresh disposable admission;
+the scanner checks the combined file/directory/unsupported population and the
+warning population independently before each first-excess append. Workflow
+then reconstructs an exact detached `ScanResult` and charges only the shallow
+slots that the final plan artifact retains. A first excess raises the shared
+typed review-limit error and no partial `ScanResult` is published.
 
 This admission closes the planning-source owner boundary. It is not the
-checkpoint-4 complete-object reservation model: text/codec/native copies,
-container allocation, and task/result retention remain governed by that later
-model and validator.
+checkpoint-4 complete-object reservation model. Scanner admission neither
+prices construction/sort/index storage nor sums a whole scan's logical bytes;
+text/codec/native copies, container capacity, complete graph validation, and
+task/result retention remain governed by that later model and validator.
 
 ## Implemented M0 Surface
 

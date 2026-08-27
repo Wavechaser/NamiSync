@@ -6,7 +6,7 @@ import unicodedata
 from dataclasses import dataclass, replace
 from itertools import chain
 from pathlib import PureWindowsPath
-from typing import Callable, Iterable, Mapping, Sequence, TypeVar
+from typing import Callable, Iterable, Mapping, Sequence
 
 from namisync.core.models import (
     CapabilityProfile,
@@ -21,14 +21,7 @@ from namisync.core.models import (
     ScanResult,
     VolumeEvidence,
     VolumeId,
-    capability_profile_projection,
-    file_identity_projection,
-    file_stat_projection,
-    metadata_projection,
-    root_projection,
     validate_scan_result,
-    volume_evidence_projection,
-    volume_id_projection,
 )
 from namisync.core.pathing import (
     is_relative_path_descendant,
@@ -43,6 +36,7 @@ from namisync.core.planning import (
     DeletionPolicy,
     DestinationAssignment,
     FilterSet,
+    IdentityDestinationPolicy,
     MappingPair,
     MappingSnapshot,
     OperationKind,
@@ -56,7 +50,6 @@ from namisync.core.planning import (
     SyncOptions,
     calculate_required_bytes,
     deterministic_operation_id,
-    operation_projection,
     plan_fingerprint,
     policy_fingerprint,
     re_fullmatch_op_id,
@@ -66,86 +59,9 @@ from namisync.core.planning import (
 from namisync.core.review import (
     PLAN_SOURCE_REFERENCE_BYTES,
     PlanReviewAdmission,
-    snapshot_admitted_plan_scan,
+    snapshot_plan_file_records,
+    snapshot_plan_scan_result,
 )
-
-
-_T = TypeVar("_T")
-
-
-def _freeze_reference_list(values: list[_T]) -> tuple[_T, ...]:
-    """Freeze one already admitted reference builder."""
-
-    return tuple(values)
-
-
-def _freeze_reference_set(values: Iterable[_T]) -> frozenset[_T]:
-    """Freeze one already admitted reference builder."""
-
-    return frozenset(values)
-
-
-def _freeze_operation_builders(
-    *builders: Sequence[PlanOperation],
-) -> tuple[PlanOperation, ...]:
-    """Freeze admitted operation builders without another intermediate list."""
-
-    return tuple(operation for builder in builders for operation in builder)
-
-
-def _freeze_snapshot_operations(
-    builder: list[PlanOperation],
-) -> tuple[PlanOperation, ...]:
-    """Freeze one admitted detached-plan operation builder."""
-
-    return tuple(builder)
-
-
-def _remember_operation_dependency(
-    builder: set[str],
-    dependency: str,
-) -> None:
-    """Retain one dependency after its reference slot has been admitted."""
-
-    builder.add(dependency)
-
-
-def _sort_operation_dependencies(builder: set[str]) -> list[str]:
-    """Sort admitted dependency references into a disposable builder."""
-
-    return sorted(builder, key=str)
-
-
-def _freeze_operation_dependencies(
-    builder: Iterable[str],
-) -> tuple[str, ...]:
-    """Copy admitted dependency references into their retained tuple."""
-
-    return tuple(dependency for dependency in builder)
-
-
-def _freeze_required_volumes(
-    builder: Iterable[VolumeId],
-) -> frozenset[VolumeId]:
-    """Freeze one admitted required-volume builder."""
-
-    return frozenset(builder)
-
-
-def _freeze_callback_source_files(
-    source: ScanResult,
-    options: SyncOptions,
-) -> tuple[FileRecord, ...]:
-    """Build the detached callback population after its slots are admitted."""
-
-    return tuple(
-        record
-        for record in sorted(
-            source.files,
-            key=lambda item: (item.rel_path_key, item.rel_path),
-        )
-        if not options.filters.excludes(record.rel_path)
-    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -230,12 +146,15 @@ def snapshot_plan_options(value: object) -> tuple[SyncOptions, SyncOptions]:
     if type(value) is not SyncOptions:
         raise TypeError("planner options must be an exact SyncOptions")
     identity, callback = _capture_destination_policy(value.destination_policy)
+    retained_identity: object = identity
+    if type(value.destination_policy) is IdentityDestinationPolicy:
+        retained_identity = IdentityDestinationPolicy(identity.name, identity.version)
     return (
         _copy_sync_options(
             value,
             _DestinationPolicyCallback(identity.name, identity.version, callback),
         ),
-        _copy_sync_options(value, identity),
+        _copy_sync_options(value, retained_identity),
     )
 
 
@@ -245,21 +164,26 @@ def _snapshot_retained_options(value: object) -> SyncOptions:
     if type(value) is not SyncOptions:
         raise TypeError("planner options must be an exact SyncOptions")
     identity, _ = _capture_destination_policy(value.destination_policy)
-    return _copy_sync_options(value, identity)
+    retained_identity: object = identity
+    if type(value.destination_policy) is IdentityDestinationPolicy:
+        retained_identity = IdentityDestinationPolicy(identity.name, identity.version)
+    return _copy_sync_options(value, retained_identity)
 
 
 def _snapshot_identity(value: FileIdentity | None) -> FileIdentity | None:
-    file_identity_projection(value)
-    return (
-        None
-        if value is None
-        else FileIdentity(value.volume_serial, value.file_index)
-    )
+    if value is None:
+        return None
+    if type(value) is not FileIdentity:
+        raise TypeError("mapping file identity has the wrong type")
+    return FileIdentity(value.volume_serial, value.file_index)
 
 
 def _snapshot_volume(value: VolumeId | None) -> VolumeId | None:
-    volume_id_projection(value)
-    return None if value is None else VolumeId(value.serial, value.fs_type)
+    if value is None:
+        return None
+    if type(value) is not VolumeId:
+        raise TypeError("mapping volume identity has the wrong type")
+    return VolumeId(value.serial, value.fs_type)
 
 
 def snapshot_mapping_snapshot(
@@ -282,11 +206,6 @@ def snapshot_mapping_snapshot(
     disqualified_source = populations[2][1]
     disqualified_target = populations[3][1]
     assert type(value) is MappingSnapshot
-    copy_owner = admission.fork()
-    retained_slots = 0
-
-    pair_stage = copy_owner.fork()
-    pair_stage.admit_domain_shape(reference_slots=len(pairs_source))
     pairs: list[MappingPair] = []
     for pair in pairs_source:
         if type(pair) is not MappingPair:
@@ -313,61 +232,35 @@ def snapshot_mapping_snapshot(
                 target_identity,
             )
         )
-    pair_stage.admit_domain_shape(reference_slots=len(pairs))
-    copy_owner.admit_domain_shape(reference_slots=len(pairs))
-    retained_slots += len(pairs)
-    frozen_pairs = _freeze_reference_list(pairs)
-    del pair_stage, pairs
 
-    ambiguous_stage = copy_owner.fork()
-    ambiguous_stage.admit_domain_shape(reference_slots=len(ambiguous_source))
-    ambiguous: set[str] = set()
-    for key in ambiguous_source:
+    def snapshot_ambiguous_key(key: object) -> str:
         if type(key) is not str:
             raise TypeError("mapping ambiguous source keys must be text")
         validate_relative_path(key)
         if key != normalize_relative_path(key):
             raise ValueError("mapping ambiguous source key is not canonical")
-        ambiguous.add(key)
-    ambiguous_stage.admit_domain_shape(reference_slots=len(ambiguous))
-    copy_owner.admit_domain_shape(reference_slots=len(ambiguous))
-    retained_slots += len(ambiguous)
-    frozen_ambiguous = _freeze_reference_set(ambiguous)
-    del ambiguous_stage, ambiguous
+        return key
 
     def snapshot_identities(
         population: frozenset[FileIdentity],
     ) -> frozenset[FileIdentity]:
-        nonlocal retained_slots
-        identity_stage = copy_owner.fork()
-        identity_stage.admit_domain_shape(reference_slots=len(population))
-        copied: set[FileIdentity] = set()
+        copied: list[FileIdentity] = []
         for identity in population:
             snapshot = _snapshot_identity(identity)
             if snapshot is None:
                 raise TypeError(
                     "mapping disqualified identities must be FileIdentity values"
                 )
-            copied.add(snapshot)
-        identity_stage.admit_domain_shape(reference_slots=len(copied))
-        copy_owner.admit_domain_shape(reference_slots=len(copied))
-        retained_slots += len(copied)
-        frozen = _freeze_reference_set(copied)
-        del identity_stage, copied
-        return frozen
-
-    frozen_disqualified_source = snapshot_identities(disqualified_source)
-    frozen_disqualified_target = snapshot_identities(disqualified_target)
-    admission.admit_domain_shape(reference_slots=retained_slots)
-    del copy_owner
+            copied.append(snapshot)
+        return frozenset(copied)
 
     return MappingSnapshot(
         _snapshot_volume(value.source_volume_id),
         _snapshot_volume(value.target_volume_id),
-        frozen_pairs,
-        frozen_ambiguous,
-        frozen_disqualified_source,
-        frozen_disqualified_target,
+        tuple(pairs),
+        frozenset(snapshot_ambiguous_key(key) for key in ambiguous_source),
+        snapshot_identities(disqualified_source),
+        snapshot_identities(disqualified_target),
     )
 
 
@@ -403,95 +296,50 @@ def _validate_plan_mapping_source(
     return populations
 
 
-def admit_plan_mapping_copy(
-    value: object,
-    admission: PlanReviewAdmission,
-) -> None:
-    """Admit one mapping owner without constructing another copy."""
-
-    populations = _validate_plan_mapping_source(value, admission)
-    admission.admit_domain_shape(
-        reference_slots=sum(len(population) for _, population, _ in populations)
-    )
-
-
 def _snapshot_assignment(
     value: object,
     admission: PlanReviewAdmission,
-    *,
-    source_owner: bool = False,
 ) -> Assignment:
     if type(value) is not Assignment:
         raise TypeError("destination policy must return an exact Assignment")
     if type(value.items) is not tuple:
         raise TypeError("assignment items must be an exact tuple")
-    if type(source_owner) is not bool:
-        raise TypeError("assignment source-owner marker must be a bool")
     admission.require_source_rows(len(value.items))
-    copy_stage = admission.fork()
-    if source_owner:
-        copy_stage.admit_domain_shape(reference_slots=len(value.items))
-    copy_stage.admit_domain_shape(reference_slots=len(value.items))
     validate_assignment(value)
-    copied = [
-        DestinationAssignment(
-            item.source_rel_path,
-            item.source_rel_path_key,
-            item.target_rel_path,
-            item.target_rel_path_key,
-            item.group_id,
-            item.conflict,
-        )
-        for item in value.items
-    ]
-    copy_stage.admit_domain_shape(reference_slots=len(copied))
-    admission.admit_domain_shape(reference_slots=len(copied))
-    frozen = _freeze_reference_list(copied)
-    del copy_stage, copied
-    return Assignment(
+    snapshot = Assignment(
         value.policy_name,
         value.policy_version,
-        frozen,
+        tuple(
+            DestinationAssignment(
+                item.source_rel_path,
+                item.source_rel_path_key,
+                item.target_rel_path,
+                item.target_rel_path_key,
+                item.group_id,
+                item.conflict,
+            )
+            for item in value.items
+        ),
     )
+    return snapshot
 
 
 class _OperationAdmission:
-    """Gate one combined operation population before every retained append."""
+    """Gate one combined operation source population before every append."""
 
-    __slots__ = ("admission", "count", "reference_slots", "rows")
+    __slots__ = ("admission", "count")
 
     def __init__(
         self,
         admission: PlanReviewAdmission,
-        *,
-        rows: bool,
     ) -> None:
         self.admission = admission
         self.count = 0
-        self.reference_slots = 0
-        self.rows = rows
 
-    def require_shape(self, dependency_count: int) -> None:
-        """Refuse an operation shape before any dependency copy is retained."""
-
+    def admit(self) -> None:
         next_count = self.count + 1
-        preview = self.admission.fork()
-        preview.require_source_rows(next_count)
-        preview.admit_domain_shape(
-            rows=int(self.rows),
-            reference_slots=1 + dependency_count,
-        )
-
-    def admit(self, operation: PlanOperation) -> None:
-        next_count = self.count + 1
-        reference_slots = 1 + len(operation.dependencies)
-        self.require_shape(len(operation.dependencies))
-        self.admission.admit_domain_shape(
-            rows=int(self.rows),
-            reference_slots=reference_slots,
-        )
+        self.admission.require_source_rows(next_count)
         self.count = next_count
-        self.reference_slots += reference_slots
 
 
 class _OperationList(list[PlanOperation]):
@@ -505,45 +353,19 @@ class _OperationList(list[PlanOperation]):
 
     def append(self, operation: PlanOperation) -> None:
         if self._gate is not None:
-            self._gate.admit(operation)
+            self._gate.admit()
         super().append(operation)
 
 
 def _cleanup_operation_dependencies(
     candidates: Iterable[str],
-    operation_admission: _OperationAdmission | None,
 ) -> tuple[str, ...]:
     """Deduplicate and freeze one cleanup operation's dependency ids."""
 
-    if operation_admission is None:
-        return tuple(sorted(set(candidates), key=str))
-
-    operation_admission.require_shape(0)
-    dependency_stage = operation_admission.admission.fork()
     dependency_ids: set[str] = set()
     for dependency in candidates:
-        if dependency in dependency_ids:
-            continue
-        operation_admission.require_shape(len(dependency_ids) + 1)
-        dependency_stage.admit_domain_shape(reference_slots=1)
-        _remember_operation_dependency(dependency_ids, dependency)
-
-    dependency_stage.admit_domain_shape(
-        reference_slots=len(dependency_ids)
-    )
-    if not dependency_ids:
-        del dependency_stage, dependency_ids
-        return ()
-    sorted_dependencies = _sort_operation_dependencies(dependency_ids)
-    del dependency_stage, dependency_ids
-
-    tuple_stage = operation_admission.admission.fork()
-    tuple_stage.admit_domain_shape(
-        reference_slots=2 * len(sorted_dependencies)
-    )
-    dependencies = _freeze_operation_dependencies(sorted_dependencies)
-    del tuple_stage, sorted_dependencies
-    return dependencies
+        dependency_ids.add(dependency)
+    return tuple(sorted(dependency_ids, key=str))
 
 
 def _metadata_equal(source: FileStat, target: FileStat, granularity_ns: int) -> bool:
@@ -734,29 +556,22 @@ def plan(
 ) -> Plan:
     """Transform immutable observations and policy into immutable intent."""
 
-    published_admission = review_admission
     admission = review_admission
     assign_destinations: Callable[..., object] | None = None
+    policy_identity: _DestinationPolicyIdentity | None = None
     if admission is not None:
         if type(admission) is not PlanReviewAdmission:
             raise TypeError("plan review admission has the wrong type")
-        admission = admission.fork()
         if type(scope) is not Scope or type(scope.kind) is not ScopeKind:
             raise TypeError("planner scope must be an exact typed Scope")
         if scope.kind is ScopeKind.EVERYTHING and scope.value is not None:
             raise ValueError("everything scope must not carry a value")
-        source = snapshot_admitted_plan_scan(
-            source,
-            admission,
-            logical_source=True,
+        validate_scan_result(source)
+        validate_scan_result(target)
+        _validate_plan_mapping_source(correspondence, admission)
+        policy_identity, assign_destinations = _capture_destination_policy(
+            options.destination_policy
         )
-        target = snapshot_admitted_plan_scan(target, admission)
-        correspondence = snapshot_mapping_snapshot(
-            correspondence,
-            review_admission=admission,
-        )
-        live_options, options = snapshot_plan_options(options)
-        assign_destinations = live_options.destination_policy.assign
 
     if scope.kind is not ScopeKind.EVERYTHING:
         raise NotImplementedError(f"scope {scope.kind.value!r} is declared but not implemented in M0")
@@ -779,58 +594,31 @@ def plan(
     if admission is None:
         assignment = options.destination_policy.assign(source_files, {}, target)
     else:
-        callback_admission = admission.fork()
-        callback_source = snapshot_admitted_plan_scan(
-            source,
-            callback_admission,
-            logical_source=True,
+        callback_source_files = snapshot_plan_file_records(
+            source_files,
+            admission,
         )
-        callback_target = snapshot_admitted_plan_scan(
-            target,
-            callback_admission,
-        )
-        callback_source_file_count = sum(
-            1
-            for record in callback_source.files
-            if not options.filters.excludes(record.rel_path)
-        )
-        callback_admission.admit_domain_shape(
-            reference_slots=callback_source_file_count
-        )
-        callback_source_files = _freeze_callback_source_files(
-            callback_source,
-            options,
-        )
-        if len(callback_source_files) != callback_source_file_count:
-            raise RuntimeError("callback source-file admission count changed")
+        callback_target = snapshot_plan_scan_result(target, admission)
         assert assign_destinations is not None
         raw_assignment = assign_destinations(
             callback_source_files,
             {},
             callback_target,
         )
-        callback_assignment = _snapshot_assignment(
+        assignment = _snapshot_assignment(
             raw_assignment,
-            callback_admission,
-            source_owner=True,
+            admission,
         )
         del (
             assign_destinations,
-            callback_source,
             callback_target,
             callback_source_files,
             raw_assignment,
-            live_options,
         )
-        assignment = _snapshot_assignment(
-            callback_assignment,
-            admission,
-            source_owner=True,
-        )
-        del callback_admission, callback_assignment
+        assert policy_identity is not None
         if (
-            assignment.policy_name != options.destination_policy.name
-            or assignment.policy_version != options.destination_policy.version
+            assignment.policy_name != policy_identity.name
+            or assignment.policy_version != policy_identity.version
         ):
             raise ValueError("destination assignment policy identity changed")
     _validate_assignment(assignment, source_files)
@@ -849,30 +637,17 @@ def plan(
 
     required_directory_paths: set[str] = set()
     for record in source_dirs:
-        if record.rel_path in required_directory_paths:
-            continue
-        if admission is not None:
-            admission.require_source_rows(len(required_directory_paths) + 1)
         required_directory_paths.add(record.rel_path)
     for item in assignment.items:
         parent = relative_path_parent(item.target_rel_path)
         while parent is not None:
-            if parent not in required_directory_paths and admission is not None:
-                admission.require_source_rows(
-                    len(required_directory_paths) + 1
-                )
             required_directory_paths.add(parent)
             parent = relative_path_parent(parent)
 
-    operation_stage = (
-        None
-        if admission is None
-        else admission.fork()
-    )
     operation_admission = (
         None
-        if operation_stage is None
-        else _OperationAdmission(operation_stage, rows=True)
+        if admission is None
+        else _OperationAdmission(admission)
     )
     mkdir_operations: list[PlanOperation] = _OperationList(operation_admission)
     created_directories: dict[str, PlanOperation] = {}
@@ -1124,8 +899,6 @@ def plan(
         if options.filters.excludes(record.rel_path):
             continue
         visible_key = (record.rel_path_key, record.rel_path)
-        if visible_key not in visible_unsupported and admission is not None:
-            admission.require_source_rows(len(visible_unsupported) + 1)
         visible_unsupported[visible_key] = record
     for record in sorted(visible_unsupported.values(), key=lambda item: (item.rel_path_key, item.rel_path)):  # type: ignore[attr-defined]
         blocked_operations.append(
@@ -1192,7 +965,6 @@ def plan(
                     == directory.rel_path
                 ),
             ),
-            operation_admission,
         )
         cleanup = PlanOperation(
             op_id=deterministic_operation_id(OperationKind.DELETE, None, directory.rel_path, None, OperationReason.DIRECTORY_CLEANUP),
@@ -1215,70 +987,30 @@ def plan(
         + len(blocked_operations)
         + len(cleanup_operations)
     )
-    if operation_admission is None:
-        operations = tuple((*mkdir_operations, *content_operations, *removal_operations, *blocked_operations, *cleanup_operations))
-    else:
-        assert operation_stage is not None and admission is not None
-        operation_stage.admit_domain_shape(reference_slots=operation_count)
-        admission.admit_domain_shape(
-            rows=operation_count,
-            reference_slots=operation_admission.reference_slots,
+    operations = tuple(
+        (
+            *mkdir_operations,
+            *content_operations,
+            *removal_operations,
+            *blocked_operations,
+            *cleanup_operations,
         )
-        operations = _freeze_operation_builders(
-            mkdir_operations,
-            content_operations,
-            removal_operations,
-            blocked_operations,
-            cleanup_operations,
-        )
-        if operation_admission.count != len(operations):
-            raise RuntimeError(
-                "plan operation admission did not cover every operation"
-            )
-        del (
-            operation_stage,
-            operation_admission,
-            mkdir_operations,
-            content_operations,
-            removal_operations,
-            blocked_operations,
-            cleanup_operations,
-        )
+    )
+    if (
+        operation_admission is not None
+        and operation_admission.count != operation_count
+    ):
+        raise RuntimeError("plan operation admission did not cover every operation")
     required_bytes = calculate_required_bytes(
         operations,
         target_profile=target.profile,
         trash_on_update=options.trash_on_update,
     )
-    if admission is None:
-        required_volumes = frozenset(
-            volume
-            for volume in (source.volume_id, target.volume_id)
-            if volume is not None
-        )
-    else:
-        required_volume_stage = admission.fork()
-        required_volume_items: list[VolumeId] = []
-        for volume in (source.volume_id, target.volume_id):
-            if volume is None:
-                continue
-            required_volume_stage.admit_domain_shape(reference_slots=1)
-            required_volume_items.append(volume)
-        required_volume_count = (
-            0
-            if not required_volume_items
-            else 1
-            if len(required_volume_items) == 1
-            or required_volume_items[0] == required_volume_items[1]
-            else 2
-        )
-        required_volume_stage.admit_domain_shape(
-            reference_slots=required_volume_count
-        )
-        admission.admit_domain_shape(
-            reference_slots=required_volume_count
-        )
-        required_volumes = _freeze_required_volumes(required_volume_items)
-        del required_volume_stage, required_volume_items
+    required_volumes = frozenset(
+        volume
+        for volume in (source.volume_id, target.volume_id)
+        if volume is not None
+    )
     placeholder = Plan(
         source_root=source.root,
         target_root=target.root,
@@ -1302,29 +1034,28 @@ def plan(
         fingerprint=PlanFingerprint("0" * 64),
     )
     result = replace(placeholder, fingerprint=plan_fingerprint(placeholder))
-    if published_admission is not None:
-        admit_retained_plan_candidate(result, published_admission)
     return result
 
 
-def _snapshot_root(value: Root) -> Root:
-    root_projection(value)
+def _snapshot_root(value: object) -> Root:
+    if type(value) is not Root:
+        raise TypeError("plan root has the wrong type")
     return Root(value.path, value.root_id)
 
 
 def _snapshot_evidence(
-    value: VolumeEvidence | None,
+    value: object,
 ) -> VolumeEvidence | None:
-    volume_evidence_projection(value)
-    return (
-        None
-        if value is None
-        else VolumeEvidence(value.label, value.device_id, value.clone_ambiguous)
-    )
+    if value is None:
+        return None
+    if type(value) is not VolumeEvidence:
+        raise TypeError("plan volume evidence has the wrong type")
+    return VolumeEvidence(value.label, value.device_id, value.clone_ambiguous)
 
 
-def _snapshot_profile(value: CapabilityProfile) -> CapabilityProfile:
-    capability_profile_projection(value)
+def _snapshot_profile(value: object) -> CapabilityProfile:
+    if type(value) is not CapabilityProfile:
+        raise TypeError("plan capability profile has the wrong type")
     return CapabilityProfile(
         value.fs_type,
         value.mtime_granularity_ns,
@@ -1337,20 +1068,20 @@ def _snapshot_profile(value: CapabilityProfile) -> CapabilityProfile:
 
 
 def _snapshot_metadata(
-    value: MetadataSnapshot | None,
+    value: object,
 ) -> MetadataSnapshot | None:
-    metadata_projection(value)
-    return (
-        None
-        if value is None
-        else MetadataSnapshot(value.attributes, value.created_ns)
-    )
-
-
-def _snapshot_stat(value: FileStat | None) -> FileStat | None:
-    file_stat_projection(value)
     if value is None:
         return None
+    if type(value) is not MetadataSnapshot:
+        raise TypeError("plan metadata has the wrong type")
+    return MetadataSnapshot(value.attributes, value.created_ns)
+
+
+def _snapshot_stat(value: object) -> FileStat | None:
+    if value is None:
+        return None
+    if type(value) is not FileStat:
+        raise TypeError("plan file stat has the wrong type")
     metadata = _snapshot_metadata(value.metadata)
     assert metadata is not None
     return FileStat(
@@ -1365,15 +1096,11 @@ def _snapshot_stat(value: FileStat | None) -> FileStat | None:
 
 def _snapshot_operation(
     value: object,
-    known_ids: set[str],
-    operation_admission: _OperationAdmission,
 ) -> PlanOperation:
     if type(value) is not PlanOperation:
         raise TypeError("plan operations must contain exact PlanOperation values")
     if type(value.dependencies) is not tuple:
         raise TypeError("plan operation dependencies must be an exact tuple")
-    if len(value.dependencies) > len(known_ids):
-        raise ValueError("operation has more dependencies than prior operations")
     if (
         type(value.op_id) is not str
         or not re_fullmatch_op_id(value.op_id)
@@ -1386,29 +1113,10 @@ def _snapshot_operation(
     ):
         raise TypeError("plan operation has an invalid typed field")
 
-    operation_admission.require_shape(len(value.dependencies))
-    validation_stage = operation_admission.admission.fork()
-    seen_dependencies: set[str] = set()
     for dependency in value.dependencies:
         if type(dependency) is not str or not re_fullmatch_op_id(dependency):
             raise TypeError("plan operation dependency has an invalid id")
-        if dependency in seen_dependencies:
-            raise ValueError("plan operation dependencies must be unique")
-        if dependency not in known_ids:
-            raise ValueError("operations must be dependency ordered")
-        validation_stage.admit_domain_shape(reference_slots=1)
-        _remember_operation_dependency(seen_dependencies, dependency)
-    del validation_stage, seen_dependencies
 
-    if value.dependencies:
-        dependency_stage = operation_admission.admission.fork()
-        dependency_stage.admit_domain_shape(
-            reference_slots=len(value.dependencies)
-        )
-        dependencies = _freeze_operation_dependencies(value.dependencies)
-        del dependency_stage
-    else:
-        dependencies = ()
     snapshot = PlanOperation(
         op_id=value.op_id,
         kind=value.kind,
@@ -1421,11 +1129,10 @@ def _snapshot_operation(
         prior_target_expected=_snapshot_stat(value.prior_target_expected),
         metadata=_snapshot_metadata(value.metadata),
         content_bytes=value.content_bytes,
-        dependencies=dependencies,
+        dependencies=tuple(dependency for dependency in value.dependencies),
         reason=value.reason,
         blocked_reason=value.blocked_reason,
     )
-    operation_projection(snapshot)
     if snapshot.op_id != deterministic_operation_id(
         snapshot.kind,
         snapshot.source_rel_path,
@@ -1444,14 +1151,11 @@ def snapshot_plan_candidate(
     options: SyncOptions,
     *,
     review_admission: PlanReviewAdmission | None = None,
-    retain_rows: bool = True,
 ) -> Plan:
     """Validate and detach one planner result before review publication."""
 
     if type(value) is not Plan:
         raise TypeError("planner must return an exact Plan")
-    if type(retain_rows) is not bool:
-        raise TypeError("plan candidate retain_rows must be a bool")
     if type(value.operations) is not tuple:
         raise TypeError("plan operations must be an exact tuple")
     if type(value.assignment) is not Assignment:
@@ -1482,7 +1186,6 @@ def snapshot_plan_candidate(
     if type(admission) is not PlanReviewAdmission:
         raise TypeError("plan review admission has the wrong type")
     admission.require_source_rows(len(value.operations))
-    admission.require_source_rows(len(value.assignment.items))
     if len(value.required_volumes) > 2:
         raise ValueError("plan required volumes exceed the endpoint limit")
 
@@ -1505,34 +1208,9 @@ def snapshot_plan_candidate(
             "plan assignment policy does not match requested policy"
         )
 
-    operation_stage = admission.fork()
-    operation_admission = _OperationAdmission(
-        operation_stage,
-        rows=retain_rows,
+    operations = tuple(
+        _snapshot_operation(operation) for operation in value.operations
     )
-    operation_builder: list[PlanOperation] = _OperationList(operation_admission)
-    known_ids: set[str] = set()
-    for operation in value.operations:
-        snapshot = _snapshot_operation(
-            operation,
-            known_ids,
-            operation_admission,
-        )
-        if snapshot.op_id in known_ids:
-            raise ValueError("duplicate operation id")
-        operation_builder.append(snapshot)
-        known_ids.add(snapshot.op_id)
-    operation_stage.admit_domain_shape(reference_slots=len(operation_builder))
-    admission.admit_domain_shape(
-        rows=(len(operation_builder) if retain_rows else 0),
-        reference_slots=operation_admission.reference_slots,
-    )
-    operations = _freeze_snapshot_operations(operation_builder)
-    if operation_admission.count != len(operations):
-        raise RuntimeError(
-            "plan operation admission did not cover every operation"
-        )
-    del operation_stage, operation_admission, operation_builder
 
     source_root = _snapshot_root(value.source_root)
     target_root = _snapshot_root(value.target_root)
@@ -1553,7 +1231,10 @@ def snapshot_plan_candidate(
         or target_profile != target.profile
     ):
         raise ValueError("plan endpoint evidence does not match admitted scans")
-    if type(value.source_complete) is not bool or type(value.target_complete) is not bool:
+    if (
+        type(value.source_complete) is not bool
+        or type(value.target_complete) is not bool
+    ):
         raise TypeError("plan completeness fields must be bools")
     if (
         value.source_complete != (source.complete and source.is_full_scan)
@@ -1580,22 +1261,13 @@ def snapshot_plan_candidate(
     ):
         raise ValueError("plan policy snapshot does not match requested options")
 
-    required_volume_stage = admission.fork()
-    required_volume_stage.admit_domain_shape(
-        reference_slots=len(value.required_volumes)
-    )
     required_volume_items: set[VolumeId] = set()
     for volume in value.required_volumes:
         snapshot_volume = _snapshot_volume(volume)
         if snapshot_volume is None:
             raise TypeError("plan required volumes must contain VolumeId values")
         required_volume_items.add(snapshot_volume)
-    required_volume_stage.admit_domain_shape(
-        reference_slots=len(required_volume_items)
-    )
-    admission.admit_domain_shape(reference_slots=len(required_volume_items))
-    required_volumes = _freeze_required_volumes(required_volume_items)
-    del required_volume_stage, required_volume_items
+    required_volumes = frozenset(required_volume_items)
     expected_volumes = frozenset(
         volume
         for volume in (source.volume_id, target.volume_id)
@@ -1639,7 +1311,9 @@ def snapshot_plan_candidate(
         fingerprint=value.fingerprint,
     )
     if value.fingerprint != plan_fingerprint(snapshot):
-        raise ValueError("plan fingerprint does not match admitted candidate")
+        raise ValueError("plan fingerprint does not match canonical plan")
+    if snapshot != value:
+        raise ValueError("plan candidate is not canonical")
     return snapshot
 
 
@@ -1662,8 +1336,6 @@ def admit_retained_plan_candidate(
     if type(value.required_volumes) is not frozenset:
         raise TypeError("plan required volumes must be an exact frozenset")
 
-    admission.require_source_rows(len(value.operations))
-    admission.require_source_rows(len(value.assignment.items))
     operation_slots = 0
     for operation in value.operations:
         if type(operation) is not PlanOperation:

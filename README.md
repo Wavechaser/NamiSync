@@ -51,10 +51,13 @@ The Stage 6 second-half reslice covers Setup, bounded plan and execution review,
 inventory/integrity, process-live multi-session tasks, and early lifecycle/
 retention closure. Its exact core-event-v5, recording, signed-64 scalar, full-
 width Windows file-identity, and coordinated persistence epoch are active;
-the plan session now refuses source-population or retained-reference excess
-before publishing a partial plan. That prerequisite is not the complete
-checkpoint-4 task-artifact reservation model; the product surfaces and task
-lifecycle remain checkpoint targets.
+the plan session now refuses independent raw-population excess and final
+retained shallow-reference excess before publishing a partial plan. Hostile
+module results are detached and revalidated at their distinct workflow seams;
+the resulting capacity error is typed `REFUSED+UNRUN` and saves no plan. This
+narrow prerequisite does not price construction, sorting, indexes, previews,
+codecs, native/browser copies, or complete task graphs; those remain
+checkpoint-4 model work alongside the product surfaces and task lifecycle.
 
 Accepted H2 work also includes server-owned filename/size/mtime sibling sorting
 for plan and inventory views, with path-key order for new views and reset;

@@ -68,23 +68,32 @@ The exact Setup and filter contracts are owned by
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
 
-Planning workflow supplies an exact workflow-owned admission. Planner first
-reconstructs the declared scan, mapping, options, assignment, and plan shapes
-instead of trusting frozen/slotted appearance or copying undeclared instance
-state. Destination-policy callbacks receive detached typed snapshots; only the
-callback-free policy identity is retained. Raw mapping and assignment
-populations are independently gated before construction, new operations charge
-cumulative semantic rows before publication, and unavoidable builder/final
-container overlap charges shallow references on disposable producer forks.
-The outer workflow owner receives the final exact plan once, after producer
-aliases retire. First excess raises the shared typed review-limit error without
-publishing a partial plan.
+Planning workflow supplies already-detached scans and one exactly captured
+correspondence result. Planner revalidates their declared contract, captures
+the destination-policy identity and callback, and gives that nested hostile
+callback only detached filtered `FileRecord`s plus a detached target scan. Its
+returned assignment is source-gated and reconstructed exactly once. The four
+raw mapping populations and the combined operation population each have
+independent stateless first-excess gates; no mapping index, operation builder,
+dependency sort, or callback-input copy is charged as retained state.
+
+Workflow reconstructs the hostile planner result with exact constructors and
+contract validators. Canonical `plan_fingerprint(snapshot)` revalidation uses
+the existing complete semantic projection to reject hostile field drift; that
+validation belongs to the exact-snapshot prerequisite, while this source wall
+does not charge or freeze the projection's construction cost. Workflow then
+charges the final operation rows and only the unavoidable operation/dependency,
+assignment, and required-volume shallow slots once. Selection remains ordinary
+workflow policy and is neither copied nor charged by this prerequisite. First
+excess raises the shared typed review-limit error without publishing a partial
+plan.
 
 Those counters establish the planning-source wall, not the checkpoint-4
-complete retained-graph model. Policy implementation temporaries, generic
-container allocation, serialization/codec copies, native views, and task
-retention require the later predeclared reservation model and independent
-validator.
+complete retained-graph model. Policy and planning construction temporaries,
+sorting/index storage, selection and preview values, additional complete-tree
+projection, generic container allocation, serialization/codec copies, native
+views, browser copies, and task retention require the later predeclared
+reservation model and independent validator.
 
 Core policy admission bounds the raw shape before canonicalization. A filter
 snapshot is an exact tuple of at most 64 nonempty valid-Unicode patterns, each
@@ -93,8 +102,8 @@ an exact tuple of at most 120,000 typed items. Destination-policy name/version
 and optional group/conflict annotations have no narrower production grammar;
 each value is capped by the plan-domain ceiling, and the complete combined
 occurrences still require the checkpoint-4 publication graph admission.
-Constructors and every named policy/assignment projection revalidate these
-contracts so forged frozen fields do not bypass them.
+Constructors and policy/assignment validators revalidate these contracts so
+forged frozen fields do not bypass them.
 
 ## Plan Contract
 

@@ -6,9 +6,7 @@ import os
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
-from pathlib import Path, PureWindowsPath
-from types import MappingProxyType
+from pathlib import Path
 from typing import Protocol
 
 from namisync.core.events import ItemOutcome, PhaseChanged
@@ -32,27 +30,19 @@ from namisync.core.integrity import (
     VerifierContext,
 )
 from namisync.core.models import (
-    FileIdentity,
-    FileStat,
     IgnoreSet,
-    MetadataSnapshot,
     Root,
     ScanResult,
     ScanScope,
-    VolumeEvidence,
-    VolumeId,
 )
 from namisync.core.pathing import (
     from_extended_length_path,
     lexical_absolute_path,
     logical_error_text,
-    normalize_relative_path,
     to_extended_length_path,
-    validate_relative_path,
 )
 from namisync.core.planning import (
     MappingSnapshot,
-    OpId,
     OperationKind,
     Plan,
     PlanOperation,
@@ -63,18 +53,11 @@ from namisync.core.planning import (
 )
 from namisync.core.preflight import (
     ObservedWorld,
-    Refusal,
-    RefusalCode,
-    RootObservation,
-    StatObservation,
-    Subject,
-    TrashObservation,
     Verdict,
 )
 from namisync.core.review import (
     PlanReviewAdmission,
     ReviewFactLimitError,
-    admit_plan_scan_copy,
     admit_retained_plan_scan,
     snapshot_plan_scan_result,
 )
@@ -86,11 +69,8 @@ from namisync.core.root_authority import (
     current_volume_anchor,
 )
 from namisync.core.scalars import (
-    MAX_DIAGNOSTIC_UTF8_BYTES,
     bounded_utf8_text,
     require_safe_int,
-    require_signed_64,
-    require_utf16_path,
 )
 from namisync.core.session import (
     Canceled,
@@ -106,13 +86,18 @@ from namisync.core.session import (
 )
 from namisync.modules.executor import ExecutorPolicies
 from namisync.modules.planner import (
-    admit_plan_mapping_copy,
     admit_retained_plan_candidate,
     snapshot_mapping_snapshot,
     snapshot_plan_candidate,
     snapshot_plan_options,
 )
-from namisync.modules.preflight import ObservationFileSystem
+from namisync.modules.preflight import (
+    ObservationFileSystem,
+    admit_retained_plan_observed_world,
+    admit_retained_plan_verdict,
+    snapshot_plan_observed_world,
+    snapshot_plan_verdict,
+)
 
 from .models import (
     ExecuteContinuation,
@@ -127,7 +112,6 @@ from .models import (
 from .selection import (
     ExecutionSelection,
     derive_execution_selection,
-    derive_plan_review_selection,
 )
 
 
@@ -217,16 +201,6 @@ class Planner(Protocol):
     ) -> Plan: ...
 
 
-class Correspondence(Protocol):
-    def __call__(
-        self,
-        source: ScanResult,
-        target: ScanResult,
-        *,
-        review_admission: PlanReviewAdmission | None = None,
-    ) -> MappingSnapshot: ...
-
-
 class Observer(Protocol):
     def __call__(
         self,
@@ -267,7 +241,7 @@ PostCopyVerifier = Callable[
 class SyncDependencies:
     scanner: Scanner
     planner: Planner
-    correspondence: Correspondence
+    correspondence: Callable[[ScanResult, ScanResult], MappingSnapshot]
     observation_fs: ObservationFileSystem
     observer: Observer
     preflight: Preflight
@@ -293,32 +267,12 @@ def _review_limit_refusal(error: ReviewFactLimitError) -> OperationResult:
     )
 
 
-def _snapshot_plan_scan_copy(
-    value: ScanResult,
-    admission: PlanReviewAdmission,
-    *,
-    logical_source: bool = False,
-) -> ScanResult:
-    admit_plan_scan_copy(value, admission)
-    return snapshot_plan_scan_result(
-        value,
-        admission,
-        logical_source=logical_source,
-    )
-
-
 def _snapshot_scanner_result(
     value: ScanResult,
     expected_root: Root,
     admission: PlanReviewAdmission,
-    *,
-    logical_source: bool = False,
 ) -> ScanResult:
-    snapshot = _snapshot_plan_scan_copy(
-        value,
-        admission,
-        logical_source=logical_source,
-    )
+    snapshot = snapshot_plan_scan_result(value, admission)
     if snapshot.root != expected_root:
         raise ValueError("plan scanner returned a different root authority")
     if snapshot.scope != ScanScope.full():
@@ -326,31 +280,20 @@ def _snapshot_scanner_result(
     return snapshot
 
 
-def _snapshot_ignore_set(
-    value: object,
-    admission: PlanReviewAdmission,
-) -> IgnoreSet:
+def _snapshot_ignore_set(value: object) -> IgnoreSet:
+    """Detach scanner policy so one collaborator cannot affect the next."""
+
     if type(value) is not IgnoreSet:
         raise TypeError("plan scanner ignores must be an exact IgnoreSet")
     if type(value.exact_names) is not frozenset:
         raise TypeError("plan scanner exact ignore names must be a frozenset")
+    if any(type(name) is not str for name in value.exact_names):
+        raise TypeError("plan scanner exact ignore names must be text")
     if (
         type(value.exclude_owned_temps) is not bool
         or type(value.exclude_sync_trash) is not bool
     ):
         raise TypeError("plan scanner ignore flags must be bools")
-    admission.require_source_rows(len(value.exact_names))
-    admission.admit_domain_shape(reference_slots=len(value.exact_names))
-    for name in value.exact_names:
-        if type(name) is not str:
-            raise TypeError("plan scanner exact ignore names must be text")
-        canonical = validate_relative_path(name)
-        if (
-            canonical != name
-            or PureWindowsPath(canonical).name != canonical
-            or normalize_relative_path(canonical) != canonical
-        ):
-            raise ValueError("plan scanner exact ignore name is not canonical")
     return IgnoreSet(
         frozenset(name for name in value.exact_names),
         value.exclude_owned_temps,
@@ -358,507 +301,26 @@ def _snapshot_ignore_set(
     )
 
 
-def _admit_plan_selection_shape(
-    value: object,
-    admission: PlanReviewAdmission,
-) -> frozenset[OpId]:
-    if type(value) is not frozenset:
-        raise TypeError("plan selection must be an exact frozenset")
-    admission.require_source_rows(len(value))
-    admission.admit_domain_shape(reference_slots=len(value))
-    for op_id in value:
-        if type(op_id) is not str:
-            raise TypeError("plan selection ids must be text")
-    return value
-
-
-def _snapshot_plan_selection(
-    value: object,
-    admission: PlanReviewAdmission,
-) -> frozenset[OpId]:
-    value = _admit_plan_selection_shape(value, admission)
-    return frozenset(op_id for op_id in value)
-
-
 def _disposable_plan_preview(
     plan: Plan,
     source: ScanResult,
     target: ScanResult,
     options: SyncOptions,
-    selection: frozenset[OpId],
+    selection: frozenset[str],
     run_id: str,
-    admission: PlanReviewAdmission,
 ) -> ExecutionSet:
-    copied_selection = _snapshot_plan_selection(selection, admission)
+    """Detach the mutable execution shell and its plan for one collaborator."""
+
     return ExecutionSet(
         snapshot_plan_candidate(
             plan,
             source,
             target,
             options,
-            review_admission=admission,
-            retain_rows=False,
+            review_admission=PlanReviewAdmission(),
         ),
-        copied_selection,
+        selection,
         run_id,
-    )
-
-
-def _plan_observation_scope(
-    plan: Plan,
-    selection: frozenset[OpId],
-    admission: PlanReviewAdmission,
-) -> tuple[dict[Subject, str], frozenset[str]]:
-    if type(admission) is not PlanReviewAdmission:
-        raise TypeError("plan review admission has the wrong type")
-    paths: dict[Subject, str] = {}
-    parents: set[str] = set()
-
-    def retain_path(subject: Subject, path: str, *, replace: bool = True) -> None:
-        if subject not in paths:
-            admission.require_source_rows(len(paths) + 1)
-            admission.admit_domain_shape(reference_slots=2)
-        elif not replace:
-            return
-        paths[subject] = path
-
-    def retain_parent(path: str) -> None:
-        if path in parents:
-            return
-        admission.require_source_rows(len(parents) + 1)
-        admission.admit_domain_shape(reference_slots=1)
-        parents.add(path)
-
-    for operation in plan.operations:
-        if operation.op_id not in selection:
-            continue
-        if operation.source_rel_path is not None:
-            retain_path(
-                Subject(
-                    plan.source_root.root_id,
-                    normalize_relative_path(operation.source_rel_path),
-                ),
-                operation.source_rel_path,
-            )
-        target_paths = (
-            operation.target_rel_path,
-            operation.prior_target_rel_path,
-        )
-        for target_path in target_paths:
-            if target_path is None:
-                continue
-            retain_path(
-                Subject(
-                    plan.target_root.root_id,
-                    normalize_relative_path(target_path),
-                ),
-                target_path,
-            )
-            parent = str(PureWindowsPath(target_path).parent)
-            parent = "" if parent == "." else parent
-            retain_parent(parent)
-            if parent:
-                retain_path(
-                    Subject(
-                        plan.target_root.root_id,
-                        normalize_relative_path(parent),
-                    ),
-                    parent,
-                    replace=False,
-                )
-    admission.admit_domain_shape(reference_slots=len(parents))
-    return paths, frozenset(parents)
-
-
-_MAPPING_PROXY_TYPE = type(MappingProxyType({}))
-
-
-def _snapshot_subject(value: object, plan: Plan) -> Subject:
-    if type(value) is not Subject:
-        raise TypeError("observed-world subjects must be exact Subject values")
-    if type(value.root_id) is not str or type(value.rel_path_key) is not str:
-        raise TypeError("observed-world subject fields must be text")
-    if value.root_id not in {
-        plan.source_root.root_id,
-        plan.target_root.root_id,
-    }:
-        raise ValueError("observed subject names an unknown root")
-    validate_relative_path(value.rel_path_key, allow_root=True)
-    if value.rel_path_key != normalize_relative_path(
-        value.rel_path_key,
-        allow_root=True,
-    ):
-        raise ValueError("observed subject path key is not canonical")
-    return Subject(value.root_id, value.rel_path_key)
-
-
-def _snapshot_diagnostic(value: object, field_name: str) -> str | None:
-    snapshot = bounded_utf8_text(
-        value,
-        field_name,
-        maximum_bytes=MAX_DIAGNOSTIC_UTF8_BYTES,
-    )
-    if value is not None and snapshot is None:
-        raise ValueError(f"{field_name} exceeds its diagnostic bound")
-    return snapshot
-
-
-def _snapshot_file_identity(
-    value: object,
-) -> FileIdentity | None:
-    if value is None:
-        return None
-    if type(value) is not FileIdentity:
-        raise TypeError("observed file identity has the wrong type")
-    return FileIdentity(value.volume_serial, value.file_index)
-
-
-def _snapshot_metadata(value: object) -> MetadataSnapshot:
-    if type(value) is not MetadataSnapshot:
-        raise TypeError("observed file metadata has the wrong type")
-    return MetadataSnapshot(value.attributes, value.created_ns)
-
-
-def _snapshot_file_stat(value: object) -> FileStat | None:
-    if value is None:
-        return None
-    if type(value) is not FileStat:
-        raise TypeError("observed file stat has the wrong type")
-    return FileStat(
-        value.kind,
-        value.size,
-        value.mtime_ns,
-        _snapshot_file_identity(value.file_identity),
-        value.nlink,
-        _snapshot_metadata(value.metadata),
-    )
-
-
-def _snapshot_stat_observation(value: object) -> StatObservation:
-    if type(value) is not StatObservation:
-        raise TypeError("observed stats must contain StatObservation values")
-    if type(value.contained) is not bool or type(value.representable) is not bool:
-        raise TypeError("observed stat flags must be bools")
-    return StatObservation(
-        _snapshot_file_stat(value.stat),
-        _snapshot_diagnostic(value.error, "stat observation error"),
-        value.contained,
-        value.representable,
-    )
-
-
-def _snapshot_volume_id(value: object) -> VolumeId | None:
-    if value is None:
-        return None
-    if type(value) is not VolumeId:
-        raise TypeError("observed volume identity has the wrong type")
-    return VolumeId(value.serial, value.fs_type)
-
-
-def _snapshot_volume_evidence(value: object) -> VolumeEvidence | None:
-    if value is None:
-        return None
-    if type(value) is not VolumeEvidence:
-        raise TypeError("observed volume evidence has the wrong type")
-    return VolumeEvidence(value.label, value.device_id, value.clone_ambiguous)
-
-
-def _snapshot_native_path(value: object, field_name: str) -> str | None:
-    if value is None:
-        return None
-    return require_utf16_path(value, field_name)
-
-
-def _snapshot_root_observation(value: object) -> RootObservation:
-    if type(value) is not RootObservation:
-        raise TypeError("observed roots must contain RootObservation values")
-    if (
-        value.authority_issue is not None
-        and type(value.authority_issue) is not RootAuthorityIssue
-    ):
-        raise TypeError("observed root authority issue has the wrong type")
-    return RootObservation(
-        _snapshot_native_path(value.resolved_path, "observed root path"),
-        _snapshot_volume_id(value.volume_id),
-        _snapshot_volume_evidence(value.volume_evidence),
-        _snapshot_diagnostic(value.error, "root observation error"),
-        value.authority_issue,
-    )
-
-
-def _snapshot_trash_observation(value: object) -> TrashObservation | None:
-    if value is None:
-        return None
-    if type(value) is not TrashObservation:
-        raise TypeError("observed trash has the wrong type")
-    if any(
-        type(flag) is not bool
-        for flag in (
-            value.available,
-            value.contained,
-            value.same_volume,
-            value.writable,
-            value.reparse_safe,
-        )
-    ):
-        raise TypeError("observed trash flags must be bools")
-    return TrashObservation(
-        _snapshot_native_path(value.resolved_path, "observed trash path"),
-        value.available,
-        value.contained,
-        value.same_volume,
-        value.writable,
-        value.reparse_safe,
-        _snapshot_diagnostic(value.error, "trash observation error"),
-    )
-
-
-def _snapshot_observed_at(value: object) -> datetime:
-    if type(value) is not datetime or value.tzinfo is not timezone.utc:
-        raise TypeError("observation timestamp must be an exact UTC datetime")
-    return datetime(
-        value.year,
-        value.month,
-        value.day,
-        value.hour,
-        value.minute,
-        value.second,
-        value.microsecond,
-        tzinfo=timezone.utc,
-        fold=value.fold,
-    )
-
-
-def _admit_plan_observed_world_shape(
-    value: object,
-    admission: PlanReviewAdmission,
-) -> ObservedWorld:
-    if type(value) is not ObservedWorld:
-        raise TypeError("plan observer must return an exact ObservedWorld")
-    if type(admission) is not PlanReviewAdmission:
-        raise TypeError("plan review admission has the wrong type")
-    populations = (value.stats, value.paths, value.roots)
-    if any(
-        type(population) not in {dict, _MAPPING_PROXY_TYPE}
-        for population in populations
-    ):
-        raise TypeError("observed-world mappings must be exact snapshots")
-    for population in populations:
-        admission.require_source_rows(len(population))
-    if type(value.target_parent_paths) is not frozenset:
-        raise TypeError("observed target parent paths must be a frozenset")
-    admission.require_source_rows(len(value.target_parent_paths))
-    if len(value.roots) > 2:
-        raise ValueError("observed world has more than two endpoint roots")
-    admission.admit_domain_shape(
-        reference_slots=(
-            2 * len(value.stats)
-            + 2 * len(value.paths)
-            + len(value.target_parent_paths)
-            + 2 * len(value.roots)
-        )
-    )
-    return value
-
-
-def _snapshot_plan_observed_world(
-    value: object,
-    plan: Plan,
-    allowed_paths: dict[Subject, str],
-    allowed_parents: frozenset[str],
-    admission: PlanReviewAdmission,
-    *,
-    allow_owned_mappings: bool = False,
-) -> ObservedWorld:
-    if type(allow_owned_mappings) is not bool:
-        raise TypeError("allow_owned_mappings must be a bool")
-    allowed_mapping_types = (
-        {dict, _MAPPING_PROXY_TYPE}
-        if allow_owned_mappings
-        else {dict}
-    )
-    if type(value) is ObservedWorld and any(
-        type(population) not in allowed_mapping_types
-        for population in (value.stats, value.paths, value.roots)
-    ):
-        raise TypeError(
-            "raw observed-world mappings must be exact dictionaries"
-        )
-    value = _admit_plan_observed_world_shape(value, admission)
-    stats: dict[Subject, StatObservation] = {}
-    for raw_subject, raw_observation in value.stats.items():
-        subject = _snapshot_subject(raw_subject, plan)
-        if subject not in allowed_paths:
-            raise ValueError("observer returned a subject outside the plan")
-        stats[subject] = _snapshot_stat_observation(raw_observation)
-
-    paths: dict[Subject, str] = {}
-    for raw_subject, raw_path in value.paths.items():
-        subject = _snapshot_subject(raw_subject, plan)
-        path = validate_relative_path(raw_path, allow_root=True)
-        if subject not in allowed_paths or allowed_paths[subject] != path:
-            raise ValueError("observer returned a path outside the plan")
-        paths[subject] = path
-    if stats.keys() != paths.keys():
-        raise ValueError("observed stats and paths must name the same subjects")
-
-    def snapshot_parent(parent: object) -> str:
-        path = validate_relative_path(parent, allow_root=True)
-        if path not in allowed_parents:
-            raise ValueError("observer returned an unknown target parent")
-        return path
-
-    target_parent_paths = frozenset(
-        snapshot_parent(parent) for parent in value.target_parent_paths
-    )
-
-    endpoint_ids = {
-        plan.source_root.root_id,
-        plan.target_root.root_id,
-    }
-    roots: dict[str, RootObservation] = {}
-    for root_id, observation in value.roots.items():
-        if type(root_id) is not str or root_id not in endpoint_ids:
-            raise ValueError("observed root names an unknown endpoint")
-        roots[root_id] = _snapshot_root_observation(observation)
-
-    free_space = (
-        None
-        if value.free_space is None
-        else require_signed_64(value.free_space, "observed free space")
-    )
-    reclaimable_temp_bytes = require_signed_64(
-        value.reclaimable_temp_bytes,
-        "observed reclaimable temporary bytes",
-    )
-    return ObservedWorld(
-        MappingProxyType(stats),
-        MappingProxyType(paths),
-        target_parent_paths,
-        MappingProxyType(roots),
-        free_space,
-        reclaimable_temp_bytes,
-        _snapshot_trash_observation(value.trash),
-        _snapshot_observed_at(value.observed_at),
-    )
-
-
-def _snapshot_plan_verdict(
-    value: object,
-    callback_world: ObservedWorld,
-    callback_stats_owner: object,
-    callback_paths_owner: object,
-    callback_roots_owner: object,
-    authoritative_world: ObservedWorld,
-    plan: Plan,
-    allowed_paths: dict[Subject, str],
-    allowed_parents: frozenset[str],
-    allowed_ids: frozenset[OpId],
-    admission: PlanReviewAdmission,
-) -> Verdict:
-    if type(value) is not Verdict or type(value.refusals) is not tuple:
-        raise TypeError("preflight must return an exact Verdict snapshot")
-    if value.observed is not callback_world:
-        raise ValueError("preflight verdict must retain its exact input world")
-    if (
-        callback_world.stats is not callback_stats_owner
-        or callback_world.paths is not callback_paths_owner
-        or callback_world.roots is not callback_roots_owner
-    ):
-        raise TypeError("preflight mutated an owned observed-world mapping")
-    validated_callback_world = _snapshot_plan_observed_world(
-        callback_world,
-        plan,
-        allowed_paths,
-        allowed_parents,
-        admission,
-        allow_owned_mappings=True,
-    )
-    if validated_callback_world != authoritative_world:
-        raise ValueError("preflight mutated its admitted observed world")
-    if type(value.ok) is not bool or value.ok == bool(value.refusals):
-        raise ValueError("preflight verdict truth does not match its refusals")
-    admission.require_informational_source_rows(len(value.refusals))
-
-    unique: dict[tuple[object, ...], Refusal] = {}
-    for raw_refusal in value.refusals:
-        if (
-            type(raw_refusal) is not Refusal
-            or type(raw_refusal.code) is not RefusalCode
-            or type(raw_refusal.detail) is not str
-        ):
-            raise TypeError("preflight refusals must contain exact typed values")
-        if raw_refusal.op_id is not None and (
-            type(raw_refusal.op_id) is not str
-            or raw_refusal.op_id not in allowed_ids
-        ):
-            raise ValueError("preflight refusal names an unselected operation")
-        subject = (
-            None
-            if raw_refusal.subject is None
-            else _snapshot_subject(raw_refusal.subject, plan)
-        )
-        if subject is not None and subject not in allowed_paths:
-            raise ValueError("preflight refusal names an unobserved subject")
-        refusal = Refusal(
-            raw_refusal.code,
-            raw_refusal.op_id,
-            subject,
-            _snapshot_diagnostic(
-                raw_refusal.detail,
-                "preflight refusal detail",
-            )
-            or "",
-        )
-        key_owner = admission.fork()
-        key_owner.admit_informational_shape(
-            # Precharge the speculative four-slot key before it exists.
-            # Duplicate candidates never acquire dictionary insertion slots.
-            reference_slots=4,
-            rows=0,
-        )
-        key = (
-            refusal.code,
-            refusal.op_id,
-            refusal.subject,
-            refusal.detail,
-        )
-        if key not in unique:
-            admission.admit_informational_shape(
-                # Four key-tuple slots plus the dictionary key/value owners.
-                reference_slots=6,
-                rows=0,
-            )
-        unique[key] = refusal
-    admission.admit_informational_shape(
-        # ``tuple(sorted(values))`` retains both construction containers.
-        reference_slots=2 * len(unique),
-        rows=0,
-    )
-    ordered = tuple(
-        sorted(
-            unique.values(),
-            key=lambda refusal: (
-                refusal.code.value,
-                str(refusal.op_id or ""),
-                refusal.subject or Subject("", ""),
-                refusal.detail,
-            ),
-        )
-    )
-    return Verdict(not ordered, ordered, authoritative_world)
-
-
-def _admit_retained_plan_verdict(
-    value: Verdict,
-    admission: PlanReviewAdmission,
-) -> None:
-    if type(value) is not Verdict or type(value.refusals) is not tuple:
-        raise TypeError("plan verdict must be an exact Verdict snapshot")
-    admission.require_informational_source_rows(len(value.refusals))
-    admission.admit_informational_shape(
-        reference_slots=len(value.refusals),
-        rows=len(value.refusals),
     )
 
 
@@ -889,7 +351,7 @@ def run_plan(
         source_path,
         target_path,
     )
-    admission = PlanReviewAdmission()
+    retained_admission = PlanReviewAdmission()
     try:
         live_options, retained_options = snapshot_plan_options(request_options)
         retained_request = PlanRequest(
@@ -901,148 +363,94 @@ def run_plan(
         del request, request_id, source_path, target_path, request_options
 
         ctx.emit(PhaseChanged("scan-source"))
-        source_stage = admission.fork()
-        source_ignores = _snapshot_ignore_set(deps.ignores, source_stage)
+        source_ignores = _snapshot_ignore_set(deps.ignores)
         raw_source_scan = deps.scanner(
             Root(source_root.path, source_root.root_id),
             source_ignores,
             ctx,
-            review_admission=source_stage,
+            review_admission=PlanReviewAdmission(),
         )
-        source_capture = source_stage.fork()
         source_scan = _snapshot_scanner_result(
             raw_source_scan,
             source_root,
-            source_capture,
-            logical_source=True,
+            PlanReviewAdmission(),
         )
-        del (
-            raw_source_scan,
-            source_ignores,
-            source_stage,
-            source_capture,
-        )
-        admit_retained_plan_scan(source_scan, admission)
+        del raw_source_scan, source_ignores
+        admit_retained_plan_scan(source_scan, retained_admission)
 
         ctx.emit(PhaseChanged("scan-target"))
-        target_stage = admission.fork()
-        target_ignores = _snapshot_ignore_set(deps.ignores, target_stage)
+        target_ignores = _snapshot_ignore_set(deps.ignores)
         raw_target_scan = deps.scanner(
             Root(target_root.path, target_root.root_id),
             target_ignores,
             ctx,
-            review_admission=target_stage,
+            review_admission=PlanReviewAdmission(),
         )
-        target_capture = target_stage.fork()
         target_scan = _snapshot_scanner_result(
             raw_target_scan,
             target_root,
-            target_capture,
+            PlanReviewAdmission(),
         )
-        del (
-            raw_target_scan,
-            target_ignores,
-            target_stage,
-            target_capture,
-            source_root,
-            target_root,
-        )
-        admit_retained_plan_scan(target_scan, admission)
+        del raw_target_scan, target_ignores, source_root, target_root
+        admit_retained_plan_scan(target_scan, retained_admission)
 
         ctx.emit(PhaseChanged("plan"))
-        correspondence_stage = admission.fork()
-        correspondence_source = _snapshot_plan_scan_copy(
+        correspondence_source = snapshot_plan_scan_result(
             source_scan,
-            correspondence_stage,
-            logical_source=True,
+            PlanReviewAdmission(),
         )
-        correspondence_target = _snapshot_plan_scan_copy(
+        correspondence_target = snapshot_plan_scan_result(
             target_scan,
-            correspondence_stage,
+            PlanReviewAdmission(),
         )
         raw_correspondence = deps.correspondence(
             correspondence_source,
             correspondence_target,
-            review_admission=correspondence_stage,
         )
-        correspondence_capture = correspondence_stage.fork()
         correspondence = snapshot_mapping_snapshot(
             raw_correspondence,
-            review_admission=correspondence_capture,
+            review_admission=PlanReviewAdmission(),
         )
-        del (
-            raw_correspondence,
-            correspondence_source,
-            correspondence_target,
-            correspondence_stage,
-            correspondence_capture,
-        )
+        del raw_correspondence, correspondence_source, correspondence_target
 
-        planner_stage = admission.fork()
-        admit_plan_mapping_copy(correspondence, planner_stage)
-        planner_source = _snapshot_plan_scan_copy(
+        planner_source = snapshot_plan_scan_result(
             source_scan,
-            planner_stage,
-            logical_source=True,
+            PlanReviewAdmission(),
         )
-        planner_target = _snapshot_plan_scan_copy(
+        planner_target = snapshot_plan_scan_result(
             target_scan,
-            planner_stage,
+            PlanReviewAdmission(),
         )
-        planner_correspondence = snapshot_mapping_snapshot(
-            correspondence,
-            review_admission=planner_stage,
-        )
-        del correspondence
         raw_plan = deps.planner(
             planner_source,
             planner_target,
-            planner_correspondence,
+            correspondence,
             live_options,
             Scope.everything(),
-            review_admission=planner_stage,
+            review_admission=PlanReviewAdmission(),
         )
-        plan_capture = planner_stage.fork()
         plan = snapshot_plan_candidate(
             raw_plan,
             source_scan,
             target_scan,
             retained_options,
-            review_admission=plan_capture,
-            retain_rows=False,
+            review_admission=PlanReviewAdmission(),
         )
         del (
             raw_plan,
             planner_source,
             planner_target,
-            planner_correspondence,
-            planner_stage,
-            plan_capture,
+            correspondence,
             live_options,
         )
-        admit_retained_plan_candidate(plan, admission)
+        admit_retained_plan_candidate(plan, retained_admission)
 
-        selection_stage = admission.fork()
-        raw_selection = derive_plan_review_selection(
-            plan,
-            review_admission=selection_stage,
-        )
-        selection_capture = selection_stage.fork()
-        selection = _snapshot_plan_selection(
-            raw_selection,
-            selection_capture,
-        )
-        del raw_selection, selection_stage, selection_capture
-        review_stage = admission.fork()
-        _admit_plan_selection_shape(selection, review_stage)
-        allowed_paths, allowed_parents = _plan_observation_scope(
-            plan,
-            selection,
-            review_stage,
-        )
+        decision = derive_execution_selection(plan)
+        selection = decision.selection
+        del decision
+        authoritative_xset = ExecutionSet(plan, selection, run_id)
 
         ctx.emit(PhaseChanged("review-preflight"))
-        observer_stage = review_stage.fork()
         observer_preview = _disposable_plan_preview(
             plan,
             source_scan,
@@ -1050,26 +458,20 @@ def run_plan(
             retained_options,
             selection,
             run_id,
-            observer_stage,
         )
         raw_world = deps.observer(
             observer_preview,
             deps.observation_fs,
-            review_admission=observer_stage,
+            review_admission=PlanReviewAdmission(),
         )
-        world_capture = observer_stage.fork()
-        world = _snapshot_plan_observed_world(
+        world = snapshot_plan_observed_world(
             raw_world,
-            plan,
-            allowed_paths,
-            allowed_parents,
-            world_capture,
+            authoritative_xset,
+            PlanReviewAdmission(),
         )
-        del raw_world, observer_preview, observer_stage, world_capture
-        _admit_plan_observed_world_shape(world, admission)
-        _admit_plan_observed_world_shape(world, review_stage)
+        del raw_world, observer_preview
+        admit_retained_plan_observed_world(world, retained_admission)
 
-        preflight_stage = review_stage.fork()
         preflight_preview = _disposable_plan_preview(
             plan,
             source_scan,
@@ -1077,54 +479,35 @@ def run_plan(
             retained_options,
             selection,
             run_id,
-            preflight_stage,
         )
-        preflight_world = _snapshot_plan_observed_world(
+        preflight_world = snapshot_plan_observed_world(
             world,
-            plan,
-            allowed_paths,
-            allowed_parents,
-            preflight_stage,
-            allow_owned_mappings=True,
+            authoritative_xset,
+            PlanReviewAdmission(),
         )
-        preflight_stats_owner = preflight_world.stats
-        preflight_paths_owner = preflight_world.paths
-        preflight_roots_owner = preflight_world.roots
         raw_verdict = deps.preflight(
             preflight_preview,
             preflight_world,
-            review_admission=preflight_stage,
+            review_admission=PlanReviewAdmission(),
         )
-        verdict_capture = preflight_stage.fork()
-        verdict = _snapshot_plan_verdict(
+        verdict = snapshot_plan_verdict(
             raw_verdict,
             preflight_world,
-            preflight_stats_owner,
-            preflight_paths_owner,
-            preflight_roots_owner,
             world,
-            plan,
-            allowed_paths,
-            allowed_parents,
-            selection,
-            verdict_capture,
+            authoritative_xset,
+            PlanReviewAdmission(),
         )
         del (
             raw_verdict,
             preflight_preview,
             preflight_world,
-            preflight_stats_owner,
-            preflight_paths_owner,
-            preflight_roots_owner,
-            preflight_stage,
-            verdict_capture,
-            review_stage,
+            authoritative_xset,
             selection,
-            allowed_paths,
-            allowed_parents,
+            world,
+            retained_options,
+            run_id,
         )
-        _admit_retained_plan_verdict(verdict, admission)
-        del world, retained_options, run_id
+        admit_retained_plan_verdict(verdict, retained_admission)
         artifact = PlanArtifact(
             retained_request,
             source_scan,
@@ -1141,7 +524,7 @@ def run_plan(
         target_scan,
         plan,
         verdict,
-        admission,
+        retained_admission,
     )
     deps.save_plan(artifact)
     return OperationResult(status=SessionState.COMPLETED)

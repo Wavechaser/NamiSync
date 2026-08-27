@@ -170,23 +170,32 @@ reprojects a staged candidate after publication.
 
 ### Plan session
 
-The plan session owns one `PlanReviewAdmission` ledger. Each scanner,
-correspondence query, planner, observer, and preflight call receives a
-disposable producer fork; declared typed output is reconstructed on a capture
-fork, the raw producer owner is retired, and the exact final fact graph is then
-charged once to the outer owner. Independent raw populations refuse before
-construction, cumulative semantic rows cannot reset between stages, and
-unavoidable simultaneously live container references are charged at their
-actual transition. Forged mapping wrappers, undeclared instance dictionaries,
-and mutation between production and capture are rejected rather than retained.
-The workflow maps the first `ReviewFactLimitError` to `REFUSED+UNRUN` without
-saving a plan or exposing a partial result.
+The plan session owns one retained `PlanReviewAdmission` ledger. Scanner,
+planner, observer, and preflight calls receive fresh disposable admissions, as
+does each exact-copy seam. Correspondence keeps its ordinary two-argument
+protocol; its concrete database query is structurally bounded by admitted scan
+keys and identities, then workflow captures the hostile result under a fresh
+admission. Each raw population has a stateless first-excess gate; declared
+collaborator output is reconstructed into an exact detached graph, and hostile
+callback inputs are separate from authoritative retained state. Forged
+wrappers, undeclared instance dictionaries, and callback mutation are rejected
+rather than retained.
+
+Only unavoidable shallow slots that coexist in the final scans, plan,
+observed world, and verdict commit to the retained ledger, together with the
+final operation and informational rows. Construction builders, sorting and
+indexes, selection/exclusion derivation, previews, callback copies, and other
+sequential temporaries are not retained owners. The workflow maps the first
+`ReviewFactLimitError` to `REFUSED+UNRUN` without saving a plan or exposing a
+partial result.
 
 This is the planning-source ownership prerequisite for checkpoint 4. Its row
 and shallow-reference counters are not a reservation formula, heap estimate,
-or complete task-artifact validator; callback/exception frames and the later
-serialization, native, browser, and multi-session owners still need separate
-closure or charge before the checkpoint-4 model can freeze.
+or complete task-artifact validator. Construction/container capacity,
+sorting/index storage, selection/previews, complete projections,
+callback/exception frames, serialization, native/browser copies, and
+multi-session owners still need separate closure or charge before the
+checkpoint-4 model can freeze.
 
 1. Lexically normalize and validate distinct non-nested roots and request
    semantics without following filesystem links. The shared core chain-only
@@ -198,21 +207,22 @@ closure or charge before the checkpoint-4 model can freeze.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
 3. Scan both roots with the same role-free observation contract and independent
-   raw source-population forks; retain only reconstructed exact scan records.
-4. Read immutable prior correspondence through a source-derived bounded ledger
-   query: current target file keys and current source/target file identities are
-   the complete query scope, with all 400-subject batches and disqualification
-   checks sharing one read snapshot. Then read one complete semantic-settings
-   snapshot. If the request supplies a deletion-policy override, replace only
-   that field in the snapshot.
+   raw source-population gates; retain only reconstructed exact scan records.
+4. Read immutable prior correspondence through a ledger query whose keys and
+   identities come only from the already admitted scans. Runtime query indexes
+   and result construction are therefore structurally bounded rather than
+   separately metered; workflow captures the hostile correspondence result
+   exactly once before giving it to the planner. Then read one complete
+   semantic-settings snapshot. If the request supplies a deletion-policy
+   override, replace only that field in the snapshot.
 5. Apply filters/policies and plan.
-6. Derive the deterministic safe selection: retain additive/no-op work, mark
+6. Derive the ordinary deterministic safe selection: retain additive/no-op work, mark
    direct blockers `BLOCKED`, quarantine overlapping/dependent work as
    `DEFERRED`, and withhold destructive/identity moves when either scan is
    incomplete.
 7. Observe/preflight that exact selection for review information.
 8. Return the immutable plan/verdict with reviewed authority and typed warning/
-   refusal facts intact after all disposable producer/copy owners retire;
+   refusal facts intact after all disposable collaborator copies retire;
    terminate and release locks. Stage 6 projects those facts as inert notices
    rather than flattening or dropping them.
 

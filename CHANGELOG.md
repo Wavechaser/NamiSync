@@ -25,18 +25,20 @@ claims explicit, independently reviewable, and regression-backed.
 
 #### Bound checkpoint-4 planning source ownership (2026-08-27)
 
-- Added one workflow-owned plan-review admission across scanning, prior
-  correspondence, planning, selection, observation, and preflight. Independent
-  raw populations, cumulative semantic facts, and simultaneous shallow
-  reference owners now fail before first-excess construction; no partial plan
-  is saved.
-- Reconstructed declared typed callback results instead of deep-copying hidden
-  state, detached policy inputs, pinned request identity before callback access,
-  and revalidated the callback observation after return. Dependency/refusal
-  keys and builder-to-final transitions are charged before allocation.
+- Added independent first-excess gates to raw scanner, mapping, assignment,
+  operation, observation, and refusal populations. Exact declared collaborator
+  results and callback inputs are detached and revalidated at each distinct
+  hostile seam; correspondence remains structurally bounded by admitted scans
+  and its result is captured exactly once before planning.
+- Charged only the unavoidable shallow reference slots retained together in the
+  final scan, plan, observed-world, and verdict graphs. Capacity failure is a
+  typed `REFUSED+UNRUN` result and never saves a partial plan; ordinary scanner,
+  planner, selection, and preflight policy remains unchanged.
 - Kept the source wall separate from checkpoint 4's complete-object
-  reservation constants, fixtures, and BR-G-45 evidence. Raw exception frames
-  and later task/native/browser owners remain explicit prerequisites.
+  reservation constants, fixtures, and BR-G-45 evidence. Construction,
+  sorting/index storage, selection and preview values, codec/native/browser
+  copies, complete projections, raw exception frames, and later task owners
+  remain explicit checkpoint prerequisites.
 
 #### Remediate independent H2 checkpoint reviews (2026-08-26 – 2026-08-27)
 

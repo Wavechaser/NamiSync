@@ -31,7 +31,6 @@ from .pathing import normalize_relative_path, validate_relative_path
 from .review import (
     MAX_PLAN_DOMAIN_RETAINED_BYTES,
     MAX_PLAN_REVIEW_ROWS,
-    PlanReviewAdmission,
     ReviewFactLimitError,
     ReviewFactLimitExceeded,
 )
@@ -762,39 +761,21 @@ def selection_digest(selection: Sequence[OpId] | frozenset[OpId]) -> bytes:
 
 def quarantined_operation_ids(
     operations: Sequence[PlanOperation],
-    *,
-    review_admission: PlanReviewAdmission | None = None,
 ) -> frozenset[OpId]:
     """Return nonblocked operations whose paths overlap blocked correspondence."""
 
-    if (
-        review_admission is not None
-        and type(review_admission) is not PlanReviewAdmission
-    ):
-        raise TypeError("quarantine review admission has the wrong type")
-
-    def retain(values: set[object], value: object) -> None:
-        if value in values:
-            return
-        if review_admission is not None:
-            review_admission.require_source_rows(len(values) + 1)
-            review_admission.admit_domain_shape(reference_slots=1, rows=0)
-        values.add(value)
-
-    blocked_source_paths: set[str] = set()
-    blocked_target_paths: set[str] = set()
-    for operation in operations:
-        if not operation.blocked:
-            continue
-        if operation.source_rel_path is not None:
-            retain(
-                blocked_source_paths,
-                normalize_relative_path(operation.source_rel_path),
-            )
-        for path in (operation.target_rel_path, operation.prior_target_rel_path):
-            if path is not None:
-                retain(blocked_target_paths, normalize_relative_path(path))
-
+    blocked_source_paths = {
+        normalize_relative_path(operation.source_rel_path)
+        for operation in operations
+        if operation.blocked and operation.source_rel_path is not None
+    }
+    blocked_target_paths = {
+        normalize_relative_path(path)
+        for operation in operations
+        if operation.blocked
+        for path in (operation.target_rel_path, operation.prior_target_rel_path)
+        if path is not None
+    }
     quarantined: set[OpId] = set()
     for operation in operations:
         if operation.blocked:
@@ -803,38 +784,33 @@ def quarantined_operation_ids(
             normalize_relative_path(operation.source_rel_path),
             blocked_source_paths,
         ):
-            retain(quarantined, operation.op_id)
+            quarantined.add(operation.op_id)
             continue
-        target_path = normalize_relative_path(operation.target_rel_path)
-        prior_target_path = (
-            None
-            if operation.prior_target_rel_path is None
-            else normalize_relative_path(operation.prior_target_rel_path)
-        )
-        if _inside_any_region(target_path, blocked_target_paths) or (
-            prior_target_path is not None
-            and _inside_any_region(prior_target_path, blocked_target_paths)
+        target_paths = {normalize_relative_path(operation.target_rel_path)}
+        if operation.prior_target_rel_path is not None:
+            target_paths.add(normalize_relative_path(operation.prior_target_rel_path))
+        if any(
+            _inside_any_region(path, blocked_target_paths)
+            for path in target_paths
         ):
-            retain(quarantined, operation.op_id)
+            quarantined.add(operation.op_id)
             continue
-        destructive_path: str | None = None
+        destructive_paths: set[str] = set()
         if operation.kind in {OperationKind.TRASH, OperationKind.DELETE}:
-            destructive_path = target_path
+            destructive_paths.add(normalize_relative_path(operation.target_rel_path))
         elif (
             operation.kind in {OperationKind.MOVE, OperationKind.MOVE_UPDATE}
-            and prior_target_path is not None
+            and operation.prior_target_rel_path is not None
         ):
-            destructive_path = prior_target_path
-        if destructive_path is not None and any(
-            _same_or_descendant(blocked, destructive_path)
+            destructive_paths.add(
+                normalize_relative_path(operation.prior_target_rel_path)
+            )
+        if any(
+            _same_or_descendant(blocked, destructive)
+            for destructive in destructive_paths
             for blocked in blocked_target_paths
         ):
-            retain(quarantined, operation.op_id)
-    if review_admission is not None:
-        review_admission.admit_domain_shape(
-            reference_slots=len(quarantined),
-            rows=0,
-        )
+            quarantined.add(operation.op_id)
     return frozenset(quarantined)
 
 

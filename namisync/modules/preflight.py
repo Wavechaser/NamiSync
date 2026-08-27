@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, ValuesView
+from collections.abc import Mapping
 from datetime import datetime, timezone
 import os
 from pathlib import Path, PureWindowsPath
 import shutil
 import stat as stat_module
+from types import MappingProxyType
 from typing import Protocol
 
 from namisync.core.evidence import Outcome
@@ -16,6 +17,7 @@ from namisync.core.file_identity import file_identity_from_stat
 from namisync.core.models import (
     CapabilityProfile,
     EntryKind,
+    FileIdentity,
     FileStat,
     MetadataSnapshot,
     Root,
@@ -34,7 +36,6 @@ from namisync.core.pathing import (
     validate_relative_path,
 )
 from namisync.core.planning import (
-    OpId,
     OperationKind,
     PlanOperation,
     calculate_required_bytes,
@@ -61,55 +62,30 @@ from namisync.core.root_authority import (
     is_reparse_stat,
     observe_native_volume,
 )
-from namisync.core.review import PlanReviewAdmission
-from namisync.core.scalars import checked_add_signed_64, require_signed_64
+from namisync.core.review import PLAN_SOURCE_REFERENCE_BYTES, PlanReviewAdmission
+from namisync.core.scalars import (
+    checked_add_signed_64,
+    require_signed_64,
+    require_utf16_path,
+)
 
 
-_RefusalKey = tuple[RefusalCode, OpId | None, Subject | None, str]
+class _PlanRefusalList(list[Refusal]):
+    """Gate the raw refusal population before each ordinary append."""
 
-
-class _PlanRefusalCollector:
-    """Retain each raw canonical refusal once after source admission."""
-
-    __slots__ = ("_admission", "_by_key", "_raw_count")
+    __slots__ = ("_admission",)
 
     def __init__(self, admission: PlanReviewAdmission | None) -> None:
         if admission is not None and type(admission) is not PlanReviewAdmission:
             raise TypeError("preflight review admission has the wrong type")
         self._admission = admission
-        self._by_key: dict[_RefusalKey, Refusal] = {}
-        self._raw_count = 0
 
     def append(self, refusal: Refusal) -> None:
         if type(refusal) is not Refusal:
             raise TypeError("preflight refusals must contain Refusal values")
-        next_raw_count = self._raw_count + 1
         if self._admission is not None:
-            self._admission.require_informational_source_rows(next_raw_count)
-            key_owner = self._admission.fork()
-            key_owner.admit_informational_shape(
-                reference_slots=4,
-                rows=0,
-            )
-        key = (
-            refusal.code,
-            refusal.op_id,
-            refusal.subject,
-            refusal.detail,
-        )
-        if key in self._by_key:
-            # Preserve the former dict-comprehension rule: the last equal
-            # refusal supplies the retained value without adding another row.
-            self._by_key[key] = refusal
-            self._raw_count = next_raw_count
-            return
-        if self._admission is not None:
-            self._admission.admit_informational_shape(reference_slots=6)
-        self._by_key[key] = refusal
-        self._raw_count = next_raw_count
-
-    def values(self) -> ValuesView[Refusal]:
-        return self._by_key.values()
+            self._admission.require_informational_source_rows(len(self) + 1)
+        super().append(refusal)
 
 
 class ObservationFileSystem(Protocol):
@@ -452,17 +428,6 @@ class LocalObservationFileSystem:
         return datetime.now(timezone.utc)
 
 
-def _iter_remaining_operations(
-    xset: ExecutionSet,
-) -> Iterator[PlanOperation]:
-    for operation in xset.plan.operations:
-        if (
-            operation.op_id in xset.selection
-            and operation.op_id not in xset.status
-        ):
-            yield operation
-
-
 def _operation_subjects(
     xset: ExecutionSet,
     *,
@@ -486,11 +451,7 @@ def _operation_subjects(
         *,
         replace_existing: bool = True,
     ) -> None:
-        if subject not in subjects:
-            if review_admission is not None:
-                review_admission.require_source_rows(len(subjects) + 1)
-                review_admission.admit_domain_shape(reference_slots=2)
-        elif not replace_existing:
+        if subject in subjects and not replace_existing:
             return
         subjects[subject] = value
 
@@ -499,10 +460,9 @@ def _operation_subjects(
             return
         if review_admission is not None:
             review_admission.require_source_rows(len(target_parents) + 1)
-            review_admission.admit_domain_shape(reference_slots=1)
         target_parents.add(parent)
 
-    for operation in _iter_remaining_operations(xset):
+    for operation in xset.remaining():
         if operation.source_rel_path is not None:
             subject = Subject(plan.source_root.root_id, normalize_relative_path(operation.source_rel_path))
             retain_subject(
@@ -552,11 +512,22 @@ def _operation_subjects(
                     (plan.target_root, prior_parent, plan.target_profile),
                     replace_existing=False,
                 )
-    if review_admission is not None:
-        review_admission.admit_domain_shape(
-            reference_slots=len(target_parents)
-        )
     return subjects, frozenset(target_parents)
+
+
+def plan_observation_scope(
+    xset: ExecutionSet,
+) -> tuple[dict[Subject, str], frozenset[str]]:
+    """Return the exact path populations the plan observer may publish."""
+
+    subjects, target_parents = _operation_subjects(xset)
+    return (
+        {
+            subject: rel_path
+            for subject, (_, rel_path, _) in subjects.items()
+        },
+        target_parents,
+    )
 
 
 def observe(
@@ -594,7 +565,6 @@ def observe(
     def retain_root(root_id: str, observation: RootObservation) -> None:
         if root_id not in roots and review_admission is not None:
             review_admission.require_source_rows(len(roots) + 1)
-            review_admission.admit_domain_shape(reference_slots=2)
         roots[root_id] = observation
 
     def reject_root(root: Root, error: RootAuthorityError) -> None:
@@ -641,7 +611,6 @@ def observe(
         if review_admission is not None:
             review_admission.require_source_rows(len(paths) + 1)
             review_admission.require_source_rows(len(stats) + 1)
-            review_admission.admit_domain_shape(reference_slots=4)
         paths[subject] = rel_path
         if not admitted_roots.get(root.root_id, False):
             root_observation = roots.get(root.root_id)
@@ -704,7 +673,7 @@ def observe(
             xset.plan.trash_on_update
             and operation.kind in {OperationKind.UPDATE, OperationKind.MOVE_UPDATE}
         )
-        for operation in _iter_remaining_operations(xset)
+        for operation in xset.remaining()
     )
     if needs_trash and admitted_roots.get(target.root_id, False):
         try:
@@ -746,6 +715,374 @@ def observe(
     )
 
 
+def _snapshot_subject(value: object, xset: ExecutionSet) -> Subject:
+    if type(value) is not Subject:
+        raise TypeError("observed-world subjects must be exact Subject values")
+    if type(value.root_id) is not str or type(value.rel_path_key) is not str:
+        raise TypeError("observed-world subject fields must be text")
+    if value.root_id not in {
+        xset.plan.source_root.root_id,
+        xset.plan.target_root.root_id,
+    }:
+        raise ValueError("observed subject names an unknown root")
+    validate_relative_path(value.rel_path_key, allow_root=True)
+    if value.rel_path_key != normalize_relative_path(
+        value.rel_path_key,
+        allow_root=True,
+    ):
+        raise ValueError("observed subject path key is not canonical")
+    return Subject(value.root_id, value.rel_path_key)
+
+
+def _snapshot_optional_text(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    if type(value) is not str:
+        raise TypeError(f"{field_name} must be text or null")
+    return value
+
+
+def _snapshot_file_identity(value: object) -> FileIdentity | None:
+    if value is None:
+        return None
+    if type(value) is not FileIdentity:
+        raise TypeError("observed file identity has the wrong type")
+    return FileIdentity(value.volume_serial, value.file_index)
+
+
+def _snapshot_metadata(value: object) -> MetadataSnapshot:
+    if type(value) is not MetadataSnapshot:
+        raise TypeError("observed file metadata has the wrong type")
+    return MetadataSnapshot(value.attributes, value.created_ns)
+
+
+def _snapshot_file_stat(value: object) -> FileStat | None:
+    if value is None:
+        return None
+    if type(value) is not FileStat:
+        raise TypeError("observed file stat has the wrong type")
+    return FileStat(
+        value.kind,
+        value.size,
+        value.mtime_ns,
+        _snapshot_file_identity(value.file_identity),
+        value.nlink,
+        _snapshot_metadata(value.metadata),
+    )
+
+
+def _snapshot_stat_observation(value: object) -> StatObservation:
+    if type(value) is not StatObservation:
+        raise TypeError("observed stats must contain StatObservation values")
+    if type(value.contained) is not bool or type(value.representable) is not bool:
+        raise TypeError("observed stat flags must be bools")
+    return StatObservation(
+        _snapshot_file_stat(value.stat),
+        _snapshot_optional_text(value.error, "stat observation error"),
+        value.contained,
+        value.representable,
+    )
+
+
+def _snapshot_volume_id(value: object) -> VolumeId | None:
+    if value is None:
+        return None
+    if type(value) is not VolumeId:
+        raise TypeError("observed volume identity has the wrong type")
+    return VolumeId(value.serial, value.fs_type)
+
+
+def _snapshot_volume_evidence(value: object) -> VolumeEvidence | None:
+    if value is None:
+        return None
+    if type(value) is not VolumeEvidence:
+        raise TypeError("observed volume evidence has the wrong type")
+    return VolumeEvidence(value.label, value.device_id, value.clone_ambiguous)
+
+
+def _snapshot_native_path(value: object, field_name: str) -> str | None:
+    if value is None:
+        return None
+    return require_utf16_path(value, field_name)
+
+
+def _snapshot_root_observation(value: object) -> RootObservation:
+    if type(value) is not RootObservation:
+        raise TypeError("observed roots must contain RootObservation values")
+    if (
+        value.authority_issue is not None
+        and type(value.authority_issue) is not RootAuthorityIssue
+    ):
+        raise TypeError("observed root authority issue has the wrong type")
+    return RootObservation(
+        _snapshot_native_path(value.resolved_path, "observed root path"),
+        _snapshot_volume_id(value.volume_id),
+        _snapshot_volume_evidence(value.volume_evidence),
+        _snapshot_optional_text(value.error, "root observation error"),
+        value.authority_issue,
+    )
+
+
+def _snapshot_trash_observation(value: object) -> TrashObservation | None:
+    if value is None:
+        return None
+    if type(value) is not TrashObservation:
+        raise TypeError("observed trash has the wrong type")
+    if any(
+        type(flag) is not bool
+        for flag in (
+            value.available,
+            value.contained,
+            value.same_volume,
+            value.writable,
+            value.reparse_safe,
+        )
+    ):
+        raise TypeError("observed trash flags must be bools")
+    return TrashObservation(
+        _snapshot_native_path(value.resolved_path, "observed trash path"),
+        value.available,
+        value.contained,
+        value.same_volume,
+        value.writable,
+        value.reparse_safe,
+        _snapshot_optional_text(value.error, "trash observation error"),
+    )
+
+
+def _snapshot_observed_at(value: object) -> datetime:
+    if not isinstance(value, datetime):
+        raise TypeError("observation timestamp must be a datetime")
+    if value.tzinfo is None or value.utcoffset() is None:
+        raise ValueError("observation timestamp must be timezone-aware")
+    if value.utcoffset() != timezone.utc.utcoffset(value):
+        raise ValueError("observation timestamp must be UTC")
+    return datetime(
+        value.year,
+        value.month,
+        value.day,
+        value.hour,
+        value.minute,
+        value.second,
+        value.microsecond,
+        tzinfo=timezone.utc,
+        fold=value.fold,
+    )
+
+
+def snapshot_plan_observed_world(
+    value: object,
+    xset: ExecutionSet,
+    admission: PlanReviewAdmission,
+) -> ObservedWorld:
+    """Capture one exact observer graph within the plan-owned subject scope."""
+
+    if type(value) is not ObservedWorld:
+        raise TypeError("plan observer must return an exact ObservedWorld")
+    if type(admission) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    for field_name, population in (
+        ("stats", value.stats),
+        ("paths", value.paths),
+        ("roots", value.roots),
+    ):
+        if not isinstance(population, Mapping):
+            raise TypeError(f"observed-world {field_name} must be a mapping")
+    if type(value.target_parent_paths) is not frozenset:
+        raise TypeError("observed target parent paths must be a frozenset")
+    admission.require_source_rows(len(value.target_parent_paths))
+
+    allowed_paths, allowed_parents = plan_observation_scope(xset)
+    stats: dict[Subject, StatObservation] = {}
+    for raw_index, (raw_subject, raw_observation) in enumerate(
+        value.stats.items(),
+        start=1,
+    ):
+        admission.require_source_rows(raw_index)
+        subject = _snapshot_subject(raw_subject, xset)
+        if subject not in allowed_paths:
+            raise ValueError("observer returned a subject outside the plan")
+        if subject in stats:
+            raise ValueError("observer returned a duplicate stat subject")
+        stats[subject] = _snapshot_stat_observation(raw_observation)
+
+    paths: dict[Subject, str] = {}
+    for raw_index, (raw_subject, raw_path) in enumerate(
+        value.paths.items(),
+        start=1,
+    ):
+        admission.require_source_rows(raw_index)
+        subject = _snapshot_subject(raw_subject, xset)
+        if type(raw_path) is not str:
+            raise TypeError("observed paths must contain text values")
+        path = validate_relative_path(raw_path, allow_root=True)
+        if subject not in allowed_paths or allowed_paths[subject] != path:
+            raise ValueError("observer returned a path outside the plan")
+        if subject in paths:
+            raise ValueError("observer returned a duplicate path subject")
+        paths[subject] = path
+    if stats.keys() != paths.keys():
+        raise ValueError("observed stats and paths must name the same subjects")
+
+    target_parents: set[str] = set()
+    for raw_parent in value.target_parent_paths:
+        if type(raw_parent) is not str:
+            raise TypeError("observed target parents must contain text values")
+        parent = validate_relative_path(raw_parent, allow_root=True)
+        if parent not in allowed_parents:
+            raise ValueError("observer returned an unknown target parent")
+        target_parents.add(parent)
+
+    endpoint_ids = {
+        xset.plan.source_root.root_id,
+        xset.plan.target_root.root_id,
+    }
+    roots: dict[str, RootObservation] = {}
+    for raw_index, (raw_root_id, raw_observation) in enumerate(
+        value.roots.items(),
+        start=1,
+    ):
+        admission.require_source_rows(raw_index)
+        if type(raw_root_id) is not str or raw_root_id not in endpoint_ids:
+            raise ValueError("observed root names an unknown endpoint")
+        if raw_root_id in roots:
+            raise ValueError("observer returned a duplicate endpoint root")
+        roots[raw_root_id] = _snapshot_root_observation(raw_observation)
+
+    free_space = (
+        None
+        if value.free_space is None
+        else require_signed_64(value.free_space, "observed free space")
+    )
+    reclaimable = require_signed_64(
+        value.reclaimable_temp_bytes,
+        "observed reclaimable temporary bytes",
+    )
+    return ObservedWorld(
+        MappingProxyType(stats),
+        MappingProxyType(paths),
+        frozenset(target_parents),
+        MappingProxyType(roots),
+        free_space,
+        reclaimable,
+        _snapshot_trash_observation(value.trash),
+        _snapshot_observed_at(value.observed_at),
+    )
+
+
+def revalidate_plan_observed_world(
+    value: object,
+    authoritative: ObservedWorld,
+    xset: ExecutionSet,
+    admission: PlanReviewAdmission,
+) -> None:
+    """Reject collaborator mutation of one previously captured world."""
+
+    if snapshot_plan_observed_world(value, xset, admission) != authoritative:
+        raise ValueError("preflight mutated its admitted observed world")
+
+
+def snapshot_plan_verdict(
+    value: object,
+    callback_world: ObservedWorld,
+    authoritative_world: ObservedWorld,
+    xset: ExecutionSet,
+    admission: PlanReviewAdmission,
+) -> Verdict:
+    """Capture exact preflight output without reordering collaborator facts."""
+
+    if type(value) is not Verdict or type(value.refusals) is not tuple:
+        raise TypeError("preflight must return an exact Verdict snapshot")
+    if type(admission) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    revalidate_plan_observed_world(
+        callback_world,
+        authoritative_world,
+        xset,
+        admission,
+    )
+    observed = (
+        authoritative_world
+        if value.observed is callback_world
+        else snapshot_plan_observed_world(value.observed, xset, admission)
+    )
+    if observed != authoritative_world:
+        raise ValueError("preflight verdict observed a different world")
+    if type(value.ok) is not bool or value.ok == bool(value.refusals):
+        raise ValueError("preflight verdict truth does not match its refusals")
+    admission.require_informational_source_rows(len(value.refusals))
+
+    allowed_paths, _ = plan_observation_scope(xset)
+    refusals: list[Refusal] = []
+    for raw_refusal in value.refusals:
+        if type(raw_refusal) is not Refusal:
+            raise TypeError("preflight refusals must contain exact Refusal values")
+        if type(raw_refusal.code) is not RefusalCode:
+            raise TypeError("preflight refusal code has the wrong type")
+        if raw_refusal.op_id is not None and (
+            type(raw_refusal.op_id) is not str
+            or raw_refusal.op_id not in xset.selection
+        ):
+            raise ValueError("preflight refusal names an unselected operation")
+        subject = (
+            None
+            if raw_refusal.subject is None
+            else _snapshot_subject(raw_refusal.subject, xset)
+        )
+        if subject is not None and subject not in allowed_paths:
+            raise ValueError("preflight refusal names an unobserved subject")
+        if type(raw_refusal.detail) is not str:
+            raise TypeError("preflight refusal detail must be text")
+        refusals.append(
+            Refusal(
+                raw_refusal.code,
+                raw_refusal.op_id,
+                subject,
+                raw_refusal.detail,
+            )
+        )
+    return Verdict(value.ok, tuple(refusals), authoritative_world)
+
+
+def admit_retained_plan_observed_world(
+    value: ObservedWorld,
+    admission: PlanReviewAdmission,
+) -> None:
+    """Charge the shallow collection slots retained by the plan artifact."""
+
+    if type(value) is not ObservedWorld:
+        raise TypeError("retained plan world must be an exact ObservedWorld")
+    if type(admission) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    admission.admit(
+        domain_bytes=(
+            2 * len(value.stats)
+            + 2 * len(value.paths)
+            + len(value.target_parent_paths)
+            + 2 * len(value.roots)
+        )
+        * PLAN_SOURCE_REFERENCE_BYTES,
+    )
+
+
+def admit_retained_plan_verdict(
+    value: Verdict,
+    admission: PlanReviewAdmission,
+) -> None:
+    """Charge final informational rows and refusal-tuple slots once."""
+
+    if type(value) is not Verdict or type(value.refusals) is not tuple:
+        raise TypeError("retained plan verdict must be an exact Verdict")
+    if type(admission) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    admission.admit(
+        informational_rows=len(value.refusals),
+        informational_bytes=(
+            len(value.refusals) * PLAN_SOURCE_REFERENCE_BYTES
+        ),
+    )
+
+
 def _paths_overlap(first: str, second: str) -> bool:
     first_norm = os.path.normcase(os.path.abspath(first))
     second_norm = os.path.normcase(os.path.abspath(second))
@@ -757,7 +1094,7 @@ def _paths_overlap(first: str, second: str) -> bool:
 
 
 def _add_stat_refusals(
-    refusals: _PlanRefusalCollector,
+    refusals: _PlanRefusalList,
     operation: PlanOperation,
     subject: Subject,
     observation: StatObservation | None,
@@ -807,18 +1144,12 @@ def preflight(
 ) -> Verdict:
     """Purely judge all applicable refusal reasons for an execution set."""
 
-    published_admission = review_admission
     if (
-        published_admission is not None
-        and type(published_admission) is not PlanReviewAdmission
+        review_admission is not None
+        and type(review_admission) is not PlanReviewAdmission
     ):
         raise TypeError("preflight review admission has the wrong type")
-    construction_admission = (
-        None
-        if published_admission is None
-        else published_admission.fork()
-    )
-    refusals = _PlanRefusalCollector(construction_admission)
+    refusals = _PlanRefusalList(review_admission)
     plan = xset.plan
     source_root = world.roots.get(plan.source_root.root_id)
     target_root = world.roots.get(plan.target_root.root_id)
@@ -885,13 +1216,7 @@ def preflight(
         refusals.append(Refusal(RefusalCode.ROOTS_OVERLAP))
 
     operations_by_id = {operation.op_id: operation for operation in plan.operations}
-    remaining_count = sum(1 for _ in _iter_remaining_operations(xset))
-    if construction_admission is not None:
-        construction_admission.require_source_rows(remaining_count)
-        construction_admission.admit_domain_shape(
-            reference_slots=remaining_count
-        )
-    remaining = tuple(_iter_remaining_operations(xset))
+    remaining = xset.remaining()
     remaining_ids = {operation.op_id for operation in remaining}
     quarantined = quarantined_operation_ids(plan.operations)
     direct_target_subjects: set[Subject] = set()
@@ -1038,15 +1363,18 @@ def preflight(
             if not trash.reparse_safe:
                 refusals.append(Refusal(RefusalCode.TRASH_REPARSE))
 
-    retained_count = len(refusals.values())
-    if construction_admission is not None:
-        construction_admission.admit_informational_shape(
-            reference_slots=2 * retained_count,
-            rows=0,
-        )
+    unique = {
+        (
+            refusal.code,
+            refusal.op_id,
+            refusal.subject,
+            refusal.detail,
+        ): refusal
+        for refusal in refusals
+    }
     ordered = tuple(
         sorted(
-            refusals.values(),
+            unique.values(),
             key=lambda refusal: (
                 refusal.code.value,
                 str(refusal.op_id or ""),
@@ -1055,11 +1383,4 @@ def preflight(
             ),
         )
     )
-    verdict = Verdict(not ordered, ordered, world)
-    if published_admission is not None:
-        published_admission.require_informational_source_rows(len(ordered))
-        published_admission.admit_informational_shape(
-            reference_slots=len(ordered),
-            rows=len(ordered),
-        )
-    return verdict
+    return Verdict(not ordered, ordered, world)

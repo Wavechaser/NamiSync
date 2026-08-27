@@ -44,20 +44,25 @@ drops, cleans, or executes operations. Admitted execution uses the immutable
 reviewed policy snapshot already bound into the plan; it never reinterprets the
 run from newer global defaults.
 
-During plan review, workflow supplies exact disposable admission forks to both
-functions. Observation gates selected subjects, target parents, roots, paths,
-stats, and backend-returned map populations before those values escape their
-producer. Workflow then reconstructs the declared `ObservedWorld` graph and
-rejects raw mapping wrappers or undeclared object state. Judgment deduplicates
-typed refusals through a bounded collector, charges each unique refusal once as
-an informational semantic row, and accounts for the simultaneous key/dict and
-sorted-tuple references before retaining the final verdict. A first excess is
-the shared no-partial review refusal; it never becomes an incomplete ordinary
-verdict.
+During plan review, workflow supplies a fresh disposable admission to each
+observer and preflight call. Observation gates its selected subjects, target
+parents, roots, paths, stats, and backend-returned mappings independently before
+first excess. The preflight module reconstructs the declared `ObservedWorld`
+graph, rejects out-of-plan keys and undeclared state, gives judgment a separate
+detached world and plan preview, and exactly revalidates that callback world
+after return. Judgment gates each raw typed refusal before append and preserves
+ordinary refusal order and selection policy.
+
+Only the final observed-world mapping slots and verdict refusal-tuple slots/
+informational rows are charged to the retained plan artifact. Construction
+maps, keys, sorting, selection, previews, and revalidation copies are disposable
+and uncharged. A first excess is the shared typed `REFUSED+UNRUN` result and
+never becomes an incomplete ordinary verdict or saved partial plan.
 
 These source and retained-reference checks are inputs to checkpoint 4. They do
-not freeze its complete-object constants or account for later task,
-serialization, native, or browser copies.
+not freeze its complete-object constants or account for construction/container
+capacity, complete projections, later task/serialization, native, or browser
+copies.
 
 ## Observation Boundary
 

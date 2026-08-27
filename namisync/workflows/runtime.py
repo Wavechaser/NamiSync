@@ -22,13 +22,7 @@ from namisync.core.integrity import (
     RecordDisposition,
     VerifierContext,
 )
-from namisync.core.models import (
-    FileIdentity,
-    FileRecord,
-    ScanResult,
-    VolumeEvidence,
-    VolumeId,
-)
+from namisync.core.models import ScanResult, VolumeEvidence, VolumeId
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import (
     DeletionPolicy,
@@ -58,7 +52,6 @@ from namisync.core.session import (
     SessionRecord,
     SessionState,
 )
-from namisync.core.review import PlanReviewAdmission
 from namisync.core.scalars import require_safe_int, scalar_64_to_text
 from namisync.db.connections import validate_database_path
 from namisync.db.history import (
@@ -87,11 +80,7 @@ from namisync.modules.executor import (
     SystemClock,
     execute,
 )
-from namisync.modules.planner import (
-    admit_plan_mapping_copy,
-    plan,
-    snapshot_mapping_snapshot,
-)
+from namisync.modules.planner import plan
 from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
 from namisync.modules.scanner import NativeScannerBackend, WalkingScanner
 from namisync.modules.verifier import baseline, rebaseline, verify, verify_post_copy
@@ -1044,99 +1033,41 @@ class LocalWorkflowRuntime:
         self._validate_database_roots((_binding_root(binding),))
 
     def _correspondence(
-        self,
-        source: ScanResult,
-        target: ScanResult,
-        *,
-        review_admission: PlanReviewAdmission | None = None,
+        self, source: ScanResult, target: ScanResult
     ) -> MappingSnapshot:
-        if (
-            review_admission is not None
-            and type(review_admission) is not PlanReviewAdmission
-        ):
-            raise TypeError("plan review admission has the wrong type")
-
-        def admitted_snapshot(value: MappingSnapshot) -> MappingSnapshot:
-            if review_admission is None:
-                return value
-            admit_plan_mapping_copy(value, review_admission)
-            return snapshot_mapping_snapshot(
-                value,
-                review_admission=review_admission,
-            )
-
         if source.volume_id is None or target.volume_id is None:
-            return admitted_snapshot(
-                MappingSnapshot.empty(source.volume_id, target.volume_id)
-            )
+            return MappingSnapshot.empty(source.volume_id, target.volume_id)
         if not self.ledger_path.exists():
-            return admitted_snapshot(
-                MappingSnapshot.empty(source.volume_id, target.volume_id)
-            )
+            return MappingSnapshot.empty(source.volume_id, target.volume_id)
         source_relative = _volume_relative_path(
             source.root.path, source.volume_evidence
         )
         target_relative = _volume_relative_path(
             target.root.path, target.volume_evidence
         )
-
-        if review_admission is None:
-            target_path_keys = tuple(
-                record.rel_path_key for record in target.files
-            )
-            source_identities = frozenset(
-                record.file_identity
-                for record in source.files
-                if record.file_identity is not None
-            )
-            target_identities = frozenset(
-                record.file_identity
-                for record in target.files
-                if record.file_identity is not None
-            )
-        else:
-            review_admission.require_source_rows(len(target.files))
-            review_admission.admit_domain_shape(
-                reference_slots=len(target.files)
-            )
-            target_path_keys = tuple(
-                record.rel_path_key for record in target.files
-            )
-
-            def retained_identities(
-                records: tuple[FileRecord, ...],
-            ) -> frozenset[FileIdentity]:
-                identities: set[FileIdentity] = set()
-                for record in records:
-                    identity = record.file_identity
-                    if identity is None or identity in identities:
-                        continue
-                    review_admission.require_source_rows(len(identities) + 1)
-                    review_admission.admit_domain_shape(reference_slots=1)
-                    identities.add(identity)
-                review_admission.admit_domain_shape(
-                    reference_slots=len(identities)
-                )
-                return frozenset(identities)
-
-            source_identities = retained_identities(source.files)
-            target_identities = retained_identities(target.files)
         with LedgerRepository(self.ledger_path) as repository:
             found = repository.find_current_mapping(
                 source.volume_id,
                 source_relative,
                 target.volume_id,
                 target_relative,
-                target_path_keys=target_path_keys,
-                source_identities=source_identities,
-                target_identities=target_identities,
+                target_path_keys=tuple(record.rel_path_key for record in target.files),
+                source_identities=frozenset(
+                    record.file_identity
+                    for record in source.files
+                    if record.file_identity is not None
+                ),
+                target_identities=frozenset(
+                    record.file_identity
+                    for record in target.files
+                    if record.file_identity is not None
+                ),
             )
-        snapshot = (
+        return (
             MappingSnapshot.empty(source.volume_id, target.volume_id)
             if found is None
             else found.snapshot
         )
-        return admitted_snapshot(snapshot)
 
     def _open_recording(
         self, xset: ExecutionSet

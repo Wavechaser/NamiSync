@@ -18,12 +18,9 @@ from .models import (
     UnsupportedRecord,
     VolumeEvidence,
     VolumeId,
-    validate_scan_result,
 )
 from .scalars import (
     MAX_SIGNED_64,
-    ScalarDomainError,
-    checked_add_signed_64,
     require_safe_int,
     require_signed_64,
 )
@@ -186,32 +183,6 @@ class PlanReviewAdmission:
         self._informational_rows = 0
         self._informational_bytes = 0
 
-    @property
-    def domain_rows(self) -> int:
-        return self._domain_rows
-
-    @property
-    def domain_bytes(self) -> int:
-        return self._domain_bytes
-
-    @property
-    def informational_rows(self) -> int:
-        return self._informational_rows
-
-    @property
-    def informational_bytes(self) -> int:
-        return self._informational_bytes
-
-    def fork(self) -> "PlanReviewAdmission":
-        """Return an isolated counter snapshot for one disposable producer."""
-
-        forked = PlanReviewAdmission()
-        forked._domain_rows = self._domain_rows
-        forked._domain_bytes = self._domain_bytes
-        forked._informational_rows = self._informational_rows
-        forked._informational_bytes = self._informational_bytes
-        return forked
-
     def admit(
         self,
         *,
@@ -280,103 +251,48 @@ class PlanReviewAdmission:
                 ReviewFactLimitExceeded.plan_informational_rows()
             )
 
-    def admit_domain_shape(
-        self,
-        *,
-        reference_slots: int = 0,
-        rows: int = 0,
-    ) -> None:
-        self._admit_shape(
-            reference_slots=reference_slots,
-            rows=rows,
-            informational=False,
-        )
-
-    def admit_informational_shape(
-        self,
-        *,
-        reference_slots: int = 0,
-        rows: int = 1,
-    ) -> None:
-        self._admit_shape(
-            reference_slots=reference_slots,
-            rows=rows,
-            informational=True,
-        )
-
-    def _admit_shape(
-        self,
-        *,
-        reference_slots: int,
-        rows: int,
-        informational: bool,
-    ) -> None:
-        _require_nonnegative_int(reference_slots, "retained reference slots")
-        _require_nonnegative_int(rows, "plan review row charge")
-        retained_bytes = reference_slots * PLAN_SOURCE_REFERENCE_BYTES
-        if informational:
-            self.admit(
-                informational_rows=rows,
-                informational_bytes=retained_bytes,
-            )
-        else:
-            self.admit(domain_rows=rows, domain_bytes=retained_bytes)
-
-
 def snapshot_plan_scan_result(
     result: ScanResult,
     admission: PlanReviewAdmission,
-    *,
-    logical_source: bool = False,
 ) -> ScanResult:
-    """Validate and copy one exact bounded scan graph for plan construction."""
+    """Return one detached exact scan after stateless source admission."""
 
-    _validate_plan_scan_source(
-        result,
-        admission,
-        logical_source=logical_source,
+    _require_plan_admission(admission)
+    populations = _plan_scan_populations(result)
+    files, directories, unsupported, warnings = populations
+    admission.require_source_rows(
+        len(files) + len(directories) + len(unsupported)
     )
-    snapshot = _copy_plan_scan_result(result)
-    _validate_plan_scan_source(
-        snapshot,
-        admission,
-        logical_source=logical_source,
+    admission.require_informational_source_rows(len(warnings))
+    return ScanResult(
+        root=_snapshot_root(result.root),
+        volume_id=_snapshot_volume_id(result.volume_id),
+        volume_evidence=_snapshot_volume_evidence(result.volume_evidence),
+        profile=_snapshot_capability_profile(result.profile),
+        files=tuple(_snapshot_file_record(record) for record in files),
+        directories=tuple(
+            _snapshot_directory(record) for record in directories
+        ),
+        unsupported=tuple(
+            _snapshot_unsupported(record) for record in unsupported
+        ),
+        warnings=tuple(_snapshot_warning(warning) for warning in warnings),
+        scope=_snapshot_scope(result.scope),
+        complete=result.complete,
     )
-    return snapshot
 
 
-def snapshot_admitted_plan_scan(
-    result: ScanResult,
+def snapshot_plan_file_records(
+    records: tuple[FileRecord, ...],
     admission: PlanReviewAdmission,
-    *,
-    logical_source: bool = False,
-    retain_information: bool = False,
-) -> ScanResult:
-    """Admit copy slots before constructing one detached exact scan."""
+) -> tuple[FileRecord, ...]:
+    """Detach one bounded file-record population for a policy callback."""
 
-    if type(retain_information) is not bool:
-        raise TypeError("retain_information must be a bool")
-    domain_count, informational_count = _validate_plan_scan_source(
-        result,
-        admission,
-        logical_source=logical_source,
-    )
-    admission.admit(
-        domain_bytes=domain_count * PLAN_SOURCE_REFERENCE_BYTES,
-        informational_rows=(
-            informational_count if retain_information else 0
-        ),
-        informational_bytes=(
-            informational_count * PLAN_SOURCE_REFERENCE_BYTES
-        ),
-    )
-    snapshot = _copy_plan_scan_result(result)
-    _validate_plan_scan_source(
-        snapshot,
-        admission,
-        logical_source=logical_source,
-    )
-    return snapshot
+    if type(records) is not tuple:
+        raise TypeError("plan file records must be an exact tuple")
+    _require_plan_admission(admission)
+    admission.require_source_rows(len(records))
+    return tuple(_snapshot_file_record(record) for record in records)
 
 
 def admit_retained_plan_scan(
@@ -385,11 +301,10 @@ def admit_retained_plan_scan(
 ) -> None:
     """Charge tuple slots and retained warnings, never scan domain rows."""
 
-    domain_count, informational_count = _validate_plan_scan_source(
-        result,
-        admission,
-        logical_source=False,
-    )
+    _require_plan_admission(admission)
+    files, directories, unsupported, warnings = _plan_scan_populations(result)
+    domain_count = len(files) + len(directories) + len(unsupported)
+    informational_count = len(warnings)
     admission.admit(
         domain_bytes=domain_count * PLAN_SOURCE_REFERENCE_BYTES,
         informational_rows=informational_count,
@@ -399,176 +314,156 @@ def admit_retained_plan_scan(
     )
 
 
-def admit_plan_scan_copy(
+def _plan_scan_populations(
     result: ScanResult,
-    admission: PlanReviewAdmission,
-) -> None:
-    """Charge one disposable scan copy without recounting review rows."""
-
-    domain_count, informational_count = _validate_plan_scan_source(
-        result,
-        admission,
-        logical_source=False,
-    )
-    admission.admit(
-        domain_bytes=domain_count * PLAN_SOURCE_REFERENCE_BYTES,
-        informational_bytes=(
-            informational_count * PLAN_SOURCE_REFERENCE_BYTES
-        ),
-    )
-
-
-def _validate_plan_scan_source(
-    result: ScanResult,
-    admission: PlanReviewAdmission,
-    *,
-    logical_source: bool,
-) -> tuple[int, int]:
-    domain_count, informational_count = _bounded_scan_counts(
-        result,
-        admission,
-    )
-    if type(logical_source) is not bool:
-        raise TypeError("logical_source must be a bool")
-    if logical_source:
-        logical_bytes = 0
-        for record in result.files:
-            if type(record) is not FileRecord:
-                raise TypeError(
-                    "plan scan files must contain exact FileRecord values"
-                )
-            # Re-admit the individual scalar before translating only a valid
-            # population's aggregate overflow into a review-limit refusal.
-            FileRecord(
-                record.rel_path,
-                record.rel_path_key,
-                record.size,
-                record.mtime_ns,
-                record.file_identity,
-                record.nlink,
-                record.metadata,
-            )
-            try:
-                logical_bytes = checked_add_signed_64(
-                    logical_bytes,
-                    record.size,
-                    "plan logical bytes",
-                )
-            except ScalarDomainError as error:
-                raise ReviewFactLimitError(
-                    ReviewFactLimitExceeded.plan_logical_bytes()
-                ) from error
-    admission.require_informational_source_rows(informational_count)
-    validate_scan_result(result)
-    return domain_count, informational_count
-
-
-def _copy_plan_scan_result(result: ScanResult) -> ScanResult:
-    """Reconstruct the declared graph without copying undeclared attributes."""
-
-    def copy_identity(value: FileIdentity | None) -> FileIdentity | None:
-        return (
-            None
-            if value is None
-            else FileIdentity(value.volume_serial, value.file_index)
-        )
-
-    def copy_metadata(value: MetadataSnapshot) -> MetadataSnapshot:
-        return MetadataSnapshot(value.attributes, value.created_ns)
-
-    return ScanResult(
-        root=Root(result.root.path, result.root.root_id),
-        volume_id=(
-            None
-            if result.volume_id is None
-            else VolumeId(result.volume_id.serial, result.volume_id.fs_type)
-        ),
-        volume_evidence=(
-            None
-            if result.volume_evidence is None
-            else VolumeEvidence(
-                result.volume_evidence.label,
-                result.volume_evidence.device_id,
-                result.volume_evidence.clone_ambiguous,
-            )
-        ),
-        profile=CapabilityProfile(
-            result.profile.fs_type,
-            result.profile.mtime_granularity_ns,
-            result.profile.stable_file_identity,
-            result.profile.incurs_seek_penalty,
-            result.profile.max_path,
-            result.profile.supports_ads,
-            result.profile.supports_hardlinks,
-        ),
-        files=tuple(
-            FileRecord(
-                record.rel_path,
-                record.rel_path_key,
-                record.size,
-                record.mtime_ns,
-                copy_identity(record.file_identity),
-                record.nlink,
-                copy_metadata(record.metadata),
-            )
-            for record in result.files
-        ),
-        directories=tuple(
-            DirRecord(
-                record.rel_path,
-                record.rel_path_key,
-                record.mtime_ns,
-                copy_metadata(record.metadata),
-                copy_identity(record.file_identity),
-                record.nlink,
-            )
-            for record in result.directories
-        ),
-        unsupported=tuple(
-            UnsupportedRecord(
-                record.rel_path,
-                record.rel_path_key,
-                record.reason,
-                record.kind,
-            )
-            for record in result.unsupported
-        ),
-        warnings=tuple(
-            ScanWarning(warning.code, warning.rel_path, warning.detail)
-            for warning in result.warnings
-        ),
-        scope=ScanScope(
-            result.scope.kind,
-            tuple(result.scope.selected_paths),
-            tuple(result.scope.subtree_roots),
-        ),
-        complete=result.complete,
-    )
-
-
-def _bounded_scan_counts(
-    result: ScanResult,
-    admission: PlanReviewAdmission,
-) -> tuple[int, int]:
+) -> tuple[
+    tuple[FileRecord, ...],
+    tuple[DirRecord, ...],
+    tuple[UnsupportedRecord, ...],
+    tuple[ScanWarning, ...],
+]:
     if type(result) is not ScanResult:
         raise TypeError("plan scanner must return an exact ScanResult")
-    if type(admission) is not PlanReviewAdmission:
-        raise TypeError("plan review admission has the wrong type")
-    for field_name, population in (
+    populations = (
         ("files", result.files),
         ("directories", result.directories),
         ("unsupported", result.unsupported),
         ("warnings", result.warnings),
-    ):
+    )
+    for field_name, population in populations:
         if type(population) is not tuple:
             raise TypeError(f"plan scan {field_name} must be an exact tuple")
-    domain_count = (
-        len(result.files)
-        + len(result.directories)
-        + len(result.unsupported)
+    return (
+        populations[0][1],
+        populations[1][1],
+        populations[2][1],
+        populations[3][1],
     )
-    admission.require_source_rows(domain_count)
-    return domain_count, len(result.warnings)
+
+
+def _require_plan_admission(value: object) -> PlanReviewAdmission:
+    if type(value) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    return value
+
+
+def _snapshot_identity(value: object) -> FileIdentity | None:
+    if value is None:
+        return None
+    if type(value) is not FileIdentity:
+        raise TypeError("plan file identity has the wrong type")
+    return FileIdentity(value.volume_serial, value.file_index)
+
+
+def _snapshot_metadata(value: object) -> MetadataSnapshot:
+    if type(value) is not MetadataSnapshot:
+        raise TypeError("plan metadata has the wrong type")
+    return MetadataSnapshot(value.attributes, value.created_ns)
+
+
+def _snapshot_file_record(value: object) -> FileRecord:
+    if type(value) is not FileRecord:
+        raise TypeError("plan scan files must contain exact FileRecord values")
+    return FileRecord(
+        value.rel_path,
+        value.rel_path_key,
+        value.size,
+        value.mtime_ns,
+        _snapshot_identity(value.file_identity),
+        value.nlink,
+        _snapshot_metadata(value.metadata),
+    )
+
+
+def _snapshot_directory(value: object) -> DirRecord:
+    if type(value) is not DirRecord:
+        raise TypeError(
+            "plan scan directories must contain exact DirRecord values"
+        )
+    return DirRecord(
+        value.rel_path,
+        value.rel_path_key,
+        value.mtime_ns,
+        _snapshot_metadata(value.metadata),
+        _snapshot_identity(value.file_identity),
+        value.nlink,
+    )
+
+
+def _snapshot_unsupported(value: object) -> UnsupportedRecord:
+    if type(value) is not UnsupportedRecord:
+        raise TypeError(
+            "plan scan unsupported must contain exact UnsupportedRecord values"
+        )
+    return UnsupportedRecord(
+        value.rel_path,
+        value.rel_path_key,
+        value.reason,
+        value.kind,
+    )
+
+
+def _snapshot_warning(value: object) -> ScanWarning:
+    if type(value) is not ScanWarning:
+        raise TypeError("plan scan warnings must contain exact ScanWarning values")
+    snapshot = ScanWarning(value.code, value.rel_path, value.detail)
+    if snapshot != value:
+        raise ValueError("plan scan warning is not canonical")
+    return snapshot
+
+
+def _snapshot_root(value: object) -> Root:
+    if type(value) is not Root:
+        raise TypeError("plan scan root has the wrong type")
+    return Root(value.path, value.root_id)
+
+
+def _snapshot_volume_id(value: object) -> VolumeId | None:
+    if value is None:
+        return None
+    if type(value) is not VolumeId:
+        raise TypeError("plan scan volume has the wrong type")
+    return VolumeId(value.serial, value.fs_type)
+
+
+def _snapshot_volume_evidence(value: object) -> VolumeEvidence | None:
+    if value is None:
+        return None
+    if type(value) is not VolumeEvidence:
+        raise TypeError("plan scan volume evidence has the wrong type")
+    return VolumeEvidence(value.label, value.device_id, value.clone_ambiguous)
+
+
+def _snapshot_capability_profile(value: object) -> CapabilityProfile:
+    if type(value) is not CapabilityProfile:
+        raise TypeError("plan scan capability profile has the wrong type")
+    return CapabilityProfile(
+        value.fs_type,
+        value.mtime_granularity_ns,
+        value.stable_file_identity,
+        value.incurs_seek_penalty,
+        value.max_path,
+        value.supports_ads,
+        value.supports_hardlinks,
+    )
+
+
+def _snapshot_scope(value: object) -> ScanScope:
+    if type(value) is not ScanScope:
+        raise TypeError("plan scan scope has the wrong type")
+    if (
+        type(value.selected_paths) is not tuple
+        or type(value.subtree_roots) is not tuple
+    ):
+        raise TypeError("plan scan scope populations must be exact tuples")
+    snapshot = ScanScope(
+        value.kind,
+        value.selected_paths,
+        value.subtree_roots,
+    )
+    if snapshot != value:
+        raise ValueError("plan scan scope is not canonical")
+    return snapshot
 
 
 def _require_nonnegative_int(value: object, field_name: str) -> int:
