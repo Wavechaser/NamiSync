@@ -67,6 +67,47 @@ _AdmissionAttach = Callable[[SessionId, EventStream], _AdmissionRollback]
 _WORKER_RETIRE_POLL_SECONDS = 0.01
 
 
+class AdmissionAttachment:
+    """Expose one retryable rollback even when attachment itself raises."""
+
+    __slots__ = ("_callbacks",)
+
+    def __init__(
+        self,
+        attach: _AdmissionAttach,
+        rollback: _AdmissionRollback,
+    ) -> None:
+        if not callable(attach) or not callable(rollback):
+            raise TypeError("admission attachment callbacks must be callable")
+        self._callbacks = (attach, rollback)
+
+    def capture(self) -> tuple[_AdmissionAttach, _AdmissionRollback]:
+        """Return one validated callback-pair snapshot."""
+
+        if type(self) is not AdmissionAttachment:
+            raise TypeError("admission attachment subclasses are not accepted")
+        callbacks = self._callbacks
+        if type(callbacks) is not tuple or len(callbacks) != 2:
+            raise TypeError("admission attachment callbacks are invalid")
+        attach, rollback = callbacks
+        if not callable(attach) or not callable(rollback):
+            raise TypeError("admission attachment callbacks must be callable")
+        return attach, rollback
+
+    def __call__(
+        self,
+        session_id: SessionId,
+        stream: EventStream,
+    ) -> _AdmissionRollback:
+        attach, rollback = self.capture()
+        attached_rollback = attach(session_id, stream)
+        if attached_rollback is not rollback:
+            raise TypeError(
+                "admission attachment returned a different rollback callback"
+            )
+        return attached_rollback
+
+
 def _stored_record(record: SessionRecord) -> StoredSessionRecord:
     return StoredSessionRecord(
         session_id=record.session_id,
@@ -282,7 +323,7 @@ class Dispatcher:
         kind: str,
         request: object,
         *,
-        attach: _AdmissionAttach | None = None,
+        attach: _AdmissionAttach | AdmissionAttachment | None = None,
     ) -> SessionId:
         with self._condition:
             if not self._accepting:
@@ -293,7 +334,20 @@ class Dispatcher:
         if registration is None:
             raise UnknownWorkflowKind(kind)
         try:
-            return self._admit(kind, request, registration, attach=attach)
+            attachment_rollback: _AdmissionRollback | None = None
+            if isinstance(attach, AdmissionAttachment):
+                captured_attach, attachment_rollback = attach.capture()
+            else:
+                captured_attach = attach
+                if captured_attach is not None and not callable(captured_attach):
+                    raise TypeError("admission attach callback must be callable")
+            return self._admit(
+                kind,
+                request,
+                registration,
+                attach=captured_attach,
+                attachment_rollback=attachment_rollback,
+            )
         finally:
             with self._condition:
                 self._admitting -= 1
@@ -306,6 +360,7 @@ class Dispatcher:
         registration: WorkflowRegistration,
         *,
         attach: _AdmissionAttach | None,
+        attachment_rollback: _AdmissionRollback | None,
     ) -> SessionId:
         if not self._claim_admission_liability():
             self._start_admission_cleanup_worker(self._audit_timeout)
@@ -320,6 +375,7 @@ class Dispatcher:
                 resources,
                 registration,
                 attach=attach,
+                attachment_rollback=attachment_rollback,
                 liability=liability,
             )
         finally:
@@ -353,6 +409,7 @@ class Dispatcher:
         registration: WorkflowRegistration,
         *,
         attach: _AdmissionAttach | None,
+        attachment_rollback: _AdmissionRollback | None,
         liability: _AdmissionLiability,
     ) -> SessionId:
         session_id = SessionId(uuid4().hex)
@@ -391,6 +448,7 @@ class Dispatcher:
         )
         stream: EventStream | None = None
         rollback: _AdmissionRollback | None = None
+        attachment_started = False
         store_touched = False
         publication_lock = Lock()
         try:
@@ -398,10 +456,18 @@ class Dispatcher:
             self._store.put(_stored_record(record))
             if attach is not None:
                 stream = hub.subscribe()
+                attachment_started = True
                 attached_rollback = attach(session_id, stream)
                 if not callable(attached_rollback):
                     raise TypeError(
                         "admission attach callback must return a rollback callback"
+                    )
+                if (
+                    attachment_rollback is not None
+                    and attached_rollback is not attachment_rollback
+                ):
+                    raise TypeError(
+                        "admission attachment returned a different rollback callback"
                     )
                 rollback = attached_rollback
             with publication_lock:
@@ -436,6 +502,8 @@ class Dispatcher:
                     self._condition.notify_all()
         except BaseException as error:
             retire_exception_graph(error)
+            if rollback is None and attachment_started:
+                rollback = attachment_rollback
             cleanup = _AdmissionCleanup(
                 session_id=session_id,
                 hub=hub,

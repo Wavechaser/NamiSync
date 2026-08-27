@@ -189,6 +189,22 @@ def test_br_g_13_replan_discards_selection_even_with_identical_operation_ids() -
     assert stale_execution.disposition == "conflict"
 
 
+def test_required_attachment_refuses_execution_before_selection_or_commit() -> None:
+    copied = operation(OperationKind.COPY, source=file_stat())
+    runtime = _PlanRuntime(_artifact(plan((copied,))))
+    dispatcher = _Dispatcher()
+    service = _service(runtime, dispatcher)
+    service._require_session_attachment = True
+
+    with pytest.raises(RuntimeError, match="attachment is required"):
+        service.start_execution("request")
+
+    assert runtime.commits == []
+    assert service._plan_selections == {}
+    assert service._session_receipts == {}
+    assert dispatcher.submissions == []
+
+
 def test_br_g_13_mutation_racing_replan_returns_the_current_artifact() -> None:
     copied = operation(OperationKind.COPY, source=file_stat())
     plan_value = plan((copied,))
@@ -924,18 +940,29 @@ def test_plan_receipt_replay_ignores_sink_and_does_not_reattach(
     service._observer = observer
     first_sink = lambda _update: None
     replay_sink = lambda _update: None
+    attachment_calls: list[tuple[str, str]] = []
+
+    def first_attachment(session_id: str):
+        attachment_calls.append(("attach", session_id))
+        return lambda: attachment_calls.append(("rollback", session_id))
+
+    def replay_attachment(session_id: str):
+        attachment_calls.append(("replay", session_id))
+        return lambda: None
 
     first = service.start_plan(
         str(source),
         str(target),
         command_id="observed-plan",
         observation_sink=first_sink,
+        session_attachment=first_attachment,
     )
     replay = service.start_plan(
         str(source),
         str(target),
         command_id="observed-plan",
         observation_sink=replay_sink,
+        session_attachment=replay_attachment,
     )
 
     assert replay == first
@@ -943,6 +970,7 @@ def test_plan_receipt_replay_ignores_sink_and_does_not_reattach(
     assert len(observer.adoptions) == 1
     assert observer.adoptions[0][0] == "observed-session"
     assert observer.adoptions[0][1] is first_sink
+    assert attachment_calls == [("attach", "observed-session")]
 
 
 def test_observed_plan_attach_failure_leaves_no_receipt_or_submission_artifact(
@@ -975,7 +1003,12 @@ def test_observed_plan_attach_failure_leaves_no_receipt_or_submission_artifact(
 
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             assert attach is not None
-            attach("failed-session", object())
+            captured_attach, rollback = attach.capture()
+            try:
+                captured_attach("failed-session", object())
+            except BaseException:
+                rollback()
+                raise
             self.accepted.append((kind, request))
             return "failed-session"
 
@@ -990,6 +1023,11 @@ def test_observed_plan_attach_failure_leaves_no_receipt_or_submission_artifact(
     dispatcher = Dispatcher()
     service = _service(Runtime(), dispatcher)
     service._observer = Observer()
+    attachment_calls: list[tuple[str, str]] = []
+
+    def attachment(session_id: str):
+        attachment_calls.append(("attach", session_id))
+        return lambda: attachment_calls.append(("rollback", session_id))
 
     with pytest.raises(RuntimeError, match="attach failed"):
         service.start_plan(
@@ -997,11 +1035,273 @@ def test_observed_plan_attach_failure_leaves_no_receipt_or_submission_artifact(
             str(target),
             command_id="failed-observed-plan",
             observation_sink=lambda _update: None,
+            session_attachment=attachment,
         )
 
     assert dispatcher.accepted == []
     assert service._session_receipts == {}
     assert service._receipt_ids_by_session == {}
+    assert attachment_calls == [
+        ("attach", "failed-session"),
+        ("rollback", "failed-session"),
+    ]
+
+
+def test_observed_plan_publication_rollback_releases_observer_before_owner(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    lifecycle: list[str] = []
+
+    class Runtime:
+        def create_plan_request(
+            self,
+            request_id: str,
+            source_path: str,
+            target_path: str,
+            *,
+            deletion_policy: str | None,
+        ):
+            return SimpleNamespace(
+                request_id=request_id,
+                source_path=source_path,
+                target_path=target_path,
+                deletion_policy=deletion_policy,
+            )
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            del kind, request
+            assert attach is not None
+            rollback = attach("rolled-back-session", object())
+            assert callable(rollback)
+            rollback()
+            raise RuntimeError("publication failed")
+
+    class Observer:
+        def __init__(self) -> None:
+            self.observations: dict[str, object] = {}
+
+        def adopt(self, session_id, sink, stream):
+            del sink, stream
+            lifecycle.append(f"observe:{session_id}")
+            observation = object()
+            self.observations[session_id] = observation
+
+            def rollback() -> None:
+                lifecycle.append(f"unobserve:{session_id}")
+                if self.observations.get(session_id) is observation:
+                    self.observations.pop(session_id)
+
+            return rollback
+
+        def retains_observation(self, session_id, sink):
+            del sink
+            return session_id in self.observations
+
+    def attachment(session_id: str):
+        lifecycle.append(f"attach:{session_id}")
+        return lambda: lifecycle.append(f"detach:{session_id}")
+
+    service = _service(Runtime(), Dispatcher())
+    service._observer = Observer()
+
+    with pytest.raises(RuntimeError, match="publication failed"):
+        service.start_plan(
+            str(source),
+            str(target),
+            command_id="rolled-back-plan",
+            observation_sink=lambda _update: None,
+            session_attachment=attachment,
+        )
+
+    assert lifecycle == [
+        "attach:rolled-back-session",
+        "observe:rolled-back-session",
+        "unobserve:rolled-back-session",
+        "detach:rolled-back-session",
+    ]
+    assert service._session_receipts == {}
+    assert service._receipt_ids_by_session == {}
+
+
+def test_publication_rollback_drains_detail_and_owner_after_observer_failure() -> None:
+    lifecycle: list[str] = []
+    publication_failure = RuntimeError("publication failed")
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            del kind, request
+            assert attach is not None
+            rollback = attach("failed-detail-session", object())
+            rollback()
+            raise publication_failure
+
+    class Observer:
+        def __init__(self) -> None:
+            self.retained = False
+
+        def adopt(self, session_id, sink, stream):
+            del sink, stream
+            lifecycle.append(f"observe:{session_id}")
+            self.retained = True
+
+            def rollback() -> None:
+                lifecycle.append(f"unobserve:{session_id}")
+                self.retained = False
+                raise OSError("observer cleanup failed")
+
+            return rollback
+
+        def retains_observation(self, session_id, sink):
+            del session_id, sink
+            return self.retained
+
+    def attachment(session_id: str):
+        lifecycle.append(f"attach:{session_id}")
+        return lambda: lifecycle.append(f"detach:{session_id}")
+
+    service = _service(SimpleNamespace(), Dispatcher())
+    service._observer = Observer()
+
+    with pytest.raises(RuntimeError, match="publication failed") as raised:
+        service.start_inventory(
+            root_path="F:\\library",
+            observation_sink=lambda _update: None,
+            session_attachment=attachment,
+        )
+
+    assert raised.value is publication_failure
+    assert lifecycle == [
+        "attach:failed-detail-session",
+        "observe:failed-detail-session",
+        "unobserve:failed-detail-session",
+        "detach:failed-detail-session",
+    ]
+    assert service._detail_owners_by_session == {}
+    assert service._session_receipts == {}
+
+
+def test_publication_rollback_retries_owner_after_exact_observer_retires() -> None:
+    lifecycle: list[str] = []
+    publication_failure = RuntimeError("publication failed")
+
+    class Dispatcher:
+        rollback = None
+        cleanup_failures: list[BaseException] = []
+
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            del kind, request
+            assert attach is not None
+            self.rollback = attach("retained-detail-session", object())
+            try:
+                self.rollback()
+            except BaseException as error:
+                self.cleanup_failures.append(error)
+            raise publication_failure
+
+    class Observer:
+        def __init__(self) -> None:
+            self.allow_retirement = False
+            self.observations: dict[str, tuple[object, object]] = {}
+
+        def adopt(self, session_id, sink, stream):
+            del stream
+            observation = object()
+            self.observations[session_id] = (sink, observation)
+            lifecycle.append(f"observe:{session_id}")
+
+            def rollback() -> None:
+                current = self.observations.get(session_id)
+                if current is None or current[1] is not observation:
+                    return
+                lifecycle.append(f"unobserve:{session_id}")
+                if not self.allow_retirement:
+                    raise TimeoutError("observer did not stop")
+                self.observations.pop(session_id)
+
+            return rollback
+
+        def retains_observation(self, session_id, sink):
+            current = self.observations.get(session_id)
+            return current is not None and current[0] is sink
+
+    def attachment(session_id: str):
+        lifecycle.append(f"attach:{session_id}")
+        return lambda: lifecycle.append(f"detach:{session_id}")
+
+    dispatcher = Dispatcher()
+    observer = Observer()
+    service = _service(SimpleNamespace(), dispatcher)
+    service._observer = observer
+
+    with pytest.raises(RuntimeError, match="publication failed") as raised:
+        service.start_inventory(
+            root_path="F:\\library",
+            observation_sink=lambda _update: None,
+            session_attachment=attachment,
+        )
+
+    assert raised.value is publication_failure
+    assert len(dispatcher.cleanup_failures) == 1
+    assert type(dispatcher.cleanup_failures[0]) is RuntimeError
+    assert lifecycle == [
+        "attach:retained-detail-session",
+        "observe:retained-detail-session",
+        "unobserve:retained-detail-session",
+    ]
+    assert service._detail_owners_by_session == {}
+
+    observer.allow_retirement = True
+    assert dispatcher.rollback is not None
+    dispatcher.rollback()
+    dispatcher.rollback()
+
+    assert lifecycle == [
+        "attach:retained-detail-session",
+        "observe:retained-detail-session",
+        "unobserve:retained-detail-session",
+        "unobserve:retained-detail-session",
+        "detach:retained-detail-session",
+    ]
+
+
+def test_desktop_attachment_requirement_covers_location_session_admission() -> None:
+    dispatcher = _Dispatcher()
+    service = _service(SimpleNamespace(), dispatcher)
+    service._require_session_attachment = True
+
+    with pytest.raises(RuntimeError, match="attachment is required"):
+        service.start_inventory(root_path="F:\\library")
+
+    assert dispatcher.submissions == []
+    lifecycle: list[str] = []
+
+    class Observer:
+        def adopt(self, session_id, sink, stream):
+            del sink, stream
+            lifecycle.append(f"observe:{session_id}")
+            return lambda: lifecycle.append(f"unobserve:{session_id}")
+
+    def attachment(session_id: str):
+        lifecycle.append(f"attach:{session_id}")
+        return lambda: lifecycle.append(f"detach:{session_id}")
+
+    service._observer = Observer()
+    started = service.start_inventory(
+        root_path="F:\\library",
+        observation_sink=lambda _update: None,
+        session_attachment=attachment,
+    )
+
+    assert started.session_id == "session-1"
+    assert lifecycle == ["attach:session-1", "observe:session-1"]
+    assert service._detail_owners_by_session == {
+        "session-1": ("inventory", started.request_id)
+    }
 
 
 def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
@@ -1244,8 +1544,60 @@ def test_br_g_16_close_before_receipt_publication_drops_late_receipt() -> None:
 
     assert not worker.is_alive()
     assert admitted[0].session_id == "session-1"
-    assert service._session_receipts == {}
-    assert service._receipt_ids_by_session == {}
+    replay = service.start_inventory(
+        root_path="F:\\library",
+        command_id="late-receipt",
+    )
+    assert replay.session_id == "session-2"
+
+
+def test_session_receipt_publication_does_not_reread_dispatcher_after_attach(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+
+    class Runtime:
+        def create_plan_request(
+            self,
+            request_id: str,
+            source_path: str,
+            target_path: str,
+            *,
+            deletion_policy: str | None,
+        ):
+            return SimpleNamespace(
+                request_id=request_id,
+                source_path=source_path,
+                target_path=target_path,
+                deletion_policy=deletion_policy,
+            )
+
+    class Dispatcher(_Dispatcher):
+        def get(self, session_id: str):
+            del session_id
+            raise RuntimeError("post-publication lookup is forbidden")
+
+    attached: list[str] = []
+    service = _service(Runtime(), Dispatcher())
+    service._observer = SimpleNamespace(
+        adopt=lambda session_id, _sink, _stream: lambda: None,
+    )
+
+    started = service.start_plan(
+        str(source),
+        str(target),
+        command_id="post-publication-lookup",
+        observation_sink=lambda _update: None,
+        session_attachment=lambda session_id: (
+            attached.append(session_id) or (lambda: None)
+        ),
+    )
+
+    assert started.session_id == "session-1"
+    assert attached == ["session-1"]
 
 
 def test_br_g_17_omitted_revision_is_limited_to_pristine_cli_selection() -> None:

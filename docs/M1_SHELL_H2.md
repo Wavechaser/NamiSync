@@ -398,6 +398,17 @@ Phase delivery, correspondence, nested module collaborators, destination
 policy, and mutated preflight input cannot claim that authority. Ordinary
 exception ownership is deliberately not claimed by this prerequisite.
 
+The inventory-side row prerequisite is now closed separately. Production scan
+append, actual repository results, and exact tree input members stop before
+first excess; integrity checks the exact candidate-row tuple before direct
+workflow construction. Initial inventory excess is typed `REFUSED+UNRUN` with
+no ledger/detail publication; integrity excess remains honest `FAILED+RAN`
+with no partial selection or verifier work. Requested-but-absent database keys
+do not consume result capacity. Requested-key/id preprocessing and its
+path-key off-by-one, hostile resolver aliases, synthetic tree/index and
+candidate construction, complete bytes, old/new generations, sorting, and
+codec/native/browser copies remain checkpoint-4.1 owners in `BUGS.md`.
+
 Checkpoint 4 must treat the following live seams as mandatory model inputs. It
 may eliminate an owner before downstream work or charge its exact simultaneous
 graph with a finite retirement condition; no acceptance may assume release:
@@ -430,6 +441,16 @@ other callback/construction transients remain checkpoint-4 model inputs.
   workflow validation graph before its unchanged unchained public error, and
   `Dispatcher.subscribe` is closed above. Bridge/host consumption of the final
   escaping adapter frame and path-message rendering remain open inputs.
+
+Desktop session ownership is now attached transactionally for every service
+start before Dispatcher scheduling. Production requires the attachment; CLI
+composition remains optional and unchanged. Observer/detail rollback is exact
+and retryable under Dispatcher's existing unpublished-cleanup worker, and the
+task reservation stays charged until that callback proves the exact sink gone.
+Malformed or mismatched successful returns clean only the attached session;
+plan-drop authority begins only after returned and attached identities agree.
+This closes the lower-owner count escape but does not freeze the task byte model
+or activate multi-session lifecycle.
 
 Checkpoint-4 regressions for these seams assert public status, item, counter,
 retry, and identity behavior plus externally held lifecycle release. They do

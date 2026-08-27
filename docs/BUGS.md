@@ -460,14 +460,15 @@ defect, and move implementation-level test choreography out of the log.
 ### M1 Hardening
 
 - MODERATE - OPEN (2026-08-27). Task-adjacent owner-count gap. The desktop
-  registry caps live cards, but dispatcher sessions/subscribers, runtime plans
-  and detail maps, service receipts/selections/observers, and close-time retry
-  owners do not yet share one enforced task lifetime. A numerical process
-  budget could therefore assume a 48-task ceiling while lower layers retain
-  more complete graphs or survive shutdown. Cause: each layer acquired and
-  released its own session-era maps without a task-wide admission and teardown
-  contract. Checkpoint 4 must bind or cap every owner and prove exact cleanup;
-  no formula may treat composition convention or timeout as retirement.
+  registry caps live cards, but the complete runtime/service/dispatcher graphs
+  and close-time owners do not yet share the checkpoint-4 byte reservation.
+  Unpublished desktop session attachment is now structural: every desktop start
+  binds its exact reservation before scheduling, observer timeout keeps that
+  capacity charged under Dispatcher retry, and exact-session release detaches
+  only after observer/detail retirement. Malformed return cleanup cannot drop
+  an unauthenticated plan. The remaining cause is the absent task-wide graph
+  charge and multi-session lifecycle; checkpoint 4 must bind those owners, and
+  no formula may treat a timeout as retirement.
 - MODERATE - FIXED (2026-08-27). Pre-run exception closure retention. Lock
   acquisition, continuation open, and canceled-session settlement passed a raw
   collaborator exception through a nested runner callback, keeping its
@@ -1274,15 +1275,23 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- SEVERE - OPEN (2026-08-27). Preconstruction inventory amplification.
-  Inventory scanning and general repository reads can build complete raw
-  populations before row admission, node-tree construction can synthesize
-  every missing ancestor, and the declared standalone-integrity retained-byte
-  fact is not enforced. A supported inventory or integrity run can therefore
-  exhaust process memory before a typed refusal. Cause: row limits were added
-  to candidate queries without one incremental complete-graph gate spanning
-  scan, database rows, tree builders, candidates, and old/new generations.
-  Checkpoint 4 must close these roots before using them in a finite task model.
+- SEVERE - OPEN (2026-08-27). Inventory complete-graph admission gap. Raw scan
+  rows, returned repository rows, and tree input members now stop before first
+  excess; integrity checks the exact candidate-row tuple before construction,
+  and no valid excess publishes partial work. Still unbounded are requested
+  path-key/id preprocessing and sorting, the inherited path-key `limit + 1`
+  check after retention, synthetic tree/index and candidate construction, and
+  old/new task generations. Checkpoint 4.1 must eliminate or charge those
+  owners and install the identity-deduplicated byte authority before accepting
+  the finite task model.
+- SEVERE - OPEN (2026-08-28). Hostile resolution alias revalidation gap. The
+  inventory workflow validates a binding before calling the resolver, then
+  retains exact resolver-returned mount/evidence objects across later resolver
+  callbacks without a detached snapshot and final correspondence check. A
+  mutating collaborator can therefore change the root or volume facts used by
+  scan and recording after admission. Checkpoint 4.1 must snapshot and
+  revalidate the exact resolved graph before any callback or ledger effect;
+  this preexisting path issue is not part of the row prerequisite.
 - MODERATE - FIXED (2026-08-27). Historical correspondence amplification.
   Every plan loaded all retained pairs and identity aliases for a mapping's two
   locations, so a small current scan could materialize an arbitrarily large

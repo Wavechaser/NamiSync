@@ -48,7 +48,12 @@ runs its fresh guard.
 The optional domain-blind admission `attach` callback receives only a newly
 allocated session id and preopened `EventStream`, and returns an idempotent
 rollback callback after adopting the stream. The record, hub, and store row are
-still unpublished and unschedulable. Dispatcher emits `PENDING` to the adopted
+still unpublished and unschedulable. A caller whose attachment can acquire an
+owner before raising supplies an exact `AdmissionAttachment`: Dispatcher rejects
+subclasses, snapshots its attach and rollback callbacks before workflow
+preparation, and transfers that pre-registered rollback only after attachment
+invocation begins. A successful attachment must return that exact callback.
+Dispatcher emits `PENDING` to the adopted
 stream, then atomically publishes its maps/pending entry and notifies the
 scheduler. Every exception through `PENDING` emission and publication takes
 the same cleanup path. After adoption, dispatcher invokes the returned rollback
@@ -69,6 +74,16 @@ never runs injected cleanup inline, never duplicates a live attempt, and
 reports the unpublished session id while cleanup remains incomplete. A cleanup
 worker invoking shutdown cannot join itself. No task identity or interface
 policy enters dispatcher.
+
+The desktop service pre-registers one retryable composite rollback from the exact task
+reservation, optional runtime-detail owner, and `SessionObserver` adoption. It
+checks the observer's exact `(session_id, sink)` identity after every attempted
+retirement. If that owner survives, the callback raises a fixed cleanup-pending
+failure and leaves the task reservation charged, so this Dispatcher worker—not
+an interface-local retry queue—remains the sole retry authority. Detail cleanup
+may complete independently; task detachment occurs only after observer and
+detail owners are both absent. The initiating submit exception remains the
+public failure throughout.
 
 The desktop task owner-claim, binding, lease, epoch, and release protocol is an
 interface obligation specified by [M1_BRIDGE.md](M1_BRIDGE.md); it uses the

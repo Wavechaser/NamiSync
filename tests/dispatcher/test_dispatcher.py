@@ -41,6 +41,7 @@ from namisync.core.session import (
 )
 from namisync.dispatcher import (
     AdmissionClosed,
+    AdmissionAttachment,
     ControlAction,
     ControlCode,
     Dispatcher,
@@ -3109,6 +3110,7 @@ def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only
     published = []
     finalized: list[OperationResult] = []
     attached = []
+    rolled_back = []
     opened = []
     observer_closed = Event()
 
@@ -3133,7 +3135,10 @@ def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only
 
     def attach(session_id, stream):
         attached.append(session_id)
-        return stream.close
+        return rollback
+
+    def rollback() -> None:
+        rolled_back.append(True)
 
     dispatcher = Dispatcher(
         {
@@ -3150,7 +3155,11 @@ def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only
     )
     try:
         with pytest.raises(OSError) as caught:
-            dispatcher.submit("rejected", b"private continuation", attach=attach)
+            dispatcher.submit(
+                "rejected",
+                b"private continuation",
+                attach=AdmissionAttachment(attach, rollback),
+            )
 
         assert caught.value is original
         assert len(store.attempted) == 1
@@ -3161,7 +3170,7 @@ def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only
         assert retained.state is SessionState.PENDING
         assert retained.result is None
         session_id = retained.session_id
-        assert published == attached == opened == []
+        assert published == attached == rolled_back == opened == []
         assert observer_closed.is_set()
         assert dispatcher.list() == ()
         assert dispatcher._hubs == {}
@@ -3181,7 +3190,7 @@ def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only
         assert dispatcher._admission_cleanups[session_id] is cleanup
         assert store.snapshot() == (retained,)
         assert store.drop_calls == 2
-        assert published == attached == opened == []
+        assert published == attached == rolled_back == opened == []
     finally:
         store.allow_drop = True
         shutdown = dispatcher.shutdown(timeout=2)
@@ -3191,6 +3200,7 @@ def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only
     assert store.snapshot() == ()
     assert dispatcher._admission_cleanups == {}
     assert finalized == []
+    assert rolled_back == []
     assert not dispatcher._scheduler.is_alive()
 
 
@@ -3711,6 +3721,148 @@ def test_observed_attach_failure_is_never_published_or_scheduled() -> None:
     assert store.snapshot() == ()
     with pytest.raises(StopIteration):
         captured[0][1].next()
+    assert dispatcher.shutdown().complete
+
+
+def test_failed_attach_retains_registered_rollback_for_dispatcher_retry() -> None:
+    initiating_failure = RuntimeError("attachment failed after ownership")
+    owner_retained = True
+    allow_retirement = False
+    rollback_attempts = 0
+
+    def attach(session_id, stream):
+        del session_id, stream
+        raise initiating_failure
+
+    def rollback() -> None:
+        nonlocal owner_retained, rollback_attempts
+        rollback_attempts += 1
+        if not allow_retirement:
+            raise TimeoutError("attachment owner did not retire")
+        owner_retained = False
+
+    dispatcher = Dispatcher(
+        {
+            "observed": registration(
+                lambda _payload: completed
+            )
+        },
+        audit_timeout=0.05,
+    )
+
+    with pytest.raises(RuntimeError) as raised:
+        dispatcher.submit(
+            "observed",
+            b"payload",
+            attach=AdmissionAttachment(attach, rollback),
+        )
+
+    assert raised.value is initiating_failure
+    assert owner_retained
+    assert rollback_attempts == 1
+    assert dispatcher.list() == ()
+
+    allow_retirement = True
+    with pytest.raises(SessionCleanupPending):
+        dispatcher.submit("observed", b"retry cleanup")
+    wait_for_admission_cleanup_attempt(dispatcher)
+
+    assert not owner_retained
+    assert rollback_attempts == 2
+    successor = dispatcher.submit("observed", b"successor")
+    wait_for(dispatcher, successor, SessionState.COMPLETED)
+    dispatcher.close(successor)
+    assert dispatcher.shutdown().complete
+
+
+def test_registered_attachment_callbacks_are_snapshotted_before_prepare() -> None:
+    original_attach_called = Event()
+    replacement_attach_called = Event()
+
+    def rollback() -> None:
+        return None
+
+    def replacement_rollback() -> None:
+        raise AssertionError("replacement rollback must not gain ownership")
+
+    def attach(session_id, stream):
+        del session_id, stream
+        original_attach_called.set()
+        return rollback
+
+    def replacement_attach(session_id, stream):
+        del session_id, stream
+        replacement_attach_called.set()
+        return replacement_rollback
+
+    attachment = AdmissionAttachment(attach, rollback)
+
+    def prepare(request):
+        object.__setattr__(
+            attachment,
+            "_callbacks",
+            (replacement_attach, replacement_rollback),
+        )
+        return PreparedSession(bytes(request), frozenset())
+
+    dispatcher = Dispatcher(
+        {
+            "observed": WorkflowRegistration(
+                prepare=prepare,
+                open=lambda _payload: Invocation(completed),
+            )
+        }
+    )
+
+    session_id = dispatcher.submit(
+        "observed",
+        b"payload",
+        attach=attachment,
+    )
+
+    assert original_attach_called.is_set()
+    assert not replacement_attach_called.is_set()
+    wait_for(dispatcher, session_id, SessionState.COMPLETED)
+    dispatcher.close(session_id)
+    assert dispatcher.shutdown().complete
+
+
+def test_registered_attachment_subclasses_are_rejected_before_prepare() -> None:
+    class AttachmentSubclass(AdmissionAttachment):
+        pass
+
+    prepared = False
+
+    def prepare(request):
+        nonlocal prepared
+        prepared = True
+        return PreparedSession(bytes(request), frozenset())
+
+    def attach(session_id, stream):
+        del session_id, stream
+        return rollback
+
+    def rollback() -> None:
+        return None
+
+    dispatcher = Dispatcher(
+        {
+            "observed": WorkflowRegistration(
+                prepare=prepare,
+                open=lambda _payload: Invocation(completed),
+            )
+        }
+    )
+
+    with pytest.raises(TypeError, match="subclasses"):
+        dispatcher.submit(
+            "observed",
+            b"payload",
+            attach=AttachmentSubclass(attach, rollback),
+        )
+
+    assert not prepared
+    assert dispatcher.list() == ()
     assert dispatcher.shutdown().complete
 
 

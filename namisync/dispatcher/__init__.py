@@ -22,12 +22,13 @@ from namisync.dispatcher.custody import (
     ResourceLockProvider,
     WindowsNamedMutexProvider,
 )
-from namisync.dispatcher.dispatcher import Dispatcher
+from namisync.dispatcher.dispatcher import AdmissionAttachment, Dispatcher
 from namisync.dispatcher.event_bus import EventStream, UtcClock
 from namisync.dispatcher.store import InMemorySessionStore
 
 __all__ = [
     "AdmissionClosed",
+    "AdmissionAttachment",
     "AuditObserver",
     "ControlAction",
     "ControlCode",

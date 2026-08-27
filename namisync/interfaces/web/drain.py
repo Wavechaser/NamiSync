@@ -139,6 +139,9 @@ class _TaskService(Protocol):
         deletion_policy: str | None = None,
         command_id: str | None = None,
         observation_sink: Callable[[SessionUpdate], None] | None = None,
+        session_attachment: (
+            Callable[[str], Callable[[], None]] | None
+        ) = None,
     ) -> PlanSession: ...
 
     def reobserve(
@@ -287,14 +290,19 @@ class _DrainClaim:
 
 @dataclass(slots=True)
 class _Compensation:
-    plan: PlanSession
+    session_id: str
+    request_id: str | None = None
     unsubscribe_done: bool = False
     close_done: bool = False
     drop_done: bool = False
 
     @property
     def complete(self) -> bool:
-        return self.unsubscribe_done and self.close_done and self.drop_done
+        return (
+            self.unsubscribe_done
+            and self.close_done
+            and (self.request_id is None or self.drop_done)
+        )
 
 
 @dataclass(slots=True)
@@ -315,10 +323,18 @@ class _TaskCleanup:
 
 
 @dataclass(slots=True)
+class _TaskReservation:
+    task_id: str
+    attached_session_id: str | None = None
+    retire_when_detached: bool = False
+
+
+@dataclass(slots=True)
 class _TaskState:
     task_id: str
     command_id: str
     intent: tuple[str, str, str | None]
+    reservation: _TaskReservation
     clock: Callable[[], float]
     condition: Condition = field(default_factory=Condition)
     session_id: str | None = None
@@ -355,11 +371,20 @@ class _TaskState:
         with self.condition:
             if self.closing or generation != self.generation:
                 return
-            if self.session_id is not None and update_session != self.session_id:
+            expected_session_id = (
+                self.session_id or self.reservation.attached_session_id
+            )
+            if (
+                expected_session_id is not None
+                and update_session != expected_session_id
+            ):
                 raise ObservationConflictError(
                     "task observation delivered a mismatched session"
                 )
-            _validate_task_observation(update, expected_session_id=self.session_id)
+            _validate_task_observation(
+                update,
+                expected_session_id=expected_session_id,
+            )
             if type(update) is SessionRecordView:
                 self.terminal_record = update
                 self.terminal_pending = False
@@ -463,6 +488,7 @@ class TaskRegistry:
         self._task_capacity = task_capacity
         self._condition = Condition(Lock())
         self._tasks: dict[str, _TaskState] = {}
+        self._reservations: dict[str, _TaskReservation] = {}
         self._commands: dict[str, _StartEntry] = {}
         self._close_receipts: OrderedDict[
             tuple[str, str], TaskCloseView
@@ -488,11 +514,19 @@ class TaskRegistry:
                 raise TaskUnavailableError("task registry is closing")
             entry = self._commands.get(command_id)
             if entry is None:
-                if len(self._tasks) >= self._task_capacity:
+                if len(self._reservations) >= self._task_capacity:
                     raise TaskUnavailableError("task capacity is exhausted")
                 task_id = self._mint_task_id()
-                task = _TaskState(task_id, command_id, intent, self._clock)
+                reservation = _TaskReservation(task_id)
+                task = _TaskState(
+                    task_id,
+                    command_id,
+                    intent,
+                    reservation,
+                    self._clock,
+                )
                 entry = _StartEntry(command_id, intent, wire_intent, task)
+                self._reservations[task_id] = reservation
                 self._commands[command_id] = entry
                 self._tasks[task_id] = task
                 owner = True
@@ -562,6 +596,7 @@ class TaskRegistry:
                     self._commands.pop(entry.command_id, None)
                 if self._tasks.get(entry.task.task_id) is entry.task:
                     self._tasks.pop(entry.task.task_id, None)
+                self._retire_reservation_locked(entry.task.reservation)
             self._condition.notify_all()
 
     def _start_owner(
@@ -573,6 +608,8 @@ class TaskRegistry:
     ) -> None:
         task = entry.task
         plan: PlanSession | None = None
+        attached_session_id: str | None = None
+        service_returned = False
         failure_code: str | None = None
         try:
             candidate = self._service.start_plan(
@@ -581,14 +618,28 @@ class TaskRegistry:
                 deletion_policy=deletion_policy,
                 command_id=entry.command_id,
                 observation_sink=task.sink(task.generation),
+                session_attachment=self._session_attachment(
+                    task,
+                    task.generation,
+                ),
             )
+            service_returned = True
+            attached_session_id = self._attached_session_id_or_none(task)
             if type(candidate) is not PlanSession:
                 raise RuntimeError("planning service returned invalid task data")
             request_id = candidate.request_id
             session_id = candidate.session_id
             _require_opaque_id(request_id, "plan request id")
             _require_opaque_id(session_id, "plan session id")
-            plan = PlanSession(request_id, session_id)
+            if attached_session_id is None:
+                raise ObservationConflictError(
+                    "planning service did not attach its admitted session"
+                )
+            if session_id != attached_session_id:
+                raise ObservationConflictError(
+                    "planning service returned a different attached session"
+                )
+            plan = PlanSession(request_id, attached_session_id)
             with task.condition:
                 if task.closing:
                     raise TaskUnavailableError("task registry closed during start")
@@ -605,8 +656,15 @@ class TaskRegistry:
             failure_code = _classify_start_failure(error)
             retire_exception_graph(error)
             result = None
-        if result is None and plan is not None:
-            task.compensation = _Compensation(plan)
+        if (
+            result is None
+            and service_returned
+            and attached_session_id is not None
+        ):
+            task.compensation = _Compensation(
+                attached_session_id,
+                None if plan is None else plan.request_id,
+            )
             try:
                 self._attempt_compensation(task)
             except BaseException as cleanup_error:
@@ -618,6 +676,64 @@ class TaskRegistry:
             entry.failure_code = failure_code
             entry.complete = True
             self._condition.notify_all()
+
+    def _session_attachment(
+        self,
+        task: _TaskState,
+        generation: int,
+    ) -> Callable[[str], Callable[[], None]]:
+        reservation = task.reservation
+        task_id = task.task_id
+
+        def attach(session_id: str) -> Callable[[], None]:
+            _require_opaque_id(session_id, "attached session id")
+            with task.condition:
+                if task.closing or task.generation != generation:
+                    raise TaskUnavailableError(
+                        "task became unavailable before session attachment"
+                    )
+            with self._condition:
+                if (
+                    self._closing
+                    or self._reservations.get(task_id) is not reservation
+                    or reservation.retire_when_detached
+                ):
+                    raise TaskUnavailableError(
+                        "task became unavailable before session attachment"
+                    )
+                if reservation.attached_session_id is not None:
+                    raise ObservationConflictError(
+                        "task already owns an attached session"
+                    )
+                reservation.attached_session_id = session_id
+
+            active = True
+
+            def rollback() -> None:
+                nonlocal active
+                if not active:
+                    return
+                with self._condition:
+                    if reservation.attached_session_id == session_id:
+                        reservation.attached_session_id = None
+                        if (
+                            reservation.retire_when_detached
+                            and self._reservations.get(task_id) is reservation
+                        ):
+                            self._reservations.pop(task_id, None)
+                    active = False
+                    self._condition.notify_all()
+
+            return rollback
+
+        return attach
+
+    def _attached_session_id_or_none(self, task: _TaskState) -> str | None:
+        with self._condition:
+            reservation = task.reservation
+            if self._reservations.get(task.task_id) is not reservation:
+                raise TaskUnavailableError("task reservation is unavailable")
+            return reservation.attached_session_id
 
     def drain(
         self,
@@ -993,6 +1109,7 @@ class TaskRegistry:
                 self._tasks.pop(task_id, None)
             if self._commands.get(task.command_id, None) is not None:
                 self._commands.pop(task.command_id, None)
+            self._retire_reservation_locked(task.reservation)
             self._close_receipts[receipt_key] = result
             self._close_receipts.move_to_end(receipt_key)
             while len(self._close_receipts) > _CLOSE_RECEIPT_CAPACITY:
@@ -1036,21 +1153,51 @@ class TaskRegistry:
             if type(token) is not str or _OPAQUE_ID.fullmatch(token) is None:
                 raise ValueError("task token must be 32 lowercase hex digits")
             task_id = f"task-{token}"
-            if task_id not in self._tasks:
+            if task_id not in self._reservations:
                 return task_id
+
+    def _detach_session(self, task: _TaskState, session_id: str) -> None:
+        with self._condition:
+            reservation = task.reservation
+            if self._reservations.get(task.task_id) is not reservation:
+                raise TaskUnavailableError("task reservation is unavailable")
+            attached_session_id = reservation.attached_session_id
+            if attached_session_id is None:
+                return
+            if attached_session_id != session_id:
+                raise ObservationConflictError(
+                    "task cleanup does not match its attached session"
+                )
+            reservation.attached_session_id = None
+            if reservation.retire_when_detached:
+                self._reservations.pop(task.task_id, None)
+            self._condition.notify_all()
+
+    def _retire_reservation_locked(
+        self,
+        reservation: _TaskReservation,
+    ) -> None:
+        reservation.retire_when_detached = True
+        if (
+            reservation.attached_session_id is None
+            and self._reservations.get(reservation.task_id) is reservation
+        ):
+            self._reservations.pop(reservation.task_id, None)
 
     def _attempt_compensation(self, task: _TaskState) -> None:
         compensation = task.compensation
         assert compensation is not None
         try:
             if not compensation.unsubscribe_done:
-                self._service.unsubscribe(compensation.plan.session_id)
+                self._service.unsubscribe(compensation.session_id)
                 compensation.unsubscribe_done = True
             if not compensation.close_done:
-                self._service.close_session(compensation.plan.session_id)
+                self._service.close_session(compensation.session_id)
                 compensation.close_done = True
-            if not compensation.drop_done:
-                self._service.drop_plan(compensation.plan.request_id)
+            if compensation.close_done:
+                self._detach_session(task, compensation.session_id)
+            if compensation.request_id is not None and not compensation.drop_done:
+                self._service.drop_plan(compensation.request_id)
                 compensation.drop_done = True
         except BaseException as error:
             task.cleanup_pending = True
@@ -1087,6 +1234,8 @@ class TaskRegistry:
         if not cleanup.close_done:
             self._service.close_session(cleanup.session_id)
             cleanup.close_done = True
+        if cleanup.close_done:
+            self._detach_session(task, cleanup.session_id)
 
     def _attempt_task_cleanup(
         self,
@@ -1105,6 +1254,7 @@ class TaskRegistry:
                 self._commands.pop(task.command_id, None)
             if self._tasks.get(task.task_id) is task:
                 self._tasks.pop(task.task_id, None)
+            self._retire_reservation_locked(task.reservation)
             self._condition.notify_all()
 
 

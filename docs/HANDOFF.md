@@ -8,6 +8,24 @@ lifecycle, model constant, fixture, validator hash, measurement, or BR-G-45
 acceptance has activated. A fresh checkpoint-4.1 model attempt was independently
 rejected and removed before staging; none of its totals is authority.
 
+The inventory-side row prerequisite is implemented in the working lineage:
+scan append, actual repository results, and exact tree input members stop before
+first excess; integrity checks the exact candidate-row tuple before its direct
+workflow construction. Initial inventory returns `REFUSED+UNRUN` without
+publication, while integrity returns `FAILED+RAN` without a partial selection
+or verifier start. Requested-key/id preprocessing, its inherited path-key
+off-by-one, synthetic tree/index and candidate construction, retained bytes,
+and hostile resolver-return aliases remain explicit checkpoint-4.1 owners in
+`BUGS.md`.
+
+Desktop task/session attachment is also structural in the working lineage.
+Production requires every session start to attach its exact unpublished task
+reservation and observer before scheduling. Dispatcher alone retries an
+incomplete rollback; capacity remains charged until the exact observer/detail
+owners retire and the callback detaches the reservation. Malformed successful
+returns clean the attached session without gaining plan-drop authority. The CLI
+keeps optional attachment and its ordinary behavior.
+
 ## Recovery and safe lineage
 
 - The complete interrupted 19-path state remains preserved at Git object

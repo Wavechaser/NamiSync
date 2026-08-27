@@ -123,6 +123,34 @@ def test_task_registry_refuses_runtime_drift_before_construction(
     assert constructed == []
 
 
+def test_desktop_service_requires_session_attachment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from namisync.interfaces import service as service_module
+
+    constructed: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    sentinel = object()
+
+    def construct(*args, **kwargs):
+        constructed.append((args, kwargs))
+        return sentinel
+
+    monkeypatch.setattr(service_module, "NamiSyncService", construct)
+    paths = AppPaths.from_root(tmp_path / "app")
+
+    assert host._create_service(paths) is sentinel
+    assert constructed == [
+        (
+            (paths.ledger, paths.history),
+            {
+                "settings_path": paths.settings,
+                "require_session_attachment": True,
+            },
+        )
+    ]
+
+
 class _Hook:
     def __init__(self) -> None:
         self.handlers = []

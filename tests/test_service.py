@@ -1599,6 +1599,8 @@ def test_sink_can_unsubscribe_itself_without_self_join_or_deadlock() -> None:
 def test_adopt_rollback_is_idempotent_and_cannot_remove_replacement() -> None:
     first_stream = _BlockingStream("first-generation")
     second_stream = _BlockingStream("second-generation")
+    first_sink = lambda _update: None
+    second_sink = lambda _update: None
 
     class Dispatcher:
         pass
@@ -1606,23 +1608,28 @@ def test_adopt_rollback_is_idempotent_and_cannot_remove_replacement() -> None:
     observer = SessionObserver(Dispatcher())
     first_rollback = observer.adopt(
         "same-session",
-        lambda _update: None,
+        first_sink,
         first_stream,
     )
     assert first_stream.entered.wait(0.5)
+    assert observer.retains_observation("same-session", first_sink)
+    assert not observer.retains_observation("same-session", second_sink)
     first_rollback()
+    assert not observer.retains_observation("same-session", first_sink)
 
     second_rollback = observer.adopt(
         "same-session",
-        lambda _update: None,
+        second_sink,
         second_stream,
     )
     assert second_stream.entered.wait(0.5)
     replacement = observer._observations["same-session"]
+    assert observer.retains_observation("same-session", second_sink)
 
     first_rollback()
 
     assert observer._observations["same-session"] is replacement
+    assert observer.retains_observation("same-session", second_sink)
     assert not second_stream.closed
     second_rollback()
     assert observer._observations == {}

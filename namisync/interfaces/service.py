@@ -13,6 +13,7 @@ from typing import Callable, Never
 from uuid import uuid4
 
 from namisync.dispatcher import (
+    AdmissionAttachment,
     Dispatcher,
     EventStream,
     PreparedSession,
@@ -70,6 +71,7 @@ from namisync.workflows.views import (
 
 SessionUpdate = SessionEventView | SessionRecordView
 SessionSink = Callable[[SessionUpdate], None]
+SessionAttachment = Callable[[str], Callable[[], None]]
 FINALIZATION_TIMEOUT_MARGIN_SECONDS = 1.0
 # Keep ordinary history retry inside the audit cutoff, and shutdown long enough
 # for a late pump claim to consume both bounds in sequence.
@@ -92,6 +94,9 @@ _OBSERVER_JOIN_TIMEOUT = "session observers did not stop"
 _SERVICE_OBSERVER_CLEANUP_FAILURE = "service observer cleanup failed"
 _SERVICE_OBSERVER_CLEANUP_INTERRUPTED = (
     "service observer cleanup was interrupted"
+)
+_SESSION_ATTACHMENT_CLEANUP_PENDING = (
+    "session attachment cleanup remains pending"
 )
 
 
@@ -455,6 +460,13 @@ class SessionObserver:
         finally:
             del observation
 
+    def retains_observation(self, session_id: str, sink: SessionSink) -> bool:
+        """Report whether the exact session still retains the supplied sink."""
+
+        with self._lock:
+            observation = self._observations.get(session_id)
+            return observation is not None and observation.sink is sink
+
     def _rollback(self, observation: _Observation) -> None:
         with self._lock:
             observation.stop.set()
@@ -642,7 +654,10 @@ class NamiSyncService:
         history_path: str | Path,
         *,
         settings_path: str | Path | None = None,
+        require_session_attachment: bool = False,
     ) -> None:
+        if type(require_session_attachment) is not bool:
+            raise TypeError("require_session_attachment must be a bool")
         self._runtime = LocalWorkflowRuntime(
             ledger_path,
             history_path,
@@ -660,6 +675,7 @@ class NamiSyncService:
         self._session_receipt_locks = tuple(Lock() for _ in range(64))
         self._session_receipt_lifecycle = Lock()
         self._visibility_receipts: dict[str, tuple[object, ...]] = {}
+        self._require_session_attachment = require_session_attachment
         self._closed = False
         self._shutdown: ShutdownView | None = None
         self._runtime_closed = False
@@ -681,6 +697,23 @@ class NamiSyncService:
             self._runtime.initialize_database_contracts()
         )
 
+    def _validate_session_attachment_contract(
+        self,
+        observation_sink: SessionSink | None,
+        session_attachment: SessionAttachment | None,
+    ) -> None:
+        if observation_sink is not None and not callable(observation_sink):
+            raise TypeError("observation sink must be callable")
+        if session_attachment is not None and not callable(session_attachment):
+            raise TypeError("session attachment must be callable")
+        if session_attachment is not None and observation_sink is None:
+            raise ValueError("session attachment requires an observation sink")
+        if (
+            getattr(self, "_require_session_attachment", False)
+            and session_attachment is None
+        ):
+            raise RuntimeError("desktop session attachment is required")
+
     def start_plan(
         self,
         source: str,
@@ -689,7 +722,12 @@ class NamiSyncService:
         deletion_policy: str | None = None,
         command_id: str | None = None,
         observation_sink: SessionSink | None = None,
+        session_attachment: SessionAttachment | None = None,
     ) -> PlanSession:
+        self._validate_session_attachment_contract(
+            observation_sink,
+            session_attachment,
+        )
         signature = (
             source,
             target,
@@ -720,24 +758,12 @@ class NamiSyncService:
                 str(target_path),
                 deletion_policy=deletion_policy,
             )
-            if observation_sink is None:
-                session_id = self._dispatcher.submit(PLAN_KIND, request)
-            else:
-                def attach(
-                    session_id: SessionId,
-                    stream: EventStream,
-                ) -> Callable[[], None]:
-                    return self._observer.adopt(
-                        str(session_id),
-                        observation_sink,
-                        stream,
-                    )
-
-                session_id = self._dispatcher.submit(
-                    PLAN_KIND,
-                    request,
-                    attach=attach,
-                )
+            session_id = self._submit_session(
+                PLAN_KIND,
+                request,
+                observation_sink=observation_sink,
+                session_attachment=session_attachment,
+            )
             result = PlanSession(request.request_id, str(session_id))
             self._remember_session_receipt(
                 command_id,
@@ -906,7 +932,13 @@ class NamiSyncService:
         expected_revision: int | None = None,
         destructive_acknowledged: bool = False,
         command_id: str | None = None,
+        observation_sink: SessionSink | None = None,
+        session_attachment: SessionAttachment | None = None,
     ) -> ExecutionSession | ExecutionAdmissionView:
+        self._validate_session_attachment_contract(
+            observation_sink,
+            session_attachment,
+        )
         if type(verify_after_execute) is not bool:
             raise TypeError("verify_after_execute must be a bool")
         if expected_revision is not None and type(expected_revision) is not int:
@@ -920,6 +952,8 @@ class NamiSyncService:
                 expected_revision=expected_revision,
                 destructive_acknowledged=destructive_acknowledged,
                 command_id=command_id,
+                observation_sink=observation_sink,
+                session_attachment=session_attachment,
             )
 
     def _start_execution_once(
@@ -930,6 +964,8 @@ class NamiSyncService:
         expected_revision: int | None,
         destructive_acknowledged: bool,
         command_id: str | None,
+        observation_sink: SessionSink | None,
+        session_attachment: SessionAttachment | None,
     ) -> ExecutionSession | ExecutionAdmissionView:
         signature = (
             request_id,
@@ -1006,10 +1042,15 @@ class NamiSyncService:
                 user_deselected=user_deselected,
                 expected_artifact=artifact,
             )
-            session_id = self._submit_detail_session(
+            session_id = self._submit_session(
                 EXECUTION_KIND,
                 request,
-                ("execution", str(request.execution_set.run_id)),
+                detail_owner=(
+                    "execution",
+                    str(request.execution_set.run_id),
+                ),
+                observation_sink=observation_sink,
+                session_attachment=session_attachment,
             )
             result = ExecutionSession(
                 str(request.execution_set.run_id),
@@ -1040,7 +1081,13 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
+        observation_sink: SessionSink | None = None,
+        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
+        self._validate_session_attachment_contract(
+            observation_sink,
+            session_attachment,
+        )
         signature = (
             root_path,
             location_id,
@@ -1072,7 +1119,13 @@ class NamiSyncService:
                 selected_mount=selected_mount,
                 subtree_roots=subtree_roots,
             )
-            result = self._start_location(INVENTORY_KIND, request_id, request)
+            result = self._start_location(
+                INVENTORY_KIND,
+                request_id,
+                request,
+                observation_sink=observation_sink,
+                session_attachment=session_attachment,
+            )
             self._remember_session_receipt(
                 command_id,
                 INVENTORY_KIND,
@@ -1091,7 +1144,13 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
+        observation_sink: SessionSink | None = None,
+        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
+        self._validate_session_attachment_contract(
+            observation_sink,
+            session_attachment,
+        )
         return self._start_integrity(
             BASELINE_KIND,
             root_path=root_path,
@@ -1100,6 +1159,8 @@ class NamiSyncService:
             selected_mount=selected_mount,
             selected_ids=selected_ids,
             command_id=command_id,
+            observation_sink=observation_sink,
+            session_attachment=session_attachment,
         )
 
     def start_verify(
@@ -1111,7 +1172,13 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
+        observation_sink: SessionSink | None = None,
+        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
+        self._validate_session_attachment_contract(
+            observation_sink,
+            session_attachment,
+        )
         return self._start_integrity(
             VERIFY_KIND,
             root_path=root_path,
@@ -1120,6 +1187,8 @@ class NamiSyncService:
             selected_mount=selected_mount,
             selected_ids=selected_ids,
             command_id=command_id,
+            observation_sink=observation_sink,
+            session_attachment=session_attachment,
         )
 
     def start_rebaseline(
@@ -1131,7 +1200,13 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
+        observation_sink: SessionSink | None = None,
+        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
+        self._validate_session_attachment_contract(
+            observation_sink,
+            session_attachment,
+        )
         self._require_open()
         if selected_ids is None and not selected_paths:
             raise ValueError("rebaseline requires an explicit selected scope")
@@ -1143,6 +1218,8 @@ class NamiSyncService:
             selected_mount=selected_mount,
             selected_ids=selected_ids,
             command_id=command_id,
+            observation_sink=observation_sink,
+            session_attachment=session_attachment,
         )
 
     def save_plan(self, artifact: object) -> None:
@@ -1451,6 +1528,8 @@ class NamiSyncService:
         selected_mount: str | None,
         selected_ids: tuple[str, ...] | None,
         command_id: str | None,
+        observation_sink: SessionSink | None,
+        session_attachment: SessionAttachment | None,
     ) -> LocationSession:
         signature = (
             root_path,
@@ -1478,7 +1557,13 @@ class NamiSyncService:
                 selected_paths=selected_paths,
                 selected_mount=selected_mount,
             )
-            result = self._start_location(kind, request_id, request)
+            result = self._start_location(
+                kind,
+                request_id,
+                request,
+                observation_sink=observation_sink,
+                session_attachment=session_attachment,
+            )
             self._remember_session_receipt(
                 command_id,
                 kind,
@@ -1493,12 +1578,17 @@ class NamiSyncService:
         kind: str,
         request_id: str,
         request: object,
+        *,
+        observation_sink: SessionSink | None = None,
+        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
         try:
-            session_id = self._submit_detail_session(
+            session_id = self._submit_session(
                 kind,
                 request,
-                ("inventory", request_id),
+                detail_owner=("inventory", request_id),
+                observation_sink=observation_sink,
+                session_attachment=session_attachment,
             )
         except VolumeResolutionRequired as error:
             raise LocationResolutionError(
@@ -1506,22 +1596,100 @@ class NamiSyncService:
             ) from error
         return LocationSession(request_id, str(session_id))
 
-    def _submit_detail_session(
+    def _submit_session(
         self,
         kind: str,
         request: object,
-        owner: tuple[str, str],
+        *,
+        detail_owner: tuple[str, str] | None = None,
+        observation_sink: SessionSink | None = None,
+        session_attachment: SessionAttachment | None = None,
     ) -> SessionId:
         self._require_open()
+        if (
+            detail_owner is None
+            and observation_sink is None
+            and session_attachment is None
+        ):
+            return self._dispatcher.submit(kind, request)
+
+        owner_rollback: Callable[[], None] | None = None
+        detail_rollback: Callable[[], None] | None = None
+        observation_rollback: Callable[[], None] | None = None
+        retained_observation_sink = observation_sink
+        session_token: str | None = None
+
+        def rollback() -> None:
+            nonlocal owner_rollback
+            nonlocal detail_rollback
+            nonlocal observation_rollback
+            nonlocal retained_observation_sink
+
+            if session_token is None:
+                return
+            observation_retained = False
+            if observation_rollback is not None:
+                try:
+                    observation_rollback()
+                except BaseException as error:
+                    retire_exception_graph(error)
+                try:
+                    observation_retained = (
+                        self._observer.retains_observation(
+                            session_token,
+                            retained_observation_sink,
+                        )
+                    )
+                except BaseException as error:
+                    observation_retained = True
+                    retire_exception_graph(error)
+                if not observation_retained:
+                    observation_rollback = None
+                    retained_observation_sink = None
+
+            if detail_rollback is not None:
+                try:
+                    detail_rollback()
+                except BaseException as error:
+                    retire_exception_graph(error)
+                else:
+                    detail_rollback = None
+
+            if (
+                not observation_retained
+                and detail_rollback is None
+                and owner_rollback is not None
+            ):
+                try:
+                    owner_rollback()
+                except BaseException as error:
+                    retire_exception_graph(error)
+                else:
+                    owner_rollback = None
+
+            if (
+                observation_rollback is not None
+                or detail_rollback is not None
+                or owner_rollback is not None
+            ):
+                raise RuntimeError(
+                    _SESSION_ATTACHMENT_CLEANUP_PENDING
+                ) from None
 
         def attach(
             session_id: SessionId,
             stream: EventStream,
         ) -> Callable[[], None]:
-            stream.close()
+            nonlocal owner_rollback
+            nonlocal detail_rollback
+            nonlocal observation_rollback
+            nonlocal retained_observation_sink
+            nonlocal session_token
             session_token = str(session_id)
+            stream_needs_close = True
 
-            def rollback() -> None:
+            def rollback_detail_owner() -> None:
+                assert detail_owner is not None
                 with self._session_receipt_lifecycle_guard():
                     lock = getattr(self, "_lock", None)
                     with (nullcontext() if lock is None else lock):
@@ -1532,32 +1700,71 @@ class NamiSyncService:
                         )
                         if (
                             owners is not None
-                            and owners.get(session_token) is owner
+                            and owners.get(session_token) is detail_owner
                         ):
                             owners.pop(session_token)
 
-            with self._session_receipt_lifecycle_guard():
-                lock = getattr(self, "_lock", None)
-                with (nullcontext() if lock is None else lock):
-                    if getattr(self, "_closed", False) or getattr(
-                        self,
-                        "_runtime_detail_retirement_started",
-                        False,
-                    ):
-                        raise RuntimeError("service is closed")
-                    owners = getattr(self, "_detail_owners_by_session", None)
-                    if owners is None:
-                        owners = {}
-                        self._detail_owners_by_session = owners
-                    if session_token in owners:
-                        raise RuntimeError(
-                            "dispatcher reused a detail session id"
+            try:
+                if session_attachment is not None:
+                    owner_rollback = session_attachment(session_token)
+                    if not callable(owner_rollback):
+                        raise TypeError(
+                            "session attachment must return a rollback callback"
                         )
-                    owners[session_token] = owner
+                if detail_owner is not None:
+                    with self._session_receipt_lifecycle_guard():
+                        lock = getattr(self, "_lock", None)
+                        with (nullcontext() if lock is None else lock):
+                            if getattr(self, "_closed", False) or getattr(
+                                self,
+                                "_runtime_detail_retirement_started",
+                                False,
+                            ):
+                                raise RuntimeError("service is closed")
+                            owners = getattr(
+                                self,
+                                "_detail_owners_by_session",
+                                None,
+                            )
+                            if owners is None:
+                                owners = {}
+                                self._detail_owners_by_session = owners
+                            if session_token in owners:
+                                raise RuntimeError(
+                                    "dispatcher reused a detail session id"
+                                )
+                            owners[session_token] = detail_owner
+                    detail_rollback = rollback_detail_owner
+                if retained_observation_sink is None:
+                    stream.close()
+                    stream_needs_close = False
+                else:
+                    # SessionObserver.adopt closes a rejected stream itself.
+                    stream_needs_close = False
+                    observation_rollback = self._observer.adopt(
+                        session_token,
+                        retained_observation_sink,
+                        stream,
+                    )
+                    if not callable(observation_rollback):
+                        raise TypeError(
+                            "session observer must return a rollback callback"
+                        )
+            except BaseException:
+                if stream_needs_close:
+                    try:
+                        stream.close()
+                    except BaseException as error:
+                        retire_exception_graph(error)
+                raise
 
             return rollback
 
-        return self._dispatcher.submit(kind, request, attach=attach)
+        return self._dispatcher.submit(
+            kind,
+            request,
+            attach=AdmissionAttachment(attach, rollback),
+        )
 
     def _drop_runtime_details(self, owner: tuple[str, str] | None) -> None:
         if owner is None:
@@ -1831,12 +2038,6 @@ class NamiSyncService:
             session_id,
         )
         with self._session_receipt_lifecycle_guard():
-            get_session = getattr(self._dispatcher, "get", None)
-            if get_session is not None:
-                try:
-                    get_session(session_id)
-                except SessionNotFound:
-                    return
             with self._lock:
                 if self._closed:
                     return
@@ -2078,6 +2279,7 @@ __all__ = [
     "SemanticSettingsPatchView",
     "SemanticSettingsView",
     "SessionEventView",
+    "SessionAttachment",
     "SessionObserver",
     "SessionRecordView",
     "SessionSink",

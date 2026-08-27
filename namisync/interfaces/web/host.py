@@ -1022,6 +1022,7 @@ def _create_service(paths: AppPaths):
         paths.ledger,
         paths.history,
         settings_path=paths.settings,
+        require_session_attachment=True,
     )
 
 

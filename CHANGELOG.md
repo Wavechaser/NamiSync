@@ -23,7 +23,26 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Close checkpoint-4 finite-model prerequisites (2026-08-27)
+#### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-28)
+
+- Moved inventory scan, returned repository-row, tree-input-member, and
+  standalone-integrity candidate-row admission ahead of their first excess
+  retained value. Exact hostile scan outputs are revalidated before ledger
+  save; initial inventory excess is `REFUSED+UNRUN` and integrity excess
+  remains `FAILED+RAN`, both without partial downstream artifacts.
+- Streamed repository rows directly into immutable snapshots and applied the
+  population ceiling to actual returned rows rather than absent requested keys
+  or ids. Candidate construction stays in the workflow after an exact tuple
+  boundary; checkpoint 4.1 still owns requested-key/id preprocessing,
+  synthetic tree/index construction, and the complete retained-byte authority.
+- Made every production desktop session attach its exact task reservation and
+  observation before scheduling. Dispatcher retains the sole retryable rollback
+  authority; an observer timeout keeps capacity charged until exact retirement,
+  while ordinary CLI/service composition remains unchanged.
+- Limited malformed or mismatched successful-start compensation to the exact
+  attached session. Only an exact returned-session match grants plan-drop
+  authority, preventing hostile return ids and hidden failed reservations from
+  corrupting another plan or exhausting capacity.
 
 - Retired callback traceback, cause, and context links whenever the core runner
   consumes or supersedes an error. Nested exception-group members are traversed

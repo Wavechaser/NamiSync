@@ -197,31 +197,37 @@ the previously unaccepted prefix.
 The current public service surface includes:
 
 ```python
-NamiSyncService(ledger_path, history_path, *, settings_path=None)
+NamiSyncService(ledger_path, history_path, *, settings_path=None,
+                require_session_attachment=False)
 validate_database_contracts() -> DatabaseContractView
 initialize_database_contracts() -> DatabaseContractView
 start_plan(source, target, *, deletion_policy=None, command_id=None,
-           observation_sink=None) -> PlanSession
+           observation_sink=None, session_attachment=None) -> PlanSession
 preview_selection(request_id) -> SelectionPreviewView
 mutate_selection(request_id, expected_revision, *,
                  deselect=(), reselect=(), command_id=None)
     -> SelectionMutationView
 start_execution(request_id, *, verify_after_execute=False,
                 expected_revision=None, destructive_acknowledged=False,
-                command_id=None)
+                command_id=None, observation_sink=None,
+                session_attachment=None)
     -> ExecutionSession | ExecutionAdmissionView
 start_inventory(*, root_path=None, location_id=None,
                 selected_paths=(), selected_mount=None,
-                selected_ids=None, command_id=None) -> LocationSession
+                selected_ids=None, command_id=None, observation_sink=None,
+                session_attachment=None) -> LocationSession
 start_baseline(*, root_path=None, location_id=None,
                selected_paths=(), selected_mount=None,
-               selected_ids=None, command_id=None) -> LocationSession
+               selected_ids=None, command_id=None, observation_sink=None,
+               session_attachment=None) -> LocationSession
 start_verify(*, root_path=None, location_id=None,
              selected_paths=(), selected_mount=None,
-             selected_ids=None, command_id=None) -> LocationSession
+             selected_ids=None, command_id=None, observation_sink=None,
+             session_attachment=None) -> LocationSession
 start_rebaseline(*, root_path=None, location_id=None,
                  selected_paths=(), selected_mount=None,
-                 selected_ids=None, command_id=None) -> LocationSession
+                 selected_ids=None, command_id=None, observation_sink=None,
+                 session_attachment=None) -> LocationSession
 list_unacknowledged_missing(location_id) -> tuple[InventoryRowView, ...]
 list_stale_inventory(location_id, verified_before) -> tuple[InventoryRowView, ...]
 acknowledge_inventory(command_id, location_id, row_ids, *, changed_at)
@@ -359,6 +365,19 @@ cleared receipt state, and close-receipt tombstones remain bounded.
 
 The web task boundary owns its linked observation, zero-or-one current session,
 retained plan and pane artifacts, revisions, reservations, and receipts.
+Production desktop composition enables `require_session_attachment`; every
+session-creating service method then rejects before selection, location,
+receipt, ledger, or dispatcher work unless it receives both an observation sink
+and a task attachment callback. The callback binds the exact allocated session
+to its unpublished task reservation before observation adoption. The service
+pre-registers one exact composite rollback before Dispatcher preparation, so a
+partial attachment that raises still leaves one retry authority. Observer and
+detail owners retire first, and the task reservation detaches only after exact
+sink identity is absent. A timed-out observer keeps the reservation charged
+while Dispatcher retries that same callback. Malformed or mismatched successful service returns
+receive exact-session cleanup only; plan-drop authority is granted only after
+the returned and attached session identities agree. The CLI leaves the
+constructor flag false and retains ordinary unobserved session behavior.
 `M1_BRIDGE.md` exclusively defines terminal-session release, explicit task
 close, receipt convergence, and the count/byte capacity exposed through the
 bridge. Plan task records retain the workflow's exact `sync-plan` kind across
