@@ -72,9 +72,12 @@ truth. Hostile truthiness, diagnostic, and note paths cannot replace a primary.
 Path-message construction remains a separately chargeable checkpoint-4
 transient.
 
-- Web task replay/start/compensation overlap in `TaskRegistry.replay_start`,
-  `_start_owner`, and `_attempt_compensation`.
-- Chained path errors in `NamiSyncService.start_plan`.
+Web task start and compensation no longer overlap raw failure ownership.
+Replay, release, close, and shutdown-unsubscribe retain only existing retry/
+cleanup truth after a dependency failure, and normal service path refusal
+clears the workflow validation graph before the unchanged unchained public
+error. Bridge/host consumption of an escaping adapter frame and path-message
+construction remain open.
 
 Dispatcher admission, audit, store, custody, subscription, and session-worker
 start owners are now structurally closed. A provably unstarted attempt uses the

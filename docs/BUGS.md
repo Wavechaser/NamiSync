@@ -1638,9 +1638,11 @@ defect, and move implementation-level test choreography out of the log.
   recording overlap. History now retires callback and replay-reader frames
   without changing prefix, retry, or pending-window truth. Dispatcher now
   retires consumed admission, audit, store, custody, subscription, and worker-
-  start frames while preserving cancel and actual-thread ownership. Bridge,
-  document, path-message construction, and history construction/read-open
-  failures remain open. Cause:
+  start frames while preserving cancel and actual-thread ownership. Task start,
+  compensation, release, close, shutdown-unsubscribe, and ordinary service path
+  refusal now retire their dependency frames without changing retry truth.
+  Bridge/host consumers, document callbacks, path-message construction, and
+  history construction/read-open failures remain open. Cause:
   bounded public failure projection did not consistently retire the caught
   graph before the next ownership transition. Checkpoint 4 must preserve public
   behavior while closing every remaining app-owned raw exception reference;

@@ -423,12 +423,13 @@ other callback/construction transients remain checkpoint-4 model inputs.
   raise threads keep actual ownership. Scheduler construction and an
   independently injected second settlement failure escape to their caller or
   thread hook before becoming retained task artifacts.
-- `TaskRegistry.replay_start`, `_start_owner`, and `_attempt_compensation`:
-  primary start failure overlapping cleanup, compensation, or retry truth.
-- `NamiSyncService.start_plan` and `Dispatcher.subscribe`: public chained path/
-  subscription exceptions that retain raw causes. Preserve current public
-  types, messages, path redaction, custody, and retry truth while eliminating
-  or charging them.
+- `TaskRegistry.replay_start`, `_start_owner`, `_attempt_compensation`, release,
+  close, and shutdown-unsubscribe now retire dependency frames before retained
+  retry/cleanup truth or the next boundary. Primary start failure no longer
+  overlaps compensation. `NamiSyncService.start_plan` clears the normal
+  workflow validation graph before its unchanged unchained public error, and
+  `Dispatcher.subscribe` is closed above. Bridge/host consumption of the final
+  escaping adapter frame and path-message rendering remain open inputs.
 
 Checkpoint-4 regressions for these seams assert public status, item, counter,
 retry, and identity behavior plus externally held lifecycle release. They do

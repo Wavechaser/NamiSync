@@ -8,9 +8,11 @@ from shutil import copy2
 from threading import Event, Lock, Thread
 from time import monotonic, sleep
 from types import SimpleNamespace
+from weakref import ref
 
 import pytest
 
+import namisync.interfaces.service as service_module
 import namisync.workflows.sync as sync_workflow_module
 from namisync.core.integrity import RecordDisposition
 from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
@@ -381,6 +383,42 @@ def test_service_missing_deep_root_error_does_not_expose_native_prefix(
     detail = str(captured.value)
     assert "missing-source" in detail
     assert "\\\\?\\" not in detail
+
+
+def test_service_path_refusal_releases_the_validation_error_graph(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class PrivatePayload:
+        __slots__ = ("__weakref__",)
+
+    payload_references: list[object] = []
+    validation_errors: list[ValueError] = []
+
+    def refuse_paths(source: str, target: str) -> tuple[Path, Path]:
+        del source, target
+        frame_payload = PrivatePayload()
+        cause_payload = PrivatePayload()
+        payload_references.extend((ref(frame_payload), ref(cause_payload)))
+        cause = OSError("private native cause")
+        cause.payload = cause_payload
+        error = ValueError("private invalid root")
+        validation_errors.append(error)
+        raise error from cause
+
+    service = _service(SimpleNamespace())
+    monkeypatch.setattr(service_module, "validate_sync_paths", refuse_paths)
+
+    with pytest.raises(SyncPathInputError) as captured:
+        service.start_plan("source", "target")
+
+    assert str(captured.value) == "private invalid root"
+    assert captured.value.__cause__ is None
+    assert captured.value.__context__ is None
+    assert validation_errors[0].__traceback__ is None
+    assert validation_errors[0].__cause__ is None
+    assert validation_errors[0].__context__ is None
+    assert payload_references
+    assert all(reference() is None for reference in payload_references)
 
 
 def test_br_g_11_service_refuses_an_all_skipped_selection_before_admission() -> None:

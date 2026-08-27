@@ -533,6 +533,7 @@ class TaskRegistry:
                     self._retry_compensation(entry.task)
                 except BaseException as error:
                     retry_failure_code = _classify_start_failure(error)
+                    retire_exception_graph(error)
                 if retry_failure_code is not None:
                     _raise_start_failure(retry_failure_code)
             return self._await_start_entry(entry)
@@ -602,13 +603,15 @@ class TaskRegistry:
             result = TaskStartView(task.task_id, plan.request_id, plan.session_id)
         except BaseException as error:
             failure_code = _classify_start_failure(error)
-            if plan is not None:
-                task.compensation = _Compensation(plan)
-                try:
-                    self._attempt_compensation(task)
-                except BaseException as cleanup_error:
-                    failure_code = _classify_start_failure(cleanup_error)
+            retire_exception_graph(error)
             result = None
+        if result is None and plan is not None:
+            task.compensation = _Compensation(plan)
+            try:
+                self._attempt_compensation(task)
+            except BaseException as cleanup_error:
+                failure_code = _classify_start_failure(cleanup_error)
+                retire_exception_graph(cleanup_error)
 
         with self._condition:
             entry.result = result
@@ -823,7 +826,11 @@ class TaskRegistry:
             tasks = tuple(self._tasks.values())
         for task in tasks:
             if task.compensation is not None:
-                self._attempt_compensation(task)
+                try:
+                    self._attempt_compensation(task)
+                except BaseException as error:
+                    retire_exception_graph(error)
+                    raise
                 if not task.cleanup_pending:
                     self._discard_failed_task(task)
                 continue
@@ -835,7 +842,11 @@ class TaskRegistry:
                 )
             if session_id is None or already:
                 continue
-            self._service.unsubscribe(session_id)
+            try:
+                self._service.unsubscribe(session_id)
+            except BaseException as error:
+                retire_exception_graph(error)
+                raise
             with task.condition:
                 if task.session_id == session_id:
                     task.observation_unsubscribed = True
@@ -898,10 +909,11 @@ class TaskRegistry:
             self._attempt_session_release(task, cleanup)
             if not cleanup.session_complete:
                 raise TaskUnavailableError("task session release remains pending")
-        except BaseException:
+        except BaseException as error:
             with task.condition:
                 task.cleanup_in_progress = False
                 task.condition.notify_all()
+            retire_exception_graph(error)
             raise
 
         with task.condition:
@@ -923,7 +935,11 @@ class TaskRegistry:
         if task is None:
             raise TaskUnavailableError("task is unavailable")
         if task.compensation is not None:
-            self._attempt_compensation(task)
+            try:
+                self._attempt_compensation(task)
+            except BaseException as error:
+                retire_exception_graph(error)
+                raise
             if task.cleanup_pending:
                 raise TaskUnavailableError("task cleanup remains pending")
             self._discard_failed_task(task)
@@ -965,10 +981,11 @@ class TaskRegistry:
             self._attempt_task_cleanup(task, cleanup)
             if not cleanup.complete:
                 raise TaskUnavailableError("task cleanup remains pending")
-        except BaseException:
+        except BaseException as error:
             with task.condition:
                 task.cleanup_in_progress = False
                 task.condition.notify_all()
+            retire_exception_graph(error)
             raise
         result = TaskCloseView(task_id, session_id)
         with self._condition:
@@ -1035,11 +1052,11 @@ class TaskRegistry:
             if not compensation.drop_done:
                 self._service.drop_plan(compensation.plan.request_id)
                 compensation.drop_done = True
-        except Exception:
+        except BaseException as error:
             task.cleanup_pending = True
-            return
-        except BaseException:
-            task.cleanup_pending = True
+            retire_exception_graph(error)
+            if isinstance(error, Exception):
+                return
             raise
         task.cleanup_pending = not compensation.complete
 

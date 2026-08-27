@@ -1274,6 +1274,7 @@ def test_concurrent_failed_start_retires_private_exception_graph() -> None:
     assert all(str(error) == "task start failed" for error in errors)
     assert all(error.__cause__ is None for error in errors)
     assert all(error.__context__ is None for error in errors)
+    assert all(reference() is None for reference in graph_references[2:])
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
@@ -1846,6 +1847,41 @@ def test_br_g_33_shutdown_wakes_then_unsubscribes_after_handler_barrier() -> Non
         assert waiting.service.cleanup == [("unsubscribe", SESSION)]
 
 
+def test_unsubscribe_all_retires_dependency_frames_and_preserves_retry() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.unsubscribe_attempts = 0
+
+        def unsubscribe(self, session_id):
+            self.unsubscribe_attempts += 1
+            if self.unsubscribe_attempts == 1:
+                _raise_private_failure(
+                    graph_references,
+                    exception_base=BaseException,
+                )
+            super().unsubscribe(session_id)
+
+    service = Service()
+    registry, _ = _registry(service)
+    _start(registry)
+    registry.begin_close()
+
+    with pytest.raises(BaseException) as raised:
+        registry.unsubscribe_all()
+
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert all(reference() is None for reference in graph_references[3:])
+    registry.unsubscribe_all()
+    assert service.cleanup == [("unsubscribe", SESSION)]
+    del raised
+    gc.collect()
+    assert all(reference() is None for reference in graph_references)
+
+
 def test_br_g_33_close_task_cleanup_order_and_retry_authority() -> None:
     registry, service = _registry()
     start = _start(registry)
@@ -1975,6 +2011,8 @@ def test_explicit_close_after_terminal_release_only_drops_plan() -> None:
 
 
 def test_release_retries_only_unfinished_session_step() -> None:
+    graph_references: list[object] = []
+
     class Service(_Service):
         def __init__(self) -> None:
             super().__init__()
@@ -1984,15 +2022,18 @@ def test_release_retries_only_unfinished_session_step() -> None:
             self.close_attempts += 1
             self.cleanup.append(("close_session", session_id))
             if self.close_attempts == 1:
-                raise OSError("injected session release failure")
+                _raise_private_failure(graph_references)
 
     service = Service()
     registry, _ = _registry(service)
     start = _start(registry)
     _mark_terminal_drained(registry, start)
 
-    with pytest.raises(OSError, match="session release failure"):
+    with pytest.raises(Exception, match="private failure") as raised:
         registry.release_terminal_session(start.task_id, start.session_id)
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert all(reference() is None for reference in graph_references[3:])
     registry.release_terminal_session(start.task_id, start.session_id)
 
     assert service.cleanup == [
@@ -2001,6 +2042,9 @@ def test_release_retries_only_unfinished_session_step() -> None:
         ("close_session", SESSION),
     ]
     assert start.task_id in registry._tasks
+    del raised
+    gc.collect()
+    assert all(reference() is None for reference in graph_references)
 
 
 def test_close_drop_failure_still_proves_terminal_session_release() -> None:
@@ -2457,6 +2501,7 @@ def test_cleanup_pending_start_retires_private_interruption_graph_before_replay(
     assert type(entry.failure_code) is str
     assert entry.task.cleanup_pending
     del initial
+    assert all(reference() is None for reference in graph_references[2:])
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
@@ -2479,7 +2524,8 @@ def test_cleanup_pending_start_retires_private_interruption_graph_before_replay(
 
 def test_replay_compensation_interruption_is_closed_and_remains_retryable(
 ) -> None:
-    graph_references: list[object] = []
+    ordinary_graph_references: list[object] = []
+    interruption_graph_references: list[object] = []
 
     class Service(_Service):
         def __init__(self) -> None:
@@ -2495,10 +2541,10 @@ def test_replay_compensation_interruption_is_closed_and_remains_retryable(
             self.close_attempts += 1
             self.cleanup.append(("close_session", session_id))
             if self.close_attempts == 1:
-                raise OSError("private ordinary cleanup failure")
+                _raise_private_failure(ordinary_graph_references)
             if self.close_attempts == 2:
                 _raise_private_failure(
-                    graph_references,
+                    interruption_graph_references,
                     exception_base=BaseException,
                 )
 
@@ -2506,6 +2552,9 @@ def test_replay_compensation_interruption_is_closed_and_remains_retryable(
     registry, _ = _registry(service)
     with pytest.raises(ObservationConflictError):
         _start(registry)
+    assert all(
+        reference() is None for reference in ordinary_graph_references[2:]
+    )
 
     with pytest.raises(KeyboardInterrupt) as interrupted:
         registry.replay_start("4" * 32, None)  # type: ignore[arg-type]
@@ -2516,9 +2565,17 @@ def test_replay_compensation_interruption_is_closed_and_remains_retryable(
     entry = registry._commands["4" * 32]
     assert entry.task.cleanup_pending
     del interrupted
+    assert all(
+        reference() is None
+        for reference in interruption_graph_references[2:]
+    )
     gc.collect()
-    assert graph_references
-    assert all(reference() is None for reference in graph_references)
+    assert ordinary_graph_references
+    assert interruption_graph_references
+    assert all(reference() is None for reference in ordinary_graph_references)
+    assert all(
+        reference() is None for reference in interruption_graph_references
+    )
 
     with pytest.raises(ObservationConflictError) as replayed:
         registry.replay_start("4" * 32, None)  # type: ignore[arg-type]
@@ -2599,6 +2656,8 @@ def test_concurrent_replays_single_flight_failed_admission_compensation() -> Non
 
 
 def test_br_g_33_close_task_retries_only_unfinished_cleanup_steps() -> None:
+    graph_references: list[object] = []
+
     class Service(_Service):
         def __init__(self) -> None:
             super().__init__()
@@ -2608,15 +2667,18 @@ def test_br_g_33_close_task_retries_only_unfinished_cleanup_steps() -> None:
             self.drop_attempts += 1
             self.cleanup.append(("drop_plan", request_id))
             if self.drop_attempts == 1:
-                raise OSError("injected drop failure")
+                _raise_private_failure(graph_references)
 
     service = Service()
     registry, _ = _registry(service)
     start = _start(registry)
 
     _mark_terminal_drained(registry, start)
-    with pytest.raises(OSError, match="drop failure"):
+    with pytest.raises(Exception, match="private failure") as raised:
         registry.close_task(start.task_id, start.session_id)
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert all(reference() is None for reference in graph_references[3:])
     assert start.task_id in registry._tasks
 
     registry.close_task(start.task_id, start.session_id)
@@ -2628,6 +2690,9 @@ def test_br_g_33_close_task_retries_only_unfinished_cleanup_steps() -> None:
         ("drop_plan", REQUEST),
     ]
     assert start.task_id not in registry._tasks
+    del raised
+    gc.collect()
+    assert all(reference() is None for reference in graph_references)
 
 
 def test_close_task_lost_response_retry_is_exact_and_idempotent() -> None:

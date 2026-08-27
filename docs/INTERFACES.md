@@ -399,6 +399,19 @@ Both ids are snapshotted once before validation and the frozen compensation
 value is cloned only from those snapshots, so later candidate mutation cannot
 change the admitted cleanup target.
 
+Start ownership is also separated from compensation: the initiating start
+failure is classified and retired before unsubscribe/close/drop callbacks run,
+so cleanup cannot keep the original request or observation graph alive. Retry
+stores only the established four-value failure code and unfinished cleanup
+bits. Replay interruption and the public release, close, and shutdown-
+unsubscribe boundaries retire dependency traceback/cause/context after restoring
+their existing retry flags; successful steps still advance once and a later
+call retries only unfinished work. The service's ordinary path-refusal wrapper
+likewise clears the workflow validation graph before raising the existing
+unchained `SyncPathInputError`. Path-message rendering itself remains an
+unbounded construction transient for checkpoint 4, and bridge/host consumers
+still own the final escaping adapter frame until their separate closure.
+
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
 `settings.json` beside the selected ledger. `read_semantic_settings()` and

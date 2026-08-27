@@ -42,6 +42,10 @@ claims explicit, independently reviewable, and regression-backed.
   unstarted worker now settles once through public `FAILED + UNRUN` behavior,
   accepted cancellation wins, real started threads keep ownership, and later
   scheduling, close, and shutdown remain usable.
+- Separated task-start failure from compensation and retired dependency frames
+  at replay, release, close, and shutdown-unsubscribe retry boundaries. Normal
+  service path refusal now drops its workflow validation graph while preserving
+  the existing unchained public type, message, and redaction behavior.
 - Bound public verifier chunks to exact integer sizes from one byte through the
   existing 4 MiB default. The Windows reader's per-file transient is now
   finitely chargeable as one aligned native buffer plus one Python bytes copy,

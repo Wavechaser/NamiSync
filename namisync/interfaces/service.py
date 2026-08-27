@@ -706,7 +706,14 @@ class NamiSyncService:
             try:
                 source_path, target_path = validate_sync_paths(source, target)
             except (OSError, ValueError) as error:
-                raise SyncPathInputError(str(error)) from error
+                try:
+                    path_failure_message = str(error)
+                finally:
+                    retire_exception_graph(error)
+            else:
+                path_failure_message = None
+            if path_failure_message is not None:
+                raise SyncPathInputError(path_failure_message) from None
             request = self._runtime.create_plan_request(
                 uuid4().hex,
                 str(source_path),
