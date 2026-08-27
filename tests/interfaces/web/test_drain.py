@@ -60,9 +60,18 @@ def _raise_private_failure(
     references: list[object],
     *,
     exception_base: type[BaseException] = Exception,
+    hostile_text: bool = False,
 ) -> None:
     payload_type = type("PrivatePayload", (), {})
-    failure_type = type("PrivateFailure", (exception_base,), {})
+
+    def render(_error: BaseException) -> str:
+        raise AssertionError("private recovery failure text was rendered")
+
+    failure_type = type(
+        "PrivateFailure",
+        (exception_base,),
+        {"__str__": render} if hostile_text else {},
+    )
     attached_payload = payload_type()
     cause_payload = payload_type()
     frame_only_payload = payload_type()
@@ -81,6 +90,18 @@ def _raise_private_failure(
         )
     )
     raise failure from cause
+
+
+def _private_malformed_recovery_record(
+    references: list[object],
+) -> SessionRecordView:
+    payload_type = type("PrivateRecoveryPayload", (), {})
+    string_type = type("PrivateRecoveryString", (str,), {})
+    payload = payload_type()
+    kind = string_type(PLAN_KIND)
+    kind.payload = payload
+    references.extend(ref(value) for value in (payload_type, string_type, payload))
+    return replace(_record(), kind=kind)
 
 
 def _private_invalid_plan(references: list[object]) -> object:
@@ -1053,6 +1074,16 @@ def test_br_g_33_start_is_singleflight_and_changed_intent_conflicts() -> None:
             KeyboardInterrupt,
             "task start was interrupted",
         ),
+        (
+            SystemExit("private exit"),
+            KeyboardInterrupt,
+            "task start was interrupted",
+        ),
+        (
+            GeneratorExit("private generator exit"),
+            KeyboardInterrupt,
+            "task start was interrupted",
+        ),
         (ValueError("private generic"), RuntimeError, "task start failed"),
     ),
 )
@@ -1671,7 +1702,7 @@ def test_br_g_33_synchronous_recovery_cannot_deadlock_at_reliable_capacity() -> 
     start = _start(registry)
     registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
 
-    with pytest.raises(ObservationConflictError, match="synchronously"):
+    with pytest.raises(ObservationConflictError) as raised:
         registry.drain(
             start.task_id,
             SESSION,
@@ -1679,34 +1710,96 @@ def test_br_g_33_synchronous_recovery_cannot_deadlock_at_reliable_capacity() -> 
             replay_from=2,
         )
 
+    assert str(raised.value) == "task observation recovery conflicted"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+
     assert not registry._tasks[start.task_id].queue
     assert registry._tasks[start.task_id].terminal_record is None
 
 
-def test_br_g_33_failed_recovery_invalidates_late_generation_callbacks() -> None:
+@pytest.mark.parametrize(
+    ("exception_base", "expected_type", "expected_message"),
+    (
+        (Exception, RuntimeError, "task observation recovery failed"),
+        (
+            ObservationConflictError,
+            ObservationConflictError,
+            "task observation recovery conflicted",
+        ),
+        (
+            TaskUnavailableError,
+            TaskUnavailableError,
+            "task became unavailable during observation recovery",
+        ),
+        (
+            KeyboardInterrupt,
+            KeyboardInterrupt,
+            "task observation recovery was interrupted",
+        ),
+        (
+            SystemExit,
+            KeyboardInterrupt,
+            "task observation recovery was interrupted",
+        ),
+        (
+            GeneratorExit,
+            KeyboardInterrupt,
+            "task observation recovery was interrupted",
+        ),
+    ),
+    ids=(
+        "exception",
+        "observation-conflict",
+        "task-unavailable",
+        "keyboard-interrupt",
+        "system-exit",
+        "generator-exit",
+    ),
+)
+def test_br_g_33_failed_recovery_retires_private_graph_and_invalidates_callbacks(
+    exception_base: type[BaseException],
+    expected_type: type[BaseException],
+    expected_message: str,
+) -> None:
+    graph_references: list[object] = []
+
     class Service(_Service):
         recovery_sink = None
 
         def reobserve(self, session_id, sink, from_sequence):
             del session_id, from_sequence
             self.recovery_sink = sink
-            raise RuntimeError("injected recovery failure")
+            _raise_private_failure(
+                graph_references,
+                exception_base=exception_base,
+                hostile_text=True,
+            )
 
     service = Service()
     registry, _ = _registry(service)
     start = _start(registry)
     registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
 
-    with pytest.raises(RuntimeError, match="recovery failure"):
+    with pytest.raises(expected_type) as raised:
         registry.drain(
             start.task_id,
             SESSION,
             "5" * 32,
             replay_from=2,
         )
+    assert str(raised.value) == expected_message
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
     service.recovery_sink(_event(2))
 
     assert not registry._tasks[start.task_id].queue
+    task = registry._tasks[start.task_id]
+    assert not task.transition
+    assert task.active_drain is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
 
 
 def test_br_g_33_task_session_mismatch_and_concurrent_recovery_are_named() -> None:
@@ -1989,12 +2082,17 @@ def test_release_and_close_race_runs_each_cleanup_step_once() -> None:
 
 
 def test_release_settles_a_stale_failed_recovery_without_deadlock() -> None:
+    graph_references: list[object] = []
+
     class Service(_Service):
         def reobserve(self, session_id, sink, from_sequence):
             self.reobserve_calls.append((session_id, sink, from_sequence))
             self.reobserve_entered.set()
             assert self.release_reobserve.wait(2)
-            raise OSError("injected stale recovery failure")
+            _raise_private_failure(
+                graph_references,
+                hostile_text=True,
+            )
 
     service = Service()
     service.release_reobserve.clear()
@@ -2039,7 +2137,10 @@ def test_release_settles_a_stale_failed_recovery_without_deadlock() -> None:
     assert not recovering.is_alive()
     assert not releasing.is_alive()
     assert len(drain_errors) == 1
-    assert isinstance(drain_errors[0], OSError)
+    assert type(drain_errors[0]) is RuntimeError
+    assert str(drain_errors[0]) == "task observation recovery failed"
+    assert drain_errors[0].__cause__ is None
+    assert drain_errors[0].__context__ is None
     assert release_errors == []
     assert release_results == [
         TaskSessionReleaseView(start.task_id, start.session_id)
@@ -2048,6 +2149,151 @@ def test_release_settles_a_stale_failed_recovery_without_deadlock() -> None:
         ("unsubscribe", SESSION),
         ("close_session", SESSION),
     ]
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+
+def test_release_settles_stale_successful_recovery_with_one_unsubscribe() -> None:
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            self.reobserve_entered.set()
+            assert self.release_reobserve.wait(2)
+            return _record(terminal=False)
+
+    service = Service()
+    service.release_reobserve.clear()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    drain_errors: list[BaseException] = []
+    release_results = []
+
+    def recover() -> None:
+        try:
+            registry.drain(
+                start.task_id,
+                start.session_id,
+                "6" * 32,
+                replay_from=1,
+            )
+        except BaseException as error:
+            drain_errors.append(error)
+
+    def release() -> None:
+        release_results.append(
+            registry.release_terminal_session(start.task_id, start.session_id)
+        )
+
+    recovering = Thread(target=recover)
+    releasing = Thread(target=release)
+    recovering.start()
+    assert service.reobserve_entered.wait(1)
+    releasing.start()
+    service.release_reobserve.set()
+    recovering.join(1)
+    releasing.join(1)
+
+    assert not recovering.is_alive()
+    assert not releasing.is_alive()
+    assert len(drain_errors) == 1
+    assert type(drain_errors[0]) is TaskUnavailableError
+    assert str(drain_errors[0]) == (
+        "task became unavailable during observation recovery"
+    )
+    assert drain_errors[0].__cause__ is None
+    assert drain_errors[0].__context__ is None
+    assert release_results == [
+        TaskSessionReleaseView(start.task_id, start.session_id)
+    ]
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+    ]
+
+
+def test_release_retries_unsubscribe_after_stale_successful_recovery_failure(
+) -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        unsubscribe_attempts = 0
+
+        def reobserve(self, session_id, sink, from_sequence):
+            self.reobserve_calls.append((session_id, sink, from_sequence))
+            self.reobserve_entered.set()
+            assert self.release_reobserve.wait(2)
+            return _record(terminal=False)
+
+        def unsubscribe(self, session_id):
+            self.unsubscribe_attempts += 1
+            self.cleanup.append(("unsubscribe", session_id))
+            if self.unsubscribe_attempts == 1:
+                _raise_private_failure(
+                    graph_references,
+                    hostile_text=True,
+                )
+
+    service = Service()
+    service.release_reobserve.clear()
+    registry, _ = _registry(service)
+    start = _start(registry)
+    _mark_terminal_drained(registry, start)
+    drain_errors: list[BaseException] = []
+    release_errors: list[BaseException] = []
+    release_results: list[TaskSessionReleaseView] = []
+
+    def recover() -> None:
+        try:
+            registry.drain(
+                start.task_id,
+                start.session_id,
+                "6" * 32,
+                replay_from=1,
+            )
+        except BaseException as error:
+            drain_errors.append(error)
+
+    def release() -> None:
+        try:
+            release_results.append(
+                registry.release_terminal_session(
+                    start.task_id,
+                    start.session_id,
+                )
+            )
+        except BaseException as error:
+            release_errors.append(error)
+
+    recovering = Thread(target=recover)
+    releasing = Thread(target=release)
+    recovering.start()
+    assert service.reobserve_entered.wait(1)
+    releasing.start()
+    service.release_reobserve.set()
+    recovering.join(1)
+    releasing.join(1)
+
+    assert not recovering.is_alive()
+    assert not releasing.is_alive()
+    assert len(drain_errors) == 1
+    assert type(drain_errors[0]) is RuntimeError
+    assert str(drain_errors[0]) == "task observation recovery failed"
+    assert drain_errors[0].__cause__ is None
+    assert drain_errors[0].__context__ is None
+    assert release_errors == []
+    assert release_results == [
+        TaskSessionReleaseView(start.task_id, start.session_id)
+    ]
+    assert service.cleanup == [
+        ("unsubscribe", SESSION),
+        ("unsubscribe", SESSION),
+        ("close_session", SESSION),
+    ]
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
 
 
 def test_close_and_delayed_release_race_converges_through_close_receipt() -> None:
@@ -2680,8 +2926,11 @@ def test_task_recovery_rejects_malformed_current_record_without_receipt(record) 
     registry, service = _registry()
     start = _start(registry)
     service.reobserve_result = record
-    with pytest.raises((TypeError, ValueError)):
+    with pytest.raises(RuntimeError) as raised:
         registry.drain(start.task_id, SESSION, DRAIN, replay_from=1)
+    assert str(raised.value) == "task observation recovery failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
     task = registry._tasks[start.task_id]
     assert not task.queue
     assert task.terminal_record is None
@@ -2690,6 +2939,34 @@ def test_task_recovery_rejects_malformed_current_record_without_receipt(record) 
     with pytest.raises(TaskUnavailableError):
         registry.release_terminal_session(start.task_id, SESSION)
     assert service.cleanup == []
+
+
+def test_task_recovery_drops_malformed_current_graph_before_reconciliation() -> None:
+    graph_references: list[object] = []
+
+    class Service(_Service):
+        def reobserve(self, session_id, sink, from_sequence):
+            del session_id, sink, from_sequence
+            return _private_malformed_recovery_record(graph_references)
+
+    registry, service = _registry(Service())
+    start = _start(registry)
+
+    with pytest.raises(RuntimeError) as raised:
+        registry.drain(start.task_id, SESSION, DRAIN, replay_from=1)
+
+    assert str(raised.value) == "task observation recovery failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    task = registry._tasks[start.task_id]
+    assert not task.queue
+    assert task.terminal_record is None
+    assert not task.terminal_pending and not task.terminal_delivered
+    assert task.active_drain is None and not task.transition
+    assert service.cleanup == []
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
 
 
 @pytest.mark.parametrize("record", [

@@ -79,9 +79,18 @@ def _raise_private_observer_failure(
     references: list[object],
     *,
     exception_base: type[BaseException] = Exception,
+    hostile_text: bool = False,
 ) -> None:
     payload_type = type("PrivateObserverPayload", (), {})
-    failure_type = type("PrivateObserverFailure", (exception_base,), {})
+
+    def render(_error: BaseException) -> str:
+        raise AssertionError("private observer failure text was rendered")
+
+    failure_type = type(
+        "PrivateObserverFailure",
+        (exception_base,),
+        {"__str__": render} if hostile_text else {},
+    )
     attached_payload = payload_type()
     cause_payload = payload_type()
     frame_only_payload = payload_type()
@@ -854,13 +863,197 @@ def test_observer_close_timeout_retains_thread_for_retry() -> None:
     assert sink_entered.wait(0.5)
     observation = observer._observations[session_id]
 
-    with pytest.raises(TimeoutError, match=session_id):
+    with pytest.raises(TimeoutError) as raised:
         observer.close()
+    assert str(raised.value) == "session observers did not stop"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
     assert observer._observations[session_id] is observation
 
     release_sink.set()
     assert observation.done.wait(0.5)
     observer.close()
+    observer.close()
+    assert observer._observations == {}
+
+
+@pytest.mark.parametrize("cleanup", ("close", "rollback", "unsubscribe"))
+@pytest.mark.parametrize(
+    ("exception_base", "expected_type", "expected_message"),
+    (
+        (Exception, RuntimeError, "session observer cleanup failed"),
+        (TimeoutError, TimeoutError, "session observers did not stop"),
+        (
+            KeyboardInterrupt,
+            KeyboardInterrupt,
+            "session observer cleanup was interrupted",
+        ),
+        (
+            SystemExit,
+            KeyboardInterrupt,
+            "session observer cleanup was interrupted",
+        ),
+        (
+            GeneratorExit,
+            KeyboardInterrupt,
+            "session observer cleanup was interrupted",
+        ),
+    ),
+    ids=(
+        "ordinary",
+        "timeout",
+        "keyboard-interrupt",
+        "system-exit",
+        "generator-exit",
+    ),
+)
+def test_observer_direct_join_failure_retires_private_graph_and_stopped_stream(
+    cleanup: str,
+    exception_base: type[BaseException],
+    expected_type: type[BaseException],
+    expected_message: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = "6" * 32
+    graph_references: list[object] = []
+    pending_streams = [_BlockingStream("join-failure")]
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            del requested, from_seq
+            return pending_streams.pop()
+
+    observer = SessionObserver(Dispatcher())
+    rollback = None
+    if cleanup == "rollback":
+        rollback = observer.adopt(
+            session_id,
+            lambda _update: None,
+            pending_streams.pop(),
+        )
+    else:
+        observer.observe(session_id, lambda _update: None)
+    observation = observer._observations[session_id]
+    stream_reference = ref(observation.stream)
+    assert observation.stream.entered.wait(0.5)
+    original_join = observer._join_threads
+    join_attempts = 0
+
+    def fail_first_join(observations) -> None:
+        nonlocal join_attempts
+        join_attempts += 1
+        original_join(observations)
+        if join_attempts == 1:
+            _raise_private_observer_failure(
+                graph_references,
+                exception_base=exception_base,
+                hostile_text=True,
+            )
+
+    monkeypatch.setattr(observer, "_join_threads", fail_first_join)
+
+    with pytest.raises(expected_type) as raised:
+        if cleanup == "close":
+            observer.close()
+        elif cleanup == "rollback":
+            assert rollback is not None
+            rollback()
+        else:
+            observer.unsubscribe(session_id)
+
+    assert str(raised.value) == expected_message
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert observer._observations == {}
+    del observation
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert stream_reference() is None
+    if cleanup == "rollback":
+        assert rollback is not None
+        rollback()
+        assert join_attempts == 1
+    elif cleanup == "unsubscribe":
+        observer.unsubscribe(session_id)
+        assert join_attempts == 1
+    observer.close()
+
+
+def test_observer_join_failure_retires_stopped_and_retains_only_live_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stopped_id = "6" * 32
+    live_id = "7" * 32
+    stopped_stream = _BlockingStream("stopped")
+    live_stream = _SequenceStream(
+        _envelope(live_id, 1, PhaseChanged("blocked"))
+    )
+    pending_streams = {
+        stopped_id: stopped_stream,
+        live_id: live_stream,
+    }
+    live_sink_entered = Event()
+    release_live_sink = Event()
+    graph_references: list[object] = []
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            del from_seq
+            return pending_streams.pop(requested)
+
+    def live_sink(_update) -> None:
+        live_sink_entered.set()
+        assert release_live_sink.wait(2)
+
+    observer = SessionObserver(Dispatcher())
+    observer.observe(stopped_id, lambda _update: None)
+    observer.observe(live_id, live_sink)
+    assert stopped_stream.entered.wait(0.5)
+    assert live_sink_entered.wait(0.5)
+    stopped_reference = ref(stopped_stream)
+    del stopped_stream
+    original_join = observer._join_threads
+    join_attempts = 0
+
+    def fail_first_join(observations) -> None:
+        nonlocal join_attempts
+        join_attempts += 1
+        if join_attempts == 1:
+            for candidate in observations:
+                if candidate.session_id == stopped_id:
+                    assert candidate.thread is not None
+                    candidate.thread.join(0.5)
+                    assert not candidate.thread.is_alive()
+            del candidate
+            _raise_private_observer_failure(
+                graph_references,
+                exception_base=Exception,
+                hostile_text=True,
+            )
+        original_join(observations)
+
+    monkeypatch.setattr(observer, "_join_threads", fail_first_join)
+
+    with pytest.raises(RuntimeError) as raised:
+        observer.close()
+
+    assert str(raised.value) == "session observer cleanup failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert tuple(observer._observations) == (live_id,)
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert stopped_reference() is None
+
+    release_live_sink.set()
     observer.close()
     assert observer._observations == {}
 
@@ -1266,6 +1459,57 @@ def test_observer_close_continues_after_private_base_exception_and_retires_all(
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
+    assert excepthook_calls == []
+    observer.close()
+
+
+def test_observer_close_failure_traceback_does_not_own_retired_observations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session_id = "8" * 32
+    graph_references: list[object] = []
+    retired_references: list[object] = []
+    excepthook_calls = []
+    monkeypatch.setattr(threading, "excepthook", excepthook_calls.append)
+
+    class Stream(_BlockingStream):
+        def close(self) -> None:
+            if self.closed:
+                return
+            super().close()
+            _raise_private_observer_failure(
+                graph_references,
+                exception_base=BaseException,
+                hostile_text=True,
+            )
+
+    stream = Stream("retired")
+
+    class Dispatcher:
+        def get(self, requested: str) -> SessionRecord:
+            return _record(requested)
+
+        def subscribe(self, requested: str, from_seq=None):
+            del requested, from_seq
+            return stream
+
+    observer = SessionObserver(Dispatcher())
+    observer.observe(session_id, lambda _update: None)
+    assert stream.entered.wait(0.5)
+    retired_references.append(ref(stream))
+    del stream
+
+    with pytest.raises(RuntimeError) as raised:
+        observer.close()
+
+    assert str(raised.value) == "session observer cleanup failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+    assert all(reference() is None for reference in retired_references)
+    assert observer._observations == {}
     assert excepthook_calls == []
     observer.close()
 
@@ -1739,13 +1983,105 @@ def test_service_close_retries_an_observer_join_failure() -> None:
     service._runtime_closed = False
     service._observer_closed = False
 
-    with pytest.raises(TimeoutError, match="observer still running"):
+    with pytest.raises(RuntimeError) as raised:
         service.close()
+    assert str(raised.value) == "service observer cleanup failed"
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
     completed = service.close()
     cached = service.close()
 
     assert completed.complete
     assert cached is completed
+    assert log == ["observer", "dispatcher", "runtime", "observer"]
+
+
+@pytest.mark.parametrize(
+    ("exception_base", "expected_type", "expected_message"),
+    (
+        (Exception, RuntimeError, "service observer cleanup failed"),
+        (
+            KeyboardInterrupt,
+            KeyboardInterrupt,
+            "service observer cleanup was interrupted",
+        ),
+        (
+            SystemExit,
+            KeyboardInterrupt,
+            "service observer cleanup was interrupted",
+        ),
+        (
+            GeneratorExit,
+            KeyboardInterrupt,
+            "service observer cleanup was interrupted",
+        ),
+    ),
+    ids=("exception", "keyboard-interrupt", "system-exit", "generator-exit"),
+)
+def test_service_close_retires_private_observer_failure_before_dependency_close(
+    exception_base: type[BaseException],
+    expected_type: type[BaseException],
+    expected_message: str,
+) -> None:
+    log: list[str] = []
+    graph_references: list[object] = []
+    observer_attempts = 0
+
+    class Observer:
+        def close(self) -> None:
+            nonlocal observer_attempts
+            observer_attempts += 1
+            log.append("observer")
+            if observer_attempts == 1:
+                _raise_private_observer_failure(
+                    graph_references,
+                    exception_base=exception_base,
+                    hostile_text=True,
+                )
+
+    class Dispatcher:
+        def shutdown(self, timeout: float):
+            del timeout
+            log.append("dispatcher")
+            return SimpleNamespace(
+                complete=True,
+                unfinished=(),
+                custody_released=True,
+            )
+
+    class Runtime:
+        def close(self) -> None:
+            log.append("runtime")
+
+    service = object.__new__(NamiSyncService)
+    service._observer = Observer()
+    service._dispatcher = Dispatcher()
+    service._runtime = Runtime()
+    service._lock = Lock()
+    service._close_lock = Lock()
+    service._plan_selections = {}
+    service._session_receipts = {}
+    service._receipt_ids_by_session = {}
+    service._visibility_receipts = {}
+    service._closed = False
+    service._shutdown = None
+    service._runtime_closed = False
+    service._observer_closed = False
+
+    with pytest.raises(expected_type) as raised:
+        service.close()
+
+    assert str(raised.value) == expected_message
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert log == ["observer", "dispatcher", "runtime"]
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+    completed = service.close()
+    assert completed.complete
+    assert service.close() is completed
     assert log == ["observer", "dispatcher", "runtime", "observer"]
 
 

@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from math import isfinite
 from threading import Condition, Lock, get_ident
 from time import monotonic
+from traceback import clear_frames
 from types import MappingProxyType
 from typing import Never, Protocol
 from uuid import uuid4
@@ -67,6 +68,31 @@ _START_FAILURES = MappingProxyType(
     }
 )
 
+_RECOVERY_FAILURE_OBSERVATION_CONFLICT = "observation_conflict"
+_RECOVERY_FAILURE_TASK_UNAVAILABLE = "task_unavailable"
+_RECOVERY_FAILURE_INTERRUPTED = "interrupted"
+_RECOVERY_FAILURE_GENERIC = "recovery_failed"
+_RECOVERY_FAILURES = MappingProxyType(
+    {
+        _RECOVERY_FAILURE_OBSERVATION_CONFLICT: (
+            ObservationConflictError,
+            "task observation recovery conflicted",
+        ),
+        _RECOVERY_FAILURE_TASK_UNAVAILABLE: (
+            TaskUnavailableError,
+            "task became unavailable during observation recovery",
+        ),
+        _RECOVERY_FAILURE_INTERRUPTED: (
+            KeyboardInterrupt,
+            "task observation recovery was interrupted",
+        ),
+        _RECOVERY_FAILURE_GENERIC: (
+            RuntimeError,
+            "task observation recovery failed",
+        ),
+    }
+)
+
 
 def _classify_start_failure(error: BaseException) -> str:
     if isinstance(error, ObservationConflictError):
@@ -83,6 +109,33 @@ def _raise_start_failure(failure_code: str) -> Never:
         failure_type, message = _START_FAILURES[failure_code]
     except KeyError:
         raise RuntimeError("task start failure code is invalid") from None
+    raise failure_type(message) from None
+
+
+def _classify_recovery_failure(error: BaseException) -> str:
+    if isinstance(error, ObservationConflictError):
+        return _RECOVERY_FAILURE_OBSERVATION_CONFLICT
+    if isinstance(error, TaskUnavailableError):
+        return _RECOVERY_FAILURE_TASK_UNAVAILABLE
+    if not isinstance(error, Exception):
+        return _RECOVERY_FAILURE_INTERRUPTED
+    return _RECOVERY_FAILURE_GENERIC
+
+
+def _retire_adapter_exception(error: BaseException) -> None:
+    raw_traceback = BaseException.__getattribute__(error, "__traceback__")
+    if raw_traceback is not None:
+        clear_frames(raw_traceback)
+    BaseException.with_traceback(error, None)
+    BaseException.__setattr__(error, "__cause__", None)
+    BaseException.__setattr__(error, "__context__", None)
+
+
+def _raise_recovery_failure(failure_code: str) -> Never:
+    try:
+        failure_type, message = _RECOVERY_FAILURES[failure_code]
+    except KeyError:
+        raise RuntimeError("task recovery failure code is invalid") from None
     raise failure_type(message) from None
 
 
@@ -684,7 +737,8 @@ class TaskRegistry:
             task.condition.notify_all()
 
         terminal: SessionRecordView | None = None
-        failure: BaseException | None = None
+        failure_code: str | None = None
+        current: object | None = None
         try:
             current = self._service.reobserve(
                 session_id,
@@ -702,21 +756,24 @@ class TaskRegistry:
                 _validate_task_observation(current, expected_session_id=session_id)
                 terminal = current
         except BaseException as error:
-            failure = error
+            failure_code = _classify_recovery_failure(error)
+            _retire_adapter_exception(error)
+        finally:
+            current = None
 
         stale = False
         with task.condition:
             stale = task.closing or task.generation != generation
             if task.recovery_caller == get_ident():
                 task.recovery_caller = None
-            if not stale and failure is not None:
+            if not stale and failure_code is not None:
                 task.generation += 1
                 task.transition = False
                 task.queue.clear()
                 task.progress_available_at = None
                 task.terminal_record = None
                 task.terminal_pending = False
-            if not stale and failure is None and terminal is not None:
+            if not stale and failure_code is None and terminal is not None:
                 task.terminal_record = terminal
                 task.progress_available_at = None
                 if len(task.queue) < _CAPACITY:
@@ -729,10 +786,15 @@ class TaskRegistry:
             task.condition.notify_all()
         if stale:
             try:
-                if failure is None:
-                    self._service.unsubscribe(session_id)
-                    with task.condition:
-                        task.observation_unsubscribed = True
+                if failure_code is None:
+                    try:
+                        self._service.unsubscribe(session_id)
+                    except BaseException as error:
+                        failure_code = _classify_recovery_failure(error)
+                        _retire_adapter_exception(error)
+                    else:
+                        with task.condition:
+                            task.observation_unsubscribed = True
             finally:
                 with task.condition:
                     if (
@@ -742,10 +804,11 @@ class TaskRegistry:
                     ):
                         task.transition = False
                     task.condition.notify_all()
-            if failure is None:
-                raise TaskUnavailableError("task closed during observation recovery")
-        if failure is not None:
-            raise failure
+            if failure_code is None:
+                failure_code = _RECOVERY_FAILURE_TASK_UNAVAILABLE
+        if failure_code is not None:
+            terminal = None
+            _raise_recovery_failure(failure_code)
 
     def begin_close(self) -> None:
         """Reject tasks and wake drains/producers without detaching observations."""

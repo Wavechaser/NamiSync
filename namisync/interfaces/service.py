@@ -9,7 +9,8 @@ from hashlib import sha256
 from pathlib import Path
 from threading import Event, Lock, Thread, current_thread
 from time import monotonic
-from typing import Callable
+from traceback import clear_frames
+from typing import Callable, Never
 from uuid import uuid4
 
 from namisync.dispatcher import (
@@ -86,6 +87,50 @@ SERVICE_CLOSE_TIMEOUT_SECONDS = (
 # with the history writer's retry bound.
 AUDIT_OFFER_TIMEOUT_SECONDS = 5.0
 _OBSERVER_CLEANUP_FAILURE = "session observer cleanup failed"
+_OBSERVER_CLEANUP_INTERRUPTED = "session observer cleanup was interrupted"
+_OBSERVER_JOIN_TIMEOUT = "session observers did not stop"
+_SERVICE_OBSERVER_CLEANUP_FAILURE = "service observer cleanup failed"
+_SERVICE_OBSERVER_CLEANUP_INTERRUPTED = (
+    "service observer cleanup was interrupted"
+)
+
+
+def _retire_adapter_exception(error: BaseException) -> None:
+    raw_traceback = BaseException.__getattribute__(error, "__traceback__")
+    if raw_traceback is not None:
+        clear_frames(raw_traceback)
+    BaseException.with_traceback(error, None)
+    BaseException.__setattr__(error, "__cause__", None)
+    BaseException.__setattr__(error, "__context__", None)
+
+
+_OBSERVER_FAILURE_ORDINARY = "ordinary"
+_OBSERVER_FAILURE_TIMEOUT = "timeout"
+_OBSERVER_FAILURE_INTERRUPTED = "interrupted"
+
+
+def _classify_observer_join_failure(error: BaseException) -> str:
+    if isinstance(error, TimeoutError):
+        return _OBSERVER_FAILURE_TIMEOUT
+    if not isinstance(error, Exception):
+        return _OBSERVER_FAILURE_INTERRUPTED
+    return _OBSERVER_FAILURE_ORDINARY
+
+
+def _raise_observer_cleanup_failure(failure_code: str) -> Never:
+    if failure_code == _OBSERVER_FAILURE_TIMEOUT:
+        raise TimeoutError(_OBSERVER_JOIN_TIMEOUT) from None
+    if failure_code == _OBSERVER_FAILURE_INTERRUPTED:
+        raise KeyboardInterrupt(_OBSERVER_CLEANUP_INTERRUPTED) from None
+    if failure_code == _OBSERVER_FAILURE_ORDINARY:
+        raise RuntimeError(_OBSERVER_CLEANUP_FAILURE) from None
+    raise RuntimeError("observer cleanup failure code is invalid") from None
+
+
+def _raise_service_observer_failure(*, interrupted: bool) -> Never:
+    if interrupted:
+        raise KeyboardInterrupt(_SERVICE_OBSERVER_CLEANUP_INTERRUPTED) from None
+    raise RuntimeError(_SERVICE_OBSERVER_CLEANUP_FAILURE) from None
 
 
 class SyncPathInputError(ValueError):
@@ -354,8 +399,23 @@ class SessionObserver:
             stream.close()
             raise
 
+        rollback_observation: _Observation | None = observation
+
         def rollback() -> None:
-            self._rollback(observation)
+            nonlocal rollback_observation
+            current = rollback_observation
+            if current is None:
+                return
+            try:
+                self._rollback(current)
+            finally:
+                with self._lock:
+                    if (
+                        self._observations.get(current.session_id)
+                        is not current
+                    ):
+                        rollback_observation = None
+                del current
 
         return rollback
 
@@ -399,18 +459,22 @@ class SessionObserver:
             observation = self._observations.get(session_id)
         if observation is None:
             return
-        self._rollback(observation)
+        try:
+            self._rollback(observation)
+        finally:
+            del observation
 
     def _rollback(self, observation: _Observation) -> None:
         with self._lock:
             observation.stop.set()
-        close_failed = self._close_streams((observation,))
-        try:
-            self._join_threads((observation,))
-        finally:
-            self._retire_stopped_observations((observation,))
+        observations = (observation,)
+        close_failed = self._close_streams(observations)
+        join_failure = self._join_and_retire(observations)
+        del observation, observations
+        if join_failure is not None:
+            _raise_observer_cleanup_failure(join_failure)
         if close_failed:
-            raise RuntimeError(_OBSERVER_CLEANUP_FAILURE) from None
+            _raise_observer_cleanup_failure(_OBSERVER_FAILURE_ORDINARY)
 
     def wait(self, session_id: str) -> SessionRecordView:
         with self._lock:
@@ -438,13 +502,15 @@ class SessionObserver:
             observations = tuple(self._observations.values())
             for observation in observations:
                 observation.stop.set()
+            if observations:
+                del observation
         close_failed = self._close_streams(observations)
-        try:
-            self._join_threads(observations)
-        finally:
-            self._retire_stopped_observations(observations)
+        join_failure = self._join_and_retire(observations)
+        del observations
+        if join_failure is not None:
+            _raise_observer_cleanup_failure(join_failure)
         if close_failed:
-            raise RuntimeError(_OBSERVER_CLEANUP_FAILURE) from None
+            _raise_observer_cleanup_failure(_OBSERVER_FAILURE_ORDINARY)
 
     def _run(self, observation: _Observation) -> None:
         stream = observation.stream
@@ -496,7 +562,8 @@ class SessionObserver:
                         )
                     )
                     return
-        except BaseException:
+        except BaseException as error:
+            _retire_adapter_exception(error)
             observation.failed = True
         finally:
             if self._close_streams((observation,)):
@@ -522,7 +589,8 @@ class SessionObserver:
         for observation, stream in streams:
             try:
                 stream.close()
-            except BaseException:
+            except BaseException as error:
+                _retire_adapter_exception(error)
                 observation.failed = True
                 failed = True
         return failed
@@ -544,6 +612,20 @@ class SessionObserver:
                         is observation
                     ):
                         self._observations.pop(observation.session_id, None)
+
+    def _join_and_retire(
+        self,
+        observations: tuple[_Observation, ...],
+    ) -> str | None:
+        join_failure: str | None = None
+        try:
+            self._join_threads(observations)
+        except BaseException as error:
+            join_failure = _classify_observer_join_failure(error)
+            _retire_adapter_exception(error)
+        finally:
+            self._retire_stopped_observations(observations)
+        return join_failure
 
     def _join_threads(self, observations: tuple[_Observation, ...]) -> None:
         deadline = monotonic() + self._join_timeout
@@ -1317,12 +1399,13 @@ class NamiSyncService:
                     self._session_receipts.clear()
                     self._receipt_ids_by_session.clear()
                     self._visibility_receipts.clear()
-        observer_failure: BaseException | None = None
+        observer_failure_interrupted: bool | None = None
         if not getattr(self, "_observer_closed", False):
             try:
                 self._observer.close()
             except BaseException as error:
-                observer_failure = error
+                observer_failure_interrupted = not isinstance(error, Exception)
+                _retire_adapter_exception(error)
             else:
                 with self._lock:
                     self._observer_closed = True
@@ -1348,8 +1431,10 @@ class NamiSyncService:
                     owners = getattr(self, "_detail_owners_by_session", None)
                     if owners is not None:
                         owners.clear()
-        if observer_failure is not None:
-            raise observer_failure
+        if observer_failure_interrupted is not None:
+            _raise_service_observer_failure(
+                interrupted=observer_failure_interrupted,
+            )
         return view
 
     def __enter__(self) -> NamiSyncService:

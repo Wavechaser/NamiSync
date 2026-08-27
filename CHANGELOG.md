@@ -52,9 +52,14 @@ claims explicit, independently reviewable, and regression-backed.
 - Delivered small independently reviewed commits, reconciled active versus
   historical documentation, and removed completed findings from HANDOFF.
   Condensed the completed 3R plan to a commit/issue index pointing to BUGS and
-  refreshed HANDOFF for the whole bug hunt. Parent checkpoint 3.3 remains
-  unstarted; its private legacy decoder, separately deferred diagnostic and
-  inspection notes, and open headed/resource acceptance gates remain separate.
+  refreshed HANDOFF for the whole bug hunt. Checkpoint 3.3 then removed the
+  private legacy decoders and made exact-v5-only refusal active; separately
+  deferred diagnostic and inspection notes and open headed/resource acceptance
+  gates remain separate.
+- Retired residual adapter exception graphs before observer dependency shutdown
+  and task-recovery reconciliation. Closed failure categories now raise fresh
+  fixed errors without carrying private tracebacks or current views, while join,
+  stale-unsubscribe, generation, and cleanup-retry truth remain explicit.
 - Specified future checkpoint-7/9 server-owned sibling sorting with initial/
   reset path-key order and unchanged selection/execution authority, plus
   checkpoint-10 null-evidence rebaseline with unconditional fresh hash-and-

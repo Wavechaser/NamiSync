@@ -346,6 +346,13 @@ construction validates the complete bounded shape, admission takes a fresh
 base snapshot, duplicate raw items refuse before omission, and wire projection
 revalidates owned state. This is a prerequisite fix, not a frozen model.
 
+Residual service-observer and task-recovery exception retention is also
+structurally closed. Raw close, reobserve, validation, and stale-unsubscribe
+failures plus unadmitted current views retire before dependency shutdown or
+task-condition reconciliation; closed failure state preserves only cleanup,
+generation, interruption, and retry truth. This remains a prerequisite fix,
+not a reservation-model acceptance.
+
 - Linked execution can retain both 120,000 operation and 120,000 integrity
   outcomes, plus the dispatcher accumulator and shallow audit/store wrappers.
   Full-result header diagnostics now share the terminal summary's whole-value

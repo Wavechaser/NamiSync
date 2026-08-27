@@ -380,6 +380,16 @@ observation conflict, task unavailability, interruption, or generic start
 failure. Every participant and cleanup-pending replay receives a fresh fixed
 exception without chaining; the initiating or compensation exception, its
 message, type, traceback, cause, context, and attached graph are never retained.
+Explicit observation recovery applies the same closed-boundary rule before it
+reacquires the task condition: a reobserve, validation, or stale-unsubscribe
+failure becomes one of four fixed recovery codes, its traceback/cause/context
+and any unadmitted current view are dropped, and generation invalidation and
+queue truth use only that code. Ordinary failures return a fresh fixed
+`RuntimeError`, known conflict/unavailability retains its public category, and
+`KeyboardInterrupt`, `SystemExit`, and `GeneratorExit` each return a fresh fixed
+`KeyboardInterrupt`. A stale successful recovery attempts unsubscribe before
+the waiting release continues; success is recorded exactly once, while failure
+leaves unsubscribe ownership with the release path for its existing retry.
 Compensation authority is created only after the service returns an exact
 `PlanSession` whose request and session ids pass canonical validation; malformed
 or graph-bearing collaborator returns are discarded without cleanup authority.
@@ -429,7 +439,19 @@ Every snapshotted stream receives an independent close attempt even if an
 earlier close raises `BaseException`; cleanup still joins and retires all stopped
 observations before exposing one fresh fixed unchained cleanup failure. A stream
 that remains live after its failed close retains the observation only through
-the existing bounded join-timeout retry path.
+the existing bounded join-timeout retry path. `SessionObserver.close()` retires
+its completed observation snapshot and loop alias before raising a fresh fixed
+cleanup error. An unexpected ordinary join failure follows that fixed path;
+an unexpected join `KeyboardInterrupt`, `SystemExit`, or `GeneratorExit` becomes
+a fresh fixed `KeyboardInterrupt`, and a join timeout remains a fresh fixed
+`TimeoutError`. Stopped observations and identity-bound rollback closures are
+retired in every case, while only live observations remain for retry. The
+service converts any observer close exception to one ordinary/interrupted
+Boolean before dispatcher and runtime shutdown, clears its
+traceback/cause/context without formatting it, then raises a fresh fixed
+`RuntimeError` or `KeyboardInterrupt` in the same categories. Observer retry,
+cached dispatcher success, runtime-close ordering, and incomplete-shutdown
+truth are unchanged.
 Slice 3 adds an explicit positive-first-desired-sequence resubscribe
 seam. The currently implemented plan start may transactionally adopt a
 preopened stream before `PENDING` and schedulable publication. The accepted

@@ -1114,14 +1114,14 @@ defect, and move implementation-level test choreography out of the log.
 ### M1 Hardening
 
 - MODERATE - FIXED (2026-08-27). Adapter exception graph retention. Failed
-  single-flight starts retained original or retry-cleanup exceptions; observer
-  workers and cleanup leaked control exceptions or aborted later stream closes.
-  Invalid or post-validation-mutated planning returns could acquire compensation
-  custody. Fixed with closed failure codes, per-stream contained cleanup, Boolean
-  observer failure, and one-time exact `PlanSession` field snapshots before
-  compensation. Callers receive fresh unchained failures and cleanup remains
-  retryable; weak-reference regressions cover starts/replays, mutation, multi-
-  stream close, observer wait, unsubscribe, and rollback.
+  starts, observer workers and cleanup, service shutdown, and recovery retained
+  initiating exception, current-view, or observation graphs; control exceptions
+  could also abort later cleanup. Fixed with closed failure codes, per-stream
+  containment, traceback/cause/context retirement, fixed ordinary/interrupted
+  boundaries, and one-time exact `PlanSession` snapshots. Timeout, generation,
+  retry, and cleanup truth remain unchanged; join faults retire stopped
+  observations, stale unsubscribe failure leaves release retry authority, and
+  weak-reference regressions prove private graphs are released.
 - SEVERE - FIXED (2026-08-13). Publisher lifetime-control omission. The
   appearance-publication UI-thread deadlock remedy was not lifecycle-bounded.
   The 2026-08-12 fix moved synchronous pywebview DOM
