@@ -113,6 +113,11 @@ start claims as well as both detail maps. A failed dependency close preserves
 all four maps for retry. This closes the unconditional post-close leak; task-
 wide admission and service/dispatcher owner counts remain model prerequisites.
 
+The task-surface runtime gate now admits only CPython 3.13.14 final rather than
+every 3.13 patch release. This supplies a narrow production premise for the
+object-layout coefficients; the first model commit must still independently
+validate every coefficient it uses.
+
 ## Verification
 
 - Exact exception-helper, review-wall, planner, and preflight focus:

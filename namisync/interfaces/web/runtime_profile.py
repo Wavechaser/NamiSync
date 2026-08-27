@@ -13,13 +13,13 @@ from .readiness import DesktopStartupError
 
 
 _SUPPORTED_IMPLEMENTATION = "cpython"
-_SUPPORTED_VERSION = (3, 13)
+_SUPPORTED_VERSION = (3, 13, 14)
 _SUPPORTED_PLATFORM = "win32"
 _SUPPORTED_MACHINES = frozenset({"amd64", "x86_64"})
 _SUPPORTED_POINTER_BITS = 64
 _SUPPORTED_ALLOCATOR_OVERRIDES = frozenset({"", "pymalloc"})
 _REFUSAL = (
-    "NamiSync task surfaces require a 64-bit CPython 3.13 release build on "
+    "NamiSync task surfaces require a 64-bit CPython 3.13.14 release build on "
     "Windows x64 with the standard GIL and pymalloc allocator. Install that "
     "runtime, remove any PYTHONMALLOC override, and restart NamiSync."
 )
@@ -28,7 +28,8 @@ _REFUSAL = (
 @dataclass(frozen=True, slots=True)
 class TaskArtifactRuntimeProfile:
     implementation: str
-    version: tuple[int, int]
+    version: tuple[int, int, int]
+    release_level: str
     platform: str
     machine: str
     pointer_bits: int
@@ -44,7 +45,12 @@ def current_task_artifact_runtime_profile() -> TaskArtifactRuntimeProfile:
     pymalloc_config = sysconfig.get_config_var("WITH_PYMALLOC")
     return TaskArtifactRuntimeProfile(
         implementation=sys.implementation.name,
-        version=(sys.version_info.major, sys.version_info.minor),
+        version=(
+            sys.version_info.major,
+            sys.version_info.minor,
+            sys.version_info.micro,
+        ),
+        release_level=sys.version_info.releaselevel,
         platform=sys.platform,
         machine=platform.machine().casefold(),
         pointer_bits=struct.calcsize("P") * 8,
@@ -76,6 +82,8 @@ def task_artifact_runtime_supported(
         and type(profile.version) is tuple
         and all(type(value) is int for value in profile.version)
         and profile.version == _SUPPORTED_VERSION
+        and type(profile.release_level) is str
+        and profile.release_level == "final"
         and type(profile.platform) is str
         and profile.platform == _SUPPORTED_PLATFORM
         and type(profile.machine) is str

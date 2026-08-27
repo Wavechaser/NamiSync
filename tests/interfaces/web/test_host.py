@@ -55,7 +55,8 @@ _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 def _supported_task_runtime_profile() -> TaskArtifactRuntimeProfile:
     return TaskArtifactRuntimeProfile(
         implementation="cpython",
-        version=(3, 13),
+        version=(3, 13, 14),
+        release_level="final",
         platform="win32",
         machine="amd64",
         pointer_bits=64,
@@ -79,7 +80,8 @@ def test_task_artifact_runtime_profile_accepts_only_the_frozen_premise() -> None
     ("field_name", "value"),
     [
         pytest.param("implementation", "pypy", id="implementation"),
-        pytest.param("version", (3, 14), id="version"),
+        pytest.param("version", (3, 13, 13), id="version"),
+        pytest.param("release_level", "candidate", id="release-level"),
         pytest.param("platform", "linux", id="platform"),
         pytest.param("machine", "arm64", id="machine"),
         pytest.param("pointer_bits", 32, id="pointer-width"),
@@ -105,7 +107,7 @@ def test_task_registry_refuses_runtime_drift_before_construction(
     monkeypatch.setattr(
         runtime_profile,
         "current_task_artifact_runtime_profile",
-        lambda: replace(_supported_task_runtime_profile(), version=(3, 14)),
+        lambda: replace(_supported_task_runtime_profile(), version=(3, 13, 15)),
     )
     import namisync.interfaces.web.drain as drain_module
 
@@ -115,7 +117,7 @@ def test_task_registry_refuses_runtime_drift_before_construction(
         lambda service: constructed.append(service),
     )
 
-    with pytest.raises(DesktopStartupError, match="64-bit CPython 3.13"):
+    with pytest.raises(DesktopStartupError, match="64-bit CPython 3.13.14"):
         host._task_registry(object())
 
     assert constructed == []

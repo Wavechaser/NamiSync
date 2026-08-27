@@ -32,6 +32,9 @@ claims explicit, independently reviewable, and regression-backed.
 - Made successful workflow-runtime shutdown release retained plans and
   execution-start claims alongside execution and inventory details. A failed
   dependency close preserves all four custody maps for one coherent retry.
+- Narrowed the dormant task-surface runtime premise from the whole CPython 3.13
+  patch family to the exact 3.13.14 final release used for checkpoint-4 object
+  coefficients; unsupported patch or prerelease builds refuse before task state.
 
 #### Reject premature checkpoint-4 reservation model (2026-08-27)
 
