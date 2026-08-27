@@ -35,6 +35,7 @@ from namisync.core.models import (
     Root,
     ScanResult,
     ScanScope,
+    snapshot_ignore_set,
 )
 from namisync.core.pathing import (
     from_extended_length_path,
@@ -295,27 +296,6 @@ def _snapshot_scanner_result(
     return snapshot
 
 
-def _snapshot_ignore_set(value: object) -> IgnoreSet:
-    """Detach scanner policy so one collaborator cannot affect the next."""
-
-    if type(value) is not IgnoreSet:
-        raise TypeError("plan scanner ignores must be an exact IgnoreSet")
-    if type(value.exact_names) is not frozenset:
-        raise TypeError("plan scanner exact ignore names must be a frozenset")
-    if any(type(name) is not str for name in value.exact_names):
-        raise TypeError("plan scanner exact ignore names must be text")
-    if (
-        type(value.exclude_owned_temps) is not bool
-        or type(value.exclude_sync_trash) is not bool
-    ):
-        raise TypeError("plan scanner ignore flags must be bools")
-    return IgnoreSet(
-        frozenset(name for name in value.exact_names),
-        value.exclude_owned_temps,
-        value.exclude_sync_trash,
-    )
-
-
 def _disposable_plan_preview(
     plan: Plan,
     source: ScanResult,
@@ -382,7 +362,7 @@ def _run_plan(
         del request, request_id, source_path, target_path, request_options
 
         ctx.emit(PhaseChanged("scan-source"))
-        source_ignores = _snapshot_ignore_set(deps.ignores)
+        source_ignores = snapshot_ignore_set(deps.ignores)
         raw_source_scan = deps.scanner(
             Root(source_root.path, source_root.root_id),
             source_ignores,
@@ -398,7 +378,7 @@ def _run_plan(
         admit_retained_plan_scan(source_scan, retained_admission)
 
         ctx.emit(PhaseChanged("scan-target"))
-        target_ignores = _snapshot_ignore_set(deps.ignores)
+        target_ignores = snapshot_ignore_set(deps.ignores)
         raw_target_scan = deps.scanner(
             Root(target_root.path, target_root.root_id),
             target_ignores,

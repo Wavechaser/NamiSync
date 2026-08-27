@@ -43,6 +43,16 @@ integrity recorder writes attestation and optionally clears
 Acknowledgement/restore changes only visibility state, while stale-age queries
 select candidates without mutating them.
 
+General inventory, stale, missing, and row-id readers stream directly into
+`InventorySnapshot` values and stop before retaining the first returned row
+beyond 120,000. The bound applies to rows that actually exist and qualify, not
+to requested path keys or ids: absent or ineligible request values can still
+produce an empty result without a false capacity refusal. Chunked reads retain
+their one-snapshot ordering and do not accumulate raw `sqlite3.Row` shells
+beside the typed result. This returned-row prerequisite does not bound the
+requested-key/id normalization, sorting, or index slots that precede the read;
+checkpoint 4.1 must eliminate or charge those construction owners.
+
 The inventory workflow re-resolves stable volume identity before each
 invocation, registers first locations in the exact order host -> volume
 observation -> role-free location -> scan -> inventory recording, and
@@ -100,6 +110,29 @@ starts no verifier work; a recorder finalization failure retains error
 precedence. Accepted rows share one root `Path` owner rather than copying it per
 candidate. The independent retained-byte axis remains inactive until the
 checkpoint-4 graph model freezes its complete charge.
+
+The workflow checks the exact candidate-row tuple and its first-excess count,
+then constructs `IntegritySelection` directly; no injectable builder or second
+validator owns policy. A valid candidate excess reaches no sink, phase event,
+verifier context, or runner. Checkpoint 4.1 must install the
+identity-deduplicated byte gate around the real construction graph; until then
+this prerequisite claims only the row boundary and no-partial behavior.
+
+Inventory scanning likewise receives a mandatory workflow-owned population
+admission. The production scanner checks the next combined domain or warning
+row before append, while workflow validates the exact complete `ScanResult` and
+rechecks both populations before any host, location, or inventory ledger row is
+written. A valid initial inventory excess is `REFUSED+UNRUN` with no saved
+details or partial inventory; malformed hostile output keeps structural-error
+precedence. Integrity refresh has already started the request and therefore
+settles the same valid excess as `FAILED+RAN` without selection or verifier work.
+
+The row prerequisite does not close the preexisting resolver-alias seam.
+`resolve_binding` still carries exact returned mount/evidence objects across
+later resolver callbacks rather than first detaching and finally revalidating
+the complete resolution. That path issue remains OPEN for checkpoint 4.1 in
+`BUGS.md`; current documentation does not treat a frozen dataclass as a lasting
+authorization token.
 
 Inventory scan scopes independently charge the combined raw selected-path and
 subtree-root population against 120,000 before canonical path dictionaries,

@@ -11,6 +11,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Iterator, Mapping, Protocol
 
+from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import PhaseChanged
 from namisync.core.evidence import RecordingStatus
 from namisync.core.execution import (
@@ -44,7 +45,7 @@ from namisync.core.models import (
     SCAN_SCOPE_ENTRY_LIMIT,
     VolumeEvidence,
     VolumeId,
-    validate_scan_result,
+    snapshot_ignore_set,
 )
 from namisync.core.pathing import (
     PathValidationError,
@@ -66,6 +67,17 @@ from namisync.core.root_authority import (
     RootAuthorityError,
     RootAuthorityIssue,
     admit_root_chain,
+)
+from namisync.core.review import (
+    MAX_PLAN_REVIEW_ROWS,
+    ReviewFactLimitError,
+    ReviewFactLimitExceeded,
+    ReviewLimitAxis,
+    ReviewPopulation,
+    ReviewTreeKind,
+    ScanPopulationAdmission,
+    snapshot_scan_result,
+    snapshot_review_fact_limit,
 )
 from namisync.core.scalars import (
     MAX_DIAGNOSTIC_UTF8_BYTES,
@@ -727,6 +739,44 @@ class _ObservedTaskRecordingIssue:
     failure: FailureDetail
 
 
+class _InventoryScanAdmission:
+    """Issue exact inventory review facts for one raw scan population."""
+
+    __slots__ = ("_issuer",)
+
+    def __init__(self) -> None:
+        self._issuer = object()
+
+    def _limit_error(
+        self,
+        population: ReviewPopulation,
+    ) -> ReviewFactLimitError:
+        fact = ReviewFactLimitExceeded(
+            "review_fact_limit_exceeded",
+            ReviewTreeKind.INVENTORY,
+            population,
+            ReviewLimitAxis.ROWS,
+            MAX_PLAN_REVIEW_ROWS,
+            None,
+        )
+        error = ReviewFactLimitError(fact)
+        error._inventory_review_issuer = self._issuer
+        return error
+
+    def require_source_rows(self, count: int) -> None:
+        _require_inventory_scan_count(count, "inventory scan domain rows")
+        if count > MAX_PLAN_REVIEW_ROWS:
+            raise self._limit_error(ReviewPopulation.DOMAIN)
+
+    def require_informational_source_rows(self, count: int) -> None:
+        _require_inventory_scan_count(
+            count,
+            "inventory scan informational rows",
+        )
+        if count > MAX_PLAN_REVIEW_ROWS:
+            raise self._limit_error(ReviewPopulation.INFORMATIONAL)
+
+
 class Scanner(Protocol):
     def __call__(
         self,
@@ -736,6 +786,7 @@ class Scanner(Protocol):
         scope: ScanScope | None,
         *,
         trusted_anchor: str | None = None,
+        population_admission: ScanPopulationAdmission,
     ) -> ScanResult: ...
 
 
@@ -1001,28 +1052,61 @@ def run_inventory(
         raise RuntimeError("resolved inventory root lacks volume evidence")
     root = resolution.root_path
     scope_token = request.request_id
-    with LedgerRecorder(
-        deps.ledger_path, clock=deps.clock, managed_roots=(root,)
-    ) as recorder:
-        host_id, location_id, scan = _register_and_scan(
-            request.request_id,
-            scope_token,
-            request.binding,
-            resolution,
-            request.selected_paths,
-            request.subtree_roots,
-            ctx,
-            deps,
-            recorder,
-        )
-        recorded = recorder.record_inventory(
-            InventoryCommand(
-                location_id,
-                host_id,
-                scan,
+    review_admission = _InventoryScanAdmission()
+    review_limit_fact: ReviewFactLimitExceeded | None = None
+    invalid_review_limit = False
+    unadmitted_review_limit = False
+    try:
+        with LedgerRecorder(
+            deps.ledger_path, clock=deps.clock, managed_roots=(root,)
+        ) as recorder:
+            host_id, location_id, scan = _register_and_scan(
+                request.request_id,
                 scope_token,
-                deps.clock.now(),
+                request.binding,
+                resolution,
+                request.selected_paths,
+                request.subtree_roots,
+                ctx,
+                deps,
+                recorder,
+                review_admission,
             )
+            recorded = recorder.record_inventory(
+                InventoryCommand(
+                    location_id,
+                    host_id,
+                    scan,
+                    scope_token,
+                    deps.clock.now(),
+                )
+            )
+    except ReviewFactLimitError as error:
+        if type(error) is not ReviewFactLimitError:
+            invalid_review_limit = True
+        else:
+            try:
+                review_limit_fact = _consume_inventory_review_limit(
+                    error,
+                    review_admission,
+                )
+                unadmitted_review_limit = review_limit_fact is None
+            except (AttributeError, TypeError, ValueError) as fact_error:
+                retire_exception_graph(fact_error)
+                invalid_review_limit = True
+        retire_exception_graph(error)
+
+    if invalid_review_limit:
+        raise RuntimeError("inventory review limit failure is invalid") from None
+    if unadmitted_review_limit:
+        raise RuntimeError(
+            "unadmitted collaborator raised an inventory review fact limit"
+        ) from None
+    if review_limit_fact is not None:
+        return OperationResult(
+            SessionState.REFUSED,
+            disposition=Disposition.UNRUN,
+            review_fact_limit=review_limit_fact,
         )
     deps.save_details(
         InventoryDetails(
@@ -1117,6 +1201,7 @@ def run_integrity(
                 ctx,
                 deps,
                 recorder,
+                _InventoryScanAdmission(),
             )
             recorded = recorder.record_inventory(
                 InventoryCommand(
@@ -1166,6 +1251,7 @@ def run_integrity(
                     request.selection_item_ids,
                     frozenset(item_id for item_id, _ in request.completed_bytes),
                 )
+            _require_integrity_candidate_rows(rows)
             selection = _integrity_selection(request, rows, root)
             if selection_sink is not None:
                 selection_sink(selection)
@@ -1260,6 +1346,7 @@ def run_integrity(
             )
         else:
             failure = FailureDetail(type(error).__name__, logical_error_text(error))
+        retire_exception_graph(error)
         if selection is None:
             return _integrity_request_terminal_result(
                 request,
@@ -2167,6 +2254,41 @@ def _binding_from_identity(
     return binding
 
 
+def _require_inventory_scan_count(count: object, field_name: str) -> int:
+    if type(count) is not int:
+        raise TypeError(f"{field_name} must be a non-Boolean integer")
+    if count < 0:
+        raise ValueError(f"{field_name} must be nonnegative")
+    return count
+
+
+def _consume_inventory_review_limit(
+    error: ReviewFactLimitError,
+    admission: _InventoryScanAdmission,
+) -> ReviewFactLimitExceeded | None:
+    issuer = error.__dict__.pop("_inventory_review_issuer", None)
+    fact = snapshot_review_fact_limit(error.fact)
+    if (
+        fact.tree_kind is not ReviewTreeKind.INVENTORY
+        or fact.axis is not ReviewLimitAxis.ROWS
+    ):
+        raise ValueError("inventory review limit fact has the wrong scope")
+    return fact if issuer is admission._issuer else None
+
+
+def _admit_inventory_scan_result(
+    value: object,
+    admission: _InventoryScanAdmission,
+) -> ScanResult:
+    """Revalidate hostile scanner populations before any ledger publication."""
+
+    return snapshot_scan_result(
+        value,
+        admission,
+        row_limit=MAX_PLAN_REVIEW_ROWS,
+    )
+
+
 def _register_and_scan(
     request_id: str,
     scope_token: str,
@@ -2177,41 +2299,89 @@ def _register_and_scan(
     ctx: RunContext,
     deps: InventoryDependencies,
     recorder: LedgerRecorder,
+    review_admission: _InventoryScanAdmission,
 ) -> tuple[int, int, ScanResult]:
-    if resolution.root_path is None or resolution.evidence is None:
+    if (
+        resolution.root_path is None
+        or resolution.selected_mount is None
+        or resolution.evidence is None
+    ):
         raise RuntimeError("resolved inventory root lacks volume evidence")
-    scope = ScanScope.scoped(
+    if type(binding.volume_id) is not VolumeId:
+        raise TypeError("inventory binding volume has the wrong type")
+    if type(resolution.evidence) is not VolumeEvidence:
+        raise TypeError("inventory resolution evidence has the wrong type")
+    expected_volume_id = VolumeId(
+        binding.volume_id.serial,
+        binding.volume_id.fs_type,
+    )
+    expected_evidence = VolumeEvidence(
+        resolution.evidence.label,
+        resolution.evidence.device_id,
+        resolution.evidence.clone_ambiguous,
+    )
+    root_path = require_utf16_path(
+        resolution.root_path,
+        "resolved inventory root",
+    )
+    selected_mount = require_utf16_path(
+        resolution.selected_mount,
+        "resolved inventory mount",
+    )
+    volume_relative_path = validate_relative_path(
+        binding.volume_relative_path,
+        allow_root=True,
+    )
+    if volume_relative_path != binding.volume_relative_path:
+        raise ValueError("inventory binding relative path is not canonical")
+    expected_location_id = binding.location_id
+    if expected_location_id is not None:
+        require_safe_int(expected_location_id, "inventory location id")
+        if expected_location_id < 1:
+            raise ValueError("inventory location id must be positive")
+    if type(deps.host_key) is not str or type(deps.host_name) is not str:
+        raise TypeError("inventory host facts must be exact strings")
+    host_key = deps.host_key
+    host_name = deps.host_name
+    scanner = deps.scanner
+    clock = deps.clock
+    expected_scope = ScanScope.scoped(
         selected_paths=selected_paths,
         subtree_roots=subtree_roots,
     )
-    root = Root(resolution.root_path, f"inventory:{scope_token}")
+    expected_root = Root(root_path, f"inventory:{scope_token}")
+    scanner_root = Root(expected_root.path, expected_root.root_id)
+    scanner_scope = ScanScope(
+        expected_scope.kind,
+        expected_scope.selected_paths,
+        expected_scope.subtree_roots,
+    )
+    scanner_ignores = snapshot_ignore_set(deps.ignores)
     ctx.emit(PhaseChanged("inventory"))
-    scan = validate_scan_result(
-        deps.scanner(
-            root,
-            deps.ignores,
-            ctx,
-            scope,
-            trusted_anchor=resolution.selected_mount,
-        )
+    raw_scan = scanner(
+        scanner_root,
+        scanner_ignores,
+        ctx,
+        scanner_scope,
+        trusted_anchor=selected_mount,
+        population_admission=review_admission,
     )
-    if scan.root != root:
+    scan = _admit_inventory_scan_result(raw_scan, review_admission)
+    if scan.root != expected_root:
         raise RuntimeError("inventory scanner returned a different root")
-    if scan.scope != scope:
+    if scan.scope != expected_scope:
         raise RuntimeError("inventory scanner returned a different scope")
-    if scan.volume_id != binding.volume_id:
+    if scan.volume_id != expected_volume_id:
         raise RuntimeError("inventory scan volume changed after preflight")
-    now = deps.clock.now()
-    host_id = recorder.ensure_host(
-        HostCommand(deps.host_key, deps.host_name, now)
-    )
+    now = clock.now()
+    host_id = recorder.ensure_host(HostCommand(host_key, host_name, now))
     volume_row = recorder.observe_volume(
-        VolumeCommand(binding.volume_id, resolution.evidence, now)
+        VolumeCommand(expected_volume_id, expected_evidence, now)
     )
     location_id = recorder.ensure_location(
-        LocationCommand(volume_row, binding.volume_relative_path, now)
+        LocationCommand(volume_row, volume_relative_path, now)
     )
-    if binding.location_id is not None and binding.location_id != location_id:
+    if expected_location_id is not None and expected_location_id != location_id:
         raise RuntimeError("resolved location identity changed")
     return host_id, location_id, scan
 
@@ -2311,6 +2481,22 @@ def _integrity_selection(
             pending_admission,
         ),
     )
+
+
+def _require_integrity_candidate_rows(
+    rows: object,
+) -> tuple[InventorySnapshot, ...]:
+    if type(rows) is not tuple:
+        raise TypeError("integrity candidate rows must be an exact tuple")
+    if any(type(row) is not InventorySnapshot for row in rows):
+        raise TypeError(
+            "integrity candidate rows must contain exact inventory snapshots"
+        )
+    if len(rows) > INTEGRITY_CANDIDATE_ROW_LIMIT:
+        raise IntegrityCandidateLimitError(
+            IntegrityCandidateLimitExceeded.rows()
+        )
+    return rows
 
 
 def _decode_integrity_recording_issue(

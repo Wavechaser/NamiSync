@@ -4,6 +4,7 @@ import inspect
 
 import pytest
 
+import namisync.workflows.node_tree as node_tree_module
 from namisync.core.pathing import (
     is_relative_path_descendant,
     normalize_relative_path,
@@ -13,8 +14,10 @@ from namisync.core.pathing import (
 )
 from namisync.modules import planner
 from namisync.workflows.node_tree import (
+    NODE_TREE_ROW_LIMIT,
     NodeTreeKind,
     NodeTreeMember,
+    NodeTreePopulationLimitError,
     build_node_tree,
 )
 
@@ -230,6 +233,92 @@ def test_br_g_2_empty_tree_retains_an_addressable_root() -> None:
     assert root.subtree_extent == (0, 1)
     assert root.subtree_member_count == 0
     assert root.is_container
+
+
+def test_tree_refuses_first_excess_member() -> None:
+    with pytest.raises(NodeTreePopulationLimitError) as raised:
+        build_node_tree(
+            tree_kind=NodeTreeKind.INVENTORY,
+            scope_identity="bounded-location",
+            members=(
+                _member(f"member-{index}", "same")
+                for index in range(NODE_TREE_ROW_LIMIT + 1)
+            ),
+        )
+
+    assert raised.value.tree_kind is NodeTreeKind.INVENTORY
+
+
+def test_tree_does_not_charge_synthetic_nodes_as_source_members(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(node_tree_module, "NODE_TREE_ROW_LIMIT", 2)
+
+    tree = build_node_tree(
+        tree_kind=NodeTreeKind.PLAN,
+        scope_identity="bounded-plan",
+        members=(
+            _member("one", "one"),
+            _member("two", "two"),
+        ),
+    )
+
+    assert tuple(node.rel_path_key for node in tree.nodes) == (
+        "",
+        "ONE",
+        "TWO",
+    )
+
+
+@pytest.mark.parametrize("malformed_kind", ("object", "duplicate", "subclass", "forged"))
+def test_malformed_first_excess_member_keeps_structural_error_precedence(
+    monkeypatch: pytest.MonkeyPatch,
+    malformed_kind: str,
+) -> None:
+    monkeypatch.setattr(node_tree_module, "NODE_TREE_ROW_LIMIT", 1)
+
+    if malformed_kind == "object":
+        malformed: object = object()
+        error = TypeError
+    elif malformed_kind == "duplicate":
+        malformed = _member("valid", "")
+        error = ValueError
+    elif malformed_kind == "subclass":
+        class HostileMember(NodeTreeMember):
+            pass
+
+        malformed = HostileMember("hostile", "", "")
+        error = TypeError
+    else:
+        malformed = _member("hostile", "")
+        object.__setattr__(malformed, "rel_path_key", "not-canonical")
+        error = ValueError
+
+    with pytest.raises(error):
+        build_node_tree(
+            tree_kind=NodeTreeKind.INVENTORY,
+            scope_identity="hostile-member",
+            members=(_member("valid", ""), malformed),
+        )
+
+
+def test_case_variant_paths_keep_the_lexicographic_minimum_display() -> None:
+    tree = build_node_tree(
+        tree_kind=NodeTreeKind.INVENTORY,
+        scope_identity="case-variants",
+        members=(
+            _member("upper", r"FOLDER\FILE.txt"),
+            _member("mixed", r"Folder\File.txt"),
+            _member("lower", r"folder\file.TXT"),
+        ),
+    )
+
+    assert len(tree.nodes) == 3
+    folder = tree.nodes[tree.path_positions["FOLDER"]]
+    leaf = tree.nodes[tree.path_positions[r"FOLDER\FILE.TXT"]]
+    assert folder.rel_path == "FOLDER"
+    assert leaf.rel_path == r"FOLDER\FILE.txt"
+    assert leaf.member_ids == ("lower", "mixed", "upper")
 
 
 def test_br_g_3_planner_uses_the_promoted_helpers_without_private_copies() -> None:

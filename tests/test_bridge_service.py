@@ -1618,6 +1618,7 @@ def test_br_g_29_folder_verify_continues_past_one_unreadable_frozen_subject(
             scope,
             *,
             trusted_anchor=None,
+            population_admission=None,
         ):
             if not self.calls:
                 return super().__call__(
@@ -1626,8 +1627,12 @@ def test_br_g_29_folder_verify_continues_past_one_unreadable_frozen_subject(
                     context,
                     scope,
                     trusted_anchor=trusted_anchor,
+                    population_admission=population_admission,
                 )
             self.calls.append(scope)
+            if population_admission is not None:
+                population_admission.require_source_rows(2)
+                population_admission.require_informational_source_rows(1)
             return ScanResult(
                 root,
                 VOLUME_ID,

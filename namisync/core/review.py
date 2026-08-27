@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Protocol
 
 from .models import (
     CapabilityProfile,
@@ -40,6 +41,14 @@ class ReviewLimitAxis(StrEnum):
     ROWS = "rows"
     RETAINED_BYTES = "retained-bytes"
     LOGICAL_BYTES = "logical-bytes"
+
+
+class ScanPopulationAdmission(Protocol):
+    """Gate aggregate scanner populations before each owned append."""
+
+    def require_source_rows(self, count: int) -> None: ...
+
+    def require_informational_source_rows(self, count: int) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -311,17 +320,64 @@ def snapshot_plan_scan_result(
     """Return one detached exact scan after stateless source admission."""
 
     _require_plan_admission(admission)
+    return snapshot_scan_result(
+        result,
+        admission,
+        row_limit=MAX_PLAN_REVIEW_ROWS,
+    )
+
+
+def snapshot_scan_result(
+    result: ScanResult,
+    admission: ScanPopulationAdmission,
+    *,
+    row_limit: int,
+) -> ScanResult:
+    """Detach one bounded exact scan without retaining an excess prefix."""
+
+    _require_nonnegative_int(row_limit, "scan population row limit")
     populations = _plan_scan_populations(result)
     files, directories, unsupported, warnings = populations
-    admission.require_source_rows(
-        len(files) + len(directories) + len(unsupported)
-    )
-    admission.require_informational_source_rows(len(warnings))
+    root = _snapshot_root(result.root)
+    volume_id = _snapshot_volume_id(result.volume_id)
+    volume_evidence = _snapshot_volume_evidence(result.volume_evidence)
+    profile = _snapshot_capability_profile(result.profile)
+    scope = _snapshot_scope(result.scope)
+    if type(result.complete) is not bool:
+        raise TypeError("scan completeness must be an exact bool")
+
+    domain_count = len(files) + len(directories) + len(unsupported)
+    informational_count = len(warnings)
+    if domain_count > row_limit:
+        _validate_scan_domain_prefix(
+            files,
+            directories,
+            unsupported,
+            row_limit + 1,
+        )
+        admission.require_source_rows(row_limit + 1)
+        raise RuntimeError("scan admission accepted an excess domain population")
+    admission.require_source_rows(domain_count)
+
+    if informational_count > row_limit:
+        _validate_scan_domain_prefix(
+            files,
+            directories,
+            unsupported,
+            domain_count,
+        )
+        _validate_scan_warning_prefix(warnings, row_limit + 1)
+        admission.require_informational_source_rows(row_limit + 1)
+        raise RuntimeError(
+            "scan admission accepted an excess informational population"
+        )
+    admission.require_informational_source_rows(informational_count)
+
     return ScanResult(
-        root=_snapshot_root(result.root),
-        volume_id=_snapshot_volume_id(result.volume_id),
-        volume_evidence=_snapshot_volume_evidence(result.volume_evidence),
-        profile=_snapshot_capability_profile(result.profile),
+        root=root,
+        volume_id=volume_id,
+        volume_evidence=volume_evidence,
+        profile=profile,
         files=tuple(_snapshot_file_record(record) for record in files),
         directories=tuple(
             _snapshot_directory(record) for record in directories
@@ -330,9 +386,47 @@ def snapshot_plan_scan_result(
             _snapshot_unsupported(record) for record in unsupported
         ),
         warnings=tuple(_snapshot_warning(warning) for warning in warnings),
-        scope=_snapshot_scope(result.scope),
+        scope=scope,
         complete=result.complete,
     )
+
+
+def _validate_scan_domain_prefix(
+    files: tuple[FileRecord, ...],
+    directories: tuple[DirRecord, ...],
+    unsupported: tuple[UnsupportedRecord, ...],
+    count: int,
+) -> None:
+    remaining = count
+    if remaining == 0:
+        return
+    for record in files:
+        _snapshot_file_record(record)
+        remaining -= 1
+        if remaining == 0:
+            return
+    for record in directories:
+        _snapshot_directory(record)
+        remaining -= 1
+        if remaining == 0:
+            return
+    for record in unsupported:
+        _snapshot_unsupported(record)
+        remaining -= 1
+        if remaining == 0:
+            return
+    raise RuntimeError("scan domain prefix is shorter than its declared count")
+
+
+def _validate_scan_warning_prefix(
+    warnings: tuple[ScanWarning, ...],
+    count: int,
+) -> None:
+    for index, warning in enumerate(warnings, start=1):
+        _snapshot_warning(warning)
+        if index == count:
+            return
+    raise RuntimeError("scan warning prefix is shorter than its declared count")
 
 
 def snapshot_plan_file_records(
@@ -376,7 +470,7 @@ def _plan_scan_populations(
     tuple[ScanWarning, ...],
 ]:
     if type(result) is not ScanResult:
-        raise TypeError("plan scanner must return an exact ScanResult")
+        raise TypeError("scanner must return an exact ScanResult")
     populations = (
         ("files", result.files),
         ("directories", result.directories),
@@ -385,7 +479,7 @@ def _plan_scan_populations(
     )
     for field_name, population in populations:
         if type(population) is not tuple:
-            raise TypeError(f"plan scan {field_name} must be an exact tuple")
+            raise TypeError(f"scan {field_name} must be an exact tuple")
     return (
         populations[0][1],
         populations[1][1],
@@ -404,19 +498,19 @@ def _snapshot_identity(value: object) -> FileIdentity | None:
     if value is None:
         return None
     if type(value) is not FileIdentity:
-        raise TypeError("plan file identity has the wrong type")
+        raise TypeError("scan file identity has the wrong type")
     return FileIdentity(value.volume_serial, value.file_index)
 
 
 def _snapshot_metadata(value: object) -> MetadataSnapshot:
     if type(value) is not MetadataSnapshot:
-        raise TypeError("plan metadata has the wrong type")
+        raise TypeError("scan metadata has the wrong type")
     return MetadataSnapshot(value.attributes, value.created_ns)
 
 
 def _snapshot_file_record(value: object) -> FileRecord:
     if type(value) is not FileRecord:
-        raise TypeError("plan scan files must contain exact FileRecord values")
+        raise TypeError("scan files must contain exact FileRecord values")
     return FileRecord(
         value.rel_path,
         value.rel_path_key,
@@ -431,7 +525,7 @@ def _snapshot_file_record(value: object) -> FileRecord:
 def _snapshot_directory(value: object) -> DirRecord:
     if type(value) is not DirRecord:
         raise TypeError(
-            "plan scan directories must contain exact DirRecord values"
+            "scan directories must contain exact DirRecord values"
         )
     return DirRecord(
         value.rel_path,
@@ -446,7 +540,7 @@ def _snapshot_directory(value: object) -> DirRecord:
 def _snapshot_unsupported(value: object) -> UnsupportedRecord:
     if type(value) is not UnsupportedRecord:
         raise TypeError(
-            "plan scan unsupported must contain exact UnsupportedRecord values"
+            "scan unsupported must contain exact UnsupportedRecord values"
         )
     return UnsupportedRecord(
         value.rel_path,
@@ -458,16 +552,16 @@ def _snapshot_unsupported(value: object) -> UnsupportedRecord:
 
 def _snapshot_warning(value: object) -> ScanWarning:
     if type(value) is not ScanWarning:
-        raise TypeError("plan scan warnings must contain exact ScanWarning values")
+        raise TypeError("scan warnings must contain exact ScanWarning values")
     snapshot = ScanWarning(value.code, value.rel_path, value.detail)
     if snapshot != value:
-        raise ValueError("plan scan warning is not canonical")
+        raise ValueError("scan warning is not canonical")
     return snapshot
 
 
 def _snapshot_root(value: object) -> Root:
     if type(value) is not Root:
-        raise TypeError("plan scan root has the wrong type")
+        raise TypeError("scan root has the wrong type")
     return Root(value.path, value.root_id)
 
 
@@ -475,7 +569,7 @@ def _snapshot_volume_id(value: object) -> VolumeId | None:
     if value is None:
         return None
     if type(value) is not VolumeId:
-        raise TypeError("plan scan volume has the wrong type")
+        raise TypeError("scan volume has the wrong type")
     return VolumeId(value.serial, value.fs_type)
 
 
@@ -483,13 +577,13 @@ def _snapshot_volume_evidence(value: object) -> VolumeEvidence | None:
     if value is None:
         return None
     if type(value) is not VolumeEvidence:
-        raise TypeError("plan scan volume evidence has the wrong type")
+        raise TypeError("scan volume evidence has the wrong type")
     return VolumeEvidence(value.label, value.device_id, value.clone_ambiguous)
 
 
 def _snapshot_capability_profile(value: object) -> CapabilityProfile:
     if type(value) is not CapabilityProfile:
-        raise TypeError("plan scan capability profile has the wrong type")
+        raise TypeError("scan capability profile has the wrong type")
     return CapabilityProfile(
         value.fs_type,
         value.mtime_granularity_ns,
@@ -503,19 +597,19 @@ def _snapshot_capability_profile(value: object) -> CapabilityProfile:
 
 def _snapshot_scope(value: object) -> ScanScope:
     if type(value) is not ScanScope:
-        raise TypeError("plan scan scope has the wrong type")
+        raise TypeError("scan scope has the wrong type")
     if (
         type(value.selected_paths) is not tuple
         or type(value.subtree_roots) is not tuple
     ):
-        raise TypeError("plan scan scope populations must be exact tuples")
+        raise TypeError("scan scope populations must be exact tuples")
     snapshot = ScanScope(
         value.kind,
         value.selected_paths,
         value.subtree_roots,
     )
     if snapshot != value:
-        raise ValueError("plan scan scope is not canonical")
+        raise ValueError("scan scope is not canonical")
     return snapshot
 
 

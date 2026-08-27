@@ -28,6 +28,7 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import MappingPair, MappingSnapshot
+from namisync.core.review import MAX_PLAN_REVIEW_ROWS
 from namisync.core.scalars import file_index_128_from_text, file_index_128_to_text
 
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_reader
@@ -40,6 +41,16 @@ class InventoryPresence(StrEnum):
     PRESENT = "present"
     MISSING = "missing"
     UNSUPPORTED = "unsupported"
+
+
+INVENTORY_POPULATION_ROW_LIMIT = MAX_PLAN_REVIEW_ROWS
+
+
+class InventoryPopulationLimitError(ValueError):
+    """Raised before a general inventory read retains its first excess row."""
+
+    def __init__(self) -> None:
+        super().__init__("inventory population exceeds the review row limit")
 
 
 @dataclass(frozen=True, slots=True)
@@ -242,6 +253,16 @@ def _integrity_row_limit_error() -> IntegrityCandidateLimitError:
     return IntegrityCandidateLimitError(IntegrityCandidateLimitExceeded.rows())
 
 
+def _append_inventory_snapshots(
+    snapshots: list[InventorySnapshot],
+    rows: Iterable[sqlite3.Row],
+) -> None:
+    for row in rows:
+        if len(snapshots) == INVENTORY_POPULATION_ROW_LIMIT:
+            raise InventoryPopulationLimitError()
+        snapshots.append(_inventory_snapshot(row))
+
+
 def _bounded_integrity_path_keys(paths: Iterable[str]) -> tuple[str, ...]:
     keys: set[str] = set()
     for path in paths:
@@ -328,32 +349,42 @@ class LedgerRepository:
     def get_inventory(
         self, location_id: int, path_keys: Iterable[str] | None = None
     ) -> tuple[InventorySnapshot, ...]:
+        snapshots: list[InventorySnapshot] = []
         if path_keys is None:
-            rows = self._connection.execute(
-                "SELECT * FROM inventory WHERE location_id = ? ORDER BY rel_path_key, id",
-                (location_id,),
-            ).fetchall()
+            cursor = self._connection.execute(
+                """SELECT * FROM inventory
+                     WHERE location_id = ?
+                     ORDER BY rel_path_key, id
+                     LIMIT ?""",
+                (location_id, INVENTORY_POPULATION_ROW_LIMIT + 1),
+            )
+            _append_inventory_snapshots(snapshots, cursor)
         else:
-            keys = sorted({normalize_relative_path(path) for path in path_keys})
-            rows = []
+            keys = tuple(
+                sorted({normalize_relative_path(path) for path in path_keys})
+            )
             if keys:
                 self._connection.execute("BEGIN")
                 try:
                     for start in range(0, len(keys), 400):
                         chunk = keys[start : start + 400]
                         placeholders = ",".join("?" for _ in chunk)
-                        rows.extend(
-                            self._connection.execute(
-                                f"""SELECT * FROM inventory
-                                      WHERE location_id = ?
-                                        AND rel_path_key IN ({placeholders})
-                                      ORDER BY rel_path_key, id""",
-                                (location_id, *chunk),
-                            ).fetchall()
+                        cursor = self._connection.execute(
+                            f"""SELECT * FROM inventory
+                                  WHERE location_id = ?
+                                    AND rel_path_key IN ({placeholders})
+                                  ORDER BY rel_path_key, id
+                                  LIMIT ?""",
+                            (
+                                location_id,
+                                *chunk,
+                                INVENTORY_POPULATION_ROW_LIMIT + 1,
+                            ),
                         )
+                        _append_inventory_snapshots(snapshots, cursor)
                 finally:
                     self._connection.rollback()
-        return tuple(_inventory_snapshot(row) for row in rows)
+        return tuple(snapshots)
 
     def get_inventory_by_row_ids(
         self, location_id: int, row_ids: Iterable[str]
@@ -374,31 +405,27 @@ class LedgerRepository:
             seen.add(row_id)
             requested.append(row_id)
 
-        rows_by_id: dict[str, sqlite3.Row] = {}
+        rows_by_id: dict[str, InventorySnapshot] = {}
         if requested:
             self._connection.execute("BEGIN")
             try:
                 for start in range(0, len(requested), 400):
                     chunk = requested[start : start + 400]
                     placeholders = ",".join("?" for _ in chunk)
-                    rows_by_id.update(
-                        (
-                            str(row["id"]),
-                            row,
-                        )
-                        for row in self._connection.execute(
-                            f"""SELECT * FROM inventory
-                                  WHERE location_id = ?
-                                    AND id IN ({placeholders})""",
-                            (location_id, *chunk),
-                        ).fetchall()
-                    )
+                    for row in self._connection.execute(
+                        f"""SELECT * FROM inventory
+                              WHERE location_id = ?
+                                AND id IN ({placeholders})""",
+                        (location_id, *chunk),
+                    ):
+                        if len(rows_by_id) == INVENTORY_POPULATION_ROW_LIMIT:
+                            raise InventoryPopulationLimitError()
+                        snapshot = _inventory_snapshot(row)
+                        rows_by_id[snapshot.row_id] = snapshot
             finally:
                 self._connection.rollback()
         return tuple(
-            _inventory_snapshot(rows_by_id[row_id])
-            for row_id in requested
-            if row_id in rows_by_id
+            rows_by_id[row_id] for row_id in requested if row_id in rows_by_id
         )
 
     def get_integrity_candidates(
@@ -624,7 +651,7 @@ class LedgerRepository:
     def get_stale_inventory(
         self, location_id: int, verified_before: datetime
     ) -> tuple[InventorySnapshot, ...]:
-        rows = self._connection.execute(
+        cursor = self._connection.execute(
             """SELECT * FROM inventory
                 WHERE location_id = ?
                   AND presence = 'present'
@@ -647,22 +674,32 @@ class LedgerRepository:
                           )
                       )
                   )
-                ORDER BY rel_path_key, id""",
-            (location_id, encode_utc(verified_before)),
-        ).fetchall()
-        return tuple(_inventory_snapshot(row) for row in rows)
+                ORDER BY rel_path_key, id
+                LIMIT ?""",
+            (
+                location_id,
+                encode_utc(verified_before),
+                INVENTORY_POPULATION_ROW_LIMIT + 1,
+            ),
+        )
+        snapshots: list[InventorySnapshot] = []
+        _append_inventory_snapshots(snapshots, cursor)
+        return tuple(snapshots)
 
     def get_unacknowledged_missing(
         self, location_id: int
     ) -> tuple[InventorySnapshot, ...]:
-        rows = self._connection.execute(
+        cursor = self._connection.execute(
             """SELECT * FROM inventory
                 WHERE location_id = ? AND presence = 'missing'
                   AND acknowledged_at IS NULL
-                ORDER BY rel_path_key, id""",
-            (location_id,),
-        ).fetchall()
-        return tuple(_inventory_snapshot(row) for row in rows)
+                ORDER BY rel_path_key, id
+                LIMIT ?""",
+            (location_id, INVENTORY_POPULATION_ROW_LIMIT + 1),
+        )
+        snapshots: list[InventorySnapshot] = []
+        _append_inventory_snapshots(snapshots, cursor)
+        return tuple(snapshots)
 
     def get_mapping_snapshot(self, mapping_id: int) -> MappingSnapshot:
         mapping = self._connection.execute(

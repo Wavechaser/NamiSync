@@ -1196,7 +1196,9 @@ def test_preselection_pause_persists_recorder_close_degradation(
             scope,
             *,
             trusted_anchor=None,
+            population_admission=None,
         ):
+            assert population_admission is not None
             started.set()
             assert release.wait(2)
             context.checkpoint()

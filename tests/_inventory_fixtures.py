@@ -79,6 +79,7 @@ class _Scanner:
         scope: ScanScope | None,
         *,
         trusted_anchor: str | None = None,
+        population_admission=None,
     ) -> ScanResult:
         assert scope is not None
         assert trusted_anchor == str(self.mount)
@@ -89,6 +90,9 @@ class _Scanner:
             if not selected
             else tuple(row for row in self.records if row.rel_path in selected)
         )
+        if population_admission is not None:
+            population_admission.require_source_rows(len(records))
+            population_admission.require_informational_source_rows(0)
         return ScanResult(
             root,
             VOLUME_ID,

@@ -14,6 +14,7 @@ from namisync.core.pathing import (
     relative_path_parent,
     validate_relative_path,
 )
+from namisync.core.review import MAX_PLAN_REVIEW_ROWS
 
 
 class NodeTreeKind(StrEnum):
@@ -21,6 +22,17 @@ class NodeTreeKind(StrEnum):
 
     PLAN = "plan"
     INVENTORY = "inventory"
+
+
+NODE_TREE_ROW_LIMIT = MAX_PLAN_REVIEW_ROWS
+
+
+class NodeTreePopulationLimitError(ValueError):
+    """Raised before a tree builder retains its first excess domain row."""
+
+    def __init__(self, tree_kind: NodeTreeKind) -> None:
+        super().__init__(f"{tree_kind.value} node tree exceeds its row limit")
+        self.tree_kind = tree_kind
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,8 +45,10 @@ class NodeTreeMember:
     is_container: bool = False
 
     def __post_init__(self) -> None:
-        if not isinstance(self.member_id, str) or not self.member_id:
+        if type(self.member_id) is not str or not self.member_id:
             raise ValueError("member_id must be a nonempty string")
+        if type(self.rel_path) is not str or type(self.rel_path_key) is not str:
+            raise TypeError("member paths must be exact strings")
         canonical = validate_relative_path(self.rel_path, allow_root=True)
         if self.rel_path_key != normalize_relative_path(
             canonical,
@@ -143,16 +157,26 @@ def build_node_tree(
     if not isinstance(scope_identity, str) or not scope_identity:
         raise ValueError("scope_identity must be a nonempty string")
 
-    display_paths: dict[str, set[str]] = {"": {""}}
+    display_paths: dict[str, str] = {"": ""}
     direct_member_ids: dict[str, list[str]] = {}
     explicit_containers: set[str] = set()
     seen_member_ids: set[str] = set()
+    member_count = 0
 
     for member in members:
-        if not isinstance(member, NodeTreeMember):
-            raise TypeError("members must contain NodeTreeMember values")
+        if type(member) is not NodeTreeMember:
+            raise TypeError("members must contain exact NodeTreeMember values")
+        member = NodeTreeMember(
+            member.member_id,
+            member.rel_path,
+            member.rel_path_key,
+            member.is_container,
+        )
         if member.member_id in seen_member_ids:
             raise ValueError(f"duplicate member_id: {member.member_id}")
+        if member_count == NODE_TREE_ROW_LIMIT:
+            raise NodeTreePopulationLimitError(tree_kind)
+        member_count += 1
         seen_member_ids.add(member.member_id)
         direct_member_ids.setdefault(member.rel_path_key, []).append(
             member.member_id
@@ -163,7 +187,11 @@ def build_node_tree(
         path = member.rel_path
         path_key = member.rel_path_key
         while True:
-            display_paths.setdefault(path_key, set()).add(path)
+            spelling = display_paths.get(path_key)
+            if spelling is None:
+                display_paths[path_key] = path
+            elif path < spelling:
+                display_paths[path_key] = path
             if path_key == "":
                 break
             parent = relative_path_parent(path)
@@ -236,7 +264,7 @@ def build_node_tree(
         nodes.append(
             NodeTreeNode(
                 node_id=node_id,
-                rel_path=min(display_paths[path_key]),
+                rel_path=display_paths[path_key],
                 rel_path_key=path_key,
                 member_ids=tuple(
                     sorted(direct_member_ids.get(path_key, ()))

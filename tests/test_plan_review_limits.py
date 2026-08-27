@@ -392,6 +392,48 @@ def test_scan_domain_and_warning_sources_are_independently_admitted(
     assert snapshot_plan_scan_result(value, admission) == value
     _fill_final_ledger(admission)
 
+
+def test_scan_snapshot_validates_malformed_first_excess_before_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
+    record = _file("valid.bin")
+    value = _scan(SOURCE_ROOT, files=(record, record))
+    object.__setattr__(value, "files", (record, object()))
+
+    with pytest.raises(TypeError):
+        snapshot_plan_scan_result(value, PlanReviewAdmission())
+
+
+def test_scan_snapshot_validates_domain_before_informational_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
+    record = _file("forged.bin")
+    warning = ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin")
+    value = _scan(
+        SOURCE_ROOT,
+        files=(record,),
+        warnings=(warning, warning),
+    )
+    object.__setattr__(record, "rel_path_key", "NOT-THE-PATH")
+
+    with pytest.raises(ValueError):
+        snapshot_plan_scan_result(value, PlanReviewAdmission())
+
+
+def test_scan_snapshot_validates_malformed_informational_first_excess(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
+    warning = ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin")
+    value = _scan(SOURCE_ROOT, warnings=(warning, warning))
+    object.__setattr__(value, "warnings", (warning, object()))
+
+    with pytest.raises(TypeError):
+        snapshot_plan_scan_result(value, PlanReviewAdmission())
+
+
 def _two_mapping_items() -> dict[str, object]:
     source_ids = (FileIdentity("SOURCE", 1), FileIdentity("SOURCE", 2))
     target_ids = (FileIdentity("TARGET", 1), FileIdentity("TARGET", 2))

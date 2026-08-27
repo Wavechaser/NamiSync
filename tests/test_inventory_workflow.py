@@ -61,6 +61,13 @@ from namisync.core.session import (
     RunContext,
     SessionState,
 )
+from namisync.core.review import (
+    MAX_PLAN_REVIEW_ROWS,
+    ReviewFactLimitExceeded,
+    ReviewLimitAxis,
+    ReviewPopulation,
+    ReviewTreeKind,
+)
 from namisync.core.scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64
 from namisync.db.connections import connect_ledger_reader
 from namisync.db.repositories import InventoryPresence, LedgerRepository
@@ -164,6 +171,7 @@ class _Scanner:
         scope: ScanScope | None,
         *,
         trusted_anchor: str | None = None,
+        population_admission=None,
     ) -> ScanResult:
         assert scope is not None
         assert trusted_anchor is not None
@@ -177,6 +185,18 @@ class _Scanner:
             if not selected
             else tuple(row for row in self.records if row.rel_path in selected)
         )
+        unsupported = tuple(
+            row
+            for row in self.unsupported
+            if not selected or row.rel_path in selected
+        )
+        if population_admission is not None:
+            population_admission.require_source_rows(
+                len(records) + len(unsupported)
+            )
+            population_admission.require_informational_source_rows(
+                len(self.warnings)
+            )
         return ScanResult(
             root,
             VOLUME_ID,
@@ -184,11 +204,7 @@ class _Scanner:
             PROFILE,
             records,
             (),
-            tuple(
-                row
-                for row in self.unsupported
-                if not selected or row.rel_path in selected
-            ),
+            unsupported,
             self.warnings,
             scope,
             self.complete,
@@ -456,7 +472,10 @@ def test_inventory_direct_entries_revalidate_before_resolver_or_ledger_work(
         run(workflow_request, _context(), inaccessible)
 
 
-@pytest.mark.parametrize("mutation", ("complete", "root", "scope", "files"))
+@pytest.mark.parametrize(
+    "mutation",
+    ("complete", "root", "scope", "files", "passed_root", "passed_scope"),
+)
 def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
     mutation: str,
 ) -> None:
@@ -470,8 +489,27 @@ def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
         candidates=("M:\\",),
     )
 
-    def scanner(root, _ignores, _ctx, scope, *, trusted_anchor=None):
+    def scanner(
+        root,
+        _ignores,
+        _ctx,
+        scope,
+        *,
+        trusted_anchor=None,
+        population_admission=None,
+    ):
+        del population_admission
         assert trusted_anchor == "M:\\"
+        if mutation == "passed_root":
+            object.__setattr__(root, "root_id", "other")
+        elif mutation == "passed_scope":
+            hostile_scope = ScanScope.selected(("other",))
+            object.__setattr__(scope, "kind", hostile_scope.kind)
+            object.__setattr__(
+                scope,
+                "selected_paths",
+                hostile_scope.selected_paths,
+            )
         result = ScanResult(
             root,
             VOLUME_ID,
@@ -490,7 +528,7 @@ def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
             object.__setattr__(result, "root", Root(root.path, "other"))
         elif mutation == "scope":
             object.__setattr__(result, "scope", ScanScope.selected(("other",)))
-        else:
+        elif mutation == "files":
             object.__setattr__(result, "files", [])
         return result
 
@@ -523,7 +561,171 @@ def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
             _context(),
             deps,
             ForbiddenRecorder(),
+            inventory_workflow._InventoryScanAdmission(),
         )
+
+
+def test_malformed_hostile_excess_scan_keeps_structural_error_precedence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(inventory_workflow, "MAX_PLAN_REVIEW_ROWS", 1)
+    mount = tmp_path / "mount"
+    root_path = mount / "managed"
+    root_path.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    record = _file()
+
+    class MalformedScanner(_Scanner):
+        def __call__(
+            self,
+            root,
+            ignores,
+            context,
+            scope,
+            *,
+            trusted_anchor=None,
+            population_admission=None,
+        ):
+            del ignores, context, trusted_anchor, population_admission
+            result = ScanResult(
+                root,
+                VOLUME_ID,
+                EVIDENCE,
+                PROFILE,
+                (record, record),
+                (),
+                (),
+                (),
+                scope,
+                True,
+            )
+            object.__setattr__(result, "files", (record, object()))
+            return result
+
+    prepared = bind_inventory_request(
+        InventoryRequest("malformed-excess", root_path=str(root_path)),
+        ledger_path=ledger_path,
+        backend=_Backend(root_path, mount),
+        resolver=_Resolver(mount),
+    )
+
+    with pytest.raises(TypeError):
+        run_inventory(
+            prepared,
+            _context(),
+            _dependencies(
+                ledger_path,
+                MalformedScanner(),
+                _Resolver(mount),
+                [],
+            ),
+        )
+
+    with connect_ledger_reader(ledger_path) as connection:
+        for table in ("hosts", "volumes", "locations", "inventory"):
+            assert connection.execute(
+                f"SELECT count(*) FROM {table}"
+            ).fetchone()[0] == 0
+
+
+def test_inventory_scanner_receives_detached_ignore_policy(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    received: list[IgnoreSet] = []
+
+    class MutatingScanner(_Scanner):
+        def __call__(self, root, ignores, context, scope, **kwargs):
+            received.append(ignores)
+            object.__setattr__(ignores, "exact_names", frozenset({"FORGED"}))
+            return super().__call__(root, ignores, context, scope, **kwargs)
+
+    scanner = MutatingScanner()
+    details: list[InventoryDetails] = []
+    deps = _dependencies(
+        tmp_path / "ledger.db",
+        scanner,
+        _Resolver(mount),
+        details,
+    )
+    configured_ignores = deps.ignores
+    prepared = bind_inventory_request(
+        InventoryRequest("detached-ignores", root_path=str(root)),
+        ledger_path=deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=deps.resolver,
+    )
+
+    result = run_inventory(prepared, _context(), deps)
+
+    assert result.status is SessionState.COMPLETED
+    assert len(received) == 1
+    assert received[0] is not configured_ignores
+    assert configured_ignores == IgnoreSet()
+
+
+def test_hostile_scanner_cannot_mutate_registration_binding(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    forged_volume = VolumeId("forged-volume", "NTFS")
+    prepared = bind_inventory_request(
+        InventoryRequest("hostile-binding", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=_Resolver(mount),
+    )
+
+    class MutatingScanner(_Scanner):
+        def __call__(
+            self,
+            scan_root,
+            _ignores,
+            _context,
+            scope,
+            *,
+            trusted_anchor=None,
+            population_admission=None,
+        ):
+            assert trusted_anchor == str(mount)
+            assert population_admission is not None
+            object.__setattr__(prepared.binding, "volume_id", forged_volume)
+            return ScanResult(
+                scan_root,
+                forged_volume,
+                EVIDENCE,
+                PROFILE,
+                (),
+                (),
+                (),
+                (),
+                scope,
+                True,
+            )
+
+    details: list[InventoryDetails] = []
+    deps = _dependencies(
+        ledger_path,
+        MutatingScanner(),
+        _Resolver(mount),
+        details,
+    )
+
+    with pytest.raises(RuntimeError, match="volume changed after preflight"):
+        run_inventory(prepared, _context(), deps)
+
+    assert details == []
+    with connect_ledger_reader(ledger_path) as connection:
+        for table in ("hosts", "volumes", "locations", "inventory"):
+            assert connection.execute(
+                f"SELECT count(*) FROM {table}"
+            ).fetchone()[0] == 0
 
 
 def test_resolution_rejects_excess_candidates_before_path_projection(
@@ -1838,6 +2040,124 @@ def test_integrity_recorder_close_failure_preserves_primary_authority(
         assert result.error is not None
         assert result.error.type_name == "RuntimeError"
         assert result.error.message == "close failed"
+
+
+def test_inventory_source_first_excess_is_refused_without_partial_save(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    details: list[InventoryDetails] = []
+
+    class ExcessScanner(_Scanner):
+        def __call__(
+            self,
+            root,
+            ignores,
+            context,
+            scope,
+            *,
+            trusted_anchor=None,
+            population_admission=None,
+        ):
+            del root, ignores, context, scope, trusted_anchor
+            assert population_admission is not None
+            population_admission.require_source_rows(
+                MAX_PLAN_REVIEW_ROWS + 1
+            )
+            raise AssertionError("first excess was admitted")
+
+    scanner = ExcessScanner()
+    prepared = bind_inventory_request(
+        InventoryRequest("inventory-excess", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=_Resolver(mount),
+    )
+
+    result = run_inventory(
+        prepared,
+        _context(),
+        _dependencies(ledger_path, scanner, _Resolver(mount), details),
+    )
+
+    assert result.status is SessionState.REFUSED
+    assert result.disposition is Disposition.UNRUN
+    assert result.review_fact_limit == ReviewFactLimitExceeded(
+        "review_fact_limit_exceeded",
+        ReviewTreeKind.INVENTORY,
+        ReviewPopulation.DOMAIN,
+        ReviewLimitAxis.ROWS,
+        MAX_PLAN_REVIEW_ROWS,
+        None,
+    )
+    assert details == []
+    with connect_ledger_reader(ledger_path) as connection:
+        assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0
+
+
+def test_inventory_revalidates_hostile_excess_result_before_ledger_publication(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    details: list[InventoryDetails] = []
+    record = _file()
+
+    class IgnoringScanner(_Scanner):
+        def __call__(
+            self,
+            root,
+            ignores,
+            context,
+            scope,
+            *,
+            trusted_anchor=None,
+            population_admission=None,
+        ):
+            del ignores, context, trusted_anchor, population_admission
+            return ScanResult(
+                root,
+                VOLUME_ID,
+                EVIDENCE,
+                PROFILE,
+                (record,) * (MAX_PLAN_REVIEW_ROWS + 1),
+                (),
+                (),
+                (),
+                scope,
+                True,
+            )
+
+    prepared = bind_inventory_request(
+        InventoryRequest("hostile-inventory-excess", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=_Resolver(mount),
+    )
+    result = run_inventory(
+        prepared,
+        _context(),
+        _dependencies(
+            ledger_path,
+            IgnoringScanner(),
+            _Resolver(mount),
+            details,
+        ),
+    )
+
+    assert result.status is SessionState.REFUSED
+    assert result.disposition is Disposition.UNRUN
+    assert result.review_fact_limit is not None
+    assert details == []
+    with connect_ledger_reader(ledger_path) as connection:
+        assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0
 
 
 def test_post_refresh_integrity_candidate_excess_fails_without_verifier_work(

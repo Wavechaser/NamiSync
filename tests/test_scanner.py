@@ -58,6 +58,38 @@ def test_clean_tree_is_complete_deterministic_and_records_every_directory(tmp_pa
     assert all(record.metadata.created_ns is None or record.metadata.created_ns >= 0 for record in first.files)
 
 
+def test_scan_population_admission_precedes_first_excess_append(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "subject.bin").write_bytes(b"x")
+
+    class FirstExcess(RuntimeError):
+        pass
+
+    class Admission:
+        def __init__(self) -> None:
+            self.domain_counts: list[int] = []
+
+        def require_source_rows(self, count: int) -> None:
+            self.domain_counts.append(count)
+            if count > 1:
+                raise FirstExcess
+
+        def require_informational_source_rows(self, count: int) -> None:
+            raise AssertionError("clean scan admitted an informational row")
+
+    admission = Admission()
+    with pytest.raises(FirstExcess):
+        WalkingScanner().scan(
+            Root(str(tmp_path), "inventory"),
+            IgnoreSet(),
+            _ctx(),
+            population_admission=admission,
+        )
+
+    assert admission.domain_counts == [1, 2]
+
+
 def test_native_walk_recovers_identity_when_directory_entry_omits_it(
     tmp_path: Path,
 ) -> None:

@@ -22,7 +22,10 @@ from namisync.core.planning import OperationKind, OperationReason
 from namisync.core.recording import InventoryCommand
 from namisync.core.scalars import MAX_FILE_INDEX_128
 from namisync.db.connections import connect_ledger_reader, connect_ledger_writer
-from namisync.db.repositories import LedgerRepository
+from namisync.db.repositories import (
+    InventoryPopulationLimitError,
+    LedgerRepository,
+)
 
 from _db_fixtures import (
     NOW,
@@ -220,6 +223,8 @@ def test_integrity_candidate_reader_enforces_complete_population_row_wall(
         )
         excess_paths = paths + (f"candidate-{limit:06d}.bin",)
         with LedgerRepository(setup.recorder.path) as repository:
+            with pytest.raises(InventoryPopulationLimitError):
+                repository.get_inventory(setup.source_location_id)
             for kwargs in (
                 {},
                 {"path_keys": excess_paths},
@@ -246,6 +251,71 @@ def test_integrity_candidate_reader_enforces_complete_population_row_wall(
                 IntegrityMode.REBASELINE,
                 path_keys=excess_paths,
             ) == ()
+    finally:
+        setup.recorder.close()
+
+
+def test_general_inventory_readers_refuse_first_excess_population(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    _insert_minimal_inventory_rows(
+        setup.recorder.path,
+        setup.source_location_id,
+        start=0,
+        count=3,
+    )
+    monkeypatch.setattr(repository_module, "INVENTORY_POPULATION_ROW_LIMIT", 2)
+    try:
+        with LedgerRepository(setup.recorder.path) as repository:
+            with pytest.raises(InventoryPopulationLimitError):
+                repository.get_inventory(setup.source_location_id)
+            assert repository.get_inventory(
+                setup.source_location_id,
+                ("absent-a.bin", "absent-b.bin", "absent-c.bin"),
+            ) == ()
+            with pytest.raises(InventoryPopulationLimitError):
+                repository.get_inventory(
+                    setup.source_location_id,
+                    (
+                        "candidate-000000.bin",
+                        "candidate-000001.bin",
+                        "candidate-000002.bin",
+                    ),
+                )
+            assert repository.get_inventory_by_row_ids(
+                setup.source_location_id,
+                ("9001", "9002", "9003"),
+            ) == ()
+            with pytest.raises(InventoryPopulationLimitError):
+                repository.get_inventory_by_row_ids(
+                    setup.source_location_id,
+                    ("1", "2", "3"),
+                )
+            with pytest.raises(InventoryPopulationLimitError):
+                repository.get_stale_inventory(
+                    setup.source_location_id,
+                    NOW,
+                )
+
+        writer = connect_ledger_writer(setup.recorder.path)
+        try:
+            writer.execute(
+                """UPDATE inventory
+                      SET presence = 'missing', missing_since = ?
+                    WHERE location_id = ?""",
+                (NOW.isoformat(), setup.source_location_id),
+            )
+            writer.commit()
+        finally:
+            writer.close()
+
+        with LedgerRepository(setup.recorder.path) as repository:
+            with pytest.raises(InventoryPopulationLimitError):
+                repository.get_unacknowledged_missing(
+                    setup.source_location_id
+                )
     finally:
         setup.recorder.close()
 

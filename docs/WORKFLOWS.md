@@ -126,6 +126,12 @@ state alone.
 deterministic preorder structure, immutable id/path indexes, direct member ids,
 subtree membership, and bottom-up member counts. The empty-key root is always
 addressable and the canonical path index remains one-to-one and domain-only.
+The builder reconstructs and validates each exact member before duplicate and
+capacity classification, then stops before retaining the first excess source
+member. It keeps one minimum display spelling for each canonical path key.
+Checkpoint 4 owns synthetic ancestor/index construction and the complete
+projection-byte charge; this row prerequisite does not price indexes, sort
+storage, or disposable construction maps.
 
 Plan projection preserves that single path authority when several immutable
 operations share one target. It retains one path/group row and emits every
@@ -615,6 +621,16 @@ without invoking the selection sink, verifier context, runner, hashing, or
 outcome collection. Recorder open/close failure remains authoritative over a
 simultaneous scale fact. The retained-byte and payload-envelope axes await the
 checkpoint-4 frozen graph/occurrence model.
+
+Inventory scan composition now requires the scanner's structural population
+admission argument. The scanner checks each next domain/warning append and the
+workflow validates the exact completed result before recording; initial valid
+excess alone becomes `REFUSED+UNRUN`, while malformed output fails ordinarily.
+General repository reads cap actual returned typed snapshots rather than input
+request cardinality. Integrity validates the exact candidate-row tuple and then
+uses its ordinary workflow-owned construction directly; there is no injected
+builder or duplicate general row validator. Checkpoint 4.1 adds the retained-
+byte authority around the real construction graph.
 
 Candidate filtering happens only while freezing a new integrity selection.
 In the current implementation, baseline admits eligible non-directory rows

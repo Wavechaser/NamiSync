@@ -577,6 +577,27 @@ class IgnoreSet:
         )
 
 
+def snapshot_ignore_set(value: object) -> IgnoreSet:
+    """Return one detached exact scanner ignore policy."""
+
+    if type(value) is not IgnoreSet:
+        raise TypeError("scanner ignores must be an exact IgnoreSet")
+    if type(value.exact_names) is not frozenset:
+        raise TypeError("scanner exact ignore names must be a frozenset")
+    if any(type(name) is not str for name in value.exact_names):
+        raise TypeError("scanner exact ignore names must be text")
+    if (
+        type(value.exclude_owned_temps) is not bool
+        or type(value.exclude_sync_trash) is not bool
+    ):
+        raise TypeError("scanner ignore flags must be bools")
+    return IgnoreSet(
+        frozenset(value.exact_names),
+        value.exclude_owned_temps,
+        value.exclude_sync_trash,
+    )
+
+
 @dataclass(frozen=True)
 class ScanResult:
     root: Root
