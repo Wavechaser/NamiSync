@@ -727,15 +727,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
-- MODERATE - OPEN (2026-08-27). Response-copy ownership gap. The bridge caps
-  request bytes and admitted handlers, but complete response projection has no
-  active preconstruction wall and CLR/WebView2/browser copies have no derived
-  byte charge. Production document posts are now separately bounded to one
-  in-flight, one required, one replaceable, and one native dispatch, with exact
-  page acknowledgment and generation retirement. Cause: ingress and Python-
-  worker bounds were reused as if they also bounded output occurrence graphs
-  and renderer custody. Checkpoint 4 must finish the response graph and keep
-  native/browser ownership distinct; SH-G-15 owns later runtime evidence.
+- MODERATE - OPEN (2026-08-27). Response-copy ownership gap. Python now admits
+  each hostile response occurrence against the exact 8 MiB canonical-JSON wall
+  while detaching it, then retires the raw graph before primitive projection.
+  Native workers retain their position through both thread exit and exact
+  browser receipt, with document-generation retirement. CLR/WebView2/browser
+  encodings still need source-derived byte charges. Cause: ingress and Python-
+  worker bounds were reused as if they also bounded every output copy;
+  checkpoint 4 must freeze the remaining representation-specific charges.
 - MODERATE - FIXED (2026-08-28). Document-generation custody accumulation. A
   reload reconstructed the post helper while queued callbacks, encoded values,
   and sent appearance/readiness values had no page-acknowledged retirement, so
@@ -759,14 +758,35 @@ defect, and move implementation-level test choreography out of the log.
   current stream, synchronizing stop and replacement adoption, and closing
   retired/rejected streams outside the observer lock. Weak-reference churn and
   both stop/adopt orderings preserve close-before-join and retry behavior.
-- MODERATE - FIXED (2026-08-27). Premature return-custody retirement. The
+- MODERATE - FIXED (2026-08-28). Premature return-custody retirement. The
   admitted-handler ceiling released positions before pywebview serialized and
-  delivered replies, permitting accumulated return graphs and shutdown before
-  those workers finished. Cause: domain-call completion stood in for native
-  worker completion. Fixed by retaining each native position against its exact
-  thread until exit and joining outside the bridge lock with one retryable
-  deadline. Direct Python calls retain call-return semantics; pre-admission
-  threads and renderer allocations remain outside this bound.
+  the browser detached replies, permitting accumulated return graphs and
+  shutdown before either owner finished. Cause: domain-call completion and then
+  worker exit stood in for end-to-end delivery. Fixed by retaining each native
+  position until its exact thread exits and its exact browser receipt arrives;
+  reload retires the old generation atomically. Direct Python calls retain
+  call-return semantics; pre-admission threads and renderer allocation remain
+  outside this bound.
+- MODERATE - FIXED (2026-08-28). Native receipt token collision. A refused
+  second native call could expose an earlier response's colliding token because
+  return wrapping checked only token membership, allowing its acknowledgment to
+  release the wrong custody. Fixed by creating one per-call custody object and
+  exposing a token only when the retained map holds that exact object. Collision
+  now returns an unreceipted `bridge_busy` response.
+- MODERATE - FIXED (2026-08-28). Response-refusal queue loss. A task drain
+  removed reliable updates and advanced delivery state before the bridge could
+  reject an over-8-MiB response, so retry could not recover the refused truth.
+  Cause: queue mutation preceded complete response admission. Fixed by
+  capturing every source occurrence once into one incrementally byte-admitted
+  prefix and committing only that longest nonempty prefix. A singular maximum
+  reliable event still fits, and terminal delivery is earned only when its
+  record is in that prefix.
+- MODERATE - FIXED (2026-08-28). Response-capture reentry. A hostile queued
+  body could synchronously offer or drain again under the reentrant task
+  condition, replacing captured entries, popping undelivered successors,
+  duplicating reliable updates, or self-waiting at capacity. Fixed by making
+  hostile traversal an exact same-task mutation boundary: reentrant offer,
+  drain, release, and close refuse before mutation or waiting.
 - MODERATE - FIXED (2026-08-27). Unused callback retention. Every synchronous
   pywebview return left a new UUID-to-None entry in the window's callback
   registry, so completed calls caused lifetime growth. Cause: the pinned
@@ -1666,8 +1686,8 @@ defect, and move implementation-level test choreography out of the log.
   start frames while preserving cancel and actual-thread ownership. Task start,
   compensation, release, close, shutdown-unsubscribe, and ordinary service path
   refusal now retire their dependency frames without changing retry truth.
-  Bridge/host consumers, document callbacks, path-message construction, and
-  history construction/read-open failures remain open. Cause:
+  Host consumers, document callbacks, path-message construction, and history
+  construction/read-open failures remain open. Cause:
   bounded public failure projection did not consistently retire the caught
   graph before the next ownership transition. Checkpoint 4 must preserve public
   behavior while closing every remaining app-owned raw exception reference;

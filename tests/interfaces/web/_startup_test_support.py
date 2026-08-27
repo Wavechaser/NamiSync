@@ -99,7 +99,22 @@ def _dispatch(
         raise AssertionError("test native bridge worker did not exit")
     if errors:
         raise errors[0]
-    return replies[0]
+    native = replies[0]
+    if (
+        type(native) is not dict
+        or set(native) != {"transport_version", "response_token", "response"}
+        or native["transport_version"] != 1
+    ):
+        raise AssertionError("test native bridge returned an invalid wrapper")
+    token = native["response_token"]
+    if token is not None and (
+        type(token) is not str or _CHALLENGE.fullmatch(token) is None
+    ):
+        raise AssertionError("test native bridge returned an invalid receipt")
+    response = json.loads(json.dumps(native["response"], ensure_ascii=False))
+    if token is not None and dispatch(f"ack:{token}") is not True:
+        raise AssertionError("test native bridge receipt was refused")
+    return response
 
 
 def drive_startup_handshake(window: object) -> None:

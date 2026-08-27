@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import gc
 from dataclasses import asdict
 import json
 import logging
 import subprocess
+import weakref
 from pathlib import Path
 from threading import Event, Lock, Thread
 from time import monotonic
@@ -27,6 +29,9 @@ from namisync.interfaces.web.bridge import (
     AdmissionRefused,
     BRIDGE_SCHEMA_VERSION,
     BridgeDispatcher,
+    MAX_BRIDGE_RESPONSE_JSON_BYTES,
+    BridgeResponseTooLargeError,
+    snapshot_bridge_response_result,
 )
 from namisync.interfaces.web.commands import (
     CommandAccess,
@@ -90,6 +95,7 @@ ERRORS = {
     "unknown_command": "This desktop action is not available.",
     "invalid_payload": "The desktop action contains invalid data.",
     "request_too_large": "The desktop request is too large.",
+    "response_too_large": "The desktop response is too large.",
     "slot_unavailable": (
         "That folder selection is no longer available. Choose both folders again."
     ),
@@ -892,10 +898,14 @@ def test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views()
     )
 
     class Registry:
-        def drain(self, *args: object, **kwargs: object) -> TaskDrainView:
+        def drain_for_bridge(self, *args: object, **kwargs: object) -> object:
+            from namisync.interfaces.web.bridge import (
+                _admit_task_drain_response_prefix,
+            )
+
             assert args == (task_id, session_id, drain_id)
             assert kwargs == {"replay_from": None}
-            return TaskDrainView(
+            return _admit_task_drain_response_prefix(
                 task_id,
                 session_id,
                 drain_id,
@@ -1046,7 +1056,7 @@ def test_terminal_session_release_crosses_dispatch_as_exact_echo() -> None:
 
 def test_br_g_33_next_events_production_refusal_is_named_and_sanitized() -> None:
     class Registry:
-        def drain(self, *args: object, **kwargs: object) -> object:
+        def drain_for_bridge(self, *args: object, **kwargs: object) -> object:
             del args, kwargs
             raise TaskUnavailableError("private task detail")
 
@@ -1164,6 +1174,228 @@ def test_br_g_32_handler_and_codec_failures_are_sanitized_and_logs_are_private(
     assert f"request_id={REQUEST_ID}" in caplog.text
     assert "command=probe" in caplog.text
     assert "code=internal_error" in caplog.text
+
+
+def test_response_projection_ceiling_is_inclusive() -> None:
+    result = {"value": "wave \U0001f30a" + ("x" * 256)}
+    expected = {
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": REQUEST_ID,
+        "ok": True,
+        "result": result,
+    }
+    exact_bytes = len(json.dumps(
+        expected,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8"))
+    assert snapshot_bridge_response_result(result, REQUEST_ID, exact_bytes) == result
+    with pytest.raises(BridgeResponseTooLargeError):
+        snapshot_bridge_response_result(result, REQUEST_ID, exact_bytes - 1)
+
+
+@pytest.mark.parametrize(
+    "invalid_ceiling",
+    (None, True, 1, MAX_BRIDGE_RESPONSE_JSON_BYTES + 1),
+)
+def test_response_projection_requires_a_complete_fixed_failure_ceiling(
+    invalid_ceiling: object,
+) -> None:
+    with pytest.raises(ValueError, match="outside the product range"):
+        snapshot_bridge_response_result(
+            None,
+            REQUEST_ID,
+            invalid_ceiling,  # type: ignore[arg-type]
+        )
+
+
+def test_response_projection_uses_the_product_ceiling_by_default() -> None:
+    dispatcher = BridgeDispatcher(
+        document=_Document(),
+        commands={
+            "probe": _spec(
+                lambda _payload: "x" * (MAX_BRIDGE_RESPONSE_JSON_BYTES + 1)
+            )
+        },
+        admit=_admit_open,
+    )
+
+    assert dispatcher.dispatch(_request())["error"]["code"] == (
+        "response_too_large"
+    )
+
+
+def test_response_admission_stops_at_first_excess_and_counts_occurrences() -> None:
+    advanced_after_excess = False
+
+    class FirstExcess(dict):
+        def items(self):
+            nonlocal advanced_after_excess
+            yield "value", "x" * 1_000
+            advanced_after_excess = True
+            raise AssertionError("response admission advanced after first excess")
+
+    shared = "x" * 512
+    one_occurrence = {
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": REQUEST_ID,
+        "ok": True,
+        "result": [shared],
+    }
+    with pytest.raises(BridgeResponseTooLargeError):
+        snapshot_bridge_response_result(FirstExcess(), REQUEST_ID, 256)
+    assert not advanced_after_excess
+    with pytest.raises(BridgeResponseTooLargeError):
+        snapshot_bridge_response_result(
+            [shared, shared],
+            REQUEST_ID,
+            len(json.dumps(
+                one_occurrence,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            ).encode("utf-8")),
+        )
+
+
+def test_response_projection_rejects_duplicate_hostile_mapping_keys() -> None:
+    class DuplicateKeys(dict):
+        def items(self):
+            yield "same", 1
+            yield "same", 2
+
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda _payload: DuplicateKeys())},
+    )
+
+    assert dispatcher.dispatch(_request()) == _failure(
+        REQUEST_ID,
+        "internal_error",
+        ERRORS["internal_error"],
+    )
+
+
+def test_response_view_captures_hostile_occurrences_once_before_validation() -> None:
+    calls = 0
+    event: SessionEventView
+
+    class MutatingBody(dict):
+        def items(self):
+            nonlocal calls
+            calls += 1
+            object.__setattr__(event, "body_type", "Gap")
+            yield "state", "running"
+
+    body = MutatingBody()
+    event = SessionEventView(
+        session_id="1" * 32,
+        sequence=1,
+        at="2026-08-12T11:00:00+00:00",
+        schema_version=5,
+        body_type="StateChanged",
+        body=body,
+    )
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda _payload: event)},
+    )
+
+    response = dispatcher.dispatch(_request())
+
+    assert response["ok"] is True
+    assert response["result"]["body_type"] == "StateChanged"
+    assert response["result"]["body"] == {"state": "running"}
+    assert event.body_type == "Gap"
+    assert calls == 1
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "quote=\" slash=\\ newline=\n control=\x01",
+        "bmp=\u4e2d astral=\U0001f30a",
+    ],
+)
+def test_response_ceiling_matches_strict_canonical_utf8(text: str) -> None:
+    result = {"value": text + ("x" * 256)}
+    response = {
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": REQUEST_ID,
+        "ok": True,
+        "result": result,
+    }
+    exact = len(json.dumps(
+        response,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8"))
+
+    assert snapshot_bridge_response_result(result, REQUEST_ID, exact) == result
+    with pytest.raises(BridgeResponseTooLargeError):
+        snapshot_bridge_response_result(result, REQUEST_ID, exact - 1)
+
+
+def test_response_projection_rejects_unsafe_integer_before_decimal_encoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    hostile_integer = 10 ** 10_000
+    attempted_decimal_projection = False
+    original_dumps = bridge_module.json.dumps
+
+    def guarded_dumps(value: object, *args: object, **kwargs: object) -> str:
+        nonlocal attempted_decimal_projection
+        if value is hostile_integer:
+            attempted_decimal_projection = True
+            raise AssertionError("unsafe integer reached JSON projection")
+        return original_dumps(value, *args, **kwargs)
+
+    monkeypatch.setattr(bridge_module.json, "dumps", guarded_dumps)
+    dispatcher = _bridge_dispatcher(
+        document=_Document(),
+        commands={"probe": _spec(lambda _payload: hostile_integer)},
+    )
+
+    assert dispatcher.dispatch(_request()) == _failure(
+        REQUEST_ID,
+        "internal_error",
+        ERRORS["internal_error"],
+    )
+    assert not attempted_decimal_projection
+
+
+def test_consumed_handler_and_projection_failures_release_traceback_frames() -> None:
+    retained: list[weakref.ReferenceType[object]] = []
+
+    class Marker:
+        pass
+
+    def fail_handler(_payload: object) -> object:
+        marker = Marker()
+        retained.append(weakref.ref(marker))
+        raise RuntimeError("injected handler failure")
+
+    class FailProjection(dict):
+        def items(self):
+            marker = Marker()
+            retained.append(weakref.ref(marker))
+            raise RuntimeError("injected projection failure")
+
+    for handler in (fail_handler, lambda _payload: FailProjection()):
+        dispatcher = _bridge_dispatcher(
+            document=_Document(),
+            commands={"probe": _spec(handler)},
+        )
+        assert dispatcher.dispatch(_request())["error"]["code"] == "internal_error"
+    gc.collect()
+
+    assert len(retained) == 2
+    assert all(reference() is None for reference in retained)
 
 
 @pytest.mark.parametrize(

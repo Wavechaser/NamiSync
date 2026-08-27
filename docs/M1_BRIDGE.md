@@ -1216,6 +1216,10 @@ after its wait ends with no update. The 1,048,576-byte core reliable-envelope
 ceiling plus fixed bridge-wrapper/scalar-projection overhead guarantees one
 maximum queue head fits; a valid event can never block the drain behind a
 singular-overflow branch.
+Hostile snapshot traversal owns the queue capture: same-thread task-operation
+reentry is refused before queue mutation, drain supersession, release, or
+capacity waiting, while ordinary producers resume after the admitted prefix
+commits under the task condition.
 Singular values that cannot fit fail as fixed
 `response_too_large` before pywebview construction. The accepted input/path
 bounds prove one maximum row fits; the fixed 37-ASCII-character `NodeId`
@@ -3002,9 +3006,15 @@ same-principal security boundary.
 The pinned host creates one thread per exposed-function call before NamiSync
 admission. The bridge admits at most 64 handlers past that gate and returns the
 fixed `bridge_busy` refusal at saturation. An admitted native call keeps its
-position until that exact worker exits, including serialization and native
-return delivery after the domain handler returns. Direct Python calls retain
-their ordinary call-return lifetime. This bounds admitted domain work, return
+position until that exact worker exits and the browser acknowledges its exact
+detached response token. The JavaScript clone precedes acknowledgment; a lost
+first acknowledgment may retry once, and absence is accepted only after that
+transport-uncertain first delivery. Reload advances the document generation
+under the same condition and retires only earlier browser custody, including a
+native entry paused before handler reservation. Direct Python calls retain
+their ordinary call-return lifetime. A generated-token collision returns no
+receipt, so it cannot acknowledge the earlier exact custody. This bounds
+admitted domain work, return
 custody, and teardown ownership, not raw WebMessage thread creation or renderer
 allocation. The same admission condition closes the race between admitted
 handler entry and teardown; no bridge-global lock spans a command handler.

@@ -60,7 +60,10 @@ const bridge = await import(moduleUrl);
 const sourceId = `slot-${"1".repeat(32)}`;
 const targetId = `slot-${"2".repeat(32)}`;
 const requests = [];
+const acknowledgments = [];
 let uncertainResponses = 0;
+let holdNextResponse = false;
+let resolveLateResponse = null;
 const planning = bridge.startPlan(sourceId, targetId, null);
 
 await Promise.resolve();
@@ -78,22 +81,37 @@ assert.equal(timers.size, 1, "the automatic replay owns a fresh deadline");
 testWindow.pywebview = {
   api: {
     dispatch(requestJson) {
+      if (requestJson.startsWith("ack:")) {
+        acknowledgments.push(requestJson);
+        return Promise.resolve(true);
+      }
       const request = JSON.parse(requestJson);
       requests.push(request);
       if (uncertainResponses > 0) {
         uncertainResponses -= 1;
         return Promise.reject(new Error("simulated uncertain delivery"));
       }
-      return Promise.resolve({
-        schema_version: 1,
-        request_id: request.request_id,
-        ok: true,
-        result: {
-          task_id: `task-${"2".repeat(32)}`,
-          request_id: "3".repeat(32),
-          session_id: "4".repeat(32),
+      const nativeResponse = {
+        transport_version: 1,
+        response_token: holdNextResponse ? "a".repeat(32) : null,
+        response: {
+          schema_version: 1,
+          request_id: request.request_id,
+          ok: true,
+          result: {
+            task_id: `task-${"2".repeat(32)}`,
+            request_id: "3".repeat(32),
+            session_id: "4".repeat(32),
+          },
         },
-      });
+      };
+      if (holdNextResponse) {
+        holdNextResponse = false;
+        return new Promise((resolve) => {
+          resolveLateResponse = () => resolve(nativeResponse);
+        });
+      }
+      return Promise.resolve(nativeResponse);
     },
   },
 };
@@ -153,3 +171,29 @@ assert.equal(uncertainAttempts[0].payload.deletion_policy, "additive");
 assert.match(uncertainAttempts[0].payload.command_id, /^[0-9a-f]{32}$/);
 assert.equal("revision" in uncertainAttempts[0].payload, false);
 assert.equal(timers.size, 0, "both uncertain attempts clear their deadlines");
+
+// A timed-out native Promise still owns its transport continuation. Its late
+// non-null wrapper is detached and acknowledged even though the retry already
+// supplied the domain result.
+holdNextResponse = true;
+const latePlanning = bridge.startPlan(sourceId, targetId, "trash");
+for (let turn = 0; turn < 8 && resolveLateResponse === null; turn += 1) {
+  await Promise.resolve();
+}
+assert.equal(typeof resolveLateResponse, "function");
+assert.equal(timers.size, 1);
+const [lateTimer, expireLate] = timers.entries().next().value;
+timers.delete(lateTimer);
+expireLate();
+assert.deepEqual(await latePlanning, {
+  task_id: `task-${"2".repeat(32)}`,
+  request_id: "3".repeat(32),
+  session_id: "4".repeat(32),
+});
+assert.equal(acknowledgments.length, 0);
+resolveLateResponse();
+for (let turn = 0; turn < 8 && acknowledgments.length === 0; turn += 1) {
+  await Promise.resolve();
+}
+assert.deepEqual(acknowledgments, [`ack:${"a".repeat(32)}`]);
+assert.equal(timers.size, 0, "late settlement cannot restore an old deadline");

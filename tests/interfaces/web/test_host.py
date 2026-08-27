@@ -394,10 +394,18 @@ def test_shared_host_rpc_driver_uses_fresh_workers_and_propagates_errors() -> No
     from _startup_test_support import _dispatch
 
     workers = []
+    receipts = []
 
     def dispatch(command_json):
+        if command_json.startswith("ack:"):
+            receipts.append(command_json[4:])
+            return True
         workers.append(current_thread())
-        return json.loads(command_json)["command"]
+        return {
+            "transport_version": 1,
+            "response_token": "f" * 32,
+            "response": json.loads(command_json)["command"],
+        }
 
     for command in ("shell_ready", "readiness_echo"):
         assert _dispatch(
@@ -405,6 +413,7 @@ def test_shared_host_rpc_driver_uses_fresh_workers_and_propagates_errors() -> No
         ) == command
     assert len(set(workers)) == 2
     assert all(type(worker) is Thread and not worker.is_alive() for worker in workers)
+    assert receipts == ["f" * 32, "f" * 32]
 
     original = RuntimeError("fixture failure")
 
@@ -610,6 +619,9 @@ def _patch_primary(
     dispatcher = SimpleNamespace(
         begin_close=lambda: order.append("reject_dispatch"),
         wait_for_handlers=lambda: order.append("wait_handlers"),
+        _retire_document_responses=lambda: order.append(
+            "retire_document_responses"
+        ),
         dispatch=lambda _body: None,
     )
 
@@ -1063,7 +1075,14 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
     worker.start()
     worker.join(1.0)
     assert not worker.is_alive()
-    assert responses == [dispatcher.dispatch("{}")]
+    assert len(responses) == 1
+    native_response = responses[0]
+    assert native_response["transport_version"] == 1
+    assert native_response["response"] == dispatcher.dispatch("{}")
+    response_token = native_response["response_token"]
+    assert isinstance(response_token, str)
+    assert window._functions["dispatch"](f"ack:{response_token}") is True
+    dispatcher.wait_for_handlers(1.0)
     assert set(window._functions) == {"dispatch"}
 
 
@@ -2324,6 +2343,9 @@ def test_loaded_refusal_closes_authority_before_destroy_fallback_and_unblocks_lo
 
         def wait_for_handlers(self) -> None:
             order.append("wait_handlers")
+
+        def _retire_document_responses(self) -> None:
+            order.append("retire_document_responses")
 
         def _dispatch_native(self, _body: str) -> str:
             return "bridge_unavailable" if self.closed else "accepted"

@@ -50,7 +50,6 @@ from namisync.interfaces.web.commands import (
     PickerUnavailableError,
     PlanningRefusedError,
     PUBLIC_VIEW_DATACLASSES,
-    PUBLIC_VIEW_ENUMS,
     SERVICE_PUBLIC_VIEW_DATACLASSES,
     production_command_specs,
 )
@@ -150,6 +149,33 @@ class _Service:
             ("drain", task_id, session_id, drain_id, replay_from)
         )
         return TaskDrainView(task_id, session_id, drain_id, ())
+
+    def drain_for_bridge(
+        self,
+        task_id: str,
+        session_id: str,
+        drain_id: str,
+        *,
+        replay_from: int | None,
+    ) -> object:
+        from namisync.interfaces.web.bridge import (
+            _admit_task_drain_response_prefix,
+        )
+
+        result = self.drain(
+            task_id,
+            session_id,
+            drain_id,
+            replay_from=replay_from,
+        )
+        if type(result) is not TaskDrainView:
+            return result
+        return _admit_task_drain_response_prefix(
+            result.task_id,
+            result.session_id,
+            result.drain_id,
+            result.updates,
+        )
 
     def close_task(self, task_id: str, session_id: str) -> TaskCloseView:
         self.calls.append(("close", task_id, session_id))
@@ -1737,7 +1763,7 @@ def test_br_g_32_public_view_enum_manifest_matches_resolved_annotations() -> Non
         for annotation in get_type_hints(view_type).values():
             annotated_enum_types.update(_annotation_enum_types(annotation))
 
-    assert annotated_enum_types == set(PUBLIC_VIEW_ENUMS)
+    assert not annotated_enum_types
 
 
 def test_br_g_32_public_view_enum_annotation_walker_is_recursive() -> None:
@@ -1751,7 +1777,7 @@ def test_br_g_32_public_view_enum_manifest_matches_manual_witnesses() -> None:
     for witness in iter_public_view_witnesses():
         witnessed_enum_types.update(_value_enum_types(witness.value))
 
-    assert witnessed_enum_types == set(PUBLIC_VIEW_ENUMS)
+    assert not witnessed_enum_types
 
 
 def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
@@ -1908,10 +1934,12 @@ def test_task_serializer_rechecks_body_mutated_after_command_return() -> None:
         "task_id": TASK_ID, "session_id": SESSION_ID,
         "drain_id": DRAIN_ID, "replay_from": None,
     })
-    assert accepted is returned
+    assert accepted == returned
+    assert accepted is not returned
     event.body["state"] = "invented"
-    with pytest.raises(BridgeProtocolError):
-        to_primitive_view(accepted)
+    assert to_primitive_view(accepted)["updates"][0]["event"]["body"] == {
+        "state": "running"
+    }
 
 
 @pytest.mark.parametrize("changes", [

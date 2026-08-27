@@ -30,14 +30,23 @@ import { installAppearanceReceiver } from "./appearance.js";
     return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
   }
 
-  function dispatchCommand(command, payload) {
+  async function dispatchCommand(command, payload) {
     state.request += 1;
-    return window.pywebview.api.dispatch(JSON.stringify({
+    const nativeResponse = await window.pywebview.api.dispatch(JSON.stringify({
       schema_version: 1,
       request_id: state.request.toString(16).padStart(32, "0"),
       command: command,
       payload: payload,
     }));
+    if (
+      nativeResponse.response_token !== null &&
+      await window.pywebview.api.dispatch(
+        `ack:${nativeResponse.response_token}`
+      ) !== true
+    ) {
+      throw new Error("native response acknowledgment failed");
+    }
+    return nativeResponse.response;
   }
 
   function dispatch(phase, extra) {

@@ -1,4 +1,5 @@
 const BRIDGE_SCHEMA_VERSION = 1;
+const NATIVE_TRANSPORT_VERSION = 1;
 const CORE_EVENT_SCHEMA_VERSION = 5;
 const MAX_RELIABLE_EVENT_CANONICAL_BYTES = 1_048_576;
 const ID_PATTERN = /^[0-9a-f]{32}$/;
@@ -160,6 +161,7 @@ const ERROR_MESSAGES = Object.freeze({
   unknown_command: "This desktop action is not available.",
   invalid_payload: "The desktop action contains invalid data.",
   request_too_large: "The desktop request is too large.",
+  response_too_large: "The desktop response is too large.",
   slot_unavailable:
     "That folder selection is no longer available. Choose both folders again.",
   picker_unavailable: "The folder picker could not open. Try again.",
@@ -660,7 +662,13 @@ async function dispatchReadyAttempt(
       throw new BridgeTransportError();
     }
     // No await occurs between this final cancellation check and dispatch.
-    const transport = api.dispatch(request);
+    const transport = Promise.resolve(api.dispatch(request)).then(
+      (nativeResponse) => detachNativeResponse(
+        api,
+        nativeResponse,
+        generation,
+      ),
+    );
     response = await Promise.race([transport, reincarnated, cancelled]);
   } catch (error) {
     if (error instanceof BridgeTransportError) {
@@ -675,6 +683,66 @@ async function dispatchReadyAttempt(
     throw new BridgeTransportError();
   }
   return validateResponse(response, requestId, validateResult);
+}
+
+async function detachNativeResponse(api, nativeResponse, generation) {
+  if (
+    !isExactObject(nativeResponse, [
+      "transport_version",
+      "response_token",
+      "response",
+    ]) ||
+    nativeResponse.transport_version !== NATIVE_TRANSPORT_VERSION ||
+    (
+      nativeResponse.response_token !== null &&
+      (
+        typeof nativeResponse.response_token !== "string" ||
+        !ID_PATTERN.test(nativeResponse.response_token)
+      )
+    )
+  ) {
+    throw new BridgeTransportError();
+  }
+  const responseToken = nativeResponse.response_token;
+  let response;
+  try {
+    response = cloneJsonValue(nativeResponse.response);
+  } finally {
+    nativeResponse = null;
+    if (responseToken !== null) {
+      await acknowledgeNativeResponse(api, responseToken, generation);
+    }
+  }
+  if (generation !== bridgeGeneration) {
+    throw new BridgeTransportError();
+  }
+  return response;
+}
+
+async function acknowledgeNativeResponse(api, responseToken, generation) {
+  let firstDeliveryUncertain = false;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (
+      generation !== bridgeGeneration ||
+      typeof api?.dispatch !== "function"
+    ) {
+      throw new BridgeTransportError();
+    }
+    try {
+      const acknowledged = await api.dispatch(`ack:${responseToken}`);
+      if (
+        acknowledged === true ||
+        (firstDeliveryUncertain && acknowledged === false)
+      ) {
+        return;
+      }
+    } catch (_error) {
+      if (attempt === 0) {
+        firstDeliveryUncertain = true;
+      }
+    }
+  }
+  throw new BridgeTransportError();
 }
 
 function cancelAttempt(attempt) {

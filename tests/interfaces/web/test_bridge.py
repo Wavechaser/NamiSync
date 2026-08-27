@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import namisync.interfaces.web.bridge as bridge_module
 import namisync.interfaces.web.pywebview_runtime as pywebview_runtime
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
@@ -1230,7 +1231,7 @@ def test_br_g_32_native_return_retains_handler_capacity_until_worker_exit(
         assert release.wait(5.0)
 
     def dumps(value: object) -> str:
-        if isinstance(value, dict) and "schema_version" in value:
+        if isinstance(value, dict) and "transport_version" in value:
             if blocked_stage == "serialization":
                 hold_return()
             if failure_stage == "serialization":
@@ -1309,7 +1310,7 @@ def test_br_g_32_native_return_retains_handler_capacity_until_worker_exit(
     assert bridge._admitted == 0
 
 
-def test_br_g_32_native_return_is_reaped_on_admission_only_after_owner_exit() -> None:
+def test_br_g_32_native_return_requires_worker_exit_and_exact_browser_receipt() -> None:
     bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
     command = json.dumps({
         "schema_version": BRIDGE_SCHEMA_VERSION,
@@ -1328,11 +1329,150 @@ def test_br_g_32_native_return_is_reaped_on_admission_only_after_owner_exit() ->
     owner.join(1.0)
 
     assert not owner.is_alive()
-    assert responses[0]["ok"] is True
-    assert responses[1]["error"]["code"] == "bridge_busy"
-    assert bridge._admitted == 1
+    assert responses[0]["response"]["ok"] is True
+    response_token = responses[0]["response_token"]
+    assert isinstance(response_token, str)
+    assert responses[1]["response_token"] is None
+    assert responses[1]["response"]["error"]["code"] == "bridge_busy"
+    with pytest.raises(TimeoutError, match="did not quiesce"):
+        bridge.wait_for_handlers(0.01)
+    assert bridge._dispatch_native(f"ack:{response_token}") is True
+    assert bridge._dispatch_native(f"ack:{response_token}") is False
+    bridge.wait_for_handlers(1.0)
     assert bridge.dispatch(command)["ok"] is True
-    assert bridge._admitted == 0
+
+
+def test_br_g_32_duplicate_native_token_cannot_receipt_an_earlier_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {},
+    })
+    monkeypatch.setattr(
+        bridge_module,
+        "uuid4",
+        lambda: SimpleNamespace(hex="a" * 32),
+    )
+    responses = []
+
+    for _ in range(2):
+        owner = Thread(
+            target=lambda: responses.append(bridge._dispatch_native(command))
+        )
+        owner.start()
+        owner.join(1.0)
+        assert not owner.is_alive()
+
+    assert responses[0]["response_token"] == "a" * 32
+    assert responses[0]["response"]["ok"] is True
+    assert responses[1]["response_token"] is None
+    assert responses[1]["response"]["error"]["code"] == "bridge_busy"
+    assert bridge._dispatch_native("ack:" + ("a" * 32)) is True
+    bridge.wait_for_handlers(1.0)
+
+
+def test_br_g_32_cleanup_receipt_bypasses_saturation_but_not_worker_exit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(bridge_module, "_MAX_ADMITTED_HANDLERS", 1)
+    bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {},
+    })
+    returned = Event()
+    release_owner = Event()
+    responses: list[dict[str, object]] = []
+
+    def run() -> None:
+        responses.append(bridge._dispatch_native(command))
+        returned.set()
+        assert release_owner.wait(1.0)
+
+    owner = Thread(target=run)
+    owner.start()
+    assert returned.wait(1.0)
+    token = responses[0]["response_token"]
+    assert isinstance(token, str)
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_busy"
+
+    assert bridge._dispatch_native("ack:" + ("0" * 32)) is False
+    assert bridge._dispatch_native(f"ack:{token}") is True
+    assert bridge.dispatch(command)["error"]["code"] == "bridge_busy"
+
+    release_owner.set()
+    owner.join(1.0)
+    assert not owner.is_alive()
+    bridge.wait_for_handlers(1.0)
+    assert bridge.dispatch(command)["ok"] is True
+
+
+def test_br_g_32_document_retirement_releases_unacknowledged_dead_workers() -> None:
+    bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {},
+    })
+    responses: list[dict[str, object]] = []
+    owner = Thread(target=lambda: responses.append(bridge._dispatch_native(command)))
+    owner.start()
+    owner.join(1.0)
+    assert not owner.is_alive()
+    with pytest.raises(TimeoutError, match="did not quiesce"):
+        bridge.wait_for_handlers(0.01)
+
+    bridge._retire_document_responses()
+
+    bridge.wait_for_handlers(1.0)
+    assert bridge._dispatch_native(
+        f"ack:{responses[0]['response_token']}"
+    ) is False
+    assert bridge.dispatch(command)["ok"] is True
+
+
+def test_br_g_32_document_retirement_refuses_a_preempted_native_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {},
+    })
+    entered_token_generation = Event()
+    resume_token_generation = Event()
+    responses: list[dict[str, object]] = []
+
+    class DelayedToken:
+        @property
+        def hex(self) -> str:
+            entered_token_generation.set()
+            assert resume_token_generation.wait(1.0)
+            return "a" * 32
+
+    monkeypatch.setattr(bridge_module, "uuid4", lambda: DelayedToken())
+    owner = Thread(target=lambda: responses.append(bridge._dispatch_native(command)))
+    owner.start()
+    assert entered_token_generation.wait(1.0)
+
+    bridge._retire_document_responses()
+    resume_token_generation.set()
+    owner.join(1.0)
+
+    assert not owner.is_alive()
+    assert responses[0]["response_token"] is None
+    assert responses[0]["response"]["error"]["code"] == "bridge_unavailable"
+    bridge.wait_for_handlers(1.0)
+    assert bridge.dispatch(command)["ok"] is True
 
 
 def test_br_g_32_direct_dispatch_does_not_reserve_native_worker_lifetime() -> None:
@@ -1347,7 +1487,9 @@ def test_br_g_32_direct_dispatch_does_not_reserve_native_worker_lifetime() -> No
     for _ in range(65):
         assert bridge.dispatch(command)["ok"] is True
     assert bridge._admitted == 0
-    assert bridge._dispatch_native(command)["error"]["code"] == "internal_error"
+    native = bridge._dispatch_native(command)
+    assert native["response_token"] is None
+    assert native["response"]["error"]["code"] == "internal_error"
     assert bridge._admitted == 0
 
 

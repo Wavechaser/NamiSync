@@ -54,6 +54,16 @@ async function turns(count = 12) {
   }
 }
 
+async function waitUntil(predicate, context) {
+  for (let turn = 0; turn < 100; turn += 1) {
+    if (predicate()) {
+      return;
+    }
+    await Promise.resolve();
+  }
+  assert.fail(context);
+}
+
 
 const timers = new Map();
 const scheduledDelays = [];
@@ -101,6 +111,9 @@ let inspectReleaseDispatch = null;
 testWindow.pywebview = {
   api: {
     dispatch(requestJson) {
+      if (requestJson.startsWith("ack:")) {
+        return Promise.resolve(true);
+      }
       const pending = deferred();
       const request = JSON.parse(requestJson);
       const invocation = { request, ...pending };
@@ -156,7 +169,11 @@ testWindow.pywebview = {
       } else {
         requests.push(invocation);
       }
-      return pending.promise;
+      return pending.promise.then((response) => ({
+        transport_version: 1,
+        response_token: null,
+        response,
+      }));
     },
   },
 };
@@ -2122,7 +2139,10 @@ const stopExhaustedRelease = bridge.startTaskDrain(
 );
 const exhaustedRelease0 = await nextRequest(exhaustedReleaseDrainStart);
 success(exhaustedRelease0, [terminalRecord(session("d"))]);
-await turns(40);
+await waitUntil(
+  () => exhaustedReleaseRefusals.length === 1,
+  "exhausted release did not expose its public retry",
+);
 assert.equal(releaseRequests.length, exhaustedReleaseStart + 4);
 assert.equal(exhaustedReleaseRefusals.length, 1);
 assert.equal(

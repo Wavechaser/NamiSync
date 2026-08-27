@@ -53,6 +53,17 @@ claims explicit, independently reviewable, and regression-backed.
   terminally release stale callbacks without changing the nine-command map.
   Required readiness always dispatches first: appearance publication remains
   revoked until the exact current challenge opens the document.
+- Admitted each complete Python response while taking one detached hostile
+  snapshot against the exact 8 MiB canonical-JSON wall, then retired the raw
+  result before primitive projection. Task drains now consume only their
+  longest admitted update prefix, so an oversized batch cannot lose reliable
+  truth or earn a premature terminal receipt; reentrant task mutation refuses
+  before it can replace, supersede, or self-block that captured population.
+- Extended native return custody through both exact worker exit and an exact
+  post-clone browser receipt. Document retirement is generation-linearized,
+  late timeout responses still clean up, and an uncertain first receipt can
+  retry without a delayed finite-LRU false refusal. Receipt-token collisions
+  are unreceipted and cannot release an earlier response's custody.
 
 - Retired callback traceback, cause, and context links whenever the core runner
   consumes or supersedes an error. Nested exception-group members are traversed

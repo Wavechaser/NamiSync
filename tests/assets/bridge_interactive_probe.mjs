@@ -6,6 +6,11 @@ class TestWindow {
   constructor() {
     this.listeners = new Map();
     this.requests = [];
+    this.acknowledgments = [];
+    this.acknowledgedTokens = new Set();
+    this.nativeResponses = new Map();
+    this.nextResponseToken = 1;
+    this.loseNextAcknowledgment = false;
     this.pywebview = {
       api: {
         dispatch: (requestJson) => this.dispatch(requestJson),
@@ -28,6 +33,20 @@ class TestWindow {
   }
 
   dispatch(requestJson) {
+    if (requestJson.startsWith("ack:")) {
+      this.acknowledgments.push(requestJson);
+      const duplicate = this.acknowledgedTokens.has(requestJson);
+      this.acknowledgedTokens.add(requestJson);
+      const acknowledgedResponse = this.nativeResponses.get(requestJson);
+      if (acknowledgedResponse !== undefined) {
+        acknowledgedResponse.response.result = "mutated after browser detachment";
+      }
+      if (this.loseNextAcknowledgment) {
+        this.loseNextAcknowledgment = false;
+        return Promise.reject(new Error("synthetic lost acknowledgment"));
+      }
+      return Promise.resolve(!duplicate);
+    }
     const request = JSON.parse(requestJson);
     this.requests.push(request);
     if (request.command === "reject_once") {
@@ -36,12 +55,19 @@ class TestWindow {
     const result = request.command === "pick_folder"
       ? { id: `slot-${"2".repeat(32)}`, display: "Selected 🌊" }
       : request.payload;
-    return Promise.resolve({
-      schema_version: 1,
-      request_id: request.request_id,
-      ok: true,
-      result,
-    });
+    const responseToken = (this.nextResponseToken++).toString(16).padStart(32, "0");
+    const nativeResponse = {
+      transport_version: 1,
+      response_token: responseToken,
+      response: {
+        schema_version: 1,
+        request_id: request.request_id,
+        ok: true,
+        result,
+      },
+    };
+    this.nativeResponses.set(`ack:${responseToken}`, nativeResponse);
+    return Promise.resolve(nativeResponse);
   }
 }
 
@@ -99,6 +125,17 @@ assert.deepEqual(selected, {
   display: "Selected 🌊",
 });
 assert.equal(testWindow.requests.at(-1).command, "pick_folder");
+assert.equal(testWindow.acknowledgments.length, 2);
+
+testWindow.loseNextAcknowledgment = true;
+const retriedAcknowledgment = await bridge.pickFolder("target");
+assert.equal(retriedAcknowledgment.id, `slot-${"2".repeat(32)}`);
+assert.equal(testWindow.acknowledgments.length, 4);
+assert.equal(
+  testWindow.acknowledgments[2],
+  testWindow.acknowledgments[3],
+  "a lost cleanup response retries the exact token",
+);
 
 const beforeRefusal = testWindow.requests.length;
 await assert.rejects(

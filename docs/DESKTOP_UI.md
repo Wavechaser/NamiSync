@@ -860,6 +860,14 @@ uncertain delivery, not uncertain commit; `M1_BRIDGE.md` owns the corresponding
 retry and recovery rules. The packaged static-asset server is not an API or
 event channel.
 
+Each native response carries a private transport token around the unchanged
+bridge envelope. JavaScript validates the wrapper, clones the response, and
+then acknowledges that token; provider mutation during acknowledgment cannot
+change the delivered clone. A late response that loses a timeout race still
+performs the same clone-and-receipt cleanup. Reinjection advances the bridge
+generation so an older worker cannot publish newly retained custody into the
+successor page.
+
 The frontend places the restrictive CSP meta element first in `<head>` so no
 earlier resource escapes it; `frame-src 'none'` independently blocks frames
 during initial parsing before the native hooks exist. DOM APIs such as

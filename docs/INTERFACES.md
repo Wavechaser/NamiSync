@@ -572,15 +572,16 @@ hostile-name round trip. Before `create_window`, host preparation pins
 `ALLOW_DOWNLOADS=False`, and `REMOTE_DEBUGGING_PORT=None`, passes
 `debug=False`, and performs a read-only registry probe for the WebView2 runtime.
 
-Native exposed calls retain their admitted handler position through the actual
-pywebview worker's exit, including serialization and native return delivery.
-The host selects that lifetime explicitly; ordinary direct `dispatch` calls
-still release their position when the call returns. Native positions are keyed
-by the exact `Thread` object and reclaimed only after it is no longer alive,
-on later admission or during shutdown. Shutdown joins outside the bridge lock;
-an expired close deadline retains the position and leaves close retryable.
-This bounds admitted return custody, not pywebview's pre-admission thread
-creation or renderer allocation; BR-G-45 remains separately open.
+Native exposed calls retain their admitted handler position through both the
+actual pywebview worker's exit and an exact browser receipt sent after detached
+JSON cloning. The host selects that lifetime explicitly; ordinary direct
+`dispatch` calls still release their position when the call returns. A reload
+advances one bridge generation and retires earlier browser custody atomically,
+including entries paused before reservation. Shutdown joins exact worker
+objects outside the bridge lock; an expired close deadline retains the position
+and leaves close retryable. This bounds admitted return custody, not pywebview's
+pre-admission thread creation, renderer allocation, or representation-specific
+copy bytes; BR-G-45 remains separately open.
 Before exposing the bridge, the host installs a per-window callback registry
 that discards only pywebview's unused synchronous `None` entries. Callable
 asynchronous entries keep their upstream lookup/delete behavior. Pinned-source

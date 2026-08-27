@@ -37,11 +37,18 @@ class TestWindow {
   }
 
   dispatch(requestJson) {
+    if (requestJson.startsWith("ack:")) {
+      return Promise.resolve(true);
+    }
     const request = JSON.parse(requestJson);
     this.requests.push(request);
     const handler = this.handlers.shift();
     assert.equal(typeof handler, "function", "every cosmetic request is expected");
-    return handler(request);
+    return Promise.resolve(handler(request)).then((response) => ({
+      transport_version: 1,
+      response_token: null,
+      response,
+    }));
   }
 }
 

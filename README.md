@@ -57,9 +57,12 @@ module results are detached and revalidated at their distinct workflow seams;
 only an exact PLAN fact carried by an exact error issued by the current plan
 admission family becomes typed `REFUSED+UNRUN`. Unissued, cross-family, or
 invalid signals fail without saving a plan.
-This narrow prerequisite does not price construction, sorting, indexes,
-previews, codecs, native/browser copies, or complete task graphs; those remain
-checkpoint-4 model work alongside the product surfaces and task lifecycle.
+Python bridge responses now stop at an exact 8 MiB canonical-JSON occurrence
+wall before native construction; drains commit only the longest admitted update
+prefix, and native positions remain charged through worker exit and exact
+browser receipt. Construction, sorting, indexes, previews, representation-
+specific native/browser bytes, and complete task graphs remain checkpoint-4
+model work alongside the product surfaces and task lifecycle.
 
 Accepted H2 work also includes server-owned filename/size/mtime sibling sorting
 for plan and inventory views, with path-key order for new views and reset;

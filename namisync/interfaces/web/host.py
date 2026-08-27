@@ -875,6 +875,7 @@ def run_desktop(
                 state.refuse(error)
                 raise
             window.events.before_load += startup_gate.begin_generation
+            window.events.before_load += dispatcher._retire_document_responses
 
             def bind_document_channel() -> None:
                 nonlocal document_channel

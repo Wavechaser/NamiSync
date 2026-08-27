@@ -6,16 +6,18 @@ import json
 import logging
 import math
 import re
-from collections.abc import Callable, Mapping, MutableMapping
+from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime
-from enum import Enum
 from pathlib import Path
 from threading import Condition, Lock, Thread, current_thread
 from time import monotonic
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import SplitResult, urlsplit
+from uuid import uuid4
 
+from namisync.dispatcher import retire_exception_graph
+from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.workflows.views import (
     OperationResultView, SessionEventView, SessionRecordView,
     validate_operation_result_view, validate_session_event_view,
@@ -49,12 +51,29 @@ _VIEW_VALIDATORS = {
 
 BRIDGE_SCHEMA_VERSION = 1
 _MAX_COMMAND_BYTES = 64 * 1024
+MAX_BRIDGE_RESPONSE_JSON_BYTES = 8 * 1024 * 1024
+_SUCCESS_RESPONSE_FIXED_CANONICAL_BYTES = len(
+    json.dumps(
+        {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": "0" * 32,
+            "ok": True,
+            "result": None,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8")
+) - len("null")
 # Sized for one ordinary long poll per each of 48 retained tasks plus 16 shared
 # calls. Positions are neither partitioned nor reserved; saturation is
 # `bridge_busy`.
 _MAX_ADMITTED_HANDLERS = 64
 _HANDLER_WAIT_TIMEOUT_SECONDS = 35.0
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
+_NATIVE_RESPONSE_ACK = re.compile(r"ack:([0-9a-f]{32})")
+_NATIVE_TRANSPORT_VERSION = 1
 _COMMAND_NAME = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
 _ERROR_MESSAGES = {
     "invalid_request": "The desktop request is invalid.",
@@ -64,6 +83,7 @@ _ERROR_MESSAGES = {
     "unknown_command": "This desktop action is not available.",
     "invalid_payload": "The desktop action contains invalid data.",
     "request_too_large": "The desktop request is too large.",
+    "response_too_large": "The desktop response is too large.",
     "slot_unavailable": (
         "That folder selection is no longer available. Choose both folders again."
     ),
@@ -88,6 +108,24 @@ _ERROR_MESSAGES = {
     ),
     "internal_error": "NamiSync could not complete the desktop action.",
 }
+_MIN_RESPONSE_JSON_BYTES = max(
+    len(
+        json.dumps(
+            {
+                "schema_version": BRIDGE_SCHEMA_VERSION,
+                "request_id": request_id,
+                "ok": False,
+                "error": {"code": code, "message": message},
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        ).encode("utf-8")
+    )
+    for request_id in (None, "0" * 32)
+    for code, message in _ERROR_MESSAGES.items()
+)
 _REQUIRED_WEBVIEW_SETTINGS: tuple[tuple[str, object], ...] = (
     ("OPEN_EXTERNAL_LINKS_IN_BROWSER", False),
     ("ALLOW_FILE_URLS", False),
@@ -115,6 +153,55 @@ class BridgeProtocolError(ValueError):
 
 class BridgeOriginError(PermissionError):
     """Native document authority is unavailable or outside the packaged origin."""
+
+
+class BridgeResponseTooLargeError(BridgeProtocolError):
+    """The complete canonical-JSON response occurrence graph exceeds its wall."""
+
+
+@dataclass(slots=True)
+class _JsonByteBudget:
+    remaining: int
+
+    def consume(self, count: int) -> None:
+        if count > self.remaining:
+            raise BridgeResponseTooLargeError(
+                "structured bridge response exceeds its JSON byte ceiling"
+            )
+        self.remaining -= count
+
+
+@dataclass(slots=True)
+class _NativeResponseCustody:
+    owner: Thread
+    browser_released: bool = False
+
+
+_TASK_DRAIN_ADMISSION_ISSUER = object()
+
+
+@dataclass(slots=True)
+class _AdmittedTaskDrainResponse:
+    result: TaskDrainView | None
+    issuer: object
+
+
+def _peek_task_drain_response(value: object) -> TaskDrainView:
+    if (
+        type(value) is not _AdmittedTaskDrainResponse
+        or value.issuer is not _TASK_DRAIN_ADMISSION_ISSUER
+        or type(value.result) is not TaskDrainView
+    ):
+        raise TypeError("task drain lacks exact bridge response admission")
+    return value.result
+
+
+def _consume_task_drain_response(value: object) -> TaskDrainView:
+    result = _peek_task_drain_response(value)
+    assert type(value) is _AdmittedTaskDrainResponse
+    value.result = None
+    value.issuer = None
+    return result
 
 
 class WebView2Unavailable(RuntimeError):
@@ -544,34 +631,80 @@ class BridgeDispatcher:
         self._handler_condition = Condition(Lock())
         self._accepting = True
         self._admitted = 0
-        self._native_return_owners: set[Thread] = set()
+        self._native_responses: dict[str, _NativeResponseCustody] = {}
+        self._document_generation = 0
 
     def dispatch(self, command_json: str) -> dict[str, object]:
         """Return one exact response envelope; never export a Python failure."""
 
-        return self._dispatch(command_json, native_owner=None)
+        return self._dispatch(command_json, native_custody=None)
 
-    def _dispatch_native(self, command_json: str) -> dict[str, object]:
-        """Retain admitted return custody until the dedicated worker exits."""
+    def _dispatch_native(self, command_json: str) -> object:
+        """Retain native/browser custody until worker exit and exact receipt."""
+
+        if type(command_json) is str and len(command_json) == 36:
+            acknowledgment = _NATIVE_RESPONSE_ACK.fullmatch(command_json)
+            if acknowledgment is not None:
+                return self._acknowledge_native_response(
+                    acknowledgment.group(1)
+                )
 
         owner = current_thread()
         if type(owner) is not Thread:
-            return self._failure(None, None, "internal_error")
-        return self._dispatch(command_json, native_owner=owner)
+            return self._native_response(
+                None,
+                self._failure(None, None, "internal_error"),
+            )
+        with self._handler_condition:
+            native_generation = self._document_generation
+        try:
+            response_token = uuid4().hex
+            if (
+                type(response_token) is not str
+                or _OPAQUE_ID.fullmatch(response_token) is None
+            ):
+                raise RuntimeError("native response token generation failed")
+        except BaseException as error:
+            retire_exception_graph(error)
+            return self._native_response(
+                None,
+                self._failure(None, None, "internal_error"),
+            )
+        custody = _NativeResponseCustody(owner)
+        response = self._dispatch(
+            command_json,
+            native_custody=custody,
+            native_token=response_token,
+            native_generation=native_generation,
+        )
+        with self._handler_condition:
+            admitted_token = (
+                response_token
+                if self._native_responses.get(response_token) is custody
+                else None
+            )
+        return self._native_response(admitted_token, response)
 
     def _dispatch(
         self,
         command_json: str,
         *,
-        native_owner: Thread | None,
+        native_custody: _NativeResponseCustody | None,
+        native_token: str | None = None,
+        native_generation: int | None = None,
     ) -> dict[str, object]:
-        refusal = self._reserve_handler(native_owner)
+        refusal = self._reserve_handler(
+            native_custody,
+            native_token,
+            native_generation,
+        )
         if refusal is not None:
             return self._failure(None, None, refusal)
         try:
             try:
                 self._document.require_trusted()
-            except BaseException:
+            except BaseException as error:
+                retire_exception_graph(error)
                 return self._failure(None, None, "bridge_unavailable")
 
             if type(command_json) is not str:
@@ -580,7 +713,8 @@ class BridgeDispatcher:
                 return self._failure(None, None, "request_too_large")
             try:
                 command_size = len(command_json.encode("utf-8"))
-            except UnicodeEncodeError:
+            except UnicodeEncodeError as error:
+                retire_exception_graph(error)
                 return self._failure(None, None, "invalid_request")
             if command_size > _MAX_COMMAND_BYTES:
                 return self._failure(None, None, "request_too_large")
@@ -590,7 +724,8 @@ class BridgeDispatcher:
                     object_pairs_hook=_unique_object,
                     parse_constant=lambda value: _reject_json_constant(value),
                 )
-            except Exception:
+            except Exception as error:
+                retire_exception_graph(error)
                 return self._failure(None, None, "invalid_request")
 
             request_id = _recover_request_id(raw)
@@ -610,7 +745,8 @@ class BridgeDispatcher:
             name = raw["command"]
             try:
                 _require_json_value(name)
-            except BridgeProtocolError:
+            except BridgeProtocolError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, None, "invalid_request")
             if (
                 type(name) is not str
@@ -624,7 +760,8 @@ class BridgeDispatcher:
 
             try:
                 admission = self._admit_command(name)
-            except BaseException:
+            except BaseException as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "bridge_unavailable")
             if type(admission) is AdmissionRefused:
                 return self._failure(request_id, name, "bridge_unavailable")
@@ -636,7 +773,8 @@ class BridgeDispatcher:
                 return self._failure(request_id, name, "invalid_payload")
             try:
                 _require_json_value(payload)
-            except BridgeProtocolError:
+            except BridgeProtocolError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "invalid_payload")
 
             from .commands import (
@@ -654,44 +792,84 @@ class BridgeDispatcher:
             from .slots import SlotUnavailableError
 
             try:
-                result = spec.invoke(
+                result = spec.invoke_for_bridge(
                     payload,
                     context=admission.context,
                 )
-            except CommandAdmissionError:
+            except CommandAdmissionError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "bridge_unavailable")
-            except CommandPayloadError:
+            except CommandPayloadError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "invalid_payload")
-            except SlotUnavailableError:
+            except SlotUnavailableError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "slot_unavailable")
-            except PickerUnavailableError:
+            except PickerUnavailableError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "picker_unavailable")
-            except CommandConflictError:
+            except CommandConflictError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "command_conflict")
-            except PlanningRefusedError:
+            except PlanningRefusedError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "planning_refused")
-            except TaskUnavailableError:
+            except TaskUnavailableError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "task_unavailable")
-            except DrainBusyError:
+            except DrainBusyError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "drain_busy")
-            except ObservationConflictError:
+            except ObservationConflictError as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "observation_conflict")
-            except BaseException:
+            except BaseException as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "internal_error")
             try:
-                result = to_primitive_view(result)
-            except BaseException:
+                if type(result) is _AdmittedTaskDrainResponse:
+                    captured_result = _consume_task_drain_response(result)
+                else:
+                    captured_result = snapshot_bridge_response_result(
+                        result,
+                        request_id,
+                        MAX_BRIDGE_RESPONSE_JSON_BYTES,
+                    )
+            except BridgeResponseTooLargeError as error:
+                retire_exception_graph(error)
+                return self._failure(request_id, name, "response_too_large")
+            except BaseException as error:
+                retire_exception_graph(error)
                 return self._failure(request_id, name, "internal_error")
+            del result
+            try:
+                result = _project_response_value(captured_result, set())
+            except BaseException as error:
+                retire_exception_graph(error)
+                return self._failure(request_id, name, "internal_error")
+            del captured_result
             return {
                 "schema_version": BRIDGE_SCHEMA_VERSION,
                 "request_id": request_id,
                 "ok": True,
                 "result": result,
             }
-        except BaseException:
+        except BaseException as error:
+            retire_exception_graph(error)
             return self._failure(None, None, "internal_error")
         finally:
-            self._release_handler(native_owner)
+            self._release_handler(native_token)
+
+    @staticmethod
+    def _native_response(
+        response_token: str | None,
+        response: dict[str, object],
+    ) -> dict[str, object]:
+        return {
+            "transport_version": _NATIVE_TRANSPORT_VERSION,
+            "response_token": response_token,
+            "response": response,
+        }
 
     def _failure(
         self,
@@ -706,8 +884,8 @@ class BridgeDispatcher:
                 _safe_log_command(command),
                 code,
             )
-        except BaseException:
-            pass
+        except BaseException as error:
+            retire_exception_graph(error)
         return {
             "schema_version": BRIDGE_SCHEMA_VERSION,
             "request_id": request_id,
@@ -718,39 +896,101 @@ class BridgeDispatcher:
             },
         }
 
-    def _reserve_handler(self, native_owner: Thread | None) -> str | None:
+    def _reserve_handler(
+        self,
+        native_custody: _NativeResponseCustody | None,
+        native_token: str | None,
+        native_generation: int | None,
+    ) -> str | None:
         with self._handler_condition:
             self._reap_native_returns_locked()
             if not self._accepting:
                 return "bridge_unavailable"
+            direct_call = (
+                native_custody is None
+                and native_token is None
+                and native_generation is None
+            )
+            native_call = (
+                native_custody is not None
+                and native_token is not None
+                and native_generation is not None
+            )
+            if not (direct_call or native_call):
+                return "bridge_unavailable"
+            if (
+                native_generation is not None
+                and native_generation != self._document_generation
+            ):
+                return "bridge_unavailable"
             if (
                 self._admitted >= _MAX_ADMITTED_HANDLERS
-                or native_owner in self._native_return_owners
+                or (
+                    native_custody is not None
+                    and any(
+                        custody.owner is native_custody.owner
+                        for custody in self._native_responses.values()
+                    )
+                )
+                or native_token in self._native_responses
             ):
                 return "bridge_busy"
             self._admitted += 1
-            if native_owner is not None:
-                self._native_return_owners.add(native_owner)
+            if native_custody is not None:
+                assert native_token is not None
+                self._native_responses[native_token] = native_custody
             return None
 
-    def _release_handler(self, native_owner: Thread | None) -> None:
+    def _release_handler(self, native_token: str | None) -> None:
         with self._handler_condition:
-            if native_owner is None:
+            if native_token is None:
                 self._admitted -= 1
             self._handler_condition.notify_all()
 
     def _reap_native_returns_locked(self) -> None:
-        finished = {
-            owner for owner in self._native_return_owners if not owner.is_alive()
-        }
-        self._native_return_owners.difference_update(finished)
+        finished = tuple(
+            token
+            for token, custody in self._native_responses.items()
+            if custody.browser_released and not custody.owner.is_alive()
+        )
+        for token in finished:
+            del self._native_responses[token]
         self._admitted -= len(finished)
+
+    def _acknowledge_native_response(self, response_token: str) -> bool:
+        try:
+            self._document.require_trusted()
+        except BaseException as error:
+            retire_exception_graph(error)
+            return False
+        with self._handler_condition:
+            custody = self._native_responses.get(response_token)
+            if custody is None:
+                return False
+            custody.browser_released = True
+            self._reap_native_returns_locked()
+            self._handler_condition.notify_all()
+            return True
+
+    def _retire_document_responses(self) -> None:
+        """Retire browser custody invalidated by a document generation change."""
+
+        with self._handler_condition:
+            self._document_generation += 1
+            for custody in self._native_responses.values():
+                custody.browser_released = True
+            self._reap_native_returns_locked()
+            self._handler_condition.notify_all()
 
     def begin_close(self) -> None:
         """Reject every later dispatch while admitted handlers settle."""
 
         with self._handler_condition:
             self._accepting = False
+            for custody in self._native_responses.values():
+                custody.browser_released = True
+            self._reap_native_returns_locked()
+            self._handler_condition.notify_all()
 
     def wait_for_handlers(
         self,
@@ -773,7 +1013,11 @@ class BridgeDispatcher:
                     raise TimeoutError(
                         "bridge handlers did not quiesce before the deadline"
                     )
-                owners = tuple(self._native_return_owners)
+                owners = tuple(
+                    custody.owner
+                    for custody in self._native_responses.values()
+                    if custody.owner.is_alive()
+                )
                 if not owners:
                     self._handler_condition.wait(remaining)
                     continue
@@ -784,57 +1028,170 @@ class BridgeDispatcher:
 def to_primitive_view(value: object) -> object:
     """Recursively encode only approved public views as JSON-native data."""
 
-    from .commands import PUBLIC_VIEW_DATACLASSES, PUBLIC_VIEW_ENUMS
+    from .commands import PUBLIC_VIEW_DATACLASSES
 
-    return _to_primitive_view(
+    snapshot = _snapshot_response_value(
         value,
         set(),
         PUBLIC_VIEW_DATACLASSES,
-        PUBLIC_VIEW_ENUMS,
+        None,
+    )
+    _validate_owned_response_tree(snapshot, set())
+    return _project_response_value(snapshot, set())
+
+
+def snapshot_bridge_response_result(
+    value: object,
+    request_id: str,
+    maximum_json_bytes: int = MAX_BRIDGE_RESPONSE_JSON_BYTES,
+) -> object:
+    """Return one detached, validated response result admitted by exact bytes."""
+
+    if type(request_id) is not str or _OPAQUE_ID.fullmatch(request_id) is None:
+        raise BridgeProtocolError("successful response request id is invalid")
+    if (
+        type(maximum_json_bytes) is not int
+        or maximum_json_bytes < _MIN_RESPONSE_JSON_BYTES
+        or maximum_json_bytes > MAX_BRIDGE_RESPONSE_JSON_BYTES
+    ):
+        raise ValueError("bridge response JSON ceiling is outside the product range")
+    from .commands import PUBLIC_VIEW_DATACLASSES
+
+    budget = _JsonByteBudget(maximum_json_bytes)
+    budget.consume(_SUCCESS_RESPONSE_FIXED_CANONICAL_BYTES)
+    snapshot = _snapshot_response_value(
+        value,
+        set(),
+        PUBLIC_VIEW_DATACLASSES,
+        budget,
+    )
+    _validate_owned_response_tree(snapshot, set())
+    return snapshot
+
+
+def snapshot_task_drain_response_prefix(
+    task_id: str,
+    session_id: str,
+    drain_id: str,
+    updates: Iterable[TaskUpdateView],
+) -> TaskDrainView:
+    """Capture each source update once and return its longest admitted prefix."""
+
+    return _consume_task_drain_response(
+        _admit_task_drain_response_prefix(
+            task_id,
+            session_id,
+            drain_id,
+            updates,
+        )
     )
 
 
-def _to_primitive_view(
+def _admit_task_drain_response_prefix(
+    task_id: str,
+    session_id: str,
+    drain_id: str,
+    updates: Iterable[TaskUpdateView],
+) -> _AdmittedTaskDrainResponse:
+    """Transfer one validated longest-prefix owner without a second copy."""
+
+    from .commands import PUBLIC_VIEW_DATACLASSES
+
+    budget = _JsonByteBudget(MAX_BRIDGE_RESPONSE_JSON_BYTES)
+    budget.consume(_SUCCESS_RESPONSE_FIXED_CANONICAL_BYTES)
+    empty = _snapshot_response_value(
+        TaskDrainView(task_id, session_id, drain_id, ()),
+        set(),
+        PUBLIC_VIEW_DATACLASSES,
+        budget,
+    )
+    if type(empty) is not TaskDrainView:
+        raise RuntimeError("bridge response admission changed task drain type")
+    admitted: list[TaskUpdateView] = []
+    for update in updates:
+        try:
+            if admitted:
+                budget.consume(1)
+            captured = _snapshot_response_value(
+                update,
+                set(),
+                PUBLIC_VIEW_DATACLASSES,
+                budget,
+            )
+        except BridgeResponseTooLargeError:
+            if not admitted:
+                raise
+            break
+        if type(captured) not in {TaskEventUpdateView, TaskRecordUpdateView}:
+            raise RuntimeError("bridge response admission changed task update type")
+        admitted.append(captured)
+    result = TaskDrainView(
+        empty.task_id,
+        empty.session_id,
+        empty.drain_id,
+        tuple(admitted),
+    )
+    _validate_owned_response_tree(result, set())
+    return _AdmittedTaskDrainResponse(result, _TASK_DRAIN_ADMISSION_ISSUER)
+
+
+def _snapshot_response_value(
     value: object,
     active: set[int],
     approved_dataclasses: frozenset[type[object]],
-    approved_enums: frozenset[type[object]],
+    budget: _JsonByteBudget | None,
 ) -> object:
-    if value is None or type(value) in {bool, int, str}:
-        if type(value) is str:
-            try:
-                value.encode("utf-8")
-            except UnicodeEncodeError as error:
-                raise BridgeProtocolError(
-                    "structured bridge data contains invalid Unicode"
-                ) from error
+    """Capture each hostile occurrence once, then validate only owned state."""
+
+    if value is None:
+        _consume_json_bytes(budget, 4)
+        return value
+    if type(value) is bool:
+        _consume_json_bytes(budget, 4 if value else 5)
+        return value
+    if type(value) is int:
+        if (
+            value < -MAX_JAVASCRIPT_SAFE_INTEGER
+            or value > MAX_JAVASCRIPT_SAFE_INTEGER
+        ):
+            raise BridgeProtocolError(
+                "structured bridge data contains an unsafe integer"
+            )
+        _consume_json_bytes(budget, len(str(value)))
+        return value
+    if type(value) is str:
+        _consume_canonical_json_string(value, budget)
         return value
     if type(value) is float:
-        if math.isfinite(value):
-            return value
-        raise BridgeProtocolError(
-            "structured bridge data contains a non-finite number"
+        if not math.isfinite(value):
+            raise BridgeProtocolError(
+                "structured bridge data contains a non-finite number"
+            )
+        _consume_json_bytes(
+            budget,
+            len(
+                json.dumps(
+                    value,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                    allow_nan=False,
+                )
+            ),
         )
+        return value
     if type(value) is datetime:
-        if value.tzinfo is None or value.utcoffset() is None:
+        if value.tzinfo is None:
             raise BridgeProtocolError(
                 "structured bridge data contains a naive datetime"
             )
-        return value.isoformat()
-    if isinstance(value, Enum):
-        if type(value) not in approved_enums:
+        projected = value.isoformat()
+        parsed = datetime.fromisoformat(projected)
+        if parsed.utcoffset() is None:
             raise BridgeProtocolError(
-                "structured bridge data contains an unapproved enum"
+                "structured bridge data contains a naive datetime"
             )
-        if value.value is value:
-            raise BridgeProtocolError("structured bridge data is recursive")
-        return _to_primitive_view(
-            value.value,
-            active,
-            approved_dataclasses,
-            approved_enums,
-        )
-
+        _consume_canonical_json_string(projected, budget)
+        return projected
     identity = id(value)
     if identity in active:
         raise BridgeProtocolError("structured bridge data is recursive")
@@ -843,64 +1200,205 @@ def _to_primitive_view(
             raise BridgeProtocolError(
                 "structured bridge data contains an unapproved dataclass"
             )
-        validator = _VIEW_VALIDATORS.get(type(value))
-        if validator is not None:
-            try:
-                validator(value)
-            except (TypeError, ValueError) as error:
-                raise BridgeProtocolError("structured bridge view is invalid") from error
         active.add(identity)
         try:
-            return {
-                field.name: _to_primitive_view(
+            _consume_json_bytes(budget, 2)
+            captured: dict[str, object] = {}
+            for index, field in enumerate(fields(value)):
+                if index:
+                    _consume_json_bytes(budget, 1)
+                _consume_canonical_json_string(field.name, budget)
+                _consume_json_bytes(budget, 1)
+                captured[field.name] = _snapshot_response_value(
                     getattr(value, field.name),
                     active,
                     approved_dataclasses,
-                    approved_enums,
+                    budget,
                 )
-                for field in fields(value)
-            }
         finally:
             active.remove(identity)
+        try:
+            snapshot = type(value)(**captured)
+        except (TypeError, ValueError) as error:
+            raise BridgeProtocolError(
+                "structured bridge view is invalid"
+            ) from error
+        return snapshot
     if isinstance(value, Mapping):
         active.add(identity)
         try:
-            encoded: dict[str, object] = {}
-            for key, item in value.items():
+            _consume_json_bytes(budget, 2)
+            captured_mapping: dict[str, object] = {}
+            for index, (key, item) in enumerate(value.items()):
                 if type(key) is not str:
                     raise BridgeProtocolError(
                         "structured bridge data contains a non-string object key"
                     )
-                try:
-                    key.encode("utf-8")
-                except UnicodeEncodeError as error:
+                if key in captured_mapping:
                     raise BridgeProtocolError(
-                        "structured bridge data contains invalid Unicode"
-                    ) from error
-                encoded[key] = _to_primitive_view(
+                        "structured bridge data contains a duplicate object key"
+                    )
+                if index:
+                    _consume_json_bytes(budget, 1)
+                _consume_canonical_json_string(key, budget)
+                _consume_json_bytes(budget, 1)
+                captured_mapping[key] = _snapshot_response_value(
                     item,
                     active,
                     approved_dataclasses,
-                    approved_enums,
+                    budget,
                 )
-            return encoded
+            return captured_mapping
         finally:
             active.remove(identity)
     if isinstance(value, (list, tuple)):
         active.add(identity)
         try:
-            return [
-                _to_primitive_view(
+            _consume_json_bytes(budget, 2)
+            captured_items = []
+            for index, item in enumerate(value):
+                if index:
+                    _consume_json_bytes(budget, 1)
+                captured_items.append(_snapshot_response_value(
                     item,
                     active,
                     approved_dataclasses,
-                    approved_enums,
+                    budget,
+                ))
+            if type(value) is tuple:
+                return tuple(captured_items)
+            return captured_items
+        finally:
+            active.remove(identity)
+    raise BridgeProtocolError("structured bridge data is not JSON-compatible")
+
+
+def _validate_owned_response_tree(value: object, active: set[int]) -> None:
+    """Invoke only the first complete public-view validator for each subtree."""
+
+    validator = _VIEW_VALIDATORS.get(type(value))
+    if validator is not None:
+        try:
+            validator(value)
+        except (TypeError, ValueError) as error:
+            raise BridgeProtocolError(
+                "structured bridge view is invalid"
+            ) from error
+        return
+    if value is None or type(value) in {bool, int, float, str}:
+        return
+    identity = id(value)
+    if identity in active:
+        raise BridgeProtocolError("structured bridge data is recursive")
+    if is_dataclass(value) and not isinstance(value, type):
+        active.add(identity)
+        try:
+            for field in fields(value):
+                _validate_owned_response_tree(getattr(value, field.name), active)
+        finally:
+            active.remove(identity)
+        return
+    if type(value) is dict:
+        active.add(identity)
+        try:
+            for item in value.values():
+                _validate_owned_response_tree(item, active)
+        finally:
+            active.remove(identity)
+        return
+    if type(value) in {list, tuple}:
+        active.add(identity)
+        try:
+            for item in value:
+                _validate_owned_response_tree(item, active)
+        finally:
+            active.remove(identity)
+        return
+    raise BridgeProtocolError("owned bridge response contains an invalid value")
+
+
+def _project_response_value(
+    value: object,
+    active: set[int],
+) -> object:
+    """Normalize a detached graph already admitted and revalidated above."""
+
+    if value is None or type(value) in {bool, int, float, str}:
+        return value
+    identity = id(value)
+    if identity in active:
+        raise BridgeProtocolError("structured bridge data is recursive")
+    if is_dataclass(value) and not isinstance(value, type):
+        active.add(identity)
+        try:
+            projected: dict[str, object] = {}
+            for field in fields(value):
+                projected[field.name] = _project_response_value(
+                    getattr(value, field.name),
+                    active,
                 )
+            return projected
+        finally:
+            active.remove(identity)
+    if type(value) is dict:
+        active.add(identity)
+        try:
+            for key, item in value.items():
+                value[key] = _project_response_value(item, active)
+            return value
+        finally:
+            active.remove(identity)
+    if type(value) is list:
+        active.add(identity)
+        try:
+            for index, item in enumerate(value):
+                value[index] = _project_response_value(item, active)
+            return value
+        finally:
+            active.remove(identity)
+    if type(value) is tuple:
+        active.add(identity)
+        try:
+            return [
+                _project_response_value(item, active)
                 for item in value
             ]
         finally:
             active.remove(identity)
     raise BridgeProtocolError("structured bridge data is not JSON-compatible")
+
+
+def _consume_json_bytes(budget: _JsonByteBudget | None, count: int) -> None:
+    if budget is not None:
+        budget.consume(count)
+
+
+def _consume_canonical_json_string(
+    value: str,
+    budget: _JsonByteBudget | None,
+) -> None:
+    """Count strict compact ensure_ascii=False JSON without a text copy."""
+
+    _consume_json_bytes(budget, 2)
+    for character in value:
+        codepoint = ord(character)
+        if 0xD800 <= codepoint <= 0xDFFF:
+            raise BridgeProtocolError(
+                "structured bridge data contains invalid Unicode"
+            )
+        if character in {'"', "\\", "\b", "\t", "\n", "\f", "\r"}:
+            count = 2
+        elif codepoint < 0x20:
+            count = 6
+        elif codepoint <= 0x7F:
+            count = 1
+        elif codepoint <= 0x7FF:
+            count = 2
+        elif codepoint <= 0xFFFF:
+            count = 3
+        else:
+            count = 4
+        _consume_json_bytes(budget, count)
 
 
 def _recover_request_id(value: object) -> str | None:

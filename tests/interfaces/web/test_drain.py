@@ -33,7 +33,11 @@ from namisync.dispatcher import (
 from namisync.dispatcher import event_bus as event_bus_module
 from namisync.interfaces import service as service_module
 from namisync.interfaces.service import NamiSyncService, PlanSession
-from namisync.interfaces.web.bridge import BRIDGE_SCHEMA_VERSION, to_primitive_view
+from namisync.interfaces.web.bridge import (
+    BRIDGE_SCHEMA_VERSION,
+    snapshot_task_drain_response_prefix,
+    to_primitive_view,
+)
 from namisync.interfaces.web import drain as drain_module
 from namisync.interfaces.web.drain import (
     DrainBusyError,
@@ -41,6 +45,7 @@ from namisync.interfaces.web.drain import (
     TaskIntentConflictError,
     TaskCloseView,
     TaskDrainView,
+    TaskEventUpdateView,
     TaskRegistry,
     TaskSessionReleaseView,
     TaskStartView,
@@ -392,6 +397,219 @@ def test_maximum_reliable_head_drains_alone_below_the_bridge_response_wall() -> 
     assert len(drained.updates) == 1
     assert drained.updates[0].event == event  # type: ignore[union-attr]
     assert len(encoded) < 8_388_608
+    registry.begin_close()
+
+
+def test_drain_keeps_an_oversized_reliable_tail_for_the_next_response() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    value = maximum_reliable_envelope()
+    for sequence in range(2, 10):
+        service.sink(SessionEventView(
+            SESSION,
+            sequence,
+            str(value["at"]),
+            CORE_EVENT_SCHEMA_VERSION,
+            str(value["body_type"]),
+            dict(value["body"]),  # type: ignore[arg-type]
+        ))
+
+    first = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    second = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+    updates = (*first.updates, *second.updates)
+
+    assert 0 < len(first.updates) < 8
+    assert all(update.update_type == "event" for update in updates)
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in updates
+    ] == list(range(2, 10))
+    registry.begin_close()
+
+
+def test_drain_response_prefix_owns_each_source_before_advancing() -> None:
+    first = _event(2)
+    second = _event(3)
+
+    def hostile_source():
+        yield TaskEventUpdateView("event", first)
+        object.__setattr__(first, "body_type", "Gap")
+        yield TaskEventUpdateView("event", second)
+
+    admitted = snapshot_task_drain_response_prefix(
+        "task-" + ("1" * 32),
+        SESSION,
+        DRAIN,
+        hostile_source(),
+    )
+
+    assert [update.event.body_type for update in admitted.updates] == [
+        "StateChanged",
+        "StateChanged",
+    ]
+
+
+def test_drain_uses_one_stable_source_population_during_reentrant_capture() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    first = _event(2)
+    service.sink(first)
+    service.sink(_event(3))
+    conflicts = []
+
+    class ReentrantBody(dict):
+        armed = True
+
+        def items(self):
+            if self.armed:
+                self.armed = False
+                try:
+                    service.sink(_event(4))
+                except ObservationConflictError as error:
+                    conflicts.append(error)
+            return super().items()
+
+    object.__setattr__(first, "body", ReentrantBody(first.body))
+
+    current = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    service.sink(_event(4))
+    successor = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in current.updates
+    ] == [2, 3]
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in successor.updates
+    ] == [4]
+    assert len(conflicts) == 1
+    assert type(conflicts[0]) is ObservationConflictError
+    registry.begin_close()
+
+
+def test_full_drain_refuses_reentrant_reliable_offer_without_waiting() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    first = _event(2)
+    service.sink(first)
+    for sequence in range(3, 66):
+        service.sink(_event(sequence))
+    conflicts = []
+
+    class ReentrantBody(dict):
+        armed = True
+
+        def items(self):
+            if self.armed:
+                self.armed = False
+                try:
+                    service.sink(_event(66))
+                except ObservationConflictError as error:
+                    conflicts.append(error)
+            return super().items()
+
+    object.__setattr__(first, "body", ReentrantBody(first.body))
+
+    current = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    service.sink(_event(66))
+    successor = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+
+    assert len(current.updates) == 64
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in successor.updates
+    ] == [66]
+    assert len(conflicts) == 1
+    assert type(conflicts[0]) is ObservationConflictError
+    registry.begin_close()
+
+
+def test_drain_refuses_reentrant_drain_without_superseding_capture() -> None:
+    registry, service = _registry()
+    start = _start(registry)
+    registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
+    first = _event(2)
+    service.sink(first)
+    service.sink(_event(3))
+    conflicts = []
+
+    class ReentrantBody(dict):
+        armed = True
+
+        def items(self):
+            if self.armed:
+                self.armed = False
+                try:
+                    registry.drain(
+                        start.task_id,
+                        SESSION,
+                        "7" * 32,
+                        replay_from=None,
+                    )
+                except ObservationConflictError as error:
+                    conflicts.append(error)
+            return super().items()
+
+    object.__setattr__(first, "body", ReentrantBody(first.body))
+
+    current = registry.drain(
+        start.task_id,
+        SESSION,
+        "5" * 32,
+        replay_from=None,
+    )
+    service.sink(_event(4))
+    successor = registry.drain(
+        start.task_id,
+        SESSION,
+        "6" * 32,
+        replay_from=None,
+    )
+
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in current.updates
+    ] == [2, 3]
+    assert [
+        update.event.sequence  # type: ignore[union-attr]
+        for update in successor.updates
+    ] == [4]
+    assert len(conflicts) == 1
+    assert type(conflicts[0]) is ObservationConflictError
     registry.begin_close()
 
 
@@ -1586,7 +1804,7 @@ def test_br_g_33_terminal_record_bypasses_progress_linger() -> None:
             "event",
             "record",
         ]
-        assert result.updates[1].record is terminal
+        assert result.updates[1].record == terminal
         assert waiting.registry._tasks[waiting.task_id].terminal_delivered
 
 
@@ -1782,7 +2000,7 @@ def test_br_g_33_terminal_recovery_enqueues_record_and_stops_at_truth() -> None:
 
     assert len(drained.updates) == 1
     assert drained.updates[0].update_type == "record"
-    assert drained.updates[0].record is terminal
+    assert drained.updates[0].record == terminal
 
 
 def test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered() -> None:
@@ -1834,7 +2052,7 @@ def test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered() -> None:
         update.event.body_type for update in drained.updates[:2]
     ] == ["Gap", "StateChanged"]
     assert drained.updates[0].event.body == {"first_missed_seq": 2}
-    assert drained.updates[2].record is terminal
+    assert drained.updates[2].record == terminal
 
 
 def test_br_g_33_terminal_recovery_never_exceeds_the_queue_or_batch_cap() -> None:
@@ -3257,7 +3475,7 @@ def test_task_drain_validates_whole_candidate_before_consuming(pending_record) -
     mutable.body["state"] = "running"
     drained = registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
     assert [update.event.sequence for update in drained.updates[:-1]] == [1, 2, 3]
-    assert drained.updates[-1].record is terminal
+    assert drained.updates[-1].record == terminal
     registry.release_terminal_session(start.task_id, SESSION)
     assert service.cleanup == [("unsubscribe", SESSION), ("close_session", SESSION)]
 

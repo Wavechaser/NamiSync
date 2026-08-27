@@ -26,7 +26,6 @@ from namisync.interfaces.web.drain import (
     TaskRecordUpdateView,
     TaskSessionReleaseView,
     TaskStartView,
-    validate_task_drain_view,
 )
 from namisync.interfaces.web.readiness import (
     CommandPhase,
@@ -143,9 +142,6 @@ PUBLIC_VIEW_DATACLASSES = (
     | NESTED_PUBLIC_VIEW_DATACLASSES
     | ADAPTER_PUBLIC_VIEW_DATACLASSES
 )
-PUBLIC_VIEW_ENUMS: frozenset[type[object]] = frozenset()
-
-
 class CommandPayloadError(ValueError):
     """A command payload does not match its exact declared schema."""
 
@@ -216,14 +212,14 @@ class TaskAuthority(Protocol):
         wire_intent: tuple[str, str, str | None] | None = None,
     ) -> TaskStartView: ...
 
-    def drain(
+    def drain_for_bridge(
         self,
         task_id: str,
         session_id: str,
         drain_id: str,
         *,
         replay_from: int | None,
-    ) -> TaskDrainView: ...
+    ) -> object: ...
 
     def release_terminal_session(
         self,
@@ -276,6 +272,24 @@ class CommandSpec:
         *,
         context: object,
     ) -> object:
+        result = self.invoke_for_bridge(payload, context=context)
+        from .bridge import (
+            _AdmittedTaskDrainResponse,
+            _consume_task_drain_response,
+        )
+
+        if type(result) is _AdmittedTaskDrainResponse:
+            return _consume_task_drain_response(result)
+        return result
+
+    def invoke_for_bridge(
+        self,
+        payload: object,
+        *,
+        context: object,
+    ) -> object:
+        """Invoke while preserving an already admitted response owner."""
+
         if (
             type(context) is not ReadinessContext
             or context.phase is not self.phase
@@ -476,12 +490,18 @@ def production_command_specs(
     def next_events(payload: object) -> object:
         if not isinstance(payload, _NextEventsPayload):
             raise TypeError("next_events received an unvalidated payload")
-        result = registry.drain(
-            payload.task_id,
-            payload.session_id,
-            payload.drain_id,
-            replay_from=payload.replay_from,
-        )
+        from .bridge import BridgeProtocolError, _peek_task_drain_response
+
+        try:
+            admitted = registry.drain_for_bridge(
+                payload.task_id,
+                payload.session_id,
+                payload.drain_id,
+                replay_from=payload.replay_from,
+            )
+            result = _peek_task_drain_response(admitted)
+        except (BridgeProtocolError, TypeError):
+            raise RuntimeError("task registry returned invalid drain data") from None
         if (
             type(result) is not TaskDrainView
             or result.task_id != payload.task_id
@@ -489,11 +509,7 @@ def production_command_specs(
             or result.drain_id != payload.drain_id
         ):
             raise RuntimeError("task registry returned invalid drain data")
-        try:
-            validate_task_drain_view(result)
-        except (TypeError, ValueError) as error:
-            raise RuntimeError("task registry returned invalid drain data") from error
-        return result
+        return admitted
 
     def close_task(payload: object) -> object:
         if not isinstance(payload, _CloseTaskPayload):

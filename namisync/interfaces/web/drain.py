@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import re
 from collections import OrderedDict, deque
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
+from itertools import chain, islice
 from math import isfinite
 from threading import Condition, Lock, get_ident
 from time import monotonic
@@ -357,12 +358,19 @@ class _TaskState:
     terminal_delivered: bool = False
     session_release_started: bool = False
     recovery_caller: int | None = None
+    response_capture_caller: int | None = None
 
     def sink(self, generation: int) -> Callable[[SessionUpdate], None]:
         def accept(update: SessionUpdate) -> None:
             self._offer(generation, update)
 
         return accept
+
+    def require_no_response_capture_reentry(self) -> None:
+        if self.response_capture_caller == get_ident():
+            raise ObservationConflictError(
+                "task operation reentered response capture"
+            )
 
     def _offer(self, generation: int, update: SessionUpdate) -> None:
         if type(update) not in {SessionEventView, SessionRecordView}:
@@ -371,6 +379,7 @@ class _TaskState:
         with self.condition:
             if self.closing or generation != self.generation:
                 return
+            self.require_no_response_capture_reentry()
             expected_session_id = (
                 self.session_id or self.reservation.attached_session_id
             )
@@ -743,11 +752,51 @@ class TaskRegistry:
         *,
         replay_from: int | None,
     ) -> TaskDrainView:
+        from .bridge import _consume_task_drain_response
+
+        return _consume_task_drain_response(
+            self._drain_admitted(
+                task_id,
+                session_id,
+                drain_id,
+                replay_from=replay_from,
+            )
+        )
+
+    def drain_for_bridge(
+        self,
+        task_id: str,
+        session_id: str,
+        drain_id: str,
+        *,
+        replay_from: int | None,
+    ) -> object:
+        """Transfer one byte-admitted drain to the bridge without recopying it."""
+
+        return self._drain_admitted(
+            task_id,
+            session_id,
+            drain_id,
+            replay_from=replay_from,
+        )
+
+    def _drain_admitted(
+        self,
+        task_id: str,
+        session_id: str,
+        drain_id: str,
+        *,
+        replay_from: int | None,
+    ) -> object:
+        from .bridge import BridgeResponseTooLargeError
+        from .bridge import _peek_task_drain_response
+
         _require_opaque_id(drain_id, "task drain id")
         task = self._require_task(task_id, session_id)
         deadline = self._clock() + self._drain_wait
         claim = _DrainClaim(drain_id)
         with task.condition:
+            task.require_no_response_capture_reentry()
             self._require_live_locked(task, session_id)
             if task.transition:
                 raise ObservationConflictError("task observation is changing")
@@ -789,21 +838,46 @@ class TaskRegistry:
                     task.condition.wait(remaining)
                 if task.closing:
                     raise TaskUnavailableError("task is closing")
-                count = 0 if claim.superseded else min(_CAPACITY, len(task.queue))
-                drained = list(task.queue)[:count]
+                queued = (
+                    ()
+                    if claim.superseded
+                    else tuple(islice(task.queue, _CAPACITY))
+                )
+                terminal = (
+                    task.terminal_record
+                    if (
+                        not claim.superseded
+                        and len(queued) < _CAPACITY
+                        and task.terminal_pending
+                    )
+                    else None
+                )
+                source = iter(queued)
+                if terminal is not None:
+                    source = chain(source, (terminal,))
+                task.response_capture_caller = get_ident()
+                try:
+                    admitted = _admit_drain_result(
+                        task_id,
+                        session_id,
+                        drain_id,
+                        (_tag_update(update) for update in source),
+                    )
+                except BridgeResponseTooLargeError as error:
+                    retire_exception_graph(error)
+                    raise RuntimeError(
+                        "one task update exceeds the bridge response ceiling"
+                    ) from None
+                finally:
+                    if task.response_capture_caller == get_ident():
+                        task.response_capture_caller = None
+                result = _peek_task_drain_response(admitted)
+                count = min(len(result.updates), len(queued))
                 include_terminal = (
                     not claim.superseded
-                    and len(drained) < _CAPACITY
-                    and task.terminal_pending
-                    and task.terminal_record is not None
+                    and terminal is not None
+                    and len(result.updates) > count
                 )
-                if include_terminal:
-                    drained.append(task.terminal_record)
-                result = TaskDrainView(
-                    task_id, session_id, drain_id,
-                    tuple(_tag_update(update) for update in drained),
-                )
-                validate_task_drain_view(result)
                 if not claim.superseded:
                     for _ in range(count):
                         task.queue.popleft()
@@ -813,7 +887,9 @@ class TaskRegistry:
                         _is_progress_update(update) for update in task.queue
                     ):
                         task.progress_available_at = None
-                    if any(type(update) is SessionRecordView for update in drained):
+                    if any(
+                        update.update_type == "record" for update in result.updates
+                    ):
                         task.terminal_delivered = True
                     task.condition.notify_all()
         finally:
@@ -822,7 +898,7 @@ class TaskRegistry:
                     task.active_drain = None
                 task.condition.notify_all()
 
-        return result
+        return admitted
 
     def _recover(
         self,
@@ -988,6 +1064,7 @@ class TaskRegistry:
             raise TaskUnavailableError("task is unavailable")
 
         with task.condition:
+            task.require_no_response_capture_reentry()
             if task.session_id != session_id:
                 raise TaskUnavailableError("task is unavailable")
             if not task.terminal_delivered:
@@ -1061,6 +1138,7 @@ class TaskRegistry:
             self._discard_failed_task(task)
             raise TaskUnavailableError("task is unavailable")
         with task.condition:
+            task.require_no_response_capture_reentry()
             if task.session_id != session_id:
                 raise TaskUnavailableError("task is unavailable")
             if not task.terminal_delivered:
@@ -1264,6 +1342,22 @@ def _tag_update(update: SessionUpdate) -> TaskUpdateView:
     if type(update) is SessionRecordView:
         return TaskRecordUpdateView("record", update)
     raise TypeError("task updates must be exact service view types")
+
+
+def _admit_drain_result(
+    task_id: str,
+    session_id: str,
+    drain_id: str,
+    updates: Iterable[TaskUpdateView],
+) -> object:
+    from .bridge import _admit_task_drain_response_prefix
+
+    return _admit_task_drain_response_prefix(
+        task_id,
+        session_id,
+        drain_id,
+        updates,
+    )
 
 
 def _require_opaque_id(value: object, label: str) -> None:
