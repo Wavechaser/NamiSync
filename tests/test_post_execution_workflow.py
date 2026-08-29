@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Event
 from time import monotonic, sleep
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from weakref import ref
 
 import pytest
@@ -33,6 +33,7 @@ from namisync.core.evidence import (
 )
 from namisync.core.execution import (
     Commitment,
+    ExecutionReview,
     ExecutionSet,
     ItemRecordingReason,
     PublishedCopyEvidence,
@@ -76,7 +77,14 @@ from namisync.core.planning import (
     selection_digest,
 )
 from namisync.core.pathing import normalize_relative_path, to_extended_length_path
-from namisync.core.preflight import ObservedWorld, Refusal, RefusalCode, Verdict
+from namisync.core.preflight import (
+    ObservedWorld,
+    Refusal,
+    RefusalCode,
+    RootObservation,
+    StatObservation,
+    Verdict,
+)
 from namisync.core.root_authority import RootAuthority
 from namisync.core.session import (
     Canceled,
@@ -99,6 +107,7 @@ from namisync.dispatcher import (
 )
 from namisync.interfaces.service import _workflow_registry
 from namisync.modules.verifier import verify_post_copy
+from namisync.modules.preflight import observe
 from namisync.workflows.models import (
     ExecuteContinuation,
     ExecutionRequest,
@@ -404,7 +413,7 @@ def _deps(
         save_execution_details=lambda value: None,
         observer=lambda *args: world,
         observation_fs=object(),
-        preflight=lambda execution_set, observed: (
+        preflight=lambda review, observed: (
             verdict if verdict is not None else Verdict(True, (), observed)
         ),
         open_recording=lambda execution_set: (
@@ -1193,6 +1202,124 @@ def test_execute_resume_does_not_require_or_reemit_initial_settlements() -> None
     assert [(item.item_id, item.outcome) for item in result.items] == [
         (str(operation.op_id), Outcome.SUCCEEDED)
     ]
+
+
+def test_execute_resume_exposes_one_detached_review_to_read_only_callbacks() -> None:
+    operation = _operation(196, 4)
+    source_volume = VolumeId("SOURCE", "NTFS")
+    target_volume = VolumeId("TARGET", "NTFS")
+    source_evidence = VolumeEvidence(device_id="C:\\")
+    target_evidence = VolumeEvidence(device_id="D:\\")
+    plan = replace(
+        _plan(operation),
+        source_volume_id=source_volume,
+        target_volume_id=target_volume,
+        source_volume_evidence=source_evidence,
+        target_volume_evidence=target_evidence,
+    )
+    plan = replace(plan, fingerprint=plan_fingerprint(plan))
+    selection = frozenset({operation.op_id})
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("a" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    xset.status[operation.op_id] = Outcome.SUCCEEDED
+    reviews: list[ExecutionReview] = []
+    callback_worlds: list[ObservedWorld] = []
+    reclaimable_run_ids: list[str] = []
+
+    class ReviewObservationFileSystem:
+        def observe_root(self, authority: RootAuthority) -> RootObservation:
+            if authority.logical_root == plan.source_root.path:
+                return RootObservation(
+                    authority.logical_root,
+                    source_volume,
+                    source_evidence,
+                )
+            return RootObservation(
+                authority.logical_root,
+                target_volume,
+                target_evidence,
+            )
+
+        def stat(self, *args) -> StatObservation:
+            del args
+            return StatObservation(None)
+
+        def free_space(self, authority: RootAuthority) -> int:
+            del authority
+            return 0
+
+        def reclaimable_temp_bytes(
+            self,
+            authority: RootAuthority,
+            parent_paths: frozenset[str],
+            current_run_id: str,
+        ) -> int:
+            del authority
+            assert parent_paths == frozenset()
+            reclaimable_run_ids.append(current_run_id)
+            return 0
+
+        def observe_trash(self, authority: RootAuthority):
+            del authority
+            raise AssertionError("settled review unexpectedly observed trash")
+
+        def now_utc(self) -> datetime:
+            return NOW
+
+    def observer(review, filesystem):
+        assert type(review) is ExecutionReview
+        assert review.run_id == xset.run_id
+        assert type(review.status) is MappingProxyType
+        assert review.status is not xset.status
+        assert dict(review.status) == xset.status
+        with pytest.raises(TypeError):
+            review.status[operation.op_id] = Outcome.FAILED
+        reviews.append(review)
+        return observe(review, filesystem)
+
+    def preflight_callback(review, world):
+        assert type(review) is ExecutionReview
+        assert review.run_id == xset.run_id
+        reviews.append(review)
+        callback_worlds.append(world)
+        return Verdict(True, (), world)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del context, recorder, policies, fs
+        assert execution_set is xset
+        assert execution_set.remaining() == ()
+        return OperationResult(
+            SessionState.COMPLETED,
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    deps = _deps(executor=executor, verifier=_verify_all, recordings=[])
+    deps.observer = observer
+    deps.preflight = preflight_callback
+    deps.observation_fs = ReviewObservationFileSystem()
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, lambda: None),
+        deps,
+        resumed=True,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert len(reviews) == 2
+    assert reviews[0] is reviews[1]
+    assert len(callback_worlds) == 1
+    assert reclaimable_run_ids == [str(xset.run_id)]
+    assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
 
 
 def test_execute_rejects_a_settlement_ahead_of_its_outward_outcome() -> None:
@@ -6394,7 +6521,7 @@ def test_resumed_execute_preflight_refusal_finishes_existing_partial_run(
 
         runtime._deps = replace(
             runtime._deps,
-            preflight=lambda execution_set, world: Verdict(
+            preflight=lambda review, world: Verdict(
                 False,
                 (
                     Refusal(
@@ -6488,7 +6615,7 @@ def test_real_resumed_verify_preflight_refusal_finishes_existing_run(
 
         runtime._deps = replace(
             runtime._deps,
-            preflight=lambda execution_set, world: Verdict(
+            preflight=lambda review, world: Verdict(
                 False,
                 (
                     Refusal(

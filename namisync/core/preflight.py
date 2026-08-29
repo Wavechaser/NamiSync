@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
+from types import MappingProxyType
 from typing import Mapping, NamedTuple
 
 from .models import FileStat, VolumeEvidence, VolumeId
@@ -72,6 +73,17 @@ class ObservedWorld:
             raise ValueError("observation timestamp must be timezone-aware")
         if self.observed_at.utcoffset() != timezone.utc.utcoffset(self.observed_at):
             raise ValueError("observation timestamp must be UTC")
+        if type(self.target_parent_paths) is not frozenset:
+            raise TypeError("observed target parent paths must be an exact frozenset")
+        for field_name in ("stats", "paths", "roots"):
+            population = getattr(self, field_name)
+            if not isinstance(population, Mapping):
+                raise TypeError(f"observed-world {field_name} must be a mapping")
+            object.__setattr__(
+                self,
+                field_name,
+                MappingProxyType(dict(population)),
+            )
 
 
 class RefusalCode(StrEnum):

@@ -15,9 +15,9 @@ refusal contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
 Preflight separates current-world observation from pure judgment:
 
 ```python
-observe(xset: ExecutionSet, fs: FileSystem, *,
+observe(review: ExecutionReview, fs: FileSystem, *,
         review_admission: PlanReviewAdmission | None = None) -> ObservedWorld
-preflight(xset: ExecutionSet, world: ObservedWorld, *,
+preflight(review: ExecutionReview, world: ObservedWorld, *,
           review_admission: PlanReviewAdmission | None = None) -> Verdict
 ```
 
@@ -39,11 +39,13 @@ execution-workflow entry, as review preflight intentionally works before a
 commitment exists.
 
 The six exact preflight observation and verdict dataclasses are frozen and
-slotted, so instances carry only their declared fields. This does not yet make
-`ObservedWorld` deeply immutable: its declared `Mapping` members can still be
-mutable. Checkpoint 4P.16 owns their conversion to deeply read-only custody.
-Hostile boundaries continue to require exact types and revalidate declared
-fields.
+slotted, so instances carry only their declared fields. `ObservedWorld` copies
+its three mapping inputs into private dict-backed read-only mapping proxies
+after validating capacity scalars and UTC time; target-parent paths remain an
+exact `frozenset`. Its frozen observation leaves make the complete published
+world deeply read-only, and later caller changes to input dictionaries cannot
+change it. Hostile boundaries continue to require exact types and revalidate
+declared fields.
 
 `observe()` performs read-only filesystem/volume IO and decides nothing.
 `preflight()` performs no IO and changes nothing. Neither repairs, re-plans,
@@ -51,19 +53,22 @@ drops, cleans, or executes operations. Admitted execution uses the immutable
 reviewed policy snapshot already bound into the plan; it never reinterprets the
 run from newer global defaults.
 
-During plan review, workflow supplies a fresh disposable admission to each
-observer and preflight call. Observation gates its selected subjects, target
-parents, roots, paths, stats, and backend-returned mappings independently before
-first excess. The preflight module reconstructs the declared `ObservedWorld`
-graph, rejects out-of-plan keys and undeclared state, gives judgment a separate
-detached world and plan preview, and exactly revalidates that callback world
-after return. Judgment gates each raw typed refusal before append and preserves
-ordinary refusal order and selection policy.
+During each preflight cycle, workflow creates one exact immutable
+`ExecutionReview` and passes that same instance to observation and judgment.
+Plan review supplies empty status; execution and resume copy current status only
+after capturing the existing mutable execution authority. Observation gates its
+selected subjects, target parents, roots, paths, stats, and backend-returned
+mappings independently before first excess. The preflight module reconstructs
+and admits the observer's declared `ObservedWorld` graph, rejects out-of-plan
+keys and undeclared state, and workflow passes that same admitted world directly
+to judgment. The existing observer/verdict reconstruction remains until
+checkpoint 4P.18. Judgment gates each raw typed refusal before append and
+preserves ordinary refusal order and selection policy.
 
 Only the final observed-world mapping slots and verdict refusal-tuple slots/
 informational rows are charged to the retained plan artifact. Construction
-maps, keys, sorting, selection, previews, and revalidation copies are disposable
-and uncharged. A first excess is the shared typed `REFUSED+UNRUN` result and
+maps, keys, sorting, selection, and revalidation copies are disposable and
+uncharged. A first excess is the shared typed `REFUSED+UNRUN` result and
 never becomes an incomplete ordinary verdict or saved partial plan.
 
 These source and retained-reference checks are inputs to checkpoint 4. They do
@@ -140,7 +145,8 @@ the run. It verifies:
 - every final destination remains root-constrained and representable on the
   target filesystem.
 
-Unrelated tree changes do not matter. A refusal never mutates `ExecutionSet`,
+Unrelated tree changes do not matter. Observation and judgment receive no
+mutable `ExecutionSet`; a refusal never changes its immutable `ExecutionReview`,
 silently removes an operation, or changes an operation to a safer-looking kind.
 
 Commitment validation is not preflight judgment: review uses preflight before a

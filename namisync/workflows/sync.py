@@ -14,6 +14,7 @@ from namisync.core.events import ItemOutcome, PhaseChanged, snapshot_item_outcom
 from namisync.core.evidence import Outcome, RecordingStatus, snapshot_attestation
 from namisync.core.execution import (
     ExecutionOperationFact,
+    ExecutionReview,
     ExecutionSet,
     ExecutionSetAuthority,
     ExecutorFileSystem,
@@ -251,7 +252,7 @@ class Planner(Protocol):
 class Observer(Protocol):
     def __call__(
         self,
-        execution_set: ExecutionSet,
+        review: ExecutionReview,
         fs: ObservationFileSystem,
         *,
         review_admission: PlanReviewAdmission | None = None,
@@ -261,7 +262,7 @@ class Observer(Protocol):
 class Preflight(Protocol):
     def __call__(
         self,
-        execution_set: ExecutionSet,
+        review: ExecutionReview,
         world: ObservedWorld,
         *,
         review_admission: PlanReviewAdmission | None = None,
@@ -327,30 +328,6 @@ def _adopt_scanner_result(
     if adopted.scope.kind is not ScanScopeKind.FULL:
         raise ValueError("plan scanner must return the requested full scope")
     return adopted
-
-
-def _disposable_plan_preview(
-    plan: Plan,
-    source: ScanResult,
-    target: ScanResult,
-    options: SyncOptions,
-    selection: frozenset[str],
-    run_id: str,
-    review_admission: PlanReviewAdmission,
-) -> ExecutionSet:
-    """Detach the mutable execution shell and its plan for one collaborator."""
-
-    return ExecutionSet(
-        snapshot_plan_candidate(
-            plan,
-            source,
-            target,
-            options,
-            review_admission=review_admission,
-        ),
-        selection,
-        run_id,
-    )
 
 
 def _run_plan(
@@ -460,62 +437,37 @@ def _run_plan(
         decision = derive_execution_selection(plan)
         selection = decision.selection
         del decision
-        authoritative_xset = ExecutionSet(plan, selection, run_id)
+        review = ExecutionReview(plan, selection, run_id, {})
 
         ctx.emit(PhaseChanged("review-preflight"))
-        observer_preview = _disposable_plan_preview(
-            plan,
-            source_scan,
-            target_scan,
-            retained_options,
-            selection,
-            run_id,
-            retained_admission.fresh(),
-        )
         raw_world = deps.observer(
-            observer_preview,
+            review,
             deps.observation_fs,
             review_admission=retained_admission.fresh(),
         )
         world = snapshot_plan_observed_world(
             raw_world,
-            authoritative_xset,
+            review,
             retained_admission.fresh(),
         )
-        del raw_world, observer_preview
+        del raw_world
         admit_retained_plan_observed_world(world, retained_admission)
 
-        preflight_preview = _disposable_plan_preview(
-            plan,
-            source_scan,
-            target_scan,
-            retained_options,
-            selection,
-            run_id,
-            retained_admission.fresh(),
-        )
-        preflight_world = snapshot_plan_observed_world(
-            world,
-            authoritative_xset,
-            retained_admission.fresh(),
-        )
         raw_verdict = deps.preflight(
-            preflight_preview,
-            preflight_world,
+            review,
+            world,
             review_admission=retained_admission.fresh(),
         )
         verdict = snapshot_plan_verdict(
             raw_verdict,
-            preflight_world,
             world,
-            authoritative_xset,
+            world,
+            review,
             retained_admission.fresh(),
         )
         del (
             raw_verdict,
-            preflight_preview,
-            preflight_world,
-            authoritative_xset,
+            review,
             selection,
             world,
             retained_options,
@@ -991,6 +943,12 @@ def _run_execution(
     try:
         execution_authority = snapshot_execution_set_authority(xset)
         retained_execution_authority = execution_authority
+        review = ExecutionReview(
+            xset.plan,
+            xset.selection,
+            xset.run_id,
+            xset.status,
+        )
 
         def revalidate_preflight_authority() -> None:
             revalidate_execution_set_authority(
@@ -1008,29 +966,24 @@ def _run_execution(
         ctx.emit(PhaseChanged("execution-preflight"))
         revalidate_preflight_authority()
         review_admission = PlanReviewAdmission()
-        raw_world = deps.observer(xset, deps.observation_fs)
+        raw_world = deps.observer(review, deps.observation_fs)
         revalidate_preflight_authority()
         world = snapshot_plan_observed_world(
             raw_world,
-            xset,
+            review,
             review_admission.fresh(),
         )
         del raw_world
-        preflight_world = snapshot_plan_observed_world(
-            world,
-            xset,
-            review_admission.fresh(),
-        )
-        raw_verdict = deps.preflight(xset, preflight_world)
+        raw_verdict = deps.preflight(review, world)
         revalidate_preflight_authority()
         verdict = snapshot_plan_verdict(
             raw_verdict,
-            preflight_world,
             world,
-            xset,
+            world,
+            review,
             review_admission.fresh(),
         )
-        del raw_verdict, preflight_world
+        del raw_verdict, review
         refusals = refusal_views(verdict)
         deps.save_execution_details(ExecutionDetails(str(xset.run_id), refusals))
         revalidate_preflight_authority()

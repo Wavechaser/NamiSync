@@ -383,9 +383,9 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
 | Ephemeral root authority, native volume evidence, and admission probes | `namisync/core/root_authority.py` |
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
-| Preflight subjects, observations, refusals, and verdicts | `namisync/core/preflight.py` |
+| Deeply read-only preflight subjects, observations, refusals, and verdicts | `namisync/core/preflight.py` |
 | Outcomes, recording status, provenance, content evidence, attestation, and hashing protocols | `namisync/core/evidence.py` |
-| Commitments, execution state/evidence, scoped recording reasons/issues, failure decisions, copy/recorder/filesystem protocols | `namisync/core/execution.py` |
+| Commitments, mutable execution state/evidence, immutable execution-review projection, scoped recording reasons/issues, failure decisions, copy/recorder/filesystem protocols | `namisync/core/execution.py` |
 | Integrity state, selections, outcomes, commands, and verifier/recorder protocols | `namisync/core/integrity.py` |
 | Ledger-bound host, volume, location, mapping, run, and inventory commands | `namisync/core/recording.py` |
 
@@ -456,7 +456,8 @@ that depend on absence or stable identity.
 | `ExecutionSet.selection` | Dependency-closed executable subset, distinct from the full reviewed plan. |
 | `Commitment` | Binding from human approval to plan fingerprint and selection digest. |
 | `ExecutionSet` | Plan, authoritative selection, commitment, operation status, sparse item recording reasons, ordered task recording issues, continuation evidence, and validated aggregate byte high-water. |
-| `ObservedWorld` | Fresh, scoped filesystem facts used by pure preflight judgment. |
+| `ExecutionReview` | Frozen read-only projection of plan, selection, run id, and privately copied status supplied to observation and judgment. |
+| `ObservedWorld` | Fresh, scoped filesystem facts whose mappings and frozen leaves are deeply read-only for pure preflight judgment. |
 | `Verdict` | Typed per-operation refusals plus the observation judged. |
 
 Observed free space is not stored in a plan. Capacity need is a pure property of
@@ -617,12 +618,14 @@ See `PLANNER.md`.
 **Tier:** Capability · **Status:** Active
 
 ```python
-observe(execution_set, filesystem, *, review_admission=None) -> ObservedWorld
-preflight(execution_set, observed_world, *, review_admission=None) -> Verdict
+observe(execution_review, filesystem, *, review_admission=None) -> ObservedWorld
+preflight(execution_review, observed_world, *, review_admission=None) -> Verdict
 ```
 
 `observe` performs scoped read-only I/O and decides nothing. `preflight` is a
-pure judge over the returned snapshot. Workflows invoke both at review,
+pure judge over the returned snapshot. One immutable review and one admitted
+world are shared across both calls in each cycle; neither collaborator receives
+the mutable execution continuation. Workflows invoke both at review,
 execution start, queue wakeup, and resume. The executor does not import
 preflight; it retains operation-local final-touch guards.
 

@@ -44,8 +44,9 @@ attestation format.
 - Stable identifier value types: session, run, operation, row, mapping, host,
   volume, and file identity.
 - Immutable scan (`FileRecord`, `DirRecord`, `UnsupportedRecord`), plan,
-  observation, content-evidence, attestation, item-result, and run-result
-  dataclasses; `ExecutionSet` is the explicit mutable execution-status carrier.
+  observation, content-evidence, attestation, item-result, run-result, and
+  read-only execution-review dataclasses; `ExecutionSet` is the explicit
+  mutable execution-status carrier.
 - `MappingSnapshot`, root-qualified `Subject`, `Commitment`,
   `PreservationPolicy`, `MetadataSnapshot`, capability profile,
   and the stable `VolumeId`/corroborating `VolumeEvidence` split.
@@ -119,9 +120,11 @@ remain the hostile-boundary authority.
 The six preflight observation/verdict dataclasses and the two remaining
 integrity command/context dataclasses are also frozen and slotted. This excludes
 undeclared outer instance state without changing observation, refusal,
-candidate, recorder, or continuation semantics. `ObservedWorld` is not yet
-deeply immutable because its declared mappings may still be mutable; checkpoint
-4P.16 owns that separate custody change.
+candidate, recorder, or continuation semantics. `ObservedWorld` validates its
+scalar and UTC fields before touching mapping inputs, then copies `stats`,
+`paths`, and `roots` into private dict-backed read-only mapping proxies.
+`target_parent_paths` remains an exact immutable `frozenset`, so the complete
+published observation graph is read-only and caller aliases cannot change it.
 
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`
@@ -154,8 +157,14 @@ evidence, contributes zero content bytes, and never implies update/trash
 semantics.
 
 Executor continuation and collaborator contracts are implemented in
-`core/execution.py`: the mutable `ExecutionSet`, fixed-format `RunId`, typed
-failure decisions/reasons, copy digest, and filesystem/copy/recorder protocols.
+`core/execution.py`: the mutable `ExecutionSet`, immutable `ExecutionReview`,
+fixed-format `RunId`, typed failure decisions/reasons, copy digest, and
+filesystem/copy/recorder protocols. `ExecutionReview` exposes only the exact
+plan, selected operation ids, run id, and a private read-only copy of current
+status to observation and judgment. It admits exact dict or mapping-proxy
+status input, checks fixed ids and selection/status subsets without rebuilding
+the plan, and shares the same plan-ordered remaining-operation helper with
+`ExecutionSet`.
 `ExecutionSet.bytes_done_high_water` is public continuation state: callers may
 restore it through the dataclass constructor, `replace()` preserves it, and it
 participates in equality because it changes later progress behavior. The

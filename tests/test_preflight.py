@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import copy
-from dataclasses import fields, replace
+from collections.abc import Mapping
+from dataclasses import FrozenInstanceError, fields, replace
 from datetime import datetime, timezone
 import os
 import stat as stat_module
 from pathlib import Path, PureWindowsPath
 import inspect
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -18,7 +18,7 @@ import namisync.core.review as review_module
 import namisync.modules.preflight as preflight_module
 
 from namisync.core.evidence import Outcome
-from namisync.core.execution import ExecutionSet, validated_run_id
+from namisync.core.execution import ExecutionReview, ExecutionSet, validated_run_id
 from namisync.core.models import (
     CapabilityProfile,
     DirRecord,
@@ -128,6 +128,96 @@ def test_preflight_contracts_are_exactly_slotted() -> None:
     )
     for value in values:
         _assert_declared_slots(value)
+
+
+def test_observed_world_detaches_mapping_aliases_and_remains_replaceable() -> None:
+    subject = Subject("source", "FILE.BIN")
+    stats = {subject: StatObservation(None)}
+    paths = {subject: "file.bin"}
+    roots = {"source": RootObservation(r"C:\source", SOURCE_VOLUME, None)}
+    world = ObservedWorld(
+        stats,
+        paths,
+        frozenset(),
+        roots,
+        1,
+        0,
+        None,
+        NOW,
+    )
+
+    stats.clear()
+    paths.clear()
+    roots.clear()
+
+    assert type(world.stats) is MappingProxyType
+    assert type(world.paths) is MappingProxyType
+    assert type(world.roots) is MappingProxyType
+    assert subject in world.stats
+    assert world.paths[subject] == "file.bin"
+    assert "source" in world.roots
+    with pytest.raises(TypeError):
+        world.stats[subject] = StatObservation(None)
+    with pytest.raises(TypeError):
+        world.paths[subject] = "other.bin"
+    with pytest.raises(TypeError):
+        world.roots["source"] = RootObservation(
+            r"C:\other",
+            SOURCE_VOLUME,
+            None,
+        )
+    with pytest.raises(AttributeError):
+        world.target_parent_paths.add("other")
+    with pytest.raises(FrozenInstanceError):
+        world.roots["source"].error = "changed"
+    with pytest.raises(FrozenInstanceError):
+        world.stats = {}
+
+    copied = replace(world)
+    assert copied == world
+    assert copied.stats is not world.stats
+    assert copied.paths is not world.paths
+    assert copied.roots is not world.roots
+
+
+class _UnreadableMapping(Mapping[object, object]):
+    def __getitem__(self, key: object) -> object:
+        raise AssertionError(f"mapping was read for {key!r}")
+
+    def __iter__(self):
+        raise AssertionError("mapping was iterated")
+
+    def __len__(self) -> int:
+        raise AssertionError("mapping length was read")
+
+
+@pytest.mark.parametrize(
+    ("free_space", "reclaimable", "observed_at", "match"),
+    [
+        (MAX_SIGNED_64 + 1, 0, NOW, "free space"),
+        (1, MAX_SIGNED_64 + 1, NOW, "reclaimable temporary bytes"),
+        (1, 0, NOW.replace(tzinfo=None), "timezone-aware"),
+    ],
+)
+def test_observed_world_validates_scalars_and_time_before_mapping_copy(
+    free_space: int,
+    reclaimable: int,
+    observed_at: datetime,
+    match: str,
+) -> None:
+    unreadable = _UnreadableMapping()
+
+    with pytest.raises((ScalarDomainError, ValueError), match=match):
+        ObservedWorld(
+            unreadable,
+            unreadable,
+            frozenset(),
+            unreadable,
+            free_space,
+            reclaimable,
+            None,
+            observed_at,
+        )
 
 
 def _native_info(
@@ -473,7 +563,7 @@ def _xset(
     target_complete: bool = True,
     options: SyncOptions | None = None,
     target_profile: CapabilityProfile = PROFILE,
-) -> ExecutionSet:
+) -> ExecutionReview:
     source = _scan(
         "source",
         SOURCE_VOLUME,
@@ -496,14 +586,15 @@ def _xset(
         options or SyncOptions(),
         Scope.everything(),
     )
-    return ExecutionSet(
+    return ExecutionReview(
         built,
         frozenset(operation.op_id for operation in built.operations if not operation.blocked),
         validated_run_id("a" * 32),
+        {},
     )
 
 
-def _world(xset: ExecutionSet, *, free_space: int = 10_000) -> ObservedWorld:
+def _world(xset: ExecutionReview, *, free_space: int = 10_000) -> ObservedWorld:
     stats: dict[Subject, StatObservation] = {}
     paths: dict[Subject, str] = {}
     for operation in xset.remaining():
@@ -541,8 +632,113 @@ def _world(xset: ExecutionSet, *, free_space: int = 10_000) -> ObservedWorld:
     )
 
 
-def _codes(xset: ExecutionSet, world: ObservedWorld) -> set[RefusalCode]:
+def _codes(xset: ExecutionReview, world: ObservedWorld) -> set[RefusalCode]:
     return {refusal.code for refusal in preflight(xset, world).refusals}
+
+
+def _world_fact(world: ObservedWorld) -> tuple[object, ...]:
+    return (
+        dict(world.stats),
+        dict(world.paths),
+        world.target_parent_paths,
+        dict(world.roots),
+        world.free_space,
+        world.reclaimable_temp_bytes,
+        world.trash,
+        world.observed_at,
+    )
+
+
+def test_execution_review_detaches_status_and_preserves_remaining_semantics() -> None:
+    initial = _xset(
+        source_files=(
+            _file("first.bin", index=1),
+            _file("second.bin", index=2),
+            _file("unselected.bin", index=3),
+        ),
+    )
+    operations = initial.plan.operations
+    assert len(operations) == 3
+    selection = frozenset(operation.op_id for operation in operations[:2])
+    pending = ExecutionReview(
+        initial.plan,
+        selection,
+        initial.run_id,
+        {},
+    )
+    assert pending.remaining() == operations[:2]
+
+    first = operations[0]
+    source_status = {first.op_id: Outcome.SUCCEEDED}
+    review = ExecutionReview(
+        initial.plan,
+        selection,
+        initial.run_id,
+        source_status,
+    )
+    mutable = ExecutionSet(
+        initial.plan,
+        selection,
+        initial.run_id,
+        dict(source_status),
+    )
+
+    source_status.clear()
+
+    _assert_declared_slots(review)
+    assert type(review.status) is MappingProxyType
+    assert review.status == {first.op_id: Outcome.SUCCEEDED}
+    assert review.remaining() == (operations[1],)
+    assert mutable.remaining() == (operations[1],)
+    with pytest.raises(TypeError):
+        review.status[first.op_id] = Outcome.FAILED
+    with pytest.raises(FrozenInstanceError):
+        review.selection = frozenset()
+    with pytest.raises(FrozenInstanceError):
+        review.status = {}
+
+    copied = replace(review)
+    assert copied == review
+    assert copied.status is not review.status
+    assert copied.remaining() == review.remaining()
+
+
+def test_execution_review_rejects_invalid_run_selection_and_status() -> None:
+    review = _xset()
+    first = review.remaining()[0]
+    unknown = "f" * 32
+    if unknown in {operation.op_id for operation in review.plan.operations}:
+        unknown = "e" * 32
+
+    with pytest.raises(ValueError, match="run id"):
+        replace(review, run_id="not-a-run-id")
+    with pytest.raises(TypeError, match="frozenset"):
+        ExecutionReview(review.plan, set(review.selection), review.run_id, {})
+    with pytest.raises(ValueError, match="unknown operation ids"):
+        replace(review, selection=frozenset({unknown}))
+    with pytest.raises(ValueError, match="unselected operation ids"):
+        ExecutionReview(
+            review.plan,
+            frozenset(),
+            review.run_id,
+            {first.op_id: Outcome.SUCCEEDED},
+        )
+    with pytest.raises(TypeError, match="status values"):
+        replace(review, status={first.op_id: object()})
+    with pytest.raises(TypeError, match="exact dict or mapping proxy"):
+        replace(review, status=_UnreadableMapping())
+
+
+def test_preflight_requires_execution_review_not_mutable_execution_set() -> None:
+    review = _xset()
+    mutable = ExecutionSet(
+        review.plan,
+        review.selection,
+        review.run_id,
+    )
+
+    with pytest.raises(TypeError, match="exact ExecutionReview"):
+        preflight(mutable, _world(review))
 
 
 def test_pure_preflight_accepts_matching_snapshot_without_filesystem() -> None:
@@ -603,7 +799,7 @@ def test_refusal_first_excess_does_not_mutate_admission_or_world(
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
     xset = _xset()
     world = replace(_world(xset), roots={})
-    before = copy.deepcopy(world)
+    before = _world_fact(world)
     admission = PlanReviewAdmission()
 
     with pytest.raises(ReviewFactLimitError) as caught:
@@ -612,7 +808,7 @@ def test_refusal_first_excess_does_not_mutate_admission_or_world(
     assert caught.value.fact == (
         ReviewFactLimitExceeded.plan_informational_rows()
     )
-    assert world == before
+    assert _world_fact(world) == before
     admission.admit(
         domain_rows=review_module.MAX_PLAN_REVIEW_ROWS,
         domain_bytes=review_module.MAX_PLAN_DOMAIN_RETAINED_BYTES,
@@ -739,10 +935,11 @@ def test_preflight_refuses_manually_selected_blocked_correspondence() -> None:
         for operation in built.operations
         if operation.target_rel_path == r"foo\keep.txt"
     )
-    xset = ExecutionSet(
+    xset = ExecutionReview(
         built,
         frozenset({counterpart.op_id}),
         validated_run_id("b" * 32),
+        {},
     )
 
     assert RefusalCode.BLOCKED_CORRESPONDENCE in _codes(xset, _world(xset))
@@ -867,13 +1064,23 @@ def test_dependency_break_and_blocked_dependency_are_refused() -> None:
     )
     mkdir = next(operation for operation in xset.plan.operations if operation.kind is OperationKind.MKDIR)
     copy_op = next(operation for operation in xset.plan.operations if operation.kind is OperationKind.COPY)
-    not_closed = ExecutionSet(xset.plan, frozenset({copy_op.op_id}), xset.run_id)
+    not_closed = ExecutionReview(
+        xset.plan,
+        frozenset({copy_op.op_id}),
+        xset.run_id,
+        {},
+    )
     assert RefusalCode.SELECTION_NOT_CLOSED in _codes(not_closed, _world(not_closed))
 
-    failed = ExecutionSet(xset.plan, xset.selection, xset.run_id, {mkdir.op_id: Outcome.FAILED})
+    failed = ExecutionReview(
+        xset.plan,
+        xset.selection,
+        xset.run_id,
+        {mkdir.op_id: Outcome.FAILED},
+    )
     assert RefusalCode.DEPENDENCY_UNAVAILABLE in _codes(failed, _world(failed))
 
-    blocked = ExecutionSet(
+    blocked = ExecutionReview(
         xset.plan,
         xset.selection,
         xset.run_id,
@@ -950,14 +1157,14 @@ def test_refusal_leaves_plan_selection_status_and_world_unchanged() -> None:
     world = replace(_world(xset), free_space=0)
     before_plan = serialize_plan(xset.plan)
     before_selection = xset.selection
-    before_status = copy.deepcopy(xset.status)
-    before_world = copy.deepcopy(world)
+    before_status = dict(xset.status)
+    before_world = _world_fact(world)
     verdict = preflight(xset, world)
     assert not verdict.ok
     assert serialize_plan(xset.plan) == before_plan
     assert xset.selection == before_selection
     assert xset.status == before_status
-    assert world == before_world
+    assert _world_fact(world) == before_world
 
 
 def test_unrelated_stat_change_is_ignored_but_touched_change_refuses() -> None:
@@ -986,7 +1193,7 @@ def test_path_escape_and_unrepresentable_destination_are_refused() -> None:
 
 
 class InstrumentedFileSystem:
-    def __init__(self, xset: ExecutionSet) -> None:
+    def __init__(self, xset: ExecutionReview) -> None:
         self.xset = xset
         self.stat_calls: list[tuple[str, str]] = []
         self.root_calls: list[str] = []
@@ -1068,7 +1275,12 @@ def test_observation_is_read_only_and_stats_only_remaining_touched_paths_and_par
         source_directories=(_dir("folder"),),
     )
     first_copy = next(operation for operation in xset.plan.operations if operation.target_rel_path.endswith("one.bin"))
-    selected = ExecutionSet(xset.plan, frozenset({first_copy.op_id}), xset.run_id)
+    selected = ExecutionReview(
+        xset.plan,
+        frozenset({first_copy.op_id}),
+        xset.run_id,
+        {},
+    )
     fs = InstrumentedFileSystem(selected)
     before = fs.user_state
     world = observe(selected, fs)
@@ -1561,7 +1773,12 @@ def test_partial_remaining_selection_recomputes_capacity_from_shared_formula() -
         target_profile=no_hardlinks,
     )
     first = next(operation for operation in original.plan.operations if operation.target_rel_path == "a.bin")
-    remaining = ExecutionSet(original.plan, original.selection, original.run_id, {first.op_id: Outcome.SUCCEEDED})
+    remaining = ExecutionReview(
+        original.plan,
+        original.selection,
+        original.run_id,
+        {first.op_id: Outcome.SUCCEEDED},
+    )
     required = calculate_required_bytes(
         remaining.remaining(), target_profile=remaining.plan.target_profile, trash_on_update=True
     )

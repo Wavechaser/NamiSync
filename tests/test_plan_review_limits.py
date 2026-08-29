@@ -17,7 +17,8 @@ import pytest
 import namisync.core.review as review_module
 import namisync.modules.planner as planner_module
 import namisync.workflows.sync as sync_workflow_module
-from namisync.core.execution import ExecutionSet, validated_run_id
+from namisync.core.evidence import Outcome
+from namisync.core.execution import ExecutionReview, validated_run_id
 from namisync.core.models import (
     CapabilityProfile, DirRecord, EntryKind, FileIdentity, FileRecord,
     IgnoreSet, MetadataSnapshot, Root, ScanResult, ScanScope, ScanWarning,
@@ -161,11 +162,12 @@ def _planned(
         Scope.everything(),
     )
 
-def _xset(value: Plan, token: str = "c" * 32) -> ExecutionSet:
-    return ExecutionSet(
+def _xset(value: Plan, token: str = "c" * 32) -> ExecutionReview:
+    return ExecutionReview(
         value,
         derive_execution_selection(value).selection,
         validated_run_id(token),
+        {},
     )
 
 def _fill_final_ledger(admission: PlanReviewAdmission) -> None:
@@ -637,7 +639,7 @@ def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() 
     assert verdict.refusals == raw_verdict.refusals
     assert verdict.observed is captured
 
-def test_world_snapshot_uses_enumerated_mapping_items_and_rejects_duplicates() -> None:
+def test_world_constructor_normalizes_declared_mapping_enumeration() -> None:
     source = _scan(SOURCE_ROOT)
     target = _scan(TARGET_ROOT, files=(_file("obsolete.bin"),))
     value_plan = _planned(source, target)
@@ -656,15 +658,12 @@ def test_world_snapshot_uses_enumerated_mapping_items_and_rejects_duplicates() -
     )
     assert captured == ordinary
 
-    with pytest.raises(ValueError, match="duplicate stat subject"):
-        snapshot_plan_observed_world(
-            replace(
-                ordinary,
-                stats=_DuplicateItemMapping(ordinary.stats),
-            ),
-            xset,
-            PlanReviewAdmission(),
-        )
+    normalized = replace(
+        ordinary,
+        stats=_DuplicateItemMapping(ordinary.stats),
+    )
+    assert normalized.stats == ordinary.stats
+    assert type(normalized.stats) is MappingProxyType
 
 def _scanner_stat(*, directory: bool, inode: int) -> SimpleNamespace:
     return SimpleNamespace(
@@ -1211,7 +1210,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
         return value
 
     def observer(
-        execution_set: ExecutionSet,
+        execution_set: ExecutionReview,
         fs: object,
         *,
         review_admission: PlanReviewAdmission | None = None,
@@ -1244,7 +1243,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
         return world
 
     def preflight_callback(
-        execution_set: ExecutionSet,
+        execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
         review_admission: PlanReviewAdmission | None = None,
@@ -1474,7 +1473,7 @@ def test_nested_collaborator_cannot_launder_unissued_review_limit(
         )
     else:
         def observer(
-            execution_set: ExecutionSet,
+            execution_set: ExecutionReview,
             fs: object,
             *,
             review_admission: PlanReviewAdmission | None = None,
@@ -1629,7 +1628,7 @@ def test_producer_accounting_cannot_poison_outer_final_ledger(
         return plan(source, target, mapping, options, scope)
 
     def observer(
-        execution_set: ExecutionSet,
+        execution_set: ExecutionReview,
         fs: object,
         *,
         review_admission: PlanReviewAdmission | None = None,
@@ -1638,7 +1637,7 @@ def test_producer_accounting_cannot_poison_outer_final_ledger(
         return observe(execution_set, fs)  # type: ignore[arg-type]
 
     def preflight_callback(
-        execution_set: ExecutionSet,
+        execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
         review_admission: PlanReviewAdmission | None = None,
@@ -1666,6 +1665,8 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
     raw: dict[str, object] = {}
     adoption_calls: list[ScanResult] = []
     original_adopt = sync_workflow_module.adopt_plan_scan_result
+    plan_snapshot_calls: list[object] = []
+    original_plan_snapshot = sync_workflow_module.snapshot_plan_candidate
 
     def track_adoption(
         value: ScanResult,
@@ -1678,6 +1679,29 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
         sync_workflow_module,
         "adopt_plan_scan_result",
         track_adoption,
+    )
+
+    def track_plan_snapshot(
+        value: object,
+        source: ScanResult,
+        target: ScanResult,
+        options: SyncOptions,
+        *,
+        review_admission: PlanReviewAdmission | None = None,
+    ) -> Plan:
+        plan_snapshot_calls.append(value)
+        return original_plan_snapshot(
+            value,
+            source,
+            target,
+            options,
+            review_admission=review_admission,
+        )
+
+    monkeypatch.setattr(
+        sync_workflow_module,
+        "snapshot_plan_candidate",
+        track_plan_snapshot,
     )
 
     def scanner(
@@ -1725,39 +1749,44 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
         del review_admission
         assert source is raw["source"]
         assert target is raw["target"]
-        object.__setattr__(
-            raw["mapping"],
-            "ambiguous_source_keys",
-            frozenset({"POISON.BIN"}),
-        )
+        assert mapping is not raw["mapping"]
         assert mapping.ambiguous_source_keys == frozenset()
         value = plan(source, target, mapping, options, scope)
         raw["plan"] = value
         return value
 
     def observer(
-        execution_set: ExecutionSet,
+        review: ExecutionReview,
         fs: object,
         *,
         review_admission: PlanReviewAdmission | None = None,
     ) -> ObservedWorld:
         del review_admission
-        object.__setattr__(raw["plan"], "operations", ())
-        assert len(execution_set.plan.operations) == 1
-        value = observe(execution_set, fs)  # type: ignore[arg-type]
+        assert type(review) is ExecutionReview
+        assert review.plan is not raw["plan"]
+        assert len(review.plan.operations) == 1
+        with pytest.raises(TypeError):
+            review.status[review.plan.operations[0].op_id] = Outcome.SUCCEEDED
+        raw["review"] = review
+        value = observe(review, fs)  # type: ignore[arg-type]
         raw["world"] = value
         return value
 
     def preflight_callback(
-        execution_set: ExecutionSet,
+        review: ExecutionReview,
         world: ObservedWorld,
         *,
         review_admission: PlanReviewAdmission | None = None,
     ) -> Verdict:
         del review_admission
-        object.__setattr__(raw["world"], "stats", {})
+        assert review is raw["review"]
+        assert world is not raw["world"]
         assert world.stats
-        value = preflight(execution_set, world)
+        subject = next(iter(world.stats))
+        with pytest.raises(TypeError):
+            world.stats[subject] = StatObservation(None)
+        raw["adopted_world"] = world
+        value = preflight(review, world)
         raw["verdict"] = value
         return value
 
@@ -1773,6 +1802,7 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
     assert result.status is SessionState.COMPLETED
     artifact = saved[0]
     assert len(adoption_calls) == 2
+    assert plan_snapshot_calls == [raw["plan"]]
     assert adoption_calls[0] is raw["source"]
     assert adoption_calls[1] is raw["target"]
     assert artifact.source_scan is raw["source"]
@@ -1782,42 +1812,37 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
     ]
     assert len(artifact.plan.operations) == 1
     assert artifact.verdict.observed.stats
-
-    object.__setattr__(
-        raw["verdict"],
-        "refusals",
-        (Refusal(RefusalCode.ROOT_CHANGED),),
-    )
+    assert artifact.plan is raw["review"].plan
+    assert artifact.verdict.observed is raw["adopted_world"]
+    assert artifact.verdict is not raw["verdict"]
     assert artifact.verdict.refusals == ()
 
-def test_workflow_rejects_preflight_mutation_of_captured_world(
+def test_workflow_admitted_world_refuses_ordinary_mapping_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_workflow_roots(monkeypatch)
     saved: list[PlanArtifact] = []
     deps = _workflow_dependencies(saved)
 
-    def mutating_preflight(
-        execution_set: ExecutionSet,
+    def read_only_preflight(
+        review: ExecutionReview,
         world: ObservedWorld,
         *,
         review_admission: PlanReviewAdmission | None = None,
     ) -> Verdict:
-        del execution_set, review_admission
-        object.__setattr__(world, "stats", {})
-        object.__setattr__(world, "paths", {})
-        return Verdict(True, (), world)
+        del review_admission
+        subject = next(iter(world.stats))
+        with pytest.raises(TypeError):
+            world.stats[subject] = StatObservation(None)
+        return preflight(review, world)
 
-    deps.preflight = mutating_preflight
-    with pytest.raises(ValueError, match="mutated its admitted observed world"):
-        _run(deps)
-    assert saved == []
+    deps.preflight = read_only_preflight
+    assert _run(deps).status is SessionState.COMPLETED
+    assert len(saved) == 1
 
 
-@pytest.mark.parametrize("replacement", (False, True))
-def test_preflight_population_mutation_cannot_become_capacity_refusal(
+def test_preflight_replacement_world_cannot_become_capacity_refusal(
     monkeypatch: pytest.MonkeyPatch,
-    replacement: bool,
 ) -> None:
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 4)
     _patch_workflow_roots(monkeypatch)
@@ -1825,7 +1850,7 @@ def test_preflight_population_mutation_cannot_become_capacity_refusal(
     deps = _workflow_dependencies(saved)
 
     def mutating_preflight(
-        execution_set: ExecutionSet,
+        execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
         review_admission: PlanReviewAdmission | None = None,
@@ -1835,14 +1860,7 @@ def test_preflight_population_mutation_cannot_become_capacity_refusal(
             world,
             target_parent_paths=frozenset(str(index) for index in range(5)),
         )
-        if replacement:
-            return Verdict(True, (), mutated)
-        object.__setattr__(
-            world,
-            "target_parent_paths",
-            mutated.target_parent_paths,
-        )
-        return Verdict(True, (), world)
+        return Verdict(True, (), mutated)
 
     deps.preflight = mutating_preflight
     with pytest.raises(
@@ -1897,7 +1915,7 @@ def test_run_plan_freezes_request_fields_before_policy_access(
     real_observer = deps.observer
 
     def recording_observer(
-        execution_set: ExecutionSet,
+        execution_set: ExecutionReview,
         fs: object,
         *,
         review_admission: PlanReviewAdmission | None = None,
@@ -1941,7 +1959,7 @@ def test_workflow_accepts_exact_final_retention_and_refuses_first_extra(
     _patch_workflow_roots(monkeypatch)
 
     def refusing_preflight(
-        execution_set: ExecutionSet,
+        execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
         review_admission: PlanReviewAdmission | None = None,

@@ -204,10 +204,16 @@ a supported collaborator result.
 Only unavoidable shallow slots that coexist in the final scans, plan,
 observed world, and verdict commit to the retained ledger, together with the
 final operation and informational rows. Construction builders, sorting and
-indexes, selection/exclusion derivation, previews, callback copies, and other
-sequential temporaries are not retained owners. The workflow maps the first
-issued `ReviewFactLimitError` to `REFUSED+UNRUN` without saving a plan or
-exposing a partial result.
+indexes, selection/exclusion derivation, and other sequential temporaries are
+not retained owners. Each preflight cycle now creates one frozen
+`ExecutionReview`: plan review gives it empty status, while execution/resume
+copies status only after capturing mutable execution authority. The same review
+reaches observer and preflight; the observer result is admitted once and that
+same deeply read-only world reaches preflight and the retained verdict. There
+are no disposable plan previews or second callback-world copies. Observer and
+verdict result adoption remain separate boundaries through checkpoint 4P.18.
+The workflow maps the first issued `ReviewFactLimitError` to `REFUSED+UNRUN`
+without saving a plan or exposing a partial result.
 
 The retained ledger and every zeroed producer or result admission share one
 opaque issuer for that plan run and no source graph. The mapping accepts only
@@ -217,14 +223,14 @@ wrong tree kind, or independently issued signal fails ordinarily, as does the
 same signal from phase delivery, correspondence, a nested scanner/observer
 collaborator, or destination policy. Preflight callback-world revalidation uses
 an unrelated bounded admission so mutation cannot become capacity refusal.
-Ordinary scanner, planner, selection, observer, and preflight behavior is
-unchanged.
+Scanner, planner, and selection behavior is unchanged; observer and preflight
+now receive the immutable review projection instead of mutable continuation.
 
 This is the planning-source ownership prerequisite for checkpoint 4. Its row
 and shallow-reference counters are not a reservation formula, heap estimate,
 or complete task-artifact validator. Construction/container capacity,
-sorting/index storage, selection/previews, complete projections,
-callback copies, serialization, native/browser copies, and
+sorting/index storage, selection, observer/verdict adoption, complete
+projections, serialization, native/browser copies, and
 multi-session owners still need separate closure or charge before the
 checkpoint-4 model can freeze.
 

@@ -229,6 +229,83 @@ def _validate_published_evidence_shape(
     return value
 
 
+def _remaining_operations(
+    plan: Plan,
+    selection: frozenset[OpId],
+    status: Mapping[OpId, Outcome],
+) -> tuple[PlanOperation, ...]:
+    """Return selected unsettled operations in reviewed plan order."""
+
+    return tuple(
+        operation
+        for operation in plan.operations
+        if operation.op_id in selection and operation.op_id not in status
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class ExecutionReview:
+    """Immutable execution facts exposed to read-only collaborators."""
+
+    plan: Plan
+    selection: frozenset[OpId]
+    run_id: RunId
+    status: Mapping[OpId, Outcome]
+
+    def __post_init__(self) -> None:
+        if type(self.plan) is not Plan or type(self.plan.operations) is not tuple:
+            raise TypeError("execution review plan has the wrong shape")
+        if type(self.plan.fingerprint) is not str:
+            raise TypeError("execution review plan fingerprint must be exact text")
+        if type(self.selection) is not frozenset:
+            raise TypeError("execution review selection must be an exact frozenset")
+        if type(self.run_id) is not str:
+            raise TypeError("execution review run id must be exact text")
+        validated_run_id(self.run_id)
+        if type(self.status) not in {dict, MappingProxyType}:
+            raise TypeError(
+                "execution review status must be an exact dict or mapping proxy"
+            )
+        if any(
+            type(op_id) is not str or _FIXED_ID.fullmatch(op_id) is None
+            for op_id in self.selection
+        ):
+            raise TypeError("execution review selection must contain exact ids")
+        operation_ids: set[OpId] = set()
+        for operation in self.plan.operations:
+            if type(operation) is not PlanOperation:
+                raise TypeError(
+                    "execution review plan must contain exact PlanOperation values"
+                )
+            operation_ids.add(operation.op_id)
+        unknown = self.selection - operation_ids
+        if unknown:
+            raise ValueError(
+                "execution review selection contains unknown operation ids: "
+                f"{sorted(unknown)!r}"
+            )
+        status = dict(self.status)
+        if any(
+            type(op_id) is not str or _FIXED_ID.fullmatch(op_id) is None
+            for op_id in status
+        ):
+            raise TypeError("execution review status must contain exact ids")
+        if any(type(outcome) is not Outcome for outcome in status.values()):
+            raise TypeError("execution review status values have the wrong type")
+        invalid_status = status.keys() - self.selection
+        if invalid_status:
+            raise ValueError(
+                "execution review status contains unselected operation ids: "
+                f"{sorted(invalid_status)!r}"
+            )
+        object.__setattr__(self, "status", MappingProxyType(status))
+
+    def remaining(self) -> tuple[PlanOperation, ...]:
+        """Return selected operations without a final status, in plan order."""
+
+        return _remaining_operations(self.plan, self.selection, self.status)
+
+
 @dataclass(slots=True)
 class ExecutionSet:
     """A selected plan plus mutable continuation state for pause/resume."""
@@ -445,11 +522,7 @@ class ExecutionSet:
     def remaining(self) -> tuple[PlanOperation, ...]:
         """Return selected operations without a final status, in plan order."""
 
-        return tuple(
-            operation
-            for operation in self.plan.operations
-            if operation.op_id in self.selection and operation.op_id not in self.status
-        )
+        return _remaining_operations(self.plan, self.selection, self.status)
 
 
 def validate_execution_set(value: object) -> None:
