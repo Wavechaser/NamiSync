@@ -5,7 +5,6 @@ from __future__ import annotations
 import ast
 import inspect
 import json
-from dataclasses import replace
 from pathlib import Path
 from textwrap import dedent
 from threading import Event, Lock, Thread, current_thread
@@ -21,7 +20,6 @@ from _startup_test_support import (
 )
 
 import namisync.interfaces.web.host as host
-import namisync.interfaces.web.runtime_profile as runtime_profile
 from namisync.interfaces.web.commands import (
     CommandAccess,
     CommandRetry,
@@ -44,87 +42,34 @@ from namisync.interfaces.web.paths import AppPaths
 from namisync.interfaces.web.readiness import (
     CommandPhase,
     DesktopReadinessGate,
-    DesktopStartupError,
     ReadinessContext,
-)
-from namisync.interfaces.web.runtime_profile import (
-    TaskArtifactRuntimeProfile,
-    task_artifact_runtime_supported,
 )
 
 
 _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 
 
-def _supported_task_runtime_profile() -> TaskArtifactRuntimeProfile:
-    return TaskArtifactRuntimeProfile(
-        implementation="cpython",
-        version=(3, 13, 14),
-        release_level="final",
-        platform="win32",
-        machine="amd64",
-        pointer_bits=64,
-        debug_build=False,
-        gil_disabled=False,
-        pymalloc_enabled=True,
-        allocator_override="",
-    )
-
-
-def test_task_artifact_runtime_profile_accepts_only_the_frozen_premise() -> None:
-    supported = _supported_task_runtime_profile()
-
-    assert task_artifact_runtime_supported(supported)
-    assert task_artifact_runtime_supported(
-        replace(supported, machine="x86_64", allocator_override="pymalloc")
-    )
-
-
-@pytest.mark.parametrize(
-    ("field_name", "value"),
-    [
-        pytest.param("implementation", "pypy", id="implementation"),
-        pytest.param("version", (3, 13, 13), id="version"),
-        pytest.param("release_level", "candidate", id="release-level"),
-        pytest.param("platform", "linux", id="platform"),
-        pytest.param("machine", "arm64", id="machine"),
-        pytest.param("pointer_bits", 32, id="pointer-width"),
-        pytest.param("debug_build", True, id="debug-build"),
-        pytest.param("gil_disabled", True, id="free-threaded"),
-        pytest.param("pymalloc_enabled", False, id="pymalloc-disabled"),
-        pytest.param("allocator_override", "malloc", id="allocator-override"),
-    ],
-)
-def test_task_artifact_runtime_profile_rejects_each_premise_drift(
-    field_name: str,
-    value: object,
-) -> None:
-    assert not task_artifact_runtime_supported(
-        replace(_supported_task_runtime_profile(), **{field_name: value})
-    )
-
-
-def test_task_registry_refuses_runtime_drift_before_construction(
+def test_task_registry_has_no_task_model_runtime_admission(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    registry = object()
+    service = object()
     constructed: list[object] = []
-    monkeypatch.setattr(
-        runtime_profile,
-        "current_task_artifact_runtime_profile",
-        lambda: replace(_supported_task_runtime_profile(), version=(3, 13, 15)),
-    )
+    monkeypatch.setenv("PYTHONMALLOC", "malloc")
     import namisync.interfaces.web.drain as drain_module
+
+    def construct(value: object) -> object:
+        constructed.append(value)
+        return registry
 
     monkeypatch.setattr(
         drain_module,
         "TaskRegistry",
-        lambda service: constructed.append(service),
+        construct,
     )
 
-    with pytest.raises(DesktopStartupError, match="64-bit CPython 3.13.14"):
-        host._task_registry(object())
-
-    assert constructed == []
+    assert host._task_registry(service) is registry
+    assert constructed == [service]
 
 
 def test_desktop_service_requires_session_attachment(

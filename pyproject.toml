@@ -7,7 +7,7 @@ name = "namisync"
 dynamic = ["version"]
 description = "Safety-first one-way file mirroring for Windows"
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
+requires-python = ">=3.13"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE"]
 dependencies = [

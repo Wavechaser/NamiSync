@@ -526,15 +526,11 @@ through a lazy wrapper.
 `M1_BRIDGE.md` owns the exact transport mechanisms and acceptance gates below
 it. This document records their interface-layer implementation.
 
-Before `TaskRegistry` import or construction, the production host admits only
-the exact runtime profile owned by `runtime_profile.py`: standard 64-bit
-CPython 3.13.14 final on Windows x64, GIL-enabled, with pymalloc active and no
-nonstandard allocator override. The patch release is exact because checkpoint
-4's object coefficients cannot inherit authority across an unreviewed CPython
-patch family. A mismatch is a startup refusal with install and restart
-guidance; no task maps, receipts, queues, or reservation state are allocated
-first. The predicate is separately mirrored by the checkpoint-4 analytical
-validator so a model/runtime drift cannot become a supported launch.
+Task-registry construction has no model-specific Python patch, build, GIL, or
+allocator admission. Distribution metadata declares only the Python 3.13 lower
+bound; exact runtime profiles remain evidence qualifiers rather than startup
+gates. Any future representation-dependent predicate must land atomically with
+its accepted model, validator, and evidence.
 
 The replacement for the unused `interfaces/ui_state.py` prototype now owns
 strict-shape `ui-state.json` independently from database-owned

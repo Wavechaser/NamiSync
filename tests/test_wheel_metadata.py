@@ -12,6 +12,25 @@ from conftest import BuiltWheel
 PROJECT_ROOT = Path(__file__).parents[1]
 
 
+def test_built_wheel_declares_lower_bound_only_python_requirement(
+    built_wheel: BuiltWheel,
+) -> None:
+    project = tomllib.loads(
+        (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    )
+    assert project["project"]["requires-python"] == ">=3.13"
+
+    with zipfile.ZipFile(built_wheel.path) as wheel:
+        metadata_name = next(
+            name
+            for name in wheel.namelist()
+            if name.endswith(".dist-info/METADATA")
+        )
+        metadata_lines = wheel.read(metadata_name).decode("utf-8").splitlines()
+
+    assert "Requires-Python: >=3.13" in metadata_lines
+
+
 def test_built_wheel_declares_and_contains_gpl_license(
     built_wheel: BuiltWheel,
 ) -> None:

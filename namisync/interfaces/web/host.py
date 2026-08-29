@@ -1140,9 +1140,6 @@ def _folder_slots():
 
 
 def _task_registry(service: object):
-    from .runtime_profile import require_task_artifact_runtime
-
-    require_task_artifact_runtime()
     from .drain import TaskRegistry
 
     return TaskRegistry(service)

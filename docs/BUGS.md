@@ -746,6 +746,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MODERATE - FIXED (2026-08-29). Orphan analytical admission. Desktop startup
+  refused every runtime outside one exact CPython patch, GIL, and allocator
+  profile even though the checkpoint-4 object model, validator, and acceptance
+  evidence that could justify that restriction do not exist. Cause: a model-
+  dependent prerequisite gate remained active after the draft model was
+  rejected. Fixed by removing the gate, restoring the lower-bound-only Python
+  metadata policy, and retaining exact runtime profiles only as measurement
+  qualifiers; native dependency and WebView2 compatibility gates remain.
 - MODERATE - OPEN (2026-08-27). Response-copy ownership gap. Python now admits
   each hostile response occurrence against the exact 8 MiB canonical-JSON wall
   while detaching it, then retires the raw graph before primitive projection.

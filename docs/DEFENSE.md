@@ -235,13 +235,14 @@ win between the final epoch check and the send. Any observed synchronous
 re-entry reopens this premise and the document-custody model; a timeout is not
 treated as proof that the call returned.
 
-Current source contains an exact CPython 3.13.14 task-registry admission that
-was added ahead of the checkpoint-4 object model it claims to protect. No
-accepted model, constant, fixture, validator, or BR-G-45 evidence currently
-authorizes that restriction. It is therefore an orphan implementation gate,
-not a supported-baseline premise, and checkpoint 4P.3 removes it. Exact runtime
-profiles recorded with benchmarks remain evidence profiles for those runs;
-they do not become launch policy by being measured.
+Package metadata declares only a Python 3.13 lower bound. It imposes no upper-
+version, implementation, build, GIL, allocator, or architecture admission, and
+does not by itself prove that every future interpreter satisfies the desktop
+dependencies or supported baseline. Exact runtime profiles recorded with
+benchmarks qualify those runs only. Any future representation-dependent
+production premise must land atomically with its owning model, constants,
+fixture, validator, and acceptance evidence rather than precede them as launch
+policy.
 
 The desktop host must remain at standard integrity. Before headed beta release,
 an elevated launch must be refused before command exposure unless a revision of
