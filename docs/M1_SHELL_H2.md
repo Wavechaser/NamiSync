@@ -374,7 +374,7 @@ its finite surface and one atomic outcome are named here.
 | 4P.17 | Apply D4A by replacing deep planner-result reconstruction with one exact compound planner admission. | `tests/test_planner.py`, `tests/test_plan_review_limits.py`, and planner/workflow consumer departments. | Complete |
 | 4P.18 | Apply D4B by replacing deep observer/verdict reconstruction with exact compound admission at their declared adoption points. | `tests/test_preflight.py`, `tests/test_plan_review_limits.py`, and preflight/workflow consumer departments. | Complete |
 | 4P.19 | Introduce `RecordingSpec` so recording authority no longer resides in mutable `ExecutionSet`, without changing settlement or recording outcomes. | `tests/test_executor_settlement.py`, `tests/test_post_execution_workflow.py`, recorder integration tests, and the protected settlement oracle under its existing gate. | Complete |
-| 4P.20 | Apply D1B/F6 by trimming immutable execution authority/fact graphs, including the unread `ExecutionOperationFact.content_bytes`, while retaining the required mutable-overlay checks. | `tests/test_post_execution_workflow.py`, `tests/test_payload_roundtrip.py`, executor/workflow departments, and authority call-count regressions. | Pending |
+| 4P.20 | Apply D1B/F6 by trimming immutable execution authority/fact graphs, including the unread `ExecutionOperationFact.content_bytes`, while retaining the required mutable-overlay checks. | `tests/test_post_execution_workflow.py`, `tests/test_payload_roundtrip.py`, executor/workflow departments, and authority call-count regressions. | Complete |
 | 4P.21 | Apply C4 by sharing only the population-admission primitives while keeping each domain's wall declaration, count semantics, precedence, and user outcome independent. | `tests/test_plan_review_limits.py`, `tests/test_inventory_workflow.py`, `tests/test_scanner.py`, and first-excess matrices. | Pending |
 | 4P.22 | Apply C4/C8 by separating workflow-retained budgets from producer gates and reducing scanner to one admission parameter. | `tests/test_plan_review_limits.py`, `tests/test_scanner.py`, `tests/test_inventory_workflow.py`, and facade-consumer departments. | Pending |
 | 4P.23 | Apply D6 with private exact signal types and remove issuer, `fresh()`, and consume choreography without weakening refusal provenance or status truth. | Refusal/provenance cases in `tests/test_plan_review_limits.py`, `tests/test_workflows.py`, and `tests/test_inventory_workflow.py`. | Pending |
@@ -592,12 +592,13 @@ not freeze private counters, handler timing, or callback choreography.
   paths, mount/inventory values, and runtime `_inventory_details` still need
   exact task/session retirement or a separately charged bounded owner before
   completion capacity can be released.
-- The next consolidation/model pass owns the cost and placement review for
-  full-graph revalidation on every callback/checkpoint, disposable fact-graph
-  construction, duplicate operation/candidate maps and settlement snapshots,
-  the currently unused `ExecutionOperationFact.content_bytes`, verifier
-  aggregate-versus-stream confirmation, and standardized four-string record
-  identities. It also owns unslotted/custom nested Python values, result
+- The consolidation pass removed execution plan hashing, duplicate operation
+  fact graphs, and immutable evidence/issue reconstruction from callback
+  guards. Mutable execution compound state is audited once at executor and
+  verifier return; required callback seams compare detached prior baselines.
+  The remaining model owns the cost of those shallow comparisons, duplicate
+  candidate maps, verifier aggregate-versus-stream confirmation, standardized
+  four-string record identities, unslotted/custom nested Python values, result
   projection containers, EventHub envelope/body subscriber aliases,
   SessionStore live-record aliases, and process-restart durability of the item
   accumulator and exclusion receipt.

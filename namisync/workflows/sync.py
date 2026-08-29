@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -13,7 +13,6 @@ from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import ItemOutcome, PhaseChanged, snapshot_item_outcome
 from namisync.core.evidence import Outcome, RecordingStatus, snapshot_attestation
 from namisync.core.execution import (
-    ExecutionOperationFact,
     ExecutionReview,
     ExecutionSet,
     ExecutionSetAuthority,
@@ -24,8 +23,10 @@ from namisync.core.execution import (
     RecordingSpec,
     TaskRecordingIssue,
     TaskRecordingIssueReason,
+    audit_execution_set_authority,
     revalidate_execution_set_authority,
     snapshot_execution_set_authority,
+    validate_execution_set,
     validated_run_id,
 )
 from namisync.core.integrity import (
@@ -579,6 +580,9 @@ def _run_execution_with_recording(
         if isinstance(continuation, ExecutionSet)
         else continuation
     ]
+    if not isinstance(current[0], (ExecuteContinuation, VerifyContinuation)):
+        raise TypeError("execution workflow requires a typed continuation")
+    validate_execution_set(current[0].execution_set)
     pre_exit_execution_authority: list[ExecutionSetAuthority | None] = [None]
     downstream_sink = continuation_sink or (lambda value: None)
 
@@ -591,7 +595,8 @@ def _run_execution_with_recording(
         execution_authority = snapshot_execution_set_authority(
             active.execution_set
         )
-        pre_exit_execution_authority[0] = execution_authority
+        if pre_exit_execution_authority[0] is None:
+            pre_exit_execution_authority[0] = execution_authority
         candidate_authority = (
             snapshot_post_copy_selection_authority(active.candidates)
             if isinstance(active, VerifyContinuation)
@@ -881,6 +886,7 @@ def _run_execution(
             sink=sink,
         )
     if commitment_error is not None:
+        commitment_detail_authority = snapshot_execution_set_authority(xset)
         try:
             deps.save_execution_details(
                 ExecutionDetails(
@@ -891,9 +897,18 @@ def _run_execution(
         except PauseRequested:
             raise
         except Canceled as error:
+            try:
+                revalidate_execution_set_authority(
+                    xset,
+                    commitment_detail_authority,
+                    allow_progress=False,
+                )
+            except Exception:
+                retire_exception_graph(error)
+                raise
             retire_exception_graph(error)
             if isinstance(current, VerifyContinuation) or resumed:
-                return settle_canceled_execution(
+                return _settle_canceled_execution_admitted(
                     current,
                     Disposition.RAN,
                     deps,
@@ -987,9 +1002,14 @@ def _run_execution(
     except PauseRequested:
         raise
     except Canceled as error:
+        try:
+            revalidate_preflight_authority()
+        except Exception:
+            retire_exception_graph(error)
+            raise
         retire_exception_graph(error)
         if isinstance(current, VerifyContinuation) or resumed:
-            return settle_canceled_execution(
+            return _settle_canceled_execution_admitted(
                 current,
                 Disposition.RAN,
                 deps,
@@ -1088,15 +1108,16 @@ def _run_execution(
             execute_continuation = current
             initially_settled = {
                 item_id: (
-                    settlement.outcome,
-                    settlement.recording_reason,
+                    outcome,
+                    execution_authority.recording_reasons.get(item_id),
                 )
-                for item_id, settlement in execution_authority.settlements.items()
+                for item_id, outcome in execution_authority.status.items()
             }
             pending_operation_by_id = {
-                item_id: operation
-                for item_id, operation in execution_authority.operations.items()
-                if item_id not in initially_settled
+                str(operation.op_id): operation
+                for operation in xset.plan.operations
+                if operation.op_id in xset.selection
+                and operation.op_id not in execution_authority.status
             }
             operation_items_by_id: dict[str, ItemOutcome] = {}
             operation_items_by_id.update(
@@ -1105,20 +1126,18 @@ def _run_execution(
                     : current.reported_exclusion_count
                 ]
             )
-            operation_id_by_text = {
-                str(op_id): op_id for op_id in xset.selection
-            }
             confirmed_settlement_count = len(xset.status)
             confirmed_recording_reason_count = len(xset.recording_reasons)
             confirmed_evidence_count = len(xset.published_evidence)
             pending_execution_item: ItemOutcome | None = None
             last_full_reconciliation_error: BaseException | None = None
+            executor_invoked = False
+            executor_transfer_audited = False
 
             def take_operation_results() -> tuple[ItemOutcome, ...]:
                 owned = tuple(
                     _iter_ordered_operation_results(
                         xset.plan,
-                        execution_authority.operations,
                         operation_items_by_id,
                         initially_settled,
                     )
@@ -1170,7 +1189,7 @@ def _run_execution(
                         )
                     return
 
-                op_id = operation_id_by_text[item.item_id]
+                op_id = pending_operation_by_id[item.item_id].op_id
                 recording_reason = xset.recording_reasons.get(op_id)
                 has_evidence = op_id in xset.published_evidence
                 if (
@@ -1207,7 +1226,16 @@ def _run_execution(
 
             def reconcile_execution(*, complete: bool) -> None:
                 nonlocal last_full_reconciliation_error
+                nonlocal executor_transfer_audited
+                if executor_transfer_audited:
+                    return
+                executor_transfer_audited = True
                 try:
+                    audit_execution_set_authority(
+                        xset,
+                        execution_authority,
+                        allow_progress=True,
+                    )
                     _reconcile_executor_outcomes(
                         xset,
                         execution_authority,
@@ -1220,6 +1248,12 @@ def _run_execution(
                     raise
                 else:
                     last_full_reconciliation_error = None
+
+            def reconcile_execution_exit(*, complete: bool) -> None:
+                if executor_invoked:
+                    reconcile_execution(complete=complete)
+                else:
+                    revalidate_preflight_authority()
 
             def checkpoint_execution() -> None:
                 reconcile_execution_edge()
@@ -1290,6 +1324,7 @@ def _run_execution(
                 emission_failure = emit_exclusions(allow_control=False)
                 if emission_failure is not None:
                     failure = emission_failure
+                validate_execution_set(xset)
                 phase = _execute_continuation_phase(
                     xset,
                     PhaseStatus.FAILED,
@@ -1317,6 +1352,7 @@ def _run_execution(
                     target_parent_paths,
                     xset.run_id,
                 )
+                executor_invoked = True
                 returned_result = deps.executor(
                     xset,
                     RunContext(observe_execution, checkpoint_execution),
@@ -1364,11 +1400,6 @@ def _run_execution(
                 retained_execution_authority = (
                     snapshot_execution_set_authority(xset)
                 )
-                revalidate_execution_set_authority(
-                    xset,
-                    retained_execution_authority,
-                    allow_progress=False,
-                )
                 if (
                     not current.candidates.candidates
                     and not current.missing_evidence_ids
@@ -1409,7 +1440,6 @@ def _run_execution(
                 result_items = list(
                     _iter_ordered_operation_results(
                         xset.plan,
-                        execution_authority.operations,
                         operation_items_by_id,
                         initially_settled,
                     )
@@ -1417,7 +1447,7 @@ def _run_execution(
             except PauseRequested as error:
                 if error is not last_full_reconciliation_error:
                     try:
-                        reconcile_execution(complete=False)
+                        reconcile_execution_exit(complete=False)
                     except Exception:
                         retire_exception_graph(error)
                         raise
@@ -1425,7 +1455,7 @@ def _run_execution(
             except Canceled as error:
                 if error is not last_full_reconciliation_error:
                     try:
-                        reconcile_execution(complete=False)
+                        reconcile_execution_exit(complete=False)
                     except Exception as reconciliation_error:
                         retire_exception_graph(error)
                         return failed_execution_result(
@@ -1458,7 +1488,7 @@ def _run_execution(
             except Exception as error:
                 if error is not last_full_reconciliation_error:
                     try:
-                        reconcile_execution(complete=False)
+                        reconcile_execution_exit(complete=False)
                     except Exception as reconciliation_error:
                         retire_exception_graph(error)
                         error = reconciliation_error
@@ -1473,7 +1503,6 @@ def _run_execution(
                 operation_items_by_id,
                 initially_settled,
                 execution_authority,
-                operation_id_by_text,
                 pending_operation_by_id,
                 reconcile_execution_edge,
                 reconcile_execution,
@@ -1525,12 +1554,18 @@ def _run_execution(
         )
         pending_verification_item_id: str | None = None
         last_verification_reconciliation_error: BaseException | None = None
+        verifier_invoked = False
+        verifier_transfer_audited = False
 
         def reconcile_verification(*, complete: bool) -> None:
             nonlocal last_verification_reconciliation_error
+            nonlocal verifier_transfer_audited
+            if verifier_transfer_audited:
+                return
+            verifier_transfer_audited = True
             try:
                 reconcile_verification_edge(allow_pending=False)
-                revalidate_execution_set_authority(
+                audit_execution_set_authority(
                     xset,
                     retained_execution_authority,
                     allow_progress=False,
@@ -1645,6 +1680,25 @@ def _run_execution(
                 allow_progress=True,
             )
 
+        def revalidate_verifier_setup_authority() -> None:
+            reconcile_verification_edge(allow_pending=False)
+            revalidate_execution_set_authority(
+                xset,
+                retained_execution_authority,
+                allow_progress=False,
+            )
+            revalidate_post_copy_selection_authority(
+                current.candidates,
+                initial_verification_authority,
+                allow_progress=False,
+            )
+
+        def reconcile_verification_exit(*, complete: bool) -> None:
+            if verifier_invoked:
+                reconcile_verification(complete=complete)
+            else:
+                revalidate_verifier_setup_authority()
+
         def checkpoint_verification() -> None:
             reconcile_verification_edge(allow_pending=True)
             ctx.checkpoint()
@@ -1704,6 +1758,7 @@ def _run_execution(
             )
             if current_recording is not current.recording:
                 current = replace(current, recording=current_recording)
+            validate_execution_set(xset)
             verify_phase = _verify_phase(
                 current,
                 items_done_floor=observed_verification_count,
@@ -1771,6 +1826,7 @@ def _run_execution(
                 post_copy_bytes_total=progress_bytes_total,
             )
             del raw_verification_context
+            verifier_invoked = True
             returned_verification = deps.verifier(
                 current.candidates,
                 verification_context,
@@ -1832,7 +1888,7 @@ def _run_execution(
         except PauseRequested as error:
             if error is not last_verification_reconciliation_error:
                 try:
-                    reconcile_verification(complete=False)
+                    reconcile_verification_exit(complete=False)
                 except Exception as reconciliation_error:
                     retire_exception_graph(error)
                     return failed_verification_result(reconciliation_error)
@@ -1842,7 +1898,7 @@ def _run_execution(
         except Canceled as error:
             if error is not last_verification_reconciliation_error:
                 try:
-                    reconcile_verification(complete=False)
+                    reconcile_verification_exit(complete=False)
                 except Exception as reconciliation_error:
                     retire_exception_graph(error)
                     return failed_verification_result(reconciliation_error)
@@ -1882,7 +1938,7 @@ def _run_execution(
         except Exception as error:
             if error is not last_verification_reconciliation_error:
                 try:
-                    reconcile_verification(complete=False)
+                    reconcile_verification_exit(complete=False)
                 except Exception as reconciliation_error:
                     retire_exception_graph(error)
                     error = reconciliation_error
@@ -1902,6 +1958,22 @@ def settle_canceled_execution(
         raise TypeError("canceled settlement requires a typed continuation")
     if isinstance(continuation, VerifyContinuation):
         continuation = _exact_verify_continuation(continuation)
+
+    xset = continuation.execution_set
+    validate_execution_set(xset)
+    return _settle_canceled_execution_admitted(
+        continuation,
+        disposition,
+        deps,
+    )
+
+
+def _settle_canceled_execution_admitted(
+    continuation: ExecutionContinuation,
+    disposition: Disposition,
+    deps: SyncDependencies,
+) -> OperationResult:
+    """Settle cancellation for a continuation admitted by the caller."""
 
     xset = continuation.execution_set
     if isinstance(continuation, ExecuteContinuation):
@@ -2155,7 +2227,7 @@ def _exclusion_items(
 
 def _canonical_operation_outcome(
     value: ItemOutcome,
-    pending_by_id: dict[str, ExecutionOperationFact],
+    pending_by_id: dict[str, PlanOperation],
     accepted_by_id: dict[str, ItemOutcome],
 ) -> ItemOutcome:
     """Bind an executor outcome to reviewed operation identity and path facts."""
@@ -2179,25 +2251,19 @@ def _canonical_operation_outcome(
 def _reconcile_executor_outcomes(
     xset: ExecutionSet,
     authority: ExecutionSetAuthority,
-    pending_by_id: dict[str, ExecutionOperationFact],
+    pending_by_id: dict[str, PlanOperation],
     accepted_by_id: dict[str, ItemOutcome],
     *,
     complete: bool,
 ) -> None:
     """Require accepted operation events to match durable continuation truth."""
 
-    revalidate_execution_set_authority(
-        xset,
-        authority,
-        allow_progress=True,
-    )
-
     accepted_ids = {
         item_id for item_id in accepted_by_id if item_id in pending_by_id
     }
     if complete and len(accepted_ids) != len(pending_by_id):
         raise ValueError("executor omitted an outcome for a pending operation")
-    initially_settled_ids = set(authority.settlements)
+    initially_settled_ids = set(authority.status)
     newly_settled_ids = {
         str(op_id)
         for op_id in xset.status
@@ -2207,10 +2273,9 @@ def _reconcile_executor_outcomes(
         raise ValueError(
             "executor settlement must match its accepted operation outcomes"
         )
-    op_id_by_text = {str(op_id): op_id for op_id in xset.selection}
     for item_id in accepted_ids:
         item = accepted_by_id[item_id]
-        op_id = op_id_by_text[item_id]
+        op_id = pending_by_id[item_id].op_id
         settled_outcome = xset.status.get(op_id)
         recording_reason = xset.recording_reasons.get(op_id)
         expected_recording = (
@@ -2324,7 +2389,6 @@ def _validate_post_copy_verifier_completion(
 
 def _iter_ordered_operation_results(
     plan: Plan,
-    operation_facts: Mapping[str, ExecutionOperationFact],
     items_by_id: dict[str, ItemOutcome],
     initially_settled: dict[
         str,
@@ -2342,12 +2406,11 @@ def _iter_ordered_operation_results(
         settlement = initially_settled.get(item_id)
         if settlement is None:
             continue
-        operation = operation_facts[item_id]
         outcome, recording_reason = settlement
         yield ItemOutcome(
             item_id=item_id,
-            kind=operation.kind,
-            path=operation.target_rel_path,
+            kind=plan_operation.kind,
+            path=plan_operation.target_rel_path,
             outcome=outcome,
             detail={"continued": True},
             recording=(

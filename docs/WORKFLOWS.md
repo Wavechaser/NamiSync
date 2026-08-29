@@ -44,12 +44,12 @@ classifies current durable evidence in the original execution scope.
 Installed NamiSync modules are trusted-but-fallible participants, not
 adversarial security principals. Their public returns are the workflow's named
 ownership-transfer points: admit a compound result once, then share immutable
-base values with first-party read-only consumers. Current deep reconstruction,
-repeated immutable-authority checks, and forged-signal authentication remain
-transitional implementation until their explicit 4P rows replace them; they
-are not durable package-boundary obligations. Population admission, fresh
-filesystem observation, mutable-overlay settlement checks, reentrant callback
-ordering, and exception-graph retirement remain independent requirements.
+base values with first-party read-only consumers. Completed 4P adoption rows no
+longer deep-reconstruct immutable scan, plan, observation, verdict, or execution
+authority graphs. Mutable execution overlays still receive one compound audit
+at each producer return and cheap prior-truth guards at reentrant callback
+seams. Population admission, fresh filesystem observation, callback ordering,
+and exception-graph retirement remain independent requirements.
 
 Both opaque codecs admit the complete typed graph before building their JSON
 object/list projection. The walk rechecks nested operations, stats, metadata,
@@ -571,8 +571,17 @@ Linked verification likewise reconciles only the current accepted-outcome and
 completion delta at item, progress, and checkpoint seams. An accepted outcome
 may remain pending while its first-party verifier returns from the reliable
 emit and marks completion; a second outcome cannot cross that gap. The complete
-execution and candidate authorities are audited once when the verifier returns,
-instead of being rescanned around every emitted item.
+mutable execution overlay is audited once after the executor returns, together
+with emitted-settlement reconciliation. A linked verifier return gets one
+strict no-execution-change audit plus its existing post-copy completion audit,
+instead of rescanning immutable plan/fact graphs around every emitted item.
+Executor outcomes bind through one workflow-local map of the canonical
+`PlanOperation` references; final plan-order iteration uses the operation being
+traversed rather than a duplicate fact graph.
+Normal, control, and ordinary-error returns share those same once-only audit
+owners. Public execution and direct canceled-settlement entry each perform one
+complete continuation admission; nested cancellation reuses the admission
+already held by the running workflow.
 Standalone integrity uses the same pre/post checkpoint rule and incremental
 accepted-outcome/completion handshake. It retains a reliable outcome as soon as
 the caller-owned sink returns, before checking whether that callback changed
@@ -593,8 +602,10 @@ that spec; the production `_LedgerRunRecording` retains the same object through
 recorder runtime therefore receive no mutable execution status, evidence,
 progress, or recording-attribution container. Workflow helpers keep the
 execution set only to attribute callback failures and derive aggregate
-recording truth. Existing execution/candidate authority guards and the
-terminal projection remain through checkpoint 4P.20, preserving the accepted
+recording truth. Cheap fixed-reference and prior-overlay guards remain around
+recording open/enter, finish, context exit, existing-run fallback, cancellation,
+continuation/exclusion sinks, and verify-degradation publication. They retain
+the first safe pre-callback issue/counter baseline and preserve the accepted
 item prefix across ordinary failure, paused cancellation, fallback finishing,
 and context exit. Settlement order, callback count, wire shape, and recorder
 outcomes are unchanged.

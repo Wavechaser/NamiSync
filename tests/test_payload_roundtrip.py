@@ -697,11 +697,9 @@ def test_execution_validation_and_encoding_do_not_rebuild_valid_graphs(
 
     monkeypatch.setattr(Plan, "__post_init__", forbid_reconstruction)
     monkeypatch.setattr(ExecutionSet, "__init__", forbid_reconstruction)
-    monkeypatch.setattr(
-        execution_module,
-        "_published_evidence_fact",
-        forbid_reconstruction,
-    )
+
+    assert not hasattr(execution_module, "ExecutionOperationFact")
+    assert not hasattr(execution_module, "_published_evidence_fact")
 
     validate_execution_set(decoded.execution_set)
 

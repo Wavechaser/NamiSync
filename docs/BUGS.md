@@ -1708,9 +1708,12 @@ defect, and move implementation-level test choreography out of the log.
   whole-graph validator at both transfer points and per-item seams. The
   execution-outcome, linked-verification, and standalone-integrity streams now
   reconcile each synchronous settlement/completion delta in constant time and
-  run one complete audit when their module returns. Checkpoint 4P.20 owns the
-  immutable work still embedded in exclusion and other mutable-overlay guards;
-  no producer wall or acceptance constant changes in this repair.
+  run one producer audit when their module returns. Checkpoint 4P.20 removed
+  execution plan hashing, duplicate operation facts, and immutable evidence/
+  issue reconstruction from authority guards. Required callback guards still
+  compare detached prior mutable baselines and can scale with already-settled
+  state, so this broader entry remains open; no wall or acceptance constant
+  changed.
 - MODERATE - FIXED (2026-08-29). Pre-checkpoint settlement gap. A direct
   workflow adapter's checkpoint callback could run after an executor changed
   settlement but before the workflow reconciled that change into its accepted
@@ -1793,9 +1796,10 @@ defect, and move implementation-level test choreography out of the log.
   execution-set aliases, so a fallible collaborator could alter settlement,
   progress, identity, or recording truth after the last workflow check. Fixed
   by exposing only a frozen identity-preserving `RecordingSpec` and retaining
-  the mutable execution set inside workflow attribution. Exact authority and
-  terminal projections remain as defense through 4P.20; ordinary, paused-
-  cancellation, fallback-finish, and context-exit regressions cover the seam.
+  the mutable execution set inside workflow attribution. Reduced fixed-reference
+  and prior-overlay guards retain the first safe pre-callback projection through
+  finish and context exit; ordinary, paused-cancellation, fallback-finish, and
+  context-exit regressions cover the seam.
 - MODERATE - FIXED (2026-08-27). Verify-continuation diagnostic retention.
   Linked execution bounded failure type and message separately, then retained
   their unchecked concatenation in paused verify custody. The continuation also

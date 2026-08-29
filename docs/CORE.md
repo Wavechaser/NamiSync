@@ -188,14 +188,23 @@ attribution.
 restore it through the dataclass constructor, `replace()` preserves it, and it
 participates in equality because it changes later progress behavior. The
 selected-content bound remains a derived, non-comparing validation cache. The
-exact mutable-overlay validator rechecks selection, settlement, recording, byte
-progress, and published-evidence relations in place. It does not reconstruct
-the already-valid immutable `Plan`, attestation, file-stat, or recorded-identity
-graphs. Published evidence still requires copy provenance, a regular-file
-subject, matching attestation/reviewed sizes, successful byte-producing status,
-the execution run scope and reviewed target path, one recorded location, and
-consistent operation-local recording attribution. Authority comparison retains
-its immutable evidence facts through checkpoint 4P.20.
+constructor and producer-return audit share one mutable-overlay validator for
+settlement, recording, byte-progress, and published-evidence relations. It does
+not reconstruct the already-valid immutable `Plan`, attestation, file-stat, or
+recorded-identity graphs. Published evidence still requires copy provenance, a
+regular-file subject, matching attestation/reviewed sizes, successful
+byte-producing status, the execution run scope and reviewed target path, one
+recorded location, and consistent operation-local recording attribution.
+
+`ExecutionSetAuthority` retains the canonical plan, selection, commitment, and
+user-deselection objects by identity, the exact run-id value, and detached
+status, recording-reason, publication-evidence, task-issue, omission, and byte
+high-water baselines. It has no plan fingerprint, operation-fact graph, or
+reconstructed commitment/evidence/issue leaves. Snapshot and strict callback
+comparison are shallow: they preserve every prior outcome and immutable
+evidence/issue reference while allowing only the declared producer-progress
+suffix. Public workflow admission performs the complete continuation check;
+executor and verifier returns each receive one compound mutable-overlay audit.
 
 The workflow continuation wire key remains `bytes_done_high_water`; plan payloads
 remain exact v5 while execution payloads are exact v7. The execute-only

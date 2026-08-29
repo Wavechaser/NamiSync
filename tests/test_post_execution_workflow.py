@@ -15,6 +15,7 @@ import pytest
 from xxhash import xxh3_128
 
 import namisync.dispatcher.event_bus as dispatcher_event_bus
+import namisync.core.execution as execution_module
 import namisync.modules.executor.runtime as executor_runtime
 import namisync.workflows.sync as sync_workflow
 from namisync.core.events import (
@@ -39,7 +40,11 @@ from namisync.core.execution import (
     PublishedCopyEvidence,
     RecordedCopyIdentity,
     RecordingSpec,
+    TaskRecordingIssue,
     TaskRecordingIssueReason,
+    audit_execution_set_authority,
+    revalidate_execution_set_authority,
+    snapshot_execution_set_authority,
     validated_run_id,
 )
 from namisync.core.integrity import (
@@ -1066,25 +1071,41 @@ def test_executor_terminal_audit_rejects_new_malformed_evidence() -> None:
         )
 
 
-def test_executor_reconciles_items_before_one_terminal_full_revalidation(
+def _track_execution_admission(
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    full_revalidations = 0
-    original = sync_workflow.revalidate_execution_set_authority
+) -> tuple[list[bool], list[object]]:
+    audit_policies: list[bool] = []
+    ingress_values: list[object] = []
+    original_audit = sync_workflow.audit_execution_set_authority
+    original_validate = sync_workflow.validate_execution_set
 
-    def count_full_revalidation(value, authority, *, allow_progress):
-        nonlocal full_revalidations
-        if allow_progress:
-            full_revalidations += 1
-        return original(value, authority, allow_progress=allow_progress)
+    def track_audit(value, authority, *, allow_progress):
+        audit_policies.append(allow_progress)
+        return original_audit(value, authority, allow_progress=allow_progress)
+
+    def track_ingress(value):
+        ingress_values.append(value)
+        return original_validate(value)
 
     monkeypatch.setattr(
         sync_workflow,
-        "revalidate_execution_set_authority",
-        count_full_revalidation,
+        "audit_execution_set_authority",
+        track_audit,
     )
+    monkeypatch.setattr(
+        sync_workflow,
+        "validate_execution_set",
+        track_ingress,
+    )
+    return audit_policies, ingress_values
 
-    def run_population(size: int, start: int) -> int:
+
+def test_executor_reconciles_items_before_one_terminal_producer_audit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    audit_policies, ingress_values = _track_execution_admission(monkeypatch)
+
+    def run_population(size: int, start: int) -> tuple[int, int]:
         operations = tuple(_operation(start + index, 1) for index in range(size))
         xset = _execution_set(*operations)
 
@@ -1111,10 +1132,10 @@ def test_executor_reconciles_items_before_one_terminal_full_revalidation(
                 bytes_total=size,
             )
 
-        before = full_revalidations
+        before = len(audit_policies), len(ingress_values)
 
         def assert_incremental_boundary(_body: object = None) -> None:
-            assert full_revalidations == before
+            assert len(audit_policies) == before[0]
 
         result = run_execution(
             ExecuteContinuation(xset, verify_after_execute=False),
@@ -1125,10 +1146,286 @@ def test_executor_reconciles_items_before_one_terminal_full_revalidation(
             _deps(executor=executor, verifier=_verify_all, recordings=[]),
         )
         assert result.status is SessionState.COMPLETED
-        return full_revalidations - before
+        return (
+            len(audit_policies) - before[0],
+            len(ingress_values) - before[1],
+        )
 
-    assert run_population(1, 131) == 1
-    assert run_population(4, 132) == 1
+    assert run_population(1, 131) == (1, 1)
+    assert run_population(4, 132) == (1, 1)
+
+
+def test_linked_execution_audits_each_producer_return_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operation = _operation(4011, 4)
+    xset = _execution_set(operation)
+    audit_policies, ingress_values = _track_execution_admission(monkeypatch)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert audit_policies == [True, False]
+    assert len(ingress_values) == 1
+
+
+def test_prerun_failure_has_ingress_validation_without_producer_audit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    xset = _execution_set(_operation(4012, 4))
+    audit_policies, ingress_values = _track_execution_admission(monkeypatch)
+    dependencies = _deps(
+        executor=lambda *args: pytest.fail("executor unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verifier unexpectedly started"),
+        recordings=[],
+    )
+    dependencies.observer = lambda *args: (_ for _ in ()).throw(
+        OSError("preflight unavailable")
+    )
+
+    result = run_execution(
+        ExecuteContinuation(xset),
+        RunContext(lambda _body: None, lambda: None),
+        dependencies,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert audit_policies == []
+    assert len(ingress_values) == 1
+
+
+def test_direct_canceled_settlement_validates_once_without_producer_audit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operation = _operation(4013, 4)
+    xset = _execution_set(operation)
+    xset.status[operation.op_id] = Outcome.SUCCEEDED
+    audit_policies, ingress_values = _track_execution_admission(monkeypatch)
+
+    result = settle_canceled_execution(
+        ExecuteContinuation(xset),
+        Disposition.RAN,
+        _deps(
+            executor=lambda *args: pytest.fail("executor unexpectedly started"),
+            verifier=lambda *args: pytest.fail("verifier unexpectedly started"),
+            recordings=[],
+        ),
+    )
+
+    assert result.canceled
+    assert audit_policies == []
+    assert len(ingress_values) == 1
+
+
+def test_nested_resumed_cancellation_reuses_ingress_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    xset = _execution_set(_operation(4018, 4))
+    audit_policies, ingress_values = _track_execution_admission(monkeypatch)
+    dependencies = _deps(
+        executor=lambda *args: pytest.fail("executor unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verifier unexpectedly started"),
+        recordings=[],
+    )
+    dependencies.observer = lambda *args: (_ for _ in ()).throw(Canceled())
+
+    result = run_execution(
+        ExecuteContinuation(xset),
+        RunContext(lambda _body: None, lambda: None),
+        dependencies,
+        resumed=True,
+    )
+
+    assert result.canceled
+    assert audit_policies == []
+    assert len(ingress_values) == 1
+
+
+def test_resumed_observer_cannot_launder_unselected_status_into_cancellation(
+) -> None:
+    xset = _execution_set(_operation(4025, 4))
+    dependencies = _deps(
+        executor=lambda *args: pytest.fail("executor unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verifier unexpectedly started"),
+        recordings=[],
+    )
+
+    def mutate_then_cancel(*_args) -> None:
+        xset.status[OpId("f" * 32)] = Outcome.FAILED
+        raise Canceled()
+
+    dependencies.observer = mutate_then_cancel
+
+    with pytest.raises(
+        ValueError,
+        match="execution settlement changed before execution",
+    ):
+        run_execution(
+            ExecuteContinuation(xset),
+            RunContext(lambda _body: None, lambda: None),
+            dependencies,
+            resumed=True,
+        )
+
+
+def _authority_fixture() -> tuple[
+    ExecutionSet,
+    PlanOperation,
+    PlanOperation,
+]:
+    succeeded = _operation(4014, 4)
+    failed = _operation(4015, 5)
+    deselected = _operation(4016, 6)
+    plan = _plan(succeeded, failed, deselected)
+    selection = frozenset({succeeded.op_id, failed.op_id})
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("a" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+        user_deselected=frozenset({deselected.op_id}),
+    )
+    xset.status[succeeded.op_id] = Outcome.SUCCEEDED
+    xset.published_evidence[succeeded.op_id] = _evidence(succeeded)
+    xset.status[failed.op_id] = Outcome.FAILED
+    xset.note_item_recording_failure(
+        failed.op_id,
+        ItemRecordingReason.UNRECORDED_MUTATION,
+    )
+    xset.recording_issues = (
+        TaskRecordingIssue(
+            TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+            "flush unavailable",
+        ),
+    )
+    xset.omitted_detail_count = 1
+    xset.note_bytes_done(4)
+    return xset, succeeded, failed
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("plan", "changed the reviewed plan"),
+        ("selection", "changed the reviewed selection"),
+        ("run-id", "changed the execution run identity"),
+        ("commitment", "changed the execution commitment"),
+        ("user-deselected", "changed reviewed user deselection"),
+        ("status", "changed an existing settlement"),
+        ("recording-reason", "changed existing settlement recording"),
+        ("evidence", "changed existing publication evidence"),
+        ("issues", "recording issues changed before execution"),
+        ("omitted", "omission witness changed before execution"),
+        ("bytes", "byte progress changed before execution"),
+    ),
+)
+def test_execution_authority_rejects_fixed_reference_and_overlay_mutation(
+    mutation: str,
+    message: str,
+) -> None:
+    xset, succeeded, failed = _authority_fixture()
+    authority = snapshot_execution_set_authority(xset)
+
+    if mutation == "plan":
+        xset.plan = replace(xset.plan)
+    elif mutation == "selection":
+        xset.selection = frozenset(set(xset.selection))
+    elif mutation == "run-id":
+        xset.run_id = validated_run_id("b" * 32)
+    elif mutation == "commitment":
+        assert xset.commitment is not None
+        xset.commitment = replace(xset.commitment)
+    elif mutation == "user-deselected":
+        xset.user_deselected = frozenset(set(xset.user_deselected))
+    elif mutation == "status":
+        xset.status[failed.op_id] = Outcome.CANCELED
+    elif mutation == "recording-reason":
+        xset.recording_reasons.pop(failed.op_id)
+    elif mutation == "evidence":
+        xset.published_evidence[succeeded.op_id] = replace(
+            xset.published_evidence[succeeded.op_id]
+        )
+    elif mutation == "issues":
+        issue = xset.recording_issues[0]
+        xset.recording_issues = (replace(issue),)
+    elif mutation == "omitted":
+        xset.omitted_detail_count += 1
+    else:
+        xset.bytes_done_high_water += 1
+
+    with pytest.raises(ValueError, match=message):
+        revalidate_execution_set_authority(
+            xset,
+            authority,
+            allow_progress=False,
+        )
+
+
+def test_execution_authority_snapshot_and_strict_guard_are_nonvalidating(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    xset, _succeeded, _failed = _authority_fixture()
+
+    def forbid_full_validation(*_args, **_kwargs):
+        raise AssertionError("cheap execution authority guard ran full validation")
+
+    monkeypatch.setattr(
+        execution_module,
+        "validate_execution_set",
+        forbid_full_validation,
+    )
+    authority = snapshot_execution_set_authority(xset)
+    revalidate_execution_set_authority(
+        xset,
+        authority,
+        allow_progress=False,
+    )
+
+    assert authority.plan is xset.plan
+    assert authority.selection is xset.selection
+    assert authority.commitment is xset.commitment
+    assert authority.user_deselected is xset.user_deselected
+    assert authority.status is not xset.status
+    assert authority.recording_reasons is not xset.recording_reasons
+    assert authority.published_evidence is not xset.published_evidence
+    assert not hasattr(authority, "operations")
+    assert not hasattr(execution_module, "ExecutionOperationFact")
+
+
+def test_execution_producer_audit_accepts_valid_overlay_progress() -> None:
+    xset = _execution_set(_operation(4017, 4))
+    authority = snapshot_execution_set_authority(xset)
+    operation = xset.plan.operations[0]
+    xset.status[operation.op_id] = Outcome.SUCCEEDED
+
+    audit_execution_set_authority(
+        xset,
+        authority,
+        allow_progress=True,
+    )
 
 
 def test_executor_must_emit_each_newly_settled_operation() -> None:
@@ -1654,6 +1951,39 @@ def test_exclusion_cursor_capture_failure_stops_later_siblings() -> None:
     )
 
 
+def test_exclusion_sink_cannot_launder_unselected_status_into_failure() -> None:
+    selected = _operation(4022, 4)
+    excluded = _operation(4023, 2)
+    initial = _execution_set(selected, excluded)
+    selection = frozenset({selected.op_id})
+    xset = replace(
+        initial,
+        selection=selection,
+        user_deselected=frozenset({excluded.op_id}),
+        commitment=Commitment(
+            initial.plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+
+    def mutate_after_exclusion(value: object) -> None:
+        assert isinstance(value, ExecuteContinuation)
+        xset.status[OpId("f" * 32)] = Outcome.FAILED
+
+    with pytest.raises(ValueError, match="status contains unselected operation ids"):
+        run_execution(
+            ExecuteContinuation(xset),
+            RunContext(lambda _body: None, lambda: None),
+            _deps(
+                executor=lambda *args: (_ for _ in ()).throw(OSError("failed")),
+                verifier=_verify_all,
+                recordings=[],
+            ),
+            continuation_sink=mutate_after_exclusion,
+        )
+
+
 def test_exclusion_cursor_cancellation_never_replays_an_accepted_item() -> None:
     selected = _operation(129, 4)
     excluded = (_operation(130, 2), _operation(131, 3))
@@ -2177,6 +2507,78 @@ def test_captured_alias_mutation_at_recording_boundary_preserves_truth(
         )
 
 
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    (
+        ("issues", "execution recording issues changed before execution"),
+        ("omitted", "execution omission witness changed before execution"),
+    ),
+)
+def test_finish_alias_mutation_preserves_safe_terminal_projection(
+    mutation: str,
+    message: str,
+) -> None:
+    operation = _operation(4019, 4)
+    xset = _execution_set(operation)
+    initial_issue = TaskRecordingIssue(
+        TaskRecordingIssueReason.FINAL_FLUSH_FAILED,
+        "flush unavailable",
+    )
+    xset.recording_issues = (initial_issue,)
+    xset.omitted_detail_count = 1
+    continuation = ExecuteContinuation(xset)
+
+    def mutate_captured_alias() -> None:
+        if mutation == "issues":
+            xset.recording_issues = (
+                *xset.recording_issues,
+                TaskRecordingIssue(
+                    TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+                    "hostile suffix",
+                ),
+            )
+        else:
+            xset.omitted_detail_count += 1
+
+    class MutatingRecording(_Recording):
+        def finish(self, status, recording):
+            super().finish(status, recording)
+            mutate_captured_alias()
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, operation)
+        execution_set.note_bytes_done(operation.content_bytes)
+        return OperationResult(
+            SessionState.COMPLETED,
+            recording=RecordingStatus.DEGRADED,
+            recording_issues=execution_set.recording_issues,
+            omitted_detail_count=execution_set.omitted_detail_count,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    dependencies = _deps(
+        executor=executor,
+        verifier=_verify_all,
+        recordings=[],
+    )
+    dependencies.open_recording = lambda _spec: MutatingRecording()
+
+    result = run_execution(
+        continuation,
+        RunContext(lambda _body: None, lambda: None),
+        dependencies,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.bytes_done == operation.content_bytes
+    assert result.recording_issues == (initial_issue,)
+    assert result.omitted_detail_count == 1
+    assert result.error == FailureDetail("ValueError", message)
+
+
 @pytest.mark.parametrize("owner", ("execute", "verify"))
 @pytest.mark.parametrize("route", ("paused-cancel", "fallback-finish"))
 def test_captured_alias_mutation_preserves_cancel_and_fallback_truth(
@@ -2317,6 +2719,31 @@ def test_executor_cannot_change_fixed_execution_authority() -> None:
         "ValueError",
         "executor changed the execution run identity",
     )
+
+
+def test_invalid_fixed_selection_cannot_enter_failed_projection() -> None:
+    operation = _operation(4021, 4)
+    xset = _execution_set(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, operation)
+        execution_set.selection = frozenset(
+            {*execution_set.selection, OpId("f" * 32)}
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    with pytest.raises(ValueError, match="selection contains unknown operation ids"):
+        run_execution(
+            ExecuteContinuation(xset),
+            RunContext(lambda _body: None, lambda: None),
+            _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        )
 
 
 @pytest.mark.parametrize("corruption", ["outcome", "recording"])
@@ -2926,6 +3353,28 @@ def test_post_copy_reconciles_items_before_one_terminal_full_revalidation(
 
     assert run_population(1, 138) == 1
     assert run_population(4, 139) == 1
+
+
+def test_verifier_cannot_launder_unselected_status_into_incomplete_result() -> None:
+    continuation = _verify_continuation_fixture(_operation(4024, 4))
+    xset = continuation.execution_set
+
+    def verifier(selection, context, recorder):
+        del selection, context, recorder
+        xset.status[OpId("f" * 32)] = Outcome.FAILED
+        return IntegrityRunResult((), RecordingStatus.OK)
+
+    with pytest.raises(ValueError, match="status contains unselected operation ids"):
+        run_execution(
+            continuation,
+            RunContext(lambda _body: None, lambda: None),
+            _deps(
+                executor=lambda *args: pytest.fail("execution phase repeated"),
+                verifier=verifier,
+                recordings=[],
+            ),
+            resumed=True,
+        )
 
 
 @pytest.mark.parametrize("corruption", ["mutated", "forged"])
@@ -3634,6 +4083,80 @@ def test_verify_setup_and_result_errors_finish_once_with_visible_phase(
     assert recordings[0].finishes == [
         (SessionState.COMPLETED, RecordingStatus.OK)
     ]
+
+
+def test_executor_setup_failure_cannot_remove_prior_settlement() -> None:
+    operation = _operation(4026, 8)
+    xset = _execution_set(operation)
+    xset.status[operation.op_id] = Outcome.FAILED
+    deps = _deps(
+        executor=lambda *args: pytest.fail("executor unexpectedly started"),
+        verifier=lambda *args: pytest.fail("verifier unexpectedly started"),
+        recordings=[],
+    )
+
+    def mutate_then_fail(*_args) -> None:
+        del xset.status[operation.op_id]
+        raise RuntimeError("temporary cleanup failed")
+
+    deps.executor_fs = SimpleNamespace(remove_orphaned_temps=mutate_then_fail)
+
+    result = run_execution(
+        ExecuteContinuation(xset),
+        RunContext(lambda _body: None, lambda: None),
+        deps,
+    )
+
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor changed an existing settlement",
+    )
+
+
+def test_verifier_context_failure_cannot_remove_prior_settlement() -> None:
+    candidate = _operation(4027, 8)
+    prior = _operation(4028, 9)
+    xset = _execution_set(candidate, prior)
+    xset.status[prior.op_id] = Outcome.FAILED
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            candidate,
+            evidence=_evidence(candidate),
+        )
+        return OperationResult(
+            SessionState.FAILED,
+            items=(item,),
+            bytes_done=candidate.content_bytes,
+            bytes_total=candidate.content_bytes + prior.content_bytes,
+        )
+
+    deps = _deps(
+        executor=executor,
+        verifier=lambda *args: pytest.fail("verifier unexpectedly started"),
+        recordings=[],
+    )
+
+    def mutate_then_fail(_run) -> None:
+        del xset.status[prior.op_id]
+        raise RuntimeError("verifier context failed")
+
+    deps.verifier_context = mutate_then_fail
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda _body: None, lambda: None),
+        deps,
+    )
+
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor changed an existing settlement",
+    )
+    assert result.phases[1].status is PhaseStatus.INCOMPLETE
 
 
 def test_continuation_sink_failure_finishes_once_as_execute_failure() -> None:
