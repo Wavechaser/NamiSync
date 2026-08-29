@@ -241,42 +241,43 @@ def _evidence(
 
 
 def _verify_continuation_fixture(
-    operation: PlanOperation,
+    *operations: PlanOperation,
 ) -> VerifyContinuation:
-    xset = _execution_set(operation)
-    evidence = _evidence(operation)
-    xset.status[operation.op_id] = Outcome.SUCCEEDED
-    xset.published_evidence[operation.op_id] = evidence
-    identity = evidence.recorded_identity
-    assert identity is not None
-    return VerifyContinuation(
-        execution_set=xset,
-        candidates=PostCopySelection(
-            (
-                PostCopyCandidate(
-                    item_id=str(operation.op_id),
-                    root=Path(xset.plan.target_root.path),
-                    display_path=operation.target_rel_path,
-                    expected_stat=evidence.attestation.subject,
-                    copy_attestation=evidence.attestation,
-                    recorded_identity=PostCopyRecordIdentity(
-                        identity.row_id,
-                        identity.location_id,
-                        identity.scope_token,
-                        identity.rel_path_key,
-                    ),
+    xset = _execution_set(*operations)
+    candidates: list[PostCopyCandidate] = []
+    for operation in operations:
+        evidence = _evidence(operation)
+        xset.status[operation.op_id] = Outcome.SUCCEEDED
+        xset.published_evidence[operation.op_id] = evidence
+        identity = evidence.recorded_identity
+        assert identity is not None
+        candidates.append(
+            PostCopyCandidate(
+                item_id=str(operation.op_id),
+                root=Path(xset.plan.target_root.path),
+                display_path=operation.target_rel_path,
+                expected_stat=evidence.attestation.subject,
+                copy_attestation=evidence.attestation,
+                recorded_identity=PostCopyRecordIdentity(
+                    identity.row_id,
+                    identity.location_id,
+                    identity.scope_token,
+                    identity.rel_path_key,
                 ),
             )
-        ),
+        )
+    return VerifyContinuation(
+        execution_set=xset,
+        candidates=PostCopySelection(tuple(candidates)),
         filesystem_status=SessionState.COMPLETED,
         recording=RecordingStatus.OK,
         execute_phase=PhaseResult(
             "execute",
             PhaseStatus.COMPLETED,
-            1,
-            1,
-            operation.content_bytes,
-            operation.content_bytes,
+            len(operations),
+            len(operations),
+            sum(operation.content_bytes for operation in operations),
+            sum(operation.content_bytes for operation in operations),
         ),
     )
 
@@ -825,6 +826,237 @@ def test_executor_duplicate_refuses_before_reading_hostile_detail() -> None:
         "ValueError",
         "executor emitted a duplicate operation outcome",
     )
+
+
+@pytest.mark.parametrize("settles", (True, False))
+def test_executor_accepts_an_outcome_before_its_settlement(
+    settles: bool,
+) -> None:
+    operation = _operation(126, 4)
+    xset = _execution_set(operation)
+    accepted: list[ItemOutcome] = []
+
+    def emit(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            assert operation.op_id not in xset.status
+            accepted.append(body)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = ItemOutcome(
+            str(operation.op_id),
+            operation.kind,
+            operation.target_rel_path,
+            Outcome.SUCCEEDED,
+        )
+        context.emit(item)
+        if settles:
+            execution_set.status[operation.op_id] = Outcome.SUCCEEDED
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes if settles else 0,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(emit, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert [item.item_id for item in accepted] == [str(operation.op_id)]
+    assert [item.item_id for item in result.items] == [str(operation.op_id)]
+    if settles:
+        assert result.status is SessionState.COMPLETED
+        assert result.error is None
+    else:
+        assert result.status is SessionState.FAILED
+        assert result.error == FailureDetail(
+            "ValueError",
+            "executor settlement must match its accepted operation outcomes",
+        )
+
+
+@pytest.mark.parametrize("seam", ("progress", "checkpoint"))
+def test_executor_reconciles_unreported_settlement_at_control_edges(
+    seam: str,
+) -> None:
+    first = _operation(127, 4)
+    second = _operation(128, 5)
+    xset = _execution_set(first, second)
+    trace: list[str] = []
+
+    def emit(body: object) -> None:
+        if isinstance(body, ItemOutcome):
+            trace.append("item")
+        elif isinstance(body, Progress):
+            trace.append("progress")
+
+    def checkpoint() -> None:
+        trace.append("checkpoint")
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        _settle(execution_set, context, first)
+        trace.append("first-settled")
+        execution_set.status[second.op_id] = Outcome.SUCCEEDED
+        trace.append("second-settled")
+        if seam == "progress":
+            context.emit(
+                Progress(
+                    "execute",
+                    1,
+                    2,
+                    first.content_bytes,
+                    first.content_bytes + second.content_bytes,
+                    None,
+                )
+            )
+        else:
+            context.checkpoint()
+        pytest.fail("unreported settlement crossed the reconciliation edge")
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(emit, checkpoint),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert trace == ["item", "first-settled", "second-settled"]
+    assert [item.item_id for item in result.items] == [str(first.op_id)]
+    assert result.status is SessionState.FAILED
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor settlement must match its accepted operation outcomes",
+    )
+
+
+def test_executor_rejects_an_outcome_outside_its_selection() -> None:
+    operation = _operation(129, 4)
+    xset = _execution_set(operation)
+    accepted: list[ItemOutcome] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del execution_set, recorder, policies, fs
+        context.emit(
+            ItemOutcome(
+                "f" * 32,
+                operation.kind,
+                operation.target_rel_path,
+                Outcome.SUCCEEDED,
+            )
+        )
+        pytest.fail("foreign outcome was accepted")
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(
+            lambda body: accepted.append(body)
+            if isinstance(body, ItemOutcome)
+            else None,
+            lambda: None,
+        ),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert accepted == []
+    assert result.items == ()
+    assert result.status is SessionState.FAILED
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor emitted an outcome outside its selection",
+    )
+
+
+def test_executor_cannot_replace_existing_publication_evidence() -> None:
+    operation = _operation(130, 4)
+    xset = _execution_set(operation)
+    xset.status[operation.op_id] = Outcome.SUCCEEDED
+    xset.published_evidence[operation.op_id] = _evidence(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del context, recorder, policies, fs
+        existing = execution_set.published_evidence[operation.op_id]
+        execution_set.published_evidence[operation.op_id] = replace(
+            existing,
+            attestation=replace(
+                existing.attestation,
+                content=replace(
+                    existing.attestation.content,
+                    digest=b"\xff" * 16,
+                ),
+            ),
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, lambda: None),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        resumed=True,
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor changed existing publication evidence",
+    )
+
+
+def test_4p_4_temporarily_characterizes_item_scaled_executor_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    full_revalidations = 0
+    original = sync_workflow.revalidate_execution_set_authority
+
+    def count_full_revalidation(value, authority, *, allow_progress):
+        nonlocal full_revalidations
+        if allow_progress:
+            full_revalidations += 1
+        return original(value, authority, allow_progress=allow_progress)
+
+    monkeypatch.setattr(
+        sync_workflow,
+        "revalidate_execution_set_authority",
+        count_full_revalidation,
+    )
+
+    def run_population(size: int, start: int) -> int:
+        operations = tuple(_operation(start + index, 1) for index in range(size))
+        xset = _execution_set(*operations)
+
+        def executor(execution_set, context, recorder, policies, fs):
+            del recorder, policies, fs
+            items = tuple(
+                _settle(execution_set, context, operation)
+                for operation in operations
+            )
+            return OperationResult(
+                SessionState.COMPLETED,
+                items=items,
+                bytes_done=size,
+                bytes_total=size,
+            )
+
+        before = full_revalidations
+        result = run_execution(
+            ExecuteContinuation(xset, verify_after_execute=False),
+            RunContext(lambda _body: None, lambda: None),
+            _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        )
+        assert result.status is SessionState.COMPLETED
+        return full_revalidations - before
+
+    one_item = run_population(1, 131)
+    four_items = run_population(4, 132)
+
+    # Temporary 4P.4 characterization: 4P.5 changes this delta to zero.
+    assert four_items - one_item == 3
 
 
 def test_executor_must_emit_each_newly_settled_operation() -> None:
@@ -2035,6 +2267,127 @@ def test_verifier_duplicate_refuses_before_reading_hostile_detail() -> None:
         "verifier emitted a duplicate integrity outcome",
     )
     assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+
+
+def test_verifier_rejects_an_outcome_outside_its_candidates() -> None:
+    operation = _operation(136, 4)
+    continuation = _verify_continuation_fixture(operation)
+    accepted: list[IntegrityOutcome] = []
+
+    def verifier(selection, context, recorder):
+        del recorder
+        foreign = replace(
+            _integrity_outcome(selection.pending[0]),
+            item_id="f" * 32,
+        )
+        context.run.emit(foreign)
+        pytest.fail("foreign integrity outcome was accepted")
+
+    result = run_execution(
+        continuation,
+        RunContext(
+            lambda body: accepted.append(body)
+            if isinstance(body, IntegrityOutcome)
+            else None,
+            lambda: None,
+        ),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=verifier,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert accepted == []
+    assert not any(isinstance(item, IntegrityOutcome) for item in result.items)
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert result.error == FailureDetail(
+        "ValueError",
+        "verifier emitted an outcome outside its candidates",
+    )
+
+
+def test_verifier_reliable_outcome_sink_failure_does_not_accept_or_complete(
+) -> None:
+    operation = _operation(137, 4)
+    continuation = _verify_continuation_fixture(operation)
+    delivered: list[object] = []
+
+    def verifier(selection, context, recorder):
+        del recorder
+        candidate = selection.pending[0]
+        selection.note_bytes_processed(candidate.expected_stat.size)
+        context.run.emit(_integrity_outcome(candidate))
+        selection.mark_completed(candidate.item_id, candidate.expected_stat.size)
+        pytest.fail("failed reliable sink unexpectedly returned")
+
+    def fail_reliable_outcome(body: object) -> None:
+        if isinstance(body, IntegrityOutcome):
+            raise RuntimeError("reliable outcome sink failed")
+        delivered.append(body)
+
+    result = run_execution(
+        continuation,
+        RunContext(fail_reliable_outcome, lambda: None),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=verifier,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert not any(isinstance(body, IntegrityOutcome) for body in delivered)
+    assert not any(isinstance(item, IntegrityOutcome) for item in result.items)
+    assert dict(continuation.candidates.completed_bytes) == {}
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert result.error == FailureDetail(
+        "RuntimeError",
+        "reliable outcome sink failed",
+    )
+
+
+def test_4p_4_temporarily_characterizes_item_scaled_post_copy_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    full_revalidations = 0
+    original = sync_workflow.revalidate_post_copy_selection_authority
+
+    def count_full_revalidation(value, authority, *, allow_progress):
+        nonlocal full_revalidations
+        if allow_progress:
+            full_revalidations += 1
+        return original(value, authority, allow_progress=allow_progress)
+
+    monkeypatch.setattr(
+        sync_workflow,
+        "revalidate_post_copy_selection_authority",
+        count_full_revalidation,
+    )
+
+    def run_population(size: int, start: int) -> int:
+        operations = tuple(_operation(start + index, 1) for index in range(size))
+        continuation = _verify_continuation_fixture(*operations)
+        before = full_revalidations
+        result = run_execution(
+            continuation,
+            RunContext(lambda _body: None, lambda: None),
+            _deps(
+                executor=lambda *args: pytest.fail("execution phase repeated"),
+                verifier=_verify_all,
+                recordings=[],
+            ),
+            resumed=True,
+        )
+        assert result.status is SessionState.COMPLETED
+        return full_revalidations - before
+
+    one_item = run_population(1, 138)
+    four_items = run_population(4, 139)
+
+    # Temporary 4P.4 characterization: 4P.6 changes this delta to zero.
+    assert four_items - one_item == 6
 
 
 @pytest.mark.parametrize("corruption", ["mutated", "forged"])

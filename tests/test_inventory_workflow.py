@@ -24,9 +24,13 @@ from namisync.core.integrity import (
     IntegrityCandidateLimitExceeded,
     IntegrityMode,
     IntegrityOutcome,
+    IntegrityReason,
     IntegrityResult,
     IntegrityRunResult,
+    IntegritySelection,
     InventoryState,
+    ReadStrategy,
+    RecordDisposition,
     VerifierContext,
 )
 from namisync.core.models import (
@@ -288,6 +292,66 @@ def _complete_integrity_selection(
         selection.mark_completed(item.item_id, 0)
         outcomes.append(outcome)
     return IntegrityRunResult(tuple(outcomes), RecordingStatus.OK)
+
+
+def _seeded_integrity_case(
+    tmp_path: Path,
+    paths: tuple[str, ...] = ("file.txt",),
+) -> tuple[InventoryWorkflowRequest, InventoryDependencies]:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    scanner = _Scanner(records=tuple(_file(path) for path in paths))
+    details: list[InventoryDetails] = []
+    inventory_deps = _dependencies(
+        tmp_path / "ledger.db",
+        scanner,
+        _Resolver(mount),
+        details,
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("seed", root_path=str(root)),
+        ledger_path=inventory_deps.ledger_path,
+        backend=_Backend(root, mount),
+        resolver=inventory_deps.resolver,
+    )
+    assert run_inventory(prepared, _context(), inventory_deps).status is (
+        SessionState.COMPLETED
+    )
+    return prepared, inventory_deps
+
+
+def _integrity_dependencies(
+    inventory_deps: InventoryDependencies,
+    runner,
+) -> IntegrityDependencies:
+    return IntegrityDependencies(
+        ledger_path=inventory_deps.ledger_path,
+        scanner=inventory_deps.scanner,
+        resolver=inventory_deps.resolver,
+        clock=inventory_deps.clock,
+        host_key=inventory_deps.host_key,
+        host_name=inventory_deps.host_name,
+        save_details=inventory_deps.save_details,
+        verifier_context=lambda context: VerifierContext(
+            run=context,
+            clock=inventory_deps.clock,
+            hasher_factory=xxh3_128,
+        ),
+        runners={IntegrityMode.VERIFY: runner},
+    )
+
+
+def _integrity_outcome(item, **changes) -> IntegrityOutcome:
+    return IntegrityOutcome(
+        item_id=item.item_id,
+        row_id=item.row_id,
+        location_id=item.location_id,
+        path=item.display_path,
+        result=IntegrityResult.VERIFIED,
+        phase=IntegrityMode.VERIFY.value,
+        **changes,
+    )
 
 
 class _IntegrityRepositorySpy:
@@ -1974,6 +2038,327 @@ def test_subject_local_incomplete_integrity_continues_with_unsupported_item(
     assert details[-1].warnings == (warning,)
 
 
+@pytest.mark.parametrize(
+    "scenario",
+    ("normal", "completion-failure", "sink-failure"),
+)
+def test_integrity_outcome_acceptance_window(
+    tmp_path: Path,
+    scenario: str,
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+    selections: list[IntegritySelection] = []
+    attempted: list[IntegrityOutcome] = []
+    completion_counts: list[int] = []
+
+    def emit(body: object) -> None:
+        if not isinstance(body, IntegrityOutcome):
+            return
+        attempted.append(body)
+        completion_counts.append(selections[0].completed_count)
+        if scenario == "sink-failure":
+            raise OSError("reliable outcome sink failed")
+
+    def runner(selection, verifier_context, _recorder):
+        item = selection.pending[0]
+        outcome = _integrity_outcome(item)
+        verifier_context.run.emit(outcome)
+        selection.mark_completed(
+            "unknown-item"
+            if scenario == "completion-failure"
+            else item.item_id,
+            0,
+        )
+        return IntegrityRunResult((outcome,), RecordingStatus.OK)
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            f"acceptance-{scenario}",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(emit, lambda: None),
+        _integrity_dependencies(inventory_deps, runner),
+        selection_sink=selections.append,
+    )
+
+    assert completion_counts == [0]
+    assert len(attempted) == 1
+    assert result.disposition is Disposition.RAN
+    if scenario == "normal":
+        assert result.status is SessionState.COMPLETED
+        assert result.error is None
+        assert result.items == tuple(attempted)
+        assert selections[0].completed_count == 1
+    elif scenario == "completion-failure":
+        assert result.status is SessionState.FAILED
+        assert result.items == tuple(attempted)
+        assert selections[0].completed_count == 0
+        assert result.error is not None
+        assert (result.error.type_name, result.error.message) == (
+            "ValueError",
+            "unknown integrity item: unknown-item",
+        )
+    else:
+        assert result.status is SessionState.FAILED
+        assert result.items == ()
+        assert selections[0].completed_count == 0
+        assert result.error is not None
+        assert (result.error.type_name, result.error.message) == (
+            "OSError",
+            "reliable outcome sink failed",
+        )
+
+
+@pytest.mark.parametrize(
+    (
+        "mismatch",
+        "expected_message",
+        "expected_items",
+        "expected_completed",
+    ),
+    (
+        (
+            "duplicate",
+            "integrity runner emitted a duplicate outcome",
+            1,
+            1,
+        ),
+        (
+            "foreign",
+            "integrity runner emitted an outcome outside its selection",
+            0,
+            0,
+        ),
+        (
+            "emitted-uncompleted",
+            "integrity runner completion must match its emitted outcomes",
+            1,
+            0,
+        ),
+        (
+            "completed-unemitted",
+            "integrity runner completion must match its emitted outcomes",
+            0,
+            1,
+        ),
+    ),
+)
+def test_integrity_rejects_outcome_custody_mismatch(
+    tmp_path: Path,
+    mismatch: str,
+    expected_message: str,
+    expected_items: int,
+    expected_completed: int,
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+    selections: list[IntegritySelection] = []
+    emitted: list[object] = []
+
+    def runner(selection, verifier_context, _recorder):
+        item = selection.pending[0]
+        outcome = _integrity_outcome(item)
+        if mismatch == "foreign":
+            verifier_context.run.emit(
+                replace(outcome, item_id="foreign-selection-item")
+            )
+            raise AssertionError("foreign outcome was accepted")
+        if mismatch == "completed-unemitted":
+            selection.mark_completed(item.item_id, 0)
+            return IntegrityRunResult((), RecordingStatus.OK)
+        verifier_context.run.emit(outcome)
+        if mismatch == "emitted-uncompleted":
+            return IntegrityRunResult((outcome,), RecordingStatus.OK)
+        selection.mark_completed(item.item_id, 0)
+        verifier_context.run.emit(outcome)
+        raise AssertionError("duplicate outcome was accepted")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            f"custody-{mismatch}",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(emitted.append, lambda: None),
+        _integrity_dependencies(inventory_deps, runner),
+        selection_sink=selections.append,
+    )
+
+    reliable = [body for body in emitted if isinstance(body, IntegrityOutcome)]
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.RAN
+    assert len(reliable) == expected_items
+    assert result.items == tuple(reliable)
+    assert selections[0].completed_count == expected_completed
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        expected_message,
+    )
+
+
+@pytest.mark.parametrize(
+    ("field_name", "accepted_changes", "returned_changes"),
+    (
+        (
+            "result",
+            {},
+            {"result": IntegrityResult.BASELINED},
+        ),
+        (
+            "reason",
+            {
+                "result": IntegrityResult.ERROR,
+                "reason": IntegrityReason.READ_ERROR,
+            },
+            {"reason": IntegrityReason.RECORDING_ERROR},
+        ),
+        (
+            "read_strategy",
+            {"read_strategy": ReadStrategy.WINDOWS_UNBUFFERED},
+            {"read_strategy": None},
+        ),
+        (
+            "record_disposition",
+            {"record_disposition": RecordDisposition.APPLIED},
+            {"record_disposition": RecordDisposition.NOOP},
+        ),
+    ),
+)
+def test_integrity_returned_aggregate_cannot_replace_accepted_outcome(
+    tmp_path: Path,
+    field_name: str,
+    accepted_changes: dict[str, object],
+    returned_changes: dict[str, object],
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+    emitted: list[object] = []
+
+    def runner(selection, verifier_context, _recorder):
+        item = selection.pending[0]
+        accepted = replace(_integrity_outcome(item), **accepted_changes)
+        verifier_context.run.emit(accepted)
+        selection.mark_completed(item.item_id, 0)
+        returned = replace(accepted, **returned_changes)
+        return IntegrityRunResult((returned,), RecordingStatus.OK)
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            f"aggregate-{field_name}",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(emitted.append, lambda: None),
+        _integrity_dependencies(inventory_deps, runner),
+    )
+
+    reliable = [body for body in emitted if isinstance(body, IntegrityOutcome)]
+    assert result.status is SessionState.FAILED
+    assert result.items == tuple(reliable)
+    assert len(result.items) == 1
+    assert getattr(result.items[0], field_name) == getattr(
+        reliable[0], field_name
+    )
+    assert getattr(result.items[0], field_name) != returned_changes[field_name]
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        "integrity runner outcomes must match emitted outcomes",
+    )
+
+
+def test_integrity_aggregate_cannot_erase_accepted_recording_degradation(
+    tmp_path: Path,
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+
+    def runner(selection, verifier_context, _recorder):
+        item = selection.pending[0]
+        accepted = replace(
+            _integrity_outcome(item),
+            recording=RecordingStatus.DEGRADED,
+            record_disposition=RecordDisposition.STALE,
+        )
+        verifier_context.run.emit(accepted)
+        selection.mark_completed(item.item_id, 0)
+        returned = replace(
+            accepted,
+            recording=RecordingStatus.OK,
+            record_disposition=RecordDisposition.NOOP,
+        )
+        return IntegrityRunResult((returned,), RecordingStatus.OK)
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "aggregate-recording",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        _integrity_dependencies(inventory_deps, runner),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.recording is RecordingStatus.DEGRADED
+    assert len(result.items) == 1
+    assert result.items[0].recording is RecordingStatus.DEGRADED
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        "integrity runner outcomes must match emitted outcomes",
+    )
+
+
+def test_integrity_full_validator_call_profile_is_frozen_for_4p7(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = inventory_workflow.revalidate_integrity_selection_authority
+    validation_widths: list[int] = []
+
+    def observe_validation(selection, authority, *, allow_progress):
+        validation_widths.append(len(authority.items))
+        return original(
+            selection,
+            authority,
+            allow_progress=allow_progress,
+        )
+
+    monkeypatch.setattr(
+        inventory_workflow,
+        "revalidate_integrity_selection_authority",
+        observe_validation,
+    )
+    profiles: dict[int, tuple[int, ...]] = {}
+    for item_count in (1, 4):
+        validation_widths.clear()
+        prepared, inventory_deps = _seeded_integrity_case(
+            tmp_path / f"items-{item_count}",
+            tuple(f"file-{index}.txt" for index in range(item_count)),
+        )
+        result = run_integrity(
+            IntegrityWorkflowRequest(
+                f"profile-{item_count}",
+                prepared.binding,
+                IntegrityMode.VERIFY,
+            ),
+            _context(),
+            _integrity_dependencies(
+                inventory_deps,
+                _complete_integrity_selection,
+            ),
+        )
+        assert result.status is SessionState.COMPLETED
+        profiles[item_count] = tuple(validation_widths)
+
+    # Temporary 4P.4 characterization. 4P.7 intentionally replaces this
+    # population-times-events full-validation profile with incremental work.
+    assert profiles == {
+        1: (1, 1, 1, 1),
+        4: (4, 4, 4, 4, 4, 4, 4),
+    }
+
+
 def test_integrity_uses_emitted_snapshot_when_returned_outcome_mutates(
     tmp_path: Path,
 ) -> None:
@@ -2090,6 +2475,7 @@ def test_integrity_success_requires_every_pending_outcome(tmp_path: Path) -> Non
     assert result.items == ()
     assert result.error is not None
     assert result.error.type_name == "ValueError"
+    assert result.error.message == "integrity runner returned with pending candidates"
 
 
 @pytest.mark.parametrize(
