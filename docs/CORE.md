@@ -107,6 +107,11 @@ structurally excluded without changing equality, ordering, validation, or
 serialization. Hostile boundaries still require the exact public type and
 revalidate its declared fields; slots are a shape constraint, not trust.
 
+The eleven exact planning dataclasses are likewise frozen and slotted. Their
+declared fields, plan identity, fingerprints, payload shape, validation, and
+selection semantics are unchanged. Exact-type and declared-field validation
+remain the hostile-boundary authority.
+
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`
 carries one or more minimal subtree roots plus any exact paths outside those

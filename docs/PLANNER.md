@@ -36,6 +36,12 @@ and shared capacity contracts. M0 implements `Scope.everything()` and the
 batch-shaped identity destination policy; the other scope constructors remain
 declared but raise rather than pretending to work.
 
+The eleven exact planning dataclasses are frozen and slotted, so their
+instances carry only their declared fields. This structural constraint does
+not change plan identity, fingerprints, payloads, equality, validation, or
+selection behavior; hostile boundaries still require exact public types and
+revalidate declared fields.
+
 Depth ordering, parent walks, and strict descendant checks use the shared
 relative-path helpers in `namisync.core.pathing`. Their Stage 5.5 promotion was
 a pure relocation: the existing planner test file and all 31 behavioral tests

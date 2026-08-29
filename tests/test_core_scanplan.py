@@ -334,6 +334,47 @@ def test_scan_model_contracts_are_exactly_slotted() -> None:
         _assert_declared_slots(value)
 
 
+def test_planning_contracts_are_exactly_slotted() -> None:
+    plans, _ = hash_fixtures(True)
+    reviewed = plans["all_fields"]
+    values = (
+        planning_contracts.PreservationPolicy(),
+        planning_contracts.FilterSet(),
+        planning_contracts.DestinationAssignment(
+            "a.txt", "A.TXT", "a.txt", "A.TXT"
+        ),
+        planning_contracts.Assignment("identity", "1", ()),
+        planning_contracts.IdentityDestinationPolicy(),
+        planning_contracts.SyncOptions(),
+        planning_contracts.MappingPair(
+            "A.TXT",
+            "a.txt",
+            "A.TXT",
+            model_contracts.FileIdentity("A", 1),
+            None,
+        ),
+        planning_contracts.MappingSnapshot.empty(),
+        planning_contracts.Scope.everything(),
+        reviewed.operations[0],
+        reviewed,
+    )
+    assert tuple(type(value).__name__ for value in values) == (
+        "PreservationPolicy",
+        "FilterSet",
+        "DestinationAssignment",
+        "Assignment",
+        "IdentityDestinationPolicy",
+        "SyncOptions",
+        "MappingPair",
+        "MappingSnapshot",
+        "Scope",
+        "PlanOperation",
+        "Plan",
+    )
+    for value in values:
+        _assert_declared_slots(value)
+
+
 def test_source_contracts_reject_coercible_scalar_fields() -> None:
     class Text(str):
         pass

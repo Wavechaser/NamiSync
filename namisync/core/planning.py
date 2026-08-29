@@ -103,7 +103,7 @@ class BlockedReason(StrEnum):
     BLOCKED_DEPENDENCY = "blocked_dependency"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PreservationPolicy:
     preserve_ads: bool = False
     preserve_created: bool = True
@@ -121,7 +121,7 @@ class PreservationPolicy:
             raise TypeError("preservation fields must be bools")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FilterSet:
     patterns: tuple[str, ...] = ()
 
@@ -150,7 +150,7 @@ class FilterSet:
         return False
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DestinationAssignment:
     source_rel_path: str
     source_rel_path_key: str
@@ -245,7 +245,7 @@ def _require_destination_assignment_fields(
         raise ValueError("target assignment key is not canonical")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Assignment:
     policy_name: str
     policy_version: str
@@ -299,7 +299,7 @@ class DestinationPolicy(Protocol):
     ) -> Assignment: ...
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IdentityDestinationPolicy:
     name: str = "identity"
     version: str = "1"
@@ -340,7 +340,7 @@ class IdentityDestinationPolicy:
         return Assignment(self.name, self.version, tuple(items))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SyncOptions:
     deletion_policy: DeletionPolicy = DeletionPolicy.TRASH
     preservation: PreservationPolicy = PreservationPolicy()
@@ -372,7 +372,7 @@ class SyncOptions:
             raise ValueError("mirror deletion requires explicit internal authorization")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MappingPair:
     source_rel_path_key: str
     target_rel_path: str
@@ -386,7 +386,7 @@ class MappingPair:
             raise ValueError("mapping target key is not canonical")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MappingSnapshot:
     source_volume_id: VolumeId | None = None
     target_volume_id: VolumeId | None = None
@@ -411,7 +411,7 @@ class ScopeKind(StrEnum):
     RECORDED_RUN = "recorded_run"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Scope:
     kind: ScopeKind
     value: str | tuple[str, ...] | None = None
@@ -433,7 +433,7 @@ class Scope:
         return cls(ScopeKind.RECORDED_RUN, token)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PlanOperation:
     op_id: OpId
     kind: OperationKind
@@ -467,7 +467,7 @@ class PlanOperation:
         return self.blocked_reason is not None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Plan:
     source_root: Root
     target_root: Root

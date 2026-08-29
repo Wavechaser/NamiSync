@@ -525,25 +525,19 @@ def test_scan_snapshot_reconstructs_declared_typed_fields() -> None:
     assert snapshot == value
     assert snapshot is not value and snapshot.files[0] is not record
 
-def test_mapping_and_plan_snapshots_drop_hidden_graphs_and_preserve_semantics() -> None:
+def test_mapping_and_plan_snapshots_preserve_semantics() -> None:
     source = _scan(SOURCE_ROOT, files=(_file("file.bin"),))
     target = _scan(TARGET_ROOT)
     mapping = _mapping(source, target)
-    _attach_bomb(mapping)
     copied_mapping = snapshot_mapping_snapshot(mapping)
     assert copied_mapping == mapping and copied_mapping is not mapping
-    assert not hasattr(copied_mapping, "_undeclared")
 
     raw_plan = _planned(source, target, mapping)
-    _attach_bomb(raw_plan)
-    _attach_bomb(raw_plan.operations[0])
     copied_plan = snapshot_plan_candidate(raw_plan, source, target, SyncOptions())
     assert copied_plan == raw_plan
     assert copied_plan.fingerprint == raw_plan.fingerprint
     assert copied_plan is not raw_plan
     assert copied_plan.operations[0] is not raw_plan.operations[0]
-    assert not hasattr(copied_plan, "_undeclared")
-    assert not hasattr(copied_plan.operations[0], "_undeclared")
 
     hostile_fingerprint = replace(raw_plan, fingerprint="f" * 64)
     with pytest.raises(ValueError, match="fingerprint"):
