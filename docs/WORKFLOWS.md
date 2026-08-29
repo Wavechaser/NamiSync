@@ -46,11 +46,16 @@ workflow's named ownership-transfer points: admit a compound result once, then
 share immutable base values with first-party read-only consumers. These
 adoption paths no longer deep-reconstruct immutable scan, plan, observation,
 verdict, or execution authority graphs. Mutable execution overlays still
-receive one compound audit at each producer return and cheap prior-truth guards
-at reentrant (rung 2) callback seams. External (rung 1) inputs are validated and
-bounded at ingress, while applicable populations remain independently bounded
-at every applicable rung. Fresh filesystem observation, callback ordering, and
-exception-graph retirement remain separate requirements.
+receive one compound audit at each producer return and shallow prior-truth
+guards at reentrant (rung 2) callback seams. Where lifecycle permits, edge
+reconciliation is incremental and whole-authority checks occur once or a fixed
+number of times per transfer or phase. Shallow or fixed-frequency describes
+graph depth and invocation placement, not constant cost: a guard may still copy
+or walk retained settlement/completion prefixes or candidate tuples. External
+(rung 1) inputs are validated and bounded at ingress, while applicable
+populations remain independently bounded at every applicable rung. Fresh
+filesystem observation, callback ordering, and exception-graph retirement
+remain separate requirements.
 
 Both opaque codecs admit the complete typed graph before building their JSON
 object/list projection. The walk rechecks nested operations, stats, metadata,
@@ -615,7 +620,7 @@ that spec; the production `_LedgerRunRecording` retains the same object through
 recorder runtime therefore receive no mutable execution status, evidence,
 progress, or recording-attribution container. Workflow helpers keep the
 execution set only to attribute callback failures and derive aggregate
-recording truth. Cheap fixed-reference and prior-overlay guards remain around
+recording truth. Shallow fixed-reference and prior-overlay guards remain around
 recording open/enter, finish, context exit, existing-run fallback, cancellation,
 continuation/exclusion sinks, and verify-degradation publication. They retain
 the first safe pre-callback issue/counter baseline and preserve the accepted

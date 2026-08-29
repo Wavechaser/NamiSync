@@ -219,7 +219,10 @@ high-water baselines. It has no plan fingerprint, operation-fact graph, or
 reconstructed commitment/evidence/issue leaves. Snapshot and strict callback
 comparison are shallow: they preserve every prior outcome and immutable
 evidence/issue reference while allowing only the declared producer-progress
-suffix. Public workflow admission performs the complete continuation check;
+suffix. Shallow describes the graph boundary, not constant cost: authority
+capture detaches retained overlay maps and strict comparison walks prior
+entries, so work can still scale with the retained overlay population. Public
+workflow admission performs the complete continuation check;
 executor and verifier returns each receive one compound mutable-overlay audit.
 
 The workflow continuation wire key remains `bytes_done_high_water`; plan payloads
@@ -254,7 +257,10 @@ authority checks require the private retained index to remain equal to the
 tuple; completion checks the completed map first for replay, then performs one
 construction-admitted membership lookup without rescanning the tuple. The
 public read-only property returns that exact `frozenset`, so verifier progress
-aliases it without a copy. Equality and continuation payload shapes are unchanged.
+aliases it without a copy. Broader authority revalidation still walks candidate
+facts and prior completion truth; the index removes the per-completion tuple
+scan but does not make those guards asymptotically constant. Equality and
+continuation payload shapes are unchanged.
 It also owns the closed `IntegrityCandidateLimitExceeded` fact and its error,
 axes, fixed limits, and user messages. This fact describes standalone-integrity
 candidate custody only; workflows project it as failed work after a durable

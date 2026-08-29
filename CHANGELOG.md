@@ -134,8 +134,13 @@ claims explicit, independently reviewable, and regression-backed.
   compound adoption, and shallow recording custody. Linked and standalone
   integrity completion now use one validated selection-owned immutable id index
   shared with verifier progress, removing the remaining quadratic candidate
-  scan without changing continuation, payload, wire, schema, wall, status, or
-  outcome truth. The 33 newly slotted core contracts remain non-weakrefable;
+  scan without changing durable workflow outcome truth. Completion membership
+  is the construction-admitted snapshot; authority revalidation rejects later
+  tuple changes, and same-length identity replacement retains its fact-oriented
+  diagnostic before the private-index guard. Verifier progress consumes the
+  exact snapshot through its public read-only property. Continuation, payload,
+  wire, schema, wall, and status remain unchanged. The 33 newly slotted core
+  contracts remain non-weakrefable;
   future support is class-specific when a concrete ownership/leak witness needs
   it rather than a blanket per-instance cost.
 - Split cumulative retained review budgets from counter-free producer gates.
@@ -153,6 +158,10 @@ claims explicit, independently reviewable, and regression-backed.
   now state active versus accepted-but-unrealized contracts; the M1 plans, task
   history, and handoff retain delivery sequencing. Runtime checkpoint/session
   terminology remains where it names product behavior.
+- Clarified that workflow authority guards are shallow and fixed-frequency only
+  where their lifecycle permits, not asymptotically constant. Callback-owner
+  inventory and any consolidation judgment remain checkpoint-4 model work
+  rather than an H2 refactor.
 
 #### Bound checkpoint-4 planning source ownership (2026-08-27)
 

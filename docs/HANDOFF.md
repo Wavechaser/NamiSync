@@ -24,9 +24,13 @@ accepted walls and task graph remain authoritative.
   authority. Legitimate first-excess status, save boundaries, and raw exception
   retirement are unchanged.
 - Linked and standalone integrity completion use one validated selection-owned
-  immutable id index shared with verifier progress, removing the quadratic
-  candidate scan without changing construction, equality, continuation,
-  payloads, walls, status, or outcomes.
+  immutable id index exposed to verifier progress through a public read-only
+  property. Completion tests construction-admitted membership without a tuple
+  scan; later authority revalidation rejects a changed selection before the
+  workflow accepts a clean phase or terminal result. Same-length identity
+  replacement again reports the changed item or candidate rather than the
+  derived index. Equality, continuation, payloads, walls, status, and durable
+  outcomes are unchanged.
 - The repeated 120,000-item populations now express one M1 performance-and-
   safety support target. Existing independent first-excess behavior remains
   through M1; there is no support promise above the target and no asserted
@@ -48,6 +52,10 @@ accepted walls and task graph remain authoritative.
 - Model or eliminate remaining complete-graph, construction, tree/index,
   container-capacity, shallow callback-guard/overlap, codec, Python/CLR,
   native/browser, raw-frame, and multi-session owners.
+- Inventory callback edges and their full mutation/control/error policies
+  before considering guard consolidation. Current guards are shallow or
+  fixed-frequency where possible, not necessarily constant-time; no H2
+  workflow refactor is required.
 - The 33 core contracts slotted by the prerequisite pass do not support weak
   references. Add support only to a named class when a concrete ownership or
   leak witness requires it and charge that representation cost.
@@ -77,6 +85,9 @@ without rederiving them from current source and ratified requirements.
 - Node-enabled ordinary suite: 5,196 passed, 4 capability skips, 28 headed
   deselected.
 - Import boundaries: all 11 contracts kept.
+- Integrity boundary follow-up: combined core/verifier departments passed
+  1,484 tests with one capability skip and 3,747 deselections; the verifier
+  source guard contains no cross-object private known-index read.
 - Protected settlement oracle: 30 scenarios across three identical successful
   prerequisite runs; the corrective follow-up did not change executor
   settlement.
