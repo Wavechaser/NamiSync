@@ -129,10 +129,17 @@ The six preflight observation/verdict dataclasses and the two remaining
 integrity command/context dataclasses are also frozen and slotted. This excludes
 undeclared outer instance state without changing observation, refusal,
 candidate, recorder, or continuation semantics. `ObservedWorld` validates its
-scalar and UTC fields before touching mapping inputs, then copies `stats`,
-`paths`, and `roots` into private dict-backed read-only mapping proxies.
+scalar and UTC fields before touching mapping inputs. It preserves an exact
+`datetime` already using `timezone.utc`, canonicalizes datetime subclasses and
+zero-offset UTC aliases, then copies `stats`, `paths`, and `roots` into private
+dict-backed read-only mapping proxies.
 `target_parent_paths` remains an exact immutable `frozenset`, so the complete
 published observation graph is read-only and caller aliases cannot change it.
+Observer-world and preflight-verdict admission validates exact outer and leaf
+types plus plan scope, path, endpoint, selection, truth, and text relations
+without rebuilding either graph. The observer world reaches judgment by
+identity, the verdict must retain that exact world, and workflow retains the
+exact callback verdict after its independent informational gate.
 
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`

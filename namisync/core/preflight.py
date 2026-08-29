@@ -69,10 +69,31 @@ class ObservedWorld:
             self.reclaimable_temp_bytes,
             "reclaimable temporary bytes",
         )
+        if not isinstance(self.observed_at, datetime):
+            raise TypeError("observation timestamp must be a datetime")
         if self.observed_at.tzinfo is None or self.observed_at.utcoffset() is None:
             raise ValueError("observation timestamp must be timezone-aware")
         if self.observed_at.utcoffset() != timezone.utc.utcoffset(self.observed_at):
             raise ValueError("observation timestamp must be UTC")
+        if (
+            type(self.observed_at) is not datetime
+            or self.observed_at.tzinfo is not timezone.utc
+        ):
+            object.__setattr__(
+                self,
+                "observed_at",
+                datetime(
+                    self.observed_at.year,
+                    self.observed_at.month,
+                    self.observed_at.day,
+                    self.observed_at.hour,
+                    self.observed_at.minute,
+                    self.observed_at.second,
+                    self.observed_at.microsecond,
+                    tzinfo=timezone.utc,
+                    fold=self.observed_at.fold,
+                ),
+            )
         if type(self.target_parent_paths) is not frozenset:
             raise TypeError("observed target parent paths must be an exact frozenset")
         for field_name in ("stats", "paths", "roots"):

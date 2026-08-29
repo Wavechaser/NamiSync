@@ -190,19 +190,20 @@ reprojects a staged candidate after publication.
 ### Plan session
 
 The plan session owns one retained `PlanReviewAdmission` ledger. Scanner,
-planner, observer, preflight, and exact-copy gates receive zeroed disposable
+planner, observer, preflight, and result-adoption gates receive zeroed disposable
 admissions that share only the workflow-owned opaque issuer. Correspondence
 keeps its ordinary two-argument protocol; its concrete database query is
 structurally bounded by admitted scan keys and identities, then workflow
-captures the hostile result under a fresh family admission. Each raw population
+captures the fallible result under a fresh family admission. Each raw population
 has a stateless first-excess gate. Each scanner result is exact-adopted once and
 then shared by identity with first-party read-only consumers. Workflow still
 copies the fallible mapping result, but it exact-adopts the planner's immutable
 `Plan` once after compound validation and shares that same plan identity with
-review, artifact, and later first-party consumers. World and verdict results
-retain their separate copying/admission boundaries through checkpoint 4P.18.
-Unsupported reflective mutation of a slotted scan or plan is not treated as a
-supported collaborator result.
+review, artifact, and later first-party consumers. Observer and preflight
+results are likewise exact-adopted once after compound validation: judgment
+receives the observer's world identity, and the artifact retains the preflight
+callback's verdict identity. Unsupported reflective mutation of these slotted
+contracts is not treated as a supported collaborator result.
 
 Only unavoidable shallow slots that coexist in the final scans, plan,
 observed world, and verdict commit to the retained ledger, together with the
@@ -212,11 +213,12 @@ not retained owners. Each preflight cycle now creates one frozen
 `ExecutionReview`: plan review gives it empty status, while execution/resume
 copies status only after capturing mutable execution authority. The same review
 reaches observer and preflight; the observer result is admitted once and that
-same deeply read-only world reaches preflight and the retained verdict. There
-are no disposable plan previews or second callback-world copies. Observer and
-verdict result adoption remain separate boundaries through checkpoint 4P.18.
-The workflow maps the first issued `ReviewFactLimitError` to `REFUSED+UNRUN`
-without saving a plan or exposing a partial result.
+same deeply read-only world reaches preflight and the retained verdict. The
+verdict must point to that exact world; an equal replacement is an ordinary
+contract failure, not a review-capacity refusal. There are no disposable plan
+previews, second callback-world copies, or verdict reconstruction. The workflow
+maps the first issued `ReviewFactLimitError` to `REFUSED+UNRUN` without saving a
+plan or exposing a partial result.
 
 The retained ledger and every zeroed producer or result admission share one
 opaque issuer for that plan run and no source graph. The mapping accepts only
@@ -224,16 +226,17 @@ an exact base error carrying that issuer, reconstructs a fresh exact PLAN fact,
 and retires the raw exception before returning. A subtype, malformed fact,
 wrong tree kind, or independently issued signal fails ordinarily, as does the
 same signal from phase delivery, correspondence, a nested scanner/observer
-collaborator, or destination policy. Preflight callback-world revalidation uses
-an unrelated bounded admission so mutation cannot become capacity refusal.
-Scanner, planner, and selection behavior is unchanged; observer and preflight
-now receive the immutable review projection instead of mutable continuation.
+collaborator, or destination policy. Preflight output validation requires an
+exact identity relation to the already admitted deeply read-only world, so
+replacement cannot become capacity refusal. Scanner, planner, and selection
+behavior is unchanged; observer and preflight receive the immutable review
+projection instead of mutable continuation.
 
 This is the planning-source ownership prerequisite for checkpoint 4. Its row
 and shallow-reference counters are not a reservation formula, heap estimate,
 or complete task-artifact validator. Construction/container capacity,
-sorting/index storage, selection, observer/verdict adoption, complete
-projections, serialization, native/browser copies, and
+sorting/index storage, selection, complete projections, serialization,
+native/browser copies, and
 multi-session owners still need separate closure or charge before the
 checkpoint-4 model can freeze.
 

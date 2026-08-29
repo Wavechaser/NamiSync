@@ -113,10 +113,10 @@ from namisync.modules.planner import (
 )
 from namisync.modules.preflight import (
     ObservationFileSystem,
+    adopt_plan_observed_world,
+    adopt_plan_verdict,
     admit_retained_plan_observed_world,
     admit_retained_plan_verdict,
-    snapshot_plan_observed_world,
-    snapshot_plan_verdict,
 )
 
 from .models import (
@@ -445,7 +445,7 @@ def _run_plan(
             deps.observation_fs,
             review_admission=retained_admission.fresh(),
         )
-        world = snapshot_plan_observed_world(
+        world = adopt_plan_observed_world(
             raw_world,
             review,
             retained_admission.fresh(),
@@ -458,9 +458,8 @@ def _run_plan(
             world,
             review_admission=retained_admission.fresh(),
         )
-        verdict = snapshot_plan_verdict(
+        verdict = adopt_plan_verdict(
             raw_verdict,
-            world,
             world,
             review,
             retained_admission.fresh(),
@@ -968,7 +967,7 @@ def _run_execution(
         review_admission = PlanReviewAdmission()
         raw_world = deps.observer(review, deps.observation_fs)
         revalidate_preflight_authority()
-        world = snapshot_plan_observed_world(
+        world = adopt_plan_observed_world(
             raw_world,
             review,
             review_admission.fresh(),
@@ -976,9 +975,8 @@ def _run_execution(
         del raw_world
         raw_verdict = deps.preflight(review, world)
         revalidate_preflight_authority()
-        verdict = snapshot_plan_verdict(
+        verdict = adopt_plan_verdict(
             raw_verdict,
-            world,
             world,
             review,
             review_admission.fresh(),

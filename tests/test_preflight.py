@@ -1298,6 +1298,7 @@ def test_observation_is_read_only_and_stats_only_remaining_touched_paths_and_par
             assert authority.reviewed_anchor == "C:\\"
             assert authority.expected_volume_id == TARGET_VOLUME
     assert world.observed_at is NOW
+    assert world.observed_at.tzinfo is timezone.utc
 
 
 @pytest.mark.parametrize("rejected_root", ("source", "target"))

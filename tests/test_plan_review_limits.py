@@ -46,7 +46,7 @@ from namisync.modules.planner import (
     adopt_plan_candidate, plan, snapshot_mapping_snapshot,
 )
 from namisync.modules.preflight import (
-    observe, preflight, snapshot_plan_observed_world, snapshot_plan_verdict,
+    adopt_plan_observed_world, adopt_plan_verdict, observe, preflight,
 )
 from namisync.modules.scanner import VolumeSnapshot, WalkingScanner
 from namisync.workflows.models import PlanArtifact, PlanRequest
@@ -695,7 +695,7 @@ def test_plan_adoption_failure_keeps_identity_after_frame_retirement(
     assert references and all(reference() is None for reference in references)
 
 
-def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() -> None:
+def test_world_construction_canonicalizes_utc_alias_and_adoption_keeps_identity() -> None:
     source = _scan(SOURCE_ROOT)
     target = _scan(TARGET_ROOT, files=(_file("obsolete.bin"),))
     value_plan = _planned(source, target)
@@ -712,14 +712,38 @@ def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() 
         ordinary.trash,
         alias_time,
     )
-    captured = snapshot_plan_observed_world(
+    assert type(raw_world.observed_at) is datetime
+    assert raw_world.observed_at.tzinfo is timezone.utc
+    assert raw_world.observed_at is not alias_time
+
+    class _MutableUtcDatetime(datetime):
+        pass
+
+    subclass_time = _MutableUtcDatetime(
+        2026,
+        8,
+        27,
+        12,
+        0,
+        tzinfo=timezone.utc,
+    )
+    subclass_time.mutable_state = ["before"]
+    subclass_world = replace(ordinary, observed_at=subclass_time)
+    subclass_time.mutable_state.append("after")
+    assert type(subclass_world.observed_at) is datetime
+    assert subclass_world.observed_at == subclass_time
+    assert subclass_world.observed_at is not subclass_time
+    assert subclass_world.observed_at.tzinfo is timezone.utc
+    assert not hasattr(subclass_world.observed_at, "mutable_state")
+
+    captured = adopt_plan_observed_world(
         raw_world,
         xset,
         PlanReviewAdmission(),
     )
+    assert captured is raw_world
     assert captured == replace(ordinary, observed_at=NOW)
-    assert isinstance(captured.stats, MappingProxyType)
-    assert captured.observed_at.tzinfo is timezone.utc
+    assert type(captured.stats) is MappingProxyType
 
     raw_verdict = Verdict(
         False,
@@ -729,15 +753,16 @@ def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() 
         ),
         captured,
     )
-    verdict = snapshot_plan_verdict(
+    verdict = adopt_plan_verdict(
         raw_verdict,
-        captured,
         captured,
         xset,
         PlanReviewAdmission(),
     )
+    assert verdict is raw_verdict
     assert verdict.refusals == raw_verdict.refusals
     assert verdict.observed is captured
+
 
 def test_world_constructor_normalizes_declared_mapping_enumeration() -> None:
     source = _scan(SOURCE_ROOT)
@@ -746,24 +771,340 @@ def test_world_constructor_normalizes_declared_mapping_enumeration() -> None:
     xset = _xset(value_plan)
     ordinary = observe(xset, _ObservationFileSystem(source, target))
 
-    captured = snapshot_plan_observed_world(
-        replace(
-            ordinary,
-            stats=_LyingLengthMapping(ordinary.stats),
-            paths=_LyingLengthMapping(ordinary.paths),
-            roots=_LyingLengthMapping(ordinary.roots),
-        ),
+    normalized = replace(
+        ordinary,
+        stats=_LyingLengthMapping(ordinary.stats),
+        paths=_LyingLengthMapping(ordinary.paths),
+        roots=_LyingLengthMapping(ordinary.roots),
+    )
+    captured = adopt_plan_observed_world(
+        normalized,
         xset,
         PlanReviewAdmission(),
     )
+    assert captured is normalized
     assert captured == ordinary
 
-    normalized = replace(
+    duplicate_items_normalized = replace(
         ordinary,
         stats=_DuplicateItemMapping(ordinary.stats),
     )
-    assert normalized.stats == ordinary.stats
-    assert type(normalized.stats) is MappingProxyType
+    assert duplicate_items_normalized.stats == ordinary.stats
+    assert type(duplicate_items_normalized.stats) is MappingProxyType
+
+
+def test_world_adoption_rejects_ordinary_wrong_shapes_and_compound_drift() -> None:
+    source = _scan(SOURCE_ROOT)
+    target = _scan(
+        TARGET_ROOT,
+        files=(_file(r"folder\sub\obsolete.bin"),),
+    )
+    review = _xset(_planned(source, target))
+    world = observe(review, _ObservationFileSystem(source, target))
+    subject = next(
+        subject
+        for subject, path in world.paths.items()
+        if path == r"folder\sub\obsolete.bin"
+    )
+    outside = Subject(TARGET_ROOT.root_id, "OUTSIDE.BIN")
+
+    wrong_stats = dict(world.stats)
+    wrong_stats[subject] = SimpleNamespace(stat=None)
+    wrong_paths = dict(world.paths)
+    wrong_paths[subject] = "other.bin"
+    slash_paths = dict(world.paths)
+    slash_paths[subject] = "folder/sub/obsolete.bin"
+    stat_observation = world.stats[subject]
+    root_id, root_observation = next(iter(world.roots.items()))
+    assert world.trash is not None
+    trash_observation = world.trash
+
+    def with_stat(observation: StatObservation) -> ObservedWorld:
+        stats = dict(world.stats)
+        stats[subject] = observation
+        return replace(world, stats=stats)
+
+    def with_root(observation: RootObservation) -> ObservedWorld:
+        roots = dict(world.roots)
+        roots[root_id] = observation
+        return replace(world, roots=roots)
+
+    malformed_subject = Subject(TARGET_ROOT.root_id, 1)  # type: ignore[arg-type]
+    noncanonical_subject = Subject(
+        subject.root_id,
+        subject.rel_path_key.lower(),
+    )
+    sparse = replace(
+        world,
+        stats={},
+        paths={},
+        target_parent_paths=frozenset(),
+        roots={},
+    )
+
+    assert adopt_plan_observed_world(
+        sparse,
+        review,
+        PlanReviewAdmission(),
+    ) is sparse
+
+    cases = (
+        (SimpleNamespace(), TypeError, "exact ObservedWorld"),
+        (
+            replace(world, stats=wrong_stats),
+            TypeError,
+            "StatObservation",
+        ),
+        (
+            with_stat(replace(stat_observation, stat=SimpleNamespace())),
+            TypeError,
+            "file stat",
+        ),
+        (
+            with_stat(replace(stat_observation, contained=1)),
+            TypeError,
+            "stat flags",
+        ),
+        (
+            with_stat(replace(stat_observation, error=1)),
+            TypeError,
+            "stat observation error",
+        ),
+        (
+            with_root(replace(root_observation, volume_id=SimpleNamespace())),
+            TypeError,
+            "volume identity",
+        ),
+        (
+            with_root(
+                replace(root_observation, volume_evidence=SimpleNamespace())
+            ),
+            TypeError,
+            "volume evidence",
+        ),
+        (
+            with_root(replace(root_observation, error=1)),
+            TypeError,
+            "root observation error",
+        ),
+        (
+            replace(
+                world,
+                trash=replace(trash_observation, available=1),
+            ),
+            TypeError,
+            "trash flags",
+        ),
+        (
+            replace(
+                world,
+                trash=replace(trash_observation, resolved_path=1),
+            ),
+            TypeError,
+            "trash path",
+        ),
+        (
+            replace(
+                world,
+                trash=replace(trash_observation, error=1),
+            ),
+            TypeError,
+            "trash observation error",
+        ),
+        (
+            replace(
+                world,
+                stats={malformed_subject: stat_observation},
+                paths={malformed_subject: r"folder\sub\obsolete.bin"},
+            ),
+            TypeError,
+            "subject fields",
+        ),
+        (
+            replace(
+                world,
+                stats={noncanonical_subject: stat_observation},
+                paths={
+                    noncanonical_subject: r"folder\sub\obsolete.bin",
+                },
+            ),
+            ValueError,
+            "subject path key is not canonical",
+        ),
+        (
+            replace(
+                world,
+                stats={outside: StatObservation(None)},
+                paths={outside: "outside.bin"},
+            ),
+            ValueError,
+            "outside the plan",
+        ),
+        (replace(world, paths={}), ValueError, "same subjects"),
+        (replace(world, paths=wrong_paths), ValueError, "outside the plan"),
+        (replace(world, paths=slash_paths), ValueError, "outside the plan"),
+        (
+            replace(world, target_parent_paths=frozenset({"unknown"})),
+            ValueError,
+            "unknown target parent",
+        ),
+        (
+            replace(world, target_parent_paths=frozenset({1})),
+            TypeError,
+            "target parents must contain text",
+        ),
+        (
+            replace(world, target_parent_paths=frozenset({"folder/sub"})),
+            ValueError,
+            "unknown target parent",
+        ),
+        (
+            replace(world, roots={"unknown": root_observation}),
+            ValueError,
+            "unknown endpoint",
+        ),
+    )
+
+    for candidate, error_type, match in cases:
+        with pytest.raises(error_type, match=match):
+            adopt_plan_observed_world(
+                candidate,
+                review,
+                PlanReviewAdmission(),
+            )
+
+
+def test_verdict_adoption_rejects_ordinary_wrong_shapes_and_compound_drift() -> None:
+    source = _scan(SOURCE_ROOT)
+    target = _scan(TARGET_ROOT, files=(_file("obsolete.bin"),))
+    review = _xset(_planned(source, target))
+    world = observe(review, _ObservationFileSystem(source, target))
+    operation = review.plan.operations[0]
+    outside = Subject(TARGET_ROOT.root_id, "OUTSIDE.BIN")
+    refusal = Refusal(RefusalCode.ROOT_CHANGED, detail="changed")
+
+    cases = (
+        (SimpleNamespace(), TypeError, "exact Verdict"),
+        (Verdict(1, (), world), ValueError, "truth"),  # type: ignore[arg-type]
+        (
+            Verdict(False, [refusal], world),  # type: ignore[arg-type]
+            TypeError,
+            "exact Verdict",
+        ),
+        (
+            Verdict(False, (SimpleNamespace(),), world),  # type: ignore[arg-type]
+            TypeError,
+            "exact Refusal",
+        ),
+        (
+            Verdict(
+                False,
+                (Refusal("wrong", detail="changed"),),  # type: ignore[arg-type]
+                world,
+            ),
+            TypeError,
+            "code",
+        ),
+        (
+            Verdict(
+                False,
+                (Refusal(RefusalCode.ROOT_CHANGED, op_id="f" * 32),),
+                world,
+            ),
+            ValueError,
+            "unselected operation",
+        ),
+        (
+            Verdict(
+                False,
+                (Refusal(RefusalCode.ROOT_CHANGED, subject=outside),),
+                world,
+            ),
+            ValueError,
+            "unobserved subject",
+        ),
+        (
+            Verdict(
+                False,
+                (
+                    Refusal(
+                        RefusalCode.ROOT_CHANGED,
+                        op_id=operation.op_id,
+                        detail=1,  # type: ignore[arg-type]
+                    ),
+                ),
+                world,
+            ),
+            TypeError,
+            "detail",
+        ),
+    )
+
+    for candidate, error_type, match in cases:
+        with pytest.raises(error_type, match=match):
+            adopt_plan_verdict(
+                candidate,
+                world,
+                review,
+                PlanReviewAdmission(),
+            )
+
+
+def test_verdict_adoption_gates_information_before_refusal_traversal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
+    source = _scan(SOURCE_ROOT)
+    target = _scan(TARGET_ROOT, files=(_file("obsolete.bin"),))
+    review = _xset(_planned(source, target))
+    world = observe(review, _ObservationFileSystem(source, target))
+    value = Verdict(
+        False,
+        (SimpleNamespace(), SimpleNamespace()),  # type: ignore[arg-type]
+        world,
+    )
+
+    with pytest.raises(ReviewFactLimitError) as raised:
+        adopt_plan_verdict(value, world, review, PlanReviewAdmission())
+
+    assert raised.value.fact == (
+        ReviewFactLimitExceeded.plan_informational_rows()
+    )
+
+
+def test_world_and_verdict_adoption_do_not_reconstruct_contracts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _scan(SOURCE_ROOT)
+    target = _scan(TARGET_ROOT, files=(_file("obsolete.bin"),))
+    review = _xset(_planned(source, target))
+    world = observe(review, _ObservationFileSystem(source, target))
+    verdict = Verdict(True, (), world)
+
+    def forbid_construction(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("world or verdict adoption rebuilt a contract")
+
+    monkeypatch.setattr(ObservedWorld, "__post_init__", forbid_construction)
+    monkeypatch.setattr(RootObservation, "__post_init__", forbid_construction)
+    monkeypatch.setattr(StatObservation, "__init__", forbid_construction)
+    monkeypatch.setattr(Refusal, "__init__", forbid_construction)
+    monkeypatch.setattr(Verdict, "__post_init__", forbid_construction)
+
+    adopted_world = adopt_plan_observed_world(
+        world,
+        review,
+        PlanReviewAdmission(),
+    )
+    adopted_verdict = adopt_plan_verdict(
+        verdict,
+        adopted_world,
+        review,
+        PlanReviewAdmission(),
+    )
+
+    assert adopted_world is world
+    assert adopted_verdict is verdict
+
 
 def _scanner_stat(*, directory: bool, inode: int) -> SimpleNamespace:
     return SimpleNamespace(
@@ -1781,7 +2122,7 @@ def test_producer_accounting_cannot_poison_outer_final_ledger(
     assert result.status is SessionState.COMPLETED
     assert len(saved) == 1
 
-def test_workflow_adopts_scans_and_plan_once_and_detaches_other_results(
+def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_workflow_roots(monkeypatch)
@@ -1904,7 +2245,7 @@ def test_workflow_adopts_scans_and_plan_once_and_detaches_other_results(
     ) -> Verdict:
         del review_admission
         assert review is raw["review"]
-        assert world is not raw["world"]
+        assert world is raw["world"]
         assert world.stats
         subject = next(iter(world.stats))
         with pytest.raises(TypeError):
@@ -1938,8 +2279,9 @@ def test_workflow_adopts_scans_and_plan_once_and_detaches_other_results(
     assert artifact.verdict.observed.stats
     assert artifact.plan is raw["plan"]
     assert artifact.plan is raw["review"].plan
+    assert artifact.verdict.observed is raw["world"]
     assert artifact.verdict.observed is raw["adopted_world"]
-    assert artifact.verdict is not raw["verdict"]
+    assert artifact.verdict is raw["verdict"]
     assert artifact.verdict.refusals == ()
 
 def test_workflow_admitted_world_refuses_ordinary_mapping_mutation(
@@ -1966,7 +2308,7 @@ def test_workflow_admitted_world_refuses_ordinary_mapping_mutation(
     assert len(saved) == 1
 
 
-def test_preflight_replacement_world_cannot_become_capacity_refusal(
+def test_preflight_equal_replacement_world_is_ordinary_identity_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 4)
@@ -1974,24 +2316,19 @@ def test_preflight_replacement_world_cannot_become_capacity_refusal(
     saved: list[PlanArtifact] = []
     deps = _workflow_dependencies(saved)
 
-    def mutating_preflight(
+    def replacing_preflight(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
         review_admission: PlanReviewAdmission | None = None,
     ) -> Verdict:
         del execution_set, review_admission
-        mutated = replace(
-            world,
-            target_parent_paths=frozenset(str(index) for index in range(5)),
-        )
-        return Verdict(True, (), mutated)
+        replacement = replace(world)
+        assert replacement == world and replacement is not world
+        return Verdict(True, (), replacement)
 
-    deps.preflight = mutating_preflight
-    with pytest.raises(
-        RuntimeError,
-        match="^unadmitted collaborator raised a review fact limit$",
-    ):
+    deps.preflight = replacing_preflight
+    with pytest.raises(ValueError, match="observed a different world"):
         _run(deps)
     assert saved == []
 

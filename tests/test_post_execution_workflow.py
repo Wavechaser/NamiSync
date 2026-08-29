@@ -414,7 +414,9 @@ def _deps(
         observer=lambda *args: world,
         observation_fs=object(),
         preflight=lambda review, observed: (
-            verdict if verdict is not None else Verdict(True, (), observed)
+            replace(verdict, observed=observed)
+            if verdict is not None
+            else Verdict(True, (), observed)
         ),
         open_recording=lambda execution_set: (
             recordings.append(_Recording()) or recordings[-1]
@@ -1231,6 +1233,7 @@ def test_execute_resume_exposes_one_detached_review_to_read_only_callbacks() -> 
     )
     xset.status[operation.op_id] = Outcome.SUCCEEDED
     reviews: list[ExecutionReview] = []
+    observer_worlds: list[ObservedWorld] = []
     callback_worlds: list[ObservedWorld] = []
     reclaimable_run_ids: list[str] = []
 
@@ -1283,11 +1286,14 @@ def test_execute_resume_exposes_one_detached_review_to_read_only_callbacks() -> 
         with pytest.raises(TypeError):
             review.status[operation.op_id] = Outcome.FAILED
         reviews.append(review)
-        return observe(review, filesystem)
+        world = observe(review, filesystem)
+        observer_worlds.append(world)
+        return world
 
     def preflight_callback(review, world):
         assert type(review) is ExecutionReview
         assert review.run_id == xset.run_id
+        assert observer_worlds and world is observer_worlds[-1]
         reviews.append(review)
         callback_worlds.append(world)
         return Verdict(True, (), world)
@@ -1317,7 +1323,9 @@ def test_execute_resume_exposes_one_detached_review_to_read_only_callbacks() -> 
     assert result.status is SessionState.COMPLETED
     assert len(reviews) == 2
     assert reviews[0] is reviews[1]
+    assert len(observer_worlds) == 1
     assert len(callback_worlds) == 1
+    assert callback_worlds[0] is observer_worlds[0]
     assert reclaimable_run_ids == [str(xset.run_id)]
     assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
 

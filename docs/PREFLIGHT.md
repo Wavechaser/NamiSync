@@ -41,11 +41,13 @@ commitment exists.
 The six exact preflight observation and verdict dataclasses are frozen and
 slotted, so instances carry only their declared fields. `ObservedWorld` copies
 its three mapping inputs into private dict-backed read-only mapping proxies
-after validating capacity scalars and UTC time; target-parent paths remain an
-exact `frozenset`. Its frozen observation leaves make the complete published
+after validating capacity scalars and UTC time; an exact `datetime` already
+using `timezone.utc` is retained, while a datetime subclass or zero-offset UTC
+alias is canonicalized before those mapping copies. Target-parent paths remain
+an exact `frozenset`. Frozen observation leaves make the complete published
 world deeply read-only, and later caller changes to input dictionaries cannot
-change it. Hostile boundaries continue to require exact types and revalidate
-declared fields.
+change it. Fallible internal result boundaries still require exact types and
+declared compound relations.
 
 `observe()` performs read-only filesystem/volume IO and decides nothing.
 `preflight()` performs no IO and changes nothing. Neither repairs, re-plans,
@@ -58,17 +60,19 @@ During each preflight cycle, workflow creates one exact immutable
 Plan review supplies empty status; execution and resume copy current status only
 after capturing the existing mutable execution authority. Observation gates its
 selected subjects, target parents, roots, paths, stats, and backend-returned
-mappings independently before first excess. The preflight module reconstructs
-and admits the observer's declared `ObservedWorld` graph, rejects out-of-plan
-keys and undeclared state, and workflow passes that same admitted world directly
-to judgment. The existing observer/verdict reconstruction remains until
-checkpoint 4P.18. Judgment gates each raw typed refusal before append and
-preserves ordinary refusal order and selection policy.
+mappings independently before first excess. The preflight module admits the
+observer's exact `ObservedWorld` without rebuilding it, rejects out-of-plan
+subjects, paths, parents, roots, or mismatched stat/path keys, and workflow
+passes that same world identity directly to judgment. Verdict admission requires
+the exact admitted world identity, gates the complete informational population
+before refusal traversal, validates truth, code, selection, subject, and text
+relations in place, and retains the exact callback verdict and refusal order.
+An equal replacement world is not the admitted world and fails ordinarily.
 
 Only the final observed-world mapping slots and verdict refusal-tuple slots/
 informational rows are charged to the retained plan artifact. Construction
-maps, keys, sorting, selection, and revalidation copies are disposable and
-uncharged. A first excess is the shared typed `REFUSED+UNRUN` result and
+maps, keys, sorting, selection, and scope-derivation temporaries are disposable
+and uncharged. A first excess is the shared typed `REFUSED+UNRUN` result and
 never becomes an incomplete ordinary verdict or saved partial plan.
 
 These source and retained-reference checks are inputs to checkpoint 4. They do
