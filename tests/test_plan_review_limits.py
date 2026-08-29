@@ -512,9 +512,8 @@ class _UtcAlias(tzinfo):
 def _attach_bomb(value: object) -> None:
     object.__setattr__(value, "_undeclared", _DeepcopyBomb())
 
-def test_scan_snapshot_reconstructs_only_declared_typed_fields() -> None:
+def test_scan_snapshot_reconstructs_declared_typed_fields() -> None:
     record = _file("file.bin", identity=FileIdentity("SOURCE", 1))
-    _attach_bomb(record)
     value = _scan(
         SOURCE_ROOT,
         files=(record,),
@@ -522,12 +521,9 @@ def test_scan_snapshot_reconstructs_only_declared_typed_fields() -> None:
         unsupported=(_unsupported("link.bin"),),
         warnings=(ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin"),),
     )
-    _attach_bomb(value)
     snapshot = snapshot_plan_scan_result(value, PlanReviewAdmission())
     assert snapshot == value
     assert snapshot is not value and snapshot.files[0] is not record
-    assert not hasattr(snapshot, "_undeclared")
-    assert not hasattr(snapshot.files[0], "_undeclared")
 
 def test_mapping_and_plan_snapshots_drop_hidden_graphs_and_preserve_semantics() -> None:
     source = _scan(SOURCE_ROOT, files=(_file("file.bin"),))

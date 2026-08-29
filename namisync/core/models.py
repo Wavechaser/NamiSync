@@ -49,7 +49,7 @@ class EntryKind(StrEnum):
     DIRECTORY = "directory"
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True, order=True, slots=True)
 class VolumeId:
     serial: str
     fs_type: str
@@ -58,7 +58,7 @@ class VolumeId:
         _require_volume_id_fields(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class VolumeEvidence:
     label: str | None = None
     device_id: str | None = None
@@ -68,7 +68,7 @@ class VolumeEvidence:
         _require_volume_evidence_fields(self)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CapabilityProfile:
     fs_type: str
     mtime_granularity_ns: int
@@ -142,7 +142,7 @@ def _require_capability_profile_fields(value: CapabilityProfile) -> None:
         raise ValueError("maximum path exceeds the UTF-16 path bound")
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(frozen=True, order=True, slots=True)
 class FileIdentity:
     volume_serial: str
     file_index: int
@@ -163,7 +163,7 @@ class FileIdentity:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MetadataSnapshot:
     attributes: int
     created_ns: int | None
@@ -174,7 +174,7 @@ class MetadataSnapshot:
             require_signed_64(self.created_ns, "creation time")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FileStat:
     kind: EntryKind
     size: int
@@ -248,7 +248,7 @@ def file_stat_fact(
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Root:
     path: str
     root_id: str
@@ -270,7 +270,7 @@ class Root:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FileRecord:
     rel_path: str
     rel_path_key: str
@@ -300,7 +300,7 @@ class FileRecord:
         )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DirRecord:
     rel_path: str
     rel_path_key: str
@@ -337,7 +337,7 @@ class UnsupportedReason(StrEnum):
     UNKNOWN_TYPE = "unknown_type"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class UnsupportedRecord:
     rel_path: str
     rel_path_key: str
@@ -372,7 +372,7 @@ class ScanWarningCode(StrEnum):
     SCALAR_UNREPRESENTABLE = "scalar_unrepresentable"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScanWarning:
     code: ScanWarningCode
     rel_path: str | None
@@ -400,7 +400,7 @@ class ScanScopeKind(StrEnum):
     SUBTREES = "subtrees"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScanScope:
     kind: ScanScopeKind
     selected_paths: tuple[str, ...] = ()
@@ -598,7 +598,7 @@ def owned_temp_run_id(name: str) -> str | None:
     return None if match is None else match.group("run_id")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IgnoreSet:
     """Built-in exact names and generated artifact grammar."""
 
@@ -644,7 +644,7 @@ def snapshot_ignore_set(value: object) -> IgnoreSet:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ScanResult:
     root: Root
     volume_id: VolumeId | None

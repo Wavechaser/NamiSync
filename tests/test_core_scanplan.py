@@ -244,6 +244,96 @@ def test_volume_root_profile_and_warning_source_bounds_are_exact() -> None:
     ).detail == ""
 
 
+def _assert_declared_slots(value: object) -> None:
+    assert not hasattr(value, "__dict__")
+    assert type(value).__slots__ == tuple(field.name for field in fields(value))
+    with pytest.raises(AttributeError):
+        object.__setattr__(value, "_undeclared", object())
+
+
+def test_scan_model_contracts_are_exactly_slotted() -> None:
+    volume = model_contracts.VolumeId("serial", "NTFS")
+    evidence = model_contracts.VolumeEvidence("source", None, False)
+    profile = model_contracts.CapabilityProfile(
+        "NTFS", 1, True, None, 32_767, True, True
+    )
+    identity = model_contracts.FileIdentity("serial", 1)
+    metadata = model_contracts.MetadataSnapshot(0, None)
+    stat = model_contracts.FileStat(
+        model_contracts.EntryKind.FILE,
+        1,
+        1,
+        identity,
+        1,
+        metadata,
+    )
+    root = model_contracts.Root(r"C:\source", "source")
+    file_record = model_contracts.FileRecord(
+        "file.bin", "FILE.BIN", 1, 1, identity, 1, metadata
+    )
+    directory_record = model_contracts.DirRecord(
+        "folder", "FOLDER", 1, metadata, identity
+    )
+    unsupported_record = model_contracts.UnsupportedRecord(
+        "link.bin",
+        "LINK.BIN",
+        model_contracts.UnsupportedReason.REPARSE_POINT,
+    )
+    warning = model_contracts.ScanWarning(
+        model_contracts.ScanWarningCode.DISAPPEARED,
+        "gone.bin",
+    )
+    scope = model_contracts.ScanScope.full()
+    ignores = model_contracts.IgnoreSet()
+    result = model_contracts.ScanResult(
+        root,
+        volume,
+        evidence,
+        profile,
+        (file_record,),
+        (directory_record,),
+        (unsupported_record,),
+        (warning,),
+        scope,
+        True,
+    )
+
+    values = (
+        volume,
+        evidence,
+        profile,
+        identity,
+        metadata,
+        stat,
+        root,
+        file_record,
+        directory_record,
+        unsupported_record,
+        warning,
+        scope,
+        ignores,
+        result,
+    )
+    assert tuple(type(value).__name__ for value in values) == (
+        "VolumeId",
+        "VolumeEvidence",
+        "CapabilityProfile",
+        "FileIdentity",
+        "MetadataSnapshot",
+        "FileStat",
+        "Root",
+        "FileRecord",
+        "DirRecord",
+        "UnsupportedRecord",
+        "ScanWarning",
+        "ScanScope",
+        "IgnoreSet",
+        "ScanResult",
+    )
+    for value in values:
+        _assert_declared_slots(value)
+
+
 def test_source_contracts_reject_coercible_scalar_fields() -> None:
     class Text(str):
         pass

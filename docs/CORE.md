@@ -101,6 +101,12 @@ remain in operation modules; core's stateless probes carry no module policy and
 remain standard-library-only. `core/pathing.py` stays purely lexical and does
 not re-export native anchor or volume probes from `core/root_authority.py`.
 
+The fourteen exact scan/model dataclasses are frozen and slotted. Their
+instances carry only their declared fields, so undeclared instance state is
+structurally excluded without changing equality, ordering, validation, or
+serialization. Hostile boundaries still require the exact public type and
+revalidate its declared fields; slots are a shape constraint, not trust.
+
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`
 carries one or more minimal subtree roots plus any exact paths outside those
