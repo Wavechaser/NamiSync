@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 from dataclasses import fields, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,6 +56,24 @@ _SUBJECT = FileStat(
     metadata=MetadataSnapshot(attributes=0, created_ns=50),
 )
 _OBSERVED_AT = datetime(2026, 8, 30, tzinfo=timezone.utc)
+
+
+def _known_item_index_reads(source: str) -> set[str]:
+    reads: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.ctx, ast.Load)
+            and node.attr == "_known_item_ids"
+        ):
+            reads.add(ast.unparse(node))
+        elif (
+            isinstance(node, ast.Constant)
+            and type(node.value) is str
+            and node.value == "_known_item_ids"
+        ):
+            reads.add(repr(node.value))
+    return reads
 
 
 def _selection_subject(
@@ -169,6 +188,23 @@ def test_selection_exposes_its_construction_admitted_item_ids(kind: str) -> None
     assert type(selection.known_item_ids) is frozenset
     assert selection.known_item_ids == frozenset({subject.item_id})
     assert selection.known_item_ids is selection._known_item_ids
+
+
+def test_known_item_index_has_no_reader_outside_its_core_contract() -> None:
+    assert _known_item_index_reads("selection._known_item_ids")
+    assert _known_item_index_reads('getattr(selection, "_known_item_ids")')
+    assert not _known_item_index_reads("selection.known_item_ids")
+
+    package = Path(__file__).parents[2] / "namisync"
+    owner = package / "core" / "integrity.py"
+    offenders = {
+        path.relative_to(package).as_posix(): reads
+        for path in package.rglob("*.py")
+        if path != owner
+        if (reads := _known_item_index_reads(path.read_text(encoding="utf-8")))
+    }
+
+    assert offenders == {}
 
 
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
