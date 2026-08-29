@@ -17,7 +17,12 @@ from uuid import uuid4
 from xxhash import xxh3_128
 
 from namisync.core.events import ItemOutcome
-from namisync.core.execution import ExecutionSet, RunId, validated_run_id
+from namisync.core.execution import (
+    ExecutionReview,
+    ExecutionSet,
+    RunId,
+    validated_run_id,
+)
 from namisync.core.models import IgnoreSet, Root, ScanResult
 from namisync.core.planning import (
     MappingSnapshot,
@@ -212,8 +217,14 @@ def execute_prepared(
     preflight_seconds = 0.0
     if preflight_gate:
         started = perf_counter()
-        world = observe(execution_set, LocalObservationFileSystem())
-        verdict = preflight(execution_set, world)
+        review = ExecutionReview(
+            execution_set.plan,
+            execution_set.selection,
+            execution_set.run_id,
+            execution_set.status,
+        )
+        world = observe(review, LocalObservationFileSystem())
+        verdict = preflight(review, world)
         preflight_seconds = perf_counter() - started
         if not verdict.ok:
             reasons = ", ".join(refusal.code.value for refusal in verdict.refusals)
