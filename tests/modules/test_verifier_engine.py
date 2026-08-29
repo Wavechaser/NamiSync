@@ -126,10 +126,39 @@ def test_verifier_package_boundaries_match_component_ownership() -> None:
                 )
         return imported
 
+    def cross_object_private_reads(name: str) -> set[str]:
+        found: set[str] = set()
+        for node in ast.walk(ast.parse(sources[name])):
+            if isinstance(node, ast.Attribute):
+                attribute = node.attr
+                owner: ast.expr = node.value
+                if isinstance(owner, ast.Name) and owner.id in {"self", "cls"}:
+                    continue
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "getattr"
+                and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Constant)
+                and type(node.args[1].value) is str
+            ):
+                attribute = node.args[1].value
+                owner = node.args[0]
+            else:
+                continue
+            if not attribute.startswith("_"):
+                continue
+            if attribute.startswith("__") and attribute.endswith("__"):
+                continue
+            found.add(f"{ast.unparse(owner)}.{attribute}")
+        return found
+
     assert relative_imports("__init__.py") == {"engine", "native"}
     assert relative_imports("engine.py") == {"native"}
     assert relative_imports("native.py") == set()
-    assert "_known_item_ids" not in sources["engine.py"]
+    assert {name: cross_object_private_reads(name) for name in sources} == {
+        name: set() for name in sources
+    }
     for name in ("engine.py", "native.py"):
         assert project_imports(name)
         assert all(
