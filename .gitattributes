@@ -5,3 +5,5 @@
 /tests/interfaces/web/sh_g_8_transport_ceiling.json text eol=lf
 /tests/interfaces/web/sh_g_8_transport_holdout.json text eol=crlf
 /tests/assets/identity_epoch5_vectors.json text eol=lf
+/tests/assets/fluent_tokens/* -text
+/namisync/interfaces/web/assets/icons/* -text

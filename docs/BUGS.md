@@ -59,6 +59,13 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - FIXED (2026-08-29). Checkout line-ending conversion. Windows clones
+  rewrote the pinned Fluent token transcripts and shipped icon-source assets to
+  CRLF, so their working-tree SHA-256 values no longer matched the reviewed
+  upstream bytes and the provenance regressions failed. Cause: the byte-exact
+  fixture and asset directories were not exempt from Git's global text
+  conversion. Fixed by marking both fixed trees as non-text in
+  `.gitattributes`; their committed bytes and recorded hashes are unchanged.
 - MINOR - FIXED (2026-08-18). Cross-sample fixture drift. Verifier repetitions
   could aggregate different corpus memberships or stats, and priming or sidecar
   validation did not bind the following measured scan; a shorter corpus could
