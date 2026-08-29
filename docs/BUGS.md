@@ -1700,6 +1700,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-29). Pre-checkpoint settlement gap. A direct
+  workflow adapter's checkpoint callback could run after an executor changed
+  settlement but before the workflow reconciled that change into its accepted
+  stream, exposing a partially owned boundary to reentrant code. The built-in
+  dispatcher checkpoint only reads control flags, but `RunContext` also admits
+  adapter-owned callbacks. Cause: execution checked settlement only after the
+  callback returned or raised. Fixed by reconciling both before and after the
+  callback; an unreported settlement now blocks re-entry while accepted-prefix
+  and pause/cancel behavior remain unchanged.
 - MODERATE - OPEN (2026-08-27). Phase exception-frame retention. Session,
   planning, execution, recording, dispatcher, history, bridge, and document
   callbacks still consume, chain, or rethrow raw errors while request, scan,

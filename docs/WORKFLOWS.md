@@ -539,7 +539,11 @@ continuation-only settlement. Candidate completion follows the same ordering.
 Workflow retains the canonical item immediately after that normal emission
 return, before any later reconciliation can fail. Executor and verifier
 aggregate returns may confirm their own terminal axes but cannot contribute
-workflow-owned phases or replace the accepted stream. Recorder `finish` and
+workflow-owned phases or replace the accepted stream.
+Execution checkpoints reconcile settlement both before and after invoking the
+caller-owned checkpoint, so an unreported mutation cannot cross a reentrant
+boundary and a returning callback cannot leave new drift unchecked.
+Recorder `finish` and
 context exit receive exact hostile-boundary snapshots of the execution set and,
 when present, the post-copy selection; mutation is reported as failed execution
 or incomplete verification while the already accepted item prefix is preserved.

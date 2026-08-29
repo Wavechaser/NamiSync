@@ -6242,6 +6242,35 @@ def test_dispatcher_pause_resume_retains_v6_item_attribution_and_attestation(
     assert terminal.result.recording is RecordingStatus.DEGRADED
 
 
+def test_executor_reconciles_settlement_before_reentrant_checkpoint() -> None:
+    operation = _operation(4090, 4)
+    xset = _execution_set(operation)
+    checkpoint_calls = 0
+
+    def checkpoint() -> None:
+        nonlocal checkpoint_calls
+        checkpoint_calls += 1
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        execution_set.status[operation.op_id] = Outcome.SUCCEEDED
+        context.checkpoint()
+        pytest.fail("unreported settlement crossed the checkpoint boundary")
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda _body: None, checkpoint),
+        _deps(executor=executor, verifier=_verify_all, recordings=[]),
+    )
+
+    assert checkpoint_calls == 0
+    assert result.status is SessionState.FAILED
+    assert result.error == FailureDetail(
+        "ValueError",
+        "executor settlement must match its accepted operation outcomes",
+    )
+
+
 def test_dispatcher_paused_verify_cancel_uses_runtime_compound_settlement(
     tmp_path: Path,
 ) -> None:

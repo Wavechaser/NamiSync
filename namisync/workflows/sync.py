@@ -1292,6 +1292,7 @@ def _run_execution(
                     last_reconciliation_error = None
 
             def checkpoint_execution() -> None:
+                reconcile_execution(complete=False)
                 ctx.checkpoint()
                 reconcile_execution(complete=False)
 
