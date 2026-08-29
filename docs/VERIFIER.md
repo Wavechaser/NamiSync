@@ -266,13 +266,14 @@ from the readable candidate selection. A successful operation whose publication
 evidence is missing therefore remains visible in every verify `Progress`
 `items_total` and `bytes_total` even though no `PostCopyCandidate` can be built
 for it; the same admission feeds the incomplete terminal phase. This paired
-invocation context is not continuation state and does not alter payload version
-5: resume re-derives it from the exact `VerifyContinuation` before constructing
-the reporter. Exact continuation and event versions, closed detail
-projection, scalar domains, omission witnesses, and envelope limits are owned by
+invocation context is not continuation state and does not alter the plan
+payload's exact version 5: resume re-derives it from the exact
+`VerifyContinuation` before constructing the reporter. Exact continuation and
+event versions, closed detail projection, scalar domains, omission witnesses,
+and envelope limits are owned by
 [M1_BRIDGE.md](M1_BRIDGE.md); verifier preserves only the local pause/resume
 state needed to continue the same admitted work. The enclosing sync-execution
-payload is exact v6.
+payload is exact v7.
 
 Ordinary manual verification is location-scoped and independent of any current
 plan or mapping. It must not require both source and target roots. The deferred

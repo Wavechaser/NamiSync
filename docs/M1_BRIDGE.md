@@ -179,7 +179,7 @@ accepted targets until their named checkpoints.
 Production core events use exact v5 with no legacy constant, private decoder,
 or positive v3/v4 compatibility fixture. The bridge envelope remains v1 and every live `SessionEventView`
 requires nested `schema_version=5`. The process-local sync-execution payload
-is exact v6; the sync-plan payload remains exact v5, and inventory and
+is exact v7; the sync-plan payload remains exact v5, and inventory and
 standalone-integrity payloads remain exact v2. Its transient copy
 attestations may exist only while the same live/paused compound session needs
 linked verification or resume. They never enter either database, retained
@@ -4220,7 +4220,8 @@ headings are organizational, not lane ownership.
   replay. *Not satisfied by* a monotonic counter nothing advances, which passes
   every assertion in a test that never invalidates.
 - **BR-G-30 — The host assumptions are measured before they become
-  architecture.** On supported Python 3.13 and the pinned pywebview range, the
+  architecture.** On the CPython 3.13 reference profile and the pinned
+  pywebview range, the
   spike records real `CoreWebView2` reachability, pythonnet event-handler syntax,
   the asset-server origin actually observed at runtime, and off-thread
   `current_url` behavior. It proves that native access/attachment occurs on the

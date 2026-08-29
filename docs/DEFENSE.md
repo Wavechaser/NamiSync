@@ -73,10 +73,12 @@ excuse NamiSync crossing a hard wall during supported use.
 ### 1.3 Stage 6 scalar and retention walls
 
 The scalar/native-identity walls are active from Stage 6 checkpoint 3.2. The
-complete-graph and process-live retention walls remain accepted design until
-their named later checkpoints land. `M1_BRIDGE.md` owns the mapped decision
-records, exact wire shapes, accounting graph, reservation order, and refusal
-schemas; other active documents point here instead of reproducing these limits.
+source-population, reliable-result-occurrence, and bridge-handler walls named
+below are also active. Complete-graph and task-artifact retention walls remain
+accepted design until their named later checkpoints land. `M1_BRIDGE.md` owns
+the mapped decision records, exact wire shapes, accounting graph, reservation
+order, and refusal schemas; other active documents point here instead of
+reproducing these limits.
 
 - Every durable or externally presented byte quantity and filesystem
   nanosecond is in `0..9_223_372_036_854_775_807`. Typed relational values use
@@ -142,35 +144,41 @@ schemas; other active documents point here instead of reproducing these limits.
   nanoseconds, and file identity must stay outside the scalar domain. Values are
   never clamped, wrapped, or narrowed.
 
+The following population and process-live admission walls are active now:
+
+- Planning and inventory each admit their independent raw domain and
+  informational source populations at 120,000 rows, before normalization,
+  omission, sorting, indexing, or retained-artifact construction. The first
+  excess is classified by its owning workflow and no partial artifact is
+  published.
+- A standalone-integrity candidate admits at most 120,000 unique inventory-
+  domain rows before selection retention or verifier start. This count is
+  independent of any inventory-tree population.
+- One dispatcher session admits at most 240,000 ordered reliable result-item
+  occurrences across its complete process-live paused/resumed lifetime. A
+  repeated reference remains a retained occurrence. Admission precedes event
+  publication, audit observation, and accumulator mutation; an excess producer
+  result is an internal failure, not truncation or a review-limit refusal.
+- The bridge admits at most 64 concurrent handlers before invoking command
+  work. This ingress concurrency wall is independent of the future task and
+  artifact reservation model.
+
 The remaining complete-graph and process-live containment walls below are not
 active until their owning checkpoints:
 
-- A plan or inventory tree admits at most 120,000 domain rows plus 120,000
-  informational rows. The complete retained-graph ceilings are 128 MiB for a
-  plan domain and 192 MiB independently for an inventory domain and either
-  informational population. Collection stops before the first excess and
-  never publishes a partial artifact.
-- A standalone-integrity candidate independently admits at most 120,000 unique
-  inventory-domain rows and 192 MiB for its complete identity-deduplicated
-  candidate-custody graph. This wall is neither shared with nor implied by an
-  inventory tree: a combined task charges every simultaneous refresh,
-  candidate, continuation, outcome, and completion owner. Candidate collection
-  stops before the first excess, with row precedence over retained bytes, and
-  never publishes a partial selection or begins verifier work.
-- One dispatcher session admits at most 240,000 ordered reliable result-item
-  occurrences across its complete paused/resumed lifetime. This is the sum of
-  the separately admitted 120,000-operation execution population and 120,000
-  linked-integrity population; a repeated reference is still a retained
-  occurrence. Admission checks the next item before event publication, audit
-  observation, or accumulator mutation, and rejects an already-excess resume
-  accumulator before workflow re-entry. The first producer excess is an
-  internal workflow failure, not a user review-limit or truncation path; items
-  already produced retain their honest ran-work truth, while no result, event,
-  or audit owner may acquire an occurrence above the wall.
+- Complete retained-graph ceilings are 128 MiB for a plan domain and 192 MiB
+  independently for an inventory domain and either informational population.
+  These byte walls must charge every simultaneously retained occurrence behind
+  the already-active source-row gates.
+- A standalone-integrity candidate's complete identity-deduplicated custody
+  graph has a proposed 192 MiB wall. A combined task must additionally charge
+  every simultaneous refresh, candidate, continuation, outcome, and completion
+  owner; the active candidate-row limit does not prove that retained-byte wall.
 - Process-live task custody is capped at 48 tasks and a mechanically derived
   byte budget that must admit at least four simultaneously complete
   maximum-scale combined tasks. The separate immutable-projection cache holds
-  at most six generations, and bridge work admits at most 64 handlers.
+  at most six generations. Neither cap is activated by the independent bridge-
+  handler wall above.
 - Each task reserves at most 4,096 mutation receipts, including one cell that
   ordinary commands cannot consume so an accepted close remains recoverable.
   Setup retains at most 128 receipts for 30 minutes and 32 admitted location
@@ -203,6 +211,22 @@ assets, CPython and pinned Python dependencies, WebView2 and its native host
 stack when the desktop is used, Windows, and the documented behavior of the
 filesystem primitives on which an operation relies.
 
+Validation and custody follow four distinct rungs:
+
+| Rung | Scope | Obligation | Violation |
+| --- | --- | --- | --- |
+| **1 — external** | Filesystem, persisted state, browser and command inputs, and user-supplied values | Treat as adversarial; validate and bound at ingress. | Typed product refusal or contained failure. |
+| **2 — reentrant** | Reentrant or extension-owned callbacks | Commit local reliable state before the call and hand out only immutable values. | Ordering, replay, or retention defect. |
+| **3 — internal** | NamiSync-owned modules inside the trusted computing base | Treat as trusted but fallible; validate once at the boundary-owning module's public return or other named ownership transfer, then trust immutable base values. | Loud internal invariant failure, never a user refusal path. |
+| **4 — reflective/forged** | Reflective mutation and forged private internal exceptions or signals | Unsupported unless promoted to a named fault class under §2.2. | Programming or trusted-base defect outside the product fault model. |
+
+Capacity and freshness are independent of this ladder. Trusted code can
+truthfully produce an excessive population, and the filesystem can change
+after valid evidence was created. Population admission therefore remains at
+every applicable rung, while `RootAuthority` consumers re-probe at their
+existing points of use. Exception-graph retirement is likewise a lifetime
+obligation, not a trust defense.
+
 The production document channel's atomic current-document send relies on the
 pinned WebView2 `PostWebMessageAsJson` call not synchronously re-entering a
 NamiSync acknowledgment, reload, or close callback before it returns. The host
@@ -211,14 +235,13 @@ win between the final epoch check and the send. Any observed synchronous
 re-entry reopens this premise and the document-custody model; a timeout is not
 treated as proof that the call returned.
 
-The desktop task-artifact containment claim has a narrower executable premise:
-64-bit CPython 3.13 on Windows x64, a release build with the standard GIL,
-pymalloc compiled in, and no nonstandard `PYTHONMALLOC` override. The host checks
-that source-derived profile before constructing the task registry and gives an
-action-guiding startup refusal on drift. Debug, free-threaded, 32-bit, ARM64,
-PyPy, CPython 3.14+, and alternate allocator profiles are unsupported for the
-desktop claim rather than silently interpreted through the frozen object-graph
-coefficients. This predicate is contract admission, not calibration evidence.
+Current source contains an exact CPython 3.13.14 task-registry admission that
+was added ahead of the checkpoint-4 object model it claims to protect. No
+accepted model, constant, fixture, validator, or BR-G-45 evidence currently
+authorizes that restriction. It is therefore an orphan implementation gate,
+not a supported-baseline premise, and checkpoint 4P.3 removes it. Exact runtime
+profiles recorded with benchmarks remain evidence profiles for those runs;
+they do not become launch policy by being measured.
 
 The desktop host must remain at standard integrity. Before headed beta release,
 an elevated launch must be refused before command exposure unless a revision of
@@ -275,6 +298,13 @@ same-principal code.
   administrator, compromised kernel or driver, lying filesystem, deliberately
   violated atomic primitive, tampered runtime, or deliberate cryptographic or
   non-cryptographic hash collision is outside the M1 model.
+
+Reflective mutation of first-party immutable values and forged private
+internal exceptions or signals are not fault classes in this model. Promoting
+one requires a named entry in this section with a supported consequence bound
+and an explicit test tier. Without that entry there is no defense to implement;
+a test that writes through `object.__setattr__` or constructs a private signal
+directly exercises an unsupported programming/TCB fault.
 
 XXH3-128 is accidental-corruption and consistency evidence, not adversarial
 authenticity. Unkeyed SHA-256 plan and history digests bind structure and detect

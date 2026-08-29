@@ -379,7 +379,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Live/stored session records, phase/run results, and `SessionStore` | `namisync/core/session.py` |
 | Event bodies, envelopes, delivery classes, codec, and exact-v5 validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
 | Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
-| Safe integer, signed-64, canonical scalar/file-index codecs, issuer-bound typed review-limit facts, independent plan-source gates, exact scan detachment, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
+| Safe integer, signed-64, canonical scalar/file-index codecs, current issuer-bound typed review-limit facts, scanner population-admission protocol, independent plan-source gates, exact scan detachment, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
 | Ephemeral root authority, native volume evidence, and admission probes | `namisync/core/root_authority.py` |
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
@@ -527,6 +527,15 @@ will be defined only with their first production consumer.
 Protocols return data or decisions. They do not receive control of the state
 machine.
 
+For NamiSync-owned modules, the boundary owner's public return is the named
+adoption point. The workflow checks the returned compound value once, then
+passes immutable base values to first-party read-only consumers without
+rebuilding or revalidating them at each package boundary. Mutable execution or
+continuation overlays remain separately checked at the ownership transfers
+where a fallible producer may legitimately change them. Reentrant callbacks
+are different: reliable local state is committed before the call, regardless
+of whether an immutable reference can be shared safely.
+
 ### 3.8 Persistence boundary
 
 The main ledger and audit history are independent SQLite databases in WAL
@@ -568,7 +577,10 @@ See `CORE.md`.
 
 **Tier:** Capability · **Status:** Active
 
-`scan(root, scope, ignores, ctx) -> ScanResult`
+```python
+scan(root, ignores, ctx, scope=None, *, trusted_anchor=None,
+     review_admission=None, population_admission=None) -> ScanResult
+```
 
 Owns filesystem enumeration, capability observation, typed unsupported and
 warning evidence, scope completeness, and cancellation checkpoints. It records
@@ -583,7 +595,10 @@ See `SCANNER.md` and `INVENTORY.md`.
 
 **Tier:** Capability · **Status:** Active
 
-`plan(source, target, correspondence, options, scope) -> Plan`
+```python
+plan(source, target, correspondence, options, scope, *,
+     review_admission=None) -> Plan
+```
 
 Purely converts immutable evidence and policy into deterministic reviewed
 intent. It owns operation identity, dependencies, conflict/advisory
@@ -602,8 +617,8 @@ See `PLANNER.md`.
 **Tier:** Capability · **Status:** Active
 
 ```python
-observe(execution_set, filesystem) -> ObservedWorld
-preflight(execution_set, observed_world) -> Verdict
+observe(execution_set, filesystem, *, review_admission=None) -> ObservedWorld
+preflight(execution_set, observed_world, *, review_admission=None) -> Verdict
 ```
 
 `observe` performs scoped read-only I/O and decides nothing. `preflight` is a
@@ -805,6 +820,16 @@ These invariants apply under the supported assumptions and tolerance policy in
     conditional on the quiescent-root baseline in `DEFENSE.md`; fresh final-
     touch guards detect observable drift, while a pathname check never claims
     handle-bound exclusion it does not provide.
+17. **Validate once at adoption.** External values are admitted at ingress;
+    first-party module results are checked once at the boundary-owning public
+    return or another explicitly named ownership transfer. Downstream consumers
+    do not reconstruct or revalidate immutable base values. Mutable overlays
+    are checked only at transfers where their owner may have changed them.
+    Capacity admission and filesystem freshness remain separate obligations.
+18. **One authority per fact.** Each reliable item, state transition, durable
+    receipt, and presentation projection has one named semantic owner. Copies
+    and views may transport that fact but cannot become peer authorities or
+    reinterpret another truth axis.
 
 ### 5.1 Measurement authority
 

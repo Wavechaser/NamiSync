@@ -41,6 +41,16 @@ recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store)
 Manual exact post-copy verification remains a later checkpoint and instead
 classifies current durable evidence in the original execution scope.
 
+Installed NamiSync modules are trusted-but-fallible participants, not
+adversarial security principals. Their public returns are the workflow's named
+ownership-transfer points: admit a compound result once, then share immutable
+base values with first-party read-only consumers. Current deep reconstruction,
+repeated immutable-authority checks, and forged-signal authentication remain
+transitional implementation until their explicit 4P rows replace them; they
+are not durable package-boundary obligations. Population admission, fresh
+filesystem observation, mutable-overlay settlement checks, reentrant callback
+ordering, and exception-graph retirement remain independent requirements.
+
 Both opaque codecs admit the complete typed graph before building their JSON
 object/list projection. The walk rechecks nested operations, stats, metadata,
 file/record identities, assignments, evidence, candidates, and mutable

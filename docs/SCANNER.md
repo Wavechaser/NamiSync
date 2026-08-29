@@ -23,16 +23,20 @@ scan(
     *,
     trusted_anchor: str | None = None,
     review_admission: PlanReviewAdmission | None = None,
+    population_admission: ScanPopulationAdmission | None = None,
 ) -> ScanResult
 ```
 
-The optional admission is workflow-owned and exact-type-only. Ordinary scanner
-callers may omit it. A planning caller supplies a fresh disposable admission;
-the scanner checks the combined file/directory/unsupported population and the
-warning population independently before each first-excess append. Workflow
-then reconstructs an exact detached `ScanResult` and charges only the shallow
-slots that the final plan artifact retains. A first excess raises the shared
-typed review-limit error and no partial `ScanResult` is published.
+The two optional population admissions are workflow-owned, exact-type-only,
+and mutually exclusive; ordinary scanner callers may omit both. Planning uses
+a fresh `PlanReviewAdmission`, while inventory supplies the narrower
+`ScanPopulationAdmission` protocol. Either gate checks the combined
+file/directory/unsupported population and the warning population independently
+before each first-excess append. Workflow then reconstructs an exact detached
+`ScanResult` and charges only the shallow slots that its final artifact retains.
+A first excess raises the owning typed signal and no partial `ScanResult` is
+published. Checkpoint 4P.22 replaces this transitional pair with one protocol-
+typed admission parameter without changing either workflow's outcome.
 
 This admission closes the planning-source owner boundary. It is not the
 checkpoint-4 complete-object reservation model. Scanner admission neither
