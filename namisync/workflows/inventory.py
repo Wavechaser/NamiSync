@@ -85,6 +85,7 @@ from namisync.core.review import (
     ReviewTreeKind,
     ScanPopulationAdmission,
     adopt_scan_result,
+    exceeds_population_wall,
     snapshot_review_fact_limit,
 )
 from namisync.core.scalars import (
@@ -606,7 +607,11 @@ class IntegrityWorkflowRequest:
             raise TypeError("integrity mode has the wrong type")
         if type(self.selected_paths) is not tuple:
             raise TypeError("integrity selected_paths must be a tuple")
-        if len(self.selected_paths) > INTEGRITY_CANDIDATE_ROW_LIMIT:
+        if exceeds_population_wall(
+            len(self.selected_paths),
+            limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+            field_name="integrity selected paths",
+        ):
             raise IntegrityCandidateLimitError(
                 IntegrityCandidateLimitExceeded.rows()
             )
@@ -620,7 +625,11 @@ class IntegrityWorkflowRequest:
             _require_utc(self.stale_before, "stale_before")
         if type(self.selection_item_ids) is not tuple:
             raise TypeError("integrity selection_item_ids must be a tuple")
-        if len(self.selection_item_ids) > INTEGRITY_CANDIDATE_ROW_LIMIT:
+        if exceeds_population_wall(
+            len(self.selection_item_ids),
+            limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+            field_name="integrity selection item ids",
+        ):
             raise IntegrityCandidateLimitError(
                 IntegrityCandidateLimitExceeded.rows()
             )
@@ -819,16 +828,19 @@ class _InventoryScanAdmission:
         return error
 
     def require_source_rows(self, count: int) -> None:
-        _require_inventory_scan_count(count, "inventory scan domain rows")
-        if count > MAX_PLAN_REVIEW_ROWS:
+        if exceeds_population_wall(
+            count,
+            limit=MAX_PLAN_REVIEW_ROWS,
+            field_name="inventory scan domain rows",
+        ):
             raise self._limit_error(ReviewPopulation.DOMAIN)
 
     def require_informational_source_rows(self, count: int) -> None:
-        _require_inventory_scan_count(
+        if exceeds_population_wall(
             count,
-            "inventory scan informational rows",
-        )
-        if count > MAX_PLAN_REVIEW_ROWS:
+            limit=MAX_PLAN_REVIEW_ROWS,
+            field_name="inventory scan informational rows",
+        ):
             raise self._limit_error(ReviewPopulation.INFORMATIONAL)
 
 
@@ -2646,14 +2658,6 @@ def _binding_from_identity(
     return resolution.binding
 
 
-def _require_inventory_scan_count(count: object, field_name: str) -> int:
-    if type(count) is not int:
-        raise TypeError(f"{field_name} must be a non-Boolean integer")
-    if count < 0:
-        raise ValueError(f"{field_name} must be nonnegative")
-    return count
-
-
 def _consume_inventory_review_limit(
     error: ReviewFactLimitError,
     admission: _InventoryScanAdmission,
@@ -2920,7 +2924,11 @@ def _require_integrity_candidate_rows(
         raise TypeError(
             "integrity candidate rows must contain exact inventory snapshots"
         )
-    if len(rows) > INTEGRITY_CANDIDATE_ROW_LIMIT:
+    if exceeds_population_wall(
+        len(rows),
+        limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+        field_name="integrity candidate rows",
+    ):
         raise IntegrityCandidateLimitError(
             IntegrityCandidateLimitExceeded.rows()
         )

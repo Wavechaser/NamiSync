@@ -39,6 +39,7 @@ from namisync.core.review import (
     MAX_PLAN_REVIEW_ROWS, PlanReviewAdmission, ReviewFactLimitError,
     ReviewFactLimitExceeded, ReviewLimitAxis, ReviewPopulation, ReviewTreeKind,
     adopt_plan_scan_result, consume_plan_review_fact_limit,
+    exceeds_population_wall, require_population_measure,
 )
 from namisync.core.session import Disposition, RunContext, SessionState
 from namisync.core.scalars import MAX_SIGNED_64, ScalarDomainError
@@ -62,6 +63,35 @@ TARGET_ROOT = Root(r"D:\target", "target")
 
 class _PrivatePlanFrameValue:
     pass
+
+
+def test_population_measure_primitives_preserve_exact_first_excess_semantics(
+) -> None:
+    assert require_population_measure(2, "test population") == 2
+    assert not exceeds_population_wall(
+        2,
+        limit=2,
+        field_name="test population",
+    )
+    assert exceeds_population_wall(
+        3,
+        limit=2,
+        field_name="test population",
+    )
+    with pytest.raises(
+        TypeError,
+        match="test population must be a non-Boolean integer",
+    ):
+        exceeds_population_wall(
+            True,
+            limit=2,
+            field_name="test population",
+        )
+    with pytest.raises(
+        ValueError,
+        match="test population must be nonnegative",
+    ):
+        require_population_measure(-1, "test population")
 
 
 def _raise_with_private_plan_frame(
@@ -311,6 +341,17 @@ def test_admission_accepts_exact_limit_and_rejects_first_excess(
 
 def test_final_admission_is_atomic_with_fixed_precedence() -> None:
     admission = PlanReviewAdmission()
+    with pytest.raises(
+        ValueError,
+        match="plan informational retained bytes must be nonnegative",
+    ):
+        admission.admit(
+            domain_rows=MAX_PLAN_REVIEW_ROWS + 1,
+            informational_bytes=-1,
+        )
+    _fill_final_ledger(admission)
+
+    admission = PlanReviewAdmission()
     with pytest.raises(ReviewFactLimitError) as caught:
         admission.admit(
             domain_rows=MAX_PLAN_REVIEW_ROWS + 1,
@@ -321,11 +362,6 @@ def test_final_admission_is_atomic_with_fixed_precedence() -> None:
     _fill_final_ledger(admission)
     with pytest.raises(ReviewFactLimitError):
         admission.admit(domain_rows=1)
-
-    admission = PlanReviewAdmission()
-    with pytest.raises(ValueError):
-        admission.admit(domain_rows=-1)
-    _fill_final_ledger(admission)
 
 def test_source_checks_are_stateless_and_independent_of_final_ledger(
     monkeypatch: pytest.MonkeyPatch,

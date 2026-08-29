@@ -379,7 +379,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Live/stored session records, phase/run results, and `SessionStore` | `namisync/core/session.py` |
 | Event bodies, envelopes, delivery classes, codec, and exact-v5 validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
 | Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
-| Safe integer, signed-64, canonical scalar/file-index codecs, current issuer-bound typed review-limit facts, scanner population-admission protocol, independent plan-source gates, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
+| Safe integer, signed-64, canonical scalar/file-index codecs, shared population-measure/excess primitives, current issuer-bound typed review-limit facts, scanner population-admission protocol, independent plan-source gates, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
 | Ephemeral root authority, native volume evidence, and admission probes | `namisync/core/root_authority.py` |
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |

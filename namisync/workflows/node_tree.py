@@ -15,7 +15,10 @@ from namisync.core.pathing import (
     relative_path_parent,
     validate_relative_path,
 )
-from namisync.core.review import MAX_PLAN_REVIEW_ROWS
+from namisync.core.review import (
+    MAX_PLAN_REVIEW_ROWS,
+    exceeds_population_wall,
+)
 
 
 class NodeTreeKind(StrEnum):
@@ -161,7 +164,11 @@ def build_node_tree(
     seen_member_ids: set[str] = set()
 
     for source_index, member in enumerate(members):
-        if source_index == NODE_TREE_ROW_LIMIT:
+        if exceeds_population_wall(
+            source_index + 1,
+            limit=NODE_TREE_ROW_LIMIT,
+            field_name="node-tree source members",
+        ):
             raise NodeTreePopulationLimitError(tree_kind)
         if type(member) is not NodeTreeMember:
             raise TypeError("members must contain exact NodeTreeMember values")

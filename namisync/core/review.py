@@ -188,6 +188,27 @@ MAX_PLAN_INFORMATIONAL_RETAINED_BYTES = 201_326_592
 PLAN_SOURCE_REFERENCE_BYTES = 8
 
 
+def require_population_measure(value: object, field_name: str) -> int:
+    """Return one exact, nonnegative population measure."""
+
+    if type(value) is not int:
+        raise TypeError(f"{field_name} must be a non-Boolean integer")
+    if value < 0:
+        raise ValueError(f"{field_name} must be nonnegative")
+    return value
+
+
+def exceeds_population_wall(
+    value: object,
+    *,
+    limit: int,
+    field_name: str,
+) -> bool:
+    """Return whether one validated population exceeds its declared wall."""
+
+    return require_population_measure(value, field_name) > limit
+
+
 class PlanReviewAdmission:
     """Bound one unpublished plan's retained rows and reference slots.
 
@@ -242,7 +263,7 @@ class PlanReviewAdmission:
             (informational_bytes, "plan informational retained bytes"),
         )
         for value, field_name in charges:
-            _require_nonnegative_int(value, field_name)
+            require_population_measure(value, field_name)
 
         next_domain_rows = self._domain_rows + domain_rows
         next_domain_bytes = self._domain_bytes + domain_bytes
@@ -250,21 +271,34 @@ class PlanReviewAdmission:
         next_informational_bytes = (
             self._informational_bytes + informational_bytes
         )
-        if next_domain_rows > MAX_PLAN_REVIEW_ROWS:
+        if exceeds_population_wall(
+            next_domain_rows,
+            limit=MAX_PLAN_REVIEW_ROWS,
+            field_name="plan domain rows",
+        ):
             raise self._limit_error(
                 ReviewFactLimitExceeded.plan_domain_rows()
             )
-        if next_domain_bytes > MAX_PLAN_DOMAIN_RETAINED_BYTES:
+        if exceeds_population_wall(
+            next_domain_bytes,
+            limit=MAX_PLAN_DOMAIN_RETAINED_BYTES,
+            field_name="plan domain retained bytes",
+        ):
             raise self._limit_error(
                 ReviewFactLimitExceeded.plan_domain_retained_bytes()
             )
-        if next_informational_rows > MAX_PLAN_REVIEW_ROWS:
+        if exceeds_population_wall(
+            next_informational_rows,
+            limit=MAX_PLAN_REVIEW_ROWS,
+            field_name="plan informational rows",
+        ):
             raise self._limit_error(
                 ReviewFactLimitExceeded.plan_informational_rows()
             )
-        if (
-            next_informational_bytes
-            > MAX_PLAN_INFORMATIONAL_RETAINED_BYTES
+        if exceeds_population_wall(
+            next_informational_bytes,
+            limit=MAX_PLAN_INFORMATIONAL_RETAINED_BYTES,
+            field_name="plan informational retained bytes",
         ):
             raise self._limit_error(
                 ReviewFactLimitExceeded.plan_informational_retained_bytes()
@@ -278,8 +312,11 @@ class PlanReviewAdmission:
     def require_source_rows(self, count: int) -> None:
         """Check one independent raw domain population without retaining it."""
 
-        _require_nonnegative_int(count, "plan source row count")
-        if count > MAX_PLAN_REVIEW_ROWS:
+        if exceeds_population_wall(
+            count,
+            limit=MAX_PLAN_REVIEW_ROWS,
+            field_name="plan source row count",
+        ):
             raise self._limit_error(
                 ReviewFactLimitExceeded.plan_domain_rows()
             )
@@ -287,8 +324,11 @@ class PlanReviewAdmission:
     def require_informational_source_rows(self, count: int) -> None:
         """Check one independent raw notice population without retaining it."""
 
-        _require_nonnegative_int(count, "plan informational source row count")
-        if count > MAX_PLAN_REVIEW_ROWS:
+        if exceeds_population_wall(
+            count,
+            limit=MAX_PLAN_REVIEW_ROWS,
+            field_name="plan informational source row count",
+        ):
             raise self._limit_error(
                 ReviewFactLimitExceeded.plan_informational_rows()
             )
@@ -335,7 +375,7 @@ def adopt_scan_result(
 ) -> ScanResult:
     """Validate and adopt one bounded immutable scan without rebuilding it."""
 
-    _require_nonnegative_int(row_limit, "scan population row limit")
+    require_population_measure(row_limit, "scan population row limit")
     populations = _plan_scan_populations(result)
     files, directories, unsupported, warnings = populations
     assert type(result) is ScanResult
@@ -356,7 +396,11 @@ def adopt_scan_result(
 
     domain_count = len(files) + len(directories) + len(unsupported)
     informational_count = len(warnings)
-    if domain_count > row_limit:
+    if exceeds_population_wall(
+        domain_count,
+        limit=row_limit,
+        field_name="scan domain rows",
+    ):
         _validate_scan_domain_prefix(
             files,
             directories,
@@ -367,7 +411,11 @@ def adopt_scan_result(
         raise RuntimeError("scan admission accepted an excess domain population")
     admission.require_source_rows(domain_count)
 
-    if informational_count > row_limit:
+    if exceeds_population_wall(
+        informational_count,
+        limit=row_limit,
+        field_name="scan informational rows",
+    ):
         _validate_scan_domain_prefix(
             files,
             directories,
@@ -487,12 +535,4 @@ def _plan_scan_populations(
 def _require_plan_admission(value: object) -> PlanReviewAdmission:
     if type(value) is not PlanReviewAdmission:
         raise TypeError("plan review admission has the wrong type")
-    return value
-
-
-def _require_nonnegative_int(value: object, field_name: str) -> int:
-    if type(value) is not int:
-        raise TypeError(f"{field_name} must be a non-Boolean integer")
-    if value < 0:
-        raise ValueError(f"{field_name} must be nonnegative")
     return value

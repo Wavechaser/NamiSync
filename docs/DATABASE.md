@@ -214,6 +214,11 @@ eligibility, rather than raw request cardinality, decides that boundary; the
 workflow request itself admits at most 120,000 raw selected paths. The frozen
 model must charge that one repository-only transient. The retained-graph byte
 axis remains part of the checkpoint-4 model rather than a database estimate.
+Repository input and output gates use core's stateless population measure and
+excess comparison only. Inventory and integrity still own separate local row
+constants and exact error/fact outcomes; raw occurrences are checked before
+normalization or deduplication, and returned rows before first-excess typed
+projection.
 
 The retained fixture is `test_repeated_runtime_reads_admit_once_per_owned_handle`
 in `tests/test_runtime_readers.py`. Its admission-count matrix

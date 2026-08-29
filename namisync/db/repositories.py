@@ -28,7 +28,10 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import MappingPair, MappingSnapshot
-from namisync.core.review import MAX_PLAN_REVIEW_ROWS
+from namisync.core.review import (
+    MAX_PLAN_REVIEW_ROWS,
+    exceeds_population_wall,
+)
 from namisync.core.scalars import file_index_128_from_text, file_index_128_to_text
 
 from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_reader
@@ -152,7 +155,11 @@ def _identity_query_values(
 ) -> tuple[tuple[str, str], ...]:
     values: set[FileIdentity] = set()
     for occurrence, identity in enumerate(identities):
-        if occurrence == INVENTORY_POPULATION_ROW_LIMIT:
+        if exceeds_population_wall(
+            occurrence + 1,
+            limit=INVENTORY_POPULATION_ROW_LIMIT,
+            field_name="inventory identity occurrences",
+        ):
             raise InventoryPopulationLimitError()
         values.add(identity)
     ordered = list(values)
@@ -172,7 +179,11 @@ def _bounded_normalized_path_keys(
 ) -> tuple[str, ...]:
     keys: set[str] = set()
     for occurrence, path in enumerate(paths):
-        if occurrence == limit:
+        if exceeds_population_wall(
+            occurrence + 1,
+            limit=limit,
+            field_name="inventory path occurrences",
+        ):
             raise limit_error()
         keys.add(normalize_relative_path(path))
     ordered = list(keys)
@@ -283,7 +294,11 @@ def _append_inventory_snapshots(
     rows: Iterable[sqlite3.Row],
 ) -> None:
     for row in rows:
-        if len(snapshots) == INVENTORY_POPULATION_ROW_LIMIT:
+        if exceeds_population_wall(
+            len(snapshots) + 1,
+            limit=INVENTORY_POPULATION_ROW_LIMIT,
+            field_name="inventory returned rows",
+        ):
             raise InventoryPopulationLimitError()
         snapshots.append(_inventory_snapshot(row))
 
@@ -299,7 +314,11 @@ def _bounded_integrity_path_keys(paths: Iterable[str]) -> tuple[str, ...]:
 def _bounded_integrity_row_ids(row_ids: Iterable[str]) -> tuple[str, ...]:
     requested: dict[str, None] = {}
     for occurrence, row_id in enumerate(row_ids):
-        if occurrence == INTEGRITY_CANDIDATE_ROW_LIMIT:
+        if exceeds_population_wall(
+            occurrence + 1,
+            limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+            field_name="integrity row-id occurrences",
+        ):
             raise _integrity_row_limit_error()
         if not isinstance(row_id, str) or not row_id:
             raise ValueError("integrity inventory row id is invalid")
@@ -322,7 +341,11 @@ def _append_integrity_candidates(
     rows: Iterable[sqlite3.Row],
 ) -> None:
     for row in rows:
-        if len(candidates) == INTEGRITY_CANDIDATE_ROW_LIMIT:
+        if exceeds_population_wall(
+            len(candidates) + 1,
+            limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+            field_name="integrity returned rows",
+        ):
             raise _integrity_row_limit_error()
         candidates.append(_inventory_snapshot(row))
 
@@ -334,7 +357,11 @@ def _append_integrity_candidate_by_id(
     row_id = str(row["id"])
     if row_id in candidates:
         return
-    if len(candidates) == INTEGRITY_CANDIDATE_ROW_LIMIT:
+    if exceeds_population_wall(
+        len(candidates) + 1,
+        limit=INTEGRITY_CANDIDATE_ROW_LIMIT,
+        field_name="integrity unique returned rows",
+    ):
         raise _integrity_row_limit_error()
     candidates[row_id] = (
         (str(row["rel_path_key"]), int(row["id"])),
@@ -415,7 +442,11 @@ class LedgerRepository:
 
         requested_keys: dict[str, None] = {}
         for occurrence, row_id in enumerate(row_ids):
-            if occurrence == INVENTORY_POPULATION_ROW_LIMIT:
+            if exceeds_population_wall(
+                occurrence + 1,
+                limit=INVENTORY_POPULATION_ROW_LIMIT,
+                field_name="inventory row-id occurrences",
+            ):
                 raise InventoryPopulationLimitError()
             if (
                 not isinstance(row_id, str)
@@ -442,7 +473,11 @@ class LedgerRepository:
                                 AND id IN ({placeholders})""",
                         (location_id, *chunk),
                     ):
-                        if len(rows_by_id) == INVENTORY_POPULATION_ROW_LIMIT:
+                        if exceeds_population_wall(
+                            len(rows_by_id) + 1,
+                            limit=INVENTORY_POPULATION_ROW_LIMIT,
+                            field_name="inventory returned rows",
+                        ):
                             raise InventoryPopulationLimitError()
                         snapshot = _inventory_snapshot(row)
                         rows_by_id[snapshot.row_id] = snapshot
