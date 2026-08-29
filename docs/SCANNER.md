@@ -27,7 +27,7 @@ scan(
 ```
 
 The one optional structural population admission is workflow-owned; ordinary
-scanner callers may omit it. Planning supplies an exact stateless
+scanner callers may omit it. Planning supplies an exact counter-free
 `PlanReviewProducerAdmission`, while inventory supplies its independent private
 gate through the same `ScanPopulationAdmission` protocol. Either owner checks
 the combined file/directory/unsupported population and the warning population

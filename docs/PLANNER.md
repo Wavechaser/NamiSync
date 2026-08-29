@@ -27,11 +27,17 @@ plan(source: ScanResult, target: ScanResult,
      review_admission: PlanReviewProducerAdmission | None = None) -> Plan
 ```
 
-The optional exact producer admission is stateless and exposes only independent
-domain/informational source gates. Mapping, assignment, operation, logical-byte,
-and final plan-result admission use that capability; it cannot charge the
-workflow's cumulative retained budget. The separate retained-plan helper
-accepts only exact `PlanReviewAdmission`.
+The optional exact producer admission is counter-free and exposes only
+independent domain/informational source gates. Mapping, assignment, operation,
+logical-byte, and final plan-result admission use that capability; it cannot
+charge the workflow's cumulative retained budget. During a plan run it shares
+one opaque admission token with the separate exact `PlanReviewAdmission`; this
+is refusal provenance, not a counter or retained-budget capability. Logical-
+byte overflow is issued through the supplied producer admission so workflow
+accepts only the active run's signal. Direct calls without a producer admission
+still raise the private signal, but it is deliberately unadmitted to any
+workflow. The separate retained-plan helper accepts only exact
+`PlanReviewAdmission`.
 
 ## Implemented M0 Surface
 
@@ -86,8 +92,8 @@ Planning workflow supplies already-adopted immutable scans and one exactly
 captured correspondence result. Planner trusts those scan identities, captures
 the destination-policy identity and callback, and gives the callback the same
 filtered `FileRecord` leaves plus the adopted target scan. The callback boundary
-still gates filtered source rows, target domain rows, and target warnings as
-three independent stateless populations before invocation. Its returned
+still checks filtered source rows, target domain rows, and target warnings
+through three independent counter-free gates before invocation. Its returned
 assignment is source-gated and reconstructed exactly once. The four raw mapping
 populations and the combined operation population each retain their independent
 first-excess gates; no mapping index, operation builder, dependency sort, or
@@ -106,14 +112,16 @@ required-volume shallow slots once. Selection remains ordinary workflow policy
 and is neither copied nor charged by this prerequisite. First excess raises the
 private exact plan-limit signal without publishing a partial plan.
 
-Review-limit authority belongs to the private signal type. Workflow supplies
-one stateless producer gate alongside its separate cumulative retained ledger;
-neither holds or shares an issuer. Planner logical-byte accumulation raises the
-same private plan signal directly. Destination-policy identity, assignment, or
-unreviewed fingerprint failures—including lookalikes with the same fact-shaped
-attributes—propagate with ordinary type and identity. Reviewed fingerprinting
-uses the one captured policy identity instead of rereading extension-owned
-policy properties across the reentrant boundary.
+Review-limit authority requires the private signal type, exact PLAN fact, and
+active same-run admission token. Workflow supplies one counter-free producer
+gate alongside its separate cumulative retained ledger; they share only that
+opaque token, not counters or retained-budget mutation. Planner logical-byte
+accumulation issues the signal through the supplied producer gate. Destination-
+policy identity, assignment, or unreviewed fingerprint failures—including
+tokenless exact signals and lookalikes with the same fact-shaped attributes—
+propagate or fail loudly without becoming refusal. Reviewed fingerprinting uses
+the one captured policy identity instead of rereading extension-owned policy
+properties across the reentrant boundary.
 
 `snapshot_plan_options`, `plan`, and `adopt_plan_candidate` isolate their
 public call frame and retire traceback/cause/context links before an error

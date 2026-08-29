@@ -364,7 +364,10 @@ def _run_plan(
         target_path,
     )
     retained_admission = PlanReviewAdmission()
-    producer_admission = PlanReviewProducerAdmission()
+    producer_admission = PlanReviewProducerAdmission(retained_admission)
+    review_limit_fact: ReviewFactLimitExceeded | None = None
+    invalid_review_limit = False
+    unadmitted_review_limit = False
     try:
         live_options, retained_options = snapshot_plan_options(request_options)
         retained_request = PlanRequest(
@@ -485,17 +488,31 @@ def _run_plan(
             verdict,
         )
     except _PlanReviewLimitSignal as error:
+        signal_token: object | None = None
         try:
             if type(error) is not _PlanReviewLimitSignal:
                 raise TypeError("plan review limit signal must be exact")
             review_limit_fact = snapshot_review_fact_limit(error.fact)
             if review_limit_fact.tree_kind is not ReviewTreeKind.PLAN:
                 raise ValueError("plan review limit fact has the wrong tree kind")
+            signal_token = error._admission_token
         except (AttributeError, TypeError, ValueError) as fact_error:
             retire_exception_graph(fact_error)
-            retire_exception_graph(error)
-            raise RuntimeError("plan review limit failure is invalid") from None
+            invalid_review_limit = True
+        if (
+            not invalid_review_limit
+            and signal_token is not retained_admission._admission_token
+        ):
+            unadmitted_review_limit = True
         retire_exception_graph(error)
+
+    if invalid_review_limit:
+        raise RuntimeError("plan review limit failure is invalid") from None
+    if unadmitted_review_limit:
+        raise RuntimeError(
+            "unadmitted collaborator raised a review fact limit"
+        ) from None
+    if review_limit_fact is not None:
         return _review_limit_refusal(review_limit_fact)
 
     del (

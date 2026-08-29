@@ -472,7 +472,7 @@ pass merely because it affects a named file or test neighborhood.
 | Id | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | 4P-R.0 | Freeze this corrective scope, ordering, non-goals, stop classes, and review boundary before implementation. | Documentation authority review, baseline/worktree check, targeted status searches, and `git diff --check`. | Complete |
-| 4P-R.1 | Restore same-run provenance for exact plan and inventory review-limit signals without restoring `fresh()` or changing any legitimate refusal fact, status, save boundary, exception retirement, or domain separation; update the rung/provenance documents and defect ledger in the same change. | Legitimate current-run producer/retained/logical and inventory first-excess signals, including re-raise and graph retirement; direct/untagged same-domain and well-formed different-run signals from scanner, correspondence, planner, observer, preflight, phase delivery, destination policy, nested owners, and inventory scanner; cross-domain, lookalike, malformed, plan/inventory/workflow departments, import contracts, and targeted provenance/rung documentation searches. | Pending |
+| 4P-R.1 | Restore same-run provenance for exact plan and inventory review-limit signals without restoring `fresh()` or changing any legitimate refusal fact, status, save boundary, exception retirement, or domain separation; update the rung/provenance documents and defect ledger in the same change. | Legitimate current-run producer/retained/logical and inventory first-excess signals, including re-raise and graph retirement; direct/untagged same-domain and well-formed different-run signals from scanner, correspondence, planner, observer, preflight, phase delivery, destination policy, nested owners, and inventory scanner; cross-domain, lookalike, malformed, plan/inventory/workflow departments, import contracts, and targeted provenance/rung documentation searches. | Complete |
 | 4P-R.2 | Replace repeated linear completion membership in both `PostCopySelection` and `IntegritySelection` with one immutable known-id index per selection while preserving construction, equality, continuation, payload, authority, progress, and outcome behavior; correct the stale workflow BUGS mechanism and owning component docs in the same change. | Core integrity, verifier engine, payload round-trip, post-execution and standalone-integrity workflows; at fixed sizes 1, 4, and 16, after bounded construction each successful completion performs no candidate/item-tuple `item_id` access and exactly one known-id-index lookup, while the existing completed-id replay lookup remains. | Pending |
 | 4P-R.3 | Record that 120,000 is one shared M1 performance/safety support target, with no promise beyond it and no claim that 120,001 breaks NamiSync; retain the existing independent hard refusals only as unchanged M1 behavior; defer neutral constant/primitive ownership and `core/review.py` naming to checkpoint 4; and document current weakref support precisely. | DEFENSE/architecture/component/H2 authority review, current-wall and future-owner searches, production/test weakref-usage search, links/anchors, and `git diff --check`. | Pending |
 | 4P-R.4 | Reconcile BUGS, task history, and handoff; run the integrated affected and ordinary gates; and conduct an independent final review without absorbing optional cleanup. | Affected departments, ordinary Node-enabled suite, import contracts, protected gates required by touched behavior, links/anchors, stale-contract searches, `git diff --check`, and independent review. | Pending |
@@ -508,6 +508,38 @@ documents to travel with each behavior fix, made the different-run provenance
 and finite complexity witnesses explicit, and separated the shared 120,000
 support target from unchanged M1 refusal behavior. Targeted status review and
 `git diff --check` were clean; checkpoint 4 remains unstarted.
+
+#### 4P-R.1 implementation boundary
+
+The correction pairs the cumulative plan ledger and counter-free producer gate
+with one opaque same-run token and gives inventory its own domain-local token.
+Exact signal type and fact scope remain necessary but no longer stand in for
+provenance. `fresh()` and public signal classes remain absent; producer
+capabilities expose no retained counters or `admit`, and legitimate logical-
+byte overflow is issued through the supplied capability. Tokenless and
+different-run rung-3 signals fail loudly, while reflective token extraction or
+mutation remains unsupported rung 4. The verification receipt below closes the
+row without changing a refusal fact, status, save boundary, or public signal,
+wire, or status contract.
+
+#### 4P-R.1 review receipt
+
+The plan ledger and counter-free producer gate now share only one opaque
+same-run token; inventory owns an independent domain-local token. Exact type,
+scope, and token identity are all required before workflow returns typed
+refusal. Tokenless and different-run signals from every named collaborator seam
+fail loudly, both cross-domain directions preserve ordinary failure identity,
+and plan/inventory save callbacks remain outside signal translation. Logical-
+byte overflow is issued through the active producer gate, while direct calls
+without one remain unadmitted to workflow.
+
+Focused implementation verification passed 411 tests. Independent review ran
+the core, scanner, planner, preflight, and workflows department union with
+2,435 passed and 1 skipped; all 11 import contracts held. The reviewer found no
+code, public/wire/status, save-boundary, or regression-test blocker. Its two
+active-document findings were corrected, bounded re-review passed, targeted
+stale-contract searches and `git diff --check` were clean, and checkpoint 4
+remains unstarted.
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
@@ -581,8 +613,9 @@ shallow slots retained together in those final graphs commit to the session
 ledger.
 Correspondence inputs are already bounded by admitted scans and its fallible
 result is captured exactly once. First excess is typed `REFUSED+UNRUN` with no
-saved or partial plan. Reflective mutation and forged private signals remain
-outside the supported fault model.
+saved or partial plan. A tokenless or different-run same-domain signal is a
+loud rung-3 failure; reflective extraction or mutation of the active private
+token remains outside the supported fault model.
 
 This prerequisite deliberately excludes construction builders, sorting/index
 storage, selection/exclusion and preview values, callback overlap, codec/text
@@ -590,12 +623,13 @@ and native/browser copies, complete-tree projection, and speculative future
 owners. Those costs, complete-object constants, formula, fixture, validator,
 and BR-G-45 evidence remain checkpoint 4. Dispatcher pre-run and cancellation-
 settlement exception owners are now closed independently. Refusal authority is
-also closed narrowly: only the private exact plan signal carrying an exact PLAN
-fact becomes `REFUSED+UNRUN`; workflow takes a fresh core snapshot, retires the
-raw signal graph, and saves no artifact. Plan and inventory use distinct private
-signal types, while ordinary lookalikes remain ordinary failures.
-Phase delivery, correspondence, nested module collaborators, destination
-policy, and mutated preflight input cannot claim that authority. Ordinary
+also closed narrowly: only the private exact plan signal carrying the active
+same-run token and an exact PLAN fact becomes `REFUSED+UNRUN`; workflow takes a
+fresh core snapshot, retires the raw signal graph, and saves no artifact. Plan
+and inventory use distinct private signal types and tokens, while ordinary
+lookalikes remain ordinary failures. Phase delivery, correspondence, nested
+module collaborators, destination policy, and malformed preflight signals
+cannot claim that authority. Ordinary
 exception ownership outside retained `FailureDetail` projection is deliberately
 not claimed by this prerequisite.
 

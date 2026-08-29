@@ -3,9 +3,10 @@
 Status (2026-08-30): checkpoint 4P remains complete. A separate bounded 4P-R
 corrective register is active on `milestone1` from clean baseline `e7c3601`.
 It owns one refusal-provenance regression, one pre-existing completion-membership
-performance defect, and their final documentation. Checkpoint 4 proper has not
-started; no ownership/reservation model, formula, fixture, validator, lifecycle
-surface, or BR-G-45 evidence is ratified or active.
+performance defect, and their final documentation. Row 4P-R.1's provenance
+correction is independently reviewed and complete; 4P-R.2 is next. Checkpoint 4
+proper has not started; no ownership/reservation model, formula, fixture,
+validator, lifecycle surface, or BR-G-45 evidence is ratified or active.
 
 The 4P-R register and its non-goals are authoritative in `M1_SHELL_H2.md`.
 Every implementation row must be independently reviewed and committed before
@@ -26,9 +27,9 @@ adding blanket weakref slots are excluded from implementation in this pass.
   mutable execution state without rebuilding it, and kept reentrant
   collaborators on read-only review values.
 - Rows 4P.19–4P.24 moved recording authority out of mutable execution state,
-  trimmed redundant authority graphs, separated retained budgets from stateless
-  producer gates, privatized domain limit signals, and centralized rendered
-  live-exception projection plus lifecycle-link retirement.
+  trimmed redundant authority graphs, separated retained budgets from counter-
+  free producer gates, privatized domain limit signals, and centralized
+  rendered live-exception projection plus lifecycle-link retirement.
 - Row 4P.25 independently reviewed requirements, tests, stop rules, repository
   custody, and exclusions through 4P.24 and found no blocking regression,
   catastrophic stop, or excluded-scope intrusion.
@@ -39,6 +40,16 @@ still passed mutable execution state to observer and preflight. Bounded repair
 `c67c4ed` now constructs their immutable `ExecutionReview`; 88 focused tests,
 1,236 tools/preflight/workflows tests, and all 11 import contracts passed. The
 repair changes no schema, wire, wall, or public status.
+
+Corrective row 4P-R.1 restores the refusal provenance accidentally lost in
+4P.23 without restoring `fresh()` or public signal classes. The cumulative plan
+ledger and counter-free producer gate share one opaque same-run token;
+inventory owns a separate domain-local token. Exact type, fact scope, and token
+identity are required before typed refusal, while tokenless and different-run
+rung-3 signals fail loudly and raw exception graphs are retired. Logical-byte
+overflow now uses the supplied plan capability. Legitimate refusal facts,
+status, no-plan-save behavior, domain separation, and save-callback boundaries
+are unchanged.
 
 Two procedural exceptions remain explicit rather than being normalized away.
 The 4P.10 named-verification cell was strengthened after register freeze without
@@ -81,6 +92,9 @@ expansion of the accepted denominator.
   `88 passed, 2 skipped` and `1,236 passed, 3 skipped`.
 - Final Node-enabled ordinary suite: `5,157 passed, 4 skipped, 28 deselected`.
 - Import boundaries: 11 contracts kept, none broken.
+- 4P-R.1 focused provenance gate: 411 passed.
+- 4P-R.1 independent core/scanner/planner/preflight/workflows department union:
+  2,435 passed, 1 skipped; bounded documentation re-review passed.
 - Protected executor settlement oracle: 30 scenarios across three identical
   successful runs.
 - Active documentation: 30 documents with no missing relative target and 83
@@ -104,7 +118,7 @@ accepted register by description alone.
 
 ## Next safe action
 
-Implement only 4P-R.1's same-run review-limit provenance correction with its
-focused regressions and matching rung/provenance documentation. Do not begin
-checkpoint 4, change the 120,000 refusal, move its constants, or add weakref
-slots.
+Implement only 4P-R.2's immutable known-id indexes for `PostCopySelection` and
+`IntegritySelection`, including the fixed-size non-timing complexity witness
+and correction of the stale BUGS mechanism. Do not begin checkpoint 4, change
+the 120,000 refusal, move its constants, or add weakref slots.

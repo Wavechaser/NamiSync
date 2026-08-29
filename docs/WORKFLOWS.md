@@ -193,13 +193,17 @@ reprojects a staged candidate after publication.
 ### Plan session
 
 The plan session owns one cumulative `PlanReviewAdmission` ledger. Scanner,
-planner, observer, preflight, and result-adoption gates receive exact stateless
+planner, observer, preflight, and result-adoption gates receive exact counter-free
 `PlanReviewProducerAdmission` capability that exposes no retained-budget
-`admit` capability and shares no counters or issuer with the ledger. Correspondence
-keeps its ordinary two-argument protocol; its concrete database query is
-structurally bounded by admitted scan keys and identities, then workflow
-captures the fallible result under the same stateless producer gate. Each raw population
-has a stateless first-excess gate. Each scanner result is exact-adopted once and
+`admit` capability or counters. The ledger and producer capability share only
+one opaque same-run admission token so workflow can distinguish a legitimately
+issued capacity signal from a tokenless or different-run same-domain internal
+failure. Correspondence keeps its ordinary two-argument protocol; its concrete
+database query is structurally bounded by admitted scan keys and identities,
+then workflow
+captures the fallible result under the same counter-free producer gate. Each
+raw population has an independent first-excess gate. Each scanner result is
+exact-adopted once and
 then shared by identity with first-party read-only consumers. Workflow still
 copies the fallible mapping result, but it exact-adopts the planner's immutable
 `Plan` once after compound validation and shares that same plan identity with
@@ -224,13 +228,18 @@ previews, second callback-world copies, or verdict reconstruction. The workflow
 maps the first exact private plan-limit signal to `REFUSED+UNRUN` without saving
 a plan or exposing a partial result.
 
-Plan and inventory use distinct private exact signal types. Workflow accepts
-only the plan signal, reconstructs a fresh exact PLAN fact, and retires the raw
-signal graph before returning. A normally produced signal with the wrong fact
-scope fails loudly; ordinary lookalike exceptions retain their ordinary failure
-identity. Forged private signals and reflective mutation remain outside the
-supported fault model. Preflight output validation requires an
-exact identity relation to the already admitted deeply read-only world, so
+Plan and inventory use distinct private exact signal types and separate
+same-run admission tokens. Workflow accepts only an exact, correctly scoped
+signal carrying the active domain token, reconstructs a fresh exact fact, and
+retires the raw signal graph before returning. A tokenless or different-run
+same-domain signal from a trusted-but-fallible module fails loudly rather than
+becoming `REFUSED+UNRUN`; a current-run signal with the wrong fact scope is
+invalid, and ordinary lookalike or cross-domain exceptions retain their
+ordinary failure identity. Reflective extraction or mutation of private tokens
+remains outside the supported fault model. Plan-save and inventory-details
+callbacks run outside signal translation, so an exact private signal raised
+there retains ordinary failure identity. Preflight output validation requires
+an exact identity relation to the already admitted deeply read-only world, so
 replacement cannot become capacity refusal. Scanner, planner, and selection
 behavior is unchanged; observer and preflight receive the immutable review
 projection instead of mutable continuation.
@@ -246,11 +255,13 @@ checkpoint-4 model can freeze.
 `run_plan` now isolates its phase frame and retires traceback/cause/context
 before any ordinary or process-fatal error escapes. Root/path adapters project
 their existing logical, redacted message and raise a fresh unchained
-`ValueError`; phase delivery, scanner, correspondence, planner, observer,
-preflight, wrong-scope signal demotion, ordinary lookalike failures, and save
-failures preserve their existing public type and identity without retaining
-request/root/options/scan/plan/world/verdict locals. This closes raw exception
-ownership, not path-message
+`ValueError`. An unadmitted signal becomes a fresh unchained provenance
+`RuntimeError`, and a malformed or wrong-scope signal becomes a distinct fresh
+unchained validation `RuntimeError`; both raw signal graphs are retired first.
+Phase delivery, scanner, correspondence, planner, observer, preflight,
+ordinary lookalike failures, and save failures otherwise preserve their
+existing public type and identity without retaining request/root/options/scan/
+plan/world/verdict locals. This closes raw exception ownership, not path-message
 construction or the other complete construction/callback costs assigned to the
 checkpoint-4 model.
 

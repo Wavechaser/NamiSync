@@ -380,7 +380,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Exception lifecycle-link retirement and rendered retained-failure projection | `namisync/core/exception_graph.py` |
 | Event bodies, envelopes, delivery classes, codec, and exact-v5 validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
 | Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
-| Safe integer, signed-64, canonical scalar/file-index codecs, shared population-measure/excess primitives, distinct retained-plan and stateless-producer admissions, private exact plan-review signals, scanner population-admission protocol, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
+| Safe integer, signed-64, canonical scalar/file-index codecs, shared population-measure/excess primitives, distinct retained-plan and counter-free producer admissions, admission-bound private exact plan-review signals, scanner population-admission protocol, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
 | Ephemeral root authority, native volume evidence, and admission probes | `namisync/core/root_authority.py` |
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
@@ -593,7 +593,7 @@ Walking is active. An incremental change-source protocol and journal/network
 implementations are unrealized and will be standardized with their first
 production consumer.
 The optional scanner gate is structural. Plan review supplies its exact
-stateless producer admission and inventory supplies its independent private
+counter-free producer admission and inventory supplies its independent private
 gate; scanner never receives the plan's cumulative retained-budget authority.
 
 See `SCANNER.md` and `INVENTORY.md`.
@@ -636,7 +636,7 @@ execution start, queue wakeup, and resume. The executor does not import
 preflight; it retains operation-local final-touch guards.
 
 Planner, observer, and preflight `review_admission` parameters accept the exact
-stateless `PlanReviewProducerAdmission`. Their separate retained-result helpers
+counter-free `PlanReviewProducerAdmission`. Their separate retained-result helpers
 accept only cumulative `PlanReviewAdmission`; the two capabilities are not
 interchangeable.
 

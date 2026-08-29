@@ -73,6 +73,7 @@ from namisync.core.review import (
     ReviewLimitAxis,
     ReviewPopulation,
     ReviewTreeKind,
+    _PlanReviewLimitSignal,
 )
 from namisync.core.scalars import MAX_SAFE_INTEGER, MAX_SIGNED_64
 from namisync.db.connections import connect_ledger_reader
@@ -2954,7 +2955,6 @@ def test_inventory_source_first_excess_is_refused_without_partial_save(
         ):
             del root, ignores, context, scope, trusted_anchor
             assert population_admission is not None
-            assert not hasattr(population_admission, "_issuer")
             graph = PrivateGraph()
             self.graph_references.append(ref(graph))
             try:
@@ -2965,7 +2965,6 @@ def test_inventory_source_first_excess_is_refused_without_partial_save(
                 assert type(error) is (
                     inventory_workflow._InventoryReviewLimitSignal
                 )
-                assert not hasattr(error, "_issuer")
                 self.errors.append(error)
                 raise
             raise AssertionError("first excess was admitted")
@@ -3012,6 +3011,91 @@ def test_inventory_source_first_excess_is_refused_without_partial_save(
     assert scanner.graph_references
     assert all(reference() is None for reference in scanner.graph_references)
     assert details == []
+    with connect_ledger_reader(ledger_path) as connection:
+        assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("provenance", ("untagged", "different-run"))
+def test_unadmitted_exact_inventory_signal_cannot_become_refusal(
+    tmp_path: Path,
+    provenance: str,
+) -> None:
+    class PrivateGraph:
+        pass
+
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    details: list[InventoryDetails] = []
+    fact = ReviewFactLimitExceeded(
+        "review_fact_limit_exceeded",
+        ReviewTreeKind.INVENTORY,
+        ReviewPopulation.DOMAIN,
+        ReviewLimitAxis.ROWS,
+        MAX_PLAN_REVIEW_ROWS,
+        None,
+    )
+    if provenance == "untagged":
+        raw_error = inventory_workflow._InventoryReviewLimitSignal(fact)
+    else:
+        different_run = inventory_workflow._InventoryScanAdmission()
+        try:
+            different_run.require_source_rows(MAX_PLAN_REVIEW_ROWS + 1)
+        except inventory_workflow._InventoryReviewLimitSignal as error:
+            raw_error = error
+        else:
+            raise AssertionError("different-run first excess was admitted")
+    graph_references: list[ref[PrivateGraph]] = []
+
+    class UnadmittedScanner(_Scanner):
+        def __call__(self, *_args, **_kwargs):
+            private = PrivateGraph()
+            graph_references.append(ref(private))
+            raise raw_error
+
+    prepared = bind_inventory_request(
+        InventoryRequest(f"inventory-{provenance}", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=_Resolver(mount),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match=(
+            "^unadmitted collaborator raised an inventory review fact limit$"
+        ),
+    ) as raised:
+        run_inventory(
+            prepared,
+            _context(),
+            _dependencies(
+                ledger_path,
+                UnadmittedScanner(),
+                _Resolver(mount),
+                details,
+            ),
+        )
+
+    assert raised.value.__cause__ is raised.value.__context__ is None
+    assert details == []
+    assert BaseException.__dict__["__traceback__"].__get__(
+        raw_error,
+        type(raw_error),
+    ) is None
+    assert BaseException.__dict__["__cause__"].__get__(
+        raw_error,
+        type(raw_error),
+    ) is None
+    assert BaseException.__dict__["__context__"].__get__(
+        raw_error,
+        type(raw_error),
+    ) is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
     with connect_ledger_reader(ledger_path) as connection:
         assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 0
         assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0
@@ -3065,6 +3149,111 @@ def test_inventory_wrong_scope_signal_fails_without_retained_context(
     with connect_ledger_reader(ledger_path) as connection:
         assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 0
         assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("kind", ("lookalike", "plan-signal"))
+def test_non_inventory_signal_keeps_failure_identity(
+    tmp_path: Path,
+    kind: str,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    details: list[InventoryDetails] = []
+
+    class InventoryLimitLookalike(ValueError):
+        def __init__(self) -> None:
+            super().__init__("review_fact_limit_exceeded")
+            self.fact = ReviewFactLimitExceeded(
+                "review_fact_limit_exceeded",
+                ReviewTreeKind.INVENTORY,
+                ReviewPopulation.DOMAIN,
+                ReviewLimitAxis.ROWS,
+                MAX_PLAN_REVIEW_ROWS,
+                None,
+            )
+
+    raw_error = (
+        InventoryLimitLookalike()
+        if kind == "lookalike"
+        else _PlanReviewLimitSignal(
+            ReviewFactLimitExceeded.plan_domain_rows()
+        )
+    )
+
+    class FailingScanner(_Scanner):
+        def __call__(self, *_args, **_kwargs):
+            raise raw_error
+
+    prepared = bind_inventory_request(
+        InventoryRequest(f"inventory-{kind}", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=_Resolver(mount),
+    )
+
+    with pytest.raises(type(raw_error)) as raised:
+        run_inventory(
+            prepared,
+            _context(),
+            _dependencies(
+                ledger_path,
+                FailingScanner(),
+                _Resolver(mount),
+                details,
+            ),
+        )
+
+    assert raised.value is raw_error
+    assert details == []
+
+
+def test_exact_inventory_signal_from_details_callback_is_not_demoted(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    details: list[InventoryDetails] = []
+    raw_error = inventory_workflow._InventoryReviewLimitSignal(
+        ReviewFactLimitExceeded(
+            "review_fact_limit_exceeded",
+            ReviewTreeKind.INVENTORY,
+            ReviewPopulation.DOMAIN,
+            ReviewLimitAxis.ROWS,
+            MAX_PLAN_REVIEW_ROWS,
+            None,
+        )
+    )
+
+    def save_details(_value: InventoryDetails) -> None:
+        raise raw_error
+
+    deps = replace(
+        _dependencies(
+            ledger_path,
+            _Scanner(records=(_file(),)),
+            _Resolver(mount),
+            details,
+        ),
+        save_details=save_details,
+    )
+    prepared = bind_inventory_request(
+        InventoryRequest("inventory-save-signal", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=_Resolver(mount),
+    )
+
+    with pytest.raises(
+        inventory_workflow._InventoryReviewLimitSignal
+    ) as raised:
+        run_inventory(prepared, _context(), deps)
+
+    assert raised.value is raw_error
+    assert details == []
 
 
 def test_inventory_revalidates_hostile_excess_result_before_ledger_publication(

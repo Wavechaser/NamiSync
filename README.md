@@ -58,11 +58,11 @@ bounded at every applicable rung, reentrant collaborators receive only
 immutable values after reliable local state is committed, and exact immutable
 first-party module results are validated once at their named workflow adoption
 transfer and then shared by identity with read-only consumers. Only the private
-exact plan-limit signal carrying an exact PLAN fact becomes typed
-`REFUSED+UNRUN`; inventory uses a distinct private signal. Ordinary lookalikes
-retain normal failure identity, wrong-scope exact signals fail loudly without
-saving a plan, and reflective mutation or forged private signals remain outside
-the supported fault model. Neither path uses an issuer token.
+exact plan-limit signal carrying the active same-run admission token and an
+exact PLAN fact becomes typed `REFUSED+UNRUN`; inventory uses a distinct private
+signal and token. Ordinary lookalikes plus tokenless, different-run, or wrong-
+scope exact signals retain failure truth without saving a plan. Reflective token
+extraction or mutation remains outside the supported fault model.
 Python bridge responses now stop at an exact 8 MiB canonical-JSON occurrence
 wall before native construction; drains commit only the longest admitted update
 prefix, and native positions remain charged through worker exit and exact

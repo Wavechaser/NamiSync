@@ -1226,6 +1226,7 @@ def preflight(
         remaining,
         target_profile=plan.target_profile,
         trash_on_update=plan.trash_on_update,
+        review_admission=review_admission,
     )
     available_bytes = (
         None

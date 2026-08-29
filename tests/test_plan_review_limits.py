@@ -16,6 +16,7 @@ import pytest
 
 import namisync.core.review as review_module
 import namisync.modules.planner as planner_module
+import namisync.workflows.inventory as inventory_workflow_module
 import namisync.workflows.sync as sync_workflow_module
 from namisync.core.evidence import Outcome
 from namisync.core.execution import ExecutionReview, validated_run_id
@@ -364,18 +365,16 @@ def test_final_admission_is_atomic_with_fixed_precedence() -> None:
     with pytest.raises(_PlanReviewLimitSignal):
         admission.admit(domain_rows=1)
 
-def test_source_checks_are_stateless_and_independent_of_final_ledger(
+def test_source_checks_are_counter_free_and_independent_of_final_ledger(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 2)
     retained = PlanReviewAdmission()
     admission = PlanReviewProducerAdmission()
     assert type(admission) is PlanReviewProducerAdmission
-    assert not hasattr(retained, "_issuer")
     assert not hasattr(retained, "fresh")
     assert not hasattr(retained, "require_source_rows")
     assert not hasattr(retained, "require_informational_source_rows")
-    assert not hasattr(admission, "_issuer")
     assert not hasattr(admission, "admit")
     assert not hasattr(admission, "fresh")
     admission.require_source_rows(2)
@@ -1968,6 +1967,140 @@ def test_ordinary_review_limit_lookalike_keeps_failure_identity(
     assert saved == []
 
 
+@pytest.mark.parametrize("provenance", ("untagged", "different-run"))
+@pytest.mark.parametrize(
+    "source",
+    (
+        "phase-delivery",
+        "scanner",
+        "correspondence",
+        "planner",
+        "observer",
+        "preflight",
+        "destination-policy",
+        "nested-scanner",
+        "nested-observer-clock",
+        "nested-world-mapping",
+    ),
+)
+def test_unadmitted_exact_plan_signal_cannot_become_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+    provenance: str,
+    source: str,
+) -> None:
+    _patch_workflow_roots(monkeypatch)
+    saved: list[PlanArtifact] = []
+    if provenance == "untagged":
+        raw_error = _PlanReviewLimitSignal(
+            ReviewFactLimitExceeded.plan_domain_rows()
+        )
+    else:
+        different_run = PlanReviewProducerAdmission()
+        try:
+            different_run.require_source_rows(MAX_PLAN_REVIEW_ROWS + 1)
+        except _PlanReviewLimitSignal as error:
+            raw_error = error
+        else:
+            raise AssertionError("different-run first excess was admitted")
+    graph_references: list[ref[_PrivatePlanFrameValue]] = []
+
+    def fail(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        _raise_with_private_plan_frame(raw_error, graph_references)
+
+    deps = _workflow_dependencies(saved)
+    options = SyncOptions()
+    emit = fail if source == "phase-delivery" else lambda _event: None
+    if source in {
+        "scanner",
+        "correspondence",
+        "planner",
+        "observer",
+        "preflight",
+    }:
+        setattr(deps, source, fail)
+    elif source == "destination-policy":
+        class FailingPolicy:
+            name = "unadmitted"
+            version = "1"
+
+            def assign(self, *_args: object) -> object:
+                fail()
+
+        options = SyncOptions(
+            destination_policy=FailingPolicy(),  # type: ignore[arg-type]
+        )
+    elif source == "nested-scanner":
+        class FailingBackend(_ScannerBackend):
+            def resolve_root(self, path: str) -> str:
+                del path
+                fail()
+
+        deps.scanner = WalkingScanner(FailingBackend()).scan
+    elif source == "nested-observer-clock":
+        class FailingClock(_ObservationFileSystem):
+            def now_utc(self) -> datetime:
+                fail()
+
+        deps.observation_fs = FailingClock(
+            _scan(SOURCE_ROOT, files=(_file("source.bin"),)),
+            _scan(TARGET_ROOT),
+        )
+    elif source == "nested-world-mapping":
+        class FailingMapping(Mapping[Subject, StatObservation]):
+            def __len__(self) -> int:
+                return 0
+
+            def __iter__(self) -> Iterator[Subject]:
+                fail()
+
+            def __getitem__(self, key: Subject) -> StatObservation:
+                raise KeyError(key)
+
+        def observer(
+            execution_set: ExecutionReview,
+            fs: object,
+            *,
+            review_admission: PlanReviewProducerAdmission | None = None,
+        ) -> ObservedWorld:
+            world = observe(
+                execution_set,
+                fs,  # type: ignore[arg-type]
+                review_admission=review_admission,
+            )
+            return replace(world, stats=FailingMapping())
+
+        deps.observer = observer
+
+    with pytest.raises(
+        RuntimeError,
+        match="^unadmitted collaborator raised a review fact limit$",
+    ) as raised:
+        run_plan(
+            _workflow_request(options),
+            RunContext(emit, lambda: None),
+            deps,
+        )
+
+    assert raised.value.__cause__ is raised.value.__context__ is None
+    assert saved == []
+    assert BaseException.__dict__["__traceback__"].__get__(
+        raw_error,
+        type(raw_error),
+    ) is None
+    assert BaseException.__dict__["__cause__"].__get__(
+        raw_error,
+        type(raw_error),
+    ) is None
+    assert BaseException.__dict__["__context__"].__get__(
+        raw_error,
+        type(raw_error),
+    ) is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
+
+
 def test_exact_plan_signal_with_inventory_fact_is_invalid_and_never_saved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2009,6 +2142,53 @@ def test_exact_plan_signal_with_inventory_fact_is_invalid_and_never_saved(
     assert all(reference() is None for reference in graph_references)
 
 
+def test_inventory_signal_keeps_identity_across_plan_domain(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_workflow_roots(monkeypatch)
+    saved: list[PlanArtifact] = []
+    raw_error = inventory_workflow_module._InventoryReviewLimitSignal(
+        ReviewFactLimitExceeded(
+            "review_fact_limit_exceeded",
+            ReviewTreeKind.INVENTORY,
+            ReviewPopulation.DOMAIN,
+            ReviewLimitAxis.ROWS,
+            MAX_PLAN_REVIEW_ROWS,
+            None,
+        )
+    )
+
+    def scanner(*_args: object, **_kwargs: object) -> ScanResult:
+        raise raw_error
+
+    with pytest.raises(
+        inventory_workflow_module._InventoryReviewLimitSignal
+    ) as raised:
+        _run(_workflow_dependencies(saved, scanner=scanner))
+
+    assert raised.value is raw_error
+    assert saved == []
+
+
+def test_exact_plan_signal_from_save_callback_is_not_demoted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_workflow_roots(monkeypatch)
+    raw_error = _PlanReviewLimitSignal(
+        ReviewFactLimitExceeded.plan_domain_rows()
+    )
+    deps = _workflow_dependencies([])
+
+    def save_plan(_artifact: PlanArtifact) -> None:
+        raise raw_error
+
+    deps.save_plan = save_plan
+    with pytest.raises(_PlanReviewLimitSignal) as raised:
+        _run(deps)
+
+    assert raised.value is raw_error
+
+
 def test_workflow_accepts_planner_issued_logical_byte_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2044,7 +2224,7 @@ def test_workflow_accepts_planner_issued_logical_byte_limit(
     )
     assert saved == []
 
-def test_workflow_producers_receive_only_stateless_admission_capability(
+def test_workflow_producers_receive_only_counter_free_admission_capability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_workflow_roots(monkeypatch)
@@ -2053,7 +2233,6 @@ def test_workflow_producers_receive_only_stateless_admission_capability(
 
     def capture(admission: PlanReviewProducerAdmission | None) -> None:
         assert type(admission) is PlanReviewProducerAdmission
-        assert not hasattr(admission, "_issuer")
         assert not hasattr(admission, "admit")
         assert not hasattr(admission, "fresh")
         admissions.append(admission)

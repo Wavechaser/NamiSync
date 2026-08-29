@@ -110,11 +110,12 @@ reproducing these limits.
   must still admit their combined retained occurrences before publication.
   Neither boundary is claimed as an empirical source-primitive maximum.
 - A plan-capacity refusal requires the private exact plan-limit signal carrying
-  an exact PLAN fact. Plan and inventory use different private signal types;
-  workflow copies the fact, retires the raw signal graph, and saves no plan.
-  An exact signal with the wrong fact scope fails loudly, while ordinary
-  lookalike exceptions remain ordinary failures. Forged private signals and
-  reflective mutation are unsupported rung-4 faults under §2.2.
+  the active same-run admission token and an exact PLAN fact. Plan and inventory
+  use different private signal types and tokens; workflow copies the fact,
+  retires the raw signal graph, and saves no plan. A tokenless, different-run,
+  or wrong-scope exact signal fails loudly, while ordinary lookalike exceptions
+  remain ordinary failures. Reflective token extraction or mutation is an
+  unsupported rung-4 fault under §2.2.
 - Reachability determines whether the signed-domain guard is a product branch
   or an assertion; the two are not presented as equivalent risks:
 
@@ -228,6 +229,14 @@ every applicable rung, while `RootAuthority` consumers re-probe at their
 existing points of use. Exception-graph retirement is likewise a lifetime
 obligation, not a trust defense.
 
+Private exception or signal type identity is not provenance by itself. Plan
+and inventory review-limit signals carry a distinct opaque same-run admission
+token; workflow maps an exact, well-scoped signal to typed refusal only when
+that token matches the active admission. A tokenless or different-run exact
+same-domain signal raised by a first-party module is a rung-3 invariant failure,
+not a rung-4 forgery and not a user refusal. Reflective extraction or mutation
+of the private token remains rung 4.
+
 The production document channel's atomic current-document send relies on the
 pinned WebView2 `PostWebMessageAsJson` call not synchronously re-entering a
 NamiSync acknowledgment, reload, or close callback before it returns. The host
@@ -301,12 +310,14 @@ same-principal code.
   violated atomic primitive, tampered runtime, or deliberate cryptographic or
   non-cryptographic hash collision is outside the M1 model.
 
-Reflective mutation of first-party immutable values and forged private
-internal exceptions or signals are not fault classes in this model. Promoting
-one requires a named entry in this section with a supported consequence bound
-and an explicit test tier. Without that entry there is no defense to implement;
-a test that writes through `object.__setattr__` or constructs a private signal
-directly exercises an unsupported programming/TCB fault.
+Reflective mutation of first-party immutable values and extraction, copying, or
+mutation of opaque private admission tokens are not fault classes in this
+model. Promoting one requires a named entry in this section with a supported
+consequence bound and an explicit test tier. Without that entry there is no
+defense to implement; a test that writes through `object.__setattr__` or obtains
+an active private token exercises an unsupported programming/TCB fault. A
+tokenless private exact signal raised through an ordinary first-party module
+seam instead witnesses the supported rung-3 provenance failure above.
 
 XXH3-128 is accidental-corruption and consistency evidence, not adversarial
 authenticity. Unkeyed SHA-256 plan and history digests bind structure and detect

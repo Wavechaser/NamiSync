@@ -808,13 +808,20 @@ class _ObservedTaskRecordingIssue:
 class _InventoryReviewLimitSignal(ValueError):
     """Private exact signal for an unpublished inventory-review limit."""
 
-    def __init__(self, fact: ReviewFactLimitExceeded) -> None:
+    def __init__(
+        self,
+        fact: ReviewFactLimitExceeded,
+        *,
+        _admission_token: object | None = None,
+    ) -> None:
         super().__init__(fact.reason)
         self.fact = fact
+        self._admission_token = _admission_token
 
 
 def _inventory_review_limit_signal(
     population: ReviewPopulation,
+    admission_token: object,
 ) -> _InventoryReviewLimitSignal:
     return _InventoryReviewLimitSignal(
         ReviewFactLimitExceeded(
@@ -824,14 +831,18 @@ def _inventory_review_limit_signal(
             ReviewLimitAxis.ROWS,
             MAX_PLAN_REVIEW_ROWS,
             None,
-        )
+        ),
+        _admission_token=admission_token,
     )
 
 
 class _InventoryScanAdmission:
     """Issue exact inventory review facts for one raw scan population."""
 
-    __slots__ = ()
+    __slots__ = ("_admission_token",)
+
+    def __init__(self) -> None:
+        self._admission_token = object()
 
     def require_source_rows(self, count: int) -> None:
         if exceeds_population_wall(
@@ -839,7 +850,10 @@ class _InventoryScanAdmission:
             limit=MAX_PLAN_REVIEW_ROWS,
             field_name="inventory scan domain rows",
         ):
-            raise _inventory_review_limit_signal(ReviewPopulation.DOMAIN)
+            raise _inventory_review_limit_signal(
+                ReviewPopulation.DOMAIN,
+                self._admission_token,
+            )
 
     def require_informational_source_rows(self, count: int) -> None:
         if exceeds_population_wall(
@@ -848,7 +862,8 @@ class _InventoryScanAdmission:
             field_name="inventory scan informational rows",
         ):
             raise _inventory_review_limit_signal(
-                ReviewPopulation.INFORMATIONAL
+                ReviewPopulation.INFORMATIONAL,
+                self._admission_token,
             )
 
 
@@ -1144,6 +1159,7 @@ def run_inventory(
     population_admission = _InventoryScanAdmission()
     review_limit_fact: ReviewFactLimitExceeded | None = None
     invalid_review_limit = False
+    unadmitted_review_limit = False
     try:
         with LedgerRecorder(
             deps.ledger_path, clock=deps.clock, managed_roots=(root,)
@@ -1170,6 +1186,7 @@ def run_inventory(
                 )
             )
     except _InventoryReviewLimitSignal as error:
+        signal_token: object | None = None
         try:
             if type(error) is not _InventoryReviewLimitSignal:
                 raise TypeError("inventory review limit signal must be exact")
@@ -1179,14 +1196,24 @@ def run_inventory(
                 or review_limit_fact.axis is not ReviewLimitAxis.ROWS
             ):
                 raise ValueError("inventory review limit fact has the wrong scope")
+            signal_token = error._admission_token
         except (AttributeError, TypeError, ValueError) as fact_error:
             retire_exception_graph(fact_error)
             invalid_review_limit = True
+        if (
+            not invalid_review_limit
+            and signal_token is not population_admission._admission_token
+        ):
+            unadmitted_review_limit = True
         retire_exception_graph(error)
 
     if invalid_review_limit:
         raise RuntimeError(
             "inventory review limit failure is invalid"
+        ) from None
+    if unadmitted_review_limit:
+        raise RuntimeError(
+            "unadmitted collaborator raised an inventory review fact limit"
         ) from None
     if review_limit_fact is not None:
         return OperationResult(

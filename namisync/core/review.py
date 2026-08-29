@@ -162,9 +162,15 @@ class ReviewFactLimitExceeded:
 class _PlanReviewLimitSignal(ValueError):
     """Private exact signal for an unpublished plan-review limit."""
 
-    def __init__(self, fact: ReviewFactLimitExceeded) -> None:
+    def __init__(
+        self,
+        fact: ReviewFactLimitExceeded,
+        *,
+        _admission_token: object | None = None,
+    ) -> None:
         super().__init__(fact.reason)
         self.fact = fact
+        self._admission_token = _admission_token
 
 
 def snapshot_review_fact_limit(value: object) -> ReviewFactLimitExceeded:
@@ -212,7 +218,27 @@ def exceeds_population_wall(
 class PlanReviewProducerAdmission:
     """Gate independent raw producer populations without retaining charges."""
 
-    __slots__ = ()
+    __slots__ = ("_admission_token",)
+
+    def __init__(
+        self,
+        retained_admission: PlanReviewAdmission | None = None,
+    ) -> None:
+        if retained_admission is None:
+            self._admission_token = object()
+        elif type(retained_admission) is PlanReviewAdmission:
+            self._admission_token = retained_admission._admission_token
+        else:
+            raise TypeError("plan review admission has the wrong type")
+
+    def _limit_signal(
+        self,
+        fact: ReviewFactLimitExceeded,
+    ) -> _PlanReviewLimitSignal:
+        return _PlanReviewLimitSignal(
+            fact,
+            _admission_token=self._admission_token,
+        )
 
     def require_source_rows(self, count: int) -> None:
         """Check one independent raw domain population without retaining it."""
@@ -222,7 +248,7 @@ class PlanReviewProducerAdmission:
             limit=MAX_PLAN_REVIEW_ROWS,
             field_name="plan source row count",
         ):
-            raise _PlanReviewLimitSignal(
+            raise self._limit_signal(
                 ReviewFactLimitExceeded.plan_domain_rows()
             )
 
@@ -234,7 +260,7 @@ class PlanReviewProducerAdmission:
             limit=MAX_PLAN_REVIEW_ROWS,
             field_name="plan informational source row count",
         ):
-            raise _PlanReviewLimitSignal(
+            raise self._limit_signal(
                 ReviewFactLimitExceeded.plan_informational_rows()
             )
 
@@ -243,6 +269,7 @@ class PlanReviewAdmission:
     """Bound one unpublished plan's final retained rows and reference slots."""
 
     __slots__ = (
+        "_admission_token",
         "_domain_rows",
         "_domain_bytes",
         "_informational_rows",
@@ -250,6 +277,7 @@ class PlanReviewAdmission:
     )
 
     def __init__(self) -> None:
+        self._admission_token = object()
         self._domain_rows = 0
         self._domain_bytes = 0
         self._informational_rows = 0
@@ -285,7 +313,7 @@ class PlanReviewAdmission:
             limit=MAX_PLAN_REVIEW_ROWS,
             field_name="plan domain rows",
         ):
-            raise _PlanReviewLimitSignal(
+            raise self._limit_signal(
                 ReviewFactLimitExceeded.plan_domain_rows()
             )
         if exceeds_population_wall(
@@ -293,7 +321,7 @@ class PlanReviewAdmission:
             limit=MAX_PLAN_DOMAIN_RETAINED_BYTES,
             field_name="plan domain retained bytes",
         ):
-            raise _PlanReviewLimitSignal(
+            raise self._limit_signal(
                 ReviewFactLimitExceeded.plan_domain_retained_bytes()
             )
         if exceeds_population_wall(
@@ -301,7 +329,7 @@ class PlanReviewAdmission:
             limit=MAX_PLAN_REVIEW_ROWS,
             field_name="plan informational rows",
         ):
-            raise _PlanReviewLimitSignal(
+            raise self._limit_signal(
                 ReviewFactLimitExceeded.plan_informational_rows()
             )
         if exceeds_population_wall(
@@ -309,7 +337,7 @@ class PlanReviewAdmission:
             limit=MAX_PLAN_INFORMATIONAL_RETAINED_BYTES,
             field_name="plan informational retained bytes",
         ):
-            raise _PlanReviewLimitSignal(
+            raise self._limit_signal(
                 ReviewFactLimitExceeded.plan_informational_retained_bytes()
             )
 
@@ -318,12 +346,21 @@ class PlanReviewAdmission:
         self._informational_rows = next_informational_rows
         self._informational_bytes = next_informational_bytes
 
+    def _limit_signal(
+        self,
+        fact: ReviewFactLimitExceeded,
+    ) -> _PlanReviewLimitSignal:
+        return _PlanReviewLimitSignal(
+            fact,
+            _admission_token=self._admission_token,
+        )
+
 
 def adopt_plan_scan_result(
     result: ScanResult,
     admission: PlanReviewProducerAdmission,
 ) -> ScanResult:
-    """Adopt one exact immutable plan scan after stateless source admission."""
+    """Adopt one exact immutable plan scan after counter-free source admission."""
 
     _require_plan_producer_admission(admission)
     return adopt_scan_result(

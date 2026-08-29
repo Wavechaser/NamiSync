@@ -1747,16 +1747,16 @@ defect, and move implementation-level test choreography out of the log.
   graph before the next ownership transition. Checkpoint 4 must preserve public
   behavior while closing every remaining app-owned raw exception reference;
   arbitrary caller-owned attributes are not bounded task artifacts.
-- MODERATE - FIXED (2026-08-27). Review-limit provenance spoofing. An event,
-  policy, or nested scanner/observer collaborator could raise the planner's
-  capacity exception and make ordinary failure appear as `REFUSED+UNRUN`;
-  mutated preflight input, a malformed fact, or a subtype could do the same.
-  Cause: workflow shared one public error class across plan and inventory
-  owners, then authenticated individual instances. Fixed with distinct private
-  exact plan/inventory signals, exact fact-scope reconstruction, raw-signal
-  retirement, and no save for either refusal or invalid input. Ordinary
-  lookalikes retain normal failure identity; the reflective/forged (rung 4)
-  cases are outside the supported fault model.
+- MODERATE - FIXED (2026-08-30). Review-limit refusal provenance. A first-party
+  plan or inventory collaborator could directly raise its domain's private
+  exact signal and turn an internal bug into false `REFUSED+UNRUN`; a signal
+  issued during another run did the same. Cause: private type and fact scope
+  were mistaken for same-run provenance when the earlier public issuer
+  choreography was removed. Fixed with distinct private plan/inventory signals
+  carrying opaque domain-local admission tokens, logical overflow issued
+  through the active plan capability, exact scope reconstruction, and raw-graph
+  retirement. Tokenless, different-run, malformed, cross-domain, and lookalike
+  failures never become refusal; reflective token forgery remains rung 4.
 - SEVERE - FIXED (2026-08-27). Prepublication source-owner escape. Plan review
   could accept unbounded raw scanner, mapping, assignment, operation,
   observation, or refusal populations before a typed capacity outcome; generic

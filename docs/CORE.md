@@ -73,29 +73,32 @@ attestation format.
 - Pure shared calculations such as capacity requirements and deterministic
   operation identifiers when those rules cross module boundaries.
 - Exact nonnegative population measurement and excess comparison shared by
-  independent admission owners, plus typed plan-review limit facts, stateless
+  independent admission owners, plus typed plan-review limit facts, counter-free
   raw source-population gates, exact declared scan adoption, and cumulative
   admission only for final domain/informational rows and unavoidable
   simultaneously retained shallow references. Exact
   `PlanReviewProducerAdmission` gates expose no cumulative `admit` capability;
-  exact `PlanReviewAdmission` ledgers expose no raw-source gate. One stateless
-  producer gate may serve the sequential plan stages; it shares no counters or
-  issuer with the retained ledger. Both capabilities raise the same private
-  exact plan signal, while inventory owns a distinct private exact signal.
+  exact `PlanReviewAdmission` ledgers expose no raw-source gate. One counter-free
+  producer gate may serve the sequential plan stages; it shares no counters
+  with the retained ledger, only one opaque same-run admission token. Both
+  capabilities issue the same private exact plan signal with that token, while
+  inventory owns a distinct private exact signal and domain-local token.
   Each final reference slot uses the fixed eight-byte charge; disposable
   construction owners do not enter that ledger.
 
-`core/review.py` is the canonical source for the two stateless population
+`core/review.py` is the canonical source for the two population
 primitives and for the plan constructors, limits, counter order, and adoption
 rules. The comparison primitive validates only the measured count or byte
 charge; each trusted owner still declares its local wall, count placement,
 precedence, fact/error type, and user outcome. Source gates test each independent
 raw population before its first excess. Workflow validates and adopts each exact
 scanner result once, retains that immutable object, and passes the same identity
-to first-party read-only consumers. Producer gates remain stateless; the
+to first-party read-only consumers. Producer gates remain non-accumulating; the
 retained ledger charges only final shallow slots. Workflow catches only the
-private exact plan signal, reconstructs an exact PLAN fact, retires the raw
-signal graph, and retains neither the signal nor admission in its result. It
+private exact plan signal carrying the active token, reconstructs an exact PLAN
+fact, retires the raw signal graph, and retains neither the signal nor admission
+in its result. Tokenless and different-run same-domain signals are loud rung-3
+failures rather than refusal authority. It
 deliberately does not walk or size a complete Python object graph:
 checkpoint 4 must separately freeze and validate construction and container
 capacity, sorting/index storage, selection and preview values, strings/codecs,

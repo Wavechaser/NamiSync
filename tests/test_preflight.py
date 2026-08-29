@@ -749,7 +749,7 @@ def test_pure_preflight_accepts_matching_snapshot_without_filesystem() -> None:
     assert verdict.refusals == ()
 
 
-def test_preflight_review_admission_is_stateless() -> None:
+def test_preflight_review_admission_is_counter_free() -> None:
     xset = _xset()
     world = replace(_world(xset), free_space=None)
     retained = PlanReviewAdmission()

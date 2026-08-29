@@ -21,8 +21,8 @@ preflight(review: ExecutionReview, world: ObservedWorld, *,
           review_admission: PlanReviewProducerAdmission | None = None) -> Verdict
 ```
 
-Plan-review producers and result-adoption gates accept only the exact stateless
-producer capability. They cannot charge retained rows or bytes. Separate
+Plan-review producers and result-adoption gates accept only the exact counter-
+free producer capability. They cannot charge retained rows or bytes. Separate
 retained-world and retained-verdict helpers accept only the cumulative
 `PlanReviewAdmission`; execution-time observer and judgment callbacks continue
 without review-capacity authority, while their returned compounds receive
