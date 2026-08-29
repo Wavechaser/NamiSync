@@ -42,11 +42,11 @@ checkpoint 0 is complete after final documentation, three independent bounded
 reviews, link/anchor validation, manifest-backed test collection, stale-contract
 searches, and diff validation. Checkpoints 1–3, including private legacy decoder
 removal and the independently reviewed 3R remediation, are complete.
-Checkpoint 4P is the active bounded prerequisite-consolidation checkpoint under
-`M1_SHELL_H2.md`'s closed register. It repairs and simplifies the already-
-landed source/custody prerequisites but activates no task command, lifecycle,
-retention model, constant, fixture, validator, or BR-G-45 evidence. Checkpoint
-4 proper has not started. Checkpoints 5–12 remain pending. NamiSync remains
+Checkpoint 4P's bounded prerequisite consolidation is complete under
+`M1_SHELL_H2.md`'s closed register. It repairs and simplifies the already-landed
+source/custody prerequisites but activates no task command, lifecycle, retention
+model, constant, fixture, validator, or BR-G-45 evidence. Checkpoint 4 proper
+has not started. Checkpoints 5–12 remain pending. NamiSync remains
 version `0.1.0` until M1 is complete. Finishing M1 makes the product beta-ready;
 any later version change is a separate release decision.
 
@@ -758,7 +758,7 @@ ratification; `M1_SHELL_H2.md` records the exact titles.
 | 1 | `test(executor): pin typed recording settlement truth` | Extend the retained oracle before producer changes | complete |
 | 2 | `refactor(executor): attribute recording degradation by scope` | Add sparse item/task attribution and advance only the execution continuation | complete |
 | 3 | three ordered protocol commits listed in `M1_SHELL_H2.md` | Switch the event/database protocol with dormant consumer, producer/reset, and legacy-removal stops | complete, including 3R remediation |
-| 4 | three ordered model, dormant-lifecycle, and activation commits listed in `M1_SHELL_H2.md` | Install the task lifecycle and containment foundation | in progress: pre-model ownership audit; no target surface active |
+| 4 | three ordered model, dormant-lifecycle, and activation commits listed in `M1_SHELL_H2.md` | Install the task lifecycle and containment foundation | pending: prerequisite 4P complete; model unratified and no target surface active |
 | 5 | `feat(workflows): unify location probing and recent locations` | Share location admission and ledger-derived recents | pending |
 | 6 | `feat(web): add frozen setup and serial task creation` | Deliver Setup and serial multi-pair creation | pending |
 | 7 | `feat(web): add bounded plan review and selection` | Deliver plan projection, shared sibling sorting, selection, and execution admission | pending |

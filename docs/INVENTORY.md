@@ -51,9 +51,9 @@ deduplication, sorting, or SQL construction. Absent or ineligible values within
 that wall can still produce an empty result; duplicates and malformed row ids
 retain their existing selection semantics, but none bypasses raw request
 admission. Chunked reads retain their one-snapshot ordering and do not
-accumulate raw `sqlite3.Row` shells beside the typed result. Checkpoint 4.1
-charges the now-finite normalized sets, ordered copies, sort scratch, query
-slices, and final tuples.
+accumulate raw `sqlite3.Row` shells beside the typed result. Checkpoint 4's
+model must charge the now-finite normalized sets, ordered copies, sort scratch,
+query slices, and final tuples.
 
 The inventory workflow re-resolves stable volume identity before each
 invocation, registers first locations in the exact order host -> volume
@@ -116,7 +116,7 @@ checkpoint-4 graph model freezes its complete charge.
 The workflow checks the exact candidate-row tuple and its first-excess count,
 then constructs `IntegritySelection` directly; no injectable builder or second
 validator owns policy. A valid candidate excess reaches no sink, phase event,
-verifier context, or runner. Checkpoint 4.1 must install the
+verifier context, or runner. Checkpoint 4 must install the
 identity-deduplicated byte gate around the real construction graph; until then
 this prerequisite claims only the row boundary and no-partial behavior.
 
@@ -125,9 +125,10 @@ admission. The production scanner checks the next combined domain or warning
 row before append, while workflow validates the exact complete `ScanResult` and
 rechecks both populations before any host, location, or inventory ledger row is
 written. A valid initial inventory excess is `REFUSED+UNRUN` with no saved
-details or partial inventory; malformed hostile output keeps structural-error
-precedence. Integrity refresh has already started the request and therefore
-settles the same valid excess as `FAILED+RAN` without selection or verifier work.
+details or partial inventory; malformed first-party scanner output remains a
+loud internal (rung 3) contract failure and keeps structural-error precedence.
+Integrity refresh has already started the request and therefore settles the
+same valid excess as `FAILED+RAN` without selection or verifier work.
 
 Resolution now snapshots the exact binding, mount, and volume-evidence fields
 before retaining them. After the no-follow root probe it obtains and snapshots a
@@ -145,12 +146,13 @@ progress-aware audit. During the run, constant-time edge reconciliation pins
 the selection, item tuple, completion container, current accepted/completed
 delta, and monotonic first-party byte counters around context construction,
 events, and checkpoints instead of rescanning every candidate. Callback return
-requires those counters to equal their pre-transfer values. Public outcomes and verifier
-context are detached exact base values. A reliably accepted outcome is retained
-immediately before post-callback reconciliation, so a later hostile seam cannot
-erase the accepted prefix; classification remains `FAILED+RAN` for standalone
-integrity work. Pause and cancellation remain resumable only when every
-accepted outcome has matching continuation completion.
+requires those counters to equal their pre-transfer values. Reentrant consumers
+receive exact immutable public outcomes and verifier context. A reliably
+accepted outcome is retained immediately before post-callback reconciliation,
+so a later reentrant (rung 2) callback seam cannot erase the accepted prefix;
+classification remains `FAILED+RAN` for standalone integrity work. Pause and
+cancellation remain resumable only when every accepted outcome has matching
+continuation completion.
 
 Inventory scan scopes independently charge the combined raw selected-path and
 subtree-root population against 120,000 before canonical path dictionaries,

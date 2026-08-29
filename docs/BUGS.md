@@ -1346,7 +1346,7 @@ defect, and move implementation-level test choreography out of the log.
   candidate-row tuple before construction, and no valid excess publishes
   partial work. Synthetic tree/index and candidate construction, their finite
   preprocessing transients, old/new task generations, and the complete byte
-  authority remain checkpoint-4.1 owners.
+  authority remain checkpoint-4 model owners.
 - SEVERE - FIXED (2026-08-28). Hostile resolution alias mutation. Inventory
   retained resolver-returned mount/evidence objects across the later root probe,
   so callback mutation could change the root or volume facts used for scan and
@@ -1711,9 +1711,9 @@ defect, and move implementation-level test choreography out of the log.
   run one producer audit when their module returns. Checkpoint 4P.20 removed
   execution plan hashing, duplicate operation facts, and immutable evidence/
   issue reconstruction from authority guards. Required callback guards still
-  compare detached prior mutable baselines and can scale with already-settled
-  state, so this broader entry remains open; no wall or acceptance constant
-  changed.
+  compare shallow fixed-reference and prior-overlay baselines and can scale
+  with already-settled state, so this broader entry remains open; no wall or
+  acceptance constant changed.
 - MODERATE - FIXED (2026-08-29). Pre-checkpoint settlement gap. A direct
   workflow adapter's checkpoint callback could run after an executor changed
   settlement but before the workflow reconciled that change into its accepted
@@ -1755,16 +1755,20 @@ defect, and move implementation-level test choreography out of the log.
   owners, then authenticated individual instances. Fixed with distinct private
   exact plan/inventory signals, exact fact-scope reconstruction, raw-signal
   retirement, and no save for either refusal or invalid input. Ordinary
-  lookalikes retain normal failure identity; forged private signals and
-  reflective mutation are outside the supported fault model.
+  lookalikes retain normal failure identity; the reflective/forged (rung 4)
+  cases are outside the supported fault model.
 - SEVERE - FIXED (2026-08-27). Prepublication source-owner escape. Plan review
   could accept unbounded raw scanner, mapping, assignment, operation,
   observation, or refusal populations before a typed capacity outcome; generic
   copying could also retain undeclared collaborator state. Cause: final-shape
-  validation did not gate each raw population or detach hostile results before
-  retention. Fixed with independent first-excess gates, exact typed snapshots
-  and post-callback revalidation, plus one final charge for unavoidable shallow
-  scan/plan/world/verdict slots. Excess is `REFUSED+UNRUN` and saves no plan.
+  validation did not gate each raw population or distinguish internal (rung 3)
+  module adoption from reentrant (rung 2) callback custody. Fixed with
+  independent first-excess gates; one exact adoption and immutable identity
+  sharing for trusted-but-fallible internal scan, plan, world, and verdict
+  returns; bounded capture of fallible mapping and reentrant callback results;
+  reliable-state-before-callback ordering and immutable callback views; plus one
+  final charge for unavoidable shallow scan/plan/world/verdict slots.
+  Excess is `REFUSED+UNRUN` and saves no plan.
   Construction, sorting/index storage, previews, codecs, native/browser copies,
   complete graphs, exceptions, and multi-session owners remain checkpoint 4.
 - SEVERE - FIXED (2026-08-28). Reliable result custody aliasing. The generic

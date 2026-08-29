@@ -7,11 +7,12 @@
 
 Delivery status (2026-08-29): checkpoints 0–3 and the independently reviewed
 3R remediation are complete, including the separately reviewed checkpoint-3.3
-legacy-source removal. Checkpoint 4P is the active closed prerequisite-
-consolidation register below. It activates no task surface, reservation model,
-constant, fixture, validator, or BR-G-45 evidence. Checkpoint 4 proper has not
-started, and its rejected draft remains quarantined outside the working tree.
-Checkpoints 5–12 remain pending. No checkpoint-4 command or control is active.
+legacy-source removal. Checkpoint 4P's prerequisite consolidation is complete
+under the closed register below. It activates no task surface, reservation
+model, constant, fixture, validator, or BR-G-45 evidence. Checkpoint 4 proper
+has not started, and its rejected draft remains quarantined outside the working
+tree. Checkpoints 5–12 remain pending. No checkpoint-4 command or control is
+active.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
@@ -380,7 +381,7 @@ its finite surface and one atomic outcome are named here.
 | 4P.23 | Apply D6 with private exact signal types and remove issuer, `fresh()`, and consume choreography without weakening refusal provenance or status truth. | Refusal/provenance cases in `tests/test_plan_review_limits.py`, `tests/test_workflows.py`, and `tests/test_inventory_workflow.py`. | Complete |
 | 4P.24 | Apply C1 by centralizing exception-to-`FailureDetail` factories and adding an AST guard for direct retained-detail construction. | `tests/core/test_exception_graph.py`, the new AST policy regression, affected producer/consumer departments, and ordinary exception-path tests. | Complete |
 | 4P.25 | Conduct an independent adversarial review against rows 4P.0–4P.24 without absorbing new implementation scope. | Requirement-to-diff trace, accepted-test matrix, stop-rule audit, targeted counterexamples, and written disposition for every review finding. | Complete |
-| 4P.26 | Reconcile active documentation, task history, and BUGS status, run full verification, replace the handoff, and delete `CUSTODY_TAX_AUDIT.md` only after every accepted disposition has an authoritative home. | Affected department union, ordinary Node-enabled suite, import contracts, required protected gates, links/anchors, stale-contract searches, `git diff --check`, repository/stash inventory, and independent final review. | Pending |
+| 4P.26 | Reconcile active documentation, task history, and BUGS status, run full verification, replace the handoff, and delete `CUSTODY_TAX_AUDIT.md` only after every accepted disposition has an authoritative home. | Affected department union, ordinary Node-enabled suite, import contracts, required protected gates, links/anchors, stale-contract searches, `git diff --check`, repository/stash inventory, and independent final review. | Complete |
 
 #### 4P.25 adversarial-review receipt
 
@@ -403,15 +404,40 @@ The 4P.10 named-verification cell was strengthened after register freeze
 without a specific user decision; retain the stronger gate and record this as
 a one-off process exception, not a product defect. `c8f03b5` was one bounded,
 isolated pre-existing bug fix and remained below both defect-stop thresholds.
-README's and this document's high-level detached/revalidated wording, plus
-HANDOFF's stale recovery-branch and `ExecutionOperationFact.content_bytes`
-claims, remain assigned to 4P.26. Every rejected or excluded idea remains
-excluded and gains no implementation authority from this review.
+The review assigned README's and this document's high-level adoption wording,
+plus HANDOFF's stale repository and removed-field claims, to 4P.26 closeout.
+Every rejected or excluded idea remains excluded and gains no implementation
+authority from this review.
 
 These are adversarial-review receipts, not the ordinary/full acceptance gate.
 The affected department union, ordinary Node-enabled suite, final documentation
-reconciliation, stash/repository closeout, and independent final review remain
-owned by 4P.26.
+reconciliation, stash/repository closeout, and independent final review were
+owned by 4P.26 and are recorded below.
+
+#### 4P.26 closeout receipt
+
+Every accepted F/C/D disposition now has an authoritative home in the closed
+register, active architecture or component documentation, implementation, and
+matching regression policy. Rejected and explicitly excluded dispositions did
+not acquire a home or implementation authority. The temporary untracked
+`CUSTODY_TAX_AUDIT.md` was therefore removed after that disposition audit; all
+four named recovery/model stashes remain untouched.
+
+The Node-enabled affected-department union passed 4,852 tests with one skip and
+336 deselections. After the ordinary gate exposed the missed immutable-review
+tool consumer, bounded repair `c67c4ed` passed 88 focused tests with two skips
+and the 1,236-test tools/preflight/workflows neighborhood with three skips. The
+final Node-enabled ordinary suite passed 5,157 tests with four skips and 28
+deselections. All 11 import contracts remained intact, and the protected
+30-scenario settlement oracle produced the same accepted result across three
+runs.
+
+The active-document review found no missing relative target across 30 documents
+and no missing target among 83 anchor links. Targeted stale-contract searches,
+the two-branch/one-worktree/four-stash custody inventory, recovery-object
+reachability, and `git diff --check` were clean. Independent final review of
+this exact closeout found no blocking design, documentation, receipt, or
+repository-custody finding.
 
 Explicit exclusions are F4; C3, C5, C6, and C7; checkpoint 4 proper and its
 model, constants, fixtures, validator, and BR-G-45 evidence; executor journal or
@@ -441,16 +467,18 @@ Commits, in order:
 2. `feat(web): install dormant task lifecycle`
 3. `feat(web): retain multi-session task artifacts`
 
-**Pending until checkpoint 4P.26 closes.** Independent source audits found that
-the current complete graph cannot yet justify a
-frozen reservation floor. The dispatcher exception-retention prerequisite
-is fixed separately in `74135b5`; the native reply lifetime prerequisite now
-passes all eight installed transport/native-host witnesses. The independent
-standalone-integrity candidate wall is ratified in `2818686`, and the linked
-verify-continuation diagnostic boundary is now closed without selecting a
-codec or task-reservation ceiling. None of these changes freezes the model or
-closes BR-G-45. Resolve
-the following before accepting the first model commit:
+**Checkpoint 4P closes here; checkpoint 4 proper has not started, and its
+ownership/reservation model remains unratified.** Row 4P.26 owns the final
+documentation and gate receipt only; it activates no task surface or model.
+Independent source audits found that the current complete graph cannot yet
+justify a frozen reservation floor. The dispatcher exception-retention
+prerequisite is fixed separately in `74135b5`; the native reply lifetime
+prerequisite now passes all eight installed transport/native-host witnesses.
+The independent standalone-integrity candidate wall is ratified in `2818686`,
+and the linked verify-continuation diagnostic boundary is now closed without
+selecting a codec or task-reservation ceiling. None of these changes freezes
+the model or closes BR-G-45. Resolve the following before accepting the first
+model commit:
 
 A fresh pre-model derivation was rejected and discarded before commit.
 It multiplied the one aggregate plan-domain and informational walls across
@@ -494,12 +522,17 @@ not a reservation-model acceptance.
 
 The narrow planning-source wall is now structurally closed across both scans,
 prior correspondence, planner policy/assignment/operations, observation, and
-preflight. Independent raw populations fail at first excess; declared hostile
-inputs/results are detached and revalidated at each distinct seam; and only
-unavoidable shallow slots retained together in the final scan, plan, world,
-and verdict graphs commit to the session ledger. Correspondence inputs are
-already bounded by admitted scans and its hostile result is captured exactly
-once. First excess is typed `REFUSED+UNRUN` with no saved or partial plan.
+preflight. Independent populations fail at first excess at every applicable
+trust rung. Exact immutable first-party scan, plan, world, and verdict results
+are validated once at their named workflow adoption transfers and then shared
+by identity with read-only consumers; reentrant collaborators receive only
+immutable values after reliable local state is committed. Only unavoidable
+shallow slots retained together in those final graphs commit to the session
+ledger.
+Correspondence inputs are already bounded by admitted scans and its fallible
+result is captured exactly once. First excess is typed `REFUSED+UNRUN` with no
+saved or partial plan. Reflective mutation and forged private signals remain
+outside the supported fault model.
 
 This prerequisite deliberately excludes construction builders, sorting/index
 storage, selection/exclusion and preview values, callback overlap, codec/text
@@ -630,16 +663,18 @@ not freeze private counters, handler timing, or callback choreography.
   whole-envelope ceiling; derive their pre-projection and pre-parse ceilings
   from the frozen occurrence model.
 - Planning roots/profiles/evidence/filter/assignment values are now captured
-  from declared exact fields at hostile seams. Only their final shallow
-  collection slots participate in the source prerequisite; complete object,
-  text/codec, construction, and callback costs remain model work. Other task
-  paths, mount/inventory values, and runtime `_inventory_details` still need
+  from declared exact fields at their applicable ingress or named ownership
+  transfer. Only their final shallow collection slots participate in the source
+  prerequisite; complete object, text/codec, construction, and callback costs
+  remain model work. Other task paths, mount/inventory values, and runtime
+  `_inventory_details` still need
   exact task/session retirement or a separately charged bounded owner before
   completion capacity can be released.
 - The consolidation pass removed execution plan hashing, duplicate operation
   fact graphs, and immutable evidence/issue reconstruction from callback
   guards. Mutable execution compound state is audited once at executor and
-  verifier return; required callback seams compare detached prior baselines.
+  verifier return; required callback seams keep shallow fixed-reference and
+  prior-overlay baselines.
   The remaining model owns the cost of those shallow comparisons, duplicate
   candidate maps, verifier aggregate-versus-stream confirmation, standardized
   four-string record identities, unslotted/custom nested Python values, result

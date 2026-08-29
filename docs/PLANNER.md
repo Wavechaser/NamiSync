@@ -45,8 +45,10 @@ declared but raise rather than pretending to work.
 The eleven exact planning dataclasses are frozen and slotted, so their
 instances carry only their declared fields. This structural constraint does
 not change plan identity, fingerprints, payloads, equality, validation, or
-selection behavior; hostile boundaries still require exact public types and
-revalidate declared fields.
+selection behavior. The named internal (rung 3) workflow transfer validates
+exact public types and declared fields once; downstream first-party readers then
+trust the immutable adopted values. External (rung 1) inputs and reentrant
+(rung 2) policy callbacks retain their separate ingress and ordering checks.
 
 Depth ordering, parent walks, and strict descendant checks use the shared
 relative-path helpers in `namisync.core.pathing`. Their Stage 5.5 promotion was
@@ -110,8 +112,8 @@ neither holds or shares an issuer. Planner logical-byte accumulation raises the
 same private plan signal directly. Destination-policy identity, assignment, or
 unreviewed fingerprint failures—including lookalikes with the same fact-shaped
 attributes—propagate with ordinary type and identity. Reviewed fingerprinting
-uses the one captured policy identity instead of rereading hostile policy
-properties.
+uses the one captured policy identity instead of rereading extension-owned
+policy properties across the reentrant boundary.
 
 `snapshot_plan_options`, `plan`, and `adopt_plan_candidate` isolate their
 public call frame and retire traceback/cause/context links before an error

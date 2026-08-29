@@ -172,8 +172,10 @@ a profile shows chunk materialization is the limiting cost.
 
 `IntegrityRecordCommand` and `VerifierContext` are frozen and slotted. Their
 declared fields, validation, recorder semantics, continuation policy, and
-factory binding remain unchanged; exact-type and declared-field validation
-still govern hostile boundaries.
+factory binding remain unchanged. Named internal (rung 3) transfers validate
+exact type and declared fields once, after which first-party readers trust the
+immutable values. External (rung 1) filesystem observations and reentrant
+(rung 2) callbacks retain their separate admission and ordering policy.
 
 There is deliberately no buffered fallback. A non-Windows host, reparse
 subject, alignment rejection, unsupported volume, or inability to prove handle

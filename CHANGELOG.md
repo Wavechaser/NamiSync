@@ -23,20 +23,21 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-28)
+#### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-29)
 
 - Moved inventory scan, returned repository-row, tree-input-member, and
   standalone-integrity candidate-row admission ahead of their first excess
-  retained value. Exact hostile scan outputs are revalidated before ledger
-  save; initial inventory excess is `REFUSED+UNRUN` and integrity excess
-  remains `FAILED+RAN`, both without partial downstream artifacts.
+  retained value. Exact first-party scan outputs are adopted once at the named
+  workflow transfer before ledger save; initial inventory excess is
+  `REFUSED+UNRUN` and integrity excess remains `FAILED+RAN`, both without partial
+  downstream artifacts.
 - Streamed repository rows directly into immutable snapshots and applied the
   population ceiling to actual returned rows rather than absent requested keys
   or ids. Every requested path, row-id, and file-identity population now also
   stops at its independent raw 120,000-occurrence wall before normalization,
   deduplication, sorting, or SQL batching; the inherited 120,001-path admission
   is closed while requested-but-absent values within the wall still return no
-  rows. Checkpoint 4.1 still owns the finite preprocessing transients,
+  rows. Checkpoint 4's model still owns the finite preprocessing transients,
   synthetic tree/index construction, and complete retained-byte authority.
 - Made every production desktop session attach its exact task reservation and
   observation before scheduling. Dispatcher retains the sole retryable rollback
@@ -93,14 +94,14 @@ claims explicit, independently reviewable, and regression-backed.
 - Made successful workflow-runtime shutdown release retained plans and
   execution-start claims alongside execution and inventory details. A failed
   dependency close preserves all four custody maps for one coherent retry.
-- Narrowed the dormant task-surface runtime premise from the whole CPython 3.13
-  patch family to the exact 3.13.14 final release used for checkpoint-4 object
-  coefficients; unsupported patch or prerelease builds refuse before task state.
-- Detached reliable session items, progress, terminal results, inventory
-  selections, execution evidence, and verifier contexts at every hostile owner
-  seam. An accepted item is retained before later reconciliation, while forged
-  collaborator aggregates and workflow-owned executor phases fail without
-  replacing the reliable stream.
+- Removed the dormant task-surface exact-patch gate. Packaging and production
+  now require Python `>=3.13` with no upper-version bound; later versions remain
+  admitted unless direct evidence reaches a catastrophic stop class.
+- Established distinct custody for reliable session items, progress, terminal
+  results, inventory selections, execution evidence, and verifier contexts at
+  their applicable ownership boundaries. An accepted item is retained before
+  later reentrant reconciliation, while forged collaborator aggregates and
+  workflow-owned executor phases fail without replacing the reliable stream.
 - Advanced the exact process-local execution continuation to v7 with a required
   plan-ordered exclusion acceptance cursor and removed the v6 compatibility
   path. Resume emits only the unaccepted suffix; the local cursor advances
@@ -117,8 +118,31 @@ claims explicit, independently reviewable, and regression-backed.
   integrity effects. Kept the complete-graph and optimization concerns assigned
   to the next consolidation/model pass.
 - Quarantined the uncommitted checkpoint-4 model draft and stopped before model
-  work. Focused and departmental verification plus a bounded independent
-  correctness review close this prerequisite commit.
+  work. Auxiliary refs were pruned only after their accepted content had an
+  authoritative home; four named stashes retain the rejected draft and recovery
+  evidence without making either merge authority.
+- Ratified the four-rung external, reentrant, internal-module, and reflective/
+  forged trust ladder. Immutable first-party results are adopted once at named
+  ownership transfers and then shared, while population admission, filesystem
+  freshness, and mutable-overlay checks retain their separate policy owners.
+- Replaced repeated whole-result reconciliation and reconstruction with
+  incremental settlement, canonical retained result identities, validated path
+  folds, slotted immutable contracts, read-only execution review inputs, exact
+  compound adoption, and shallow recording custody without changing wire,
+  schema, wall, status, or settlement truth.
+- Split cumulative retained review budgets from stateless producer gates,
+  shared only the domain-neutral population primitives, and gave plan and
+  inventory unrelated private exact limit signals. First excess, refusal
+  provenance, rollback/close precedence, and ordinary lookalike classification
+  remain unchanged.
+- Centralized rendered live-exception detail projection with lifecycle-link
+  retirement and an exact direct-construction drift guard. The independent
+  register review found no blocking regression or excluded-scope intrusion and
+  retained the documented one-off process exceptions rather than rewriting
+  history.
+- Closed one ordinary-gate-discovered 4P.16 consumer omission: the executor rig
+  now gives observer and preflight the immutable execution review rather than
+  mutable execution state, with no schema, wire, wall, or status change.
 
 #### Reject premature checkpoint-4 reservation model (2026-08-27)
 

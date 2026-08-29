@@ -118,13 +118,16 @@ structurally excluded without changing equality, ordering, validation, or
 serialization. Scanner-result adoption and retained recorder checks require the
 exact public types and declared container shapes without reconstructing the
 graph. Once adopted, first-party consumers trust those immutable base values;
-reflective mutation of their declared fields remains the unsupported fourth
-trust rung.
+reflective mutation of their declared fields remains the unsupported
+reflective/forged (rung 4) case.
 
 The eleven exact planning dataclasses are likewise frozen and slotted. Their
 declared fields, plan identity, fingerprints, payload shape, validation, and
 selection semantics are unchanged. Exact-type and declared-field validation
-remain the hostile-boundary authority.
+remain the named internal (rung 3) adoption authority; downstream first-party
+readers trust the immutable adopted values. External (rung 1) ingress and
+reentrant (rung 2) callbacks retain their separate validation and ordering
+obligations.
 
 Planner-result admission validates the exact compound `Plan` contract and
 returns the producer's immutable plan by identity instead of rebuilding its

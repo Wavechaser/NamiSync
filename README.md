@@ -52,12 +52,17 @@ inventory/integrity, process-live multi-session tasks, and early lifecycle/
 retention closure. Its exact core-event-v5, recording, signed-64 scalar, full-
 width Windows file-identity, and coordinated persistence epoch are active;
 the plan session now refuses independent raw-population excess and final
-retained shallow-reference excess before publishing a partial plan. Hostile
-module results are detached and revalidated at their distinct workflow seams;
-only the private exact plan-limit signal carrying an exact PLAN fact becomes
-typed `REFUSED+UNRUN`; inventory uses a distinct private signal. Ordinary
-lookalikes retain normal failure identity, and wrong-scope exact signals fail
-loudly without saving a plan. Neither path uses an issuer token.
+retained shallow-reference excess before publishing a partial plan. External
+inputs are validated and bounded at ingress, populations remain independently
+bounded at every applicable rung, reentrant collaborators receive only
+immutable values after reliable local state is committed, and exact immutable
+first-party module results are validated once at their named workflow adoption
+transfer and then shared by identity with read-only consumers. Only the private
+exact plan-limit signal carrying an exact PLAN fact becomes typed
+`REFUSED+UNRUN`; inventory uses a distinct private signal. Ordinary lookalikes
+retain normal failure identity, wrong-scope exact signals fail loudly without
+saving a plan, and reflective mutation or forged private signals remain outside
+the supported fault model. Neither path uses an issuer token.
 Python bridge responses now stop at an exact 8 MiB canonical-JSON occurrence
 wall before native construction; drains commit only the longest admitted update
 prefix, and native positions remain charged through worker exit and exact

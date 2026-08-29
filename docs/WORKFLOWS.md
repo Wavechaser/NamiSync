@@ -41,15 +41,17 @@ recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store)
 Manual exact post-copy verification remains a later checkpoint and instead
 classifies current durable evidence in the original execution scope.
 
-Installed NamiSync modules are trusted-but-fallible participants, not
-adversarial security principals. Their public returns are the workflow's named
-ownership-transfer points: admit a compound result once, then share immutable
-base values with first-party read-only consumers. Completed 4P adoption rows no
-longer deep-reconstruct immutable scan, plan, observation, verdict, or execution
-authority graphs. Mutable execution overlays still receive one compound audit
-at each producer return and cheap prior-truth guards at reentrant callback
-seams. Population admission, fresh filesystem observation, callback ordering,
-and exception-graph retirement remain independent requirements.
+Installed NamiSync modules are trusted-but-fallible internal (rung 3)
+participants, not adversarial security principals. Their public returns are the
+workflow's named ownership-transfer points: admit a compound result once, then
+share immutable base values with first-party read-only consumers. Completed 4P
+adoption rows no longer deep-reconstruct immutable scan, plan, observation,
+verdict, or execution authority graphs. Mutable execution overlays still
+receive one compound audit at each producer return and cheap prior-truth guards
+at reentrant (rung 2) callback seams. External (rung 1) inputs are validated and
+bounded at ingress, while applicable populations remain independently bounded
+at every applicable rung. Fresh filesystem observation, callback ordering, and
+exception-graph retirement remain separate requirements.
 
 Both opaque codecs admit the complete typed graph before building their JSON
 object/list projection. The walk rechecks nested operations, stats, metadata,
@@ -269,10 +271,10 @@ checkpoint-4 model.
 4. Read immutable prior correspondence through a ledger query whose keys and
    identities come only from the already admitted scans. Runtime query indexes
    and result construction are therefore structurally bounded rather than
-   separately metered; workflow captures the hostile correspondence result
-   exactly once before giving it to the planner. Then read one complete
-   semantic-settings snapshot. If the request supplies a deletion-policy
-   override, replace only that field in the snapshot.
+   separately metered; workflow captures the trusted-but-fallible internal
+   (rung 3) correspondence result exactly once before giving it to the planner.
+   Then it reads one complete semantic-settings snapshot. If the request
+   supplies a deletion-policy override, replace only that field in the snapshot.
 5. Apply filters/policies and plan.
 6. Derive the ordinary deterministic safe selection: retain additive/no-op work, mark
    direct blockers `BLOCKED`, quarantine overlapping/dependent work as
@@ -743,8 +745,8 @@ excess and before normalization, validation, deduplication, or sorting; result
 collectors stop before materializing the first excess typed snapshot. Integrity
 validates the exact candidate-row tuple and then uses its ordinary
 workflow-owned construction directly; there is no injected builder or duplicate
-general row validator. Checkpoint 4.1 adds the retained-byte authority around
-the real construction graph.
+general row validator. Checkpoint 4's first model commit must add the retained-
+byte authority around the real construction graph.
 
 Candidate filtering happens only while freezing a new integrity selection.
 In the current implementation, baseline admits eligible non-directory rows

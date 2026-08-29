@@ -377,6 +377,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Contract family | Canonical source |
 | --- | --- |
 | Live/stored session records, phase/run results, and `SessionStore` | `namisync/core/session.py` |
+| Exception lifecycle-link retirement and rendered retained-failure projection | `namisync/core/exception_graph.py` |
 | Event bodies, envelopes, delivery classes, codec, and exact-v5 validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
 | Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
 | Safe integer, signed-64, canonical scalar/file-index codecs, shared population-measure/excess primitives, distinct retained-plan and stateless-producer admissions, private exact plan-review signals, scanner population-admission protocol, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
