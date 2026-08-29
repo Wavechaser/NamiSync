@@ -166,6 +166,10 @@ claims explicit, independently reviewable, and regression-backed.
   single file to every cross-object private read across the package, including
   literal `getattr` access. The guard names the offending file and expression
   on failure.
+- Recorded scaling claims as a distinct evidence class: complexity closes on a
+  counted structural witness at named sizes, while execution timing stays noisy
+  even for a fixed in-memory workload, requires repeated fresh processes, and
+  reports its spread beside the figure it qualifies.
 
 #### Bound checkpoint-4 planning source ownership (2026-08-27)
 

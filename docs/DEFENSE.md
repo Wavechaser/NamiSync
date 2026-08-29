@@ -697,6 +697,20 @@ may close a gate.
   byte-identical fresh children add provenance and drift confidence, not
   statistical samples, and do not justify calibration, holdout, headroom, or a
   sampled ceiling.
+- Separate a scaling claim from a value claim. A statement that cost is
+  linear, that a quadratic term is removed, or that a per-item scan no longer
+  repeats is a complexity claim, and its evidence is a counted structural
+  witness at named sizes — operations, lookups, or attribute accesses observed
+  from frozen source — rather than elapsed time. Wall-clock shows whether a
+  complexity change was worth making; it never establishes the complexity
+  itself, because constant factors, allocator behavior, and garbage collection
+  can each dominate the term under test. Execution timing stays a noisy
+  quantity even for a fixed in-memory workload, so it requires repeated fresh
+  processes and a reported spread, and a single run is Tier 0 however carefully
+  it was taken. Report that spread beside the figure it qualifies: a timing
+  difference narrower than the spread observed for the same unchanged workload
+  distinguishes nothing, and the owning component authority records the
+  fixture, process count, and spread.
 - Evidence tiers describe how a quantitative claim is used. **Tier 0** is a
   reasoned target and never closes a gate. **Tier 1** is a current-source live
   drift guard against an already accepted contract or claim and is not
