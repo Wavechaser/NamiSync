@@ -1063,7 +1063,7 @@ def validate_integrity_run_result(
     return recording
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IntegrityRecordCommand:
     """One atomic conditional baseline/verify/rebaseline request."""
 
@@ -1202,7 +1202,7 @@ def matches_expected_stat(expected: FileStat, actual: FileStat) -> bool:
     )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class VerifierContext:
     """Shared run controls plus verifier timing and chunk policy."""
 

@@ -468,11 +468,6 @@ def test_mapping_source_populations_are_independent_not_aggregate(
     assert snapshot_mapping_snapshot(value, review_admission=admission) == value
     _fill_final_ledger(admission)
 
-class _DeepcopyBomb:
-    def __deepcopy__(self, memo: object) -> object:
-        del memo
-        raise AssertionError("undeclared graph was copied")
-
 class _DeclaredMapping(Mapping[object, object]):
     def __init__(self, values: Mapping[object, object]) -> None:
         self._values = dict(values)
@@ -508,9 +503,6 @@ class _UtcAlias(tzinfo):
     def dst(self, value: datetime | None) -> timedelta:
         del value
         return timedelta(0)
-
-def _attach_bomb(value: object) -> None:
-    object.__setattr__(value, "_undeclared", _DeepcopyBomb())
 
 def test_scan_snapshot_reconstructs_declared_typed_fields() -> None:
     record = _file("file.bin", identity=FileIdentity("SOURCE", 1))
@@ -589,7 +581,6 @@ def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() 
         ordinary.trash,
         alias_time,
     )
-    _attach_bomb(raw_world)
     captured = snapshot_plan_observed_world(
         raw_world,
         xset,
@@ -598,7 +589,6 @@ def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() 
     assert captured == replace(ordinary, observed_at=NOW)
     assert isinstance(captured.stats, MappingProxyType)
     assert captured.observed_at.tzinfo is timezone.utc
-    assert not hasattr(captured, "_undeclared")
 
     raw_verdict = Verdict(
         False,
@@ -608,7 +598,6 @@ def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() 
         ),
         captured,
     )
-    _attach_bomb(raw_verdict)
     verdict = snapshot_plan_verdict(
         raw_verdict,
         captured,
@@ -618,7 +607,6 @@ def test_world_and_verdict_accept_declared_mappings_and_zero_offset_utc_alias() 
     )
     assert verdict.refusals == raw_verdict.refusals
     assert verdict.observed is captured
-    assert not hasattr(verdict, "_undeclared")
 
 def test_world_snapshot_uses_enumerated_mapping_items_and_rejects_duplicates() -> None:
     source = _scan(SOURCE_ROOT)

@@ -29,7 +29,7 @@ target parents, both roots, capacity, exact reclaimable temp bytes, trash
 safety, and one UTC timestamp. The native local backend performs no cleanup or
 hydration.
 
-`preflight()` consumes only the immutable `ObservedWorld` contract in
+`preflight()` consumes only the frozen outer `ObservedWorld` contract in
 `namisync.core.preflight`. It reports all applicable typed run- and
 operation-level refusals for unsafe operations selected from incomplete scans,
 root/volume ambiguity, broken selection dependencies, blocked/quarantined work,
@@ -37,6 +37,13 @@ direct or parent-path drift, insufficient capacity, trash safety,
 containment, and target path representation. Commitment checking remains at the
 execution-workflow entry, as review preflight intentionally works before a
 commitment exists.
+
+The six exact preflight observation and verdict dataclasses are frozen and
+slotted, so instances carry only their declared fields. This does not yet make
+`ObservedWorld` deeply immutable: its declared `Mapping` members can still be
+mutable. Checkpoint 4P.16 owns their conversion to deeply read-only custody.
+Hostile boundaries continue to require exact types and revalidate declared
+fields.
 
 `observe()` performs read-only filesystem/volume IO and decides nothing.
 `preflight()` performs no IO and changes nothing. Neither repairs, re-plans,

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import datetime, timezone
 import os
 import stat as stat_module
@@ -53,6 +53,7 @@ from namisync.core.preflight import (
     StatObservation,
     Subject,
     TrashObservation,
+    Verdict,
 )
 from namisync.core.review import (
     PlanReviewAdmission,
@@ -76,6 +77,57 @@ META = MetadataSnapshot(0, 100)
 SOURCE_VOLUME = VolumeId("SRC", "NTFS")
 TARGET_VOLUME = VolumeId("DST", "NTFS")
 PROFILE = CapabilityProfile("NTFS", 100, True, None, 32767, False, True)
+
+
+def _assert_declared_slots(value: object) -> None:
+    assert not hasattr(value, "__dict__")
+    assert type(value).__slots__ == tuple(field.name for field in fields(value))
+    with pytest.raises(AttributeError):
+        object.__setattr__(value, "_undeclared", object())
+
+
+def test_preflight_contracts_are_exactly_slotted() -> None:
+    subject = Subject("source", "FILE.BIN")
+    stat_observation = StatObservation(None)
+    root_observation = RootObservation(r"C:\source", SOURCE_VOLUME, None)
+    trash_observation = TrashObservation(
+        r"C:\target\.synctrash",
+        True,
+        True,
+        True,
+        True,
+        True,
+    )
+    world = ObservedWorld(
+        {subject: stat_observation},
+        {subject: "file.bin"},
+        frozenset(),
+        {"source": root_observation},
+        1,
+        0,
+        trash_observation,
+        NOW,
+    )
+    refusal = Refusal(RefusalCode.OBSERVATION_UNAVAILABLE, subject=subject)
+    verdict = Verdict(False, (refusal,), world)
+    values = (
+        stat_observation,
+        root_observation,
+        trash_observation,
+        world,
+        refusal,
+        verdict,
+    )
+    assert tuple(type(value).__name__ for value in values) == (
+        "StatObservation",
+        "RootObservation",
+        "TrashObservation",
+        "ObservedWorld",
+        "Refusal",
+        "Verdict",
+    )
+    for value in values:
+        _assert_declared_slots(value)
 
 
 def _native_info(

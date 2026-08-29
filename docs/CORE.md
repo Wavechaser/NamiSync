@@ -112,6 +112,13 @@ declared fields, plan identity, fingerprints, payload shape, validation, and
 selection semantics are unchanged. Exact-type and declared-field validation
 remain the hostile-boundary authority.
 
+The six preflight observation/verdict dataclasses and the two remaining
+integrity command/context dataclasses are also frozen and slotted. This excludes
+undeclared outer instance state without changing observation, refusal,
+candidate, recorder, or continuation semantics. `ObservedWorld` is not yet
+deeply immutable because its declared mappings may still be mutable; checkpoint
+4P.16 owns that separate custody change.
+
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`
 carries one or more minimal subtree roots plus any exact paths outside those

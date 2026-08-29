@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import fields, replace
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 
+from namisync.core.evidence import Attestation, ContentEvidence, Provenance
 from namisync.core.integrity import (
     INTEGRITY_CANDIDATE_RETAINED_BYTE_LIMIT,
     INTEGRITY_CANDIDATE_ROW_LIMIT,
@@ -16,9 +18,12 @@ from namisync.core.integrity import (
     IntegrityCandidateLimitAxis,
     IntegrityCandidateLimitError,
     IntegrityCandidateLimitExceeded,
+    IntegrityMode,
     IntegrityOutcome,
+    IntegrityRecordCommand,
     IntegrityResult,
     IntegritySelection,
+    InventoryState,
     PostCopySelection,
     VerifierContext,
     matches_expected_stat,
@@ -196,6 +201,49 @@ def _verifier_context(**changes: object) -> VerifierContext:
         **changes,
     }
     return VerifierContext(**values)
+
+
+def _assert_declared_slots(value: object) -> None:
+    assert not hasattr(value, "__dict__")
+    assert type(value).__slots__ == tuple(field.name for field in fields(value))
+    with pytest.raises(AttributeError):
+        object.__setattr__(value, "_undeclared", object())
+
+
+def test_integrity_command_and_context_are_exactly_slotted() -> None:
+    observed_at = datetime(2026, 8, 29, tzinfo=timezone.utc)
+    attestation = Attestation(
+        ContentEvidence(
+            "xxh3_128",
+            bytes(16),
+            _SUBJECT.size,
+            Provenance.VERIFY_ATTESTED,
+            observed_at,
+        ),
+        _SUBJECT,
+    )
+    command = IntegrityRecordCommand(
+        IntegrityMode.BASELINE,
+        "item",
+        "row",
+        "location",
+        "FILE.BIN",
+        "scope",
+        InventoryState.PRESENT,
+        _SUBJECT,
+        None,
+        attestation,
+        False,
+        False,
+    )
+    context = _verifier_context()
+
+    assert tuple(type(value).__name__ for value in (command, context)) == (
+        "IntegrityRecordCommand",
+        "VerifierContext",
+    )
+    for value in (command, context):
+        _assert_declared_slots(value)
 
 
 def test_post_copy_progress_admission_is_paired() -> None:

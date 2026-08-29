@@ -18,7 +18,7 @@ class Subject(NamedTuple):
     rel_path_key: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class StatObservation:
     stat: FileStat | None
     error: str | None = None
@@ -26,7 +26,7 @@ class StatObservation:
     representable: bool = True
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RootObservation:
     resolved_path: str | None
     volume_id: VolumeId | None
@@ -39,7 +39,7 @@ class RootObservation:
             raise ValueError("root authority issue requires an observation error")
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class TrashObservation:
     resolved_path: str | None
     available: bool
@@ -50,7 +50,7 @@ class TrashObservation:
     error: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ObservedWorld:
     stats: Mapping[Subject, StatObservation]
     paths: Mapping[Subject, str]
@@ -104,7 +104,7 @@ class RefusalCode(StrEnum):
     PATH_UNREPRESENTABLE = "path_unrepresentable"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Refusal:
     code: RefusalCode
     op_id: OpId | None = None
@@ -112,7 +112,7 @@ class Refusal:
     detail: str = ""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Verdict:
     ok: bool
     refusals: tuple[Refusal, ...]

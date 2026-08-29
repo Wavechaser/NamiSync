@@ -170,6 +170,11 @@ native buffer and one 4 MiB Python chunk at the same time. Smaller configured
 chunks remain supported. Change the stream/hasher lifetime contract only after
 a profile shows chunk materialization is the limiting cost.
 
+`IntegrityRecordCommand` and `VerifierContext` are frozen and slotted. Their
+declared fields, validation, recorder semantics, continuation policy, and
+factory binding remain unchanged; exact-type and declared-field validation
+still govern hostile boundaries.
+
 There is deliberately no buffered fallback. A non-Windows host, reparse
 subject, alignment rejection, unsupported volume, or inability to prove handle
 containment produces a disclosed `unsupported` outcome and never a false
