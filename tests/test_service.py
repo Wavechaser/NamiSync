@@ -2352,6 +2352,9 @@ def test_runtime_detail_drops_release_complete_diagnostic_graphs(
     class WeakInventoryDetails(InventoryDetails):
         __slots__ = ("__weakref__",)
 
+    class WeakScanWarning(ScanWarning):
+        __slots__ = ("__weakref__",)
+
     class WeakRefusal(RefusalView):
         __slots__ = ("__weakref__",)
 
@@ -2371,7 +2374,7 @@ def test_runtime_detail_drops_release_complete_diagnostic_graphs(
         7,
     )
     resolution = WeakResolution(VolumeResolutionState.OFFLINE, binding)
-    warning = ScanWarning(
+    warning = WeakScanWarning(
         ScanWarningCode.ACCESS_DENIED,
         "private.bin",
         "denied",
