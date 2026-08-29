@@ -5,12 +5,13 @@
 > sequence; this file is the newest checkpoint reslice and owns the detailed
 > acceptance, review, and test boundary for checkpoints 0-12.
 
-Delivery status (2026-08-28): checkpoints 0–3 and the independently reviewed
+Delivery status (2026-08-29): checkpoints 0–3 and the independently reviewed
 3R remediation are complete, including the separately reviewed checkpoint-3.3
-legacy-source removal. The checkpoint-4 prerequisites are stabilized at their
-behavioral boundary; checkpoint 4 itself has not started and its draft model is
-quarantined outside the working tree. Checkpoints 5–12 remain pending. No
-checkpoint-4 command or control is active.
+legacy-source removal. Checkpoint 4P is the active closed prerequisite-
+consolidation register below. It activates no task surface, reservation model,
+constant, fixture, validator, or BR-G-45 evidence. Checkpoint 4 proper has not
+started, and its rejected draft remains quarantined outside the working tree.
+Checkpoints 5–12 remain pending. No checkpoint-4 command or control is active.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
@@ -112,6 +113,14 @@ change, and reread that checkpoint's mapped `M1_BRIDGE.md` decisions and BR-G
 gates plus any `DEFENSE.md` wall it cites. Do not absorb, rewrite, or commit
 unrelated or already-started work merely to obtain a clean tree.
 
+Every preparatory or closure change must trace to one accepted register row.
+The row's named checks and recorded pre-work baseline are its completion
+denominator. Adversarial review is one finite pass against that denominator,
+not authority to add discoveries to the checkpoint. Atomic outcome, not diff
+size, governs commit scope; if one outcome outgrows its stated mechanism or
+verification boundary, stop and reorganize it before starting another rather
+than committing a non-atomic half.
+
 Except where a checkpoint lists multiple mandatory commits, its `Commit:` line
 names the required activation/closure commit; it does not require all
 preparatory work to be compressed into one commit. Preparatory commits may add
@@ -133,15 +142,25 @@ xfail, comment-only, dormant, or uncollected evidence does not count. Record
 measurement fixtures and validators before observing acceptance evidence, as
 required by `DEFENSE.md`.
 
-If a gate or adversarial review exposes a policy defect, land the policy and
-persistent regression in a separate commit, invalidate affected evidence, and
-rerun the gate from its declared entry state. Do not weaken a gate or silently
-retune a constant to preserve green. At closure, update the checkpoint row in
-`M1_SHELL.md`, every owning document's active/inactive wording, and any gate
-status changed by the checkpoint in the same commit. When work stops before
-the next checkpoint closes, replace `HANDOFF.md` with the exact safe stop,
-verification already run, dirty-file ownership, and next command; checkpoint
-12 remains the one integrated CHANGELOG and final-documentation closure.
+If a gate exposes a policy defect already named by the active register, land
+that policy fix and its persistent regression in a separate commit, invalidate
+affected evidence, and rerun the gate from its declared entry state. A
+regression introduced by the active checkpoint must be corrected before that
+commit. A bounded pre-existing substantive defect may use a separate fix commit
+only while the stop rules in `AGENTS.md` remain untriggered. Other unplanned
+defects follow Task Containment And Recovery in `AGENTS.md`; do not fix one
+merely because a gate or adversarial review discovered it. Never weaken a gate
+or silently retune a constant to preserve green. At closure, update the
+checkpoint row in `M1_SHELL.md`, every owning document's active/inactive
+wording, and any gate status changed by the checkpoint in the same commit.
+When work stops before the next checkpoint closes, first preserve non-
+mergeable task-owned work on the disposable recovery branch required by
+`AGENTS.md`, then replace `HANDOFF.md` with the exact branch and commit,
+register row, verification, excluded dirty-file ownership, and next recovery
+action. A stash or unstaged tree alone is not the safe-stop authority;
+checkpoint 4P.26 performs this bounded task's own history/documentation
+closure, while checkpoint 12 remains the integrated Stage 6 final-
+documentation closure.
 
 ### 0. Ratify the reslice and protocols
 
@@ -324,6 +343,65 @@ remains protected. S5 and identity design holds are
 resolved; current persistence/reset and M2 recovery constraints live in
 [DATABASE.md](DATABASE.md) and [DISPATCHER.md](DISPATCHER.md).
 
+### 4P. Consolidate checkpoint-4 prerequisites before the model
+
+Checkpoint 4P is a bounded consolidation checkpoint, not checkpoint 4 proper.
+Its accepted rows are the sole completion denominator. Findings discovered
+after this register freezes do not add a row and do not by themselves authorize
+another fix; they follow the bug policy below and Task Containment And Recovery
+in `AGENTS.md`. A predeclared row may contain several known instances only when
+its finite surface and one atomic outcome are named here.
+
+| Id | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| 4P.0 | Complete the reviewed auxiliary-branch disposition while retaining the named recovery/model stashes and reachable recovery object. | `git branch --list`, `git worktree list --porcelain`, descriptive stash hashes, recovery-object reachability, and worktree status. | Complete |
+| 4P.1 | Ratify the closed register, accepted-denominator rule, defect escalation, catastrophic stops, disposable recovery commits, and BUGS handling without changing product behavior. | Documentation authority review, targeted policy/status searches, and `git diff --check`. | Complete |
+| 4P.2 | Ratify the trust/adoption, capacity/freshness, result-custody, runtime-premise, and active/inactive-wall architecture and repair current v7/checkpoint/signature documentation. | Independent architecture/defense review, contract-source locators, links/anchors, targeted stale-contract searches, and `git diff --check`. | Pending |
+| 4P.3 | Remove exact-CPython-patch production admission and set the supported Python metadata floor to lower-bound-only 3.13. | `tests/interfaces/web/test_host.py`, packaging-metadata checks, owning interface/web departments, and ordinary startup verification. | Pending |
+| 4P.4 | Freeze current execution, post-copy, and standalone-integrity reconciliation behavior before restructuring it. | Focused characterization in `tests/test_post_execution_workflow.py` and `tests/test_inventory_workflow.py`, plus the affected workflow baseline. | Pending |
+| 4P.5 | Make executor-result reconciliation incremental without changing accepted item, counter, recording, continuation, or settlement truth. | `tests/test_post_execution_workflow.py`, `tests/test_executor_settlement.py`, and the executor/workflow departments. | Pending |
+| 4P.6 | Make post-copy reconciliation incremental while preserving candidate order, completion, exclusion, and continuation truth. | Post-copy cases in `tests/test_post_execution_workflow.py` and the affected verifier/workflow departments. | Pending |
+| 4P.7 | Make standalone-integrity reconciliation incremental while preserving refresh, ran/unrun, candidate, and reliable-result truth. | `tests/test_inventory_workflow.py`, `tests/core/test_integrity.py`, and the inventory/verifier/workflow departments. | Pending |
+| 4P.8 | Replace the duplicated pre-run settlement dispatches with one shared C2 path while preserving every fresh/resumed/verify-continuation branch. | The pre-run, refusal, cancellation, exclusion, and recording matrix in `tests/test_post_execution_workflow.py`. | Pending |
+| 4P.9 | Apply D5/F2 so core/session retains one canonical immutable result-item graph and gives consumers the already-owned items without redundant terminal reconstruction. | `tests/core/test_session_events.py`, `tests/test_result_classification.py`, `tests/test_workflows.py`, and session/workflow departments. | Pending |
+| 4P.10 | Apply F1/F3 path simplification so validated canonical paths fold without duplicate validation and the proven redundant path checks disappear. | `tests/test_core_scanplan.py`, `tests/test_scanner.py`, `tests/test_planner.py`, `tests/test_preflight.py`, and `tests/interfaces/web/test_paths.py`. | Pending |
+| 4P.11 | Add slots to the accepted fourteen scan/model dataclasses without changing their fields, equality, validation, or serialization. | Focused slot/undeclared-attribute regressions plus `tests/test_core_scanplan.py`, `tests/test_scanner.py`, and `tests/test_plan_review_limits.py`. | Pending |
+| 4P.12 | Add slots to the accepted eleven planning dataclasses without changing plan identity, fingerprint, payload, or selection semantics. | Focused slot regressions plus `tests/test_core_scanplan.py`, `tests/test_planner.py`, `tests/test_plan_review_limits.py`, and `tests/test_payload_roundtrip.py`. | Pending |
+| 4P.13 | Add slots to the accepted six preflight and two integrity dataclasses without changing observation, refusal, candidate, or continuation semantics. | Focused slot regressions plus `tests/test_preflight.py`, `tests/core/test_integrity.py`, `tests/test_inventory_workflow.py`, and `tests/test_post_execution_workflow.py`. | Pending |
+| 4P.14 | Apply D2/D3A so each immutable scan result is validated and adopted once rather than reconstructed for first-party read-only consumers. | `tests/test_plan_review_limits.py`, `tests/test_scanner.py`, `tests/test_planner.py`, and `tests/test_preflight.py`, including hostile-shape and first-excess cases. | Pending |
+| 4P.15 | Apply D2 to provide nonallocating `ExecutionSet` and payload validation without rebuilding already-valid record graphs. | `tests/test_payload_roundtrip.py`, `tests/test_post_execution_workflow.py`, and core/workflow payload departments. | Pending |
+| 4P.16 | Apply D3B by introducing immutable `ExecutionReview` input and a deeply read-only `ObservedWorld` so read-only collaborators receive no mutable execution container. | `tests/test_preflight.py`, `tests/test_plan_review_limits.py`, and `tests/test_post_execution_workflow.py`, including mutation-refusal cases. | Pending |
+| 4P.17 | Apply D4A by replacing deep planner-result reconstruction with one exact compound planner admission. | `tests/test_planner.py`, `tests/test_plan_review_limits.py`, and planner/workflow consumer departments. | Pending |
+| 4P.18 | Apply D4B by replacing deep observer/verdict reconstruction with exact compound admission at their declared adoption points. | `tests/test_preflight.py`, `tests/test_plan_review_limits.py`, and preflight/workflow consumer departments. | Pending |
+| 4P.19 | Introduce `RecordingSpec` so recording authority no longer resides in mutable `ExecutionSet`, without changing settlement or recording outcomes. | `tests/test_executor_settlement.py`, `tests/test_post_execution_workflow.py`, recorder integration tests, and the protected settlement oracle under its existing gate. | Pending |
+| 4P.20 | Apply D1B/F6 by trimming immutable execution authority/fact graphs, including the unread `ExecutionOperationFact.content_bytes`, while retaining the required mutable-overlay checks. | `tests/test_post_execution_workflow.py`, `tests/test_payload_roundtrip.py`, executor/workflow departments, and authority call-count regressions. | Pending |
+| 4P.21 | Apply C4 by sharing only the population-admission primitives while keeping each domain's wall declaration, count semantics, precedence, and user outcome independent. | `tests/test_plan_review_limits.py`, `tests/test_inventory_workflow.py`, `tests/test_scanner.py`, and first-excess matrices. | Pending |
+| 4P.22 | Apply C4/C8 by separating workflow-retained budgets from producer gates and reducing scanner to one admission parameter. | `tests/test_plan_review_limits.py`, `tests/test_scanner.py`, `tests/test_inventory_workflow.py`, and facade-consumer departments. | Pending |
+| 4P.23 | Apply D6 with private exact signal types and remove issuer, `fresh()`, and consume choreography without weakening refusal provenance or status truth. | Refusal/provenance cases in `tests/test_plan_review_limits.py`, `tests/test_workflows.py`, and `tests/test_inventory_workflow.py`. | Pending |
+| 4P.24 | Apply C1 by centralizing exception-to-`FailureDetail` factories and adding an AST guard for direct retained-detail construction. | `tests/core/test_exception_graph.py`, the new AST policy regression, affected producer/consumer departments, and ordinary exception-path tests. | Pending |
+| 4P.25 | Conduct an independent adversarial review against rows 4P.0–4P.24 without absorbing new implementation scope. | Requirement-to-diff trace, accepted-test matrix, stop-rule audit, targeted counterexamples, and written disposition for every review finding. | Pending |
+| 4P.26 | Reconcile active documentation, task history, and BUGS status, run full verification, replace the handoff, and delete `CUSTODY_TAX_AUDIT.md` only after every accepted disposition has an authoritative home. | Affected department union, ordinary Node-enabled suite, import contracts, required protected gates, links/anchors, stale-contract searches, `git diff --check`, repository/stash inventory, and independent final review. | Pending |
+
+Explicit exclusions are F4; C3, C5, C6, and C7; checkpoint 4 proper and its
+model, constants, fixtures, validator, and BR-G-45 evidence; executor journal or
+reducer restructuring; M2 process-restart durability; and schema, wire, wall,
+or public status changes. No excluded item may enter 4P through cleanup,
+adversarial review, or an oversized accepted row.
+
+Register row 4P.3 makes Python support lower-bound-only at 3.13. Python 3.14
+and later are handled metadata-first and remain nonblocking unless direct
+evidence meets a global catastrophic stop class in `AGENTS.md`; a speculative
+task-artifact object model does not authorize an exact patch or upper-version
+gate.
+
+An active-row regression is fixed before that row's mergeable commit. A bounded
+pre-existing substantive bug may land as its own fix commit if the second-same-
+mechanism and third-unplanned-defect stops remain untriggered. Once either
+threshold is reached, stop instance fixes, reorganize by mechanism, and obtain
+review before resuming. Diff size never authorizes a partial checkpoint: when
+one row grows beyond its atomic outcome, stop and reorganize before beginning
+the next row.
+
 ### 4. Install task-centric lifecycle and compact artifacts
 
 Commits, in order:
@@ -332,8 +410,8 @@ Commits, in order:
 2. `feat(web): install dormant task lifecycle`
 3. `feat(web): retain multi-session task artifacts`
 
-**In progress (2026-08-27), before the first mandatory commit.** Independent
-source audits found that the current complete graph cannot yet justify a
+**Pending until checkpoint 4P.26 closes.** Independent source audits found that
+the current complete graph cannot yet justify a
 frozen reservation floor. The dispatcher exception-retention prerequisite
 is fixed separately in `74135b5`; the native reply lifetime prerequisite now
 passes all eight installed transport/native-host witnesses. The independent
@@ -343,7 +421,7 @@ codec or task-reservation ceiling. None of these changes freezes the model or
 closes BR-G-45. Resolve
 the following before accepting the first model commit:
 
-A fresh checkpoint-4.1 derivation was rejected and discarded before commit.
+A fresh pre-model derivation was rejected and discarded before commit.
 It multiplied the one aggregate plan-domain and informational walls across
 several aliases, summed sequential scanner/planner/observer/preflight peaks as
 simultaneous owners, priced retained event graphs as wire bytes, and selected
@@ -411,10 +489,11 @@ first excess; integrity checks the exact candidate-row tuple before direct
 workflow construction. Initial inventory excess is typed `REFUSED+UNRUN` with
 no ledger/detail publication; integrity excess remains honest `FAILED+RAN`
 with no partial selection or verifier work. Requested-but-absent database keys
-do not consume result capacity. Requested-key/id preprocessing and its
-path-key off-by-one, hostile resolver aliases, synthetic tree/index and
-candidate construction, complete bytes, old/new generations, sorting, and
-codec/native/browser copies remain checkpoint-4.1 owners in `BUGS.md`.
+do not consume result capacity. Finite preprocessing transients, synthetic
+tree/index and candidate construction, complete bytes, old/new generations,
+sorting, and codec/native/browser copies remain checkpoint-4 proper model
+inputs in `BUGS.md`; checkpoint 4P accepts only the subset named in its closed
+register above.
 
 Checkpoint 4 must treat the following live seams as mandatory model inputs. It
 may eliminate an owner before downstream work or charge its exact simultaneous

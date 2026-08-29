@@ -138,6 +138,60 @@ their contract, and update the matching tests and documentation when it does.
 - Preserve timestamps on copied files so reruns can stay stable.
 - Hide or guard `mirror` deletion until the rest of the safety model is proven.
 
+## Task Containment And Recovery
+
+- Before an audit-driven implementation, hardening or stabilization pass,
+  cross-component change, or task with more than one independently committable
+  outcome, record a closed checkpoint register in the owning delivery
+  document. Each row has a stable id, one accepted outcome, and named
+  verification. Record non-goals and any task-specific stop classes beside the
+  register. A quantified criterion is closed only when its search domain,
+  procedure, and terminal observation are finite. Discovery work may instead
+  close over a named corpus and method; its findings are output, not implicit
+  implementation scope.
+- The accepted register is the completion denominator. A checkpoint is
+  complete only when every accepted row satisfies its named verification and
+  the declared baseline has not regressed. A new finding does not add a row and
+  does not by itself authorize a fix; handle it only under the regression,
+  bounded pre-existing defect, and stop rules below. If it prevents a named
+  check from passing and those rules do not authorize handling it, stop and
+  request adjudication rather than repairing it merely to recover green. Only
+  an explicit user decision may change the register after implementation
+  starts.
+- A regression introduced by the active checkpoint must be corrected before
+  its mergeable commit. A bounded pre-existing substantive defect may land as
+  a separate fix commit when it does not trigger a stop rule. Treat mechanisms
+  semantically, not by exact `BUGS.md` Category spelling. On the second
+  unplanned instance of one causal mechanism, or the third unplanned
+  substantive defect of any kind within one pass or checkpoint, finish only
+  the current safety-preserving atomic outcome, begin no further instance fix,
+  and produce a mechanism table naming each consequence, owner, and common
+  choke point or the reason no common choke point exists. Reorganize the work
+  and obtain review before resuming. A predeclared finite migration does not
+  trigger this rule.
+- Always stop, preserve the exact work state, and report evidence of supported-
+  path data loss or corruption, unauthorized or out-of-root mutation, a
+  supported security- or hard-wall escape, false durable or terminal success,
+  duplicate or replayed mutation, or inability to preserve or recover the
+  current work. A broad checkpoint may add narrower stop classes stated as a
+  precise consequence and transition before work starts; only the user may
+  expand them during the checkpoint. Other verified findings are logged and
+  deferred.
+- Atomic outcome, not diff size, determines commit scope. Do not impose a line-
+  count or file-count stop. If one accepted outcome grows beyond its stated
+  mechanism or verification boundary, stop and reorganize it before starting
+  another outcome; do not commit a non-atomic half merely to make the diff
+  smaller.
+- If work must stop before a merge-ready commit, preserve only task-owned
+  changes on a disposable branch named
+  `codex/wip-YYYYMMDD-HHMM-<scope>`. Stage exact paths, never `git add -A`, and
+  commit `wip(<scope>): save interrupted state`. The body records the base
+  commit, register row, completed and incomplete work, verification passed,
+  failed, or not run, and excluded dirty or untracked files. A recovery commit
+  is not a review unit: never merge or cherry-pick it as-is. Rebuild its useful
+  changes into coherent commits, apply ordinary readiness checks, and delete
+  the temporary ref only after recovery is reviewed.
+
 ## Windows Rules
 
 - The target platform is native Windows 11 x64.
@@ -197,12 +251,19 @@ their contract, and update the matching tests and documentation when it does.
   `refactor`, `build`, or `chore`. The optional lowercase scope names the owning
   component, such as `web`, `executor`, or `dispatcher`; omit it when the change
   is genuinely cross-cutting.
+- `wip` is reserved for the recovery commits defined under Task Containment And
+  Recovery. It is forbidden on default, milestone, release, or other
+  integration branches and is never a mergeable category.
 - Keep one coherent checkpoint per commit. The title describes the commit's
   primary effect even when matching tests and documentation travel with it.
 
 ## Commit Readiness
 
-- Before any future commit, review whether the relevant files under `docs/`,
+The rules below govern mergeable commits. A recovery-only `wip` commit is
+exempt while it remains on its disposable branch, but it never becomes ready;
+its useful changes must be rebuilt and verified under the ordinary rules.
+
+- Before any mergeable commit, review whether the relevant files under `docs/`,
   `docs/obsolete/`, `README.md`, or `AGENTS.md` need updates for the committed
   behavior.
 - Do not commit behavior changes whose matching documentation is stale.

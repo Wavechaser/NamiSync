@@ -22,6 +22,18 @@ symptom, cause, and fix.
   pathname, and observed outcome in the description. Do not use a sentence,
   milestone, review gate, test outcome, fix, or broad result such as availability
   or convergence as the category.
+- Category similarity is an input to the repeated-mechanism rule in
+  `AGENTS.md`; it is semantic, not exact-string identity and not proof that one
+  cross-layer abstraction is correct. A predeclared finite migration may have
+  several instances without becoming a newly discovered mechanism.
+- Record an `OPEN` entry only after a supported consequence and causal class
+  are verified. A hypothesis, code-size concern, duplicate mechanism without a
+  demonstrated consequence, or documentation inconsistency belongs in the
+  active delivery document or handoff instead. An `OPEN` entry does not expand
+  the active checkpoint. A regression introduced by that checkpoint is fixed
+  before its mergeable commit; a bounded pre-existing substantive bug may use a
+  separate fix commit while the repeated-mechanism and third-defect stop rules
+  in `AGENTS.md` remain untriggered.
 - Assign severity from the worst consequence supported by the admitted product
   path, not the importance of the audit or test that found it. A safe refusal,
   test-only race, or hypothetical future caller does not inherit the severity

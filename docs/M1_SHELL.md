@@ -42,16 +42,13 @@ checkpoint 0 is complete after final documentation, three independent bounded
 reviews, link/anchor validation, manifest-backed test collection, stale-contract
 searches, and diff validation. Checkpoints 1–3, including private legacy decoder
 removal and the independently reviewed 3R remediation, are complete.
-Checkpoint 4 is in its pre-model ownership audit. Its narrow planning-source
-wall now gates independent raw populations, detaches/revalidates hostile
-collaborator graphs, and charges only unavoidable final shallow references;
-excess is typed `REFUSED+UNRUN` with no save. Construction, sorting/indexes,
-selection/previews, complete graphs, and remaining exception/task-artifact
-owners still precede the first mandatory model commit.
-Checkpoints 5–12 remain pending. NamiSync remains version
-`0.1.0` until
-M1 is complete. Finishing M1 makes the product beta-ready; any later version
-change is a separate release decision.
+Checkpoint 4P is the active bounded prerequisite-consolidation checkpoint under
+`M1_SHELL_H2.md`'s closed register. It repairs and simplifies the already-
+landed source/custody prerequisites but activates no task command, lifecycle,
+retention model, constant, fixture, validator, or BR-G-45 evidence. Checkpoint
+4 proper has not started. Checkpoints 5–12 remain pending. NamiSync remains
+version `0.1.0` until M1 is complete. Finishing M1 makes the product beta-ready;
+any later version change is a separate release decision.
 
 The 2026-08-27 additions assign shared/plan sibling sorting to checkpoint 7,
 full inventory integration to checkpoint 9, and null-evidence rebaseline to
