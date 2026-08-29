@@ -146,6 +146,18 @@ reproducing these limits.
   nanoseconds, and file identity must stay outside the scalar domain. Values are
   never clamped, wrapped, or narrowed.
 
+Across plan, inventory, and standalone integrity, 120,000 items in each
+applicable admitted population is one shared M1 performance-and-safety support
+target. M1 makes no support promise above that scale, and the target is not
+evidence that item 120,001 or any larger population would fail. The current
+independently owned first-excess behaviors remain active through M1. Specific
+time or memory acceptance still requires the evidence authority in §7; the
+shared target alone is not measurement evidence. H2 checkpoint 4 must choose a
+domain-neutral owner before centralizing the repeated constants or relocating
+and renaming the generic population primitives. A later milestone may adjust or
+remove the production walls only under its own ratified evidence and
+compatibility boundary.
+
 The following population and process-live admission walls are active now:
 
 - Planning and inventory each admit their independent raw domain and

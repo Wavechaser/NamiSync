@@ -217,8 +217,11 @@ Production freezes these complete-graph walls:
 Domain means every non-informational row plus backing objects, strings, ids,
 containers, indexes, and rollups; informational means the complete plan-notice
 or inventory-warning graph. Shared objects are charged once, each full tree is
-at most 240,000 rows, and these are production walls rather than diagnostic or
-empirical targets.
+at most 240,000 rows, and these remain production walls rather than diagnostic
+measurements or empirical failure thresholds. The repeated 120,000 row value
+also defines the one M1 performance-and-safety support target for each
+applicable plan, inventory, and standalone-integrity population; it makes no
+promise above that scale and does not predict failure at 120,001.
 
 Closed fields use the exact `.value` sets of `EntryKind`, `OperationKind`,
 `OperationReason`, `BlockedReason`, `UnsupportedReason`, `RefusalCode`,
@@ -4670,9 +4673,11 @@ headings are organizational, not lane ownership.
   The 128/192-MiB domain and 192-MiB informational hard walls are frozen
   deterministic complete-graph sizer contracts with an independent validator;
   these Tier-2 process-memory measurements neither derive nor validate them.
-  The 100,000-plus-20,000 rows above are performance fixtures, not production
-  maxima; first-excess production admission is governed by the 120,000-row and
-  matching complete-graph byte walls.
+  The 100,000-plus-20,000 rows above are the plan/inventory performance fixtures
+  for the shared 120,000-item M1 support target, not separate production
+  maxima. First-excess production admission is governed by the 120,000-row and
+  matching complete-graph byte walls; component-specific acceptance evidence
+  remains required rather than inferred from the target.
 
   **Transport-custody clause.** Custody is the identity-deduplicated live graph
   rooted at dispatcher replay deques, subscriber deques, and adapter task

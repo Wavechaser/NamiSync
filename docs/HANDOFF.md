@@ -3,8 +3,8 @@
 Status (2026-08-30): checkpoint 4P remains complete. A separate bounded 4P-R
 corrective register is active on `milestone1` from clean baseline `e7c3601`.
 It owns one refusal-provenance regression, one pre-existing completion-membership
-performance defect, and their final documentation. Rows 4P-R.1 and 4P-R.2 are
-independently reviewed and complete; the documentation-only 4P-R.3 is next. Checkpoint 4
+performance defect, and their final documentation. Rows 4P-R.1 through 4P-R.3
+are complete; final integrated review and documentation row 4P-R.4 is next. Checkpoint 4
 proper has not started; no ownership/reservation model, formula, fixture,
 validator, lifecycle surface, or BR-G-45 evidence is ratified or active.
 
@@ -59,6 +59,15 @@ The stale BUGS entry now distinguishes this pre-existing core defect from the
 already-fixed workflow authority-scaling mechanism. Construction, equality,
 continuation, explicit payloads, outcomes, and current walls are unchanged.
 
+Corrective row 4P-R.3 records 120,000 items in each applicable plan, inventory,
+or standalone-integrity population as one shared M1 performance-and-safety
+support target. It changes no first-excess behavior and claims neither support
+above that scale nor a failure cliff at 120,001. Checkpoint 4 must choose a
+neutral constant/primitive owner and resolve the plan-specific `core/review.py`
+name. The 33 core contracts newly slotted in checkpoint 4P currently lack
+weakref slots; production does not weak-reference them, and future support is
+class-specific only when a concrete ownership or leak witness requires it.
+
 Two procedural exceptions remain explicit rather than being normalized away.
 The 4P.10 named-verification cell was strengthened after register freeze without
 a specific user decision; the stronger gate remains as a one-off exception.
@@ -106,11 +115,14 @@ expansion of the accepted denominator.
 - 4P-R.2 focused integrity/verifier/payload/workflow gate: 622 passed.
 - 4P-R.2 core/verifier/workflows department union: 2,342 passed, 1 skipped;
   all 11 import contracts held and independent review found no blocker.
+- 4P-R.3 authority, active-wall, constant-owner, and weakref-usage searches:
+  no contradiction or production weakref consumer; 29 active documents,
+  183 relative targets, and 83 heading anchors clean; `git diff --check` clean.
 - Protected executor settlement oracle: 30 scenarios across three identical
   successful runs.
-- Active documentation: 30 documents with no missing relative target and 83
-  anchor links with no missing target; targeted stale-contract searches and
-  `git diff --check` are clean.
+- 4P.26 active-document scope: 30 documents with no missing relative target and
+  83 anchor links with no missing target; targeted stale-contract searches and
+  `git diff --check` were clean.
 - Repository custody: only `main` and `milestone1`, one worktree, all four named
   stashes with the exact ids above, and reachable recovery object `33f6994`.
 - Independent final review found no blocking design, documentation, receipt, or
@@ -129,8 +141,9 @@ accepted register by description alone.
 
 ## Next safe action
 
-Implement only the documentation dispositions in 4P-R.3: record one shared M1
-120,000-item performance/safety support target without changing either current
-refusal, and document the current lack of weakref support. Defer neutral cap
-ownership and `core/review.py` naming to checkpoint 4; do not move constants,
-change walls, add weakref slots, or begin the ownership/reservation model.
+Perform only 4P-R.4 closeout: run the integrated affected and ordinary gates,
+conduct independent final review, reconcile BUGS/history/handoff, and condense
+the checkpoint-4P/4P-R records by delivered area rather than commit. Remove
+obsolete audit shorthand and non-events; keep actual checkpoint-4 objectives,
+criteria, and genuine deferrals prominent. Do not begin checkpoint 4 or absorb
+optional cleanup.

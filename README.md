@@ -69,6 +69,11 @@ prefix, and native positions remain charged through worker exit and exact
 browser receipt. Construction, sorting, indexes, previews, representation-
 specific native/browser bytes, and complete task graphs remain checkpoint-4
 model work alongside the product surfaces and task lifecycle.
+The repeated 120,000-item population walls serve one M1 performance-and-safety
+support target in each applicable population. Existing independently owned
+first-excess behavior remains active through M1; NamiSync makes no support
+promise above that scale, but does not claim that item 120,001 is a failure
+threshold.
 
 Accepted H2 work also includes server-owned filename/size/mtime sibling sorting
 for plan and inventory views, with path-key order for new views and reset;

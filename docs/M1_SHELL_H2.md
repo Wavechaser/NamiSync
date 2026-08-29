@@ -474,7 +474,7 @@ pass merely because it affects a named file or test neighborhood.
 | 4P-R.0 | Freeze this corrective scope, ordering, non-goals, stop classes, and review boundary before implementation. | Documentation authority review, baseline/worktree check, targeted status searches, and `git diff --check`. | Complete |
 | 4P-R.1 | Restore same-run provenance for exact plan and inventory review-limit signals without restoring `fresh()` or changing any legitimate refusal fact, status, save boundary, exception retirement, or domain separation; update the rung/provenance documents and defect ledger in the same change. | Legitimate current-run producer/retained/logical and inventory first-excess signals, including re-raise and graph retirement; direct/untagged same-domain and well-formed different-run signals from scanner, correspondence, planner, observer, preflight, phase delivery, destination policy, nested owners, and inventory scanner; cross-domain, lookalike, malformed, plan/inventory/workflow departments, import contracts, and targeted provenance/rung documentation searches. | Complete |
 | 4P-R.2 | Replace repeated linear completion membership in both `PostCopySelection` and `IntegritySelection` with one immutable known-id index per selection while preserving construction, equality, continuation, payload, authority, progress, and outcome behavior; correct the stale workflow BUGS mechanism and owning component docs in the same change. | Core integrity, verifier engine, payload round-trip, post-execution and standalone-integrity workflows; at fixed sizes 1, 4, and 16, after bounded construction each successful completion performs no candidate/item-tuple `item_id` access and exactly one known-id-index lookup, while the existing completed-id replay lookup remains. | Complete |
-| 4P-R.3 | Record that 120,000 is one shared M1 performance/safety support target, with no promise beyond it and no claim that 120,001 breaks NamiSync; retain the existing independent hard refusals only as unchanged M1 behavior; defer neutral constant/primitive ownership and `core/review.py` naming to checkpoint 4; and document current weakref support precisely. | DEFENSE/architecture/component/H2 authority review, current-wall and future-owner searches, production/test weakref-usage search, links/anchors, and `git diff --check`. | Pending |
+| 4P-R.3 | Record that 120,000 is one shared M1 performance/safety support target, with no promise beyond it and no claim that 120,001 breaks NamiSync; retain the existing independent hard refusals only as unchanged M1 behavior; defer neutral constant/primitive ownership and `core/review.py` naming to checkpoint 4; and document current weakref support precisely. | DEFENSE/architecture/component/H2 authority review, current-wall and future-owner searches, production/test weakref-usage search, links/anchors, and `git diff --check`. | Complete |
 | 4P-R.4 | Reconcile BUGS, task history, and handoff; run the integrated affected and ordinary gates; and conduct an independent final review without absorbing optional cleanup. | Affected departments, ordinary Node-enabled suite, import contracts, protected gates required by touched behavior, links/anchors, stale-contract searches, `git diff --check`, and independent review. | Pending |
 
 Non-goals are changing, relaxing, or removing the M1 120,000-item refusal;
@@ -486,10 +486,11 @@ owner for the shared 120,000 target before centralizing its constants and
 generic primitives. The target is the supported M1 performance/safety scale,
 not evidence of failure at 120,001 or any larger count, and M1 makes no promise
 beyond it. A later milestone may adjust or remove the refusal only under its
-own ratified evidence and compatibility boundary. The 33 current slotted
-contracts do not support weak references and production uses no weak references
-to them. Blanket support is deferred because it adds per-instance cost; any
-future support is class-specific when an ownership or leak witness requires it.
+own ratified evidence and compatibility boundary. The 33 core contracts newly
+slotted in checkpoint 4P do not support weak references and production uses no
+weak references to them. Blanket support is deferred because it adds per-
+instance cost; any future support is class-specific when an ownership or leak
+witness requires it.
 
 In addition to the global catastrophic stops, stop this pass if authenticating
 all legitimate limit paths requires a public signal, wire/status change, or
@@ -558,6 +559,25 @@ passed 622 tests. The core, verifier, and workflows department union passed
 2,342 tests with one skip, and all 11 import contracts held. Independent review
 repeated the deterministic 1/4/16 witness, deletion/tamper probes, and contract
 inspection and found no blocker; `git diff --check` was clean.
+
+#### 4P-R.3 documentation receipt
+
+The defense and bridge authorities now define 120,000 items in each applicable
+plan, inventory, or standalone-integrity population as one M1 performance-and-
+safety support target. Existing domain-owned first-excess behavior remains
+unchanged through M1. The target makes no promise above that scale, predicts no
+failure cliff at 120,001, and is not itself time or memory evidence. Core and
+H2 documentation defer a neutral constant/primitive owner and the plan-specific
+`core/review.py` name to checkpoint 4 without moving any current symbol or
+dependency.
+
+The 33 core contracts newly slotted in checkpoint 4P have no weakref slot;
+production does not weak-reference them, and current leak tests use explicitly
+capable witnesses. Blanket support remains excluded because it charges every
+instance; a concrete ownership or leak witness may justify class-specific
+support later. Targeted source/usage and active-wall searches found no contrary
+production path. Documentation links, anchors, and `git diff --check` were
+clean.
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
