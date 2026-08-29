@@ -162,14 +162,15 @@ claims explicit, independently reviewable, and regression-backed.
   where their lifecycle permits, not asymptotically constant. Callback-owner
   inventory and any consolidation judgment remain checkpoint-4 model work
   rather than an H2 refactor.
-- Generalized the verifier component boundary guard from one private name in a
-  single file to every cross-object private read across the package, including
-  literal `getattr` access. The guard names the offending file and expression
-  on failure.
-- Recorded scaling claims as a distinct evidence class: complexity closes on a
-  counted structural witness at named sizes, while execution timing stays noisy
-  even for a fixed in-memory workload, requires repeated fresh processes, and
-  reports its spread beside the figure it qualifies.
+- Generalized the integrity membership boundary guard from one private name in
+  one verifier file to exact direct or literal-reflective reads across every
+  production module outside the defining core contract. The guard names each
+  offending file and expression on failure.
+- Recorded scaling claims as a distinct evidence class: an analytical or
+  source-derived bound owns the named domain, counted accesses/lookups at named
+  sizes provide preferred regression evidence, and any timing claim used beyond
+  diagnosis predeclares its statistic/comparison and reports fresh-process
+  count, dispersion, and uncertainty.
 
 #### Bound checkpoint-4 planning source ownership (2026-08-27)
 
