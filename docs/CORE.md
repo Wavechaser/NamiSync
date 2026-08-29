@@ -514,6 +514,10 @@ development/test fallbacks only, not production mount-boundary authority.
 `str.casefold()` and not unrestricted Python `upper()` when it expands a code
 point. The implementation must use a tested Windows-equivalent mapping strategy
 and preserve NTFS-distinct names such as `Straße.txt` and `strasse.txt`.
+Raw paths enter through `normalize_relative_path()`, which validates and then
+folds. Code that has just received the canonical return from
+`validate_relative_path()` may call `fold_validated_path()` exactly once; that
+helper performs no validation and is not an alternate raw-input entry point.
 
 Unicode normalization is deliberately not part of path identity: NFC and NFD
 spellings remain distinct stored paths. Planner may identify a unique

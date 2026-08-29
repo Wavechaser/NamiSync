@@ -38,6 +38,9 @@ def _uppercase_one_codepoint(value: str) -> str:
     character whose uppercase form expands is therefore retained verbatim.
     """
 
+    uppercase = value.upper()
+    if len(uppercase) == len(value):
+        return uppercase
     mapped: list[str] = []
     for character in value:
         uppercase = character.upper()
@@ -80,16 +83,20 @@ def validate_relative_path(value: str, *, allow_root: bool = False) -> str:
         if _uppercase_one_codepoint(basename) in _RESERVED_BASENAMES:
             raise PathValidationError("relative path names a Windows device")
 
-    if PureWindowsPath(canonical).is_absolute():
-        raise PathValidationError("relative path is absolute")
     return canonical
+
+
+def fold_validated_path(canonical: str) -> str:
+    """Fold a canonical path already returned by ``validate_relative_path``."""
+
+    return _uppercase_one_codepoint(canonical)
 
 
 def normalize_relative_path(value: str, *, allow_root: bool = False) -> str:
     """Return the canonical Windows comparison key for a relative path."""
 
     canonical = validate_relative_path(value, allow_root=allow_root)
-    return _uppercase_one_codepoint(canonical)
+    return fold_validated_path(canonical)
 
 
 def relative_path_depth(path: str) -> int:

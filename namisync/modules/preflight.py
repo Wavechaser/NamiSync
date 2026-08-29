@@ -26,6 +26,7 @@ from namisync.core.models import (
     owned_temp_run_id,
 )
 from namisync.core.pathing import (
+    fold_validated_path,
     from_extended_length_path,
     is_path_below,
     join_under_root,
@@ -725,11 +726,11 @@ def _snapshot_subject(value: object, xset: ExecutionSet) -> Subject:
         xset.plan.target_root.root_id,
     }:
         raise ValueError("observed subject names an unknown root")
-    validate_relative_path(value.rel_path_key, allow_root=True)
-    if value.rel_path_key != normalize_relative_path(
+    canonical_key = validate_relative_path(
         value.rel_path_key,
         allow_root=True,
-    ):
+    )
+    if value.rel_path_key != fold_validated_path(canonical_key):
         raise ValueError("observed subject path key is not canonical")
     return Subject(value.root_id, value.rel_path_key)
 

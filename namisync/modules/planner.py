@@ -25,6 +25,7 @@ from namisync.core.models import (
     validate_scan_result,
 )
 from namisync.core.pathing import (
+    fold_validated_path,
     is_relative_path_descendant,
     normalize_relative_path,
     relative_path_depth,
@@ -229,9 +230,11 @@ def snapshot_mapping_snapshot(
             )
         if type(pair.source_rel_path_key) is not str:
             raise TypeError("mapping source path key must be text")
-        validate_relative_path(pair.source_rel_path_key)
-        if pair.source_rel_path_key != normalize_relative_path(
+        canonical_source_key = validate_relative_path(
             pair.source_rel_path_key
+        )
+        if pair.source_rel_path_key != fold_validated_path(
+            canonical_source_key
         ):
             raise ValueError("mapping source path key is not canonical")
         source_identity = _snapshot_identity(pair.source_identity)
@@ -251,8 +254,8 @@ def snapshot_mapping_snapshot(
     def snapshot_ambiguous_key(key: object) -> str:
         if type(key) is not str:
             raise TypeError("mapping ambiguous source keys must be text")
-        validate_relative_path(key)
-        if key != normalize_relative_path(key):
+        canonical_key = validate_relative_path(key)
+        if key != fold_validated_path(canonical_key):
             raise ValueError("mapping ambiguous source key is not canonical")
         return key
 

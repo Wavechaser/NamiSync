@@ -24,7 +24,11 @@ from .evidence import (
     attestation_fact,
 )
 from .models import FileStat, file_stat_fact
-from .pathing import normalize_relative_path, validate_relative_path
+from .pathing import (
+    fold_validated_path,
+    normalize_relative_path,
+    validate_relative_path,
+)
 from .root_authority import RootAuthority
 from .session import ResultItem, RunContext
 from .scalars import (
@@ -271,7 +275,7 @@ class PostCopyCandidate:
                 raise TypeError("post-copy recorded identity has the wrong type")
             if (
                 self.recorded_identity.rel_path_key
-                != normalize_relative_path(validated_path)
+                != fold_validated_path(validated_path)
             ):
                 raise ValueError(
                     "post-copy recorded identity does not match its display path"

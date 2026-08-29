@@ -9,6 +9,7 @@ from enum import StrEnum
 from pathlib import PureWindowsPath
 
 from .pathing import (
+    fold_validated_path,
     normalize_relative_path,
     relative_path_parent,
     validate_relative_path,
@@ -283,7 +284,7 @@ class FileRecord:
         if type(self.rel_path_key) is not str:
             raise TypeError("file path key must be text")
         canonical = validate_relative_path(self.rel_path)
-        if self.rel_path_key != normalize_relative_path(canonical):
+        if self.rel_path_key != fold_validated_path(canonical):
             raise ValueError("file path key is not canonical")
         FileStat(EntryKind.FILE, self.size, self.mtime_ns, self.file_identity, self.nlink, self.metadata)
 
@@ -312,7 +313,7 @@ class DirRecord:
         if type(self.rel_path_key) is not str:
             raise TypeError("directory path key must be text")
         canonical = validate_relative_path(self.rel_path, allow_root=True)
-        if self.rel_path_key != normalize_relative_path(canonical, allow_root=True):
+        if self.rel_path_key != fold_validated_path(canonical):
             raise ValueError("directory path key is not canonical")
         FileStat(EntryKind.DIRECTORY, 0, self.mtime_ns, self.file_identity, self.nlink, self.metadata)
 
@@ -351,7 +352,7 @@ class UnsupportedRecord:
         if self.kind is not None and type(self.kind) is not EntryKind:
             raise TypeError("unsupported record kind has the wrong type")
         canonical = validate_relative_path(self.rel_path)
-        if self.rel_path_key != normalize_relative_path(canonical):
+        if self.rel_path_key != fold_validated_path(canonical):
             raise ValueError("unsupported path key is not canonical")
 
 
@@ -527,7 +528,7 @@ def _canonical_scope_paths(
     by_key: dict[str, str] = {}
     for path in paths:
         canonical = validate_relative_path(path, allow_root=allow_root)
-        key = normalize_relative_path(canonical, allow_root=allow_root)
+        key = fold_validated_path(canonical)
         retained = by_key.get(key)
         if retained is None or canonical < retained:
             by_key[key] = canonical
@@ -609,8 +610,8 @@ class IgnoreSet:
 
     def excludes(self, rel_path: str, *, is_directory: bool) -> bool:
         canonical = validate_relative_path(rel_path)
-        key = normalize_relative_path(canonical)
-        if normalize_relative_path(PureWindowsPath(canonical).name) in self.exact_names:
+        key = fold_validated_path(canonical)
+        if PureWindowsPath(key).name in self.exact_names:
             return True
         if self.exclude_sync_trash and (key == ".SYNCTRASH" or key.startswith(".SYNCTRASH\\")):
             return True

@@ -45,7 +45,11 @@ from namisync.core.models import (
     validate_scan_scope,
     validate_scan_warning,
 )
-from namisync.core.pathing import normalize_relative_path, validate_relative_path
+from namisync.core.pathing import (
+    fold_validated_path,
+    normalize_relative_path,
+    validate_relative_path,
+)
 from namisync.core.planning import (
     OpId,
     OperationKind,
@@ -479,7 +483,7 @@ class LedgerRecorder:
             command.observed_at,
         )
         canonical = validate_relative_path(command.volume_relative_path, allow_root=True)
-        key = normalize_relative_path(canonical, allow_root=True)
+        key = fold_validated_path(canonical)
         at = encode_utc(command.observed_at)
 
         def apply(connection: sqlite3.Connection) -> int:
@@ -1343,7 +1347,7 @@ class LedgerRecorder:
         at: str,
     ) -> int:
         canonical = validate_relative_path(rel_path)
-        key = normalize_relative_path(canonical)
+        key = fold_validated_path(canonical)
         identity_serial, identity_index = _identity_values(stat.file_identity)
         row = connection.execute(
             f"""INSERT INTO inventory(

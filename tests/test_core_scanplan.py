@@ -11,11 +11,13 @@ from pathlib import Path
 import pytest
 
 import namisync.core.models as model_contracts
+import namisync.core.pathing as path_contracts
 import namisync.core.planning as planning_contracts
 import namisync.core.scalars as scalar_contracts
 from namisync.core.models import IgnoreSet
 from namisync.core.pathing import (
     PathValidationError,
+    fold_validated_path,
     from_extended_length_path,
     lexical_absolute_path,
     lexical_path_chain,
@@ -86,6 +88,98 @@ def test_relative_path_validation_rejects_additional_documented_windows_devices(
 def test_relative_path_key_normalizes_separator_and_ordinary_case_without_casefold_expansion() -> None:
     assert normalize_relative_path("Folder/file.txt") == normalize_relative_path(r"folder\FILE.TXT")
     assert normalize_relative_path("Straße.txt") != normalize_relative_path("strasse.txt")
+
+
+@pytest.mark.parametrize(
+    ("value", "allow_root"),
+    (
+        ("Folder/file.txt", False),
+        ("Straße/ß.txt", False),
+        ("", True),
+    ),
+)
+def test_validated_path_fold_matches_normalizing_entry_point(
+    value: str,
+    allow_root: bool,
+) -> None:
+    canonical = validate_relative_path(value, allow_root=allow_root)
+
+    assert fold_validated_path(canonical) == normalize_relative_path(
+        value,
+        allow_root=allow_root,
+    )
+
+
+def test_source_records_and_mapping_pair_validate_each_path_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_validate = model_contracts.validate_relative_path
+    planning_validate = planning_contracts.validate_relative_path
+    model_calls: list[str] = []
+    path_calls: list[str] = []
+    planning_calls: list[str] = []
+
+    def observe_model(value: str, *, allow_root: bool = False) -> str:
+        model_calls.append(value)
+        return model_validate(value, allow_root=allow_root)
+
+    def observe_planning(value: str, *, allow_root: bool = False) -> str:
+        planning_calls.append(value)
+        return planning_validate(value, allow_root=allow_root)
+
+    def observe_path(value: str, *, allow_root: bool = False) -> str:
+        path_calls.append(value)
+        return path_validate(value, allow_root=allow_root)
+
+    monkeypatch.setattr(
+        model_contracts,
+        "validate_relative_path",
+        observe_model,
+    )
+    monkeypatch.setattr(
+        planning_contracts,
+        "validate_relative_path",
+        observe_planning,
+    )
+    path_validate = path_contracts.validate_relative_path
+    monkeypatch.setattr(
+        path_contracts,
+        "validate_relative_path",
+        observe_path,
+    )
+    metadata = model_contracts.MetadataSnapshot(0, None)
+    model_contracts.FileRecord(
+        "file.txt",
+        "FILE.TXT",
+        1,
+        1,
+        None,
+        1,
+        metadata,
+    )
+    model_contracts.DirRecord(
+        "folder",
+        "FOLDER",
+        1,
+        metadata,
+        None,
+    )
+    model_contracts.UnsupportedRecord(
+        "other",
+        "OTHER",
+        model_contracts.UnsupportedReason.UNKNOWN_TYPE,
+    )
+    planning_contracts.MappingPair(
+        "SOURCE",
+        "target.txt",
+        "TARGET.TXT",
+        model_contracts.FileIdentity("serial", 1),
+        None,
+    )
+
+    assert model_calls == ["file.txt", "folder", "other"]
+    assert path_calls == []
+    assert planning_calls == ["target.txt"]
 
 
 def test_long_relative_path_is_valid() -> None:

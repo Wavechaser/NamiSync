@@ -27,7 +27,11 @@ from .models import (
     volume_evidence_projection,
     volume_id_projection,
 )
-from .pathing import normalize_relative_path, validate_relative_path
+from .pathing import (
+    fold_validated_path,
+    normalize_relative_path,
+    validate_relative_path,
+)
 from .review import (
     MAX_PLAN_DOMAIN_RETAINED_BYTES,
     MAX_PLAN_REVIEW_ROWS,
@@ -319,16 +323,21 @@ class IdentityDestinationPolicy:
         target: ScanResult,
     ) -> Assignment:
         del meta, target
-        items = tuple(
-            DestinationAssignment(
-                record.rel_path,
-                record.rel_path_key,
-                validate_relative_path(record.rel_path),
-                normalize_relative_path(record.rel_path),
+        items: list[DestinationAssignment] = []
+        for record in sorted(
+            records,
+            key=lambda item: (item.rel_path_key, item.rel_path),
+        ):
+            canonical = validate_relative_path(record.rel_path)
+            items.append(
+                DestinationAssignment(
+                    record.rel_path,
+                    record.rel_path_key,
+                    canonical,
+                    fold_validated_path(canonical),
+                )
             )
-            for record in sorted(records, key=lambda item: (item.rel_path_key, item.rel_path))
-        )
-        return Assignment(self.name, self.version, items)
+        return Assignment(self.name, self.version, tuple(items))
 
 
 @dataclass(frozen=True)
@@ -372,8 +381,8 @@ class MappingPair:
     target_identity: FileIdentity | None
 
     def __post_init__(self) -> None:
-        validate_relative_path(self.target_rel_path)
-        if self.target_rel_path_key != normalize_relative_path(self.target_rel_path):
+        canonical = validate_relative_path(self.target_rel_path)
+        if self.target_rel_path_key != fold_validated_path(canonical):
             raise ValueError("mapping target key is not canonical")
 
 

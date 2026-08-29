@@ -50,9 +50,9 @@ from namisync.core.integrity import (
 )
 from namisync.core.models import FileStat
 from namisync.core.pathing import (
+    fold_validated_path,
     lexical_absolute_path,
     logical_error_text,
-    normalize_relative_path,
     validate_relative_path,
 )
 from namisync.core.session import Canceled, PauseRequested
@@ -764,7 +764,7 @@ def _process_item(
 ) -> _ProcessedItem:
     try:
         validated_path = validate_relative_path(item.display_path)
-        if normalize_relative_path(validated_path) != item.rel_path_key:
+        if fold_validated_path(validated_path) != item.rel_path_key:
             raise ValueError("display path does not match the selected canonical key")
     except (OSError, ValueError) as exc:
         return _ProcessedItem(

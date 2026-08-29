@@ -9,6 +9,7 @@ from types import MappingProxyType
 from typing import Iterable, Mapping
 
 from namisync.core.pathing import (
+    fold_validated_path,
     normalize_relative_path,
     relative_path_depth,
     relative_path_parent,
@@ -50,10 +51,7 @@ class NodeTreeMember:
         if type(self.rel_path) is not str or type(self.rel_path_key) is not str:
             raise TypeError("member paths must be exact strings")
         canonical = validate_relative_path(self.rel_path, allow_root=True)
-        if self.rel_path_key != normalize_relative_path(
-            canonical,
-            allow_root=True,
-        ):
+        if self.rel_path_key != fold_validated_path(canonical):
             raise ValueError("member path key is not canonical")
         if type(self.is_container) is not bool:
             raise TypeError("is_container must be a bool")
