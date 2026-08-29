@@ -181,6 +181,13 @@ def test_selection_revalidation_rejects_a_replaced_known_id_index(
         if kind == "integrity"
         else PostCopySelection((subject,))  # type: ignore[arg-type]
     )
+    if kind == "integrity":
+        snapshot = snapshot_integrity_selection_authority
+        revalidate = revalidate_integrity_selection_authority
+    else:
+        snapshot = snapshot_post_copy_selection_authority
+        revalidate = revalidate_post_copy_selection_authority
+    authority = snapshot(selection)
     index_field = next(
         candidate
         for candidate in fields(selection)
@@ -200,11 +207,45 @@ def test_selection_revalidation_rejects_a_replaced_known_id_index(
 
     selection._known_item_ids = DerivedKnownIds(selection._known_item_ids)
     with pytest.raises(TypeError, match="known-item index has the wrong type"):
-        selection.__post_init__()
+        revalidate(selection, authority, allow_progress=False)
 
     selection._known_item_ids = frozenset({"forged"})
     with pytest.raises(ValueError, match="known-item index changed"):
-        selection.__post_init__()
+        revalidate(selection, authority, allow_progress=False)
+
+
+@pytest.mark.parametrize(
+    ("kind", "expected_message"),
+    (
+        ("post-copy", "post-copy candidate changed during collaboration"),
+        ("integrity", "integrity selection item changed during collaboration"),
+    ),
+)
+def test_selection_authority_reports_changed_item_before_derived_index(
+    kind: str,
+    expected_message: str,
+) -> None:
+    subject = _selection_subject(kind, 0)
+    selection = (
+        IntegritySelection((subject,))  # type: ignore[arg-type]
+        if kind == "integrity"
+        else PostCopySelection((subject,))  # type: ignore[arg-type]
+    )
+    if kind == "integrity":
+        authority = snapshot_integrity_selection_authority(selection)
+        setattr(selection, "items", (replace(subject, item_id="integrity-1"),))
+        revalidate = revalidate_integrity_selection_authority
+    else:
+        authority = snapshot_post_copy_selection_authority(selection)
+        setattr(
+            selection,
+            "candidates",
+            (replace(subject, item_id="post-copy-1"),),
+        )
+        revalidate = revalidate_post_copy_selection_authority
+
+    with pytest.raises(ValueError, match=f"^{expected_message}$"):
+        revalidate(selection, authority, allow_progress=False)
 
 
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))

@@ -817,10 +817,10 @@ def revalidate_integrity_selection_authority(
     if type(value._bytes_total_high_water) is not int:
         raise TypeError("integrity byte total has the wrong type")
     item_facts = tuple(integrity_selection_item_fact(item) for item in value.items)
-    IntegritySelection.__post_init__(value)
     for item, expected in zip(item_facts, authority.items, strict=True):
         if item != expected:
             raise ValueError("integrity selection item changed during collaboration")
+    IntegritySelection.__post_init__(value)
     for item_id, completed_bytes in authority.completed_bytes:
         if value._completed_bytes.get(item_id) != completed_bytes:
             raise ValueError("integrity prior completion changed during collaboration")
@@ -900,7 +900,6 @@ def revalidate_post_copy_selection_authority(
     candidate_facts = tuple(
         post_copy_candidate_fact(item) for item in value.candidates
     )
-    PostCopySelection.__post_init__(value)
     for candidate, expected in zip(
         candidate_facts,
         authority.candidates,
@@ -908,6 +907,7 @@ def revalidate_post_copy_selection_authority(
     ):
         if candidate != expected:
             raise ValueError("post-copy candidate changed during collaboration")
+    PostCopySelection.__post_init__(value)
     for item_id, completed_bytes in authority.completed_bytes:
         if value._completed_bytes.get(item_id) != completed_bytes:
             raise ValueError("post-copy prior completion changed during collaboration")
