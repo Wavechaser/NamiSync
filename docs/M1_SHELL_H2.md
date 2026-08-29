@@ -379,8 +379,39 @@ its finite surface and one atomic outcome are named here.
 | 4P.22 | Apply C4/C8 by separating workflow-retained budgets from producer gates and reducing scanner to one admission parameter. | `tests/test_plan_review_limits.py`, `tests/test_scanner.py`, `tests/test_inventory_workflow.py`, and facade-consumer departments. | Complete |
 | 4P.23 | Apply D6 with private exact signal types and remove issuer, `fresh()`, and consume choreography without weakening refusal provenance or status truth. | Refusal/provenance cases in `tests/test_plan_review_limits.py`, `tests/test_workflows.py`, and `tests/test_inventory_workflow.py`. | Complete |
 | 4P.24 | Apply C1 by centralizing exception-to-`FailureDetail` factories and adding an AST guard for direct retained-detail construction. | `tests/core/test_exception_graph.py`, the new AST policy regression, affected producer/consumer departments, and ordinary exception-path tests. | Complete |
-| 4P.25 | Conduct an independent adversarial review against rows 4P.0–4P.24 without absorbing new implementation scope. | Requirement-to-diff trace, accepted-test matrix, stop-rule audit, targeted counterexamples, and written disposition for every review finding. | Pending |
+| 4P.25 | Conduct an independent adversarial review against rows 4P.0–4P.24 without absorbing new implementation scope. | Requirement-to-diff trace, accepted-test matrix, stop-rule audit, targeted counterexamples, and written disposition for every review finding. | Complete |
 | 4P.26 | Reconcile active documentation, task history, and BUGS status, run full verification, replace the handoff, and delete `CUSTODY_TAX_AUDIT.md` only after every accepted disposition has an authoritative home. | Affected department union, ordinary Node-enabled suite, import contracts, required protected gates, links/anchors, stale-contract searches, `git diff --check`, repository/stash inventory, and independent final review. | Pending |
+
+#### 4P.25 adversarial-review receipt
+
+Independent requirement-to-diff, accepted-test, stop-rule, exclusion, and
+repository-custody review found no product blocker or regression, catastrophic
+stop, or excluded-scope intrusion in completed rows 4P.0–4P.24. The
+4P.0–4P.23 audit pinned `8fd7434`, checked the local branch/worktree state and
+all four retained stash hashes (including reachable recovery commit
+`33f6994`), passed 80 targeted cases and all 11 import contracts, repeated the
+protected 30-scenario settlement oracle three times with identical traces, and
+found `git diff --check` clean. The separate 4P.24 audit of `bb4b9e7` confirmed
+the intended direct-`FailureDetail` constructor inventory fell from 22 to the
+15 exact guarded constructors, passed 30 independent focused cases, and found
+no blocker.
+
+The review dispositions are closed as follows. The 4P.11 commit `72f4303`
+requires test-only companion `42162a4` for independent ordinary-green
+reviewability; current HEAD is correct, so history will not be rewritten.
+The 4P.10 named-verification cell was strengthened after register freeze
+without a specific user decision; retain the stronger gate and record this as
+a one-off process exception, not a product defect. `c8f03b5` was one bounded,
+isolated pre-existing bug fix and remained below both defect-stop thresholds.
+README's and this document's high-level detached/revalidated wording, plus
+HANDOFF's stale recovery-branch and `ExecutionOperationFact.content_bytes`
+claims, remain assigned to 4P.26. Every rejected or excluded idea remains
+excluded and gains no implementation authority from this review.
+
+These are adversarial-review receipts, not the ordinary/full acceptance gate.
+The affected department union, ordinary Node-enabled suite, final documentation
+reconciliation, stash/repository closeout, and independent final review remain
+owned by 4P.26.
 
 Explicit exclusions are F4; C3, C5, C6, and C7; checkpoint 4 proper and its
 model, constants, fixtures, validator, and BR-G-45 evidence; executor journal or
