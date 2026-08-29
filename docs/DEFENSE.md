@@ -109,11 +109,12 @@ reproducing these limits.
   the plan-domain ceiling per value; the checkpoint-4 completed-plan graph wall
   must still admit their combined retained occurrences before publication.
   Neither boundary is claimed as an empirical source-primitive maximum.
-- A plan-capacity refusal requires an exact PLAN fact issued by the current
-  workflow's opaque admission family. Workflow copies that fact, consumes its
-  issuer marker, retires the raw exception, and saves no plan. An unissued,
-  malformed, wrong-tree, or subtype signal is an ordinary internal failure,
-  including when it escapes a nested collaborator inside an admitted module.
+- A plan-capacity refusal requires the private exact plan-limit signal carrying
+  an exact PLAN fact. Plan and inventory use different private signal types;
+  workflow copies the fact, retires the raw signal graph, and saves no plan.
+  An exact signal with the wrong fact scope fails loudly, while ordinary
+  lookalike exceptions remain ordinary failures. Forged private signals and
+  reflective mutation are unsupported rung-4 faults under §2.2.
 - Reachability determines whether the signed-domain guard is a product branch
   or an assertion; the two are not presented as equivalent risks:
 

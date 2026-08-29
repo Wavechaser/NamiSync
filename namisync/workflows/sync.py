@@ -76,11 +76,12 @@ from namisync.core.review import (
     PlanReviewAdmission,
     PlanReviewProducerAdmission,
     ReviewFactLimitExceeded,
-    ReviewFactLimitError,
+    ReviewTreeKind,
     ScanPopulationAdmission,
+    _PlanReviewLimitSignal,
     admit_retained_plan_scan,
-    consume_plan_review_fact_limit,
     adopt_plan_scan_result,
+    snapshot_review_fact_limit,
 )
 from namisync.core.root_authority import (
     RootAuthority,
@@ -360,9 +361,7 @@ def _run_plan(
         target_path,
     )
     retained_admission = PlanReviewAdmission()
-    review_limit_fact: ReviewFactLimitExceeded | None = None
-    invalid_review_limit = False
-    unadmitted_review_limit = False
+    producer_admission = PlanReviewProducerAdmission()
     try:
         live_options, retained_options = snapshot_plan_options(request_options)
         retained_request = PlanRequest(
@@ -380,10 +379,10 @@ def _run_plan(
                 Root(source_root.path, source_root.root_id),
                 source_ignores,
                 ctx,
-                population_admission=retained_admission.fresh(),
+                population_admission=producer_admission,
             ),
             source_root,
-            retained_admission.fresh(),
+            producer_admission,
         )
         del source_ignores
         admit_retained_plan_scan(source_scan, retained_admission)
@@ -395,10 +394,10 @@ def _run_plan(
                 Root(target_root.path, target_root.root_id),
                 target_ignores,
                 ctx,
-                population_admission=retained_admission.fresh(),
+                population_admission=producer_admission,
             ),
             target_root,
-            retained_admission.fresh(),
+            producer_admission,
         )
         del target_ignores, source_root, target_root
         admit_retained_plan_scan(target_scan, retained_admission)
@@ -410,7 +409,7 @@ def _run_plan(
         )
         correspondence = snapshot_mapping_snapshot(
             raw_correspondence,
-            review_admission=retained_admission.fresh(),
+            review_admission=producer_admission,
         )
         del raw_correspondence
 
@@ -420,14 +419,14 @@ def _run_plan(
             correspondence,
             live_options,
             Scope.everything(),
-            review_admission=retained_admission.fresh(),
+            review_admission=producer_admission,
         )
         plan = adopt_plan_candidate(
             raw_plan,
             source_scan,
             target_scan,
             retained_options,
-            review_admission=retained_admission.fresh(),
+            review_admission=producer_admission,
         )
         del (
             raw_plan,
@@ -445,12 +444,12 @@ def _run_plan(
         raw_world = deps.observer(
             review,
             deps.observation_fs,
-            review_admission=retained_admission.fresh(),
+            review_admission=producer_admission,
         )
         world = adopt_plan_observed_world(
             raw_world,
             review,
-            retained_admission.fresh(),
+            producer_admission,
         )
         del raw_world
         admit_retained_plan_observed_world(world, retained_admission)
@@ -458,13 +457,13 @@ def _run_plan(
         raw_verdict = deps.preflight(
             review,
             world,
-            review_admission=retained_admission.fresh(),
+            review_admission=producer_admission,
         )
         verdict = adopt_plan_verdict(
             raw_verdict,
             world,
             review,
-            retained_admission.fresh(),
+            producer_admission,
         )
         del (
             raw_verdict,
@@ -482,26 +481,18 @@ def _run_plan(
             plan,
             verdict,
         )
-    except ReviewFactLimitError as error:
-        if type(error) is not ReviewFactLimitError:
-            invalid_review_limit = True
-        else:
-            try:
-                review_limit_fact = consume_plan_review_fact_limit(
-                    error,
-                    retained_admission,
-                )
-                unadmitted_review_limit = review_limit_fact is None
-            except (AttributeError, TypeError, ValueError) as fact_error:
-                retire_exception_graph(fact_error)
-                invalid_review_limit = True
+    except _PlanReviewLimitSignal as error:
+        try:
+            if type(error) is not _PlanReviewLimitSignal:
+                raise TypeError("plan review limit signal must be exact")
+            review_limit_fact = snapshot_review_fact_limit(error.fact)
+            if review_limit_fact.tree_kind is not ReviewTreeKind.PLAN:
+                raise ValueError("plan review limit fact has the wrong tree kind")
+        except (AttributeError, TypeError, ValueError) as fact_error:
+            retire_exception_graph(fact_error)
+            retire_exception_graph(error)
+            raise RuntimeError("plan review limit failure is invalid") from None
         retire_exception_graph(error)
-
-    if invalid_review_limit:
-        raise RuntimeError("plan review limit failure is invalid")
-    if unadmitted_review_limit:
-        raise RuntimeError("unadmitted collaborator raised a review fact limit")
-    if review_limit_fact is not None:
         return _review_limit_refusal(review_limit_fact)
 
     del (
@@ -511,6 +502,7 @@ def _run_plan(
         plan,
         verdict,
         retained_admission,
+        producer_admission,
     )
     deps.save_plan(artifact)
     return OperationResult(status=SessionState.COMPLETED)
@@ -964,6 +956,7 @@ def _run_execution(
             xset.run_id,
             xset.status,
         )
+        producer_admission = PlanReviewProducerAdmission()
 
         def revalidate_preflight_authority() -> None:
             revalidate_execution_set_authority(
@@ -985,7 +978,7 @@ def _run_execution(
         world = adopt_plan_observed_world(
             raw_world,
             review,
-            PlanReviewProducerAdmission(),
+            producer_admission,
         )
         del raw_world
         raw_verdict = deps.preflight(review, world)
@@ -994,9 +987,9 @@ def _run_execution(
             raw_verdict,
             world,
             review,
-            PlanReviewProducerAdmission(),
+            producer_admission,
         )
-        del raw_verdict, review
+        del raw_verdict, review, producer_admission
         refusals = refusal_views(verdict)
         deps.save_execution_details(ExecutionDetails(str(xset.run_id), refusals))
         revalidate_preflight_authority()

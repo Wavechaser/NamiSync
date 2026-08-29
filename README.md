@@ -54,9 +54,10 @@ width Windows file-identity, and coordinated persistence epoch are active;
 the plan session now refuses independent raw-population excess and final
 retained shallow-reference excess before publishing a partial plan. Hostile
 module results are detached and revalidated at their distinct workflow seams;
-only an exact PLAN fact carried by an exact error issued by the current plan
-admission family becomes typed `REFUSED+UNRUN`. Unissued, cross-family, or
-invalid signals fail without saving a plan.
+only the private exact plan-limit signal carrying an exact PLAN fact becomes
+typed `REFUSED+UNRUN`; inventory uses a distinct private signal. Ordinary
+lookalikes retain normal failure identity, and wrong-scope exact signals fail
+loudly without saving a plan. Neither path uses an issuer token.
 Python bridge responses now stop at an exact 8 MiB canonical-JSON occurrence
 wall before native construction; drains commit only the longest admitted update
 prefix, and native positions remain charged through worker exit and exact

@@ -15,6 +15,7 @@ from _identity_epoch5 import frozen_execution
 
 import namisync.workflows.sync as sync_workflow
 import namisync.workflows.runtime as runtime_module
+import namisync.core.review as review_module
 from namisync.core.events import ItemOutcome
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import Commitment, ExecutionSet, validated_run_id
@@ -837,6 +838,60 @@ def test_fresh_preflight_boundary_uses_reviewed_execution_counters(
     if expected_status is SessionState.FAILED:
         assert result.error is not None
         assert result.error.type_name == "RuntimeError"
+
+
+def test_execution_review_wall_is_an_ordinary_prerun_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    operation = _operation(
+        1,
+        OperationKind.COPY,
+        "normal.txt",
+        source="normal.txt",
+        content_bytes=17,
+    )
+    plan = _plan_with((operation,))
+    selection = frozenset({operation.op_id})
+    xset = ExecutionSet(
+        plan,
+        selection,
+        validated_run_id("b" * 32),
+        commitment=Commitment(
+            plan.fingerprint,
+            selection_digest(selection),
+            NOW,
+        ),
+    )
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 0)
+    executor_called = False
+
+    def executor(*_args):
+        nonlocal executor_called
+        executor_called = True
+        raise AssertionError("executor entered after execution review excess")
+
+    result = run_execution(
+        xset,
+        RunContext(lambda _value: None, lambda: None),
+        SimpleNamespace(
+            save_execution_details=lambda _value: None,
+            observer=lambda *_args: _empty_world(),
+            observation_fs=object(),
+            preflight=lambda *_args: pytest.fail(
+                "preflight ran after observer-result excess"
+            ),
+            executor=executor,
+        ),
+    )
+
+    assert not executor_called
+    assert result.status is SessionState.FAILED
+    assert result.disposition is Disposition.UNRUN
+    assert result.review_fact_limit is None
+    assert result.error is not None
+    assert result.error.message == "review_fact_limit_exceeded"
+    assert result.phases == ()
+    assert (result.bytes_done, result.bytes_total) == (0, 17)
 
 
 @pytest.mark.parametrize("boundary", ["commitment-details", "preflight-details"])

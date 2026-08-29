@@ -58,8 +58,8 @@ from namisync.core.preflight import (
 from namisync.core.review import (
     PlanReviewAdmission,
     PlanReviewProducerAdmission,
-    ReviewFactLimitError,
     ReviewFactLimitExceeded,
+    _PlanReviewLimitSignal,
 )
 from namisync.core.root_authority import (
     NativeVolumeInfo,
@@ -753,7 +753,7 @@ def test_preflight_review_admission_is_stateless() -> None:
     xset = _xset()
     world = replace(_world(xset), free_space=None)
     retained = PlanReviewAdmission()
-    admission = retained.fresh()
+    admission = PlanReviewProducerAdmission()
 
     verdict = preflight(xset, world, review_admission=admission)
 
@@ -776,7 +776,7 @@ def test_duplicate_raw_refusals_are_bounded_before_public_deduplication(
     xset = _xset()
     world = replace(_world(xset), roots={})
     retained = PlanReviewAdmission()
-    admission = retained.fresh()
+    admission = PlanReviewProducerAdmission()
 
     verdict = preflight(xset, world, review_admission=admission)
 
@@ -804,9 +804,9 @@ def test_refusal_first_excess_does_not_mutate_admission_or_world(
     world = replace(_world(xset), roots={})
     before = _world_fact(world)
     retained = PlanReviewAdmission()
-    admission = retained.fresh()
+    admission = PlanReviewProducerAdmission()
 
-    with pytest.raises(ReviewFactLimitError) as caught:
+    with pytest.raises(_PlanReviewLimitSignal) as caught:
         preflight(xset, world, review_admission=admission)
 
     assert caught.value.fact == (

@@ -37,11 +37,10 @@ from namisync.core.preflight import (
 from namisync.core.review import (
     MAX_PLAN_DOMAIN_RETAINED_BYTES, MAX_PLAN_INFORMATIONAL_RETAINED_BYTES,
     MAX_PLAN_REVIEW_ROWS, PlanReviewAdmission, PlanReviewProducerAdmission,
-    ReviewFactLimitError,
     ReviewFactLimitExceeded, ReviewLimitAxis, ReviewPopulation, ReviewTreeKind,
     admit_retained_plan_scan, adopt_plan_scan_result,
-    consume_plan_review_fact_limit,
     exceeds_population_wall, require_population_measure,
+    _PlanReviewLimitSignal,
 )
 from namisync.core.session import Disposition, RunContext, SessionState
 from namisync.core.scalars import MAX_SIGNED_64, ScalarDomainError
@@ -337,7 +336,7 @@ def test_admission_accepts_exact_limit_and_rejects_first_excess(
 ) -> None:
     admission = PlanReviewAdmission()
     admission.admit(**charge)
-    with pytest.raises(ReviewFactLimitError) as caught:
+    with pytest.raises(_PlanReviewLimitSignal) as caught:
         admission.admit(**{key: 1 for key in charge})
     assert caught.value.fact == fact
 
@@ -354,7 +353,7 @@ def test_final_admission_is_atomic_with_fixed_precedence() -> None:
     _fill_final_ledger(admission)
 
     admission = PlanReviewAdmission()
-    with pytest.raises(ReviewFactLimitError) as caught:
+    with pytest.raises(_PlanReviewLimitSignal) as caught:
         admission.admit(
             domain_rows=MAX_PLAN_REVIEW_ROWS + 1,
             domain_bytes=MAX_PLAN_DOMAIN_RETAINED_BYTES + 1,
@@ -362,7 +361,7 @@ def test_final_admission_is_atomic_with_fixed_precedence() -> None:
         )
     assert caught.value.fact == ReviewFactLimitExceeded.plan_domain_rows()
     _fill_final_ledger(admission)
-    with pytest.raises(ReviewFactLimitError):
+    with pytest.raises(_PlanReviewLimitSignal):
         admission.admit(domain_rows=1)
 
 def test_source_checks_are_stateless_and_independent_of_final_ledger(
@@ -370,49 +369,30 @@ def test_source_checks_are_stateless_and_independent_of_final_ledger(
 ) -> None:
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 2)
     retained = PlanReviewAdmission()
-    admission = retained.fresh()
+    admission = PlanReviewProducerAdmission()
     assert type(admission) is PlanReviewProducerAdmission
+    assert not hasattr(retained, "_issuer")
+    assert not hasattr(retained, "fresh")
     assert not hasattr(retained, "require_source_rows")
     assert not hasattr(retained, "require_informational_source_rows")
+    assert not hasattr(admission, "_issuer")
     assert not hasattr(admission, "admit")
     assert not hasattr(admission, "fresh")
     admission.require_source_rows(2)
     admission.require_source_rows(2)
     admission.require_informational_source_rows(2)
     admission.require_informational_source_rows(2)
-    with pytest.raises(ReviewFactLimitError) as domain:
+    with pytest.raises(_PlanReviewLimitSignal) as domain:
         admission.require_source_rows(3)
-    with pytest.raises(ReviewFactLimitError) as informational:
+    with pytest.raises(_PlanReviewLimitSignal) as informational:
         admission.require_informational_source_rows(3)
+    assert type(domain.value) is _PlanReviewLimitSignal
+    assert type(informational.value) is _PlanReviewLimitSignal
     assert domain.value.fact == ReviewFactLimitExceeded.plan_domain_rows()
     assert informational.value.fact == (
         ReviewFactLimitExceeded.plan_informational_rows()
     )
     _fill_final_ledger(retained)
-
-
-def test_fresh_admissions_share_only_one_refusal_issuer() -> None:
-    root = PlanReviewAdmission()
-    sibling = root.fresh()
-    fact = ReviewFactLimitExceeded.plan_domain_rows()
-
-    with pytest.raises(ReviewFactLimitError) as issued:
-        sibling.require_source_rows(MAX_PLAN_REVIEW_ROWS + 1)
-    snapshot = consume_plan_review_fact_limit(issued.value, root)
-
-    assert snapshot == fact
-    assert snapshot is not issued.value.fact
-
-    with pytest.raises(ReviewFactLimitError) as unrelated:
-        PlanReviewProducerAdmission().require_source_rows(
-            MAX_PLAN_REVIEW_ROWS + 1
-        )
-    assert consume_plan_review_fact_limit(unrelated.value, root) is None
-    assert (
-        consume_plan_review_fact_limit(ReviewFactLimitError(fact), root)
-        is None
-    )
-
 
 def test_plan_review_capabilities_reject_cross_role_use() -> None:
     value = _scan(SOURCE_ROOT)
@@ -439,7 +419,10 @@ def test_scan_domain_and_warning_sources_are_independently_admitted(
         ),
     )
     retained = PlanReviewAdmission()
-    assert adopt_plan_scan_result(value, retained.fresh()) is value
+    assert adopt_plan_scan_result(
+        value,
+        PlanReviewProducerAdmission(),
+    ) is value
     _fill_final_ledger(retained)
 
 
@@ -450,7 +433,7 @@ def test_scan_adoption_refuses_domain_at_first_excess(
     record = _file("valid.bin")
     value = _scan(SOURCE_ROOT, files=(record, record))
 
-    with pytest.raises(ReviewFactLimitError) as raised:
+    with pytest.raises(_PlanReviewLimitSignal) as raised:
         adopt_plan_scan_result(value, PlanReviewProducerAdmission())
 
     assert raised.value.fact == ReviewFactLimitExceeded.plan_domain_rows()
@@ -468,7 +451,7 @@ def test_scan_adoption_refuses_information_after_valid_domain(
         warnings=(warning, warning),
     )
 
-    with pytest.raises(ReviewFactLimitError) as raised:
+    with pytest.raises(_PlanReviewLimitSignal) as raised:
         adopt_plan_scan_result(value, PlanReviewProducerAdmission())
 
     assert raised.value.fact == (
@@ -522,7 +505,7 @@ def test_mapping_source_populations_are_independent_not_aggregate(
     retained = PlanReviewAdmission()
     assert snapshot_mapping_snapshot(
         value,
-        review_admission=retained.fresh(),
+        review_admission=PlanReviewProducerAdmission(),
     ) == value
     _fill_final_ledger(retained)
 
@@ -1125,7 +1108,7 @@ def test_verdict_adoption_gates_information_before_refusal_traversal(
         world,
     )
 
-    with pytest.raises(ReviewFactLimitError) as raised:
+    with pytest.raises(_PlanReviewLimitSignal) as raised:
         adopt_plan_verdict(
             value,
             world,
@@ -1441,7 +1424,7 @@ def test_planner_required_bytes_remains_logical_overflow_owner() -> None:
     )
     target = _scan(TARGET_ROOT)
     for admission in (None, PlanReviewProducerAdmission()):
-        with pytest.raises(ReviewFactLimitError) as caught:
+        with pytest.raises(_PlanReviewLimitSignal) as caught:
             plan(
                 source,
                 target,
@@ -1817,42 +1800,104 @@ def test_each_raw_population_refuses_first_excess_before_save(
     assert saved == []
 
 
-def test_workflow_copies_and_retires_owned_review_limit(
+@pytest.mark.parametrize(
+    ("source", "expected_fact"),
+    (
+        ("producer", ReviewFactLimitExceeded.plan_domain_rows()),
+        (
+            "retained",
+            ReviewFactLimitExceeded.plan_domain_retained_bytes(),
+        ),
+        ("logical-overflow", ReviewFactLimitExceeded.plan_logical_bytes()),
+    ),
+)
+def test_workflow_copies_and_retires_authorized_review_limits(
     monkeypatch: pytest.MonkeyPatch,
+    source: str,
+    expected_fact: ReviewFactLimitExceeded,
 ) -> None:
-    class PrivateGraph:
-        pass
-
     _patch_workflow_roots(monkeypatch)
     saved: list[PlanArtifact] = []
-    retained_errors: list[BaseException] = []
-    graph_references = []
-    original_fact = ReviewFactLimitExceeded.plan_domain_rows()
+    retained_errors: list[_PlanReviewLimitSignal] = []
+    graph_references: list[ref[_PrivatePlanFrameValue]] = []
+
+    def reraising(error: _PlanReviewLimitSignal) -> None:
+        retained_errors.append(error)
+        _raise_with_private_plan_frame(error, graph_references)
 
     def scanner(
-        *_args,
+        root: Root,
+        ignores: IgnoreSet,
+        ctx: RunContext,
+        *,
         population_admission: PlanReviewProducerAdmission | None = None,
-        **_kwargs,
-    ):
+    ) -> ScanResult:
         assert population_admission is not None
-        graph = PrivateGraph()
-        graph_references.append(ref(graph))
-        try:
-            population_admission.require_source_rows(
-                MAX_PLAN_REVIEW_ROWS + 1
+        if source == "producer":
+            try:
+                population_admission.require_source_rows(
+                    MAX_PLAN_REVIEW_ROWS + 1
+                )
+            except _PlanReviewLimitSignal as error:
+                reraising(error)
+        if root.root_id == "source" and source == "logical-overflow":
+            return _scan(
+                root,
+                files=(
+                    _file("maximum.bin", size=MAX_SIGNED_64),
+                    _file("extra.bin", size=1),
+                ),
             )
-        except ReviewFactLimitError as error:
-            retained_errors.append(error)
-            raise
+        return _workflow_scanner(
+            root,
+            ignores,
+            ctx,
+            population_admission=population_admission,
+        )
 
-    result = _run(_workflow_dependencies(saved, scanner=scanner))
+    deps = _workflow_dependencies(saved, scanner=scanner)
+    if source == "retained":
+        monkeypatch.setattr(
+            review_module,
+            "MAX_PLAN_DOMAIN_RETAINED_BYTES",
+            0,
+        )
+        original_admit = sync_workflow_module.admit_retained_plan_scan
+
+        def admit_retained(
+            value: ScanResult,
+            admission: PlanReviewAdmission,
+        ) -> None:
+            try:
+                original_admit(value, admission)
+            except _PlanReviewLimitSignal as error:
+                reraising(error)
+
+        monkeypatch.setattr(
+            sync_workflow_module,
+            "admit_retained_plan_scan",
+            admit_retained,
+        )
+    elif source == "logical-overflow":
+        original_plan = deps.planner
+
+        def planner(*args: object, **kwargs: object) -> Plan:
+            try:
+                return original_plan(*args, **kwargs)
+            except _PlanReviewLimitSignal as error:
+                reraising(error)
+
+        deps.planner = planner
+
+    result = _run(deps)
 
     assert result.status is SessionState.REFUSED
     assert result.disposition is Disposition.UNRUN
-    assert result.review_fact_limit == original_fact
-    assert result.review_fact_limit is not original_fact
+    assert result.review_fact_limit == expected_fact
     assert saved == []
     assert retained_errors
+    assert type(retained_errors[0]) is _PlanReviewLimitSignal
+    assert result.review_fact_limit is not retained_errors[0].fact
     assert all(
         BaseException.__dict__["__traceback__"].__get__(error, type(error))
         is None
@@ -1867,44 +1912,19 @@ def test_workflow_copies_and_retires_owned_review_limit(
     assert all(reference() is None for reference in graph_references)
 
 
-@pytest.mark.parametrize(
-    ("source", "expected_message"),
-    (
-        ("event", "unadmitted collaborator raised a review fact limit"),
-        (
-            "correspondence",
-            "unadmitted collaborator raised a review fact limit",
-        ),
-        (
-            "policy",
-            "unadmitted collaborator raised a review fact limit",
-        ),
-        (
-            "scanner-unissued",
-            "unadmitted collaborator raised a review fact limit",
-        ),
-        ("scanner-malformed", "plan review limit failure is invalid"),
-        ("scanner-subclass", "plan review limit failure is invalid"),
-    ),
-)
-def test_spoofed_review_limit_fails_instead_of_refusing(
+@pytest.mark.parametrize("source", ("event", "correspondence", "policy", "scanner"))
+def test_ordinary_review_limit_lookalike_keeps_failure_identity(
     monkeypatch: pytest.MonkeyPatch,
     source: str,
-    expected_message: str,
 ) -> None:
-    class SpoofedReviewLimit(ReviewFactLimitError):
-        pass
+    class ReviewLimitLookalike(ValueError):
+        def __init__(self) -> None:
+            super().__init__("review_fact_limit_exceeded")
+            self.fact = ReviewFactLimitExceeded.plan_domain_rows()
 
     _patch_workflow_roots(monkeypatch)
     saved: list[PlanArtifact] = []
-    raw_fact = ReviewFactLimitExceeded.plan_domain_rows()
-    if source == "scanner-malformed":
-        object.__setattr__(raw_fact, "axis", "rows")
-    raw_error = (
-        SpoofedReviewLimit(raw_fact)
-        if source == "scanner-subclass"
-        else ReviewFactLimitError(raw_fact)
-    )
+    raw_error = ReviewLimitLookalike()
 
     def raise_spoof(*_args, **_kwargs):
         raise raw_error
@@ -1913,11 +1933,7 @@ def test_spoofed_review_limit_fails_instead_of_refusing(
         saved,
         scanner=(
             raise_spoof
-            if source in {
-                "scanner-unissued",
-                "scanner-malformed",
-                "scanner-subclass",
-            }
+            if source == "scanner"
             else _workflow_scanner
         ),
         correspondence=(
@@ -1940,100 +1956,34 @@ def test_spoofed_review_limit_fails_instead_of_refusing(
         )
     emit = raise_spoof if source == "event" else lambda event: None
 
-    with pytest.raises(RuntimeError, match=f"^{expected_message}$") as raised:
+    with pytest.raises(ReviewLimitLookalike) as raised:
         run_plan(
             _workflow_request(options),
             RunContext(emit, lambda: None),
             deps,
         )
 
+    assert raised.value is raw_error
     assert raised.value.__cause__ is raised.value.__context__ is None
     assert saved == []
-    assert BaseException.__dict__["__traceback__"].__get__(
-        raw_error, type(raw_error)
-    ) is None
-    assert BaseException.__dict__["__cause__"].__get__(
-        raw_error, type(raw_error)
-    ) is None
-    assert BaseException.__dict__["__context__"].__get__(
-        raw_error, type(raw_error)
-    ) is None
 
 
-@pytest.mark.parametrize("source", ("scanner-backend", "clock", "world-mapping"))
-def test_nested_collaborator_cannot_launder_unissued_review_limit(
+def test_exact_plan_signal_with_inventory_fact_is_invalid_and_never_saved(
     monkeypatch: pytest.MonkeyPatch,
-    source: str,
 ) -> None:
     _patch_workflow_roots(monkeypatch)
     saved: list[PlanArtifact] = []
-    raw_error = ReviewFactLimitError(
-        ReviewFactLimitExceeded.plan_domain_rows()
-    )
-
-    class SpoofingBackend(_ScannerBackend):
-        def resolve_root(self, path: str) -> str:
-            del path
-            raise raw_error
-
-    class SpoofingClock(_ObservationFileSystem):
-        def now_utc(self) -> datetime:
-            raise raw_error
-
-    class SpoofingMapping(Mapping[Subject, StatObservation]):
-        def __len__(self) -> int:
-            return 0
-
-        def __iter__(self) -> Iterator[Subject]:
-            raise raw_error
-
-        def __getitem__(self, key: Subject) -> StatObservation:
-            raise KeyError(key)
-
-    deps = _workflow_dependencies(saved)
-    if source == "scanner-backend":
-        deps.scanner = WalkingScanner(SpoofingBackend()).scan
-    elif source == "clock":
-        deps.observation_fs = SpoofingClock(
-            _scan(SOURCE_ROOT, files=(_file("source.bin"),)),
-            _scan(TARGET_ROOT),
+    graph_references: list[ref[_PrivatePlanFrameValue]] = []
+    raw_error = _PlanReviewLimitSignal(
+        ReviewFactLimitExceeded(
+            "review_fact_limit_exceeded",
+            ReviewTreeKind.INVENTORY,
+            ReviewPopulation.DOMAIN,
+            ReviewLimitAxis.ROWS,
+            MAX_PLAN_REVIEW_ROWS,
+            None,
         )
-    else:
-        def observer(
-            execution_set: ExecutionReview,
-            fs: object,
-            *,
-            review_admission: PlanReviewProducerAdmission | None = None,
-        ) -> ObservedWorld:
-            world = observe(
-                execution_set,
-                fs,  # type: ignore[arg-type]
-                review_admission=review_admission,
-            )
-            return replace(world, stats=SpoofingMapping())
-
-        deps.observer = observer
-
-    with pytest.raises(
-        RuntimeError,
-        match="^unadmitted collaborator raised a review fact limit$",
-    ) as raised:
-        _run(deps)
-
-    assert raised.value.__cause__ is raised.value.__context__ is None
-    assert saved == []
-    assert BaseException.__dict__["__traceback__"].__get__(
-        raw_error,
-        type(raw_error),
-    ) is None
-
-
-def test_issued_non_plan_fact_is_invalid_and_never_saved(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _patch_workflow_roots(monkeypatch)
-    saved: list[PlanArtifact] = []
-    retained_errors: list[ReviewFactLimitError] = []
+    )
 
     def scanner(
         *_args,
@@ -2041,18 +1991,7 @@ def test_issued_non_plan_fact_is_invalid_and_never_saved(
         **_kwargs,
     ) -> ScanResult:
         assert population_admission is not None
-        try:
-            population_admission.require_source_rows(
-                MAX_PLAN_REVIEW_ROWS + 1
-            )
-        except ReviewFactLimitError as error:
-            retained_errors.append(error)
-            object.__setattr__(
-                error.fact,
-                "tree_kind",
-                ReviewTreeKind.INVENTORY,
-            )
-            raise
+        _raise_with_private_plan_frame(raw_error, graph_references)
 
     with pytest.raises(
         RuntimeError,
@@ -2061,11 +2000,13 @@ def test_issued_non_plan_fact_is_invalid_and_never_saved(
         _run(_workflow_dependencies(saved, scanner=scanner))
 
     assert saved == []
-    assert retained_errors
     assert BaseException.__dict__["__traceback__"].__get__(
-        retained_errors[0],
-        type(retained_errors[0]),
+        raw_error,
+        type(raw_error),
     ) is None
+    gc.collect()
+    assert graph_references
+    assert all(reference() is None for reference in graph_references)
 
 
 def test_workflow_accepts_planner_issued_logical_byte_limit(
@@ -2112,7 +2053,9 @@ def test_workflow_producers_receive_only_stateless_admission_capability(
 
     def capture(admission: PlanReviewProducerAdmission | None) -> None:
         assert type(admission) is PlanReviewProducerAdmission
+        assert not hasattr(admission, "_issuer")
         assert not hasattr(admission, "admit")
+        assert not hasattr(admission, "fresh")
         admissions.append(admission)
 
     def scanner(
@@ -2179,7 +2122,7 @@ def test_workflow_producers_receive_only_stateless_admission_capability(
     assert result.status is SessionState.COMPLETED
     assert len(saved) == 1
     assert len(admissions) == 5
-    assert len({id(admission) for admission in admissions}) == 5
+    assert len({id(admission) for admission in admissions}) == 1
 
 def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
     monkeypatch: pytest.MonkeyPatch,

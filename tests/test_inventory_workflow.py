@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import gc
 import json
 import os
 import stat as stat_module
@@ -9,6 +10,7 @@ from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from weakref import ref
 
 import pytest
 from xxhash import xxh3_128
@@ -2925,6 +2927,9 @@ def test_integrity_recorder_close_failure_preserves_primary_authority(
 def test_inventory_source_first_excess_is_refused_without_partial_save(
     tmp_path: Path,
 ) -> None:
+    class PrivateGraph:
+        pass
+
     mount = tmp_path / "mount"
     root = mount / "managed"
     root.mkdir(parents=True)
@@ -2932,6 +2937,11 @@ def test_inventory_source_first_excess_is_refused_without_partial_save(
     details: list[InventoryDetails] = []
 
     class ExcessScanner(_Scanner):
+        def __init__(self) -> None:
+            super().__init__()
+            self.errors: list[BaseException] = []
+            self.graph_references: list[ref[PrivateGraph]] = []
+
         def __call__(
             self,
             root,
@@ -2944,9 +2954,20 @@ def test_inventory_source_first_excess_is_refused_without_partial_save(
         ):
             del root, ignores, context, scope, trusted_anchor
             assert population_admission is not None
-            population_admission.require_source_rows(
-                MAX_PLAN_REVIEW_ROWS + 1
-            )
+            assert not hasattr(population_admission, "_issuer")
+            graph = PrivateGraph()
+            self.graph_references.append(ref(graph))
+            try:
+                population_admission.require_source_rows(
+                    MAX_PLAN_REVIEW_ROWS + 1
+                )
+            except inventory_workflow._InventoryReviewLimitSignal as error:
+                assert type(error) is (
+                    inventory_workflow._InventoryReviewLimitSignal
+                )
+                assert not hasattr(error, "_issuer")
+                self.errors.append(error)
+                raise
             raise AssertionError("first excess was admitted")
 
     scanner = ExcessScanner()
@@ -2973,7 +2994,74 @@ def test_inventory_source_first_excess_is_refused_without_partial_save(
         MAX_PLAN_REVIEW_ROWS,
         None,
     )
+    assert scanner.errors
+    assert result.review_fact_limit is not scanner.errors[0].fact
+    assert BaseException.__dict__["__traceback__"].__get__(
+        scanner.errors[0],
+        type(scanner.errors[0]),
+    ) is None
+    assert BaseException.__dict__["__cause__"].__get__(
+        scanner.errors[0],
+        type(scanner.errors[0]),
+    ) is None
+    assert BaseException.__dict__["__context__"].__get__(
+        scanner.errors[0],
+        type(scanner.errors[0]),
+    ) is None
+    gc.collect()
+    assert scanner.graph_references
+    assert all(reference() is None for reference in scanner.graph_references)
     assert details == []
+    with connect_ledger_reader(ledger_path) as connection:
+        assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 0
+        assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0
+
+
+def test_inventory_wrong_scope_signal_fails_without_retained_context(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    root = mount / "managed"
+    root.mkdir(parents=True)
+    ledger_path = tmp_path / "ledger.db"
+    details: list[InventoryDetails] = []
+    raw_error = inventory_workflow._InventoryReviewLimitSignal(
+        ReviewFactLimitExceeded.plan_domain_rows()
+    )
+
+    class WrongScopeScanner(_Scanner):
+        def __call__(self, *_args, **_kwargs):
+            raise raw_error
+
+    prepared = bind_inventory_request(
+        InventoryRequest("inventory-wrong-scope", root_path=str(root)),
+        ledger_path=ledger_path,
+        backend=_Backend(root, mount),
+        resolver=_Resolver(mount),
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="^inventory review limit failure is invalid$",
+    ) as raised:
+        run_inventory(
+            prepared,
+            _context(),
+            _dependencies(
+                ledger_path,
+                WrongScopeScanner(),
+                _Resolver(mount),
+                details,
+            ),
+        )
+
+    assert raised.value.__cause__ is None
+    assert raised.value.__context__ is None
+    assert details == []
+    assert BaseException.__dict__["__traceback__"].__get__(
+        raw_error,
+        type(raw_error),
+    ) is None
     with connect_ledger_reader(ledger_path) as connection:
         assert connection.execute("SELECT count(*) FROM hosts").fetchone()[0] == 0
         assert connection.execute("SELECT count(*) FROM inventory").fetchone()[0] == 0

@@ -1747,11 +1747,12 @@ defect, and move implementation-level test choreography out of the log.
   policy, or nested scanner/observer collaborator could raise the planner's
   capacity exception and make ordinary failure appear as `REFUSED+UNRUN`;
   mutated preflight input, a malformed fact, or a subtype could do the same.
-  Cause: workflow trusted one error class across issued and unissued seams.
-  Fixed with an opaque issuer shared only by one plan's fresh admissions, exact
-  PLAN-fact reconstruction, separate bounded mutation revalidation, raw-signal
+  Cause: workflow shared one public error class across plan and inventory
+  owners, then authenticated individual instances. Fixed with distinct private
+  exact plan/inventory signals, exact fact-scope reconstruction, raw-signal
   retirement, and no save for either refusal or invalid input. Ordinary
-  collaborator behavior is otherwise unchanged.
+  lookalikes retain normal failure identity; forged private signals and
+  reflective mutation are outside the supported fault model.
 - SEVERE - FIXED (2026-08-27). Prepublication source-owner escape. Plan review
   could accept unbounded raw scanner, mapping, assignment, operation,
   observation, or refusal populations before a typed capacity outcome; generic

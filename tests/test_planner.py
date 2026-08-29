@@ -31,8 +31,8 @@ from namisync.core.models import (
 from namisync.core.pathing import PathValidationError, normalize_relative_path
 from namisync.core.review import (
     PlanReviewProducerAdmission,
-    ReviewFactLimitError,
     ReviewFactLimitExceeded,
+    _PlanReviewLimitSignal,
 )
 from namisync.core.scalars import MAX_SIGNED_64
 from namisync.core.planning import (
@@ -695,7 +695,7 @@ def test_unrepresentable_plan_logical_bytes_refuse_before_plan_publication() -> 
         ),
     )
 
-    with pytest.raises(ReviewFactLimitError) as caught:
+    with pytest.raises(_PlanReviewLimitSignal) as caught:
         _plan(source, _scan("target", TARGET_VOLUME))
 
     assert caught.value.fact == ReviewFactLimitExceeded.plan_logical_bytes()
@@ -923,7 +923,7 @@ def test_reviewed_policy_inputs_keep_independent_capacity_gates(
         warning = ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin")
         target = replace(target, warnings=(warning, warning))
 
-    with pytest.raises(ReviewFactLimitError) as raised:
+    with pytest.raises(_PlanReviewLimitSignal) as raised:
         plan(
             source,
             target,
@@ -952,9 +952,12 @@ def test_destination_policy_review_limit_keeps_ordinary_identity(
     failure_site: str,
     reviewed: bool,
 ) -> None:
-    raw_error = ReviewFactLimitError(
-        ReviewFactLimitExceeded.plan_domain_rows()
-    )
+    class PolicyReviewLimit(ValueError):
+        def __init__(self) -> None:
+            super().__init__("review_fact_limit_exceeded")
+            self.fact = ReviewFactLimitExceeded.plan_domain_rows()
+
+    raw_error = PolicyReviewLimit()
 
     class SpoofingPolicy:
         version = "1"
@@ -972,7 +975,7 @@ def test_destination_policy_review_limit_keeps_ordinary_identity(
 
     source = _scan("source", SOURCE_VOLUME)
     target = _scan("target", TARGET_VOLUME)
-    with pytest.raises(ReviewFactLimitError) as raised:
+    with pytest.raises(PolicyReviewLimit) as raised:
         plan(
             source,
             target,

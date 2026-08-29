@@ -35,9 +35,8 @@ from .pathing import (
 from .review import (
     MAX_PLAN_DOMAIN_RETAINED_BYTES,
     MAX_PLAN_REVIEW_ROWS,
-    PlanReviewProducerAdmission,
-    ReviewFactLimitError,
     ReviewFactLimitExceeded,
+    _PlanReviewLimitSignal,
 )
 from .scalars import (
     ScalarDomainError,
@@ -687,15 +686,9 @@ def calculate_required_bytes(
     *,
     target_profile: CapabilityProfile,
     trash_on_update: bool,
-    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> int:
     """Return a conservative start-of-run free-space requirement."""
 
-    if (
-        review_admission is not None
-        and type(review_admission) is not PlanReviewProducerAdmission
-    ):
-        raise TypeError("plan review admission has the wrong type")
     required = 0
     try:
         for operation in operations:
@@ -728,13 +721,9 @@ def calculate_required_bytes(
                         "plan logical bytes",
                     )
     except ScalarDomainError as error:
-        fact = ReviewFactLimitExceeded.plan_logical_bytes()
-        limit_error = (
-            ReviewFactLimitError(fact)
-            if review_admission is None
-            else review_admission._limit_error(fact)
-        )
-        raise limit_error from error
+        raise _PlanReviewLimitSignal(
+            ReviewFactLimitExceeded.plan_logical_bytes()
+        ) from error
     return required
 
 

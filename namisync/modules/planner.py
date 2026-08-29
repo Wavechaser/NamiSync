@@ -60,7 +60,7 @@ from namisync.core.review import (
     PLAN_SOURCE_REFERENCE_BYTES,
     PlanReviewAdmission,
     PlanReviewProducerAdmission,
-    ReviewFactLimitError,
+    _PlanReviewLimitSignal,
 )
 from namisync.core.scalars import ScalarDomainError
 
@@ -1018,7 +1018,6 @@ def _plan(
         operations,
         target_profile=target.profile,
         trash_on_update=options.trash_on_update,
-        review_admission=admission,
     )
     required_volumes = frozenset(
         volume
@@ -1080,7 +1079,7 @@ def plan(
         cause = BaseException.__cause__.__get__(error, BaseException)
         context = BaseException.__context__.__get__(error, BaseException)
         preserve_scalar_cause = (
-            type(error) is ReviewFactLimitError
+            type(error) is _PlanReviewLimitSignal
             and type(cause) is ScalarDomainError
             and context is cause
         )
@@ -1266,7 +1265,6 @@ def _adopt_plan_candidate(
         value.operations,
         target_profile=value.target_profile,
         trash_on_update=retained_options.trash_on_update,
-        review_admission=admission,
     )
     if value.required_bytes != required_bytes:
         raise ValueError("plan required bytes do not match operations")

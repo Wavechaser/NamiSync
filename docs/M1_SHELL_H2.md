@@ -377,7 +377,7 @@ its finite surface and one atomic outcome are named here.
 | 4P.20 | Apply D1B/F6 by trimming immutable execution authority/fact graphs, including the unread `ExecutionOperationFact.content_bytes`, while retaining the required mutable-overlay checks. | `tests/test_post_execution_workflow.py`, `tests/test_payload_roundtrip.py`, executor/workflow departments, and authority call-count regressions. | Complete |
 | 4P.21 | Apply C4 by sharing only the population-admission primitives while keeping each domain's wall declaration, count semantics, precedence, and user outcome independent. | `tests/test_plan_review_limits.py`, `tests/test_inventory_workflow.py`, `tests/test_scanner.py`, and first-excess matrices. | Complete |
 | 4P.22 | Apply C4/C8 by separating workflow-retained budgets from producer gates and reducing scanner to one admission parameter. | `tests/test_plan_review_limits.py`, `tests/test_scanner.py`, `tests/test_inventory_workflow.py`, and facade-consumer departments. | Complete |
-| 4P.23 | Apply D6 with private exact signal types and remove issuer, `fresh()`, and consume choreography without weakening refusal provenance or status truth. | Refusal/provenance cases in `tests/test_plan_review_limits.py`, `tests/test_workflows.py`, and `tests/test_inventory_workflow.py`. | Pending |
+| 4P.23 | Apply D6 with private exact signal types and remove issuer, `fresh()`, and consume choreography without weakening refusal provenance or status truth. | Refusal/provenance cases in `tests/test_plan_review_limits.py`, `tests/test_workflows.py`, and `tests/test_inventory_workflow.py`. | Complete |
 | 4P.24 | Apply C1 by centralizing exception-to-`FailureDetail` factories and adding an AST guard for direct retained-detail construction. | `tests/core/test_exception_graph.py`, the new AST policy regression, affected producer/consumer departments, and ordinary exception-path tests. | Pending |
 | 4P.25 | Conduct an independent adversarial review against rows 4P.0–4P.24 without absorbing new implementation scope. | Requirement-to-diff trace, accepted-test matrix, stop-rule audit, targeted counterexamples, and written disposition for every review finding. | Pending |
 | 4P.26 | Reconcile active documentation, task history, and BUGS status, run full verification, replace the handoff, and delete `CUSTODY_TAX_AUDIT.md` only after every accepted disposition has an authoritative home. | Affected department union, ordinary Node-enabled suite, import contracts, required protected gates, links/anchors, stale-contract searches, `git diff --check`, repository/stash inventory, and independent final review. | Pending |
@@ -476,9 +476,10 @@ and native/browser copies, complete-tree projection, and speculative future
 owners. Those costs, complete-object constants, formula, fixture, validator,
 and BR-G-45 evidence remain checkpoint 4. Dispatcher pre-run and cancellation-
 settlement exception owners are now closed independently. Refusal authority is
-also closed narrowly: only an exact PLAN fact issued by the current workflow's
-opaque admission family becomes `REFUSED+UNRUN`; workflow takes a fresh core
-snapshot, consumes the issuer, retires the raw signal, and saves no artifact.
+also closed narrowly: only the private exact plan signal carrying an exact PLAN
+fact becomes `REFUSED+UNRUN`; workflow takes a fresh core snapshot, retires the
+raw signal graph, and saves no artifact. Plan and inventory use distinct private
+signal types, while ordinary lookalikes remain ordinary failures.
 Phase delivery, correspondence, nested module collaborators, destination
 policy, and mutated preflight input cannot claim that authority. Ordinary
 exception ownership is deliberately not claimed by this prerequisite.

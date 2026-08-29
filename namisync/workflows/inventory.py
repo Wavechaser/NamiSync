@@ -78,7 +78,6 @@ from namisync.core.root_authority import (
 )
 from namisync.core.review import (
     MAX_PLAN_REVIEW_ROWS,
-    ReviewFactLimitError,
     ReviewFactLimitExceeded,
     ReviewLimitAxis,
     ReviewPopulation,
@@ -803,19 +802,19 @@ class _ObservedTaskRecordingIssue:
     failure: FailureDetail
 
 
-class _InventoryScanAdmission:
-    """Issue exact inventory review facts for one raw scan population."""
+class _InventoryReviewLimitSignal(ValueError):
+    """Private exact signal for an unpublished inventory-review limit."""
 
-    __slots__ = ("_issuer",)
+    def __init__(self, fact: ReviewFactLimitExceeded) -> None:
+        super().__init__(fact.reason)
+        self.fact = fact
 
-    def __init__(self) -> None:
-        self._issuer = object()
 
-    def _limit_error(
-        self,
-        population: ReviewPopulation,
-    ) -> ReviewFactLimitError:
-        fact = ReviewFactLimitExceeded(
+def _inventory_review_limit_signal(
+    population: ReviewPopulation,
+) -> _InventoryReviewLimitSignal:
+    return _InventoryReviewLimitSignal(
+        ReviewFactLimitExceeded(
             "review_fact_limit_exceeded",
             ReviewTreeKind.INVENTORY,
             population,
@@ -823,9 +822,13 @@ class _InventoryScanAdmission:
             MAX_PLAN_REVIEW_ROWS,
             None,
         )
-        error = ReviewFactLimitError(fact)
-        error._inventory_review_issuer = self._issuer
-        return error
+    )
+
+
+class _InventoryScanAdmission:
+    """Issue exact inventory review facts for one raw scan population."""
+
+    __slots__ = ()
 
     def require_source_rows(self, count: int) -> None:
         if exceeds_population_wall(
@@ -833,7 +836,7 @@ class _InventoryScanAdmission:
             limit=MAX_PLAN_REVIEW_ROWS,
             field_name="inventory scan domain rows",
         ):
-            raise self._limit_error(ReviewPopulation.DOMAIN)
+            raise _inventory_review_limit_signal(ReviewPopulation.DOMAIN)
 
     def require_informational_source_rows(self, count: int) -> None:
         if exceeds_population_wall(
@@ -841,7 +844,9 @@ class _InventoryScanAdmission:
             limit=MAX_PLAN_REVIEW_ROWS,
             field_name="inventory scan informational rows",
         ):
-            raise self._limit_error(ReviewPopulation.INFORMATIONAL)
+            raise _inventory_review_limit_signal(
+                ReviewPopulation.INFORMATIONAL
+            )
 
 
 class Scanner(Protocol):
@@ -1136,7 +1141,6 @@ def run_inventory(
     population_admission = _InventoryScanAdmission()
     review_limit_fact: ReviewFactLimitExceeded | None = None
     invalid_review_limit = False
-    unadmitted_review_limit = False
     try:
         with LedgerRecorder(
             deps.ledger_path, clock=deps.clock, managed_roots=(root,)
@@ -1162,26 +1166,24 @@ def run_inventory(
                     deps.clock.now(),
                 )
             )
-    except ReviewFactLimitError as error:
-        if type(error) is not ReviewFactLimitError:
+    except _InventoryReviewLimitSignal as error:
+        try:
+            if type(error) is not _InventoryReviewLimitSignal:
+                raise TypeError("inventory review limit signal must be exact")
+            review_limit_fact = snapshot_review_fact_limit(error.fact)
+            if (
+                review_limit_fact.tree_kind is not ReviewTreeKind.INVENTORY
+                or review_limit_fact.axis is not ReviewLimitAxis.ROWS
+            ):
+                raise ValueError("inventory review limit fact has the wrong scope")
+        except (AttributeError, TypeError, ValueError) as fact_error:
+            retire_exception_graph(fact_error)
             invalid_review_limit = True
-        else:
-            try:
-                review_limit_fact = _consume_inventory_review_limit(
-                    error,
-                    population_admission,
-                )
-                unadmitted_review_limit = review_limit_fact is None
-            except (AttributeError, TypeError, ValueError) as fact_error:
-                retire_exception_graph(fact_error)
-                invalid_review_limit = True
         retire_exception_graph(error)
 
     if invalid_review_limit:
-        raise RuntimeError("inventory review limit failure is invalid") from None
-    if unadmitted_review_limit:
         raise RuntimeError(
-            "unadmitted collaborator raised an inventory review fact limit"
+            "inventory review limit failure is invalid"
         ) from None
     if review_limit_fact is not None:
         return OperationResult(
@@ -2656,20 +2658,6 @@ def _binding_from_identity(
     if resolution.state != VolumeResolutionState.RESOLVED:
         raise VolumeResolutionRequired(resolution)
     return resolution.binding
-
-
-def _consume_inventory_review_limit(
-    error: ReviewFactLimitError,
-    admission: _InventoryScanAdmission,
-) -> ReviewFactLimitExceeded | None:
-    issuer = error.__dict__.pop("_inventory_review_issuer", None)
-    fact = snapshot_review_fact_limit(error.fact)
-    if (
-        fact.tree_kind is not ReviewTreeKind.INVENTORY
-        or fact.axis is not ReviewLimitAxis.ROWS
-    ):
-        raise ValueError("inventory review limit fact has the wrong scope")
-    return fact if issuer is admission._issuer else None
 
 
 def _admit_inventory_scan_result(

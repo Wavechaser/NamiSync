@@ -192,11 +192,11 @@ reprojects a staged candidate after publication.
 
 The plan session owns one cumulative `PlanReviewAdmission` ledger. Scanner,
 planner, observer, preflight, and result-adoption gates receive exact stateless
-`PlanReviewProducerAdmission` values that share only the workflow-owned opaque
-issuer and expose no retained-budget `admit` capability. Correspondence
+`PlanReviewProducerAdmission` capability that exposes no retained-budget
+`admit` capability and shares no counters or issuer with the ledger. Correspondence
 keeps its ordinary two-argument protocol; its concrete database query is
 structurally bounded by admitted scan keys and identities, then workflow
-captures the fallible result under a fresh family admission. Each raw population
+captures the fallible result under the same stateless producer gate. Each raw population
 has a stateless first-excess gate. Each scanner result is exact-adopted once and
 then shared by identity with first-party read-only consumers. Workflow still
 copies the fallible mapping result, but it exact-adopts the planner's immutable
@@ -219,16 +219,15 @@ same deeply read-only world reaches preflight and the retained verdict. The
 verdict must point to that exact world; an equal replacement is an ordinary
 contract failure, not a review-capacity refusal. There are no disposable plan
 previews, second callback-world copies, or verdict reconstruction. The workflow
-maps the first issued `ReviewFactLimitError` to `REFUSED+UNRUN` without saving a
-plan or exposing a partial result.
+maps the first exact private plan-limit signal to `REFUSED+UNRUN` without saving
+a plan or exposing a partial result.
 
-The retained ledger and every producer or result gate share one opaque issuer
-for that plan run and no source graph. The mapping accepts only
-an exact base error carrying that issuer, reconstructs a fresh exact PLAN fact,
-and retires the raw exception before returning. A subtype, malformed fact,
-wrong tree kind, or independently issued signal fails ordinarily, as does the
-same signal from phase delivery, correspondence, a nested scanner/observer
-collaborator, or destination policy. Preflight output validation requires an
+Plan and inventory use distinct private exact signal types. Workflow accepts
+only the plan signal, reconstructs a fresh exact PLAN fact, and retires the raw
+signal graph before returning. A normally produced signal with the wrong fact
+scope fails loudly; ordinary lookalike exceptions retain their ordinary failure
+identity. Forged private signals and reflective mutation remain outside the
+supported fault model. Preflight output validation requires an
 exact identity relation to the already admitted deeply read-only world, so
 replacement cannot become capacity refusal. Scanner, planner, and selection
 behavior is unchanged; observer and preflight receive the immutable review
@@ -246,9 +245,10 @@ checkpoint-4 model can freeze.
 before any ordinary or process-fatal error escapes. Root/path adapters project
 their existing logical, redacted message and raise a fresh unchained
 `ValueError`; phase delivery, scanner, correspondence, planner, observer,
-preflight, invalid/unissued-fact demotion, and save failures preserve their
-existing public type and identity without retaining request/root/options/scan/
-plan/world/verdict locals. This closes raw exception ownership, not path-message
+preflight, wrong-scope signal demotion, ordinary lookalike failures, and save
+failures preserve their existing public type and identity without retaining
+request/root/options/scan/plan/world/verdict locals. This closes raw exception
+ownership, not path-message
 construction or the other complete construction/callback costs assigned to the
 checkpoint-4 model.
 

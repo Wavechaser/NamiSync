@@ -102,16 +102,16 @@ nor charges or freezes its construction cost. Workflow then charges the final
 operation rows and only the unavoidable operation/dependency, assignment, and
 required-volume shallow slots once. Selection remains ordinary workflow policy
 and is neither copied nor charged by this prerequisite. First excess raises the
-shared typed review-limit error without publishing a partial plan.
+private exact plan-limit signal without publishing a partial plan.
 
-Review-limit authority belongs to the workflow's current admission family;
-planner receives one zeroed member. Planner logical-byte accumulation and
-candidate revalidation issue their limit through that member. Destination
-policy has no such authority: its identity, assignment, or unreviewed
-fingerprint error propagates unchanged from a direct planner call and workflow
-classifies an unissued review-limit signal as ordinary failure. Reviewed
-fingerprinting uses the one captured policy identity instead of rereading
-hostile policy properties.
+Review-limit authority belongs to the private signal type. Workflow supplies
+one stateless producer gate alongside its separate cumulative retained ledger;
+neither holds or shares an issuer. Planner logical-byte accumulation raises the
+same private plan signal directly. Destination-policy identity, assignment, or
+unreviewed fingerprint failures—including lookalikes with the same fact-shaped
+attributes—propagate with ordinary type and identity. Reviewed fingerprinting
+uses the one captured policy identity instead of rereading hostile policy
+properties.
 
 `snapshot_plan_options`, `plan`, and `adopt_plan_candidate` isolate their
 public call frame and retire traceback/cause/context links before an error
@@ -119,10 +119,10 @@ escapes. Property, assignment, fingerprint, and validation failures therefore
 preserve their existing public type, identity, and behavior without retaining
 stage-dependent policy, callback, shared scan, or input frames. Successful plan
 adoption returns the exact producer value; retained-plan admission remains a
-separate workflow step. The one
-required logical-byte `ReviewFactLimitError` cause remains by identity after its
-own frames retire. Arbitrary custom exception state leaves with the caller and
-is not retained planner custody.
+separate workflow step. The `ScalarDomainError` cause of the required private
+logical-byte signal remains by identity after its own frames retire. Arbitrary
+custom exception state leaves with the caller and is not retained planner
+custody.
 
 Those counters establish the planning-source wall, not the checkpoint-4
 complete retained-graph model. Policy and planning construction temporaries,
