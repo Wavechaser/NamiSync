@@ -1764,9 +1764,11 @@ defect, and move implementation-level test choreography out of the log.
   same item/result graph retained for terminal truth, or run a later validator
   before retaining an item whose emission had already returned. Mutation or a
   later mismatch could therefore rewrite or omit an accepted outcome. Fixed
-  with separate exact public/private snapshots, private pause accumulation,
-  accepted-prefix retention before later seams, and distinct settle, audit,
-  publication, summary, and returned-result graphs.
+  with one exact producer adoption into frozen, slotted public item shapes,
+  detached pause accumulation, and accepted-prefix retention before later
+  seams. Supported read-only terminal owners now share that one canonical item
+  graph across separate pre/post-audit headers; reflective frozen-object
+  corruption remains outside the supported fault model.
 - SEVERE - FIXED (2026-08-28). Exclusion delivery replay. A pause during
   plan-exclusion delivery retained no acceptance position, so resume began at
   the first exclusion and replayed already accepted reliable outcomes. Cause:

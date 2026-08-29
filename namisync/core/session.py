@@ -723,9 +723,8 @@ def run_session(
                 )
                 raise RuntimeError(_RESULT_ITEM_LIMIT_MESSAGE)
             snapshot = snapshot_result_item(body)
-            public_snapshot = snapshot_result_item(snapshot)
             try:
-                emit(public_snapshot)
+                emit(snapshot)
             except BaseException as error:
                 if detect_accumulator_mutation():
                     retire_exception_graph(error)
@@ -893,29 +892,17 @@ def run_session(
     result = normalize_result_diagnostics(replace(result, recording=recording))
 
     try:
-        settled_view = snapshot_operation_result(result)
-        settle(result_terminal_state(result), settled_view)
-        del settled_view
+        settle(result_terminal_state(result), result)
         try:
-            audit_view = snapshot_operation_result(result)
-            try:
-                audit = finalize_audit(audit_view)
-            finally:
-                del audit_view
+            audit = finalize_audit(result)
             if type(audit) is not RecordingStatus:
                 raise TypeError("audit finalizer must return RecordingStatus")
         except Exception as error:
             retire_exception_graph(error)
             audit = RecordingStatus.DEGRADED
         final_result = replace(result, audit=audit)
-        published_view = snapshot_operation_result(final_result)
-        publish_result(published_view)
-        del published_view
-        summary_view = snapshot_operation_result(final_result)
-        try:
-            summary = TerminalSummary.from_result(summary_view)
-        finally:
-            del summary_view
+        publish_result(final_result)
+        summary = TerminalSummary.from_result(final_result)
         emit(Terminal(summary))
         return RunOutcome(paused=False, result=final_result)
     finally:

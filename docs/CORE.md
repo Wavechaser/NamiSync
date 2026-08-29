@@ -267,12 +267,16 @@ emission`. The first producer excess similarly becomes runner-owned
 internal failures override an intercepted return, pause, or cancellation; they
 do not truncate or relabel prior admitted ran work, nor publish the excess
 occurrence.
-Each admitted item and Progress event has a private runner snapshot and a
-separate disposable emitter snapshot. Settlement, audit finalization, result
-publication, terminal-summary construction, and the returned `RunOutcome` also
-receive distinct exact `OperationResult` graphs. A callback may mutate its own
-copy, but cannot rewrite another owner's item, phase, diagnostic, recording, or
-counter truth.
+Each admitted reliable item crosses one producer-to-runner adoption boundary
+into its exact frozen, slotted public base shape. The emitter, settlement,
+audit finalizer, result publisher, terminal-summary builder, and returned
+`RunOutcome` then share that canonical immutable item tuple and object graph;
+settlement/audit use the pre-audit result header and publication/return use the
+post-audit header. Ordinary mutation is rejected, while reflective
+`object.__setattr__` corruption is outside the supported fault model. Progress
+events keep separate runner/emitter snapshots because the runner retains their
+latest mutable fallback truth. The external pause accumulator likewise remains
+detached on ingress and egress and never becomes the canonical result graph.
 Before settlement, audit finalization, or result publication, the runner applies
 the terminal summary's existing whole-value diagnostic rules to the full result
 header too. An oversized or invalid-Unicode phase error becomes null; an invalid
