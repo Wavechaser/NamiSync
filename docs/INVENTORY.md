@@ -51,9 +51,9 @@ deduplication, sorting, or SQL construction. Absent or ineligible values within
 that wall can still produce an empty result; duplicates and malformed row ids
 retain their existing selection semantics, but none bypasses raw request
 admission. Chunked reads retain their one-snapshot ordering and do not
-accumulate raw `sqlite3.Row` shells beside the typed result. Checkpoint 4's
-model must charge the now-finite normalized sets, ordered copies, sort scratch,
-query slices, and final tuples.
+accumulate raw `sqlite3.Row` shells beside the typed result. A complete retained-
+graph charge must cover the now-finite normalized sets, ordered copies, sort
+scratch, query slices, and final tuples.
 
 The inventory workflow re-resolves stable volume identity before each
 invocation, registers first locations in the exact order host -> volume
@@ -110,15 +110,15 @@ identity before enforcing the count, so an overlap is charged once. An excess
 after successful refresh is `FAILED+RAN`, publishes no partial selection, and
 starts no verifier work; a recorder finalization failure retains error
 precedence. Accepted rows share one root `Path` owner rather than copying it per
-candidate. The independent retained-byte axis remains inactive until the
-checkpoint-4 graph model freezes its complete charge.
+candidate. The independent retained-byte axis remains inactive until its
+complete graph charge is frozen.
 
 The workflow checks the exact candidate-row tuple and its first-excess count,
 then constructs `IntegritySelection` directly; no injectable builder or second
 validator owns policy. A valid candidate excess reaches no sink, phase event,
-verifier context, or runner. Checkpoint 4 must install the
-identity-deduplicated byte gate around the real construction graph; until then
-this prerequisite claims only the row boundary and no-partial behavior.
+verifier context, or runner. The identity-deduplicated retained-byte gate must
+surround the real construction graph; until then only the row boundary and no-
+partial behavior are supported.
 
 Inventory scanning likewise receives a mandatory workflow-owned population
 admission. The production scanner checks the next combined domain or warning

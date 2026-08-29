@@ -10,9 +10,8 @@ review-limit fact, and full-width Windows file identity.
 Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
 shared workflow tree substrate without changing their semantics, and makes
 recursive inventory scope an explicit core contract.
-The checkpoint-4 pre-model prerequisite adds finite plan-source admission and
-single exact typed scan adoption; it does not activate the later task-artifact
-reservation model.
+Finite plan-source admission and single exact typed scan adoption are active;
+the complete task-artifact reservation model remains unrealized.
 
 The remaining accepted-but-inactive Stage 6 second-half contract is mapped in
 `M1_BRIDGE.md`; its scalar and retention hard walls are owned by
@@ -100,16 +99,9 @@ fact, retires the raw signal graph, and retains neither the signal nor admission
 in its result. Tokenless and different-run same-domain signals are loud rung-3
 failures rather than refusal authority. It
 deliberately does not walk or size a complete Python object graph:
-checkpoint 4 must separately freeze and validate construction and container
-capacity, sorting/index storage, selection and preview values, strings/codecs,
-native/browser copies, callbacks, and multi-session retention before any task
-reservation is accepted.
-
-The module name reflects the primitives' plan-review origin, not neutral
-ownership of the shared 120,000-item M1 target. H2 checkpoint 4 must choose that
-neutral owner before moving or renaming the repeated constants or generic
-population primitives. No current import, wall, or refusal behavior changes
-until that decision.
+a complete task reservation must separately freeze and validate construction
+and container capacity, sorting/index storage, selection and preview values,
+strings/codecs, native/browser copies, callbacks, and multi-session retention.
 
 The M0 scan/plan/preflight portion is implemented in `core/pathing.py`,
 `core/root_authority.py`, `core/models.py`, `core/planning.py`, and
@@ -162,14 +154,14 @@ without rebuilding either graph. The observer world reaches judgment by
 identity, the verdict must retain that exact world, and workflow retains the
 exact callback verdict after its independent informational gate.
 
-The 33 core contracts newly slotted in checkpoint 4P (fourteen scan/model,
-eleven planning, six preflight, and two integrity contracts) have no
-`__weakref__` slot and therefore cannot be targets of `weakref.ref`. Production
-creates no weak references to them, and current leak regressions use explicitly
-weakref-capable witnesses instead. Do not add blanket weakref support: it adds
-storage to every instance. Add `weakref_slot=True` only to a named contract when
-a concrete ownership or leak witness requires it, with its representation cost
-included in the checkpoint-4 model.
+The 33 core contracts in the four cohorts above (fourteen scan/model, eleven
+planning, six preflight, and two integrity contracts) have no `__weakref__`
+slot and therefore cannot be targets of `weakref.ref`. Production creates no
+weak references to them, and current leak regressions use explicitly weakref-
+capable witnesses instead. Do not add blanket weakref support: it adds storage
+to every instance. Add `weakref_slot=True` only to a named contract when a
+concrete ownership or leak witness requires it, with its representation cost
+included in the owning model.
 
 `ScanScope` has exactly three canonical shapes. `FULL` carries neither exact
 paths nor subtree roots; `PATHS` carries only exact paths; and `SUBTREES`

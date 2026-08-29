@@ -1,149 +1,89 @@
 # Session Handoff
 
-Status (2026-08-30): checkpoint 4P remains complete. A separate bounded 4P-R
-corrective register is active on `milestone1` from clean baseline `e7c3601`.
-It owns one refusal-provenance regression, one pre-existing completion-membership
-performance defect, and their final documentation. Rows 4P-R.1 through 4P-R.3
-are complete; final integrated review and documentation row 4P-R.4 is next. Checkpoint 4
-proper has not started; no ownership/reservation model, formula, fixture,
-validator, lifecycle surface, or BR-G-45 evidence is ratified or active.
+Status (2026-08-30): checkpoint-4 prerequisite consolidation and the bounded
+post-review corrections are complete on `milestone1`. Checkpoint 4 proper has
+not started. No process-live task surface, ownership/reservation formula,
+constant set, maximum fixture, independent validator, command row, or BR-G-45
+evidence is accepted or active.
 
-The 4P-R register and its non-goals are authoritative in `M1_SHELL_H2.md`.
-Every implementation row must be independently reviewed and committed before
-the next begins. Current 120,000-item refusals remain unchanged. Moving or
-renaming their current constants or generic primitives, changing the cap, and
-adding blanket weakref slots are excluded from implementation in this pass.
+## Delivered
 
-## Accepted checkpoint-4P boundary
+- Repository and process rules now use the four-rung external, reentrant,
+  internal-module, and reflective/forged trust model. The reviewed auxiliary
+  branches were removed after accepted extraction; task containment, recovery,
+  defect escalation, and documentation ownership are ratified. Python support
+  is lower-bound-only at 3.13 with no exact-patch or upper-version gate.
+- Workflow custody now uses incremental execution, linked post-copy, and
+  standalone-integrity reconciliation; one-time adoption of exact immutable
+  scan/plan/world/verdict values; read-only reentrant review inputs; reduced
+  execution authority; and centralized retained-exception projection.
+- Plan and inventory review-limit refusal requires the exact private signal,
+  fact scope, and active same-run domain token. Direct internal, different-run,
+  cross-domain, malformed, and lookalike failures cannot claim refusal
+  authority. Legitimate first-excess status, save boundaries, and raw exception
+  retirement are unchanged.
+- Linked and standalone integrity completion use one validated selection-owned
+  immutable id index shared with verifier progress, removing the quadratic
+  candidate scan without changing construction, equality, continuation,
+  payloads, walls, status, or outcomes.
+- The repeated 120,000-item populations now express one M1 performance-and-
+  safety support target. Existing independent first-excess behavior remains
+  through M1; there is no support promise above the target and no asserted
+  failure cliff at 120,001.
 
-- Rows 4P.0–4P.3 closed repository custody, task-containment rules, the
-  four-rung trust/adoption architecture, and the Python `>=3.13` lower bound
-  without an upper-version gate.
-- Rows 4P.4–4P.10 characterized and made execution, post-copy, and standalone-
-  integrity reconciliation incremental; centralized pre-run settlement; shared
-  canonical retained result items; and removed proven duplicate path work.
-- Rows 4P.11–4P.18 slotted the accepted immutable contracts, adopted exact
-  first-party scan/plan/world/verdict values once at named transfers, validated
-  mutable execution state without rebuilding it, and kept reentrant
-  collaborators on read-only review values.
-- Rows 4P.19–4P.24 moved recording authority out of mutable execution state,
-  trimmed redundant authority graphs, separated retained budgets from counter-
-  free producer gates, privatized domain limit signals, and centralized
-  rendered live-exception projection plus lifecycle-link retirement.
-- Row 4P.25 independently reviewed requirements, tests, stop rules, repository
-  custody, and exclusions through 4P.24 and found no blocking regression,
-  catastrophic stop, or excluded-scope intrusion.
+## Deferred to checkpoint 4
 
-Commit `4d0bbc0` records that adversarial-review receipt. The subsequent
-ordinary closeout gate exposed one missed 4P.16 tool consumer: the executor rig
-still passed mutable execution state to observer and preflight. Bounded repair
-`c67c4ed` now constructs their immutable `ExecutionReview`; 88 focused tests,
-1,236 tools/preflight/workflows tests, and all 11 import contracts passed. The
-repair changes no schema, wire, wall, or public status.
+- Freeze the complete simultaneous owner graph, constants, formula, maximum
+  fixtures, independent validator, reservation outcomes, and BR-G-45 evidence
+  before activating any task surface.
+- Choose a domain-neutral owner for the shared 120,000 target and generic
+  population primitives, centralize the repeated constants, and resolve the
+  plan-specific `core/review.py` name. Current imports and first-excess behavior
+  remain unchanged.
+- Model or eliminate remaining complete-graph, construction, tree/index,
+  container-capacity, shallow callback-guard/overlap, codec, Python/CLR,
+  native/browser, raw-frame, and multi-session owners.
+- The 33 core contracts slotted by the prerequisite pass do not support weak
+  references. Add support only to a named class when a concrete ownership or
+  leak witness requires it and charge that representation cost.
 
-Corrective row 4P-R.1 restores the refusal provenance accidentally lost in
-4P.23 without restoring `fresh()` or public signal classes. The cumulative plan
-ledger and counter-free producer gate share one opaque same-run token;
-inventory owns a separate domain-local token. Exact type, fact scope, and token
-identity are required before typed refusal, while tokenless and different-run
-rung-3 signals fail loudly and raw exception graphs are retired. Logical-byte
-overflow now uses the supplied plan capability. Legitimate refusal facts,
-status, no-plan-save behavior, domain separation, and save-callback boundaries
-are unchanged.
+## Repository custody
 
-Corrective row 4P-R.2 replaces repeated candidate-tuple scans in linked and
-standalone integrity completion with one selection-owned immutable id index.
-Verifier progress aliases that index, while replay still checks the completed
-map first. Authority checks reject missing or changed indexes without repair.
-The stale BUGS entry now distinguishes this pre-existing core defect from the
-already-fixed workflow authority-scaling mechanism. Construction, equality,
-continuation, explicit payloads, outcomes, and current walls are unchanged.
+Only `main` and `milestone1` remain as local branches, with one worktree.
+Preserve these stashes by descriptive name and stable object id:
 
-Corrective row 4P-R.3 records 120,000 items in each applicable plan, inventory,
-or standalone-integrity population as one shared M1 performance-and-safety
-support target. It changes no first-excess behavior and claims neither support
-above that scale nor a failure cliff at 120,001. Checkpoint 4 must choose a
-neutral constant/primitive owner and resolve the plan-specific `core/review.py`
-name. The 33 core contracts newly slotted in checkpoint 4P currently lack
-weakref slots; production does not weak-reference them, and future support is
-class-specific only when a concrete ownership or leak witness requires it.
+- `checkpoint 4 model draft before prerequisite consolidation` —
+  `3940df5abf6056435e7d70a309324c0442664a74`
+- `safety: pre-simplicity exception audit 2026-08-27` —
+  `5adbe65a2ed318943429aaeeb439b5918d71b6ad`
+- `recovery: paused exception retirement for source-wall simplicity audit
+  2026-08-27` — `8a639ab77cae98ea3ae0b8db2dc41c328c1b1391`
+- `recovery: interrupted checkpoint-4 audit 2026-08-27` —
+  `33f699448b5940b2aa4b0464b3a238297c68ab86`
 
-Two procedural exceptions remain explicit rather than being normalized away.
-The 4P.10 named-verification cell was strengthened after register freeze without
-a specific user decision; the stronger gate remains as a one-off exception.
-The 4P.11 production commit `72f4303` requires test-only companion `42162a4` for
-ordinary-green reviewability, so history was not rewritten. Separate fix
-`c8f03b5` was a bounded pre-existing defect below both stop thresholds, not an
-expansion of the accepted denominator.
-
-## Repository and recovery custody
-
-- The only local branches are `main` and active `milestone1`; there is one
-  worktree. The reviewed phase-0, M0-documentation, and power-loss recovery
-  auxiliary refs were deleted. The former
-  `codex/recovery-power-loss-20260827` tree remains reachable through its named
-  recovery stash rather than a branch.
-- Preserve these stashes by descriptive name and stable object id:
-  - `checkpoint 4 model draft before prerequisite consolidation` —
-    `3940df5abf6056435e7d70a309324c0442664a74`;
-  - `safety: pre-simplicity exception audit 2026-08-27` —
-    `5adbe65a2ed318943429aaeeb439b5918d71b6ad`;
-  - `recovery: paused exception retirement for source-wall simplicity audit
-    2026-08-27` — `8a639ab77cae98ea3ae0b8db2dc41c328c1b1391`;
-  - `recovery: interrupted checkpoint-4 audit 2026-08-27` —
-    `33f699448b5940b2aa4b0464b3a238297c68ab86`.
-- Do not pop or apply the checkpoint-4 model stash wholesale. Its constants,
-  hashes, totals, and model conclusions were rejected. Inspect it by stable name
-  only when checkpoint 4 begins, and rederive any useful fixture or oracle shape
-  from current source and ratified requirements.
-- `CUSTODY_TAX_AUDIT.md` is temporary closeout evidence, not active product
-  documentation. It was removed uncommitted in row 4P.26 after every accepted
-  disposition gained an authoritative home. Rejected and excluded dispositions
-  were not promoted merely to retain that temporary file.
+The recovery object remains reachable as `33f6994`. The saved model draft is
+recovery context only; do not apply it wholesale or reuse its conclusions
+without rederiving them from current source and ratified requirements.
 
 ## Verification
 
-- Node-enabled affected-department union:
-  `4,852 passed, 1 skipped, 336 deselected`.
-- Post-repair tool-focused and tools/preflight/workflows checks:
-  `88 passed, 2 skipped` and `1,236 passed, 3 skipped`.
-- Final Node-enabled ordinary suite: `5,157 passed, 4 skipped, 28 deselected`.
-- Import boundaries: 11 contracts kept, none broken.
-- 4P-R.1 focused provenance gate: 411 passed.
-- 4P-R.1 independent core/scanner/planner/preflight/workflows department union:
-  2,435 passed, 1 skipped; bounded documentation re-review passed.
-- 4P-R.2 focused integrity/verifier/payload/workflow gate: 622 passed.
-- 4P-R.2 core/verifier/workflows department union: 2,342 passed, 1 skipped;
-  all 11 import contracts held and independent review found no blocker.
-- 4P-R.3 authority, active-wall, constant-owner, and weakref-usage searches:
-  no contradiction or production weakref consumer; 29 active documents,
-  183 relative targets, and 83 heading anchors clean; `git diff --check` clean.
-- Protected executor settlement oracle: 30 scenarios across three identical
-  successful runs.
-- 4P.26 active-document scope: 30 documents with no missing relative target and
-  83 anchor links with no missing target; targeted stale-contract searches and
-  `git diff --check` were clean.
-- Repository custody: only `main` and `milestone1`, one worktree, all four named
-  stashes with the exact ids above, and reachable recovery object `33f6994`.
-- Independent final review found no blocking design, documentation, receipt, or
-  repository-custody finding.
-
-## Excluded work
-
-Checkpoint 4P does not authorize F4; C3, C5, C6, or C7; checkpoint 4 proper or
-its model, constants, fixtures, validator, and BR-G-45 evidence; executor journal
-or reducer restructuring; M2 process-restart durability; or schema, wire, wall,
-and public-status changes. Construction/transient, complete-tree, sorting/index,
-codec/text, native/browser, callback-overlap, container-capacity, and other
-remaining ownership costs stay checkpoint-4 model inputs. Rejected model-stash
-dispositions and unsupported reflective/forged behavior do not enter the
-accepted register by description alone.
+- Node-enabled affected departments: 2,556 passed, 1 capability skip, 2,671
+  deselected.
+- Node-enabled ordinary suite: 5,196 passed, 4 capability skips, 28 headed
+  deselected.
+- Import boundaries: all 11 contracts kept.
+- Protected settlement oracle: 30 scenarios across three identical successful
+  prerequisite runs; the corrective follow-up did not change executor
+  settlement.
+- Active documents: 29 documents, 182 relative targets, and 83 Markdown
+  anchors resolve; stale-contract searches, repository custody, and
+  `git diff --check` are clean.
+- Independent final review found no blocking code, documentation-authority,
+  overclaim, or repository-custody finding.
 
 ## Next safe action
 
-Perform only 4P-R.4 closeout: run the integrated affected and ordinary gates,
-conduct independent final review, reconcile BUGS/history/handoff, and condense
-the checkpoint-4P/4P-R records by delivered area rather than commit. Remove
-obsolete audit shorthand and non-events; keep actual checkpoint-4 objectives,
-criteria, and genuine deferrals prominent. Do not begin checkpoint 4 or absorb
-optional cleanup.
+Begin checkpoint 4 proper from the compact boundary in `M1_SHELL_H2.md`.
+Freeze and independently review the complete analytical model before dormant
+lifecycle machinery or task activation. Do not change current population walls
+or apply the saved model draft as implementation authority.

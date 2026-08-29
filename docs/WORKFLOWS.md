@@ -11,8 +11,8 @@ commands. Stage 5.5's workflow-owned selection semantics are now implemented:
 direct user deselection remains distinct from safety exclusion, execution
 re-derives the authoritative set, and plan payload v5 plus execution payload v7
 preserve that provenance and executor continuation truth.
-Stage 5.5 facade integration is complete; Stage 6's pre-model planning-source
-ownership wall is active without freezing the checkpoint-4 reservation model;
+Stage 5.5 facade integration is complete; the planning-source ownership wall is
+active while the complete task-artifact reservation model remains unrealized;
 Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
@@ -44,8 +44,8 @@ classifies current durable evidence in the original execution scope.
 Installed NamiSync modules are trusted-but-fallible internal (rung 3)
 participants, not adversarial security principals. Their public returns are the
 workflow's named ownership-transfer points: admit a compound result once, then
-share immutable base values with first-party read-only consumers. Completed 4P
-adoption rows no longer deep-reconstruct immutable scan, plan, observation,
+share immutable base values with first-party read-only consumers. These
+adoption paths no longer deep-reconstruct immutable scan, plan, observation,
 verdict, or execution authority graphs. Mutable execution overlays still
 receive one compound audit at each producer return and cheap prior-truth guards
 at reentrant (rung 2) callback seams. External (rung 1) inputs are validated and
@@ -145,9 +145,9 @@ The builder checks source occurrence `N+1` against its local wall before
 accessing that member. Within the wall it reconstructs and validates each exact
 member before duplicate classification, and it never retains the first excess
 source member. It keeps one minimum display spelling for each canonical path key.
-Checkpoint 4 owns synthetic ancestor/index construction and the complete
-projection-byte charge; this row prerequisite does not price indexes, sort
-storage, or disposable construction maps.
+Synthetic ancestor/index construction and the complete projection-byte charge
+remain unclosed; this row boundary does not price indexes, sort storage, or
+disposable construction maps.
 
 Plan projection preserves that single path authority when several immutable
 operations share one target. It retains one path/group row and emits every
@@ -244,13 +244,11 @@ replacement cannot become capacity refusal. Scanner, planner, and selection
 behavior is unchanged; observer and preflight receive the immutable review
 projection instead of mutable continuation.
 
-This is the planning-source ownership prerequisite for checkpoint 4. Its row
-and shallow-reference counters are not a reservation formula, heap estimate,
-or complete task-artifact validator. Construction/container capacity,
-sorting/index storage, selection, complete projections, serialization,
-native/browser copies, and
-multi-session owners still need separate closure or charge before the
-checkpoint-4 model can freeze.
+These planning-source row and shallow-reference counters are not a reservation
+formula, heap estimate, or complete task-artifact validator. Construction/
+container capacity, sorting/index storage, selection, complete projections,
+serialization, native/browser copies, and multi-session owners still need
+separate closure or charge before a complete model can be frozen.
 
 `run_plan` now isolates its phase frame and retires traceback/cause/context
 before any ordinary or process-fatal error escapes. Root/path adapters project
@@ -262,8 +260,7 @@ Phase delivery, scanner, correspondence, planner, observer, preflight,
 ordinary lookalike failures, and save failures otherwise preserve their
 existing public type and identity without retaining request/root/options/scan/
 plan/world/verdict locals. This closes raw exception ownership, not path-message
-construction or the other complete construction/callback costs assigned to the
-checkpoint-4 model.
+construction or the other unmodeled construction/callback costs.
 
 1. Lexically normalize and validate distinct non-nested roots and request
    semantics without following filesystem links. The shared core chain-only
@@ -743,8 +740,8 @@ saved resume validates every exact id and order. The first post-refresh excess
 returns `FAILED+RAN` with the core-owned candidate fact's type and message,
 without invoking the selection sink, verifier context, runner, hashing, or
 outcome collection. Recorder open/close failure remains authoritative over a
-simultaneous scale fact. The retained-byte and payload-envelope axes await the
-checkpoint-4 frozen graph/occurrence model.
+simultaneous scale fact. The retained-byte and payload-envelope axes await a
+complete frozen graph/occurrence model.
 
 Inventory scan composition now requires the scanner's structural population
 admission argument. The scanner checks each next domain/warning append and the
@@ -756,8 +753,8 @@ excess and before normalization, validation, deduplication, or sorting; result
 collectors stop before materializing the first excess typed snapshot. Integrity
 validates the exact candidate-row tuple and then uses its ordinary
 workflow-owned construction directly; there is no injected builder or duplicate
-general row validator. Checkpoint 4's first model commit must add the retained-
-byte authority around the real construction graph.
+general row validator. Retained-byte authority remains unimplemented and must
+surround the real construction graph.
 
 Candidate filtering happens only while freezing a new integrity selection.
 In the current implementation, baseline admits eligible non-directory rows

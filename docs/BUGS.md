@@ -480,14 +480,14 @@ defect, and move implementation-level test choreography out of the log.
 
 - MODERATE - OPEN (2026-08-27). Task-adjacent owner-count gap. The desktop
   registry caps live cards, but the complete runtime/service/dispatcher graphs
-  and close-time owners do not yet share the checkpoint-4 byte reservation.
+  and close-time owners do not yet share one task-wide byte reservation.
   Unpublished desktop session attachment is now structural: every desktop start
   binds its exact reservation before scheduling, observer timeout keeps that
   capacity charged under Dispatcher retry, and exact-session release detaches
   only after observer/detail retirement. Malformed return cleanup cannot drop
   an unauthenticated plan. The remaining cause is the absent task-wide graph
-  charge and multi-session lifecycle; checkpoint 4 must bind those owners, and
-  no formula may treat a timeout as retirement.
+  charge and multi-session lifecycle; closure must bind those owners, and no
+  formula may treat a timeout as retirement.
 - MODERATE - FIXED (2026-08-27). Pre-run exception closure retention. Lock
   acquisition, continuation open, and canceled-session settlement passed a raw
   collaborator exception through a nested runner callback, keeping its
@@ -748,10 +748,10 @@ defect, and move implementation-level test choreography out of the log.
 
 - MODERATE - FIXED (2026-08-29). Orphan analytical admission. Desktop startup
   refused every runtime outside one exact CPython patch, GIL, and allocator
-  profile even though the checkpoint-4 object model, validator, and acceptance
-  evidence that could justify that restriction do not exist. Cause: a model-
-  dependent prerequisite gate remained active after the draft model was
-  rejected. Fixed by removing the gate, restoring the lower-bound-only Python
+  profile even though no object model, validator, or acceptance evidence could
+  justify that restriction. Cause: model-dependent assumptions became launch
+  policy without ratified authority. Fixed by removing the gate and restoring
+  the lower-bound-only Python
   metadata policy, and retaining exact runtime profiles only as measurement
   qualifiers; native dependency and WebView2 compatibility gates remain.
 - MODERATE - OPEN (2026-08-27). Response-copy ownership gap. Python now admits
@@ -761,7 +761,7 @@ defect, and move implementation-level test choreography out of the log.
   browser receipt, with document-generation retirement. CLR/WebView2/browser
   encodings still need source-derived byte charges. Cause: ingress and Python-
   worker bounds were reused as if they also bounded every output copy;
-  checkpoint 4 must freeze the remaining representation-specific charges.
+  closure requires the remaining representation-specific charges to be frozen.
 - MODERATE - FIXED (2026-08-28). Document-generation custody accumulation. A
   reload reconstructed the post helper while queued callbacks, encoded values,
   and sent appearance/readiness values had no page-acknowledged retirement, so
@@ -1346,7 +1346,7 @@ defect, and move implementation-level test choreography out of the log.
   candidate-row tuple before construction, and no valid excess publishes
   partial work. Synthetic tree/index and candidate construction, their finite
   preprocessing transients, old/new task generations, and the complete byte
-  authority remain checkpoint-4 model owners.
+  authority remain unclosed model owners.
 - SEVERE - FIXED (2026-08-28). Hostile resolution alias mutation. Inventory
   retained resolver-returned mount/evidence objects across the later root probe,
   so callback mutation could change the root or volume facts used for scan and
@@ -1375,7 +1375,7 @@ defect, and move implementation-level test choreography out of the log.
   one-snapshot streamed reads capped at the first row beyond 120,000, exact
   saved order/missing checks, stale identity deduplication, and workflow
   settlement that starts no verifier work. The independently modeled retained-
-  byte and codec-envelope axes remain checkpoint-4 work.
+  byte and codec-envelope axes remain unimplemented.
 - MODERATE - FIXED (2026-08-26). Ambient snapshot placement. File admission
   copied complete database/WAL contents into an environment-selected temporary
   directory, which could place private validation data outside the required
@@ -1747,8 +1747,8 @@ defect, and move implementation-level test choreography out of the log.
   reconstruction. Host consumers, document callbacks, and raw failures that do
   not become `FailureDetail` remain open. Cause:
   bounded public failure projection did not consistently retire the caught
-  graph before the next ownership transition. Checkpoint 4 must preserve public
-  behavior while closing every remaining app-owned raw exception reference;
+  graph before the next ownership transition. Closure must preserve public
+  behavior while retiring every remaining app-owned raw exception reference;
   arbitrary caller-owned attributes are not bounded task artifacts.
 - MODERATE - FIXED (2026-08-30). Review-limit refusal provenance. A first-party
   plan or inventory collaborator could directly raise its domain's private
@@ -1773,7 +1773,7 @@ defect, and move implementation-level test choreography out of the log.
   final charge for unavoidable shallow scan/plan/world/verdict slots.
   Excess is `REFUSED+UNRUN` and saves no plan.
   Construction, sorting/index storage, previews, codecs, native/browser copies,
-  complete graphs, exceptions, and multi-session owners remain checkpoint 4.
+  complete graphs, exceptions, and multi-session owners remain unclosed.
 - SEVERE - FIXED (2026-08-28). Reliable result custody aliasing. The generic
   runner, execution workflow, and integrity workflow could give a callback the
   same item/result graph retained for terminal truth, or run a later validator

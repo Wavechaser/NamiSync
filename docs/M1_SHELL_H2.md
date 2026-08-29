@@ -7,14 +7,11 @@
 
 Delivery status (2026-08-30): checkpoints 0–3 and the independently reviewed
 3R remediation are complete, including the separately reviewed checkpoint-3.3
-legacy-source removal. Checkpoint 4P's prerequisite consolidation is complete
-under the closed register below. The bounded 4P-R corrective register is active
-after independent review found one refusal-provenance regression and one
-pre-existing completion-membership performance defect. It activates no task
-surface, reservation model, constant, fixture, validator, or BR-G-45 evidence.
-Checkpoint 4 proper has not started, and its rejected draft remains quarantined
-outside the working tree. Checkpoints 5–12 remain pending. No checkpoint-4
-command or control is active.
+legacy-source removal. Checkpoint-4 prerequisite consolidation and its bounded
+corrections are complete under the combined closeout below. Checkpoint 4 proper
+has not started; no task surface, reservation model, constant set, fixture,
+validator, BR-G-45 evidence, command, or control is active. Checkpoints 5–12
+remain pending.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
@@ -161,9 +158,9 @@ mergeable task-owned work on the disposable recovery branch required by
 `AGENTS.md`, then replace `HANDOFF.md` with the exact branch and commit,
 register row, verification, excluded dirty-file ownership, and next recovery
 action. A stash or unstaged tree alone is not the safe-stop authority;
-checkpoint 4P.26 performs this bounded task's own history/documentation
-closure, while checkpoint 12 remains the integrated Stage 6 final-
-documentation closure.
+the completed prerequisite closeout performs this bounded task's own history/
+documentation closure, while checkpoint 12 remains the integrated Stage 6
+final-documentation closure.
 
 ### 0. Ratify the reslice and protocols
 
@@ -346,514 +343,145 @@ remains protected. S5 and identity design holds are
 resolved; current persistence/reset and M2 recovery constraints live in
 [DATABASE.md](DATABASE.md) and [DISPATCHER.md](DISPATCHER.md).
 
-### 4P. Consolidate checkpoint-4 prerequisites before the model
+### 4P. Close checkpoint-4 prerequisites
 
-Checkpoint 4P is a bounded consolidation checkpoint, not checkpoint 4 proper.
-Its accepted rows are the sole completion denominator. Findings discovered
-after this register freezes do not add a row and do not by themselves authorize
-another fix; they follow the bug policy below and Task Containment And Recovery
-in `AGENTS.md`. A predeclared row may contain several known instances only when
-its finite surface and one atomic outcome are named here.
+**Complete (2026-08-30).** This combined record covers prerequisite
+consolidation, the bounded corrections found during review, and final closeout.
+It is not checkpoint 4 proper and activated no task-lifecycle surface,
+reservation model, command row, schema, wire contract, public status, or
+continuation version.
 
-| Id | Accepted outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| 4P.0 | Complete the reviewed auxiliary-branch disposition while retaining the named recovery/model stashes and reachable recovery object. | `git branch --list`, `git worktree list --porcelain`, descriptive stash hashes, recovery-object reachability, and worktree status. | Complete |
-| 4P.1 | Ratify the closed register, accepted-denominator rule, defect escalation, catastrophic stops, disposable recovery commits, and BUGS handling without changing product behavior. | Documentation authority review, targeted policy/status searches, and `git diff --check`. | Complete |
-| 4P.2 | Ratify the trust/adoption, capacity/freshness, result-custody, runtime-premise, and active/inactive-wall architecture and repair current v7/checkpoint/signature documentation. | Independent architecture/defense review, contract-source locators, links/anchors, targeted stale-contract searches, and `git diff --check`. | Complete |
-| 4P.3 | Remove exact-CPython-patch production admission and set the supported Python metadata floor to lower-bound-only 3.13. | `tests/interfaces/web/test_host.py`, packaging-metadata checks, owning interface/web departments, and ordinary startup verification. | Complete |
-| 4P.4 | Freeze current execution, post-copy, and standalone-integrity reconciliation behavior before restructuring it. | Focused characterization in `tests/test_post_execution_workflow.py` and `tests/test_inventory_workflow.py`, plus the affected workflow baseline. | Complete |
-| 4P.5 | Make executor-result reconciliation incremental without changing accepted item, counter, recording, continuation, or settlement truth. | `tests/test_post_execution_workflow.py`, `tests/test_executor_settlement.py`, and the executor/workflow departments. | Complete |
-| 4P.6 | Make post-copy reconciliation incremental while preserving candidate order, completion, exclusion, and continuation truth. | Post-copy cases in `tests/test_post_execution_workflow.py` and the affected verifier/workflow departments. | Complete |
-| 4P.7 | Make standalone-integrity reconciliation incremental while preserving refresh, ran/unrun, candidate, and reliable-result truth. | `tests/test_inventory_workflow.py`, `tests/core/test_integrity.py`, and the inventory/verifier/workflow departments. | Complete |
-| 4P.8 | Replace the duplicated pre-run settlement dispatches with one shared C2 path while preserving every fresh/resumed/verify-continuation branch. | The pre-run, refusal, cancellation, exclusion, and recording matrix in `tests/test_post_execution_workflow.py`. | Complete |
-| 4P.9 | Apply D5/F2 so core/session retains one canonical immutable result-item graph and gives consumers the already-owned items without redundant terminal reconstruction. | `tests/core/test_session_events.py`, `tests/test_result_classification.py`, `tests/test_workflows.py`, and session/workflow departments. | Complete |
-| 4P.10 | Apply F1/F3 path simplification so validated canonical paths fold without duplicate validation and the proven redundant path checks disappear. | Focused core, scanner, planner, preflight, node-tree, recorder, integrity, verifier, and web-path tests plus their owning departments. | Complete |
-| 4P.11 | Add slots to the accepted fourteen scan/model dataclasses without changing their fields, equality, validation, or serialization. | Focused slot/undeclared-attribute regressions plus `tests/test_core_scanplan.py`, `tests/test_scanner.py`, and `tests/test_plan_review_limits.py`. | Complete |
-| 4P.12 | Add slots to the accepted eleven planning dataclasses without changing plan identity, fingerprint, payload, or selection semantics. | Focused slot regressions plus `tests/test_core_scanplan.py`, `tests/test_planner.py`, `tests/test_plan_review_limits.py`, and `tests/test_payload_roundtrip.py`. | Complete |
-| 4P.13 | Add slots to the accepted six preflight and two integrity dataclasses without changing observation, refusal, candidate, or continuation semantics. | Focused slot regressions plus `tests/test_preflight.py`, `tests/core/test_integrity.py`, `tests/test_inventory_workflow.py`, and `tests/test_post_execution_workflow.py`. | Complete |
-| 4P.14 | Apply D2/D3A so each immutable scan result is validated and adopted once rather than reconstructed for first-party read-only consumers. | `tests/test_plan_review_limits.py`, `tests/test_scanner.py`, `tests/test_planner.py`, and `tests/test_preflight.py`, including hostile-shape and first-excess cases. | Complete |
-| 4P.15 | Apply D2 to provide nonallocating `ExecutionSet` and payload validation without rebuilding already-valid record graphs. | `tests/test_payload_roundtrip.py`, `tests/test_post_execution_workflow.py`, and core/workflow payload departments. | Complete |
-| 4P.16 | Apply D3B by introducing immutable `ExecutionReview` input and a deeply read-only `ObservedWorld` so read-only collaborators receive no mutable execution container. | `tests/test_preflight.py`, `tests/test_plan_review_limits.py`, and `tests/test_post_execution_workflow.py`, including mutation-refusal cases. | Complete |
-| 4P.17 | Apply D4A by replacing deep planner-result reconstruction with one exact compound planner admission. | `tests/test_planner.py`, `tests/test_plan_review_limits.py`, and planner/workflow consumer departments. | Complete |
-| 4P.18 | Apply D4B by replacing deep observer/verdict reconstruction with exact compound admission at their declared adoption points. | `tests/test_preflight.py`, `tests/test_plan_review_limits.py`, and preflight/workflow consumer departments. | Complete |
-| 4P.19 | Introduce `RecordingSpec` so recording authority no longer resides in mutable `ExecutionSet`, without changing settlement or recording outcomes. | `tests/test_executor_settlement.py`, `tests/test_post_execution_workflow.py`, recorder integration tests, and the protected settlement oracle under its existing gate. | Complete |
-| 4P.20 | Apply D1B/F6 by trimming immutable execution authority/fact graphs, including the unread `ExecutionOperationFact.content_bytes`, while retaining the required mutable-overlay checks. | `tests/test_post_execution_workflow.py`, `tests/test_payload_roundtrip.py`, executor/workflow departments, and authority call-count regressions. | Complete |
-| 4P.21 | Apply C4 by sharing only the population-admission primitives while keeping each domain's wall declaration, count semantics, precedence, and user outcome independent. | `tests/test_plan_review_limits.py`, `tests/test_inventory_workflow.py`, `tests/test_scanner.py`, and first-excess matrices. | Complete |
-| 4P.22 | Apply C4/C8 by separating workflow-retained budgets from producer gates and reducing scanner to one admission parameter. | `tests/test_plan_review_limits.py`, `tests/test_scanner.py`, `tests/test_inventory_workflow.py`, and facade-consumer departments. | Complete |
-| 4P.23 | Apply D6 with private exact signal types and remove issuer, `fresh()`, and consume choreography without weakening refusal provenance or status truth. | Refusal/provenance cases in `tests/test_plan_review_limits.py`, `tests/test_workflows.py`, and `tests/test_inventory_workflow.py`. | Complete |
-| 4P.24 | Apply C1 by centralizing exception-to-`FailureDetail` factories and adding an AST guard for direct retained-detail construction. | `tests/core/test_exception_graph.py`, the new AST policy regression, affected producer/consumer departments, and ordinary exception-path tests. | Complete |
-| 4P.25 | Conduct an independent adversarial review against rows 4P.0–4P.24 without absorbing new implementation scope. | Requirement-to-diff trace, accepted-test matrix, stop-rule audit, targeted counterexamples, and written disposition for every review finding. | Complete |
-| 4P.26 | Reconcile active documentation, task history, and BUGS status, run full verification, replace the handoff, and delete `CUSTODY_TAX_AUDIT.md` only after every accepted disposition has an authoritative home. | Affected department union, ordinary Node-enabled suite, import contracts, required protected gates, links/anchors, stale-contract searches, `git diff --check`, repository/stash inventory, and independent final review. | Complete |
+| Delivered area | Final state |
+| --- | --- |
+| Repository, rules, and runtime premise | Removed the three reviewed auxiliary branches while retaining the four named recovery/model stashes and reachable recovery object; ratified task containment, recovery, documentation, and the four-rung trust/adoption rules; removed exact-CPython-patch admission so supported Python remains lower-bound-only at 3.13. |
+| Reconciliation and retained identity | Made execution, linked post-copy, and standalone-integrity reconciliation incremental; unified pre-run settlement; reused canonical terminal items and validated paths; replaced linked and standalone completion scans with one selection-owned immutable id index also used by verifier progress. |
+| Immutable adoption and callback custody | Slotted the accepted scan/model, planning, preflight, and integrity cohorts; adopted exact immutable scan, plan, observed-world, and verdict values once at named transfers; validated mutable execution state without rebuilding it; supplied read-only review values to reentrant collaborators. |
+| Execution and retained-failure authority | Moved recording inputs into `RecordingSpec`; removed redundant immutable execution authority/fact graphs while preserving mutable-overlay checks; centralized retained live-exception projection and lifecycle-link retirement under one core owner with a constructor drift guard. |
+| Population admission and refusal provenance | Shared population measurement and threshold arithmetic while retaining each domain's wall, count semantics, precedence, and outcome; separated cumulative retained budgets from counter-free producer gates; required exact plan and inventory limit signals to carry their active same-run domain token. Legitimate first-excess behavior is unchanged, while tokenless, different-run, cross-domain, malformed, and lookalike failures cannot claim refusal authority. |
+| Scale semantics and documentation | Defined 120,000 items in each applicable population as one M1 performance-and-safety support target without implying support above it or a failure cliff at 120,001; corrected the completion-cost diagnosis; documented the weakref boundary; removed the temporary audit document after every accepted disposition had an authoritative home. |
 
-#### 4P.25 adversarial-review receipt
+Current independently owned first-excess behavior remains unchanged through M1.
+Checkpoint 4 must choose a neutral owner for the shared 120,000 target and
+generic population primitives, centralize the repeated constants, and resolve
+the plan-specific `core/review.py` name. A later milestone may adjust or remove
+the hard refusals under its own evidence and compatibility boundary.
 
-Independent requirement-to-diff, accepted-test, stop-rule, exclusion, and
-repository-custody review found no product blocker or regression, catastrophic
-stop, or excluded-scope intrusion in completed rows 4P.0–4P.24. The
-4P.0–4P.23 audit pinned `8fd7434`, checked the local branch/worktree state and
-all four retained stash hashes (including reachable recovery commit
-`33f6994`), passed 80 targeted cases and all 11 import contracts, repeated the
-protected 30-scenario settlement oracle three times with identical traces, and
-found `git diff --check` clean. The separate 4P.24 audit of `bb4b9e7` confirmed
-the intended direct-`FailureDetail` constructor inventory fell from 22 to the
-15 exact guarded constructors, passed 30 independent focused cases, and found
-no blocker.
+The 33 core contracts slotted by this pass do not support weak references, and
+production does not weak-reference them. Future support is class-specific and
+requires a concrete ownership or leak-detection witness rather than a blanket
+per-instance cost. Remaining workflow guard density, complete-graph,
+construction, callback, codec, native/browser, and multi-session ownership stay
+checkpoint-4 inputs.
 
-The review dispositions are closed as follows. The 4P.11 commit `72f4303`
-requires test-only companion `42162a4` for independent ordinary-green
-reviewability; current HEAD is correct, so history will not be rewritten.
-The 4P.10 named-verification cell was strengthened after register freeze
-without a specific user decision; retain the stronger gate and record this as
-a one-off process exception, not a product defect. `c8f03b5` was one bounded,
-isolated pre-existing bug fix and remained below both defect-stop thresholds.
-The review assigned README's and this document's high-level adoption wording,
-plus HANDOFF's stale repository and removed-field claims, to 4P.26 closeout.
-Every rejected or excluded idea remains excluded and gains no implementation
-authority from this review.
+#### Closeout receipt
 
-These are adversarial-review receipts, not the ordinary/full acceptance gate.
-The affected department union, ordinary Node-enabled suite, final documentation
-reconciliation, stash/repository closeout, and independent final review were
-owned by 4P.26 and are recorded below.
+The final Node-enabled affected-department union passed 2,556 tests with one
+capability skip and 2,671 deselections. The Node-enabled ordinary suite passed
+5,196 tests with four capability skips and 28 headed deselections. All 11 import
+contracts held. The protected 30-scenario settlement oracle retained its three
+identical successful prerequisite runs; this corrective follow-up did not
+change executor settlement.
 
-#### 4P.26 closeout receipt
-
-Every accepted F/C/D disposition now has an authoritative home in the closed
-register, active architecture or component documentation, implementation, and
-matching regression policy. Rejected and explicitly excluded dispositions did
-not acquire a home or implementation authority. The temporary untracked
-`CUSTODY_TAX_AUDIT.md` was therefore removed after that disposition audit; all
-four named recovery/model stashes remain untouched.
-
-The Node-enabled affected-department union passed 4,852 tests with one skip and
-336 deselections. After the ordinary gate exposed the missed immutable-review
-tool consumer, bounded repair `c67c4ed` passed 88 focused tests with two skips
-and the 1,236-test tools/preflight/workflows neighborhood with three skips. The
-final Node-enabled ordinary suite passed 5,157 tests with four skips and 28
-deselections. All 11 import contracts remained intact, and the protected
-30-scenario settlement oracle produced the same accepted result across three
-runs.
-
-The active-document review found no missing relative target across 30 documents
-and no missing target among 83 anchor links. Targeted stale-contract searches,
-the two-branch/one-worktree/four-stash custody inventory, recovery-object
-reachability, and `git diff --check` were clean. Independent final review of
-this exact closeout found no blocking design, documentation, receipt, or
-repository-custody finding.
-
-Explicit exclusions are F4; C3, C5, C6, and C7; checkpoint 4 proper and its
-model, constants, fixtures, validator, and BR-G-45 evidence; executor journal or
-reducer restructuring; M2 process-restart durability; and schema, wire, wall,
-or public status changes. No excluded item may enter 4P through cleanup,
-adversarial review, or an oversized accepted row.
-
-Register row 4P.3 makes Python support lower-bound-only at 3.13. Python 3.14
-and later are handled metadata-first and remain nonblocking unless direct
-evidence meets a global catastrophic stop class in `AGENTS.md`; a speculative
-task-artifact object model does not authorize an exact patch or upper-version
-gate.
-
-An active-row regression is fixed before that row's mergeable commit. A bounded
-pre-existing substantive bug may land as its own fix commit if the second-same-
-mechanism and third-unplanned-defect stops remain untriggered. Once either
-threshold is reached, stop instance fixes, reorganize by mechanism, and obtain
-review before resuming. Diff size never authorizes a partial checkpoint: when
-one row grows beyond its atomic outcome, stop and reorganize before beginning
-the next row.
-
-### 4P-R. Correct post-consolidation findings before checkpoint 4
-
-This is a new bounded corrective pass based on the clean `e7c3601` baseline. It
-does not reopen checkpoint 4P's denominator and is not checkpoint 4 proper.
-Each implementation row is one separately reviewed, mergeable commit. A
-finding outside this finite register follows `AGENTS.md`; it does not enter the
-pass merely because it affects a named file or test neighborhood.
-
-| Id | Accepted outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| 4P-R.0 | Freeze this corrective scope, ordering, non-goals, stop classes, and review boundary before implementation. | Documentation authority review, baseline/worktree check, targeted status searches, and `git diff --check`. | Complete |
-| 4P-R.1 | Restore same-run provenance for exact plan and inventory review-limit signals without restoring `fresh()` or changing any legitimate refusal fact, status, save boundary, exception retirement, or domain separation; update the rung/provenance documents and defect ledger in the same change. | Legitimate current-run producer/retained/logical and inventory first-excess signals, including re-raise and graph retirement; direct/untagged same-domain and well-formed different-run signals from scanner, correspondence, planner, observer, preflight, phase delivery, destination policy, nested owners, and inventory scanner; cross-domain, lookalike, malformed, plan/inventory/workflow departments, import contracts, and targeted provenance/rung documentation searches. | Complete |
-| 4P-R.2 | Replace repeated linear completion membership in both `PostCopySelection` and `IntegritySelection` with one immutable known-id index per selection while preserving construction, equality, continuation, payload, authority, progress, and outcome behavior; correct the stale workflow BUGS mechanism and owning component docs in the same change. | Core integrity, verifier engine, payload round-trip, post-execution and standalone-integrity workflows; at fixed sizes 1, 4, and 16, after bounded construction each successful completion performs no candidate/item-tuple `item_id` access and exactly one known-id-index lookup, while the existing completed-id replay lookup remains. | Complete |
-| 4P-R.3 | Record that 120,000 is one shared M1 performance/safety support target, with no promise beyond it and no claim that 120,001 breaks NamiSync; retain the existing independent hard refusals only as unchanged M1 behavior; defer neutral constant/primitive ownership and `core/review.py` naming to checkpoint 4; and document current weakref support precisely. | DEFENSE/architecture/component/H2 authority review, current-wall and future-owner searches, production/test weakref-usage search, links/anchors, and `git diff --check`. | Complete |
-| 4P-R.4 | Reconcile BUGS, task history, and handoff; run the integrated affected and ordinary gates; and conduct an independent final review without absorbing optional cleanup. | Affected departments, ordinary Node-enabled suite, import contracts, protected gates required by touched behavior, links/anchors, stale-contract searches, `git diff --check`, and independent review. | Pending |
-
-Non-goals are changing, relaxing, or removing the M1 120,000-item refusal;
-moving or renaming the current constants or generic primitives; beginning checkpoint 4's
-ownership/reservation model; adding `weakref_slot=True`; rewriting historical
-commit titles; reducing workflow guard counts; and changing schema, wire, wall,
-public status, or continuation versions. Checkpoint 4 must decide the neutral
-owner for the shared 120,000 target before centralizing its constants and
-generic primitives. The target is the supported M1 performance/safety scale,
-not evidence of failure at 120,001 or any larger count, and M1 makes no promise
-beyond it. A later milestone may adjust or remove the refusal only under its
-own ratified evidence and compatibility boundary. The 33 core contracts newly
-slotted in checkpoint 4P do not support weak references and production uses no
-weak references to them. Blanket support is deferred because it adds per-
-instance cost; any future support is class-specific when an ownership or leak
-witness requires it.
-
-In addition to the global catastrophic stops, stop this pass if authenticating
-all legitimate limit paths requires a public signal, wire/status change, or
-cross-domain authority; or if completion indexing requires a continuation/
-payload shape change, an unbounded owner, or loss of exact unknown-id and replay
-rejection. The repeated-mechanism and third-unplanned-defect rules remain in
-force. F2 provenance lands before the pre-existing F1 performance fix. Rows
-4P-R.0 through 4P-R.4 remain separate review units and commits; 4P-R.3 is the
-one documentation commit shared by the 120,000-target and weakref dispositions.
-
-#### 4P-R.0 register receipt
-
-The register froze from clean `milestone1` baseline `e7c3601` before any code
-change. Independent review corrected the row/commit boundary, required matching
-documents to travel with each behavior fix, made the different-run provenance
-and finite complexity witnesses explicit, and separated the shared 120,000
-support target from unchanged M1 refusal behavior. Targeted status review and
-`git diff --check` were clean; checkpoint 4 remains unstarted.
-
-#### 4P-R.1 implementation boundary
-
-The correction pairs the cumulative plan ledger and counter-free producer gate
-with one opaque same-run token and gives inventory its own domain-local token.
-Exact signal type and fact scope remain necessary but no longer stand in for
-provenance. `fresh()` and public signal classes remain absent; producer
-capabilities expose no retained counters or `admit`, and legitimate logical-
-byte overflow is issued through the supplied capability. Tokenless and
-different-run rung-3 signals fail loudly, while reflective token extraction or
-mutation remains unsupported rung 4. The verification receipt below closes the
-row without changing a refusal fact, status, save boundary, or public signal,
-wire, or status contract.
-
-#### 4P-R.1 review receipt
-
-The plan ledger and counter-free producer gate now share only one opaque
-same-run token; inventory owns an independent domain-local token. Exact type,
-scope, and token identity are all required before workflow returns typed
-refusal. Tokenless and different-run signals from every named collaborator seam
-fail loudly, both cross-domain directions preserve ordinary failure identity,
-and plan/inventory save callbacks remain outside signal translation. Logical-
-byte overflow is issued through the active producer gate, while direct calls
-without one remain unadmitted to workflow.
-
-Focused implementation verification passed 411 tests. Independent review ran
-the core, scanner, planner, preflight, and workflows department union with
-2,435 passed and 1 skipped; all 11 import contracts held. The reviewer found no
-code, public/wire/status, save-boundary, or regression-test blocker. Its two
-active-document findings were corrected, bounded re-review passed, targeted
-stale-contract searches and `git diff --check` were clean, and checkpoint 4
-remains unstarted.
-
-#### 4P-R.2 review receipt
-
-Linked and standalone integrity selections now retain one immutable known-id
-index derived from their fixed tuple. Completion checks the existing completed
-map first and then performs one indexed membership lookup; verifier progress
-aliases the same index. Authority validation rejects a missing, wrong-type, or
-wrong-value index without repairing it. Construction, equality, continuation,
-explicit payloads, progress, outcomes, and both current 120,000-item refusals
-are unchanged. `BUGS.md` now assigns the pre-existing quadratic completion
-cost to this core mechanism and closes the separate workflow authority-scaling
-entry without attributing residual cost to its callback guards.
-
-The focused integrity, verifier, payload, post-execution, and inventory set
-passed 622 tests. The core, verifier, and workflows department union passed
-2,342 tests with one skip, and all 11 import contracts held. Independent review
-repeated the deterministic 1/4/16 witness, deletion/tamper probes, and contract
-inspection and found no blocker; `git diff --check` was clean.
-
-#### 4P-R.3 documentation receipt
-
-The defense and bridge authorities now define 120,000 items in each applicable
-plan, inventory, or standalone-integrity population as one M1 performance-and-
-safety support target. Existing domain-owned first-excess behavior remains
-unchanged through M1. The target makes no promise above that scale, predicts no
-failure cliff at 120,001, and is not itself time or memory evidence. Core and
-H2 documentation defer a neutral constant/primitive owner and the plan-specific
-`core/review.py` name to checkpoint 4 without moving any current symbol or
-dependency.
-
-The 33 core contracts newly slotted in checkpoint 4P have no weakref slot;
-production does not weak-reference them, and current leak tests use explicitly
-capable witnesses. Blanket support remains excluded because it charges every
-instance; a concrete ownership or leak witness may justify class-specific
-support later. Targeted source/usage and active-wall searches found no contrary
-production path. Documentation links, anchors, and `git diff --check` were
-clean.
+All 29 active documents resolve their 182 relative targets and 83 Markdown
+anchors. Targeted stale-contract searches, repository custody, and
+`git diff --check` are clean. Repository closeout retains only `main` and
+`milestone1`, one worktree, and the four named stashes with the recovery object
+reachable. Exact stash ids remain in `HANDOFF.md` where they are operationally
+useful. Independent final review found no blocking code, documentation-
+authority, overclaim, or repository-custody finding.
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
-Commits, in order:
+**Status:** Pending. The prerequisite closeout above is complete, but no
+process-live task surface, ownership/reservation formula, constant set, maximum
+fixture, independent validator, or BR-G-45 evidence is accepted or active.
 
-1. `test(web): pin task artifact reservation model`
-2. `feat(web): install dormant task lifecycle`
-3. `feat(web): retain multi-session task artifacts`
+**Objective:** Remove the one-session assumption before adding production task
+surfaces.
 
-**Checkpoint 4P closes here; checkpoint 4 proper has not started, and its
-ownership/reservation model remains unratified.** Row 4P.26 owns the final
-documentation and gate receipt only; it activates no task surface or model.
-Independent source audits found that the current complete graph cannot yet
-justify a frozen reservation floor. The dispatcher exception-retention
-prerequisite is fixed separately in `74135b5`; the native reply lifetime
-prerequisite now passes all eight installed transport/native-host witnesses.
-The independent standalone-integrity candidate wall is ratified in `2818686`,
-and the linked verify-continuation diagnostic boundary is now closed without
-selecting a codec or task-reservation ceiling. None of these changes freezes
-the model or closes BR-G-45. Resolve the following before accepting the first
-model commit:
+**Delivery order:**
 
-A fresh pre-model derivation was rejected and discarded before commit.
-It multiplied the one aggregate plan-domain and informational walls across
-several aliases, summed sequential scanner/planner/observer/preflight peaks as
-simultaneous owners, priced retained event graphs as wire bytes, and selected
-codec/native/browser constants without a source-derived representation. Its
-internally consistent totals are invalid and must not be recovered from Git,
-session context, or interruption stashes. The next derivation must split actual
-phase unions, identity-deduplicate aggregate artifacts, use named limits rather
-than repeated literals, and reject every unused constant and opaque fixed blob.
+1. `test(web): pin task artifact reservation model` — freeze the complete
+   analytical graph, constants, formula, maximum fixtures, validator, and typed
+   capacity outcomes before measurement or production reachability.
+2. `feat(web): install dormant task lifecycle` — install the registry,
+   ownership/lifecycle machinery, bounded artifacts, and dormant consumers
+   while the current nine-row production map and one-session behavior remain
+   exact.
+3. `feat(web): retain multi-session task artifacts` — activate the coherent task
+   rail, replace superseded aliases, and move the production map to exactly 12
+   rows without changing the frozen model.
 
-The same audit found finite-model prerequisites beyond the earlier path list:
-the desktop task cap does not yet bind dispatcher subscribers/sessions or all
-runtime/service maps; inventory scan/query/tree construction precedes complete
-admission; the standalone-integrity retained-byte wall is declared but not
-enforced; and CLR/WebView2/browser response copies still lack source-derived
-charges. Python response projection now admits one exact hostile occurrence
-snapshot against the complete 8 MiB canonical-JSON wall, releases its raw result
-before projection, and retains native positions through exact worker exit plus
-post-clone browser receipt. Production document posts have one in-flight, one
-required, one replaceable, and one native-dispatch owner with exact generation
-acknowledgment; their encoded/native byte charges remain.
-The direct verifier chunk seam found in the same audit is now closed by one
-exact public 4 MiB maximum, so the model charges at most one aligned native
-buffer and one Python bytes copy per open stream. The remaining blockers are
-OPEN in [BUGS.md](BUGS.md). Close them structurally or place them behind an
-exact enforced desktop-only premise before freezing numerical charges. A
-timeout or composition convention is not a retirement witness.
+#### Inputs to settle
 
-Canonical typed-detail admission is now structurally closed: exact-base
-construction validates the complete bounded shape, admission takes a fresh
-base snapshot, duplicate raw items refuse before omission, and wire projection
-revalidates owned state. This is a prerequisite fix, not a frozen model.
+- Freeze the complete simultaneous current-process owner graph across task,
+  session, runtime, service, dispatcher, observers, subscribers, workers,
+  callbacks, retries, close, tombstones, and overlapping generations. Every
+  owner needs an exact charge or finite retirement witness; timeout alone is
+  not retirement.
+- Account for retained and construction graphs across planning, execution,
+  inventory, integrity, post-copy verification, tree projection, selection,
+  continuations, sorting/index storage, container high-water capacity, shallow
+  callback guards, and callback overlap.
+- Derive representation-specific charges for codec/text/JSON, Python,
+  CLR/WebView2, browser, and native copies from their actual representations.
+- Make the independent validator cover slotted and non-slotted values,
+  mapping-proxy backing stores, mutable-container capacity, `Path` caches,
+  complete detail entries, and native/browser copies.
+- Close or explicitly charge the remaining app-owned raw exception frames at
+  host and document boundaries. Arbitrary caller-owned exception attributes are
+  not retained task artifacts.
+- Treat current population refusals, including the shared 120,000-item M1
+  target, as count containment only. They do not substitute for the complete
+  retained-byte and copy model. Any weakref support remains class-specific and
+  must be charged.
 
-Residual service-observer and task-recovery exception retention is also
-structurally closed. Raw close, reobserve, validation, and stale-unsubscribe
-failures plus unadmitted current views retire before dependency shutdown or
-task-condition reconciliation; closed failure state preserves only cleanup,
-generation, interruption, and retry truth. This remains a prerequisite fix,
-not a reservation-model acceptance.
+`BUGS.md` owns current open causal entries; `M1_BRIDGE.md` owns exact task,
+claim, lease, publication, retry, and command contracts; `DEFENSE.md` owns hard
+walls and measurement authority. The saved model draft is recovery context
+only; rederive any useful fixture shape from current source and ratified
+requirements rather than applying it wholesale.
 
-The narrow planning-source wall is now structurally closed across both scans,
-prior correspondence, planner policy/assignment/operations, observation, and
-preflight. Independent populations fail at first excess at every applicable
-trust rung. Exact immutable first-party scan, plan, world, and verdict results
-are validated once at their named workflow adoption transfers and then shared
-by identity with read-only consumers; reentrant collaborators receive only
-immutable values after reliable local state is committed. Only unavoidable
-shallow slots retained together in those final graphs commit to the session
-ledger.
-Correspondence inputs are already bounded by admitted scans and its fallible
-result is captured exactly once. First excess is typed `REFUSED+UNRUN` with no
-saved or partial plan. A tokenless or different-run same-domain signal is a
-loud rung-3 failure; reflective extraction or mutation of the active private
-token remains outside the supported fault model.
+#### Acceptance criteria
 
-This prerequisite deliberately excludes construction builders, sorting/index
-storage, selection/exclusion and preview values, callback overlap, codec/text
-and native/browser copies, complete-tree projection, and speculative future
-owners. Those costs, complete-object constants, formula, fixture, validator,
-and BR-G-45 evidence remain checkpoint 4. Dispatcher pre-run and cancellation-
-settlement exception owners are now closed independently. Refusal authority is
-also closed narrowly: only the private exact plan signal carrying the active
-same-run token and an exact PLAN fact becomes `REFUSED+UNRUN`; workflow takes a
-fresh core snapshot, retires the raw signal graph, and saves no artifact. Plan
-and inventory use distinct private signal types and tokens, while ordinary
-lookalikes remain ordinary failures. Phase delivery, correspondence, nested
-module collaborators, destination policy, and malformed preflight signals
-cannot claim that authority. Ordinary
-exception ownership outside retained `FailureDetail` projection is deliberately
-not claimed by this prerequisite.
+- Implement the mapped one-current-session task model with distinct plan,
+  execution, inventory, integrity, and post-copy result authority.
+- Implement the owner claim, transactional observation attachment,
+  publication/compensation rules, exact-session release, task close, compact
+  overlays/results, bounded terminal summaries, and page rehydration.
+- Enforce the complete conservative pre-surface reservation floor from
+  `DEFENSE.md`; checkpoint 11 later calibrates and proves the active containment
+  model.
+- Retain the four bootstrap/cosmetic and two Setup rows while replacing the
+  three current task/session rows with the six checkpoint-4 task rows, for
+  exactly 12 unique production commands.
 
-Retained ordinary-failure projection is now closed separately. One core helper
-renders logical-path text exactly once, constructs the retained detail before
-retiring raw lifecycle links and nested group members in `finally`, and accepts
-only an already-classified type-name override. Session, dispatcher, inventory,
-and sync live sites use that owner; recording failures retain one local fixed
-`recording diagnostic unavailable` fallback after a failed attempted
-projection, while other fixed/static outcomes and base, wire, or history
-reconstruction remain direct. An exact owner/scope AST drift guard accounts for
-all fifteen constructors and rejects simple aliases and session star imports;
-it is a maintenance guard rather than a dataflow or hostile-code proof.
+#### Regression guards
 
-The inventory-side row prerequisite is now closed separately. Production scan
-append, actual repository results, and exact tree input members stop before
-first excess; integrity checks the exact candidate-row tuple before direct
-workflow construction. Initial inventory excess is typed `REFUSED+UNRUN` with
-no ledger/detail publication; integrity excess remains honest `FAILED+RAN`
-with no partial selection or verifier work. Requested-but-absent database keys
-do not consume result capacity. Finite preprocessing transients, synthetic
-tree/index and candidate construction, complete bytes, old/new generations,
-sorting, and codec/native/browser copies remain checkpoint-4 proper model
-inputs in `BUGS.md`; checkpoint 4P accepts only the subset named in its closed
-register above.
+- No task lock spans facade, JSON, database, or filesystem work.
+- Start/control/release/close replay and races preserve one effect owner,
+  exact-intent join, compensation, and successor isolation.
+- Terminal event, record, observer, publication, close, and reservation release
+  cannot reorder into false success, duplicate settlement, or early capacity
+  release.
+- Plan, execution, inventory, integrity, and post-copy generations never mix;
+  adapters and callbacks retain no uncharged full-result graph or native copy.
+- Capacity refusal, pinned-generation replacement, delayed cleanup, shutdown,
+  and handler saturation remain bounded and retryable.
 
-Checkpoint 4 must treat the following live seams as mandatory model inputs. It
-may eliminate an owner before downstream work or charge its exact simultaneous
-graph with a finite retirement condition; no acceptance may assume release:
+#### Verification and review
 
-`core.session.run_session` is now structurally closed for emitter mutation-plus-
-raise, work errors superseded by accumulator truth, consumed pause/cancel, and
-audit failures. It retires traceback/cause/context for nested exception-group
-members too. Unsuperseded process-fatal exceptions and arbitrary custom
-exception state leave with their caller and are not retained task artifacts.
-
-Planner and sync-workflow phase frames are now structurally closed too.
-Escaping public identities keep their established types/messages, the one
-required logical-byte cause survives without its frames, consumed execution
-errors become typed details, and recording keeps only closed issue state.
-Truthy context suppression, hostile diagnostics/notes, path-cause projection,
-and repeated exclusion delivery have independent regressions. Path-message and
-other callback/construction transients remain checkpoint-4 model inputs.
-
-The final bounded prerequisite review also closes three terminal truth gaps.
-Cursor custody advances locally before hostile capture, fresh-refusal control
-stays `REFUSED+UNRUN` with its accepted prefix, and recording mutation projects
-items, counters, phases, and the original integrity failure from pre-finish
-authority. Paused cancellation and fallback finishing use the same rule; later
-reconciliation cannot substitute a mutated alias or generic mismatch.
-
-- Dispatcher admission, cleanup, persistence, custody release, subscription,
-  audit-pump, and session-worker start owners are now structurally closed.
-  Provably unstarted attempts settle through the ordinary lifecycle, accepted
-  cancellation wins, resumed cancellation remains `RAN`, and accepted-before-
-  raise threads keep actual ownership. Scheduler construction and an
-  independently injected second settlement failure escape to their caller or
-  thread hook before becoming retained task artifacts.
-- `TaskRegistry.replay_start`, `_start_owner`, `_attempt_compensation`, release,
-  close, and shutdown-unsubscribe now retire dependency frames before retained
-  retry/cleanup truth or the next boundary. Primary start failure no longer
-  overlaps compensation. `NamiSyncService.start_plan` clears the normal
-  workflow validation graph before its unchanged unchained public error, and
-  `Dispatcher.subscribe` is closed above. Bridge/host consumption of the final
-  escaping adapter frame and path-message rendering remain open inputs.
-
-Desktop session ownership is now attached transactionally for every service
-start before Dispatcher scheduling. Production requires the attachment; CLI
-composition remains optional and unchanged. Observer/detail rollback is exact
-and retryable under Dispatcher's existing unpublished-cleanup worker, and the
-task reservation stays charged until that callback proves the exact sink gone.
-Malformed or mismatched successful returns clean only the attached session;
-plan-drop authority begins only after returned and attached identities agree.
-This closes the lower-owner count escape but does not freeze the task byte model
-or activate multi-session lifecycle.
-
-Checkpoint-4 regressions for these seams assert public status, item, counter,
-retry, and identity behavior plus externally held lifecycle release. They do
-not freeze private counters, handler timing, or callback choreography.
-
-- Linked execution can retain both 120,000 operation and 120,000 integrity
-  outcomes, plus the dispatcher accumulator and shallow audit/store wrappers.
-  Full-result header diagnostics now share the terminal summary's whole-value
-  bounds, but the summary still does not bound the raw item collection or the
-  additional workflow/audit owners behind it.
-- Serialization expands the complete schema occurrence graph, not just path
-  strings: shared dependency tuples, metadata/evidence, and per-candidate
-  absolute roots can become distinct lists, strings, and decoded objects.
-  Keep this future-copy liability separate from the identity-deduplicated
-  retained-domain walls; a constant multiple of those walls alone is unsound.
-- Original history-observer payloads, delayed audit finalization, callback
-  retry, and queue copies are real owners. History callback, replay-busy, and
-  receipt-reader-close exception frames now retire without changing fail-stop
-  or pending-window truth. Store construction and existing-run reader failures
-  remain outside that narrow closure. Observation-stream history and dispatcher
-  worker frames have explicit release witnesses; exact worker retirement remains
-  fenced through thread exit. Every remaining owner needs an explicit finite
-  charge and retirement condition, or structural elimination, before a
-  completion reservation may be released.
-- The complete-graph validator must classify non-slotted instance dictionaries,
-  mapping-proxy backing stores, mutable-container high-water capacity, `Path`
-  caches, all declared detail entries, and native/browser serialization copies.
-  The frozen transport instrument is not that validator and remains untouched.
-- Standalone integrity now has a separately named 120,000-row/192-MiB candidate
-  wall with honest post-refresh `FAILED+RAN` policy and exact row-level
-  repository/workflow admission. Its complete retained-byte, task-service, and
-  retirement ownership remain checkpoint-4 model work; stale unions and saved
-  resume selections refuse as complete populations rather than truncate.
-- `VerifyContinuation.execute_phase` now owns a fresh exact base snapshot;
-  executor diagnostics and their combined phase value use the existing
-  whole-value policy with exact omission accounting. Construction, v7 encode/
-  decode, direct workflow entry, and canceled settlement revalidate that
-  boundary, and the raw executor result retires before the continuation sink.
-  Continuation codecs still project or parse the complete graph before any
-  whole-envelope ceiling; derive their pre-projection and pre-parse ceilings
-  from the frozen occurrence model.
-- Planning roots/profiles/evidence/filter/assignment values are now captured
-  from declared exact fields at their applicable ingress or named ownership
-  transfer. Only their final shallow collection slots participate in the source
-  prerequisite; complete object, text/codec, construction, and callback costs
-  remain model work. Other task paths, mount/inventory values, and runtime
-  `_inventory_details` still need
-  exact task/session retirement or a separately charged bounded owner before
-  completion capacity can be released.
-- The consolidation pass removed execution plan hashing, duplicate operation
-  fact graphs, and immutable evidence/issue reconstruction from callback
-  guards. Mutable execution compound state is audited once at executor and
-  verifier return; required callback seams keep shallow fixed-reference and
-  prior-overlay baselines.
-  The remaining model owns the cost of those shallow comparisons, duplicate
-  candidate maps, verifier aggregate-versus-stream confirmation, standardized
-  four-string record identities, unslotted/custom nested Python values, result
-  projection containers, EventHub envelope/body subscriber aliases,
-  SessionStore live-record aliases, and process-restart durability of the item
-  accumulator and exclusion receipt.
-- Checkpoint 4 must still model or eliminate complete tree projection,
-  codec/text estimates, disposable construction transients, sorting/index
-  storage, callback overlap, native/browser copies, container capacity, and
-  every speculative owner before it becomes production policy. None of these
-  deferred concerns justifies widening the stabilized workflow contracts.
-
-These are source-derived counterexamples and enforcement prerequisites, not
-memory measurements or a substitute maximum fixture. No numerical model,
-fixture, or acceptance evidence has been frozen or calibrated yet.
-
-- **Objective:** Remove the one-session assumption before adding production surfaces.
-- **Position and safe stops:** The first commit freezes the complete analytical
-  artifact graph, per-artifact constants, aggregate formula, maximum fixtures,
-  independent validator, and typed reservation/refusal expectations before any
-  result is measured or surface is reachable. The second installs the task
-  registry, ownership/lifecycle machinery, bounded artifacts, and dormant UI
-  consumers while the production nine-row command map and current one-session
-  behavior remain exact. The third is the activation/closure commit: it
-  switches the command map to the exact 12 rows, removes replaced aliases,
-  exposes the coherent task rail and controls, and proves the predeclared model
-  without changing its constants. Any defect in that model follows the
-  checkpoint execution protocol and restarts its evidence; it is never folded
-  into the activation commit by amendment.
-- **Acceptance:** Implement the mapped one-current-session task model,
-  lifecycle and result authorities, owner claim, transactional observation
-  attachment, task reads/control, exact-session release, task close, compact
-  overlays/results, bounded terminal summaries, and page rehydration. Apply the
-  exact publication and overlay invariants from `M1_BRIDGE.md`, and enforce the
-  complete conservative pre-surface reservation floor from `DEFENSE.md` §1.3;
-  checkpoint 11 calibrates and proves that already-active containment model.
-  Revise the production command mapping from nine to 12 unique rows: retain the
-  four bootstrap/cosmetic and two current Setup rows while replacing three
-  current task/session rows with the six checkpoint-4 task rows.
-- **Regression watch:** No task lock across facade, JSON, database, or filesystem work; non-atomic issue/retirement classification and lease acquisition; normal named publication advancing the task epoch; same-revision start/start, control/start, control/close, start/close, and release/successor races; claim-owner and attach/start compensation; terminal-event versus terminal-record race; stale drain/release; pinned-generation release or eviction; observer-thread and close-long-poll deadlock; receipts released before task close; references retaining full results; uncharged read/native/callback copies; capacity failure during release/close; mutation rows accidentally taking the lifecycle claim.
-- **Tests:** At the first stop, prove the independent validator rejects every
-  constant, formula, root-class, and refusal-boundary drift before retaining
-  evidence. At the second, prove the exact current nine-row production map and
-  one-session behavior remain reachable while every new task command and
-  rendered control is unreachable. At activation, run the dispatcher/
-  interfaces/service neighborhood; competing starts and
-  unpublished-task claims; control/start/close/release interleavings; atomic
-  lookup, issue, retirement, claim, lease, and epoch decisions; publication-
-  versus-close barriers; exact overlay/result revision invariants; no mixing of
-  plan, execution, inventory, integrity, or post-copy generations; every
-  bridge/defense-owned population and retention refusal boundary; old/new
-  diagnostic and artifact overlap; pinned-generation replacement/eviction;
-  handler-saturation reconciliation; start/control/release/close replay and
-  tombstones; byte-aware drain; reinjection; delayed terminal cleanup; and
-  shutdown during observation. Python and JavaScript policy mirrors freeze the
-  exact 12-row mapping with no retained alias for a replaced task/session row.
-- **Docs/review:** Update ARCHITECTURE, M1_BRIDGE, DESKTOP_UI, INTERFACES, and DISPATCHER. Review the complete ownership graph and initial BR-G-45 analytical model; land the checkpoint-4 BR-G-32 command-table and BR-G-46 command-map revisions together.
+- At the analytical stop, prove the independent validator rejects drift in
+  every accepted constant, formula, root class, fixture, and refusal boundary.
+- At the dormant stop, prove the current nine-row map and one-session behavior
+  remain reachable while every new task command and rendered control remains
+  unreachable.
+- At activation, run dispatcher/interfaces/service and ordinary gates,
+  concurrency and capacity matrices, Python/JavaScript policy mirrors, required
+  headed witnesses, and checkpoint-4 BR-G-32, BR-G-45, and BR-G-46 evidence.
+- Update `ARCHITECTURE.md`, `M1_BRIDGE.md`, `DEFENSE.md`, `DESKTOP_UI.md`,
+  `INTERFACES.md`, and `DISPATCHER.md`. Independently review the complete
+  ownership graph and initial analytical model before activation.
 
 ### 5. Unify probing, recents, and typed directory admission
 

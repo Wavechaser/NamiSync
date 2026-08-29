@@ -23,7 +23,7 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-29)
+#### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-30)
 
 - Moved inventory scan, returned repository-row, tree-input-member, and
   standalone-integrity candidate-row admission ahead of their first excess
@@ -37,8 +37,12 @@ claims explicit, independently reviewable, and regression-backed.
   stops at its independent raw 120,000-occurrence wall before normalization,
   deduplication, sorting, or SQL batching; the inherited 120,001-path admission
   is closed while requested-but-absent values within the wall still return no
-  rows. Checkpoint 4's model still owns the finite preprocessing transients,
-  synthetic tree/index construction, and complete retained-byte authority.
+  rows. Across plan, inventory, and standalone integrity, the repeated limit is
+  one M1 performance-and-safety support target; current domain-owned first-
+  excess behavior remains through M1, with no support promise above the target
+  and no asserted failure cliff at 120,001. Checkpoint 4 still owns complete
+  preprocessing/retained-byte authority, neutral constant/primitive ownership,
+  and resolution of the plan-specific `core/review.py` name.
 - Made every production desktop session attach its exact task reservation and
   observation before scheduling. Dispatcher retains the sole retryable rollback
   authority; an observer timeout keeps capacity charged until exact retirement,
@@ -117,10 +121,9 @@ claims explicit, independently reviewable, and regression-backed.
   after root admission, and refused changed resolution before inventory or
   integrity effects. Kept the complete-graph and optimization concerns assigned
   to the next consolidation/model pass.
-- Quarantined the uncommitted checkpoint-4 model draft and stopped before model
-  work. Auxiliary refs were pruned only after their accepted content had an
-  authoritative home; four named stashes retain the rejected draft and recovery
-  evidence without making either merge authority.
+- Pruned the three reviewed auxiliary refs only after their accepted content
+  had an authoritative home. Four named stashes retain recovery/model evidence
+  without making any stash merge authority.
 - Ratified the four-rung external, reentrant, internal-module, and reflective/
   forged trust ladder. Immutable first-party results are adopted once at named
   ownership transfers and then shared, while population admission, filesystem
@@ -128,37 +131,23 @@ claims explicit, independently reviewable, and regression-backed.
 - Replaced repeated whole-result reconciliation and reconstruction with
   incremental settlement, canonical retained result identities, validated path
   folds, slotted immutable contracts, read-only execution review inputs, exact
-  compound adoption, and shallow recording custody without changing wire,
-  schema, wall, status, or settlement truth.
-- Split cumulative retained review budgets from stateless producer gates,
-  shared only the domain-neutral population primitives, and gave plan and
-  inventory unrelated private exact limit signals. First excess, refusal
-  provenance, rollback/close precedence, and ordinary lookalike classification
-  remain unchanged.
+  compound adoption, and shallow recording custody. Linked and standalone
+  integrity completion now use one validated selection-owned immutable id index
+  shared with verifier progress, removing the remaining quadratic candidate
+  scan without changing continuation, payload, wire, schema, wall, status, or
+  outcome truth. The 33 newly slotted core contracts remain non-weakrefable;
+  future support is class-specific when a concrete ownership/leak witness needs
+  it rather than a blanket per-instance cost.
+- Split cumulative retained review budgets from counter-free producer gates.
+  Plan and inventory keep domain-local private signals and tokens; typed refusal
+  requires exact signal type, fact scope, and active same-run token. Direct
+  internal, different-run, cross-domain, malformed, and lookalike failures
+  cannot claim refusal authority, while first-excess status, save boundaries,
+  rollback/close precedence, and graph retirement remain unchanged.
 - Centralized rendered live-exception detail projection with lifecycle-link
-  retirement and an exact direct-construction drift guard. The independent
-  register review found no blocking regression or excluded-scope intrusion and
-  retained the documented one-off process exceptions rather than rewriting
-  history.
-- Closed one ordinary-gate-discovered 4P.16 consumer omission: the executor rig
-  now gives observer and preflight the immutable execution review rather than
-  mutable execution state, with no schema, wire, wall, or status change.
-
-#### Reject premature checkpoint-4 reservation model (2026-08-27)
-
-- Independently rejected and deleted an uncommitted analytical draft that
-  multiplied aggregate plan walls across aliases, summed sequential phase
-  transients, substituted wire bytes for retained graphs, and selected opaque
-  codec/native/browser costs. None of its internally consistent totals became
-  contract or evidence.
-- Recorded the source-derived blockers that must close before the first model
-  commit: phase exception graphs, task-adjacent owner counts and shutdown,
-  inventory/query/tree preconstruction, standalone candidate bytes, verifier
-  buffers, and complete response/callback/native/browser custody.
-- Clarified that each complete-graph wall charges its aggregate
-  identity-deduplicated population once, phase construction uses reachable
-  maximum unions, and aliasing containers remain separately charged. The
-  production nine-command surface and ordinary behavior are unchanged.
+  retirement and an exact direct-construction drift guard. Independent final
+  review found no blocking code, documentation-authority, overclaim, or
+  repository-custody finding.
 
 #### Bound checkpoint-4 planning source ownership (2026-08-27)
 

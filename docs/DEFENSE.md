@@ -106,7 +106,7 @@ reproducing these limits.
   substitute for this public component bound.
 - Destination-policy name/version and optional assignment annotations have no
   narrower production grammar yet. Constructors and projections enforce only
-  the plan-domain ceiling per value; the checkpoint-4 completed-plan graph wall
+  the plan-domain ceiling per value; the unrealized completed-plan graph wall
   must still admit their combined retained occurrences before publication.
   Neither boundary is claimed as an empirical source-primitive maximum.
 - A plan-capacity refusal requires the private exact plan-limit signal carrying
@@ -152,10 +152,8 @@ target. M1 makes no support promise above that scale, and the target is not
 evidence that item 120,001 or any larger population would fail. The current
 independently owned first-excess behaviors remain active through M1. Specific
 time or memory acceptance still requires the evidence authority in §7; the
-shared target alone is not measurement evidence. H2 checkpoint 4 must choose a
-domain-neutral owner before centralizing the repeated constants or relocating
-and renaming the generic population primitives. A later milestone may adjust or
-remove the production walls only under its own ratified evidence and
+shared target alone is not measurement evidence. A later milestone may adjust
+or remove the production walls only under its own ratified evidence and
 compatibility boundary.
 
 The following population and process-live admission walls are active now:
