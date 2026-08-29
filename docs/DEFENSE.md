@@ -72,13 +72,12 @@ excuse NamiSync crossing a hard wall during supported use.
 
 ### 1.3 Stage 6 scalar and retention walls
 
-The scalar/native-identity walls are active from Stage 6 checkpoint 3.2. The
-source-population, reliable-result-occurrence, and bridge-handler walls named
-below are also active. Complete-graph and task-artifact retention walls remain
-accepted design until their named later checkpoints land. `M1_BRIDGE.md` owns
-the mapped decision records, exact wire shapes, accounting graph, reservation
-order, and refusal schemas; other active documents point here instead of
-reproducing these limits.
+The scalar/native-identity, source-population, reliable-result-occurrence, and
+bridge-handler walls named below are active. Complete-graph and task-artifact
+retention walls are accepted but unrealized and confer no production guarantee.
+`M1_BRIDGE.md` owns the mapped decision records, exact wire shapes, accounting
+graph, reservation order, and refusal schemas; other active documents point
+here instead of reproducing these limits.
 
 - Every durable or externally presented byte quantity and filesystem
   nanosecond is in `0..9_223_372_036_854_775_807`. Typed relational values use
@@ -156,6 +155,11 @@ shared target alone is not measurement evidence. A later milestone may adjust
 or remove the production walls only under its own ratified evidence and
 compatibility boundary.
 
+The repeated values express one domain-neutral target, and one domain-neutral
+definition is accepted but unrealized. Each active gate nevertheless retains
+its independently owned constant, count semantics, precedence, and typed first-
+excess outcome; those repeated constants do not define separate support targets.
+
 The following population and process-live admission walls are active now:
 
 - Planning and inventory each admit their independent raw domain and
@@ -172,11 +176,11 @@ The following population and process-live admission walls are active now:
   publication, audit observation, and accumulator mutation; an excess producer
   result is an internal failure, not truncation or a review-limit refusal.
 - The bridge admits at most 64 concurrent handlers before invoking command
-  work. This ingress concurrency wall is independent of the future task and
-  artifact reservation model.
+  work. This ingress concurrency wall is independent of the accepted but
+  unrealized task and artifact reservation model.
 
-The remaining complete-graph and process-live containment walls below are not
-active until their owning checkpoints:
+The remaining complete-graph and process-live containment walls below are
+accepted but unrealized and do not constitute active production guarantees:
 
 - Complete retained-graph ceilings are 128 MiB for a plan domain and 192 MiB
   independently for an inventory domain and either informational population.
@@ -745,7 +749,7 @@ may close a gate.
   policy. `M1_BRIDGE.md` owns exact desktop envelopes, commands, limits, and
   acceptance gates beneath the trusted-base decision in §4.
 - `CHANGELOG.md` records dated adoption or revision of this policy;
-  `HANDOFF.md` carries only immediate session context.
+  `HANDOFF.md` carries only immediate operational context.
 
 When behavior, an authority boundary, a supported precondition, or a residual
 disposition changes, update this document and the owning behavior/mechanism

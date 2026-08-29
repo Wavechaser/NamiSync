@@ -102,8 +102,8 @@ The clean-wheel parent remains the only complete evidence validator. The
 console labels an unchanged persistent log as old rather than attributing it to
 the failed launch; an unreadable log warns without bypassing the relaunch prompt.
 
-This is a dirty editable preview for interaction speed. Its manually driven
-milestones and logs are diagnostics, not clean-wheel, release, headed-gate, or
+This is a dirty editable preview for interaction speed. Its manual interaction
+observations and logs are diagnostics, not clean-wheel, release, headed-gate, or
 compositor-health evidence. Use the commands in `TESTS.md` for acceptance.
 
 ## Measurement authority
@@ -237,8 +237,8 @@ post-refactor stabilization rows. `check` requires both the policy oracle and
 the committed trace to match; either can fail while the other passes.
 
 The in-code oracle also carries a typed recording projection for the exact
-seven checkpoint-1 rows named by `M1_SHELL_H2.md`; that catalog is part of the
-fail-closed manifest. Before normalization, an oracle-only side channel
+seven protected rows recorded by [M1_SHELL_H2.md](M1_SHELL_H2.md); that catalog
+is part of the fail-closed manifest. Before normalization, an oracle-only side channel
 snapshots authoritative production `ExecutionSet.status`,
 `recording_reasons`, `recording_issues`, and aggregate recording alongside the
 typed reliable-item order. The projection keeps filesystem, item recording,
@@ -262,9 +262,9 @@ default path cannot bypass its Git and semantic-pin checks. A snapshot is never
 an "accept current behavior" mechanism:
 when the oracle exposes a policy defect, fix and document that defect in its
 own commit, add its focused regression, restart the three-run gate, and only
-then replace the corrected baseline in a separate checkpoint. Executor split,
-journal, reducer, verifier, and test-consolidation commits run `check`; they do
-not refresh the snapshot to make a difference pass.
+then replace the corrected baseline in a dedicated reviewed commit. Executor
+split, journal, reducer, verifier, and test-consolidation commits run `check`;
+they do not refresh the snapshot to make a difference pass.
 
 After a reviewed policy correction expands or changes the baseline, commit the
 replacement baseline and the explicit `REVIEWED_BASELINE_SHA256` update together

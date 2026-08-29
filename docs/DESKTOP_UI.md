@@ -325,7 +325,7 @@ value with a yellow fill; resume returns it to system accent. A plain canceled
 task freezes at its last value with a neutral-gray fill. The product may later
 add a stopped count or percentage such as “stopped after 412 of 1,908” or “42%
 completed” to paused/canceled presentation. That decision remains latent: this
-checkpoint defines no payload, projection, or renderer field for it.
+contract defines no payload, projection, or renderer field for it.
 
 #### Channel 3 — integrity
 
@@ -453,8 +453,8 @@ opaque-base flyout specimens side by side so an HDR operator can distinguish a
 shadow-compositing defect from a surface-alpha defect. This is a platform
 fallback, not a claim that SDR shadows are defective.
 
-The pre-Slice-5 file-list checkpoint ships three deliberately dormant surface
-modules. `file_row.js` owns the shared row skeleton; `plan.js` exports only
+Three file-list surface modules are deliberately inactive.
+`file_row.js` owns the shared row skeleton; `plan.js` exports only
 `renderPlanRow(element, rowView)` and `integrity.js` exports only
 `renderIntegrityRow(element, rowView)`. Inputs are page-local presentation
 views, not bridge envelopes or compatibility contracts. Callers supply native
@@ -599,7 +599,7 @@ document replacement, a later validated native appearance publication triggers
 another authoritative section read on the healthy publication path; it
 converges a late prior-document mutation without claiming a zero-stale interval
 when the old realm no longer exists. Save failure remains a sanitized log event
-in this checkpoint;
+in the active cosmetic contract;
 it does not block bridge readiness or replace the shell's operational status.
 The stored override drives both the native window material and the page
 tokens. Active high contrast temporarily wins without overwriting the
@@ -891,7 +891,7 @@ selectors, ZWNJ/ZWJ, and long labels remain exact.
 
 ### Accepted Setup and location flow
 
-This remains visually inactive until the Setup checkpoint lands. Setup exposes
+This remains visually inactive until the Setup surface is implemented. Setup exposes
 trash/additive deletion, trash-on-update, filters, creation-time and ACL
 preservation, source-casing propagation, and linked verification. Mirror has no
 control. ADS is visibly unavailable and frozen off; the page never implies a
@@ -955,7 +955,8 @@ structural/search/filter/window/anchor contract and installed shell/tree
 contract live in `M1_BRIDGE.md`; the installed shell/tree witness is SH-G-7 in
 `M1_SHELL.md`.
 
-H2 checkpoints 7/9 add server-owned sibling sorting for plan/inventory views.
+The accepted but unrealized view contract adds server-owned sibling sorting for
+plan and inventory views.
 New views start in canonical path-key order; users can choose filename, size,
 or mtime with explicit direction, and reset restores path-key order. The server
 sorts complete sibling sets before windowing, with deterministic ties and
@@ -969,11 +970,12 @@ through a fresh guarded server anchor.
 
 The 48rem table's mtime column and ordering/reset control layout may remain
 latent, but production commands, validators, state, raw row facts, and window/
-anchor behavior must be complete by the owning H2 checkpoints. Later GUI
+anchor behavior must be complete when sorting activates. Later GUI
 layout work must not reopen those contracts. Status/progress sorting, global
 flat sorting, and durable preferences are excluded from M1. Exact rules and
-acceptance live in [Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9)
-and H2 7.A/9.A; the existing shell/tree witness does not close this new work.
+acceptance live in [Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9);
+the existing shell/tree witness does not close this new work. The active M1
+delivery plan owns sequencing.
 
 A valid scroll page is terminal for the viewport snapshot that requested it.
 If it is narrower than the viewport, the renderer waits for a later viewport
@@ -1111,15 +1113,16 @@ confirm replacing current evidence; the receipted native command enforces that
 intent. Context actions require a valid domain row; warning rows are
 informational and never actionable.
 
-Checkpoint 10 admits eligible selected files with or without evidence to
-rebaseline. It always hashes and conditionally replaces/creates evidence,
+The accepted but unrealized policy admits eligible selected files with or
+without evidence to rebaseline. It always hashes and conditionally replaces or
+creates evidence,
 even for a genuine match, and clears verification freshness; explicit
 acceptance remains required for all-null and mixed selections. Baseline stays
 missing-evidence-only; verify compares existing evidence or establishes an
 initial baseline without claiming a verification. The
-[three-operation policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
-owns the outcomes and deferred compare-and-accept behavior. This is accepted
-checkpoint-10 work, not current desktop functionality.
+[three-operation policy](VERIFIER.md#accepted-standalone-operation-policy)
+owns the outcomes and deferred compare-and-accept behavior. This is accepted,
+not current desktop functionality.
 
 Each inventory subject presents ledger-derived verification state separately
 from the latest ordinary-integrity overlay. Manual post-copy results never enter
@@ -1227,6 +1230,6 @@ Contrast and no-color-only signaling remain requirements in every theme.
   grouping, independent evidence/result axes, confirmation-gated rebaseline,
   exact-handoff fallback labeling, and no browser-retained full result.
 - Exact target contracts and gates remain in
-  [M1_BRIDGE.md](M1_BRIDGE.md), checkpoint coverage in
+  [M1_BRIDGE.md](M1_BRIDGE.md), delivery coverage in
   [M1_SHELL_H2.md](M1_SHELL_H2.md), and test-scope policy in
   [TESTS.md](TESTS.md).

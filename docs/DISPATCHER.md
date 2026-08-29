@@ -7,13 +7,12 @@ implemented. Stage 6 Slice 3 adds the domain-blind transactional admission
 domain-blind. M2 durable queue ownership, SQLite session persistence, and
 startup reconciliation remain deferred.
 
-Checkpoint 2's terminal continuation scrubbing and checkpoint 3.2's exact-v5
-event admission are active. The remaining Stage 6 second-half desktop task
-target is not active yet. It reuses
+Terminal continuation scrubbing and exact-v5 event admission are active. The
+remaining Stage 6 second-half desktop task target is not active yet. It reuses
 the existing `attach` seam for every desktop-created session and lets an
 interface-owned process-live task serially bind those sessions. No task id,
 task revision, retained presentation artifact, or bridge retention policy enters
-dispatcher; the owning implementation checkpoint must preserve that boundary.
+dispatcher; any implementation of that target must preserve this boundary.
 
 ## Purpose
 
@@ -440,7 +439,7 @@ contract, explicit recovery and retention rules, unique durable queue ownership,
 and fresh workflow authority/custody reconciliation before pending re-admission
 or `RUNNING`→`INTERRUPTED` recovery. The current execution-v7 continuation and
 its transient attestations are not a durable recovery format. Exact active
-continuation and event/database checkpoint versions remain owned by
+continuation and event/database versions remain owned by
 [M1_BRIDGE.md](M1_BRIDGE.md); none changes for this metadata boundary.
 
 ### Stored-record retention classification

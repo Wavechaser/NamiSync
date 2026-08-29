@@ -3,13 +3,12 @@
 Status: history schema v6 records exact core-event-v5 reliable receipts in
 bounded, incrementally durable windows and exposes bounded summary, item-page,
 and event-page reads. Retention, export, durable task custody, and execution
-resume remain later work.
+resume remain unrealized.
 
 ## Active Schema-V6 Persistence Boundary
 
-Status: active from Stage 6 checkpoint 3.2 beside ledger v4. `DATABASE.md` owns
-the pair metadata, refusal boundary, and reset instructions; there is no
-in-place migration.
+Status: active beside ledger v4. `DATABASE.md` owns the pair metadata, refusal
+boundary, and reset instructions; there is no in-place migration.
 
 History v6 accepts only the coordinated exact core-event-v5 receipts, including
 duplicate and bounded rejection receipts; it has no mixed-version page or
@@ -347,9 +346,9 @@ and every non-retryable storage error remain fail-stop.
 
 Observer cleanup occurs after durable finalization. A cleanup-only failure
 therefore cannot rewrite persisted or live terminal truth. The pump retains an
-internal degraded cleanup state, but that post-finalization state is not yet a
-public session-health axis; any future persistent dispatcher/store delivery
-must define and test that projection before it ships.
+internal degraded cleanup state, but that post-finalization state is not a
+public session-health axis. A persistent dispatcher/store projection is
+unrealized and must be defined and tested before activation.
 
 A supported, canonically serializable event exceeding `max_event_bytes` is the
 single contained per-event failure. Its bounded durable receipt degrades audit,
@@ -433,11 +432,12 @@ fixed summary query count without event decoding; WAL reader visibility;
 streamed CLI output; subscriber repair; finalization parity; and the relevant
 query plans.
 
-Checkpoint-3.2 coverage proves exact event-v5-only persistence, canonical-envelope/
+Current coverage proves exact event-v5-only persistence, canonical-envelope/
 typed-projection agreement, immutable item recording facts, once-only full-
 result finalization, the all-null-or-complete review-limit group, and bounded
 rejection recovery. Shared event-shape and scalar boundary cases remain with
-the owning core/bridge checkpoint rather than being cataloged here.
+the owning [core](CORE.md) and [bridge](M1_BRIDGE.md) authorities rather than
+being cataloged here.
 
 The structural sequence-admission test must continue to prove that adding an
 event cannot iterate all prior hashes. Wall-clock timing is not an acceptable

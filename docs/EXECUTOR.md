@@ -1,7 +1,7 @@
 # Executor Module
 
-Status: M1 Stages 2 and 4 implemented. The native executor covers every reviewed
-operation kind on local Windows filesystems. Normal copies use one bounded
+Status: the native executor covers every reviewed operation kind on local
+Windows filesystems. Normal copies use one bounded
 reader/hasher/writer pipeline at a time, fixed adaptive chunks, XXH3-128
 evidence, measured conditional preallocation, and single-handle native
 finalization. Successful byte-producing operations now publish exact
@@ -11,8 +11,8 @@ below rather than presented as closed.
 
 ## Recording Settlement (Event v5 Active)
 
-The activation sequence and exact result/event shapes are owned by
-[M1_BRIDGE.md](M1_BRIDGE.md). Executor now attributes recording degradation
+The exact result/event shapes are owned by [M1_BRIDGE.md](M1_BRIDGE.md).
+Executor attributes recording degradation
 internally by scope. `_record()` returns a typed observation; settled operations
 retain only their own `ItemRecordingReason`, while final-flush and
 post-settlement restoration divergence retain ordered task issues. The
@@ -63,16 +63,16 @@ The settlement oracle remains the change gate. Typed projection must preserve
 its protected scenario/row manifest, normalized filesystem and recorder
 traces, baseline, and semantic hash. Structural settlement work stays blocked
 until three identical runs and independent review pass. The oracle owns its
-scenario manifest, [M1_SHELL_H2.md](M1_SHELL_H2.md) owns checkpoint coverage,
-and [TESTS.md](TESTS.md) owns test-scope policy; none is duplicated here.
+scenario manifest, [M1_SHELL_H2.md](M1_SHELL_H2.md) owns the delivery
+acceptance record, and [TESTS.md](TESTS.md) owns test-scope policy; none is
+duplicated here.
 
-Checkpoint 1's immutable tool-local projection pins the four
-filesystem/recording combinations and three ordering cases named by the H2
-plan. Checkpoint 2 implements the corresponding internal production
-attribution. Checkpoint 3.2 now projects that truth through exact event-v5 item
-fields and the item-free terminal summary without changing the retained oracle
-trace. Checkpoint 3.3 removes the unreachable legacy decoder source and positive
-fixtures; the oracle's historical trace adapters remain unchanged.
+The active immutable tool-local projection pins four filesystem/recording
+combinations and three ordering cases. Production retains the corresponding
+internal attribution and projects it through exact event-v5 item fields and the
+item-free terminal summary without changing the retained oracle trace.
+Unreachable legacy decoder source and positive fixtures are absent; the
+oracle's historical trace adapters remain unchanged.
 
 ## Purpose
 
@@ -302,8 +302,8 @@ discarding the only known-good version.
 
 The planner/preflight formula includes backup-copy bytes on no-hardlink targets.
 A partial backup remains under exact temp grammar, is ignored by restore
-planning, and remains with the trash run directory until a future reviewed
-maintenance purge; ordinary temp recovery still never walks `.synctrash`.
+planning, and remains with the trash run directory. A reviewed maintenance
+purge is unrealized; ordinary temp recovery still never walks `.synctrash`.
 Readonly ordering/recovery restores the old version's planned attributes after
 replacement so the hardlinked trash inode is not left silently degraded.
 
@@ -565,7 +565,7 @@ A newly exposed policy defect is fixed in its own commit with a persistent
 regression before the baseline is regenerated; that change resets the
 three-run gate. The oracle and its committed baseline remain under `tools/`
 through the executor split, typed journal, reducer, verifier split, and final
-test consolidation. They are intentionally not temporary checkpoint artifacts:
+test consolidation. They are intentionally not temporary delivery artifacts:
 the original 58 rows retain corrected-monolith attribution through the
 refactor, while the 12 later rows retain separately reviewed post-refactor
 stabilization behavior. Together they form the current corrected-baseline
@@ -807,12 +807,12 @@ fixed adaptive chunk bands remain executor-private constants.
 - File-level concurrency has no current setting or protocol. It may return only
   after a workload benchmark demonstrates underutilization and the resulting
   design preserves capacity, deterministic outcome aggregation, and
-  per-volume safety; Stage 1 deliberately removed `worker_count` without a
-  replacement.
+  per-volume safety; no `worker_count` replacement is active.
 - Restartable copy requires a versioned partial-file/digest checkpoint whose
   ownership and source snapshot are validated before reuse.
-- ADS preservation, when exposed later, enumerates and validates source streams
-  during copy without adding scanner, plan-operation, or database manifests.
+- ADS preservation is unrealized. Its accepted contract enumerates and
+  validates source streams during copy without adding scanner, plan-operation,
+  or database manifests.
   Requested stream loss on a capable target fails the operation; stream bytes
   remain outside capacity/progress totals and main-stream attestations.
 - Throttling wraps chunk pacing without changing event semantics.
@@ -827,7 +827,7 @@ whole-tree preflight, broad temp deletion, false byte totals, unsafe
 incomplete-scan destructive execution, cross-volume trash, orphan-temp capacity loop, missing source-drift
 attestation guard, and composite move-update gap.
 
-## M1 Stage 2 Implementation
+## Current Implementation
 
 `namisync/core/execution.py` owns `ExecutionSet`, validated run identifiers,
 typed executor reasons and decisions, and the filesystem/copy/recorder
@@ -841,7 +841,7 @@ concrete `xxhash.xxh3_128` object and supplies the reviewed, freshly preflighted
 set. Dispatcher/session owns custody and terminal aggregation, and the
 run-bound recorder owns durable ledger interpretation.
 
-The Stage 2 suite re-proves all nine operation kinds through the new path and
+The current suite re-proves all nine operation kinds through the active path and
 pins every gate in `obsolete/M1_HASH_REFACTOR.md` §4.5: stage overlap and FIFO/byte bounds;
 exact first-error teardown; growth/shrink, cancellation, pause, and callback
 paths; adaptive-band wiring; allocation allowlist; exact temp grammar and

@@ -30,10 +30,10 @@ symptom, cause, and fix.
   are verified. A hypothesis, code-size concern, duplicate mechanism without a
   demonstrated consequence, or documentation inconsistency belongs in the
   active delivery document or handoff instead. An `OPEN` entry does not expand
-  the active checkpoint. A regression introduced by that checkpoint is fixed
-  before its mergeable commit; a bounded pre-existing substantive bug may use a
-  separate fix commit while the repeated-mechanism and third-defect stop rules
-  in `AGENTS.md` remain untriggered.
+  the active delivery scope. A regression introduced by the current change is
+  fixed before its mergeable commit; a bounded pre-existing substantive bug may
+  use a separate fix commit while the repeated-mechanism and third-defect stop
+  rules in `AGENTS.md` remain untriggered.
 - Assign severity from the worst consequence supported by the admitted product
   path, not the importance of the audit or test that found it. A safe refusal,
   test-only race, or hypothetical future caller does not inherit the severity
@@ -896,17 +896,17 @@ defect, and move implementation-level test choreography out of the log.
   aborting partial attachment, closing the cosmetic subscription exactly once,
   and invalidating the controller so a retained handler is inert.
 - MODERATE - OPEN (2026-08-17). Headed compositor-restart evidence blindness. A
-  headed checkpoint can report green while Windows DWM restarts during the same
-  session because the harness observes its child/page result but has no shared
-  compositor event sentinel. Checkpoint 4 coincided with the 18:29:25
+  headed run can report green while Windows DWM restarts during the same
+  invocation because the harness observes its child/page result but has no shared
+  compositor event sentinel. The affected 18:29:25 run coincided with the
   Application Error record 63156 and WER report
   `854b76c5-b80c-4127-acc8-404d18814e0d`; Dwminit record 63157 reports restart
   1, while WER subcode `0x23` names an unexpected heap exception. No
   contemporaneous GPU/TDR event was found in the inspected logs. Earlier
   2025-07-23 and 2026-07-26 DWM restarts had different
-  `MILERR_DISPLAYSTATEINVALID` signatures, and checkpoint 5 had no later DWM
-  event. This proves an evidence blind spot, not NamiSync causality. A shared
-  headed-session compositor sentinel remains required before a green checkpoint
+  `MILERR_DISPLAYSTATEINVALID` signatures, and the later comparison run had no
+  DWM event. This proves an evidence blind spot, not NamiSync causality. A shared
+  headed-run compositor sentinel remains required before a green result
   can make any compositor-health claim.
 - MINOR - FIXED (2026-08-17). Headed-evidence replacement contention. Headed
   children repeatedly replaced one live JSON snapshot while parents polled and
@@ -1346,7 +1346,8 @@ defect, and move implementation-level test choreography out of the log.
   candidate-row tuple before construction, and no valid excess publishes
   partial work. Synthetic tree/index and candidate construction, their finite
   preprocessing transients, old/new task generations, and the complete byte
-  authority remain unclosed model owners.
+  authority remain outside active admission. `DEFENSE.md` §1.3 owns the walls;
+  `M1_BRIDGE.md` owns the accepted complete task/artifact graph.
 - SEVERE - FIXED (2026-08-28). Hostile resolution alias mutation. Inventory
   retained resolver-returned mount/evidence objects across the later root probe,
   so callback mutation could change the root or volume facts used for scan and
@@ -1646,8 +1647,8 @@ defect, and move implementation-level test choreography out of the log.
   decoder previously retained v3 history compatibility beside v4 while the live
   browser and canonical history projection accepted different populations.
   Cause: consumer-local compatibility lacked one event/data epoch and removal
-  point. Production is exact-v5-only at data epoch 6. Checkpoint 3.3 removes the
-  private v3/v4 decoders, exclusive helpers, and positive compatibility fixtures.
+  point. Production is exact-v5-only at data epoch 6; the private v3/v4 decoders,
+  exclusive helpers, and positive compatibility fixtures are removed.
   Removal guards and all-family negative cases pin the source boundary;
   co-batched retired-version events preserve the drain cursor and replay.
 - MODERATE - FIXED (2026-08-22). Lossy-progress authority conflation. Forced
@@ -1773,7 +1774,9 @@ defect, and move implementation-level test choreography out of the log.
   final charge for unavoidable shallow scan/plan/world/verdict slots.
   Excess is `REFUSED+UNRUN` and saves no plan.
   Construction, sorting/index storage, previews, codecs, native/browser copies,
-  complete graphs, exceptions, and multi-session owners remain unclosed.
+  complete graphs, exceptions, and multi-session owners remain outside active
+  admission under [DEFENSE.md](DEFENSE.md) §1.3 and
+  [M1_BRIDGE.md](M1_BRIDGE.md).
 - SEVERE - FIXED (2026-08-28). Reliable result custody aliasing. The generic
   runner, execution workflow, and integrity workflow could give a callback the
   same item/result graph retained for terminal truth, or run a later validator

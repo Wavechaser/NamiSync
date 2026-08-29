@@ -1,14 +1,14 @@
 # Recorder Module
 
-Status: M0 sync recording, ledger setup, inventory reconciliation, and the
-shared conditional integrity write are implemented. M1 Stage 4 adds atomic
-copy-identity returns and one logical recorder window across optional linked
-verification. Maintenance recording remains later work.
+Status: sync recording, ledger setup, inventory reconciliation, the shared
+conditional integrity write, atomic copy-identity returns, and one logical
+recorder window across optional linked verification are implemented.
+Maintenance recording remains unrealized.
 
 ## Recording Truth (Event v5 Active)
 
-The checkpoint sequence and exact result vocabulary are owned by
-[M1_BRIDGE.md](M1_BRIDGE.md). Each recorder call produces one typed,
+The exact result vocabulary is owned by [M1_BRIDGE.md](M1_BRIDGE.md). Each
+recorder call produces one typed,
 operation-local truth result. A committed receipt is final and idempotent; an
 identical byte-producing replay returns the same complete
 `RecordedCopyIdentity`. Executor now retains a failing call as that operation's
@@ -30,10 +30,10 @@ scope, current stat, attestation, and invalidation at the point of use.
 ## Purpose
 
 Recorder is the only write path into the main ledger. Executor, inventory
-reconciliation, verifier, baseline, rebind, annotations, and later
-maintenance issue typed commands; none executes SQL directly. Recorder
-serializes in-process writes, applies conditional evidence rules, batches within
-a bounded durability window, and fails visibly.
+reconciliation, verifier, baseline, rebind, and annotations issue typed
+commands; maintenance would use the same seam when implemented. None executes
+SQL directly. Recorder serializes in-process writes, applies conditional
+evidence rules, batches within a bounded durability window, and fails visibly.
 
 History is not recorder output. It independently observes session events and
 uses a separate database.

@@ -5,10 +5,9 @@ removes the unused worker-count field from the immutable plan contract.
 Stage 5.5 relocates the planner's three relative hierarchy helpers to
 `core.pathing` without changing planning behavior. Later scopes, content
 evidence, ingest policies, replay, repair, and undo reuse the same plan shape.
-The signed-64 scalar boundary is active from Stage 6 checkpoint 3.2, and the
-pre-model planning-source admission is active. The complete Setup snapshot and
-complete task-artifact retained-graph contract below remain accepted targets
-until their implementation checkpoints close. The
+The signed-64 scalar boundary and planning-source admission are active. The
+complete Setup snapshot and task-artifact retained-graph contract below remain
+accepted but unrealized. The
 100,000-operation shape is a performance fixture, not the production maximum.
 
 ## Purpose
@@ -134,8 +133,8 @@ logical-byte signal remains by identity after its own frames retire. Arbitrary
 custom exception state leaves with the caller and is not retained planner
 custody.
 
-Those counters establish the planning-source wall, not the checkpoint-4
-complete retained-graph model. Policy and planning construction temporaries,
+Those counters establish the planning-source wall, not the unrealized complete
+retained-graph model. Policy and planning construction temporaries,
 sorting/index storage, selection and preview values, additional complete-tree
 projection, generic container allocation, serialization/codec copies, native
 views, browser copies, and task retention require the later predeclared
@@ -146,8 +145,8 @@ snapshot is an exact tuple of at most 64 nonempty valid-Unicode patterns, each
 at most 1,024 UTF-8 bytes and together at most 16,384 bytes. An assignment is
 an exact tuple of at most 120,000 typed items. Destination-policy name/version
 and optional group/conflict annotations have no narrower production grammar;
-each value is capped by the plan-domain ceiling, and the complete combined
-occurrences still require the checkpoint-4 publication graph admission.
+each value is capped by the plan-domain ceiling, and their complete combined
+occurrences remain outside active publication-graph admission.
 Constructors and policy/assignment validators revalidate these contracts so
 forged frozen fields do not bypass them.
 
@@ -182,8 +181,8 @@ the destination policy's intentional name/version projection, not its private
 implementation state. Unsupported objects or keys and nonfinite numbers refuse
 at the shared closed JSON boundary described in [CORE.md](CORE.md).
 
-Checkpoint 3R.14 changes identity-bearing hashes under the shared epoch-6
-cutover; frozen identityless plan bytes remain identical. Plan-v5 and the
+The shared epoch-6 cutover changes identity-bearing hashes; frozen identityless
+plan bytes remain identical. Plan-v5 and the
 then-current execution-v6 workflow wire shapes were unchanged, so workflow
 refingerprinting rejected an old numeric-identity fingerprint before execution
 while unchanged identityless fingerprints remained compatible. Current exact-v7
@@ -276,8 +275,8 @@ Stage 1 removed `worker_count` from options, plans, fingerprints, and payloads.
 The current executor admits one file operation at a time, and the capacity
 contract has no dormant file-concurrency tuning input.
 
-At the active checkpoint-3.2 scalar cutover, planner construction follows the checked-
-arithmetic and pre-publication refusal contract in
+Planner construction follows the active checked-arithmetic and pre-publication
+refusal contract in
 [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; planner defines
 no local numeric domain. Every logical-byte rollup uses checked signed-64
 addition; an aggregate excess refuses publication with the typed plan/domain

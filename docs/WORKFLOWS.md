@@ -16,12 +16,11 @@ active while the complete task-artifact reservation model remains unrealized;
 Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
-## Stage 6 Second-Half Workflow Contract (Checkpoints 2–3.3 And The Checkpoint-4 Source Prerequisite Active)
+## Stage 6 Second-Half Workflow Contract
 
-The checkpoint sequence is owned by
-[M1_SHELL_H2.md](M1_SHELL_H2.md); exact event/result and task protocols live in
-[M1_BRIDGE.md](M1_BRIDGE.md), and numeric/retention walls in
-[DEFENSE.md](DEFENSE.md) §1.3. Workflows consume those contracts without
+Exact event/result and task protocols live in [M1_BRIDGE.md](M1_BRIDGE.md), and
+numeric/retention walls in [DEFENSE.md](DEFENSE.md) §1.3. Workflows consume
+those contracts without
 treating a continuation version as a global epoch or receiving an
 interface-owned task claim.
 
@@ -38,7 +37,7 @@ the current live record's opaque reference, and its separate metadata-store
 projection never forwards continuation bytes at admission or later writes.
 This is not whole-process reference erasure; the scope and M2 protected
 recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store).
-Manual exact post-copy verification remains a later checkpoint and instead
+Manual exact post-copy verification remains unrealized; its accepted contract
 classifies current durable evidence in the original execution scope.
 
 Installed NamiSync modules are trusted-but-fallible internal (rung 3)
@@ -97,8 +96,8 @@ separate from construction so each consuming boundary can recheck collaborator
 data, including event bodies changed after initial admission. Generic
 result-free session snapshots remain legal without implying terminal delivery.
 
-At the active checkpoint-3.2 scalar cutover, workflow accumulation follows the exact
-checked-arithmetic contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
+Workflow accumulation follows the active exact checked-arithmetic contract in
+[M1_BRIDGE.md](M1_BRIDGE.md) and
 [DEFENSE.md](DEFENSE.md) §1.3 without a workflow-local numeric variant.
 
 ## Purpose
@@ -375,8 +374,8 @@ dropped or renormalized field fails the build instead of silently refusing every
 execution.
 
 The identity-hash correction did not change the then-current execution-v6 wire
-shape. Checkpoint-4 prerequisite stabilization later advances execution custody
-to exact v7 for the exclusion acceptance cursor, so every v6 continuation is now
+shape. Execution custody is now exact v7 for the exclusion acceptance cursor,
+so every v6 continuation is
 rejected at schema admission rather than entering fingerprint or domain work.
 This adds no process-restart recovery; the live continuation and store boundary
 remain as described above.
@@ -391,8 +390,9 @@ version 1-3 payloads are refused instead of being guessed into the changed
 contract. Progress-continuation hardening advances the shared plan/execution
 codec to strict version 5, requires an exact bounded byte high-water on every
 execution set, and refuses versions 1-4 rather than resetting a resumed task's
-aggregate bar. Stage 6 checkpoint 2 then keeps plan payload v5 and advances only
-the process-local execution payload to exact v6 for sparse recording reasons,
+aggregate bar. The recording-attribution cutover kept plan payload v5 and
+advanced only the process-local execution payload to exact v6 for sparse
+recording reasons,
 ordered task issues, and transient attestation consistency; execution payload
 v5 is refused. Prerequisite stabilization advances only execution to exact v7
 for the required reliable-exclusion cursor and refuses v6 without a legacy
@@ -769,14 +769,14 @@ baseline still performs
 its required fresh inventory recording, but hashes and writes no integrity
 attestation when every eligible row already has evidence.
 
-The accepted checkpoint-10 change admits null-attestation rows to fresh
+The accepted but unrealized change admits null-attestation rows to fresh
 rebaseline too, without weakening its explicit selected scope/acceptance or
 changing resume selection. Rebaseline hashes and conditionally replaces or
 creates evidence even when content matches; it clears verification freshness
 rather than reporting a verified match. This admission change is not yet
-implemented. See the [three-operation policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
-and [H2 checkpoint 10](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification)
-for the complete acceptance and regression requirements.
+implemented. See the [three-operation policy](VERIFIER.md#accepted-standalone-operation-policy)
+for behavior and the [active M1 plan](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification)
+for delivery and regression requirements.
 
 ## Other Workflows
 

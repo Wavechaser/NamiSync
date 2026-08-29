@@ -1853,7 +1853,7 @@ scan, recorder, and payload-module behavior.
   their comparison/replacement policies differ, not that admission rule.
   Baseline and verify require no confirmation; rebaseline requires explicit
   current-evidence acceptance even for an all-null-evidence selection. The
-  [verifier policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
+  [verifier policy table](VERIFIER.md#accepted-standalone-operation-policy)
   owns the distinction. Every admitted operation reports its actual count.
 - Folder refresh uses `ScanScopeKind.SUBTREES` so new descendants are
   discoverable. A mixed refresh carries both `selected_paths` and

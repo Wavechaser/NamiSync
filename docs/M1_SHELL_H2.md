@@ -394,17 +394,22 @@ authority, overclaim, or repository-custody finding.
 
 | Id | Accepted outcome | Verification | Status |
 | --- | --- | --- | --- |
-| `reference-routing` | Remove delivery-session and checkpoint chronology from active fundamental, product, and component references; express only active versus accepted-but-unrealized contracts there, while retaining delivery sequencing in the M1 plans, task history, and handoff. Runtime pause/cancel checkpoint terminology is unchanged. | Search every active Markdown file outside the declared delivery/history owners; resolve every changed relative link and anchor; run `git diff --check`; independently review behavior/status preservation. | In progress |
+| `reference-routing` | Remove delivery-session and checkpoint chronology from active fundamental, product, and component references; express only active versus accepted-but-unrealized contracts there, while retaining delivery sequencing in the M1 plans, task history, and handoff. Runtime pause/cancel checkpoint terminology is unchanged. | Search every active Markdown file outside the declared delivery/history owners; resolve every changed relative link and anchor; run `git diff --check`; independently review behavior/status preservation. | Complete |
 
 Non-goals are changing code or product behavior, renumbering or rewriting the
 M1 delivery plans, removing runtime `Checkpoint`/`ctx.checkpoint()` language,
 or rewriting superseded and dated task history.
 
+Closeout resolved all 189 local targets and 84 anchors across the 29 active
+documents. Targeted routing searches and `git diff --check` are clean;
+independent review found no remaining blocker.
+
 ### 4. Install task-centric lifecycle and compact artifacts
 
 **Status:** Pending. The prerequisite closeout above is complete, but no
-process-live task surface, ownership/reservation formula, constant set, maximum
-fixture, independent validator, or BR-G-45 evidence is accepted or active.
+process-live task surface or implementation derivation, formula, constant set,
+maximum fixture, independent validator, or BR-G-45 evidence is ratified or
+active. The higher-level accepted walls and task graph remain authoritative.
 
 **Objective:** Remove the one-session assumption before adding production task
 surfaces.
@@ -445,6 +450,10 @@ surfaces.
   target, as count containment only. They do not substitute for the complete
   retained-byte and copy model. Any weakref support remains class-specific and
   must be charged.
+- Choose a domain-neutral owner for that shared target and its generic
+  population primitives before centralizing repeated constants or resolving
+  the plan-origin `core/review.py` name. Preserve current domain-specific count
+  semantics, precedence, and typed outcomes through M1.
 
 `BUGS.md` owns current open causal entries; `M1_BRIDGE.md` owns exact task,
 claim, lease, publication, retry, and command contracts; `DEFENSE.md` owns hard
@@ -738,7 +747,7 @@ Commit: `feat(web): add integrity and post-copy verification`
 
 #### 10.A Rebaseline missing evidence without comparison semantics
 
-- **Accepted protocol:** Implement the [three-operation policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target).
+- **Accepted protocol:** Implement the [three-operation policy table](VERIFIER.md#accepted-standalone-operation-policy).
   A fresh rebaseline admits eligible selected files both with and without prior
   evidence. Hash current content and conditionally create/replace evidence;
   unchanged content is still `baselined`, never a verified match. Baseline's

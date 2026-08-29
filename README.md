@@ -67,22 +67,21 @@ Python bridge responses now stop at an exact 8 MiB canonical-JSON occurrence
 wall before native construction; drains commit only the longest admitted update
 prefix, and native positions remain charged through worker exit and exact
 browser receipt. Construction, sorting, indexes, previews, representation-
-specific native/browser bytes, and complete task graphs remain checkpoint-4
-model work alongside the product surfaces and task lifecycle.
+specific native/browser bytes, and complete task graphs remain accepted but
+unrealized M1 model work alongside the product surfaces and task lifecycle.
 The repeated 120,000-item population walls serve one M1 performance-and-safety
 support target in each applicable population. Existing independently owned
 first-excess behavior remains active through M1; NamiSync makes no support
 promise above that scale, but does not claim that item 120,001 is a failure
 threshold.
 
-Accepted H2 work also includes server-owned filename/size/mtime sibling sorting
-for plan and inventory views, with path-key order for new views and reset;
-sorting changes neither selection nor execution authority. Rebaseline will
-also create evidence for selected files that lack it, while remaining explicit
-hash-and-replace rather than compare-and-accept. These changes are planned for
-checkpoints 7/9 and 10 respectively, not implemented by this documentation pass.
-See the [H2 plan](docs/M1_SHELL_H2.md) and
-[integrity policy table](docs/VERIFIER.md#standalone-operation-policy-checkpoint-10-target).
+Accepted but unrealized M1 behavior also includes server-owned filename/size/
+mtime sibling sorting for plan and inventory views, with path-key order for new
+views and reset; sorting changes neither selection nor execution authority.
+Rebaseline will also create evidence for selected files that lack it, while
+remaining explicit hash-and-replace rather than compare-and-accept. See the
+[H2 plan](docs/M1_SHELL_H2.md) and
+[integrity policy table](docs/VERIFIER.md#accepted-standalone-operation-policy).
 
 M1 state remains process-local: queued sessions and unexecuted plans do not
 survive an application restart, and committed nonterminal history returns only
@@ -243,11 +242,11 @@ never hides the other result axes in rendered output.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
   executor/verifier harness, deterministic corpora, and the settlement oracle.
 
-- [Handoff](docs/HANDOFF.md) — immediate session contexts.
+- [Handoff](docs/HANDOFF.md) — immediate operational context.
 - [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
 - [M1 Bridge](docs/M1_BRIDGE.md) — sole Stage 6 bridge protocol and BR-G acceptance authority.
 - [M1 Shell](docs/M1_SHELL.md) — Stage 6 slice order, host/package placement, packaging, and SH-G map.
-- [M1 Stage 6 second-half checklist](docs/M1_SHELL_H2.md) — newest checkpoints 0–12 reslice, detailed acceptance, review, and verification.
+- [M1 Stage 6 second-half checklist](docs/M1_SHELL_H2.md) — current detailed acceptance, review, and verification plan.
 
 Historical criteria are collected in the [retrospective M0 plan](docs/obsolete/M0_PLAN.md).
 The [imported PoC documents](docs/obsolete/PoC_import/) are archived alongside it.
@@ -280,9 +279,9 @@ ownership explicit without changing public or persisted contracts.
 Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, dormant sync/integrity file-list row
 renderers, and a persisted native/page theme override over the refrozen
-cosmetic-state channel. The second-half workflow/protocol contracts are now
-ratified for checkpoint delivery, and the exact event-v5/data-epoch-6 protocol
-cut is active. Product surfaces and beta packaging remain open.
+cosmetic-state channel. The remaining second-half product/task contracts
+are accepted but unrealized, and the exact event-v5/data-epoch-6 protocol cut
+is active. Product surfaces and beta packaging remain open.
 
 ### M1 Features
 

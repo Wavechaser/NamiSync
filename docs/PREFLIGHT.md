@@ -6,8 +6,8 @@ authority. Fresh preflight remains mandatory immediately before every
 managed-data mutation, on resume, and on queued wakeup. Stage 6's pre-model
 plan-review source/refusal admission is active for workflow-supplied review.
 
-At the active checkpoint-3.2 scalar cutover, preflight uses the capacity-observation and
-refusal contract in [M1_BRIDGE.md](M1_BRIDGE.md) and
+Preflight uses the active capacity-observation and refusal contract in
+[M1_BRIDGE.md](M1_BRIDGE.md) and
 [DEFENSE.md](DEFENSE.md) §1.3 without defining a local numeric variant.
 
 ## Purpose
@@ -82,10 +82,9 @@ maps, keys, sorting, selection, and scope-derivation temporaries are disposable
 and uncharged. A first excess is the shared typed `REFUSED+UNRUN` result and
 never becomes an incomplete ordinary verdict or saved partial plan.
 
-These source and retained-reference checks are inputs to checkpoint 4. They do
-not freeze its complete-object constants or account for construction/container
-capacity, complete projections, later task/serialization, native, or browser
-copies.
+These source and retained-reference checks do not freeze the unrealized
+complete-object constants or account for construction/container capacity,
+complete projections, later task/serialization, native, or browser copies.
 
 ## Observation Boundary
 

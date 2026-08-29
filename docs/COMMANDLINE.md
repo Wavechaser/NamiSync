@@ -122,12 +122,12 @@ identity, and both `--database PATH` and `--history-database PATH`.
   selected eligible rows that already have an attestation. At least one
   `--path` and the intent flag are mandatory.
 
-Those are the current admission rules. The accepted H2 checkpoint-10 change
-also admits explicitly selected eligible files without evidence to rebaseline,
-using the same flags and confirmation. It always hashes and conditionally
-replaces/creates evidence, even for matching content; verification freshness
-is cleared rather than advanced. This change is not yet implemented. See the
-[three-operation policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target).
+Those are the current admission rules. The accepted but unrealized change also
+admits explicitly selected eligible files without evidence to rebaseline, using
+the same flags and confirmation. It always hashes and conditionally replaces or
+creates evidence, even for matching content; verification freshness is cleared
+rather than advanced. See the
+[accepted three-operation policy](VERIFIER.md#accepted-standalone-operation-policy).
 
 Omitting `--path` means full-location scope for inventory, baseline, and verify.
 Paths are exact values, not globs. Location resolution distinguishes resolved,

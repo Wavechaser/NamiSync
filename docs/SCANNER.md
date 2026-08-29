@@ -39,10 +39,10 @@ published. Scanner does not authenticate the owning signal or receive the
 plan's cumulative retained-budget capability.
 
 This admission closes the planning-source owner boundary. It is not the
-checkpoint-4 complete-object reservation model. Scanner admission neither
+unrealized complete-object reservation model. Scanner admission neither
 prices construction/sort/index storage nor sums a whole scan's logical bytes;
 text/codec/native copies, container capacity, complete graph validation, and
-task/result retention remain governed by that later model and validator.
+task/result retention remain outside active admission.
 
 ## Implemented M0 Surface
 
@@ -233,8 +233,8 @@ Unknowns degrade conservatively: unknown seek penalty behaves like HDD for any
 future parallelism decision; absent stable identity disables identity moves;
 coarse timestamps control planner comparison tolerance.
 
-At the active checkpoint-3.2 scalar cutover, scanner projects unsupported numeric and native
-identity observations through the exact typed outcomes in
+Scanner projects unsupported numeric and native identity observations through
+the active exact typed outcomes in
 [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; it defines no
 local numeric domain or fallback. Stable NTFS/ReFS identity comes from the
 shared complete-file-id adapter, and a path-local

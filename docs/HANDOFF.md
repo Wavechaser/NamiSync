@@ -2,9 +2,10 @@
 
 Status (2026-08-30): checkpoint-4 prerequisite consolidation and the bounded
 post-review corrections are complete on `milestone1`. Checkpoint 4 proper has
-not started. No process-live task surface, ownership/reservation formula,
-constant set, maximum fixture, independent validator, command row, or BR-G-45
-evidence is accepted or active.
+not started. No process-live task surface or implementation-level ownership/
+reservation formula, constant set, maximum fixture, independent validator,
+command row, or BR-G-45 evidence is ratified or active. The higher-level
+accepted walls and task graph remain authoritative.
 
 ## Delivered
 
@@ -30,6 +31,10 @@ evidence is accepted or active.
   safety support target. Existing independent first-excess behavior remains
   through M1; there is no support promise above the target and no asserted
   failure cliff at 120,001.
+- Durable references now state active versus accepted-but-unrealized contracts
+  without numbered checkpoint routing or session-local closeout chronology. M1
+  plans, task history, and this handoff retain delivery sequencing; runtime
+  checkpoints and product sessions keep their behavioral names.
 
 ## Deferred to checkpoint 4
 
@@ -75,7 +80,7 @@ without rederiving them from current source and ratified requirements.
 - Protected settlement oracle: 30 scenarios across three identical successful
   prerequisite runs; the corrective follow-up did not change executor
   settlement.
-- Active documents: 29 documents, 182 relative targets, and 83 Markdown
+- Active documents: 29 documents, 189 relative targets, and 84 Markdown
   anchors resolve; stale-contract searches, repository custody, and
   `git diff --check` are clean.
 - Independent final review found no blocking code, documentation-authority,

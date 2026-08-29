@@ -145,15 +145,15 @@ ownership-marked, exact ready/final diagnostic set after revalidation; abnormal,
 changed, or unknown output is retained for operator inspection.
 
 A green headed result proves only its declared NamiSync/page contract; it is not
-evidence that the surrounding Windows compositor remained healthy. A
-2026-08-17 checkpoint completed green while the same session contained a DWM
+evidence that the surrounding Windows compositor remained healthy. A headed
+acceptance run completed green while the same Windows session contained a DWM
 restart, which the child/page evidence protocol could not see; `BUGS.md` owns
 the exact incident record and does not attribute causality to NamiSync. A shared
-current-session DWM sentinel should bracket future headed runs, detect a
-compositor restart independently of child/page success, and report event-log or
-GPU/TDR evidence without conflating temporal overlap with cause. Until it lands,
-compositor health is an explicit evidence limitation rather than an inferred
-pass.
+current-session DWM sentinel is accepted but unrealized. When active, it will
+bracket headed runs, detect a compositor restart independently of child/page
+success, and report event-log or GPU/TDR evidence without conflating temporal
+overlap with cause. Until then, compositor health is an explicit evidence
+limitation rather than an inferred pass.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q --dept interfaces -o "addopts=" -m headed
@@ -169,16 +169,15 @@ collected test without a department filter.
 
 ## Accepted-target verification
 
-Accepted but inactive M1 Stage 6 contracts do not become current behavior or
-acceptance evidence until their owning checkpoint activates them.
-`M1_SHELL_H2.md` is the newest delivery plan where it overlaps
-`M1_SHELL.md`; its checkpoint acceptance/test clauses and the referenced
-`M1_BRIDGE.md` gates own the target cases. Do not reproduce checkpoint,
-command, module, or case catalogs here.
+Accepted but unrealized M1 Stage 6 contracts are neither current behavior nor
+acceptance evidence. `M1_SHELL_H2.md` is the current delivery plan where it
+overlaps `M1_SHELL.md`; its acceptance/test clauses and the referenced
+`M1_BRIDGE.md` gates own the target cases. Do not reproduce delivery, command,
+module, or case catalogs here.
 
-While implementing a checkpoint, run focused tests, every affected producer and
-consumer department, and the ordinary suite when a public contract crosses
-departments. Exact primary ownership remains only in
+While implementing an accepted target, run focused tests, every affected
+producer and consumer department, and the ordinary suite when a public contract
+crosses departments. Exact primary ownership remains only in
 `tests/_departments.py`. Surface work also runs the real installed WebView2
 witnesses with default addopts cleared. Quantitative evidence follows
 `DEFENSE.md`; a benchmark is not acceptance merely because it ran.

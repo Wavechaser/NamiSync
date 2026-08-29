@@ -1,16 +1,16 @@
 # Database Module
 
-Status: schema bones, safe connection factories, the M0 ledger/repositories,
-inventory reconciliation, bounded receipt-journal history, and M1's
-ledger-v4/history-v6 data-epoch-6 reset boundary and semantic settings store are
-implemented. General migrations, retention, and backup/protection workflows
-remain later work.
+Status: schema bones, safe connection factories, ledger/repositories, inventory
+reconciliation, bounded receipt-journal history, the ledger-v4/history-v6
+data-epoch-6 reset boundary, and the semantic settings store are implemented.
+General migrations, retention, and backup/protection workflows remain
+unrealized.
 
 ## Active V4/V6 Persistence Boundary
 
-Status: ledger-v4/history-v6 shapes are active from Stage 6 checkpoint 3.2;
-remediation checkpoint 3R.14 advances the shared data epoch and ledger contract
-id. This is a coordinated pre-release reset, not an in-place migration.
+Status: ledger-v4/history-v6 shapes, shared data epoch 6, and the corrected
+ledger contract id are active. This is a coordinated pre-release reset, not an
+in-place migration.
 
 | Database | Schema | `data_epoch` | `contract_id` |
 | --- | ---: | ---: | --- |
@@ -34,9 +34,10 @@ contract fields explicitly and quote canonical `FileIndex128` text; ordinary
 integers remain JSON numbers. SQLite column shapes and the history contract id
 do not change. This fixes canonical consistency and latent portability risk,
 not demonstrated Python integer-precision loss. Valid-Unicode identityless hash
-bytes remain unchanged. A later boundary hardening requires Unicode scalar
-strings/keys and strict UTF-8 without another epoch or schema change. JSON had
-already distinguished surrogate escapes from literal backslashes; this is a
+bytes remain unchanged. Accepted but unrealized boundary hardening requires
+Unicode scalar strings/keys and strict UTF-8 without another epoch or schema
+change. JSON had already distinguished surrogate escapes from literal
+backslashes; this is a
 malformed-input/round-trip fix, not a demonstrated hash collision. Optional scan
 warning detail is omitted at construction if malformed or larger than 1,024
 UTF-8 bytes; its old captured receipt consequently conflicts without mutation
@@ -66,8 +67,8 @@ with unchanged schema versions and history id. These tests never reset user data
 Ledger v4 stores complete file identities as canonical `FileIndex128` text and
 strengthens pair, canonical-domain, and attestation checks. It does not add an
 operation digest. The execution-evidence join and indexed recent-location
-queries described below remain later checkpoint targets; process-local recent
-ids remain outside the database.
+queries described below are accepted but unrealized; process-local recent ids
+remain outside the database.
 
 At the active cutover, ledger numeric and native-identity storage follows
 `DEFENSE.md` §1.3 and the mapped bridge decision without a database-local
@@ -81,9 +82,9 @@ Presentation-only omission state is never stored.
 
 ### Exact topology authority
 
-Status: active from remediation checkpoint 3R.13, using the exact authority
-prepared independently in 3R.12. Reader validation, initializer/repository
-preflight, and pair admission all select it alongside the current markers.
+Status: active. Reader validation, initializer/repository preflight, and pair
+admission all select the exact topology authority alongside the current
+markers.
 
 `schema.py` compares the complete ordered `main.sqlite_schema` projection
 `(type, name, tbl_name, sql)` with a private in-memory reference created from the
@@ -211,9 +212,10 @@ publish a torn or partial population, and SQLite's numeric affinity cannot make
 a noncanonical saved spelling satisfy exact missing-row validation. The direct
 exact-path reader may retain one normalized lookahead key so SQL mode
 eligibility, rather than raw request cardinality, decides that boundary; the
-workflow request itself admits at most 120,000 raw selected paths. The frozen
-model must charge that one repository-only transient. The retained-graph byte
-axis remains part of the checkpoint-4 model rather than a database estimate.
+workflow request itself admits at most 120,000 raw selected paths. The accepted
+but unrealized [task-artifact graph](M1_BRIDGE.md#task-and-authority-ordering)
+must charge that one repository-only transient; [DEFENSE.md](DEFENSE.md) §1.3
+owns the retained-graph byte axis. Neither is a database estimate.
 Repository input and output gates use core's stateless population measure and
 excess comparison only. Inventory and integrity still own separate local row
 constants and exact error/fact outcomes; raw occurrences are checked before
@@ -245,8 +247,8 @@ measure physical disk allocation, cleanup latency, or a maximum database size.
 
 ### Atomic execution-evidence read
 
-Status: accepted for the later execution-review checkpoint; not active in
-checkpoint 3.2.
+Status: accepted but unrealized. [M1_BRIDGE.md](M1_BRIDGE.md) owns the exact
+cross-layer execution-review contract.
 
 The execution-evidence repository resolves one retained execution identity and
 a bounded operation window in one SQLite read transaction. It joins committed
@@ -267,7 +269,7 @@ coherent item evidence; explicit settlement divergence blocks the handoff.
 ## Purpose And Boundaries
 
 `namisync.db` owns SQLite schemas, connection factories, recorder implementation,
-read repositories, history observer/store, and later migrations. The main
+read repositories, history observer/store, and unrealized migrations. The main
 ledger stores durable operational evidence; the history database stores an
 independent activity audit. They have separate connections, versions,
 retention, failure domains, and no cross-database foreign keys.
@@ -460,10 +462,10 @@ The initial schema reserves the expensive identity/evidence bones:
   independent of plan or interface view state;
 - generic namespaced annotations with entity kind/id/key/value and uniqueness.
 
-At the active checkpoint-3 reset, file-index columns and repository binds use
-canonical `FileIndex128` text rather than SQLite numeric affinity. The exact
-identity domain and native-source rule remain owned by `M1_BRIDGE.md` and
-`DEFENSE.md` §1.3.
+At the active epoch-6 persistence boundary, file-index columns and repository
+binds use canonical `FileIndex128` text rather than SQLite numeric affinity.
+The exact identity domain and native-source rule remain owned by `M1_BRIDGE.md`
+and `DEFENSE.md` §1.3.
 
 Successful byte-producing operation transactions return the persisted target
 inventory row identity, target location, run scope token, and canonical path
@@ -571,8 +573,8 @@ equality and descendant range. The existing
 the default-binary literal range `root || '\'` through `root || ']'`; no
 `LIKE`, collation change, schema migration, or ledger version bump is involved.
 Missing rows retain evidence and may be acknowledged/restored/reappeared.
-Tombstone pruning is a future explicit policy with impact review, not an
-incidental scan cleanup.
+Tombstone pruning is unrealized and requires an explicit policy with impact
+review; it is not incidental scan cleanup.
 
 Stale-inventory reads include rows with no evidence, no true verification time,
 an age-expired verification, a durable invalidation, or a current/attested stat
@@ -592,7 +594,7 @@ volume/location correspondence.
 
 ## Data Protection
 
-Retention and backup/protection workflows are unimplemented future requirements.
+Retention and backup/protection workflows are accepted but unrealized.
 Detail retention must use a writable connection and canonical time comparison,
 preserve summaries when pruning detail, and remain idempotent. Backup snapshots
 must pass integrity check, and rotation must never delete the newest sole good

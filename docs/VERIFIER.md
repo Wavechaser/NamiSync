@@ -9,11 +9,9 @@ compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
 actions remain Stage 6. Signed-64 totals, exact event v5, and full-width native
-identity are active from checkpoint 3.2. The no-rescan manual post-copy handoff
-and ledger-current classification below remain accepted Stage 6 targets until
-their implementation gates close.
-Checkpoint 10 also broadens fresh rebaseline admission to rows without prior
-evidence; that selection change is accepted but not yet implemented.
+identity are active. The no-rescan manual post-copy handoff and ledger-current
+classification below remain accepted but unrealized. Broader fresh rebaseline
+admission to rows without prior evidence is also accepted but unrealized.
 
 ## Purpose
 
@@ -214,19 +212,19 @@ evidence change cannot remove admitted pending work. Repeating a full baseline
 still refreshes and records inventory, but when every row already has evidence
 it runs with zero verifier hashes and zero integrity-attestation writes.
 
-### Standalone operation policy (checkpoint 10 target)
+### Accepted standalone operation policy
 
-This table governs the accepted checkpoint-10 behavior after fresh inventory,
-for eligible readable files whose current subject remains stable during the
-read. Only rebaseline's missing-evidence admission changes; all other cells
-describe existing policy. Until checkpoint 10 lands, fresh rebaseline still
-excludes rows without evidence as stated above.
+This table governs the accepted behavior after fresh inventory for eligible
+readable files whose current subject remains stable during the read. Only
+rebaseline's missing-evidence admission is unrealized; all other cells describe
+existing policy. Current fresh rebaseline still excludes rows without evidence
+as stated above.
 
 | Operation | No prior evidence | Prior evidence exists | Successful evidence / verification freshness |
 | --- | --- | --- | --- |
 | Baseline | Hash and conditionally create a baseline. | Not admitted to verifier work; no verifier hash or attestation write. | Report `baselined`; do not claim a comparison or advance `last_verified_at`. |
 | Verify | Hash and conditionally create a baseline; report `baselined`, so the verify phase is `verification-incomplete`. | Changed baseline stat: `modified` without hashing. Stable stat: hash; equal digest is `verified`, different digest is `mismatched` and never auto-accepted. | Only a genuine comparison match advances `last_verified_at`; negative results retain prior evidence and may conditionally record invalidation. |
-| Rebaseline | **New at checkpoint 10:** hash and conditionally create a baseline, accepting null as the prior evidence state. | Hash and conditionally replace with fresh evidence, including when the digest genuinely matches. | Report `baselined`, never `verified`; clear prior `last_verified_at`, leaving the successfully baselined row `unverified`. |
+| Rebaseline | **Accepted, unrealized:** hash and conditionally create a baseline, accepting null as the prior evidence state. | Hash and conditionally replace with fresh evidence, including when the digest genuinely matches. | Report `baselined`, never `verified`; clear prior `last_verified_at`, leaving the successfully baselined row `unverified`. |
 
 These are workflow admission rules, not silent per-item `skipped` results.
 Fresh inventory may still update observations for excluded baseline subjects.
@@ -248,7 +246,8 @@ content verdict. Successful replacement clears invalidation/reappearance only
 atomically with the evidence transaction. Pause/resume retains exact admitted
 ids/order and completed results without reapplying fresh-selection filters.
 Automatic linked and manual exact post-copy verification remain separate.
-Delivery and regression gates live in [H2 checkpoint 10](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification).
+Delivery and regression gates live in the
+[active M1 plan](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification).
 
 ## Selected And Post-Execution Verification
 
@@ -320,8 +319,8 @@ explicitly ordinary verify-current workflow whose refresh may establish a new
 scope. Exact replacement retention and task attachment semantics remain bridge
 authority.
 
-At the active checkpoint-3.2 scalar cutover, verifier totals follow the checked-arithmetic
-contract in [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
+Verifier totals follow the active checked-arithmetic contract in
+[M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
 verifier defines no local numeric or file-identity variant.
 
 Verify, baseline, and the implemented rebaseline entry point carry per-item

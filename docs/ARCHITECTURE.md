@@ -934,7 +934,7 @@ existing identity, evidence, custody, and settlement contracts.
 - `M1_PLAN.md`, `M1_BRIDGE.md`, and `M1_SHELL.md` own active delivery plans and
   gates.
 - `CHANGELOG.md` owns dated task outcomes.
-- `HANDOFF.md` owns only immediate next-session context.
+- `HANDOFF.md` owns only immediate operational context.
 
 When a detail changes without altering a cross-module contract, update its
 owning module document rather than copying it here. Add architecture detail
@@ -944,7 +944,7 @@ it would reinterpret durable state or public contracts.
 The accepted Stage 6 second-half target is intentionally not restated here.
 `M1_BRIDGE.md` maps its event, database, task-authority, publication, and
 retention decisions to the existing DR-BR records; `DEFENSE.md` §1.3 owns the
-normative scalar and containment walls. Until each implementation checkpoint
-lands, the current-version contracts above remain the description of running
-code. Their coordinated replacement must update this document and the
-contract-to-source locator in the same implementation commit.
+normative scalar and containment walls. Accepted but unrealized contracts do
+not describe running code; the active current-version contracts above do. A
+coordinated replacement must update this document and the contract-to-source
+locator in the same implementation commit that activates it.

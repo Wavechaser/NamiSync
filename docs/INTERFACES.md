@@ -38,10 +38,10 @@ global-settings pages are deferred by the accepted second-half reslice. The gate
 API and production mapping are active, while the current empty product page
 invokes only startup and has no later workflow-surface callers yet.
 
-Stage 6 checkpoint 3.2 has activated the exact event-v5, scalar, recording, and
-database-epoch boundary. Native directory admission, complete Setup, process-
-live desktop tasks, compact artifacts, and bounded evidence reads remain later
-checkpoint targets. Exact cutovers live in [M1_BRIDGE.md](M1_BRIDGE.md);
+The exact event-v5, scalar, recording, and database-epoch boundary is active.
+Native directory admission, complete Setup, process-live desktop tasks, compact
+artifacts, and bounded evidence reads remain accepted but unrealized. Exact
+target contracts live in [M1_BRIDGE.md](M1_BRIDGE.md);
 history/settings pages remain deferred.
 
 ## Purpose
@@ -248,9 +248,8 @@ get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
 
 Exact wire, scalar, task-authority, population, and retention contracts live in
 [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md).
-The event/scalar/persistence subset is active from checkpoint 3.2; task
-authority, population retention, and product-surface rows activate only in
-their named later checkpoints.
+The event/scalar/persistence subset is active; task authority, population
+retention, and product-surface rows remain accepted but unrealized.
 
 Workflow owns parsing, fresh admission, and canonical Setup; the adapter owns
 only bounded intent slots and recomputed recent-location handles. Every desktop
@@ -265,13 +264,14 @@ and framing. Task reads rehydrate the UI, exact release removes session custody,
 and close destroys task presentation/receipts. Interfaces follow and recheck
 bridge authority around outside work.
 
-H2 checkpoints 7/9 add shared plan/inventory sibling sorting to those server
-projections. New views and reset use canonical path-key order; explicit
-filename/size/mtime choices reorder presentation before windowing, not domain
-selection, recursive scope, or execution authority/order. Raw workflow-owned
-sort facts and complete production command/validator support must land even
-if mtime/reset GUI layout remains latent. Revisions, indexes, anchors, and
-late-response guards move coherently under the exact
+The accepted but unrealized contract adds shared plan/inventory sibling sorting
+to those server projections. New views and reset use canonical path-key order;
+explicit filename/size/mtime choices reorder presentation before windowing, not
+domain selection, recursive scope, or execution authority/order. Raw workflow-
+owned sort facts and complete production command/validator support must be
+active whenever sorting activates, even if mtime/reset GUI layout remains
+latent. Revisions, indexes, anchors, and late-response guards move coherently
+under the exact
 [Bridge sorting contract](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9).
 
 External values are validated before presentation construction. Numeric
@@ -428,8 +428,9 @@ their existing retry flags; successful steps still advance once and a later
 call retries only unfinished work. The service's ordinary path-refusal wrapper
 likewise clears the workflow validation graph before raising the existing
 unchained `SyncPathInputError`. Path-message rendering itself remains an
-unbounded construction transient for checkpoint 4, and bridge/host consumers
-still own the final escaping adapter frame until their separate closure.
+unbounded construction transient outside active admission, and bridge/host
+consumers still own the final escaping adapter frame until their separate
+closure.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
@@ -782,7 +783,7 @@ task close, and all BR-G evidence. Implementation placement remains discrete:
 `commands.py` owns rows and validators, `bridge.py` owns dispatch security,
 `slots.py` owns bounded process-local opaque intent slots, `drain.py` owns
 adapter task/event/artifact custody, and only `assets/bridge.js` references
-`window.pywebview`. At the accepted location-admission checkpoint, workflows
+`window.pywebview`. Under the accepted location-admission contract, workflows
 own path parsing, probing, and candidate classification; a slot never becomes a
 second path-policy authority.
 

@@ -148,6 +148,11 @@ claims explicit, independently reviewable, and regression-backed.
   retirement and an exact direct-construction drift guard. Independent final
   review found no blocking code, documentation-authority, overclaim, or
   repository-custody finding.
+- Removed numbered checkpoint routing and session-local closeout chronology
+  from durable fundamental, product, and component references. Those references
+  now state active versus accepted-but-unrealized contracts; the M1 plans, task
+  history, and handoff retain delivery sequencing. Runtime checkpoint/session
+  terminology remains where it names product behavior.
 
 #### Bound checkpoint-4 planning source ownership (2026-08-27)
 

@@ -161,11 +161,11 @@ canonicalize with their established semantics after that raw-shape charge.
 Resolution detail follows complete-value omission at 1,024 UTF-8 bytes; it is
 never truncated into misleading recovery guidance.
 
-Checkpoint 10 will admit eligible null-evidence files to fresh rebaseline as
-well. It remains explicit acceptance of current content: always hash and
-conditionally replace/create evidence, even on a genuine match, and clear
+The accepted but unrealized policy admits eligible null-evidence files to fresh
+rebaseline as well. It remains explicit acceptance of current content: always
+hash and conditionally replace/create evidence, even on a genuine match, and clear
 verification freshness. Compare-and-accept is deferred beyond M1. The
-[verifier policy table](VERIFIER.md#standalone-operation-policy-checkpoint-10-target)
+[verifier policy table](VERIFIER.md#accepted-standalone-operation-policy)
 distinguishes the three operations and current versus accepted behavior.
 
 Desktop rebaseline requires explicit acknowledgement of current evidence;
@@ -228,10 +228,9 @@ domains, and retention accounting are centralized in
 candidate pipeline and always re-admits a real start; a slot or
 `RootAuthority` is evidence, never cached authorization.
 
-Checkpoint 3.2 activates the signed-64 scalar, full-width native identity, and
-event/persistence epoch consumed here. Setup, recents, desktop projection,
-paging, and retention behavior below remain inactive until their named
-checkpoints.
+The signed-64 scalar, full-width native identity, and event/persistence epoch
+consumed here are active. Setup, recents, desktop projection, paging, and
+retention behavior below remain accepted but unrealized.
 
 The desktop inventory projection is one canonical server-side view over a
 complete immutable inventory generation. Search, filters, collapse, visible
@@ -241,7 +240,8 @@ Projection eviction removes only rebuildable view state. A refused refresh
 stages no partial artifact and preserves the prior inventory generation and its
 view identity unchanged.
 
-Checkpoint 9 adds the shared server-owned sibling sorter from
+The accepted but unrealized view contract adds the shared server-owned sibling
+sorter from
 [Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9).
 New views and reset use canonical path-key order; filename, size, and mtime
 are explicit opt-in column/direction choices. Sort the complete projection
@@ -250,9 +250,10 @@ unavailable values last. A real folder may expose its own observed mtime;
 synthetic ancestors have no invented descendant-derived time. Sorting changes
 only presentation/view state, never selection, recursive action scope,
 integrity candidate order, or execution authority. Full production bridge
-support and raw mtime facts land even if their GUI layout remains latent.
+support and raw mtime facts must accompany activation even if their GUI layout
+remains latent.
 Status/progress sorting, global flat sorting, and durable preferences are not
-M1 work. H2 9.A owns regression, race, and scale acceptance.
+M1 work. The active M1 delivery plan owns regression, race, and scale acceptance.
 
 Warning rows are informational leaves, not inventory subjects. They have typed,
 stable identities and attachment order, but never enter the canonical path

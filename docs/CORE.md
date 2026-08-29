@@ -1,29 +1,23 @@
 # Core Module
 
-Status: M0 scan/plan/preflight, session/event/evidence, execution, integrity,
-and recording contracts are implemented. M1 Stages 2-4 add the fixed XXH3-128
-content contract, nominal heterogeneous result vocabulary,
-published-copy/post-copy evidence, compound phase results, and the continuation
-state consumed by standalone and linked integrity workflows. Stage 6 checkpoint
-3.2 activates the exact core-event v5 codec, signed-64 scalar boundary, typed
-review-limit fact, and full-width Windows file identity.
-Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
-shared workflow tree substrate without changing their semantics, and makes
-recursive inventory scope an explicit core contract.
-Finite plan-source admission and single exact typed scan adoption are active;
-the complete task-artifact reservation model remains unrealized.
+Status: scan/plan/preflight, session/event/evidence, execution, integrity, and
+recording contracts are implemented. Active contracts include fixed XXH3-128
+content, the nominal heterogeneous result vocabulary, published-copy/post-copy
+evidence, compound phase results, standalone and linked integrity continuation,
+the exact core-event v5 codec, signed-64 scalar boundaries, typed review-limit
+facts, full-width Windows file identity, shared relative-path hierarchy helpers,
+and recursive inventory scope. Finite plan-source admission and single exact
+typed scan adoption are active; the complete task-artifact reservation model is
+accepted but unrealized.
 
-The remaining accepted-but-inactive Stage 6 second-half contract is mapped in
+The remaining accepted-but-unrealized bridge contract is mapped in
 `M1_BRIDGE.md`; its scalar and retention hard walls are owned by
-`DEFENSE.md` §1.3. Checkpoint 2's scoped recording continuation and terminal
-payload cleanup remain active below. Checkpoint 3.2 switched every live
-producer and consumer to event v5 and data epoch 5. Checkpoint 3R.14 advances
-the shared data epoch to 6 for the corrected ledger/plan identity hash contract;
-Checkpoint 3.3 removes the private v3/v4 decoders and their positive fixtures;
-only the exact v5 source path remains.
-Component docs point to
-those authorities rather than copy task authority or retention shapes owned by
-later checkpoints.
+`DEFENSE.md` §1.3. Scoped recording continuation and terminal payload cleanup
+are active below. Every live producer and consumer uses event v5 and data epoch
+6 with the corrected ledger/plan identity hash contract. Private v3/v4 decoders
+and their positive fixtures are absent; only the exact v5 source path remains.
+Component docs point to those authorities rather than copying task authority or
+unrealized retention shapes.
 
 ## Purpose
 
@@ -722,12 +716,12 @@ text vectors remain historical evidence, not accepted current input. Their JSON
 bytes distinguish a surrogate escape from literal backslash text; the former
 raw-encoding collision claim was not a collision in these JSON hashes.
 
-Identity-bearing durable hashes change at the coordinated epoch-6 boundary.
-At that cutover the ledger contract id changed while ledger/history schema
-versions, the history contract id, and plan-v5/execution-v6 wire shapes did not.
-Prerequisite stabilization later advances only execution custody to exact v7;
-v6 is now refused before workflow admission. Database admission and the explicit
-reset boundary remain owned by [DATABASE.md](DATABASE.md).
+Identity-bearing durable hashes use the coordinated epoch-6 boundary. The
+ledger contract id differs from epoch 5 while ledger/history schema versions,
+the history contract id, and the plan-v5 wire shape remain unchanged. Execution
+custody requires exact v7; v6 is refused before workflow admission. Database
+admission and the explicit reset boundary remain owned by
+[DATABASE.md](DATABASE.md).
 
 ## Time And Evidence
 
