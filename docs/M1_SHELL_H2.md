@@ -378,7 +378,7 @@ its finite surface and one atomic outcome are named here.
 | 4P.21 | Apply C4 by sharing only the population-admission primitives while keeping each domain's wall declaration, count semantics, precedence, and user outcome independent. | `tests/test_plan_review_limits.py`, `tests/test_inventory_workflow.py`, `tests/test_scanner.py`, and first-excess matrices. | Complete |
 | 4P.22 | Apply C4/C8 by separating workflow-retained budgets from producer gates and reducing scanner to one admission parameter. | `tests/test_plan_review_limits.py`, `tests/test_scanner.py`, `tests/test_inventory_workflow.py`, and facade-consumer departments. | Complete |
 | 4P.23 | Apply D6 with private exact signal types and remove issuer, `fresh()`, and consume choreography without weakening refusal provenance or status truth. | Refusal/provenance cases in `tests/test_plan_review_limits.py`, `tests/test_workflows.py`, and `tests/test_inventory_workflow.py`. | Complete |
-| 4P.24 | Apply C1 by centralizing exception-to-`FailureDetail` factories and adding an AST guard for direct retained-detail construction. | `tests/core/test_exception_graph.py`, the new AST policy regression, affected producer/consumer departments, and ordinary exception-path tests. | Pending |
+| 4P.24 | Apply C1 by centralizing exception-to-`FailureDetail` factories and adding an AST guard for direct retained-detail construction. | `tests/core/test_exception_graph.py`, the new AST policy regression, affected producer/consumer departments, and ordinary exception-path tests. | Complete |
 | 4P.25 | Conduct an independent adversarial review against rows 4P.0–4P.24 without absorbing new implementation scope. | Requirement-to-diff trace, accepted-test matrix, stop-rule audit, targeted counterexamples, and written disposition for every review finding. | Pending |
 | 4P.26 | Reconcile active documentation, task history, and BUGS status, run full verification, replace the handoff, and delete `CUSTODY_TAX_AUDIT.md` only after every accepted disposition has an authoritative home. | Affected department union, ordinary Node-enabled suite, import contracts, required protected gates, links/anchors, stale-contract searches, `git diff --check`, repository/stash inventory, and independent final review. | Pending |
 
@@ -482,7 +482,19 @@ raw signal graph, and saves no artifact. Plan and inventory use distinct private
 signal types, while ordinary lookalikes remain ordinary failures.
 Phase delivery, correspondence, nested module collaborators, destination
 policy, and mutated preflight input cannot claim that authority. Ordinary
-exception ownership is deliberately not claimed by this prerequisite.
+exception ownership outside retained `FailureDetail` projection is deliberately
+not claimed by this prerequisite.
+
+Retained ordinary-failure projection is now closed separately. One core helper
+renders logical-path text exactly once, constructs the retained detail before
+retiring raw lifecycle links and nested group members in `finally`, and accepts
+only an already-classified type-name override. Session, dispatcher, inventory,
+and sync live sites use that owner; recording failures retain one local fixed
+`recording diagnostic unavailable` fallback after a failed attempted
+projection, while other fixed/static outcomes and base, wire, or history
+reconstruction remain direct. An exact owner/scope AST drift guard accounts for
+all fifteen constructors and rejects simple aliases and session star imports;
+it is a maintenance guard rather than a dataflow or hostile-code proof.
 
 The inventory-side row prerequisite is now closed separately. Production scan
 append, actual repository results, and exact tree input members stop before

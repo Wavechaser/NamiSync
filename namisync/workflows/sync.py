@@ -9,7 +9,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Protocol
 
-from namisync.core.exception_graph import retire_exception_graph
+from namisync.core.exception_graph import (
+    retire_exception_graph,
+    retired_failure_detail,
+)
 from namisync.core.events import ItemOutcome, PhaseChanged, snapshot_item_outcome
 from namisync.core.evidence import Outcome, RecordingStatus, snapshot_attestation
 from namisync.core.execution import (
@@ -181,7 +184,7 @@ class _ContainedRecordingContext:
             revalidate = self._boundary.snapshot_exit_revalidator()
         except Exception as error:
             if self._boundary.integrity_failure is None:
-                self._boundary.integrity_failure = _retired_failure_detail(error)
+                self._boundary.integrity_failure = retired_failure_detail(error)
             revalidate = lambda: None
         try:
             suppressed = self._context.__exit__(exc_type, exc, traceback)
@@ -192,7 +195,7 @@ class _ContainedRecordingContext:
             revalidate()
         except Exception as error:
             if self._boundary.integrity_failure is None:
-                self._boundary.integrity_failure = _retired_failure_detail(error)
+                self._boundary.integrity_failure = retired_failure_detail(error)
         is_suppressed = bool(suppressed)
         if is_suppressed and isinstance(exc, BaseException):
             retire_exception_graph(exc)
@@ -846,7 +849,7 @@ def _run_execution(
                 user_deselected=xset.user_deselected,
             )
         except (TypeError, ValueError) as error:
-            failure = _retired_failure_detail(error)
+            failure = retired_failure_detail(error)
             commitment_error = (
                 "reviewed selection provenance is invalid: "
                 f"{failure.type_name}: {failure.message}"
@@ -869,7 +872,7 @@ def _run_execution(
                         "fresh execution cannot carry reported exclusions"
                     )
     except Exception as error:
-        failure = _retired_failure_detail(error)
+        failure = retired_failure_detail(error)
         return _settle_prerun_failure(
             current,
             ctx,
@@ -915,7 +918,7 @@ def _run_execution(
                 status=SessionState.CANCELED,
             )
         except Exception as error:
-            failure = _retired_failure_detail(error)
+            failure = retired_failure_detail(error)
             return _settle_prerun_failure(
                 current,
                 ctx,
@@ -1016,7 +1019,7 @@ def _run_execution(
             status=SessionState.CANCELED,
         )
     except Exception as error:
-        failure = _retired_failure_detail(error)
+        failure = retired_failure_detail(error)
         return _settle_prerun_failure(
             current,
             ctx,
@@ -1092,7 +1095,7 @@ def _run_execution(
                 if recording_integrity_sink is None:
                     raise
                 recording_integrity_sink(
-                    _retired_failure_detail(error),
+                    retired_failure_detail(error),
                     finish_authority,
                 )
             return finished_recording
@@ -1745,7 +1748,7 @@ def _run_execution(
             nonlocal current
             verification_candidates.clear()
             observed_verification_ids.clear()
-            failure = _retired_failure_detail(error)
+            failure = retired_failure_detail(error)
             current_recording = _combined_recording(
                 current.recording,
                 observed_recording,
@@ -2021,7 +2024,7 @@ def _settle_canceled_execution_admitted(
                         allow_progress=False,
                     )
             except Exception as error:
-                integrity_failure = _retired_failure_detail(error)
+                integrity_failure = retired_failure_detail(error)
                 terminal_authority = finish_authority
             else:
                 terminal_authority = snapshot_execution_set_authority(xset)
@@ -2051,7 +2054,7 @@ def _settle_canceled_execution_admitted(
                     allow_progress=False,
                 )
         except Exception as finish_error:
-            integrity_failure = _retired_failure_detail(finish_error)
+            integrity_failure = retired_failure_detail(finish_error)
         else:
             terminal_authority = snapshot_execution_set_authority(xset)
     if integrity_failure is None and boundary.integrity_failure is not None:
@@ -2064,7 +2067,7 @@ def _settle_canceled_execution_admitted(
                 allow_progress=False,
             )
         except Exception as error:
-            integrity_failure = _retired_failure_detail(error)
+            integrity_failure = retired_failure_detail(error)
     if boundary.exit_failure is not None:
         recording_failure = boundary.exit_failure
         if integrity_failure is None:
@@ -2709,7 +2712,7 @@ def _settle_fresh_execute_refusal(
             status=SessionState.REFUSED,
             disposition=Disposition.UNRUN,
             items=tuple(emitted_items),
-            error=_retired_failure_detail(error),
+            error=retired_failure_detail(error),
         )
     return OperationResult(
         status=SessionState.REFUSED,
@@ -2749,7 +2752,7 @@ def _settle_fresh_execute_boundary(
     except (PauseRequested, Canceled):
         raise
     except Exception as emit_error:
-        emit_failure = _retired_failure_detail(emit_error)
+        emit_failure = retired_failure_detail(emit_error)
         if error is None:
             error = emit_failure
         else:
@@ -2838,7 +2841,7 @@ def _recording_open_failure_result(
         except Exception as error:
             return _recording_integrity_failure_result(
                 terminal,
-                _retired_failure_detail(error),
+                retired_failure_detail(error),
                 execution_authority,
                 verification=True,
                 filesystem_status=continuation.filesystem_status,
@@ -2900,7 +2903,7 @@ def _recording_open_failure_result(
     except Exception as error:
         return _recording_integrity_failure_result(
             terminal,
-            _retired_failure_detail(error),
+            retired_failure_detail(error),
             execution_authority,
             verification=False,
             filesystem_status=SessionState.FAILED,
@@ -2939,7 +2942,7 @@ def _recording_entry_canceled_result(
         except (PauseRequested, Canceled):
             raise
         except Exception as error:
-            emission_error = _retired_failure_detail(error)
+            emission_error = retired_failure_detail(error)
         phase = _execute_continuation_phase(
             xset,
             PhaseStatus.CANCELED,
@@ -2997,7 +3000,7 @@ def _recording_entry_canceled_result(
     except Exception as error:
         return _recording_integrity_failure_result(
             terminal,
-            _retired_failure_detail(error),
+            retired_failure_detail(error),
             execution_authority,
             verification=isinstance(continuation, VerifyContinuation),
             filesystem_status=(
@@ -3036,10 +3039,7 @@ def _settle_execute_resume_failure(
     except (PauseRequested, Canceled):
         raise
     except Exception as emit_error:
-        try:
-            error = FailureDetail(type(emit_error).__name__, str(emit_error))
-        finally:
-            retire_exception_graph(emit_error)
+        error = retired_failure_detail(emit_error)
     phase = _execute_continuation_phase(
         continuation.execution_set,
         PhaseStatus.FAILED,
@@ -3072,7 +3072,7 @@ def _settle_execute_resume_failure(
     except Exception as finish_error:
         return _recording_integrity_failure_result(
             terminal,
-            _retired_failure_detail(finish_error),
+            retired_failure_detail(finish_error),
             execution_authority,
             verification=False,
             filesystem_status=SessionState.FAILED,
@@ -3128,7 +3128,7 @@ def _settle_verify_incomplete(
     except Exception as finish_error:
         return _recording_integrity_failure_result(
             terminal,
-            _retired_failure_detail(finish_error),
+            retired_failure_detail(finish_error),
             execution_authority,
             verification=True,
             filesystem_status=continuation.filesystem_status,
@@ -3300,13 +3300,6 @@ def _finish_recording(
     return _combined_recording(recording_status, xset.recording)
 
 
-def _retired_failure_detail(error: BaseException) -> FailureDetail:
-    try:
-        return FailureDetail(type(error).__name__, logical_error_text(error))
-    finally:
-        retire_exception_graph(error)
-
-
 def _try_add_exception_note(error: BaseException, note: str) -> None:
     """Add secondary diagnostics without replacing the escaping primary."""
 
@@ -3340,27 +3333,23 @@ def _note_closed_recording_issue(
     )
 
 
-def _recording_error_message(error: BaseException) -> str | None:
+def _close_recording_failure(error: BaseException) -> _ClosedRecordingFailure:
+    type_name = type(error).__name__
     try:
-        return logical_error_text(error)
+        detail = retired_failure_detail(error)
     except BaseException as diagnostic_error:
         retire_exception_graph(diagnostic_error)
-        return None
-
-
-def _close_recording_failure(error: BaseException) -> _ClosedRecordingFailure:
-    try:
-        type_name = type(error).__name__
-        message = _recording_error_message(error)
         return _ClosedRecordingFailure(
             FailureDetail(
                 type_name,
-                "recording diagnostic unavailable" if message is None else message,
+                "recording diagnostic unavailable",
             ),
-            None if message is None else f"{type_name}: {message}",
+            None,
         )
-    finally:
-        retire_exception_graph(error)
+    return _ClosedRecordingFailure(
+        detail,
+        f"{detail.type_name}: {detail.message}",
+    )
 
 
 def _recording_failure_detail(error: BaseException) -> FailureDetail:

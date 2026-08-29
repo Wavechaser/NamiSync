@@ -1737,8 +1737,12 @@ defect, and move implementation-level test choreography out of the log.
   start frames while preserving cancel and actual-thread ownership. Task start,
   compensation, release, close, shutdown-unsubscribe, and ordinary service path
   refusal now retire their dependency frames without changing retry truth.
-  Host consumers, document callbacks, path-message construction, and history
-  construction/read-open failures remain open. Cause:
+  Every rendered ordinary live-exception detail now passes one core logical-
+  diagnostic-and-retirement helper. Recording failures attempt that projection
+  before their fixed type-only diagnostic-unavailable fallback; an exact owner/
+  scope AST guard keeps other direct construction limited to static/base
+  reconstruction. Host consumers, document callbacks, and raw failures that do
+  not become `FailureDetail` remain open. Cause:
   bounded public failure projection did not consistently retire the caught
   graph before the next ownership transition. Checkpoint 4 must preserve public
   behavior while closing every remaining app-owned raw exception reference;

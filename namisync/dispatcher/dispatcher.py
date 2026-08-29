@@ -10,7 +10,10 @@ from time import monotonic
 from typing import Callable
 from uuid import uuid4
 
-from namisync.core.exception_graph import retire_exception_graph
+from namisync.core.exception_graph import (
+    retire_exception_graph,
+    retired_failure_detail,
+)
 from namisync.core.evidence import RecordingStatus
 from namisync.core.events import StateChanged
 from namisync.core.session import (
@@ -129,32 +132,31 @@ def _project_worker_exception(
 ) -> tuple[OperationResult | None, bool]:
     """Replace a raw pre-run failure with fixed terminal or control truth."""
 
+    if isinstance(error, Canceled):
+        retire_exception_graph(error)
+        return None, False
+    if isinstance(error, PauseRequested):
+        retire_exception_graph(error)
+        return None, True
     try:
-        if isinstance(error, Canceled):
-            return None, False
-        if isinstance(error, PauseRequested):
-            return None, True
-        try:
-            result = normalize_result_diagnostics(
-                OperationResult(
-                    status=SessionState.FAILED,
-                    disposition=disposition,
-                    error=FailureDetail(type(error).__name__, str(error)),
-                )
-            )
-        except Exception as diagnostic_error:
-            retire_exception_graph(diagnostic_error)
-            result = OperationResult(
+        result = normalize_result_diagnostics(
+            OperationResult(
                 status=SessionState.FAILED,
                 disposition=disposition,
-                omitted_detail_count=1,
+                error=retired_failure_detail(error),
             )
-        except BaseException as diagnostic_fatal:
-            retire_exception_graph(diagnostic_fatal)
-            raise
-        return result, False
-    finally:
-        retire_exception_graph(error)
+        )
+    except Exception as diagnostic_error:
+        retire_exception_graph(diagnostic_error)
+        result = OperationResult(
+            status=SessionState.FAILED,
+            disposition=disposition,
+            omitted_detail_count=1,
+        )
+    except BaseException as diagnostic_fatal:
+        retire_exception_graph(diagnostic_fatal)
+        raise
+    return result, False
 
 
 class _Control:

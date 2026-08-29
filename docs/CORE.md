@@ -311,14 +311,32 @@ nothing for unreached work on `PauseRequested`, because that work remains
 pending for resume.
 
 When the runner consumes an ordinary failure, pause, cancellation, audit
-failure, or an emitter error superseded by accumulator truth, it first removes
-the raw exception's traceback, cause, and context links. Nested built-in
+failure, or an emitter error superseded by accumulator truth, its failure owner
+projects any retained diagnostic before removing the raw exception's traceback,
+cause, and context links. Nested built-in
 exception groups receive the same lifecycle cleanup for every identity-distinct
 member without invoking subclass lifecycle attributes. This releases runner-
 owned callback frames before settlement while preserving the typed terminal
 projection. An unsuperseded process-fatal exception still escapes to its caller;
 custom exception attributes, slots, arguments, and notes remain caller-owned
 state rather than bounded session artifacts.
+
+`core.exception_graph.retired_failure_detail()` is the single rendered
+ordinary live-exception projection into retained `FailureDetail` truth. It
+renders one logical-path diagnostic, constructs the detail with the exact
+exception type name or an already-classified override, and retires raw
+lifecycle links and nested group members in `finally`, including when rendering
+or construction fails. Control and process-fatal errors are never normalized
+into terminal workflow failure. A recording boundary may first close a
+secondary diagnostic without replacing their identity. Static typed outcomes
+and base/wire/history reconstruction still construct `FailureDetail` directly;
+an exact owner-and-scope AST drift guard accounts for those calls and rejects
+simple aliases or star imports. The guard closes accidental direct-construction
+drift; it is not a Python dataflow or hostile-code security proof.
+Recording failures attempt the shared projection first; if diagnostic rendering
+fails, their local fixed fallback retains the original type with
+`recording diagnostic unavailable`, sets issue detail to null, and keeps no
+raw lifecycle link.
 
 The runner accepts a dispatcher-owned item accumulator. It snapshots prior
 items into private custody and clears the externally reachable list while work

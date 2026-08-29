@@ -635,10 +635,13 @@ All terminal paths after recorder entry share one finish-once boundary.
 boundary likewise remains a control transition: pause escapes for custody
 snapshotting, while cancellation projects authoritative continuation counters
 without reopening the recording factory or consulting lossy Progress.
-A consumed callback failure is converted immediately to its bounded
-`FailureDetail` or closed recording issue, then its traceback/cause/context is
-retired before another callback runs. Exclusion delivery retains only that
-closed first-failure value rather than the raw exception. Recording contexts
+A consumed callback failure is converted through the core
+`retired_failure_detail()` owner to its logical-path `FailureDetail`, then its
+traceback/cause/context is retired before another callback runs. The same owner
+is used for integrity and dispatcher terminal failures; integrity candidate
+limits supply their already-classified fact type as the explicit type-name
+override. Exclusion delivery retains only the closed first-failure value rather
+than the raw exception. Recording contexts
 evaluate a collaborator's exit truth exactly once; every truthy value suppresses
 and retires the body exception, while a truth-test failure follows normal Python
 propagation. Secondary diagnostic rendering and note attachment catch their own

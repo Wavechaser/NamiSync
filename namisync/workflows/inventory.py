@@ -11,7 +11,10 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Iterator, Mapping, Protocol
 
-from namisync.core.exception_graph import retire_exception_graph
+from namisync.core.exception_graph import (
+    retire_exception_graph,
+    retired_failure_detail,
+)
 from namisync.core.events import PhaseChanged
 from namisync.core.evidence import RecordingStatus, snapshot_attestation
 from namisync.core.execution import (
@@ -1260,7 +1263,7 @@ def run_integrity(
             SessionState.FAILED,
             recording=request.recording,
             items=(),
-            error=FailureDetail(type(error).__name__, logical_error_text(error)),
+            error=retired_failure_detail(error),
         )
     root = resolution.root_path
     scope_token = f"{request.request_id}:refresh:{request.refresh_generation}"
@@ -1739,14 +1742,14 @@ def run_integrity(
             and recorder_observation[0] is not None
         ):
             failure = recorder_observation[0].failure
+            retire_exception_graph(error)
         elif isinstance(error, IntegrityCandidateLimitError):
-            failure = FailureDetail(
-                type(error.fact).__name__,
-                logical_error_text(error),
+            failure = retired_failure_detail(
+                error,
+                type_name=type(error.fact).__name__,
             )
         else:
-            failure = FailureDetail(type(error).__name__, logical_error_text(error))
-        retire_exception_graph(error)
+            failure = retired_failure_detail(error)
         if selection is None:
             return _integrity_request_terminal_result(
                 request,
@@ -1925,14 +1928,13 @@ def _task_recording_issue(
     reason: TaskRecordingIssueReason,
     error: BaseException,
 ) -> _ObservedTaskRecordingIssue:
-    type_name = type(error).__name__
-    message = logical_error_text(error)
-    raw_detail = f"{type_name}: {message}"
+    failure = retired_failure_detail(error)
+    raw_detail = f"{failure.type_name}: {failure.message}"
     detail = bounded_recording_detail(raw_detail)
     return _ObservedTaskRecordingIssue(
         TaskRecordingIssue(reason, detail),
         1 if detail is None else 0,
-        FailureDetail(type_name, message),
+        failure,
     )
 
 

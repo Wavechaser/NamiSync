@@ -7,7 +7,10 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Callable, NewType, Protocol, Sequence
 
-from namisync.core.exception_graph import retire_exception_graph
+from namisync.core.exception_graph import (
+    retire_exception_graph,
+    retired_failure_detail,
+)
 from namisync.core.evidence import RecordingStatus
 from namisync.core.execution import TaskRecordingIssue
 from namisync.core.review import (
@@ -854,15 +857,12 @@ def run_session(
                     else bytes_done
                 )
                 try:
-                    try:
-                        detail = _bounded_failure_detail(
-                            FailureDetail(type(error).__name__, str(error))
-                        )
-                    except Exception as diagnostic_error:
-                        retire_exception_graph(diagnostic_error)
-                        detail = None
-                finally:
-                    retire_exception_graph(error)
+                    detail = _bounded_failure_detail(
+                        retired_failure_detail(error)
+                    )
+                except Exception as diagnostic_error:
+                    retire_exception_graph(diagnostic_error)
+                    detail = None
                 result = OperationResult(
                     status=SessionState.FAILED,
                     disposition=disposition,
