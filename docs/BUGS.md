@@ -1783,6 +1783,9 @@ defect, and move implementation-level test choreography out of the log.
   terminal control conversion had no typed refusal owner. Fixed by containing
   it as the error of a phase-free `REFUSED+UNRUN` result while retaining only
   the normally accepted exclusion prefix and opening no recorder or executor.
+  The five pre-run failure/refusal sites now share one typed owner dispatcher,
+  removing the divergent copies that produced this defect while retaining the
+  distinct cancellation control path.
 - SEVERE - FIXED (2026-08-28). Recording boundary authority mutation. Recording
   `finish`, fallback finishing, and context exit received mutable execution-set
   aliases, while linked recording owners could also retain candidate aliases.

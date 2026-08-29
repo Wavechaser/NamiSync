@@ -941,27 +941,14 @@ def _run_execution(
                     )
     except Exception as error:
         failure = _retired_failure_detail(error)
-        if isinstance(current, VerifyContinuation):
-            return _settle_verify_incomplete(
-                current,
-                deps,
-                failure,
-            )
-        if resumed:
-            return _settle_execute_resume_failure(
-                current,
-                ctx,
-                deps,
-                failure,
-                (),
-                continuation_sink=sink,
-            )
-        return _settle_fresh_execute_boundary(
+        return _settle_prerun_failure(
             current,
             ctx,
+            deps,
+            failure,
             (),
-            continuation_sink=sink,
-            error=failure,
+            resumed=resumed,
+            sink=sink,
         )
     if commitment_error is not None:
         try:
@@ -990,52 +977,35 @@ def _run_execution(
             )
         except Exception as error:
             failure = _retired_failure_detail(error)
-            if isinstance(current, VerifyContinuation):
-                return _settle_verify_incomplete(
-                    current,
-                    deps,
-                    failure,
-                )
-            if resumed:
-                return _settle_execute_resume_failure(
-                    current,
-                    ctx,
-                    deps,
-                    failure,
-                    exclusion_items,
-                    continuation_sink=sink,
-                )
-            return _settle_fresh_execute_boundary(
-                current,
-                ctx,
-                exclusion_items,
-                continuation_sink=sink,
-                error=failure,
-            )
-        if isinstance(current, VerifyContinuation):
-            return _settle_verify_incomplete(
-                current,
-                deps,
-                FailureDetail(
-                    "VerificationContinuationInvalid",
-                    commitment_error,
-                ),
-            )
-        if resumed:
-            return _settle_execute_resume_failure(
+            return _settle_prerun_failure(
                 current,
                 ctx,
                 deps,
-                FailureDetail(
-                    "ExecutionResumeCommitmentInvalid",
-                    commitment_error,
-                ),
+                failure,
                 exclusion_items,
-                continuation_sink=sink,
+                resumed=resumed,
+                sink=sink,
             )
-        return OperationResult(
-            status=SessionState.REFUSED,
-            disposition=Disposition.UNRUN,
+        failure = (
+            FailureDetail(
+                "VerificationContinuationInvalid",
+                commitment_error,
+            )
+            if isinstance(current, VerifyContinuation)
+            else FailureDetail(
+                "ExecutionResumeCommitmentInvalid",
+                commitment_error,
+            )
+        )
+        return _settle_prerun_failure(
+            current,
+            ctx,
+            deps,
+            failure,
+            exclusion_items,
+            resumed=resumed,
+            sink=sink,
+            fresh_status=SessionState.REFUSED,
         )
 
     try:
@@ -1103,72 +1073,36 @@ def _run_execution(
         )
     except Exception as error:
         failure = _retired_failure_detail(error)
-        if isinstance(current, VerifyContinuation):
-            return _settle_verify_incomplete(
-                current,
-                deps,
-                failure,
-            )
-        if resumed:
-            return _settle_execute_resume_failure(
-                current,
-                ctx,
-                deps,
-                failure,
-                exclusion_items,
-                continuation_sink=sink,
-            )
-        return _settle_fresh_execute_boundary(
+        return _settle_prerun_failure(
             current,
             ctx,
+            deps,
+            failure,
             exclusion_items,
-            continuation_sink=sink,
-            error=failure,
+            resumed=resumed,
+            sink=sink,
         )
     if not verdict.ok:
         if isinstance(current, VerifyContinuation):
             detail = "; ".join(
                 f"{refusal.code}: {refusal.detail}" for refusal in refusals
             ) or "verification preflight refused"
-            return _settle_verify_incomplete(
-                current,
-                deps,
-                FailureDetail("VerificationPreflightRefused", detail),
-            )
-        if resumed:
+            failure = FailureDetail("VerificationPreflightRefused", detail)
+        else:
             detail = "; ".join(
                 f"{refusal.code}: {refusal.detail}" for refusal in refusals
             ) or "execution resume preflight refused"
-            return _settle_execute_resume_failure(
-                current,
-                ctx,
-                deps,
-                FailureDetail("ExecutionResumePreflightRefused", detail),
-                exclusion_items,
-                continuation_sink=sink,
-            )
-        emitted_exclusions: list[ItemOutcome] = []
-        try:
-            current, _emitted = _emit_execution_exclusion_suffix(
-                current,
-                ctx,
-                exclusion_items,
-                sink,
-                accept=emitted_exclusions.append,
-                revalidate=revalidate_preflight_authority,
-                allow_control=False,
-            )
-        except Exception as error:
-            return OperationResult(
-                status=SessionState.REFUSED,
-                disposition=Disposition.UNRUN,
-                items=tuple(emitted_exclusions),
-                error=_retired_failure_detail(error),
-            )
-        return OperationResult(
-            status=SessionState.REFUSED,
-            disposition=Disposition.UNRUN,
-            items=tuple(emitted_exclusions),
+            failure = FailureDetail("ExecutionResumePreflightRefused", detail)
+        return _settle_prerun_failure(
+            current,
+            ctx,
+            deps,
+            failure,
+            exclusion_items,
+            resumed=resumed,
+            sink=sink,
+            fresh_status=SessionState.REFUSED,
+            fresh_refusal_items=exclusion_items,
         )
 
     target_parent_paths = verdict.observed.target_parent_paths
@@ -2708,6 +2642,92 @@ def _missing_evidence_error(item_ids: tuple[str, ...]) -> str | None:
         return None
     return "missing published evidence for successful operations: " + ", ".join(
         item_ids
+    )
+
+
+def _settle_prerun_failure(
+    continuation: ExecutionContinuation,
+    ctx: RunContext,
+    deps: SyncDependencies,
+    failure: FailureDetail,
+    exclusion_items: tuple[ItemOutcome, ...],
+    *,
+    resumed: bool,
+    sink: Callable[[ExecutionContinuation], None],
+    fresh_status: SessionState = SessionState.FAILED,
+    fresh_refusal_items: tuple[ItemOutcome, ...] | None = None,
+) -> OperationResult:
+    """Dispatch one pre-run failure without duplicating custody policy."""
+
+    if isinstance(continuation, VerifyContinuation):
+        return _settle_verify_incomplete(continuation, deps, failure)
+    if not isinstance(continuation, ExecuteContinuation):
+        raise TypeError("pre-run settlement requires a typed continuation")
+    if resumed:
+        return _settle_execute_resume_failure(
+            continuation,
+            ctx,
+            deps,
+            failure,
+            exclusion_items,
+            continuation_sink=sink,
+        )
+    if fresh_status is SessionState.FAILED:
+        return _settle_fresh_execute_boundary(
+            continuation,
+            ctx,
+            exclusion_items,
+            continuation_sink=sink,
+            error=failure,
+        )
+    if fresh_status is SessionState.REFUSED:
+        if fresh_refusal_items is None:
+            return OperationResult(
+                status=SessionState.REFUSED,
+                disposition=Disposition.UNRUN,
+            )
+        return _settle_fresh_execute_refusal(
+            continuation,
+            ctx,
+            fresh_refusal_items,
+            continuation_sink=sink,
+        )
+    raise ValueError("fresh pre-run settlement must fail or refuse")
+
+
+def _settle_fresh_execute_refusal(
+    continuation: ExecuteContinuation,
+    ctx: RunContext,
+    exclusion_items: tuple[ItemOutcome, ...],
+    *,
+    continuation_sink: Callable[[ExecutionContinuation], None],
+) -> OperationResult:
+    """Publish fresh refusal exclusions without opening execution custody."""
+
+    emitted_items: list[ItemOutcome] = []
+    try:
+        _continuation, _emitted = _emit_execution_exclusion_suffix(
+            continuation,
+            ctx,
+            exclusion_items,
+            continuation_sink,
+            accept=emitted_items.append,
+            revalidate=_strict_execution_revalidator(
+                continuation.execution_set
+            ),
+            allow_control=False,
+        )
+    except Exception as error:
+        return OperationResult(
+            status=SessionState.REFUSED,
+            disposition=Disposition.UNRUN,
+            items=tuple(emitted_items),
+            error=_retired_failure_detail(error),
+        )
+    return OperationResult(
+        status=SessionState.REFUSED,
+        disposition=Disposition.UNRUN,
+        items=tuple(emitted_items),
     )
 
 

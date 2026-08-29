@@ -578,6 +578,12 @@ without replacing the existing failure result. Canceled open failure likewise
 passes the newly degraded axis to fallback finishing before taking its returned
 aggregate. A verify-resume preflight refusal preserves the
 settled execute filesystem status and adds a zero-work incomplete verify phase.
+Selection derivation, commitment diagnostics, commitment refusal, preflight
+exceptions, and preflight refusal all route through one pre-run settlement
+dispatcher. That owner selects fresh, resumed-execute, or verify-continuation
+policy while keeping fresh commitment refusal item-free and fresh preflight
+refusal responsible for its accepted exclusion suffix. Cancellation remains a
+separate control dispatch.
 All terminal paths after recorder entry share one finish-once boundary.
 `PauseRequested`, `KeyboardInterrupt`, `SystemExit`, and other
 `BaseException` subclasses are not normalized into a workflow failure.
