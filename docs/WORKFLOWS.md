@@ -195,10 +195,11 @@ admissions that share only the workflow-owned opaque issuer. Correspondence
 keeps its ordinary two-argument protocol; its concrete database query is
 structurally bounded by admitted scan keys and identities, then workflow
 captures the hostile result under a fresh family admission. Each raw population
-has a stateless first-excess gate; declared collaborator output is reconstructed
-into an exact detached graph, and hostile callback inputs are separate from
-authoritative retained state. Forged wrappers, undeclared instance dictionaries,
-and callback mutation are rejected rather than retained.
+has a stateless first-excess gate. Each scanner result is exact-adopted once and
+then shared by identity with first-party read-only consumers; fallible mapping,
+plan, world, and verdict results retain their separately declared admission
+boundaries. Unsupported reflective mutation of a slotted scan is not treated as
+a supported collaborator result.
 
 Only unavoidable shallow slots that coexist in the final scans, plan,
 observed world, and verdict commit to the retained ledger, together with the
@@ -208,7 +209,7 @@ sequential temporaries are not retained owners. The workflow maps the first
 issued `ReviewFactLimitError` to `REFUSED+UNRUN` without saving a plan or
 exposing a partial result.
 
-The retained ledger and every zeroed producer or snapshot admission share one
+The retained ledger and every zeroed producer or result admission share one
 opaque issuer for that plan run and no source graph. The mapping accepts only
 an exact base error carrying that issuer, reconstructs a fresh exact PLAN fact,
 and retires the raw exception before returning. A subtype, malformed fact,
@@ -247,7 +248,9 @@ checkpoint-4 model.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
 3. Scan both roots with the same role-free observation contract and independent
-   raw source-population gates; retain only reconstructed exact scan records.
+   raw source-population gates; validate and adopt each exact immutable scan
+   once, then share those identities with correspondence, planner, and the
+   retained plan artifact.
 4. Read immutable prior correspondence through a ledger query whose keys and
    identities come only from the already admitted scans. Runtime query indexes
    and result construction are therefore structurally bounded rather than

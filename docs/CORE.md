@@ -11,7 +11,7 @@ Stage 5.5 promotes the planner's relative-path hierarchy helpers here for the
 shared workflow tree substrate without changing their semantics, and makes
 recursive inventory scope an explicit core contract.
 The checkpoint-4 pre-model prerequisite adds finite plan-source admission and
-exact typed scan reconstruction; it does not activate the later task-artifact
+single exact typed scan adoption; it does not activate the later task-artifact
 reservation model.
 
 The remaining accepted-but-inactive Stage 6 second-half contract is mapped in
@@ -72,7 +72,7 @@ attestation format.
 - Pure shared calculations such as capacity requirements and deterministic
   operation identifiers when those rules cross module boundaries.
 - Typed plan-review limit facts, stateless independent raw source-population
-  gates, exact declared scan snapshots, and cumulative admission only for final
+  gates, exact declared scan adoption, and cumulative admission only for final
   domain/informational rows and unavoidable simultaneously retained shallow
   references. Fresh admissions for one plan share only an opaque refusal issuer;
   an exact fact from another issuer is not plan-capacity authority. Each final
@@ -80,10 +80,11 @@ attestation format.
   owners do not enter that ledger.
 
 `core/review.py` is the canonical source for those constructors, limits,
-counter order, and snapshot rules. Source gates test each independent raw
-population before its first excess; exact reconstruction rejects undeclared scan
-state at hostile boundaries. The retained ledger charges only final shallow
-slots. Workflow consumes the issuer marker once, reconstructs an exact PLAN
+counter order, and adoption rules. Source gates test each independent raw
+population before its first excess. Workflow validates and adopts each exact
+scanner result once, retains that immutable object, and passes the same identity
+to first-party read-only consumers. The retained ledger charges only final
+shallow slots. Workflow consumes the issuer marker once, reconstructs an exact PLAN
 fact, and retains neither the raw exception nor admission in its result. It
 deliberately does not walk or size a complete Python object graph:
 checkpoint 4 must separately freeze and validate construction and container
@@ -104,8 +105,11 @@ not re-export native anchor or volume probes from `core/root_authority.py`.
 The fourteen exact scan/model dataclasses are frozen and slotted. Their
 instances carry only their declared fields, so undeclared instance state is
 structurally excluded without changing equality, ordering, validation, or
-serialization. Hostile boundaries still require the exact public type and
-revalidate its declared fields; slots are a shape constraint, not trust.
+serialization. Scanner-result adoption and retained recorder checks require the
+exact public types and declared container shapes without reconstructing the
+graph. Once adopted, first-party consumers trust those immutable base values;
+reflective mutation of their declared fields remains the unsupported fourth
+trust rung.
 
 The eleven exact planning dataclasses are likewise frozen and slotted. Their
 declared fields, plan identity, fingerprints, payload shape, validation, and

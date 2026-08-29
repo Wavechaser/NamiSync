@@ -74,14 +74,16 @@ The exact Setup and filter contracts are owned by
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
 
-Planning workflow supplies already-detached scans and one exactly captured
-correspondence result. Planner revalidates their declared contract, captures
-the destination-policy identity and callback, and gives that nested hostile
-callback only detached filtered `FileRecord`s plus a detached target scan. Its
-returned assignment is source-gated and reconstructed exactly once. The four
-raw mapping populations and the combined operation population each have
-independent stateless first-excess gates; no mapping index, operation builder,
-dependency sort, or callback-input copy is charged as retained state.
+Planning workflow supplies already-adopted immutable scans and one exactly
+captured correspondence result. Planner trusts those scan identities, captures
+the destination-policy identity and callback, and gives the callback the same
+filtered `FileRecord` leaves plus the adopted target scan. The callback boundary
+still gates filtered source rows, target domain rows, and target warnings as
+three independent stateless populations before invocation. Its returned
+assignment is source-gated and reconstructed exactly once. The four raw mapping
+populations and the combined operation population each retain their independent
+first-excess gates; no mapping index, operation builder, dependency sort, or
+callback-input copy is charged as retained state.
 
 Workflow reconstructs the hostile planner result with exact constructors and
 contract validators. Canonical `plan_fingerprint(snapshot)` revalidation uses
@@ -107,7 +109,7 @@ hostile policy properties.
 public call frame and retire traceback/cause/context links before an error
 escapes. Property, assignment, fingerprint, and validation failures therefore
 preserve their existing public type, identity, and behavior without retaining
-stage-dependent policy, callback, detached scan/file, or input frames. The one
+stage-dependent policy, callback, shared scan, or input frames. The one
 required logical-byte `ReviewFactLimitError` cause remains by identity after its
 own frames retire. Arbitrary custom exception state leaves with the caller and
 is not retained planner custody.
@@ -302,8 +304,9 @@ historical operation list is scope input, never executable authority.
 The M0 identity policy returns a batch assignment. Batch shape is permanent so
 future templates can detect collisions and keep companion groups together.
 Assignments must be deterministic, root-relative, collision-complete, and path
-validated. Policy/enrichment versions and all assignment inputs are snapshotted
-in the plan. Ingest origin evidence uses feature-owned namespaced annotations
+validated. Policy/enrichment versions and assignment results are snapshotted in
+the plan; callback inputs are already-adopted immutable scan values. Ingest
+origin evidence uses feature-owned namespaced annotations
 (`ingest.origin.*`) so a later implementation does not require new generic
 schema. No policy receives filesystem or executor control.
 

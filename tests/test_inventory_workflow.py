@@ -565,9 +565,9 @@ def test_inventory_direct_entries_revalidate_before_resolver_or_ledger_work(
 
 @pytest.mark.parametrize(
     "mutation",
-    ("complete", "root", "scope", "files", "passed_root", "passed_scope"),
+    ("shape", "root", "scope"),
 )
-def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
+def test_inventory_scan_result_is_adopted_before_any_ledger_setup(
     mutation: str,
 ) -> None:
     binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
@@ -591,18 +591,10 @@ def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
     ):
         del population_admission
         assert trusted_anchor == "M:\\"
-        if mutation == "passed_root":
-            object.__setattr__(root, "root_id", "other")
-        elif mutation == "passed_scope":
-            hostile_scope = ScanScope.selected(("other",))
-            object.__setattr__(scope, "kind", hostile_scope.kind)
-            object.__setattr__(
-                scope,
-                "selected_paths",
-                hostile_scope.selected_paths,
-            )
-        result = ScanResult(
-            root,
+        if mutation == "shape":
+            return SimpleNamespace(root=root, scope=scope)
+        return ScanResult(
+            Root(root.path, "other") if mutation == "root" else root,
             VOLUME_ID,
             EVIDENCE,
             PROFILE,
@@ -610,18 +602,9 @@ def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
             (),
             (),
             (),
-            scope,
+            ScanScope.selected(("other",)) if mutation == "scope" else scope,
             True,
         )
-        if mutation == "complete":
-            object.__setattr__(result, "complete", 1)
-        elif mutation == "root":
-            object.__setattr__(result, "root", Root(root.path, "other"))
-        elif mutation == "scope":
-            object.__setattr__(result, "scope", ScanScope.selected(("other",)))
-        elif mutation == "files":
-            object.__setattr__(result, "files", [])
-        return result
 
     class ForbiddenRecorder:
         def ensure_host(self, *_args):
@@ -640,7 +623,7 @@ def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
         host_key="host",
         host_name="Host",
     )
-    expected = TypeError if mutation in {"complete", "files"} else RuntimeError
+    expected = TypeError if mutation == "shape" else RuntimeError
     with pytest.raises(expected):
         inventory_workflow._register_and_scan(
             "request",
@@ -654,71 +637,6 @@ def test_inventory_scan_result_is_revalidated_before_any_ledger_setup(
             ForbiddenRecorder(),
             inventory_workflow._InventoryScanAdmission(),
         )
-
-
-def test_malformed_hostile_excess_scan_keeps_structural_error_precedence(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(inventory_workflow, "MAX_PLAN_REVIEW_ROWS", 1)
-    mount = tmp_path / "mount"
-    root_path = mount / "managed"
-    root_path.mkdir(parents=True)
-    ledger_path = tmp_path / "ledger.db"
-    record = _file()
-
-    class MalformedScanner(_Scanner):
-        def __call__(
-            self,
-            root,
-            ignores,
-            context,
-            scope,
-            *,
-            trusted_anchor=None,
-            population_admission=None,
-        ):
-            del ignores, context, trusted_anchor, population_admission
-            result = ScanResult(
-                root,
-                VOLUME_ID,
-                EVIDENCE,
-                PROFILE,
-                (record, record),
-                (),
-                (),
-                (),
-                scope,
-                True,
-            )
-            object.__setattr__(result, "files", (record, object()))
-            return result
-
-    prepared = bind_inventory_request(
-        InventoryRequest("malformed-excess", root_path=str(root_path)),
-        ledger_path=ledger_path,
-        backend=_Backend(root_path, mount),
-        resolver=_Resolver(mount),
-    )
-
-    with pytest.raises(TypeError):
-        run_inventory(
-            prepared,
-            _context(),
-            _dependencies(
-                ledger_path,
-                MalformedScanner(),
-                _Resolver(mount),
-                [],
-            ),
-        )
-
-    with connect_ledger_reader(ledger_path) as connection:
-        for table in ("hosts", "volumes", "locations", "inventory"):
-            assert connection.execute(
-                f"SELECT count(*) FROM {table}"
-            ).fetchone()[0] == 0
-
 
 def test_inventory_scanner_receives_detached_ignore_policy(
     tmp_path: Path,
@@ -1234,8 +1152,9 @@ def test_native_resolver_probe_uses_scanner_backend(
     assert backend.scanned_paths == ["logical-root"]
 
 
-def test_first_location_validates_scan_before_role_free_registration_and_inventory(
+def test_first_location_adopts_scan_once_before_registration_and_inventory(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     mount = tmp_path / "mount"
     root = mount / "managed"
@@ -1243,6 +1162,20 @@ def test_first_location_validates_scan_before_role_free_registration_and_invento
     ledger_path = tmp_path / "ledger.db"
     scanner = _Scanner(records=(_file(),))
     details: list[InventoryDetails] = []
+    adoption_calls: list[ScanResult] = []
+    original_adopt = inventory_workflow.adopt_scan_result
+
+    def track_adoption(value, admission, *, row_limit):
+        adoption_calls.append(value)
+        adopted = original_adopt(value, admission, row_limit=row_limit)
+        assert adopted is value
+        return adopted
+
+    monkeypatch.setattr(
+        inventory_workflow,
+        "adopt_scan_result",
+        track_adoption,
+    )
 
     def assert_scan_precedes_registration() -> None:
         with connect_ledger_reader(ledger_path) as connection:
@@ -1265,6 +1198,7 @@ def test_first_location_validates_scan_before_role_free_registration_and_invento
     )
 
     assert result.status is SessionState.COMPLETED
+    assert len(adoption_calls) == len(scanner.calls) == 1
     assert details[-1].resolution.state is VolumeResolutionState.RESOLVED
     assert details[-1].observed_count == 1
     with connect_ledger_reader(ledger_path) as connection:

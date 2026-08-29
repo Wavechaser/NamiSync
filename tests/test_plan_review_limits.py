@@ -37,7 +37,7 @@ from namisync.core.review import (
     MAX_PLAN_DOMAIN_RETAINED_BYTES, MAX_PLAN_INFORMATIONAL_RETAINED_BYTES,
     MAX_PLAN_REVIEW_ROWS, PlanReviewAdmission, ReviewFactLimitError,
     ReviewFactLimitExceeded, ReviewLimitAxis, ReviewPopulation, ReviewTreeKind,
-    consume_plan_review_fact_limit, snapshot_plan_scan_result,
+    adopt_plan_scan_result, consume_plan_review_fact_limit,
 )
 from namisync.core.session import Disposition, RunContext, SessionState
 from namisync.core.scalars import MAX_SIGNED_64, ScalarDomainError
@@ -389,49 +389,54 @@ def test_scan_domain_and_warning_sources_are_independently_admitted(
         ),
     )
     admission = PlanReviewAdmission()
-    assert snapshot_plan_scan_result(value, admission) == value
+    assert adopt_plan_scan_result(value, admission) is value
     _fill_final_ledger(admission)
 
 
-def test_scan_snapshot_validates_malformed_first_excess_before_refusal(
+def test_scan_adoption_refuses_domain_at_first_excess(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
     record = _file("valid.bin")
     value = _scan(SOURCE_ROOT, files=(record, record))
-    object.__setattr__(value, "files", (record, object()))
 
-    with pytest.raises(TypeError):
-        snapshot_plan_scan_result(value, PlanReviewAdmission())
+    with pytest.raises(ReviewFactLimitError) as raised:
+        adopt_plan_scan_result(value, PlanReviewAdmission())
+
+    assert raised.value.fact == ReviewFactLimitExceeded.plan_domain_rows()
 
 
-def test_scan_snapshot_validates_domain_before_informational_refusal(
+def test_scan_adoption_refuses_information_after_valid_domain(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
-    record = _file("forged.bin")
+    record = _file("valid.bin")
     warning = ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin")
     value = _scan(
         SOURCE_ROOT,
         files=(record,),
         warnings=(warning, warning),
     )
-    object.__setattr__(record, "rel_path_key", "NOT-THE-PATH")
 
-    with pytest.raises(ValueError):
-        snapshot_plan_scan_result(value, PlanReviewAdmission())
+    with pytest.raises(ReviewFactLimitError) as raised:
+        adopt_plan_scan_result(value, PlanReviewAdmission())
+
+    assert raised.value.fact == (
+        ReviewFactLimitExceeded.plan_informational_rows()
+    )
 
 
-def test_scan_snapshot_validates_malformed_informational_first_excess(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
-    warning = ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin")
-    value = _scan(SOURCE_ROOT, warnings=(warning, warning))
-    object.__setattr__(value, "warnings", (warning, object()))
+def test_scan_adoption_requires_the_exact_scan_result_type() -> None:
+    value = _scan(SOURCE_ROOT)
+    lookalike = SimpleNamespace(
+        **{
+            field.name: getattr(value, field.name)
+            for field in fields(value)
+        }
+    )
 
     with pytest.raises(TypeError):
-        snapshot_plan_scan_result(value, PlanReviewAdmission())
+        adopt_plan_scan_result(lookalike, PlanReviewAdmission())
 
 
 def _two_mapping_items() -> dict[str, object]:
@@ -504,7 +509,9 @@ class _UtcAlias(tzinfo):
         del value
         return timedelta(0)
 
-def test_scan_snapshot_reconstructs_declared_typed_fields() -> None:
+def test_scan_adoption_preserves_identity_without_constructor_validation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     record = _file("file.bin", identity=FileIdentity("SOURCE", 1))
     value = _scan(
         SOURCE_ROOT,
@@ -513,9 +520,31 @@ def test_scan_snapshot_reconstructs_declared_typed_fields() -> None:
         unsupported=(_unsupported("link.bin"),),
         warnings=(ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin"),),
     )
-    snapshot = snapshot_plan_scan_result(value, PlanReviewAdmission())
-    assert snapshot == value
-    assert snapshot is not value and snapshot.files[0] is not record
+
+    def forbid_construction(_value: object) -> None:
+        raise AssertionError("scan adoption reconstructed a validated contract")
+
+    for contract in (
+        CapabilityProfile,
+        DirRecord,
+        FileIdentity,
+        FileRecord,
+        MetadataSnapshot,
+        Root,
+        ScanResult,
+        ScanScope,
+        ScanWarning,
+        UnsupportedRecord,
+        VolumeEvidence,
+        VolumeId,
+    ):
+        monkeypatch.setattr(contract, "__post_init__", forbid_construction)
+
+    adopted = adopt_plan_scan_result(value, PlanReviewAdmission())
+
+    assert adopted is value
+    assert adopted.files[0] is record
+
 
 def test_mapping_and_plan_snapshots_preserve_semantics() -> None:
     source = _scan(SOURCE_ROOT, files=(_file("file.bin"),))
@@ -1629,12 +1658,27 @@ def test_producer_accounting_cannot_poison_outer_final_ledger(
     assert result.status is SessionState.COMPLETED
     assert len(saved) == 1
 
-def test_workflow_detaches_each_successful_collaborator_boundary(
+def test_workflow_adopts_scans_once_and_detaches_fallible_results(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_workflow_roots(monkeypatch)
     saved: list[PlanArtifact] = []
     raw: dict[str, object] = {}
+    adoption_calls: list[ScanResult] = []
+    original_adopt = sync_workflow_module.adopt_plan_scan_result
+
+    def track_adoption(
+        value: ScanResult,
+        admission: PlanReviewAdmission,
+    ) -> ScanResult:
+        adoption_calls.append(value)
+        return original_adopt(value, admission)
+
+    monkeypatch.setattr(
+        sync_workflow_module,
+        "adopt_plan_scan_result",
+        track_adoption,
+    )
 
     def scanner(
         root: Root,
@@ -1644,11 +1688,15 @@ def test_workflow_detaches_each_successful_collaborator_boundary(
         review_admission: PlanReviewAdmission | None = None,
     ) -> ScanResult:
         del ignores, ctx, review_admission
-        if root.root_id == "target":
-            object.__setattr__(raw["source"], "files", ())
-            return _scan(root)
-        value = _scan(root, files=(_file("source.bin"),))
-        raw["source"] = value
+        value = _scan(
+            root,
+            files=(
+                (_file("source.bin"),)
+                if root.root_id == "source"
+                else ()
+            ),
+        )
+        raw[root.root_id] = value
         return value
 
     def correspondence(
@@ -1658,6 +1706,8 @@ def test_workflow_detaches_each_successful_collaborator_boundary(
         review_admission: PlanReviewAdmission | None = None,
     ) -> MappingSnapshot:
         del review_admission
+        assert source is raw["source"]
+        assert target is raw["target"]
         assert [record.rel_path for record in source.files] == ["source.bin"]
         value = _mapping(source, target)
         raw["mapping"] = value
@@ -1673,6 +1723,8 @@ def test_workflow_detaches_each_successful_collaborator_boundary(
         review_admission: PlanReviewAdmission | None = None,
     ) -> Plan:
         del review_admission
+        assert source is raw["source"]
+        assert target is raw["target"]
         object.__setattr__(
             raw["mapping"],
             "ambiguous_source_keys",
@@ -1720,6 +1772,11 @@ def test_workflow_detaches_each_successful_collaborator_boundary(
     result = _run(deps)
     assert result.status is SessionState.COMPLETED
     artifact = saved[0]
+    assert len(adoption_calls) == 2
+    assert adoption_calls[0] is raw["source"]
+    assert adoption_calls[1] is raw["target"]
+    assert artifact.source_scan is raw["source"]
+    assert artifact.target_scan is raw["target"]
     assert [record.rel_path for record in artifact.source_scan.files] == [
         "source.bin"
     ]

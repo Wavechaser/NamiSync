@@ -32,8 +32,9 @@ and mutually exclusive; ordinary scanner callers may omit both. Planning uses
 a fresh `PlanReviewAdmission`, while inventory supplies the narrower
 `ScanPopulationAdmission` protocol. Either gate checks the combined
 file/directory/unsupported population and the warning population independently
-before each first-excess append. Workflow then reconstructs an exact detached
-`ScanResult` and charges only the shallow slots that its final artifact retains.
+before each first-excess append. Workflow then validates and adopts the exact
+immutable `ScanResult` once and charges only the shallow slots that its final
+artifact retains.
 A first excess raises the owning typed signal and no partial `ScanResult` is
 published. Checkpoint 4P.22 replaces this transitional pair with one protocol-
 typed admission parameter without changing either workflow's outcome.
@@ -110,8 +111,10 @@ bounded trusted anchor before its first backend call. Every backend
 `VolumeSnapshot` is an exact typed value whose identity, evidence, and
 capability fields are revalidated before anchor or filesystem policy consumes
 them, including the second binding probe. Workflow consumers independently
-re-admit the returned exact `ScanResult` and require its root and scope to match
-the request before ledger registration.
+adopt each returned exact `ScanResult` once, require its root and scope to match
+the request, and share that immutable identity with first-party read-only
+consumers. Inventory performs the same adoption before ledger registration;
+later recorder validation uses the shared nonconstructing exact-shape check.
 
 ## Walking Rules
 

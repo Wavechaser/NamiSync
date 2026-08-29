@@ -666,50 +666,66 @@ class ScanResult:
 
 
 def validate_scan_warning(value: object) -> ScanWarning:
-    """Re-admit one exact warning without retaining a repaired projection."""
+    """Validate and adopt one exact immutable warning without rebuilding it."""
 
     if type(value) is not ScanWarning:
         raise TypeError("scan warning requires ScanWarning")
-    snapshot = ScanWarning(value.code, value.rel_path, value.detail)
-    if snapshot != value:
-        raise ValueError("scan warning is not canonical")
+    if type(value.code) is not ScanWarningCode:
+        raise TypeError("scan warning code has the wrong type")
+    if value.rel_path is not None and type(value.rel_path) is not str:
+        raise TypeError("scan warning path must be text or None")
+    if type(value.detail) is not str:
+        raise TypeError("scan warning detail must be a string")
     return value
 
 
 def validate_scan_scope(value: object) -> ScanScope:
-    """Re-admit one exact canonical scan scope."""
+    """Validate and adopt one exact immutable scan-scope shape."""
 
     if type(value) is not ScanScope:
         raise TypeError("scan result scope requires ScanScope")
-    snapshot = ScanScope(
-        value.kind,
+    if type(value.kind) is not ScanScopeKind:
+        raise TypeError("scan scope kind has the wrong type")
+    if type(value.selected_paths) is not tuple:
+        raise TypeError("selected scan paths must be a tuple")
+    if type(value.subtree_roots) is not tuple:
+        raise TypeError("scan subtree roots must be a tuple")
+    _require_scope_population(
         value.selected_paths,
         value.subtree_roots,
+        "scan scope",
     )
-    if snapshot != value:
-        raise ValueError("scan scope is not canonical")
+    if value.kind is ScanScopeKind.FULL:
+        if value.selected_paths or value.subtree_roots:
+            raise ValueError("full scan cannot carry scoped paths")
+    elif value.kind is ScanScopeKind.PATHS:
+        if not value.selected_paths or value.subtree_roots:
+            raise ValueError(
+                "selected scan requires paths and cannot carry subtree roots"
+            )
+    elif not value.subtree_roots or "" in value.subtree_roots:
+        raise ValueError(
+            "subtree scan requires at least one non-root subtree"
+        )
     return value
 
 
 def validate_scan_result(value: object) -> ScanResult:
-    """Re-admit a complete exact scan graph before downstream allocation."""
+    """Validate and adopt one exact immutable scan graph without rebuilding it."""
 
     if type(value) is not ScanResult:
         raise TypeError("scanner must return ScanResult")
     if type(value.root) is not Root:
         raise TypeError("scan result root has the wrong type")
-    Root(value.root.path, value.root.root_id)
-    if value.volume_id is not None:
-        if type(value.volume_id) is not VolumeId:
-            raise TypeError("scan result volume has the wrong type")
-        _require_volume_id_fields(value.volume_id)
-    if value.volume_evidence is not None:
-        if type(value.volume_evidence) is not VolumeEvidence:
-            raise TypeError("scan result volume evidence has the wrong type")
-        _require_volume_evidence_fields(value.volume_evidence)
+    if value.volume_id is not None and type(value.volume_id) is not VolumeId:
+        raise TypeError("scan result volume has the wrong type")
+    if (
+        value.volume_evidence is not None
+        and type(value.volume_evidence) is not VolumeEvidence
+    ):
+        raise TypeError("scan result volume evidence has the wrong type")
     if type(value.profile) is not CapabilityProfile:
         raise TypeError("scan result capability profile has the wrong type")
-    _require_capability_profile_fields(value.profile)
     for population, context in (
         (value.files, "scan files"),
         (value.directories, "scan directories"),
@@ -721,37 +737,14 @@ def validate_scan_result(value: object) -> ScanResult:
     for item in value.files:
         if type(item) is not FileRecord:
             raise TypeError("scan files must contain FileRecord values")
-        FileRecord(
-            item.rel_path,
-            item.rel_path_key,
-            item.size,
-            item.mtime_ns,
-            item.file_identity,
-            item.nlink,
-            item.metadata,
-        )
     for item in value.directories:
         if type(item) is not DirRecord:
             raise TypeError("scan directories must contain DirRecord values")
-        DirRecord(
-            item.rel_path,
-            item.rel_path_key,
-            item.mtime_ns,
-            item.metadata,
-            item.file_identity,
-            item.nlink,
-        )
     for item in value.unsupported:
         if type(item) is not UnsupportedRecord:
             raise TypeError(
                 "scan unsupported records must contain UnsupportedRecord values"
             )
-        UnsupportedRecord(
-            item.rel_path,
-            item.rel_path_key,
-            item.reason,
-            item.kind,
-        )
     for item in value.warnings:
         validate_scan_warning(item)
     validate_scan_scope(value.scope)

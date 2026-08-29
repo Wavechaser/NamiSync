@@ -84,7 +84,7 @@ from namisync.core.review import (
     ReviewPopulation,
     ReviewTreeKind,
     ScanPopulationAdmission,
-    snapshot_scan_result,
+    adopt_scan_result,
     snapshot_review_fact_limit,
 )
 from namisync.core.scalars import (
@@ -2672,9 +2672,9 @@ def _admit_inventory_scan_result(
     value: object,
     admission: _InventoryScanAdmission,
 ) -> ScanResult:
-    """Revalidate hostile scanner populations before any ledger publication."""
+    """Validate and adopt one exact scanner result before ledger publication."""
 
-    return snapshot_scan_result(
+    return adopt_scan_result(
         value,
         admission,
         row_limit=MAX_PLAN_REVIEW_ROWS,

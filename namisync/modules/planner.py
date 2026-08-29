@@ -22,7 +22,6 @@ from namisync.core.models import (
     ScanResult,
     VolumeEvidence,
     VolumeId,
-    validate_scan_result,
 )
 from namisync.core.pathing import (
     fold_validated_path,
@@ -62,8 +61,6 @@ from namisync.core.review import (
     PLAN_SOURCE_REFERENCE_BYTES,
     PlanReviewAdmission,
     ReviewFactLimitError,
-    snapshot_plan_file_records,
-    snapshot_plan_scan_result,
 )
 from namisync.core.scalars import ScalarDomainError
 
@@ -584,8 +581,6 @@ def _plan(
             raise TypeError("planner scope must be an exact typed Scope")
         if scope.kind is ScopeKind.EVERYTHING and scope.value is not None:
             raise ValueError("everything scope must not carry a value")
-        validate_scan_result(source)
-        validate_scan_result(target)
         _validate_plan_mapping_source(correspondence, admission)
         policy_identity, assign_destinations = _capture_destination_policy(
             options.destination_policy
@@ -612,16 +607,18 @@ def _plan(
     if admission is None:
         assignment = options.destination_policy.assign(source_files, {}, target)
     else:
-        callback_source_files = snapshot_plan_file_records(
-            source_files,
-            admission,
+        admission.require_source_rows(len(source_files))
+        admission.require_source_rows(
+            len(target.files)
+            + len(target.directories)
+            + len(target.unsupported)
         )
-        callback_target = snapshot_plan_scan_result(target, admission)
+        admission.require_informational_source_rows(len(target.warnings))
         assert assign_destinations is not None
         raw_assignment = assign_destinations(
-            callback_source_files,
+            source_files,
             {},
-            callback_target,
+            target,
         )
         assignment = _snapshot_assignment(
             raw_assignment,
@@ -629,8 +626,6 @@ def _plan(
         )
         del (
             assign_destinations,
-            callback_target,
-            callback_source_files,
             raw_assignment,
         )
         assert policy_identity is not None
@@ -1257,8 +1252,6 @@ def _snapshot_plan_candidate(
     if len(value.required_volumes) > 2:
         raise ValueError("plan required volumes exceed the endpoint limit")
 
-    validate_scan_result(source)
-    validate_scan_result(target)
     retained_options = _snapshot_retained_options(options)
     assignment = _snapshot_assignment(value.assignment, admission)
     filtered_source_files = tuple(

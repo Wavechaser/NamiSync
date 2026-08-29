@@ -46,7 +46,7 @@ from namisync.core.models import (
     IgnoreSet,
     Root,
     ScanResult,
-    ScanScope,
+    ScanScopeKind,
     snapshot_ignore_set,
 )
 from namisync.core.pathing import (
@@ -75,7 +75,7 @@ from namisync.core.review import (
     ReviewFactLimitError,
     admit_retained_plan_scan,
     consume_plan_review_fact_limit,
-    snapshot_plan_scan_result,
+    adopt_plan_scan_result,
 )
 from namisync.core.root_authority import (
     RootAuthority,
@@ -316,17 +316,17 @@ def _review_limit_refusal(
     )
 
 
-def _snapshot_scanner_result(
+def _adopt_scanner_result(
     value: ScanResult,
     expected_root: Root,
     admission: PlanReviewAdmission,
 ) -> ScanResult:
-    snapshot = snapshot_plan_scan_result(value, admission)
-    if snapshot.root != expected_root:
+    adopted = adopt_plan_scan_result(value, admission)
+    if adopted.root != expected_root:
         raise ValueError("plan scanner returned a different root authority")
-    if snapshot.scope != ScanScope.full():
+    if adopted.scope.kind is not ScanScopeKind.FULL:
         raise ValueError("plan scanner must return the requested full scope")
-    return snapshot
+    return adopted
 
 
 def _disposable_plan_preview(
@@ -396,66 +396,48 @@ def _run_plan(
 
         ctx.emit(PhaseChanged("scan-source"))
         source_ignores = snapshot_ignore_set(deps.ignores)
-        raw_source_scan = deps.scanner(
-            Root(source_root.path, source_root.root_id),
-            source_ignores,
-            ctx,
-            review_admission=retained_admission.fresh(),
-        )
-        source_scan = _snapshot_scanner_result(
-            raw_source_scan,
+        source_scan = _adopt_scanner_result(
+            deps.scanner(
+                Root(source_root.path, source_root.root_id),
+                source_ignores,
+                ctx,
+                review_admission=retained_admission.fresh(),
+            ),
             source_root,
             retained_admission.fresh(),
         )
-        del raw_source_scan, source_ignores
+        del source_ignores
         admit_retained_plan_scan(source_scan, retained_admission)
 
         ctx.emit(PhaseChanged("scan-target"))
         target_ignores = snapshot_ignore_set(deps.ignores)
-        raw_target_scan = deps.scanner(
-            Root(target_root.path, target_root.root_id),
-            target_ignores,
-            ctx,
-            review_admission=retained_admission.fresh(),
-        )
-        target_scan = _snapshot_scanner_result(
-            raw_target_scan,
+        target_scan = _adopt_scanner_result(
+            deps.scanner(
+                Root(target_root.path, target_root.root_id),
+                target_ignores,
+                ctx,
+                review_admission=retained_admission.fresh(),
+            ),
             target_root,
             retained_admission.fresh(),
         )
-        del raw_target_scan, target_ignores, source_root, target_root
+        del target_ignores, source_root, target_root
         admit_retained_plan_scan(target_scan, retained_admission)
 
         ctx.emit(PhaseChanged("plan"))
-        correspondence_source = snapshot_plan_scan_result(
-            source_scan,
-            retained_admission.fresh(),
-        )
-        correspondence_target = snapshot_plan_scan_result(
-            target_scan,
-            retained_admission.fresh(),
-        )
         raw_correspondence = deps.correspondence(
-            correspondence_source,
-            correspondence_target,
+            source_scan,
+            target_scan,
         )
         correspondence = snapshot_mapping_snapshot(
             raw_correspondence,
             review_admission=retained_admission.fresh(),
         )
-        del raw_correspondence, correspondence_source, correspondence_target
+        del raw_correspondence
 
-        planner_source = snapshot_plan_scan_result(
-            source_scan,
-            retained_admission.fresh(),
-        )
-        planner_target = snapshot_plan_scan_result(
-            target_scan,
-            retained_admission.fresh(),
-        )
         raw_plan = deps.planner(
-            planner_source,
-            planner_target,
+            source_scan,
+            target_scan,
             correspondence,
             live_options,
             Scope.everything(),
@@ -470,8 +452,6 @@ def _run_plan(
         )
         del (
             raw_plan,
-            planner_source,
-            planner_target,
             correspondence,
             live_options,
         )

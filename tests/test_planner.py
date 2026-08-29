@@ -9,6 +9,7 @@ from weakref import ref
 
 import pytest
 
+import namisync.core.review as review_module
 from namisync.core.evidence import Outcome
 from namisync.core.models import (
     CapabilityProfile,
@@ -20,6 +21,8 @@ from namisync.core.models import (
     Root,
     ScanResult,
     ScanScope,
+    ScanWarning,
+    ScanWarningCode,
     UnsupportedReason,
     UnsupportedRecord,
     VolumeEvidence,
@@ -826,6 +829,114 @@ class CollidingPolicy:
                 for record in sorted(records, key=lambda item: item.rel_path_key)
             ),
         )
+
+
+def test_reviewed_policy_receives_adopted_target_and_filtered_record_identities(
+) -> None:
+    received: dict[str, object] = {}
+
+    class CapturingPolicy:
+        name = "capturing"
+        version = "1"
+
+        def assign(self, records, meta, target) -> Assignment:
+            received["records"] = records
+            received["target"] = target
+            assigned = IdentityDestinationPolicy(
+                self.name,
+                self.version,
+            ).assign(records, meta, target)
+            return assigned
+
+    kept = _file("keep.bin")
+    excluded = _file("skip.bin")
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(kept, excluded),
+    )
+    target = _scan("target", TARGET_VOLUME)
+
+    plan(
+        source,
+        target,
+        MappingSnapshot.empty(source.volume_id, target.volume_id),
+        SyncOptions(
+            filters=FilterSet(("SKIP.BIN",)),
+            destination_policy=CapturingPolicy(),  # type: ignore[arg-type]
+        ),
+        Scope.everything(),
+        review_admission=PlanReviewAdmission(),
+    )
+
+    records = received["records"]
+    assert type(records) is tuple
+    assert records == (kept,)
+    assert records[0] is kept  # type: ignore[index]
+    assert received["target"] is target
+
+
+@pytest.mark.parametrize(
+    ("population", "expected_fact"),
+    (
+        ("source", ReviewFactLimitExceeded.plan_domain_rows()),
+        ("target", ReviewFactLimitExceeded.plan_domain_rows()),
+        ("warnings", ReviewFactLimitExceeded.plan_informational_rows()),
+    ),
+)
+def test_reviewed_policy_inputs_keep_independent_capacity_gates(
+    monkeypatch: pytest.MonkeyPatch,
+    population: str,
+    expected_fact: ReviewFactLimitExceeded,
+) -> None:
+    monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 1)
+    calls = 0
+
+    class UnreachedPolicy:
+        name = "unreached"
+        version = "1"
+
+        def assign(self, *_args) -> Assignment:
+            nonlocal calls
+            calls += 1
+            return Assignment(self.name, self.version, ())
+
+    source = _scan(
+        "source",
+        SOURCE_VOLUME,
+        files=(
+            (_file("one.bin"), _file("two.bin"))
+            if population == "source"
+            else ()
+        ),
+    )
+    target = _scan(
+        "target",
+        TARGET_VOLUME,
+        files=(
+            (_file("one.bin"), _file("two.bin"))
+            if population == "target"
+            else ()
+        ),
+    )
+    if population == "warnings":
+        warning = ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin")
+        target = replace(target, warnings=(warning, warning))
+
+    with pytest.raises(ReviewFactLimitError) as raised:
+        plan(
+            source,
+            target,
+            MappingSnapshot.empty(source.volume_id, target.volume_id),
+            SyncOptions(
+                destination_policy=UnreachedPolicy(),  # type: ignore[arg-type]
+            ),
+            Scope.everything(),
+            review_admission=PlanReviewAdmission(),
+        )
+
+    assert raised.value.fact == expected_fact
+    assert calls == 0
 
 
 @pytest.mark.parametrize(

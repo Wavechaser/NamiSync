@@ -558,36 +558,6 @@ def test_applied_visibility_receipt_replays_and_rejects_changed_input(tmp_path: 
         setup.recorder.close()
 
 
-@pytest.mark.parametrize(
-    "value",
-    (
-        _UnprojectedHashValue(), object(), {1: "not-a-string-key"}, float("nan"),
-        "\ud800", "\udcff", "\ud83d\ude00",
-    ),
-    ids=("dataclass", "unknown-type", "non-string-key", "nonfinite", "high", "low", "pair"),
-)
-def test_inventory_rejects_unprojected_nested_input_before_mutation(
-    tmp_path: Path, value: object,
-) -> None:
-    plans, inputs = hash_fixtures(False)
-    command = inputs["inventory"]
-    # Source evidence now rejects this at construction. Forge the frozen exact
-    # instance to keep proving the recorder's independent projection boundary.
-    malformed_scan = replace(command.scan)
-    malformed = replace(command, scan=malformed_scan)
-    evidence = replace(malformed_scan.volume_evidence)
-    object.__setattr__(malformed_scan, "volume_evidence", evidence)
-    object.__setattr__(evidence, "label", value)
-    setup = setup_recorder(tmp_path / "ledger.db", plans["two_copy"])
-    try:
-        before = _ledger_state(setup.recorder.path)
-        with pytest.raises((TypeError, ValueError)):
-            setup.recorder.record_inventory(malformed)
-        assert _ledger_state(setup.recorder.path) == before
-    finally:
-        setup.recorder.close()
-
-
 def test_volume_and_location_commands_are_readmitted_before_ledger_mutation(
     tmp_path: Path,
 ) -> None:
