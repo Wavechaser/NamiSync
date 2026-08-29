@@ -390,6 +390,16 @@ reachable. Exact stash ids remain in `HANDOFF.md` where they are operationally
 useful. Independent final review found no blocking code, documentation-
 authority, overclaim, or repository-custody finding.
 
+#### Documentation-role follow-up
+
+| Id | Accepted outcome | Verification | Status |
+| --- | --- | --- | --- |
+| `reference-routing` | Remove delivery-session and checkpoint chronology from active fundamental, product, and component references; express only active versus accepted-but-unrealized contracts there, while retaining delivery sequencing in the M1 plans, task history, and handoff. Runtime pause/cancel checkpoint terminology is unchanged. | Search every active Markdown file outside the declared delivery/history owners; resolve every changed relative link and anchor; run `git diff --check`; independently review behavior/status preservation. | In progress |
+
+Non-goals are changing code or product behavior, renumbering or rewriting the
+M1 delivery plans, removing runtime `Checkpoint`/`ctx.checkpoint()` language,
+or rewriting superseded and dated task history.
+
 ### 4. Install task-centric lifecycle and compact artifacts
 
 **Status:** Pending. The prerequisite closeout above is complete, but no
