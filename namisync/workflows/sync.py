@@ -1239,7 +1239,14 @@ def _run_execution(
                     : current.reported_exclusion_count
                 ]
             )
-            last_reconciliation_error: BaseException | None = None
+            operation_id_by_text = {
+                str(op_id): op_id for op_id in xset.selection
+            }
+            confirmed_settlement_count = len(xset.status)
+            confirmed_recording_reason_count = len(xset.recording_reasons)
+            confirmed_evidence_count = len(xset.published_evidence)
+            pending_execution_item: ItemOutcome | None = None
+            last_full_reconciliation_error: BaseException | None = None
 
             def take_operation_results() -> tuple[ItemOutcome, ...]:
                 owned = tuple(
@@ -1254,12 +1261,13 @@ def _run_execution(
                 return owned
 
             def observe_execution(body: object) -> None:
+                nonlocal pending_execution_item
                 if not isinstance(body, ItemOutcome):
-                    reconcile_execution(complete=False)
+                    reconcile_execution_edge()
                     ctx.emit(body)
-                    reconcile_execution(complete=False)
+                    reconcile_execution_edge()
                     return
-                reconcile_execution(complete=False)
+                reconcile_execution_edge()
                 snapshot = _canonical_operation_outcome(
                     body,
                     pending_operation_by_id,
@@ -1274,9 +1282,65 @@ def _run_execution(
                     )
                 )
                 operation_items_by_id[snapshot.item_id] = snapshot
+                pending_execution_item = snapshot
+
+            def reconcile_execution_edge() -> None:
+                nonlocal confirmed_settlement_count
+                nonlocal confirmed_recording_reason_count
+                nonlocal confirmed_evidence_count
+                nonlocal pending_execution_item
+                item = pending_execution_item
+                if item is None:
+                    if (
+                        len(xset.status) != confirmed_settlement_count
+                        or len(xset.recording_reasons)
+                        != confirmed_recording_reason_count
+                        or len(xset.published_evidence)
+                        != confirmed_evidence_count
+                    ):
+                        raise ValueError(
+                            "executor settlement must match its accepted "
+                            "operation outcomes"
+                        )
+                    return
+
+                op_id = operation_id_by_text[item.item_id]
+                recording_reason = xset.recording_reasons.get(op_id)
+                has_evidence = op_id in xset.published_evidence
+                if (
+                    len(xset.status) != confirmed_settlement_count + 1
+                    or len(xset.recording_reasons)
+                    != confirmed_recording_reason_count
+                    + int(recording_reason is not None)
+                    or len(xset.published_evidence)
+                    != confirmed_evidence_count + int(has_evidence)
+                ):
+                    raise ValueError(
+                        "executor settlement must match its accepted "
+                        "operation outcomes"
+                    )
+                expected_recording = (
+                    RecordingStatus.DEGRADED
+                    if recording_reason is not None
+                    else RecordingStatus.OK
+                )
+                if (
+                    xset.status.get(op_id) is not item.outcome
+                    or item.recording is not expected_recording
+                    or item.recording_reason is not recording_reason
+                ):
+                    raise ValueError(
+                        "executor outcome disagrees with execution-set settlement"
+                    )
+                confirmed_settlement_count += 1
+                confirmed_recording_reason_count += int(
+                    recording_reason is not None
+                )
+                confirmed_evidence_count += int(has_evidence)
+                pending_execution_item = None
 
             def reconcile_execution(*, complete: bool) -> None:
-                nonlocal last_reconciliation_error
+                nonlocal last_full_reconciliation_error
                 try:
                     _reconcile_executor_outcomes(
                         xset,
@@ -1286,15 +1350,15 @@ def _run_execution(
                         complete=complete,
                     )
                 except BaseException as error:
-                    last_reconciliation_error = error
+                    last_full_reconciliation_error = error
                     raise
                 else:
-                    last_reconciliation_error = None
+                    last_full_reconciliation_error = None
 
             def checkpoint_execution() -> None:
-                reconcile_execution(complete=False)
+                reconcile_execution_edge()
                 ctx.checkpoint()
-                reconcile_execution(complete=False)
+                reconcile_execution_edge()
 
             verify_after_execute = current.verify_after_execute
             exclusion_failure: FailureDetail | None = None
@@ -1485,7 +1549,7 @@ def _run_execution(
                     )
                 )
             except PauseRequested as error:
-                if error is not last_reconciliation_error:
+                if error is not last_full_reconciliation_error:
                     try:
                         reconcile_execution(complete=False)
                     except Exception:
@@ -1493,7 +1557,7 @@ def _run_execution(
                         raise
                 raise
             except Canceled as error:
-                if error is not last_reconciliation_error:
+                if error is not last_full_reconciliation_error:
                     try:
                         reconcile_execution(complete=False)
                     except Exception as reconciliation_error:
@@ -1526,7 +1590,7 @@ def _run_execution(
                 )
                 return replace(terminal, recording=recording_status)
             except Exception as error:
-                if error is not last_reconciliation_error:
+                if error is not last_full_reconciliation_error:
                     try:
                         reconcile_execution(complete=False)
                     except Exception as reconciliation_error:
@@ -1543,7 +1607,9 @@ def _run_execution(
                 operation_items_by_id,
                 initially_settled,
                 execution_authority,
+                operation_id_by_text,
                 pending_operation_by_id,
+                reconcile_execution_edge,
                 reconcile_execution,
                 take_operation_results,
             )

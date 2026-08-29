@@ -1700,6 +1700,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- SEVERE - OPEN (2026-08-29). Population-scaled authority revalidation.
+  Execution, post-copy, and standalone-integrity workflows rebuilt or rescanned
+  their complete immutable authority around item callbacks, making a linear
+  result stream quadratic and rendering the declared 120,000-item wall
+  impractical. Cause: immutable base facts and mutable stream deltas shared one
+  whole-graph validator at both transfer points and per-item seams. The
+  execution-outcome stream now reconciles each synchronous settlement delta in
+  constant time and runs one complete audit when the executor returns.
+  Checkpoints 4P.6/4P.7 own the two other result streams, and 4P.20 owns the
+  immutable work still embedded in exclusion and other mutable-overlay guards;
+  no producer wall or acceptance constant changes in this repair.
 - MODERATE - FIXED (2026-08-29). Pre-checkpoint settlement gap. A direct
   workflow adapter's checkpoint callback could run after an executor changed
   settlement but before the workflow reconciled that change into its accepted

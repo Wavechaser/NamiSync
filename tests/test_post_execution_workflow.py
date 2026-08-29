@@ -1008,7 +1008,37 @@ def test_executor_cannot_replace_existing_publication_evidence() -> None:
     )
 
 
-def test_4p_4_temporarily_characterizes_item_scaled_executor_revalidation(
+def test_executor_terminal_audit_rejects_new_malformed_evidence() -> None:
+    operation = _operation(4091, 4)
+    xset = _execution_set(operation)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation, scope_token="b" * 32),
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    with pytest.raises(
+        ValueError,
+        match="recorded copy scope token does not match the execution run",
+    ):
+        run_execution(
+            ExecuteContinuation(xset, verify_after_execute=False),
+            RunContext(lambda _body: None, lambda: None),
+            _deps(executor=executor, verifier=_verify_all, recordings=[]),
+        )
+
+
+def test_executor_reconciles_items_before_one_terminal_full_revalidation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     full_revalidations = 0
@@ -1032,31 +1062,45 @@ def test_4p_4_temporarily_characterizes_item_scaled_executor_revalidation(
 
         def executor(execution_set, context, recorder, policies, fs):
             del recorder, policies, fs
-            items = tuple(
-                _settle(execution_set, context, operation)
-                for operation in operations
-            )
+            items = []
+            for index, operation in enumerate(operations, 1):
+                items.append(_settle(execution_set, context, operation))
+                context.emit(
+                    Progress(
+                        "execute",
+                        index,
+                        size,
+                        index,
+                        size,
+                        operation.target_rel_path,
+                    )
+                )
+                context.checkpoint()
             return OperationResult(
                 SessionState.COMPLETED,
-                items=items,
+                items=tuple(items),
                 bytes_done=size,
                 bytes_total=size,
             )
 
         before = full_revalidations
+
+        def assert_incremental_boundary(_body: object = None) -> None:
+            assert full_revalidations == before
+
         result = run_execution(
             ExecuteContinuation(xset, verify_after_execute=False),
-            RunContext(lambda _body: None, lambda: None),
+            RunContext(
+                assert_incremental_boundary,
+                assert_incremental_boundary,
+            ),
             _deps(executor=executor, verifier=_verify_all, recordings=[]),
         )
         assert result.status is SessionState.COMPLETED
         return full_revalidations - before
 
-    one_item = run_population(1, 131)
-    four_items = run_population(4, 132)
-
-    # Temporary 4P.4 characterization: 4P.5 changes this delta to zero.
-    assert four_items - one_item == 3
+    assert run_population(1, 131) == 1
+    assert run_population(4, 132) == 1
 
 
 def test_executor_must_emit_each_newly_settled_operation() -> None:

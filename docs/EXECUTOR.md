@@ -35,6 +35,12 @@ continuation state. A one-shot rejection is retried from that exact retained
 settlement, including any committed recorder receipt; persistent rejection
 leaves both journal retirement and continuation settlement pending. Publication
 and non-byte mutation reducers attach `unrecorded-mutation` centrally.
+The workflow confirms each synchronous emit-to-settlement delta with constant-
+time identity, cardinality, outcome, and recording checks before another
+callback can run. It performs the complete execution-authority and aggregate
+audit once when the executor transfers control back; immutable plan and prior-
+settlement graphs are no longer rehashed around every item, progress event, or
+checkpoint.
 A pre-destructive flush refusal retains a typed, operation-local prerequisite
 cause in the journal, independent of the exception selected for filesystem
 settlement. It survives retry, cleanup substitution, and backstop error choice.
