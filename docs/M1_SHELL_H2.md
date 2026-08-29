@@ -404,6 +404,19 @@ Closeout resolved all 189 local targets and 84 anchors across the 29 active
 documents. Targeted routing searches and `git diff --check` are clean;
 independent review found no remaining blocker.
 
+#### Bounded integrity follow-up
+
+| Id | Accepted outcome | Verification | Status |
+| --- | --- | --- | --- |
+| `public-membership` | Expose each integrity selection's construction-admitted item ids through one read-only public property and make verifier progress consume that property without copying or reading another object's private state. | Focused core and verifier tests pin exact `frozenset` identity, unknown-id refusal, and zero production `selection._known_item_ids` reads outside the defining core contract. | Pending |
+| `diagnostic-precedence` | Preserve fact-oriented collaboration diagnostics for same-length item-id replacement while retaining the private-index tamper guard. | Focused regressions cover both integrity selection types and both fact replacement and index-only tampering. | Pending |
+| `integrity-guard-docs` | State that completion membership is the construction-admitted snapshot and that workflow guards are shallow/fixed-frequency where possible, not asymptotically constant; leave callback-edge ownership/consolidation judgment to checkpoint 4 without requiring an H2 refactor. | Targeted documentation searches, active-link validation, `git diff --check`, and independent review. | Pending |
+
+Non-goals are post-publication capacity handling, weak-reference support, the
+shared-population owner/name change, workflow guard consolidation, or any other
+checkpoint-4 owner-graph/model work. Ordinary repeated-mechanism and stop rules
+remain in force.
+
 ### 4. Install task-centric lifecycle and compact artifacts
 
 **Status:** Pending. The prerequisite closeout above is complete, but no
