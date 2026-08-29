@@ -56,7 +56,7 @@ from namisync.core.root_authority import (
     is_reparse_stat,
     observe_native_volume,
 )
-from namisync.core.review import PlanReviewAdmission, ScanPopulationAdmission
+from namisync.core.review import ScanPopulationAdmission
 from namisync.core.session import RunContext
 from namisync.core.scalars import (
     ScalarDomainError,
@@ -349,7 +349,6 @@ class WalkingScanner:
         scope: ScanScope | None = None,
         *,
         trusted_anchor: str | None = None,
-        review_admission: PlanReviewAdmission | None = None,
         population_admission: ScanPopulationAdmission | None = None,
     ) -> ScanResult:
         if type(root) is not Root:
@@ -357,18 +356,6 @@ class WalkingScanner:
         root = Root(root.path, root.root_id)
         if type(ignores) is not IgnoreSet:
             raise TypeError("scanner ignores require IgnoreSet")
-        if (
-            review_admission is not None
-            and type(review_admission) is not PlanReviewAdmission
-        ):
-            raise TypeError("plan review admission has the wrong type")
-        if review_admission is not None and population_admission is not None:
-            raise ValueError("scanner population admissions are mutually exclusive")
-        source_admission = (
-            review_admission
-            if review_admission is not None
-            else population_admission
-        )
         requested_scope = (
             ScanScope.full()
             if scope is None
@@ -392,7 +379,7 @@ class WalkingScanner:
                 requested_scope,
                 error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
-                source_admission=source_admission,
+                population_admission=population_admission,
             )
 
         resolved_root = Root(resolved, root.root_id)
@@ -404,7 +391,7 @@ class WalkingScanner:
                 requested_scope,
                 error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
-                source_admission=source_admission,
+                population_admission=population_admission,
             )
         root_error = self._root_error(resolved, reviewed_anchor)
         if root_error is not None:
@@ -413,7 +400,7 @@ class WalkingScanner:
                 requested_scope,
                 root_error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
-                source_admission=source_admission,
+                population_admission=population_admission,
             )
         try:
             volume = validate_volume_snapshot(
@@ -425,7 +412,7 @@ class WalkingScanner:
                 requested_scope,
                 error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
-                source_admission=source_admission,
+                population_admission=population_admission,
             )
         root_error = self._root_error(resolved, reviewed_anchor)
         if root_error is not None:
@@ -434,7 +421,7 @@ class WalkingScanner:
                 requested_scope,
                 root_error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
-                source_admission=source_admission,
+                population_admission=population_admission,
             )
         binding_error = self._binding_error(
             resolved,
@@ -447,7 +434,7 @@ class WalkingScanner:
                 requested_scope,
                 binding_error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
-                source_admission=source_admission,
+                population_admission=population_admission,
             )
         device_anchor = volume.evidence.device_id
         # The reviewed mount may itself be a folder-volume reparse point. A
@@ -472,13 +459,13 @@ class WalkingScanner:
             )
         )
 
-        if source_admission is None:
+        if population_admission is None:
             files: list[FileRecord] = []
             directories: list[DirRecord] = []
             unsupported: list[UnsupportedRecord] = []
             warnings: list[ScanWarning] = []
         else:
-            collectors = _ScanCollectors(source_admission)
+            collectors = _ScanCollectors(population_admission)
             files = _ScanList(collectors, informational=False)
             directories = _ScanList(collectors, informational=False)
             unsupported = _ScanList(collectors, informational=False)
@@ -564,7 +551,7 @@ class WalkingScanner:
                 requested_scope,
                 root_error,
                 ScanWarningCode.ROOT_UNAVAILABLE,
-                source_admission=source_admission,
+                population_admission=population_admission,
             )
         binding_error = self._binding_error(
             resolved,
@@ -577,7 +564,7 @@ class WalkingScanner:
                 requested_scope,
                 binding_error,
                 ScanWarningCode.VOLUME_UNAVAILABLE,
-                source_admission=source_admission,
+                population_admission=population_admission,
             )
         return ScanResult(
             root=resolved_root,
@@ -1313,10 +1300,10 @@ class WalkingScanner:
         error: OSError,
         code: ScanWarningCode,
         *,
-        source_admission: ScanPopulationAdmission | None = None,
+        population_admission: ScanPopulationAdmission | None = None,
     ) -> ScanResult:
-        if source_admission is not None:
-            source_admission.require_informational_source_rows(1)
+        if population_admission is not None:
+            population_admission.require_informational_source_rows(1)
         return ScanResult(
             root=root,
             volume_id=None,
@@ -1338,7 +1325,6 @@ def scan(
     scope: ScanScope | None = None,
     *,
     trusted_anchor: str | None = None,
-    review_admission: PlanReviewAdmission | None = None,
     population_admission: ScanPopulationAdmission | None = None,
 ) -> ScanResult:
     return WalkingScanner().scan(
@@ -1347,6 +1333,5 @@ def scan(
         ctx,
         scope,
         trusted_anchor=trusted_anchor,
-        review_admission=review_admission,
         population_admission=population_admission,
     )

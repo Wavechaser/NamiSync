@@ -61,7 +61,11 @@ from namisync.core.root_authority import (
     is_reparse_stat,
     observe_native_volume,
 )
-from namisync.core.review import PLAN_SOURCE_REFERENCE_BYTES, PlanReviewAdmission
+from namisync.core.review import (
+    PLAN_SOURCE_REFERENCE_BYTES,
+    PlanReviewAdmission,
+    PlanReviewProducerAdmission,
+)
 from namisync.core.scalars import (
     checked_add_signed_64,
     require_signed_64,
@@ -74,8 +78,11 @@ class _PlanRefusalList(list[Refusal]):
 
     __slots__ = ("_admission",)
 
-    def __init__(self, admission: PlanReviewAdmission | None) -> None:
-        if admission is not None and type(admission) is not PlanReviewAdmission:
+    def __init__(self, admission: PlanReviewProducerAdmission | None) -> None:
+        if (
+            admission is not None
+            and type(admission) is not PlanReviewProducerAdmission
+        ):
             raise TypeError("preflight review admission has the wrong type")
         self._admission = admission
 
@@ -436,14 +443,14 @@ def _require_execution_review(value: object) -> ExecutionReview:
 def _operation_subjects(
     review: ExecutionReview,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> tuple[
     dict[Subject, tuple[Root, str, CapabilityProfile]],
     frozenset[str],
 ]:
     if (
         review_admission is not None
-        and type(review_admission) is not PlanReviewAdmission
+        and type(review_admission) is not PlanReviewProducerAdmission
     ):
         raise TypeError("preflight review admission has the wrong type")
     subjects: dict[Subject, tuple[Root, str, CapabilityProfile]] = {}
@@ -540,13 +547,13 @@ def observe(
     review: ExecutionReview,
     fs: ObservationFileSystem,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> ObservedWorld:
     """Read the current scoped world without making any safety decision."""
 
     if (
         review_admission is not None
-        and type(review_admission) is not PlanReviewAdmission
+        and type(review_admission) is not PlanReviewProducerAdmission
     ):
         raise TypeError("preflight review admission has the wrong type")
     review = _require_execution_review(review)
@@ -809,14 +816,14 @@ def _validate_trash_observation(value: object) -> TrashObservation | None:
 def adopt_plan_observed_world(
     value: object,
     review: ExecutionReview,
-    admission: PlanReviewAdmission,
+    admission: PlanReviewProducerAdmission,
 ) -> ObservedWorld:
     """Admit one exact observer graph without rebuilding it."""
 
     if type(value) is not ObservedWorld:
         raise TypeError("plan observer must return an exact ObservedWorld")
     review = _require_execution_review(review)
-    if type(admission) is not PlanReviewAdmission:
+    if type(admission) is not PlanReviewProducerAdmission:
         raise TypeError("plan review admission has the wrong type")
     for field_name, population in (
         ("stats", value.stats),
@@ -898,14 +905,14 @@ def adopt_plan_verdict(
     value: object,
     world: ObservedWorld,
     review: ExecutionReview,
-    admission: PlanReviewAdmission,
+    admission: PlanReviewProducerAdmission,
 ) -> Verdict:
     """Admit exact preflight output without rebuilding or reordering it."""
 
     if type(value) is not Verdict or type(value.refusals) is not tuple:
         raise TypeError("preflight must return an exact Verdict")
     review = _require_execution_review(review)
-    if type(admission) is not PlanReviewAdmission:
+    if type(admission) is not PlanReviewProducerAdmission:
         raise TypeError("plan review admission has the wrong type")
     if type(world) is not ObservedWorld:
         raise TypeError("admitted preflight world has the wrong type")
@@ -1034,13 +1041,13 @@ def preflight(
     review: ExecutionReview,
     world: ObservedWorld,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Verdict:
     """Purely judge all applicable refusal reasons for an execution set."""
 
     if (
         review_admission is not None
-        and type(review_admission) is not PlanReviewAdmission
+        and type(review_admission) is not PlanReviewProducerAdmission
     ):
         raise TypeError("preflight review admission has the wrong type")
     review = _require_execution_review(review)

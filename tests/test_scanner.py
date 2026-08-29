@@ -8,6 +8,7 @@ import stat as stat_module
 import subprocess
 from contextlib import contextmanager
 from dataclasses import dataclass
+from inspect import signature
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -38,6 +39,21 @@ from namisync.modules.scanner import (
 
 def _ctx(checkpoint=lambda: None) -> RunContext:
     return RunContext(lambda event: None, checkpoint)
+
+
+def test_scanner_entry_points_expose_one_population_admission_keyword() -> None:
+    scanner = WalkingScanner()
+    for entry_point in (scanner.scan, scanner_module.scan):
+        parameters = signature(entry_point).parameters
+        assert "population_admission" in parameters
+        assert "review_admission" not in parameters
+        with pytest.raises(TypeError, match="review_admission"):
+            entry_point(
+                Root(r"C:\source", "source"),
+                IgnoreSet(),
+                _ctx(),
+                review_admission=object(),
+            )
 
 
 def test_clean_tree_is_complete_deterministic_and_records_every_directory(tmp_path: Path) -> None:

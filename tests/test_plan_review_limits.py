@@ -36,9 +36,11 @@ from namisync.core.preflight import (
 )
 from namisync.core.review import (
     MAX_PLAN_DOMAIN_RETAINED_BYTES, MAX_PLAN_INFORMATIONAL_RETAINED_BYTES,
-    MAX_PLAN_REVIEW_ROWS, PlanReviewAdmission, ReviewFactLimitError,
+    MAX_PLAN_REVIEW_ROWS, PlanReviewAdmission, PlanReviewProducerAdmission,
+    ReviewFactLimitError,
     ReviewFactLimitExceeded, ReviewLimitAxis, ReviewPopulation, ReviewTreeKind,
-    adopt_plan_scan_result, consume_plan_review_fact_limit,
+    admit_retained_plan_scan, adopt_plan_scan_result,
+    consume_plan_review_fact_limit,
     exceeds_population_wall, require_population_measure,
 )
 from namisync.core.session import Disposition, RunContext, SessionState
@@ -367,7 +369,13 @@ def test_source_checks_are_stateless_and_independent_of_final_ledger(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 2)
-    admission = PlanReviewAdmission()
+    retained = PlanReviewAdmission()
+    admission = retained.fresh()
+    assert type(admission) is PlanReviewProducerAdmission
+    assert not hasattr(retained, "require_source_rows")
+    assert not hasattr(retained, "require_informational_source_rows")
+    assert not hasattr(admission, "admit")
+    assert not hasattr(admission, "fresh")
     admission.require_source_rows(2)
     admission.require_source_rows(2)
     admission.require_informational_source_rows(2)
@@ -380,7 +388,7 @@ def test_source_checks_are_stateless_and_independent_of_final_ledger(
     assert informational.value.fact == (
         ReviewFactLimitExceeded.plan_informational_rows()
     )
-    _fill_final_ledger(admission)
+    _fill_final_ledger(retained)
 
 
 def test_fresh_admissions_share_only_one_refusal_issuer() -> None:
@@ -396,12 +404,26 @@ def test_fresh_admissions_share_only_one_refusal_issuer() -> None:
     assert snapshot is not issued.value.fact
 
     with pytest.raises(ReviewFactLimitError) as unrelated:
-        PlanReviewAdmission().require_source_rows(MAX_PLAN_REVIEW_ROWS + 1)
+        PlanReviewProducerAdmission().require_source_rows(
+            MAX_PLAN_REVIEW_ROWS + 1
+        )
     assert consume_plan_review_fact_limit(unrelated.value, root) is None
     assert (
         consume_plan_review_fact_limit(ReviewFactLimitError(fact), root)
         is None
     )
+
+
+def test_plan_review_capabilities_reject_cross_role_use() -> None:
+    value = _scan(SOURCE_ROOT)
+    with pytest.raises(TypeError, match="plan review admission"):
+        adopt_plan_scan_result(value, PlanReviewAdmission())  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="plan review admission"):
+        admit_retained_plan_scan(  # type: ignore[arg-type]
+            value,
+            PlanReviewProducerAdmission(),
+        )
+
 
 def test_scan_domain_and_warning_sources_are_independently_admitted(
     monkeypatch: pytest.MonkeyPatch,
@@ -416,9 +438,9 @@ def test_scan_domain_and_warning_sources_are_independently_admitted(
             ScanWarning(ScanWarningCode.ACCESS_DENIED, "folder"),
         ),
     )
-    admission = PlanReviewAdmission()
-    assert adopt_plan_scan_result(value, admission) is value
-    _fill_final_ledger(admission)
+    retained = PlanReviewAdmission()
+    assert adopt_plan_scan_result(value, retained.fresh()) is value
+    _fill_final_ledger(retained)
 
 
 def test_scan_adoption_refuses_domain_at_first_excess(
@@ -429,7 +451,7 @@ def test_scan_adoption_refuses_domain_at_first_excess(
     value = _scan(SOURCE_ROOT, files=(record, record))
 
     with pytest.raises(ReviewFactLimitError) as raised:
-        adopt_plan_scan_result(value, PlanReviewAdmission())
+        adopt_plan_scan_result(value, PlanReviewProducerAdmission())
 
     assert raised.value.fact == ReviewFactLimitExceeded.plan_domain_rows()
 
@@ -447,7 +469,7 @@ def test_scan_adoption_refuses_information_after_valid_domain(
     )
 
     with pytest.raises(ReviewFactLimitError) as raised:
-        adopt_plan_scan_result(value, PlanReviewAdmission())
+        adopt_plan_scan_result(value, PlanReviewProducerAdmission())
 
     assert raised.value.fact == (
         ReviewFactLimitExceeded.plan_informational_rows()
@@ -464,7 +486,7 @@ def test_scan_adoption_requires_the_exact_scan_result_type() -> None:
     )
 
     with pytest.raises(TypeError):
-        adopt_plan_scan_result(lookalike, PlanReviewAdmission())
+        adopt_plan_scan_result(lookalike, PlanReviewProducerAdmission())
 
 
 def _two_mapping_items() -> dict[str, object]:
@@ -497,9 +519,12 @@ def test_mapping_source_populations_are_independent_not_aggregate(
         target.volume_id,
         **_two_mapping_items(),
     )
-    admission = PlanReviewAdmission()
-    assert snapshot_mapping_snapshot(value, review_admission=admission) == value
-    _fill_final_ledger(admission)
+    retained = PlanReviewAdmission()
+    assert snapshot_mapping_snapshot(
+        value,
+        review_admission=retained.fresh(),
+    ) == value
+    _fill_final_ledger(retained)
 
 class _DeclaredMapping(Mapping[object, object]):
     def __init__(self, values: Mapping[object, object]) -> None:
@@ -568,7 +593,7 @@ def test_scan_adoption_preserves_identity_without_constructor_validation(
     ):
         monkeypatch.setattr(contract, "__post_init__", forbid_construction)
 
-    adopted = adopt_plan_scan_result(value, PlanReviewAdmission())
+    adopted = adopt_plan_scan_result(value, PlanReviewProducerAdmission())
 
     assert adopted is value
     assert adopted.files[0] is record
@@ -775,7 +800,7 @@ def test_world_construction_canonicalizes_utc_alias_and_adoption_keeps_identity(
     captured = adopt_plan_observed_world(
         raw_world,
         xset,
-        PlanReviewAdmission(),
+        PlanReviewProducerAdmission(),
     )
     assert captured is raw_world
     assert captured == replace(ordinary, observed_at=NOW)
@@ -793,7 +818,7 @@ def test_world_construction_canonicalizes_utc_alias_and_adoption_keeps_identity(
         raw_verdict,
         captured,
         xset,
-        PlanReviewAdmission(),
+        PlanReviewProducerAdmission(),
     )
     assert verdict is raw_verdict
     assert verdict.refusals == raw_verdict.refusals
@@ -816,7 +841,7 @@ def test_world_constructor_normalizes_declared_mapping_enumeration() -> None:
     captured = adopt_plan_observed_world(
         normalized,
         xset,
-        PlanReviewAdmission(),
+        PlanReviewProducerAdmission(),
     )
     assert captured is normalized
     assert captured == ordinary
@@ -881,7 +906,7 @@ def test_world_adoption_rejects_ordinary_wrong_shapes_and_compound_drift() -> No
     assert adopt_plan_observed_world(
         sparse,
         review,
-        PlanReviewAdmission(),
+        PlanReviewProducerAdmission(),
     ) is sparse
 
     cases = (
@@ -1006,7 +1031,7 @@ def test_world_adoption_rejects_ordinary_wrong_shapes_and_compound_drift() -> No
             adopt_plan_observed_world(
                 candidate,
                 review,
-                PlanReviewAdmission(),
+                PlanReviewProducerAdmission(),
             )
 
 
@@ -1082,7 +1107,7 @@ def test_verdict_adoption_rejects_ordinary_wrong_shapes_and_compound_drift() -> 
                 candidate,
                 world,
                 review,
-                PlanReviewAdmission(),
+                PlanReviewProducerAdmission(),
             )
 
 
@@ -1101,7 +1126,12 @@ def test_verdict_adoption_gates_information_before_refusal_traversal(
     )
 
     with pytest.raises(ReviewFactLimitError) as raised:
-        adopt_plan_verdict(value, world, review, PlanReviewAdmission())
+        adopt_plan_verdict(
+            value,
+            world,
+            review,
+            PlanReviewProducerAdmission(),
+        )
 
     assert raised.value.fact == (
         ReviewFactLimitExceeded.plan_informational_rows()
@@ -1129,13 +1159,13 @@ def test_world_and_verdict_adoption_do_not_reconstruct_contracts(
     adopted_world = adopt_plan_observed_world(
         world,
         review,
-        PlanReviewAdmission(),
+        PlanReviewProducerAdmission(),
     )
     adopted_verdict = adopt_plan_verdict(
         verdict,
         adopted_world,
         review,
-        PlanReviewAdmission(),
+        PlanReviewProducerAdmission(),
     )
 
     assert adopted_world is world
@@ -1221,7 +1251,7 @@ def test_protected_scanner_matches_ordinary_output(
         SOURCE_ROOT,
         IgnoreSet(),
         ctx,
-        review_admission=PlanReviewAdmission(),
+        population_admission=PlanReviewProducerAdmission(),
     )
     assert protected == ordinary
 
@@ -1342,7 +1372,7 @@ def test_protected_planner_observer_and_preflight_match_ordinary_semantics(
         mapping,
         SyncOptions(),
         Scope.everything(),
-        review_admission=PlanReviewAdmission(),
+        review_admission=PlanReviewProducerAdmission(),
     )
     assert protected_plan == ordinary_plan
     assert protected_plan.fingerprint == ordinary_plan.fingerprint
@@ -1354,7 +1384,7 @@ def test_protected_planner_observer_and_preflight_match_ordinary_semantics(
     protected_world = observe(
         protected_xset,
         fs,
-        review_admission=PlanReviewAdmission(),
+        review_admission=PlanReviewProducerAdmission(),
     )
     assert protected_world == ordinary_world
 
@@ -1362,7 +1392,7 @@ def test_protected_planner_observer_and_preflight_match_ordinary_semantics(
     protected_verdict = preflight(
         protected_xset,
         protected_world,
-        review_admission=PlanReviewAdmission(),
+        review_admission=PlanReviewProducerAdmission(),
     )
     assert protected_verdict == ordinary_verdict
     assert marker(protected_plan, protected_verdict)
@@ -1386,8 +1416,8 @@ def test_scan_wide_logical_sum_does_not_refuse_noncopy_work(
     )
     saved: list[PlanArtifact] = []
 
-    def scanner(root, ignores, ctx, *, review_admission=None):
-        del ignores, ctx, review_admission
+    def scanner(root, ignores, ctx, *, population_admission=None):
+        del ignores, ctx, population_admission
         return source if root.root_id == "source" else target
 
     deps = _workflow_dependencies(saved, scanner=scanner)
@@ -1410,7 +1440,7 @@ def test_planner_required_bytes_remains_logical_overflow_owner() -> None:
         ),
     )
     target = _scan(TARGET_ROOT)
-    for admission in (None, PlanReviewAdmission()):
+    for admission in (None, PlanReviewProducerAdmission()):
         with pytest.raises(ReviewFactLimitError) as caught:
             plan(
                 source,
@@ -1441,9 +1471,9 @@ def _workflow_scanner(
     ignores: IgnoreSet,
     ctx: RunContext,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    population_admission: PlanReviewProducerAdmission | None = None,
 ) -> ScanResult:
-    del ignores, ctx, review_admission
+    del ignores, ctx, population_admission
     return _scan(
         root,
         files=(_file("source.bin"),) if root.root_id == "source" else (),
@@ -1452,10 +1482,7 @@ def _workflow_scanner(
 def _workflow_correspondence(
     source: ScanResult,
     target: ScanResult,
-    *,
-    review_admission: PlanReviewAdmission | None = None,
 ) -> MappingSnapshot:
-    del review_admission
     return _mapping(source, target)
 
 def _workflow_dependencies(
@@ -1564,7 +1591,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
         target: ScanResult,
         options: SyncOptions,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan:
         calls.append("plan-adoption")
         return original_plan_adoption(
@@ -1586,9 +1613,9 @@ def test_each_raw_population_refuses_first_excess_before_save(
         ignores: IgnoreSet,
         ctx: RunContext,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        population_admission: PlanReviewProducerAdmission | None = None,
     ) -> ScanResult:
-        del ignores, ctx, review_admission
+        del ignores, ctx, population_admission
         calls.append(f"scan-{root.root_id}")
         if root.root_id == "source" and population == "scan-domain":
             return _scan(
@@ -1642,10 +1669,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
     def correspondence(
         source: ScanResult,
         target: ScanResult,
-        *,
-        review_admission: PlanReviewAdmission | None = None,
     ) -> MappingSnapshot:
-        del review_admission
         calls.append("correspondence")
         if population.startswith("world-"):
             source_identity = source.files[0].file_identity
@@ -1686,7 +1710,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
         options: SyncOptions,
         scope: Scope,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan:
         calls.append("planner")
         value = plan(
@@ -1710,7 +1734,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
         execution_set: ExecutionReview,
         fs: object,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld:
         del review_admission
         calls.append("observer")
@@ -1743,7 +1767,7 @@ def test_each_raw_population_refuses_first_excess_before_save(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del execution_set, review_admission
         calls.append("preflight")
@@ -1807,14 +1831,16 @@ def test_workflow_copies_and_retires_owned_review_limit(
 
     def scanner(
         *_args,
-        review_admission: PlanReviewAdmission | None = None,
+        population_admission: PlanReviewProducerAdmission | None = None,
         **_kwargs,
     ):
-        assert review_admission is not None
+        assert population_admission is not None
         graph = PrivateGraph()
         graph_references.append(ref(graph))
         try:
-            review_admission.require_source_rows(MAX_PLAN_REVIEW_ROWS + 1)
+            population_admission.require_source_rows(
+                MAX_PLAN_REVIEW_ROWS + 1
+            )
         except ReviewFactLimitError as error:
             retained_errors.append(error)
             raise
@@ -1977,7 +2003,7 @@ def test_nested_collaborator_cannot_launder_unissued_review_limit(
             execution_set: ExecutionReview,
             fs: object,
             *,
-            review_admission: PlanReviewAdmission | None = None,
+            review_admission: PlanReviewProducerAdmission | None = None,
         ) -> ObservedWorld:
             world = observe(
                 execution_set,
@@ -2011,12 +2037,14 @@ def test_issued_non_plan_fact_is_invalid_and_never_saved(
 
     def scanner(
         *_args,
-        review_admission: PlanReviewAdmission | None = None,
+        population_admission: PlanReviewProducerAdmission | None = None,
         **_kwargs,
     ) -> ScanResult:
-        assert review_admission is not None
+        assert population_admission is not None
         try:
-            review_admission.require_source_rows(MAX_PLAN_REVIEW_ROWS + 1)
+            population_admission.require_source_rows(
+                MAX_PLAN_REVIEW_ROWS + 1
+            )
         except ReviewFactLimitError as error:
             retained_errors.append(error)
             object.__setattr__(
@@ -2059,9 +2087,9 @@ def test_workflow_accepts_planner_issued_logical_byte_limit(
         ignores: IgnoreSet,
         ctx: RunContext,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        population_admission: PlanReviewProducerAdmission | None = None,
     ) -> ScanResult:
-        del ignores, ctx, review_admission
+        del ignores, ctx, population_admission
         return source if root.root_id == "source" else target
 
     deps = _workflow_dependencies(saved, scanner=scanner)
@@ -2075,31 +2103,27 @@ def test_workflow_accepts_planner_issued_logical_byte_limit(
     )
     assert saved == []
 
-def test_producer_accounting_cannot_poison_outer_final_ledger(
+def test_workflow_producers_receive_only_stateless_admission_capability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_workflow_roots(monkeypatch)
     saved: list[PlanArtifact] = []
+    admissions: list[PlanReviewProducerAdmission] = []
 
-    def poison(admission: PlanReviewAdmission | None) -> None:
-        if admission is None:
-            return
-        admission.admit(
-            domain_rows=MAX_PLAN_REVIEW_ROWS,
-            domain_bytes=MAX_PLAN_DOMAIN_RETAINED_BYTES,
-            informational_rows=MAX_PLAN_REVIEW_ROWS,
-            informational_bytes=MAX_PLAN_INFORMATIONAL_RETAINED_BYTES,
-        )
+    def capture(admission: PlanReviewProducerAdmission | None) -> None:
+        assert type(admission) is PlanReviewProducerAdmission
+        assert not hasattr(admission, "admit")
+        admissions.append(admission)
 
     def scanner(
         root: Root,
         ignores: IgnoreSet,
         ctx: RunContext,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        population_admission: PlanReviewProducerAdmission | None = None,
     ) -> ScanResult:
         del ignores, ctx
-        poison(review_admission)
+        capture(population_admission)
         return _scan(
             root,
             files=(_file("source.bin"),)
@@ -2110,10 +2134,7 @@ def test_producer_accounting_cannot_poison_outer_final_ledger(
     def correspondence(
         source: ScanResult,
         target: ScanResult,
-        *,
-        review_admission: PlanReviewAdmission | None = None,
     ) -> MappingSnapshot:
-        assert review_admission is None
         return _mapping(source, target)
 
     def planner(
@@ -2123,27 +2144,27 @@ def test_producer_accounting_cannot_poison_outer_final_ledger(
         options: SyncOptions,
         scope: Scope,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan:
-        poison(review_admission)
+        capture(review_admission)
         return plan(source, target, mapping, options, scope)
 
     def observer(
         execution_set: ExecutionReview,
         fs: object,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld:
-        poison(review_admission)
+        capture(review_admission)
         return observe(execution_set, fs)  # type: ignore[arg-type]
 
     def preflight_callback(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
-        poison(review_admission)
+        capture(review_admission)
         return preflight(execution_set, world)
 
     deps = _workflow_dependencies(
@@ -2157,6 +2178,8 @@ def test_producer_accounting_cannot_poison_outer_final_ledger(
     result = _run(deps)
     assert result.status is SessionState.COMPLETED
     assert len(saved) == 1
+    assert len(admissions) == 5
+    assert len({id(admission) for admission in admissions}) == 5
 
 def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
     monkeypatch: pytest.MonkeyPatch,
@@ -2171,7 +2194,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
 
     def track_adoption(
         value: ScanResult,
-        admission: PlanReviewAdmission,
+        admission: PlanReviewProducerAdmission,
     ) -> ScanResult:
         adoption_calls.append(value)
         return original_adopt(value, admission)
@@ -2188,7 +2211,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         target: ScanResult,
         options: SyncOptions,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan:
         plan_adoption_calls.append(value)
         return original_plan_adoption(
@@ -2210,9 +2233,9 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         ignores: IgnoreSet,
         ctx: RunContext,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        population_admission: PlanReviewProducerAdmission | None = None,
     ) -> ScanResult:
-        del ignores, ctx, review_admission
+        del ignores, ctx, population_admission
         value = _scan(
             root,
             files=(
@@ -2227,10 +2250,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
     def correspondence(
         source: ScanResult,
         target: ScanResult,
-        *,
-        review_admission: PlanReviewAdmission | None = None,
     ) -> MappingSnapshot:
-        del review_admission
         assert source is raw["source"]
         assert target is raw["target"]
         assert [record.rel_path for record in source.files] == ["source.bin"]
@@ -2245,7 +2265,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         options: SyncOptions,
         scope: Scope,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan:
         del review_admission
         assert source is raw["source"]
@@ -2260,7 +2280,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         review: ExecutionReview,
         fs: object,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld:
         del review_admission
         assert type(review) is ExecutionReview
@@ -2277,7 +2297,7 @@ def test_workflow_adopts_immutable_results_once_and_detaches_mapping(
         review: ExecutionReview,
         world: ObservedWorld,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del review_admission
         assert review is raw["review"]
@@ -2331,7 +2351,7 @@ def test_workflow_admitted_world_refuses_ordinary_mapping_mutation(
         review: ExecutionReview,
         world: ObservedWorld,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del review_admission
         subject = next(iter(world.stats))
@@ -2356,7 +2376,7 @@ def test_preflight_equal_replacement_world_is_ordinary_identity_failure(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del execution_set, review_admission
         replacement = replace(world)
@@ -2416,7 +2436,7 @@ def test_run_plan_freezes_request_fields_before_policy_access(
         execution_set: ExecutionReview,
         fs: object,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld:
         observed_run_ids.append(str(execution_set.run_id))
         return real_observer(
@@ -2460,7 +2480,7 @@ def test_workflow_accepts_exact_final_retention_and_refuses_first_extra(
         execution_set: ExecutionReview,
         world: ObservedWorld,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict:
         del execution_set, review_admission
         return Verdict(

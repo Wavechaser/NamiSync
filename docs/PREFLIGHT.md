@@ -16,10 +16,17 @@ Preflight separates current-world observation from pure judgment:
 
 ```python
 observe(review: ExecutionReview, fs: FileSystem, *,
-        review_admission: PlanReviewAdmission | None = None) -> ObservedWorld
+        review_admission: PlanReviewProducerAdmission | None = None) -> ObservedWorld
 preflight(review: ExecutionReview, world: ObservedWorld, *,
-          review_admission: PlanReviewAdmission | None = None) -> Verdict
+          review_admission: PlanReviewProducerAdmission | None = None) -> Verdict
 ```
+
+Plan-review producers and result-adoption gates accept only the exact stateless
+producer capability. They cannot charge retained rows or bytes. Separate
+retained-world and retained-verdict helpers accept only the cumulative
+`PlanReviewAdmission`; execution-time observer and judgment callbacks continue
+without review-capacity authority, while their returned compounds receive
+standalone producer admission and ordinary pre-run failure classification.
 
 ## Implemented M0 Surface
 

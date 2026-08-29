@@ -57,6 +57,7 @@ from namisync.core.preflight import (
 )
 from namisync.core.review import (
     PlanReviewAdmission,
+    PlanReviewProducerAdmission,
     ReviewFactLimitError,
     ReviewFactLimitExceeded,
 )
@@ -751,13 +752,14 @@ def test_pure_preflight_accepts_matching_snapshot_without_filesystem() -> None:
 def test_preflight_review_admission_is_stateless() -> None:
     xset = _xset()
     world = replace(_world(xset), free_space=None)
-    admission = PlanReviewAdmission()
+    retained = PlanReviewAdmission()
+    admission = retained.fresh()
 
     verdict = preflight(xset, world, review_admission=admission)
 
     assert len(verdict.refusals) == 1
     assert verdict == preflight(xset, world)
-    admission.admit(
+    retained.admit(
         domain_rows=review_module.MAX_PLAN_REVIEW_ROWS,
         domain_bytes=review_module.MAX_PLAN_DOMAIN_RETAINED_BYTES,
         informational_rows=review_module.MAX_PLAN_REVIEW_ROWS,
@@ -773,7 +775,8 @@ def test_duplicate_raw_refusals_are_bounded_before_public_deduplication(
     monkeypatch.setattr(review_module, "MAX_PLAN_REVIEW_ROWS", 2)
     xset = _xset()
     world = replace(_world(xset), roots={})
-    admission = PlanReviewAdmission()
+    retained = PlanReviewAdmission()
+    admission = retained.fresh()
 
     verdict = preflight(xset, world, review_admission=admission)
 
@@ -783,7 +786,7 @@ def test_duplicate_raw_refusals_are_bounded_before_public_deduplication(
             detail="missing root observation",
         ),
     )
-    admission.admit(
+    retained.admit(
         domain_rows=review_module.MAX_PLAN_REVIEW_ROWS,
         domain_bytes=review_module.MAX_PLAN_DOMAIN_RETAINED_BYTES,
         informational_rows=review_module.MAX_PLAN_REVIEW_ROWS,
@@ -800,7 +803,8 @@ def test_refusal_first_excess_does_not_mutate_admission_or_world(
     xset = _xset()
     world = replace(_world(xset), roots={})
     before = _world_fact(world)
-    admission = PlanReviewAdmission()
+    retained = PlanReviewAdmission()
+    admission = retained.fresh()
 
     with pytest.raises(ReviewFactLimitError) as caught:
         preflight(xset, world, review_admission=admission)
@@ -809,7 +813,7 @@ def test_refusal_first_excess_does_not_mutate_admission_or_world(
         ReviewFactLimitExceeded.plan_informational_rows()
     )
     assert _world_fact(world) == before
-    admission.admit(
+    retained.admit(
         domain_rows=review_module.MAX_PLAN_REVIEW_ROWS,
         domain_bytes=review_module.MAX_PLAN_DOMAIN_RETAINED_BYTES,
         informational_rows=review_module.MAX_PLAN_REVIEW_ROWS,

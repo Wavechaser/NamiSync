@@ -209,14 +209,49 @@ def exceeds_population_wall(
     return require_population_measure(value, field_name) > limit
 
 
-class PlanReviewAdmission:
-    """Bound one unpublished plan's retained rows and reference slots.
+class PlanReviewProducerAdmission:
+    """Gate independent raw producer populations without retaining charges."""
 
-    Raw producer populations are checked independently because sequential
-    source collections do not become completed plan rows merely by being read.
-    Full identity-deduplicated graph validation remains the artifact
-    reservation validator's job.
-    """
+    __slots__ = ("_issuer",)
+
+    def __init__(self, *, _issuer: object | None = None) -> None:
+        self._issuer = object() if _issuer is None else _issuer
+
+    def _limit_error(
+        self,
+        fact: ReviewFactLimitExceeded,
+    ) -> ReviewFactLimitError:
+        error = ReviewFactLimitError(fact)
+        error._plan_review_issuer = self._issuer
+        return error
+
+    def require_source_rows(self, count: int) -> None:
+        """Check one independent raw domain population without retaining it."""
+
+        if exceeds_population_wall(
+            count,
+            limit=MAX_PLAN_REVIEW_ROWS,
+            field_name="plan source row count",
+        ):
+            raise self._limit_error(
+                ReviewFactLimitExceeded.plan_domain_rows()
+            )
+
+    def require_informational_source_rows(self, count: int) -> None:
+        """Check one independent raw notice population without retaining it."""
+
+        if exceeds_population_wall(
+            count,
+            limit=MAX_PLAN_REVIEW_ROWS,
+            field_name="plan informational source row count",
+        ):
+            raise self._limit_error(
+                ReviewFactLimitExceeded.plan_informational_rows()
+            )
+
+
+class PlanReviewAdmission:
+    """Bound one unpublished plan's final retained rows and reference slots."""
 
     __slots__ = (
         "_issuer",
@@ -233,10 +268,10 @@ class PlanReviewAdmission:
         self._informational_rows = 0
         self._informational_bytes = 0
 
-    def fresh(self) -> "PlanReviewAdmission":
-        """Return an empty admission in the same refusal-authority family."""
+    def fresh(self) -> PlanReviewProducerAdmission:
+        """Return a stateless producer gate in this refusal-authority family."""
 
-        return PlanReviewAdmission(_issuer=self._issuer)
+        return PlanReviewProducerAdmission(_issuer=self._issuer)
 
     def _limit_error(
         self,
@@ -309,30 +344,6 @@ class PlanReviewAdmission:
         self._informational_rows = next_informational_rows
         self._informational_bytes = next_informational_bytes
 
-    def require_source_rows(self, count: int) -> None:
-        """Check one independent raw domain population without retaining it."""
-
-        if exceeds_population_wall(
-            count,
-            limit=MAX_PLAN_REVIEW_ROWS,
-            field_name="plan source row count",
-        ):
-            raise self._limit_error(
-                ReviewFactLimitExceeded.plan_domain_rows()
-            )
-
-    def require_informational_source_rows(self, count: int) -> None:
-        """Check one independent raw notice population without retaining it."""
-
-        if exceeds_population_wall(
-            count,
-            limit=MAX_PLAN_REVIEW_ROWS,
-            field_name="plan informational source row count",
-        ):
-            raise self._limit_error(
-                ReviewFactLimitExceeded.plan_informational_rows()
-            )
-
 
 def consume_plan_review_fact_limit(
     error: object,
@@ -355,11 +366,11 @@ def consume_plan_review_fact_limit(
 
 def adopt_plan_scan_result(
     result: ScanResult,
-    admission: PlanReviewAdmission,
+    admission: PlanReviewProducerAdmission,
 ) -> ScanResult:
     """Adopt one exact immutable plan scan after stateless source admission."""
 
-    _require_plan_admission(admission)
+    _require_plan_producer_admission(admission)
     return adopt_scan_result(
         result,
         admission,
@@ -534,5 +545,13 @@ def _plan_scan_populations(
 
 def _require_plan_admission(value: object) -> PlanReviewAdmission:
     if type(value) is not PlanReviewAdmission:
+        raise TypeError("plan review admission has the wrong type")
+    return value
+
+
+def _require_plan_producer_admission(
+    value: object,
+) -> PlanReviewProducerAdmission:
+    if type(value) is not PlanReviewProducerAdmission:
         raise TypeError("plan review admission has the wrong type")
     return value

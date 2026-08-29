@@ -35,7 +35,7 @@ from .pathing import (
 from .review import (
     MAX_PLAN_DOMAIN_RETAINED_BYTES,
     MAX_PLAN_REVIEW_ROWS,
-    PlanReviewAdmission,
+    PlanReviewProducerAdmission,
     ReviewFactLimitError,
     ReviewFactLimitExceeded,
 )
@@ -687,13 +687,13 @@ def calculate_required_bytes(
     *,
     target_profile: CapabilityProfile,
     trash_on_update: bool,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> int:
     """Return a conservative start-of-run free-space requirement."""
 
     if (
         review_admission is not None
-        and type(review_admission) is not PlanReviewAdmission
+        and type(review_admission) is not PlanReviewProducerAdmission
     ):
         raise TypeError("plan review admission has the wrong type")
     required = 0

@@ -59,6 +59,7 @@ from namisync.core.planning import (
 from namisync.core.review import (
     PLAN_SOURCE_REFERENCE_BYTES,
     PlanReviewAdmission,
+    PlanReviewProducerAdmission,
     ReviewFactLimitError,
 )
 from namisync.core.scalars import ScalarDomainError
@@ -201,16 +202,16 @@ def _snapshot_volume(value: VolumeId | None) -> VolumeId | None:
 def snapshot_mapping_snapshot(
     value: object,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> MappingSnapshot:
     """Return an exact detached correspondence under independent source gates."""
 
     admission = (
-        PlanReviewAdmission()
+        PlanReviewProducerAdmission()
         if review_admission is None
         else review_admission
     )
-    if type(admission) is not PlanReviewAdmission:
+    if type(admission) is not PlanReviewProducerAdmission:
         raise TypeError("plan review admission has the wrong type")
     populations = _validate_plan_mapping_source(value, admission)
     pairs_source = populations[0][1]
@@ -280,13 +281,13 @@ def snapshot_mapping_snapshot(
 
 def _validate_plan_mapping_source(
     value: object,
-    admission: PlanReviewAdmission,
+    admission: PlanReviewProducerAdmission,
 ) -> tuple[tuple[str, object, type], ...]:
     """Validate and source-gate the mapping populations without allocation."""
 
     if type(value) is not MappingSnapshot:
         raise TypeError("planner correspondence must be an exact MappingSnapshot")
-    if type(admission) is not PlanReviewAdmission:
+    if type(admission) is not PlanReviewProducerAdmission:
         raise TypeError("plan review admission has the wrong type")
     populations = (
         ("pairs", value.pairs, tuple),
@@ -312,7 +313,7 @@ def _validate_plan_mapping_source(
 
 def _snapshot_assignment(
     value: object,
-    admission: PlanReviewAdmission,
+    admission: PlanReviewProducerAdmission,
 ) -> Assignment:
     if type(value) is not Assignment:
         raise TypeError("destination policy must return an exact Assignment")
@@ -345,7 +346,7 @@ class _OperationAdmission:
 
     def __init__(
         self,
-        admission: PlanReviewAdmission,
+        admission: PlanReviewProducerAdmission,
     ) -> None:
         self.admission = admission
         self.count = 0
@@ -566,7 +567,7 @@ def _plan(
     options: SyncOptions,
     scope: Scope,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Plan:
     """Transform immutable observations and policy into immutable intent."""
 
@@ -574,7 +575,7 @@ def _plan(
     assign_destinations: Callable[..., object] | None = None
     policy_identity: _DestinationPolicyIdentity | None = None
     if admission is not None:
-        if type(admission) is not PlanReviewAdmission:
+        if type(admission) is not PlanReviewProducerAdmission:
             raise TypeError("plan review admission has the wrong type")
         if type(scope) is not Scope or type(scope.kind) is not ScopeKind:
             raise TypeError("planner scope must be an exact typed Scope")
@@ -1062,7 +1063,7 @@ def plan(
     options: SyncOptions,
     scope: Scope,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Plan:
     """Plan after retiring owned traceback links from rejected inputs."""
 
@@ -1137,7 +1138,7 @@ def _adopt_plan_candidate(
     target: ScanResult,
     options: SyncOptions,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Plan:
     """Validate and adopt one exact immutable planner result."""
 
@@ -1166,11 +1167,11 @@ def _adopt_plan_candidate(
         raise ValueError("plan fingerprint must be lowercase SHA-256 text")
 
     admission = (
-        PlanReviewAdmission()
+        PlanReviewProducerAdmission()
         if review_admission is None
         else review_admission
     )
-    if type(admission) is not PlanReviewAdmission:
+    if type(admission) is not PlanReviewProducerAdmission:
         raise TypeError("plan review admission has the wrong type")
     admission.require_source_rows(len(value.operations))
     if len(value.required_volumes) > 2:
@@ -1286,7 +1287,7 @@ def adopt_plan_candidate(
     target: ScanResult,
     options: SyncOptions,
     *,
-    review_admission: PlanReviewAdmission | None = None,
+    review_admission: PlanReviewProducerAdmission | None = None,
 ) -> Plan:
     """Adopt a candidate after retiring rejected input traceback links."""
 

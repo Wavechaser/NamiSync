@@ -74,8 +74,10 @@ from namisync.core.preflight import (
 )
 from namisync.core.review import (
     PlanReviewAdmission,
+    PlanReviewProducerAdmission,
     ReviewFactLimitExceeded,
     ReviewFactLimitError,
+    ScanPopulationAdmission,
     admit_retained_plan_scan,
     consume_plan_review_fact_limit,
     adopt_plan_scan_result,
@@ -232,7 +234,7 @@ class Scanner(Protocol):
         ignores: IgnoreSet,
         ctx: RunContext,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        population_admission: ScanPopulationAdmission | None = None,
     ) -> ScanResult: ...
 
 
@@ -245,7 +247,7 @@ class Planner(Protocol):
         options: SyncOptions,
         scope: Scope,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Plan: ...
 
 
@@ -255,7 +257,7 @@ class Observer(Protocol):
         review: ExecutionReview,
         fs: ObservationFileSystem,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> ObservedWorld: ...
 
 
@@ -265,7 +267,7 @@ class Preflight(Protocol):
         review: ExecutionReview,
         world: ObservedWorld,
         *,
-        review_admission: PlanReviewAdmission | None = None,
+        review_admission: PlanReviewProducerAdmission | None = None,
     ) -> Verdict: ...
 
 
@@ -320,7 +322,7 @@ def _review_limit_refusal(
 def _adopt_scanner_result(
     value: ScanResult,
     expected_root: Root,
-    admission: PlanReviewAdmission,
+    admission: PlanReviewProducerAdmission,
 ) -> ScanResult:
     adopted = adopt_plan_scan_result(value, admission)
     if adopted.root != expected_root:
@@ -378,7 +380,7 @@ def _run_plan(
                 Root(source_root.path, source_root.root_id),
                 source_ignores,
                 ctx,
-                review_admission=retained_admission.fresh(),
+                population_admission=retained_admission.fresh(),
             ),
             source_root,
             retained_admission.fresh(),
@@ -393,7 +395,7 @@ def _run_plan(
                 Root(target_root.path, target_root.root_id),
                 target_ignores,
                 ctx,
-                review_admission=retained_admission.fresh(),
+                population_admission=retained_admission.fresh(),
             ),
             target_root,
             retained_admission.fresh(),
@@ -978,13 +980,12 @@ def _run_execution(
 
         ctx.emit(PhaseChanged("execution-preflight"))
         revalidate_preflight_authority()
-        review_admission = PlanReviewAdmission()
         raw_world = deps.observer(review, deps.observation_fs)
         revalidate_preflight_authority()
         world = adopt_plan_observed_world(
             raw_world,
             review,
-            review_admission.fresh(),
+            PlanReviewProducerAdmission(),
         )
         del raw_world
         raw_verdict = deps.preflight(review, world)
@@ -993,7 +994,7 @@ def _run_execution(
             raw_verdict,
             world,
             review,
-            review_admission.fresh(),
+            PlanReviewProducerAdmission(),
         )
         del raw_verdict, review
         refusals = refusal_views(verdict)
@@ -1056,7 +1057,7 @@ def _run_execution(
         )
 
     target_parent_paths = verdict.observed.target_parent_paths
-    del decision, refusals, review_admission, verdict, world
+    del decision, refusals, verdict, world
 
     recording_factory = open_recording or deps.open_recording
     with recording_factory(_recording_spec(xset)) as recording:

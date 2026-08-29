@@ -22,22 +22,21 @@ scan(
     scope: ScanScope | None = None,
     *,
     trusted_anchor: str | None = None,
-    review_admission: PlanReviewAdmission | None = None,
     population_admission: ScanPopulationAdmission | None = None,
 ) -> ScanResult
 ```
 
-The two optional population admissions are workflow-owned, exact-type-only,
-and mutually exclusive; ordinary scanner callers may omit both. Planning uses
-a fresh `PlanReviewAdmission`, while inventory supplies the narrower
-`ScanPopulationAdmission` protocol. Either gate checks the combined
-file/directory/unsupported population and the warning population independently
-before each first-excess append. Workflow then validates and adopts the exact
-immutable `ScanResult` once and charges only the shallow slots that its final
-artifact retains.
+The one optional structural population admission is workflow-owned; ordinary
+scanner callers may omit it. Planning supplies an exact stateless
+`PlanReviewProducerAdmission`, while inventory supplies its independent private
+gate through the same `ScanPopulationAdmission` protocol. Either owner checks
+the combined file/directory/unsupported population and the warning population
+independently before each first-excess append, including an offline warning.
+Workflow then validates and adopts the exact immutable `ScanResult` once and
+charges only the shallow slots that its final artifact retains.
 A first excess raises the owning typed signal and no partial `ScanResult` is
-published. Checkpoint 4P.22 replaces this transitional pair with one protocol-
-typed admission parameter without changing either workflow's outcome.
+published. Scanner does not authenticate the owning signal or receive the
+plan's cumulative retained-budget capability.
 
 This admission closes the planning-source owner boundary. It is not the
 checkpoint-4 complete-object reservation model. Scanner admission neither

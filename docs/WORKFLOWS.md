@@ -190,9 +190,10 @@ reprojects a staged candidate after publication.
 
 ### Plan session
 
-The plan session owns one retained `PlanReviewAdmission` ledger. Scanner,
-planner, observer, preflight, and result-adoption gates receive zeroed disposable
-admissions that share only the workflow-owned opaque issuer. Correspondence
+The plan session owns one cumulative `PlanReviewAdmission` ledger. Scanner,
+planner, observer, preflight, and result-adoption gates receive exact stateless
+`PlanReviewProducerAdmission` values that share only the workflow-owned opaque
+issuer and expose no retained-budget `admit` capability. Correspondence
 keeps its ordinary two-argument protocol; its concrete database query is
 structurally bounded by admitted scan keys and identities, then workflow
 captures the fallible result under a fresh family admission. Each raw population
@@ -221,8 +222,8 @@ previews, second callback-world copies, or verdict reconstruction. The workflow
 maps the first issued `ReviewFactLimitError` to `REFUSED+UNRUN` without saving a
 plan or exposing a partial result.
 
-The retained ledger and every zeroed producer or result admission share one
-opaque issuer for that plan run and no source graph. The mapping accepts only
+The retained ledger and every producer or result gate share one opaque issuer
+for that plan run and no source graph. The mapping accepts only
 an exact base error carrying that issuer, reconstructs a fresh exact PLAN fact,
 and retires the raw exception before returning. A subtype, malformed fact,
 wrong tree kind, or independently issued signal fails ordinarily, as does the
@@ -260,10 +261,11 @@ checkpoint-4 model.
    root names, and never persists or displays a `\\?\` prefix.
 2. Resolve volume/location/mapping evidence without persisting preview-only
    configuration.
-3. Scan both roots with the same role-free observation contract and independent
-   raw source-population gates; validate and adopt each exact immutable scan
-   once, then share those identities with correspondence, planner, and the
-   retained plan artifact.
+3. Scan both roots through the single structural `population_admission`
+   parameter and independent raw source-population gates; validate and adopt
+   each exact immutable scan once under a separate producer gate, then share
+   those identities with correspondence, planner, and the retained plan
+   artifact.
 4. Read immutable prior correspondence through a ledger query whose keys and
    identities come only from the already admitted scans. Runtime query indexes
    and result construction are therefore structurally bounded rather than

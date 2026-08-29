@@ -1133,7 +1133,7 @@ def run_inventory(
         raise RuntimeError("resolved inventory root lacks volume evidence")
     root = resolution.root_path
     scope_token = request.request_id
-    review_admission = _InventoryScanAdmission()
+    population_admission = _InventoryScanAdmission()
     review_limit_fact: ReviewFactLimitExceeded | None = None
     invalid_review_limit = False
     unadmitted_review_limit = False
@@ -1151,7 +1151,7 @@ def run_inventory(
                 ctx,
                 deps,
                 recorder,
-                review_admission,
+                population_admission,
             )
             recorded = recorder.record_inventory(
                 InventoryCommand(
@@ -1169,7 +1169,7 @@ def run_inventory(
             try:
                 review_limit_fact = _consume_inventory_review_limit(
                     error,
-                    review_admission,
+                    population_admission,
                 )
                 unadmitted_review_limit = review_limit_fact is None
             except (AttributeError, TypeError, ValueError) as fact_error:
@@ -2695,7 +2695,7 @@ def _register_and_scan(
     ctx: RunContext,
     deps: InventoryDependencies,
     recorder: LedgerRecorder,
-    review_admission: _InventoryScanAdmission,
+    population_admission: _InventoryScanAdmission,
 ) -> tuple[int, int, ScanResult]:
     if (
         resolution.root_path is None
@@ -2760,9 +2760,9 @@ def _register_and_scan(
         ctx,
         scanner_scope,
         trusted_anchor=selected_mount,
-        population_admission=review_admission,
+        population_admission=population_admission,
     )
-    scan = _admit_inventory_scan_result(raw_scan, review_admission)
+    scan = _admit_inventory_scan_result(raw_scan, population_admission)
     if scan.root != expected_root:
         raise RuntimeError("inventory scanner returned a different root")
     if scan.scope != expected_scope:

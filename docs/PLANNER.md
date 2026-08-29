@@ -24,8 +24,14 @@ or executes/repairs anything.
 plan(source: ScanResult, target: ScanResult,
      correspondence: MappingSnapshot, options: SyncOptions,
      scope: Scope, *,
-     review_admission: PlanReviewAdmission | None = None) -> Plan
+     review_admission: PlanReviewProducerAdmission | None = None) -> Plan
 ```
+
+The optional exact producer admission is stateless and exposes only independent
+domain/informational source gates. Mapping, assignment, operation, logical-byte,
+and final plan-result admission use that capability; it cannot charge the
+workflow's cumulative retained budget. The separate retained-plan helper
+accepts only exact `PlanReviewAdmission`.
 
 ## Implemented M0 Surface
 

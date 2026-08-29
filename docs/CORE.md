@@ -76,10 +76,13 @@ attestation format.
   independent admission owners, plus typed plan-review limit facts, stateless
   raw source-population gates, exact declared scan adoption, and cumulative
   admission only for final domain/informational rows and unavoidable
-  simultaneously retained shallow references. Fresh admissions for one plan
-  share only an opaque refusal issuer; an exact fact from another issuer is not
-  plan-capacity authority. Each final reference slot uses the fixed eight-byte
-  charge; disposable construction owners do not enter that ledger.
+  simultaneously retained shallow references. Exact
+  `PlanReviewProducerAdmission` gates expose no cumulative `admit` capability;
+  exact `PlanReviewAdmission` ledgers expose no raw-source gate. A retained
+  ledger's temporary `fresh()` creates a producer sharing only its opaque
+  refusal issuer; an exact fact from another issuer is not plan-capacity
+  authority. Each final reference slot uses the fixed eight-byte charge;
+  disposable construction owners do not enter that ledger.
 
 `core/review.py` is the canonical source for the two stateless population
 primitives and for the plan constructors, limits, counter order, and adoption
@@ -88,8 +91,9 @@ charge; each trusted owner still declares its local wall, count placement,
 precedence, fact/error type, and user outcome. Source gates test each independent
 raw population before its first excess. Workflow validates and adopts each exact
 scanner result once, retains that immutable object, and passes the same identity
-to first-party read-only consumers. The retained ledger charges only final
-shallow slots. Workflow consumes the issuer marker once, reconstructs an exact
+to first-party read-only consumers. Producer gates remain stateless; the
+retained ledger charges only final shallow slots. Workflow consumes the issuer
+marker once, reconstructs an exact
 PLAN fact, and retains neither the raw exception nor admission in its result. It
 deliberately does not walk or size a complete Python object graph:
 checkpoint 4 must separately freeze and validate construction and container
