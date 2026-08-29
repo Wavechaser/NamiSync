@@ -1651,16 +1651,15 @@ def test_execute_retains_an_accepted_item_when_later_reconciliation_fails() -> N
     )
 
 
-def test_verify_retains_an_accepted_item_when_revalidation_fails() -> None:
+def test_verify_retains_an_accepted_item_when_candidate_tuple_changes() -> None:
     operation = _operation(122, 5)
     continuation = _verify_continuation_fixture(operation)
 
     def mutate_after_accept(body: object) -> None:
         if isinstance(body, IntegrityOutcome):
-            object.__setattr__(
-                continuation.candidates.candidates[0],
-                "display_path",
-                "mutated.txt",
+            candidate = continuation.candidates.candidates[0]
+            continuation.candidates.candidates = (
+                replace(candidate, root=Path(r"E:\redirected")),
             )
 
     result = run_execution(
@@ -1680,7 +1679,7 @@ def test_verify_retains_an_accepted_item_when_revalidation_fails() -> None:
     assert result.items[0].path == operation.target_rel_path
     assert result.error == FailureDetail(
         "ValueError",
-        "post-copy recorded identity does not match its display path",
+        "post-copy candidates changed during collaboration",
     )
 
 
@@ -2392,7 +2391,92 @@ def test_verifier_reliable_outcome_sink_failure_does_not_accept_or_complete(
     )
 
 
-def test_4p_4_temporarily_characterizes_item_scaled_post_copy_revalidation(
+@pytest.mark.parametrize("completion", ("missing", "wrong-sibling"))
+def test_verifier_requires_prior_accepted_completion_before_next_outcome(
+    completion: str,
+) -> None:
+    first = _operation(4092, 3)
+    second = _operation(4093, 5)
+    continuation = _verify_continuation_fixture(first, second)
+    accepted: list[IntegrityOutcome] = []
+
+    def verifier(selection, context, recorder):
+        del recorder
+        first_candidate, second_candidate = selection.pending
+        first_outcome = _integrity_outcome(first_candidate)
+        context.run.emit(first_outcome)
+        if completion == "wrong-sibling":
+            selection.note_bytes_processed(
+                second_candidate.expected_stat.size
+            )
+            selection.mark_completed(
+                second_candidate.item_id,
+                second_candidate.expected_stat.size,
+            )
+        context.run.emit(_integrity_outcome(second_candidate))
+        pytest.fail("a second outcome crossed the first completion boundary")
+
+    result = run_execution(
+        continuation,
+        RunContext(
+            lambda body: accepted.append(body)
+            if isinstance(body, IntegrityOutcome)
+            else None,
+            lambda: None,
+        ),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=verifier,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert [item.item_id for item in accepted] == [str(first.op_id)]
+    assert [item.item_id for item in result.items] == [str(first.op_id)]
+    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
+    assert result.error == FailureDetail(
+        "ValueError",
+        "post-copy verifier completion must match its emitted outcomes",
+    )
+
+
+def test_verifier_checkpoint_allows_an_accepted_pending_completion() -> None:
+    operation = _operation(4094, 3)
+    continuation = _verify_continuation_fixture(operation)
+    checkpoint_calls = 0
+
+    def checkpoint() -> None:
+        nonlocal checkpoint_calls
+        checkpoint_calls += 1
+
+    def verifier(selection, context, recorder):
+        del recorder
+        candidate = selection.pending[0]
+        selection.note_bytes_processed(candidate.expected_stat.size)
+        outcome = _integrity_outcome(candidate)
+        context.run.emit(outcome)
+        context.run.checkpoint()
+        selection.mark_completed(candidate.item_id, candidate.expected_stat.size)
+        return IntegrityRunResult((outcome,), RecordingStatus.OK)
+
+    result = run_execution(
+        continuation,
+        RunContext(lambda _body: None, checkpoint),
+        _deps(
+            executor=lambda *args: pytest.fail("execution phase repeated"),
+            verifier=verifier,
+            recordings=[],
+        ),
+        resumed=True,
+    )
+
+    assert checkpoint_calls == 1
+    assert result.status is SessionState.COMPLETED
+    assert result.error is None
+
+
+def test_post_copy_reconciles_items_before_one_terminal_full_revalidation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     full_revalidations = 0
@@ -2414,9 +2498,16 @@ def test_4p_4_temporarily_characterizes_item_scaled_post_copy_revalidation(
         operations = tuple(_operation(start + index, 1) for index in range(size))
         continuation = _verify_continuation_fixture(*operations)
         before = full_revalidations
+
+        def assert_incremental_boundary(_body: object = None) -> None:
+            assert full_revalidations == before
+
         result = run_execution(
             continuation,
-            RunContext(lambda _body: None, lambda: None),
+            RunContext(
+                assert_incremental_boundary,
+                assert_incremental_boundary,
+            ),
             _deps(
                 executor=lambda *args: pytest.fail("execution phase repeated"),
                 verifier=_verify_all,
@@ -2427,11 +2518,8 @@ def test_4p_4_temporarily_characterizes_item_scaled_post_copy_revalidation(
         assert result.status is SessionState.COMPLETED
         return full_revalidations - before
 
-    one_item = run_population(1, 138)
-    four_items = run_population(4, 139)
-
-    # Temporary 4P.4 characterization: 4P.6 changes this delta to zero.
-    assert four_items - one_item == 6
+    assert run_population(1, 138) == 1
+    assert run_population(4, 139) == 1
 
 
 @pytest.mark.parametrize("corruption", ["mutated", "forged"])

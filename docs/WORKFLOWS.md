@@ -543,6 +543,16 @@ workflow-owned phases or replace the accepted stream.
 Execution checkpoints reconcile settlement both before and after invoking the
 caller-owned checkpoint, so an unreported mutation cannot cross a reentrant
 boundary and a returning callback cannot leave new drift unchecked.
+Linked verification likewise reconciles only the current accepted-outcome and
+completion delta at item, progress, and checkpoint seams. An accepted outcome
+may remain pending while its first-party verifier returns from the reliable
+emit and marks completion; a second outcome cannot cross that gap. The complete
+execution and candidate authorities are audited once when the verifier returns,
+instead of being rescanned around every emitted item.
+Each external edge still requires the same admitted selection container,
+candidate tuple, and immutable execution identities, so ordinary callback
+replacement cannot redirect later verifier work; frozen candidate-leaf
+reflection remains outside the supported fault model.
 Recorder `finish` and
 context exit receive exact hostile-boundary snapshots of the execution set and,
 when present, the post-copy selection; mutation is reported as failed execution

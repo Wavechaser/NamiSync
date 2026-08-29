@@ -86,7 +86,9 @@ from namisync.core.root_authority import (
 )
 from namisync.core.scalars import (
     bounded_utf8_text,
+    checked_add_signed_64,
     require_safe_int,
+    require_signed_64,
 )
 from namisync.core.session import (
     Canceled,
@@ -1631,6 +1633,13 @@ def _run_execution(
         initial_completed_verification = dict(
             initial_verification_authority.completed_bytes
         )
+        fixed_post_copy_selection = current.candidates
+        fixed_post_copy_candidates = current.candidates.candidates
+        fixed_completion_map = current.candidates._completed_bytes
+        fixed_execution_plan = xset.plan
+        fixed_execution_selection = xset.selection
+        fixed_execution_commitment = xset.commitment
+        fixed_user_deselection = xset.user_deselected
         observed_verification_ids = set(initial_completed_verification)
         observed_verification_count = len(observed_verification_ids)
         verification_candidates = {
@@ -1638,22 +1647,127 @@ def _run_execution(
             for candidate in initial_verification_authority.candidates
             if candidate.item_id not in observed_verification_ids
         }
+        confirmed_completion_count = len(initial_completed_verification)
+        confirmed_completion_by_id = dict(initial_completed_verification)
+        confirmed_completed_bytes = 0
+        for completed_bytes in initial_completed_verification.values():
+            confirmed_completed_bytes = checked_add_signed_64(
+                confirmed_completed_bytes,
+                completed_bytes,
+                "completed post-copy bytes",
+            )
+        confirmed_processed_bytes = (
+            initial_verification_authority.processed_bytes
+        )
+        pending_verification_item_id: str | None = None
         last_verification_reconciliation_error: BaseException | None = None
 
         def reconcile_verification(*, complete: bool) -> None:
             nonlocal last_verification_reconciliation_error
             try:
+                reconcile_verification_edge(allow_pending=False)
+                revalidate_execution_set_authority(
+                    xset,
+                    retained_execution_authority,
+                    allow_progress=False,
+                )
                 _validate_post_copy_verifier_completion(
                     current.candidates,
                     initial_verification_authority,
                     verification_candidates,
                     complete=complete,
                 )
+                if (
+                    current.candidates._completed_bytes
+                    != confirmed_completion_by_id
+                ):
+                    raise ValueError(
+                        "post-copy completion changed after reconciliation"
+                    )
             except BaseException as error:
                 last_verification_reconciliation_error = error
                 raise
             else:
                 last_verification_reconciliation_error = None
+
+        def reconcile_verification_edge(*, allow_pending: bool) -> None:
+            nonlocal confirmed_completion_count
+            nonlocal confirmed_completed_bytes
+            nonlocal confirmed_processed_bytes
+            nonlocal pending_verification_item_id
+            if (
+                current.candidates is not fixed_post_copy_selection
+                or current.candidates.candidates is not fixed_post_copy_candidates
+            ):
+                raise ValueError(
+                    "post-copy candidates changed during collaboration"
+                )
+            if (
+                xset.plan is not fixed_execution_plan
+                or xset.selection is not fixed_execution_selection
+                or xset.commitment is not fixed_execution_commitment
+                or xset.user_deselected is not fixed_user_deselection
+            ):
+                raise ValueError(
+                    "verification changed fixed execution authority"
+                )
+            completed = current.candidates._completed_bytes
+            processed_bytes = current.candidates._processed_bytes
+            if type(completed) is not dict:
+                raise TypeError("post-copy completion state must be an exact dict")
+            if completed is not fixed_completion_map:
+                raise ValueError(
+                    "post-copy completion state changed during collaboration"
+                )
+            if type(processed_bytes) is not int:
+                raise TypeError("post-copy processed bytes have the wrong type")
+            require_signed_64(processed_bytes, "post-copy processed bytes")
+
+            pending_item_id = pending_verification_item_id
+            if pending_item_id is None:
+                if len(completed) != confirmed_completion_count:
+                    raise ValueError(
+                        "post-copy verifier completion must match its "
+                        "emitted outcomes"
+                    )
+            elif len(completed) == confirmed_completion_count:
+                if not allow_pending:
+                    raise ValueError(
+                        "post-copy verifier completion must match its "
+                        "emitted outcomes"
+                    )
+            elif (
+                len(completed) == confirmed_completion_count + 1
+                and pending_item_id in completed
+            ):
+                completed_bytes = completed[pending_item_id]
+                if type(completed_bytes) is not int:
+                    raise TypeError(
+                        "post-copy completion facts have the wrong type"
+                    )
+                require_signed_64(
+                    completed_bytes,
+                    "completed post-copy byte count",
+                )
+                confirmed_completed_bytes = checked_add_signed_64(
+                    confirmed_completed_bytes,
+                    completed_bytes,
+                    "completed post-copy bytes",
+                )
+                confirmed_completion_count += 1
+                confirmed_completion_by_id[pending_item_id] = completed_bytes
+                pending_verification_item_id = None
+            else:
+                raise ValueError(
+                    "post-copy verifier completion must match its emitted outcomes"
+                )
+            if processed_bytes < confirmed_completed_bytes:
+                raise ValueError(
+                    "post-copy processed bytes cannot trail completed bytes"
+                )
+            if processed_bytes < confirmed_processed_bytes:
+                raise ValueError("post-copy processed bytes regressed")
+            confirmed_processed_bytes = processed_bytes
 
         def revalidate_verification_authority() -> None:
             revalidate_execution_set_authority(
@@ -1668,22 +1782,24 @@ def _run_execution(
             )
 
         def checkpoint_verification() -> None:
+            reconcile_verification_edge(allow_pending=True)
             ctx.checkpoint()
-            revalidate_verification_authority()
+            reconcile_verification_edge(allow_pending=True)
 
         def observe_verification(body: object) -> None:
             nonlocal observed_recording, observed_verification_count
+            nonlocal pending_verification_item_id
             if not isinstance(body, IntegrityOutcome):
-                revalidate_verification_authority()
+                reconcile_verification_edge(allow_pending=True)
                 ctx.emit(body)
-                revalidate_verification_authority()
+                reconcile_verification_edge(allow_pending=True)
                 return
             snapshot = _canonical_integrity_outcome(
                 body,
                 verification_candidates,
                 observed_verification_ids,
             )
-            reconcile_verification(complete=False)
+            reconcile_verification_edge(allow_pending=False)
             # A degraded recording snapshot can fail.  Publish it before the
             # reliable item so a raised sink error cannot leave the reporter
             # unable to tell whether downstream accepted that item.
@@ -1708,7 +1824,8 @@ def _run_execution(
             verification_candidates.pop(snapshot.item_id)
             observed_verification_ids.add(snapshot.item_id)
             observed_verification_count += 1
-            revalidate_verification_authority()
+            pending_verification_item_id = snapshot.item_id
+            reconcile_verification_edge(allow_pending=True)
 
         def failed_verification_result(
             error: BaseException,
@@ -1758,13 +1875,21 @@ def _run_execution(
                 _verify_progress_totals(current)
             )
             ctx.emit(PhaseChanged("verify"))
-            revalidate_verification_authority()
+            revalidate_execution_set_authority(
+                xset,
+                retained_execution_authority,
+                allow_progress=False,
+            )
+            revalidate_post_copy_selection_authority(
+                current.candidates,
+                initial_verification_authority,
+                allow_progress=False,
+            )
             owned_run = RunContext(
                 observe_verification,
                 checkpoint_verification,
             )
             raw_verification_context = deps.verifier_context(owned_run)
-            revalidate_verification_authority()
             target_evidence = xset.plan.target_volume_evidence
             verification_context = bind_verifier_context(
                 raw_verification_context,
@@ -1782,8 +1907,6 @@ def _run_execution(
                 post_copy_bytes_total=progress_bytes_total,
             )
             del raw_verification_context
-            revalidate_verification_authority()
-            reconcile_verification(complete=False)
             returned_verification = deps.verifier(
                 current.candidates,
                 verification_context,
