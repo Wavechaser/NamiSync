@@ -302,14 +302,7 @@ class _ProgressReporter:
             self._bytes_total = self._live_bytes_total
         self._phase = phase
         self._item_type = item_type
-        self._selected_item_ids = frozenset(
-            candidate.item_id
-            for candidate in (
-                selection.items
-                if isinstance(selection, IntegritySelection)
-                else selection.candidates
-            )
-        )
+        self._selected_item_ids = selection._known_item_ids
         if self._items_total < len(self._selected_item_ids):
             raise ValueError(
                 "progress item admission cannot exclude selected verifier items"

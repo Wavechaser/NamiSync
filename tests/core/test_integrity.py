@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import fields, replace
 from datetime import datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -23,10 +24,16 @@ from namisync.core.integrity import (
     IntegrityRecordCommand,
     IntegrityResult,
     IntegritySelection,
+    IntegritySelectionItem,
     InventoryState,
+    PostCopyCandidate,
     PostCopySelection,
     VerifierContext,
     matches_expected_stat,
+    revalidate_integrity_selection_authority,
+    revalidate_post_copy_selection_authority,
+    snapshot_integrity_selection_authority,
+    snapshot_post_copy_selection_authority,
 )
 from namisync.core.models import (
     EntryKind,
@@ -47,6 +54,176 @@ _SUBJECT = FileStat(
     nlink=1,
     metadata=MetadataSnapshot(attributes=0, created_ns=50),
 )
+_OBSERVED_AT = datetime(2026, 8, 30, tzinfo=timezone.utc)
+
+
+def _selection_subject(
+    kind: str,
+    number: int,
+) -> IntegritySelectionItem | PostCopyCandidate:
+    item_id = f"{kind}-{number}"
+    display_path = f"folder\\file-{number}.bin"
+    if kind == "integrity":
+        return IntegritySelectionItem(
+            item_id=item_id,
+            row_id=f"row-{number}",
+            location_id="location",
+            root=Path("C:/selection-root"),
+            rel_path_key=display_path,
+            display_path=display_path,
+            expected_state=InventoryState.PRESENT,
+            expected_stat=_SUBJECT,
+            baseline=None,
+            scope_token="scope",
+        )
+    return PostCopyCandidate(
+        item_id=item_id,
+        root=Path("C:/selection-root"),
+        display_path=display_path,
+        expected_stat=_SUBJECT,
+        copy_attestation=Attestation(
+            ContentEvidence(
+                "xxh3_128",
+                bytes(16),
+                _SUBJECT.size,
+                Provenance.COPY_ATTESTED,
+                _OBSERVED_AT,
+            ),
+            _SUBJECT,
+        ),
+        recorded_identity=None,
+    )
+
+
+@pytest.mark.parametrize("size", (1, 4, 16))
+@pytest.mark.parametrize("kind", ("post-copy", "integrity"))
+def test_selection_completion_uses_one_index_lookup_without_tuple_scan(
+    monkeypatch: pytest.MonkeyPatch,
+    size: int,
+    kind: str,
+) -> None:
+    subjects = tuple(_selection_subject(kind, number) for number in range(size))
+    subject_type = type(subjects[0])
+    selected_ids = tuple(subject.item_id for subject in subjects)
+    item_id_accesses: list[str] = []
+    known_id_lookups: list[str] = []
+    completed_id_lookups: list[str] = []
+    armed = False
+    original_getattribute = subject_type.__getattribute__
+
+    def observe_getattribute(value: object, name: str) -> object:
+        if armed and name == "item_id":
+            item_id_accesses.append(name)
+        return original_getattribute(value, name)
+
+    class ObservedKnownIds(frozenset[str]):
+        def __contains__(self, value: object) -> bool:
+            known_id_lookups.append(str(value))
+            return super().__contains__(value)
+
+    class ObservedCompletedIds(dict[str, int]):
+        def __contains__(self, value: object) -> bool:
+            completed_id_lookups.append(str(value))
+            return super().__contains__(value)
+
+    monkeypatch.setattr(subject_type, "__getattribute__", observe_getattribute)
+    selection = (
+        IntegritySelection(subjects)  # type: ignore[arg-type]
+        if kind == "integrity"
+        else PostCopySelection(subjects)  # type: ignore[arg-type]
+    )
+    selection._known_item_ids = ObservedKnownIds(selection._known_item_ids)
+    selection._completed_bytes = ObservedCompletedIds(selection._completed_bytes)
+    armed = True
+
+    for item_id in selected_ids:
+        selection.mark_completed(item_id, 0)
+
+    assert item_id_accesses == []
+    assert known_id_lookups == list(selected_ids)
+    assert completed_id_lookups == list(selected_ids)
+
+    with pytest.raises(ValueError, match="already completed"):
+        selection.mark_completed(selected_ids[0], 0)
+    assert item_id_accesses == []
+    assert known_id_lookups == list(selected_ids)
+    assert completed_id_lookups == [*selected_ids, selected_ids[0]]
+
+    with pytest.raises(ValueError, match="unknown .* item"):
+        selection.mark_completed("unknown", 0)
+    assert item_id_accesses == []
+    assert known_id_lookups == [*selected_ids, "unknown"]
+    assert completed_id_lookups == [*selected_ids, selected_ids[0], "unknown"]
+    assert selection.completed_count == size
+
+
+@pytest.mark.parametrize("kind", ("post-copy", "integrity"))
+def test_selection_revalidation_rejects_a_replaced_known_id_index(
+    kind: str,
+) -> None:
+    subject = _selection_subject(kind, 0)
+    selection = (
+        IntegritySelection((subject,))  # type: ignore[arg-type]
+        if kind == "integrity"
+        else PostCopySelection((subject,))  # type: ignore[arg-type]
+    )
+    index_field = next(
+        candidate
+        for candidate in fields(selection)
+        if candidate.name == "_known_item_ids"
+    )
+
+    assert (index_field.init, index_field.repr, index_field.compare) == (
+        False,
+        False,
+        False,
+    )
+    assert "_known_item_ids" not in repr(selection)
+    assert selection == replace(selection)
+
+    class DerivedKnownIds(frozenset[str]):
+        pass
+
+    selection._known_item_ids = DerivedKnownIds(selection._known_item_ids)
+    with pytest.raises(TypeError, match="known-item index has the wrong type"):
+        selection.__post_init__()
+
+    selection._known_item_ids = frozenset({"forged"})
+    with pytest.raises(ValueError, match="known-item index changed"):
+        selection.__post_init__()
+
+
+@pytest.mark.parametrize("kind", ("post-copy", "integrity"))
+def test_selection_authority_rejects_a_deleted_known_id_index(kind: str) -> None:
+    subject = _selection_subject(kind, 0)
+    selection = (
+        IntegritySelection((subject,))  # type: ignore[arg-type]
+        if kind == "integrity"
+        else PostCopySelection((subject,))  # type: ignore[arg-type]
+    )
+    if kind == "integrity":
+        snapshot = snapshot_integrity_selection_authority
+        revalidate = revalidate_integrity_selection_authority
+    else:
+        snapshot = snapshot_post_copy_selection_authority
+        revalidate = revalidate_post_copy_selection_authority
+    authority = snapshot(selection)
+
+    del selection._known_item_ids
+
+    with pytest.raises(TypeError, match="known-item index is missing"):
+        revalidate(selection, authority, allow_progress=False)
+    assert not hasattr(selection, "_known_item_ids")
+
+    second = (
+        IntegritySelection((subject,))  # type: ignore[arg-type]
+        if kind == "integrity"
+        else PostCopySelection((subject,))  # type: ignore[arg-type]
+    )
+    del second._known_item_ids
+    with pytest.raises(TypeError, match="known-item index is missing"):
+        snapshot(second)
+    assert not hasattr(second, "_known_item_ids")
 
 
 def test_integrity_candidate_limit_facts_are_exact_and_typed() -> None:

@@ -3,8 +3,8 @@
 Status (2026-08-30): checkpoint 4P remains complete. A separate bounded 4P-R
 corrective register is active on `milestone1` from clean baseline `e7c3601`.
 It owns one refusal-provenance regression, one pre-existing completion-membership
-performance defect, and their final documentation. Row 4P-R.1's provenance
-correction is independently reviewed and complete; 4P-R.2 is next. Checkpoint 4
+performance defect, and their final documentation. Rows 4P-R.1 and 4P-R.2 are
+independently reviewed and complete; the documentation-only 4P-R.3 is next. Checkpoint 4
 proper has not started; no ownership/reservation model, formula, fixture,
 validator, lifecycle surface, or BR-G-45 evidence is ratified or active.
 
@@ -51,6 +51,14 @@ overflow now uses the supplied plan capability. Legitimate refusal facts,
 status, no-plan-save behavior, domain separation, and save-callback boundaries
 are unchanged.
 
+Corrective row 4P-R.2 replaces repeated candidate-tuple scans in linked and
+standalone integrity completion with one selection-owned immutable id index.
+Verifier progress aliases that index, while replay still checks the completed
+map first. Authority checks reject missing or changed indexes without repair.
+The stale BUGS entry now distinguishes this pre-existing core defect from the
+already-fixed workflow authority-scaling mechanism. Construction, equality,
+continuation, explicit payloads, outcomes, and current walls are unchanged.
+
 Two procedural exceptions remain explicit rather than being normalized away.
 The 4P.10 named-verification cell was strengthened after register freeze without
 a specific user decision; the stronger gate remains as a one-off exception.
@@ -95,6 +103,9 @@ expansion of the accepted denominator.
 - 4P-R.1 focused provenance gate: 411 passed.
 - 4P-R.1 independent core/scanner/planner/preflight/workflows department union:
   2,435 passed, 1 skipped; bounded documentation re-review passed.
+- 4P-R.2 focused integrity/verifier/payload/workflow gate: 622 passed.
+- 4P-R.2 core/verifier/workflows department union: 2,342 passed, 1 skipped;
+  all 11 import contracts held and independent review found no blocker.
 - Protected executor settlement oracle: 30 scenarios across three identical
   successful runs.
 - Active documentation: 30 documents with no missing relative target and 83
@@ -118,7 +129,8 @@ accepted register by description alone.
 
 ## Next safe action
 
-Implement only 4P-R.2's immutable known-id indexes for `PostCopySelection` and
-`IntegritySelection`, including the fixed-size non-timing complexity witness
-and correction of the stale BUGS mechanism. Do not begin checkpoint 4, change
-the 120,000 refusal, move its constants, or add weakref slots.
+Implement only the documentation dispositions in 4P-R.3: record one shared M1
+120,000-item performance/safety support target without changing either current
+refusal, and document the current lack of weakref support. Defer neutral cap
+ownership and `core/review.py` naming to checkpoint 4; do not move constants,
+change walls, add weakref slots, or begin the ownership/reservation model.

@@ -2710,6 +2710,34 @@ def test_runner_retains_verifier_outcomes_across_pause_then_cancel(
     assert len({item.item_id for item in canceled.result.items}) == 3
 
 
+@pytest.mark.parametrize("post_copy", (False, True), ids=("standalone", "post-copy"))
+def test_progress_reporter_reuses_the_selection_known_id_index(
+    tmp_path: Path,
+    post_copy: bool,
+) -> None:
+    subject = (
+        _post_copy_candidate(tmp_path)
+        if post_copy
+        else _item(tmp_path)
+    )
+    selection = (
+        PostCopySelection((subject,))  # type: ignore[arg-type]
+        if post_copy
+        else IntegritySelection((subject,))  # type: ignore[arg-type]
+    )
+
+    reporter = verifier_engine._ProgressReporter(
+        selection,
+        _context([]),
+        items_total=1,
+        pending_sizes=(subject.expected_stat.size,),
+        phase=IntegrityMode.VERIFY.value,
+        item_type="operation" if post_copy else "integrity",
+    )
+
+    assert reporter._selected_item_ids is selection._known_item_ids
+
+
 @pytest.mark.parametrize("streamed", (False, True), ids=("nonstream", "stream"))
 def test_fast_items_have_constant_progress_boundaries(
     tmp_path: Path,

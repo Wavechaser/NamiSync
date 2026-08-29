@@ -53,7 +53,10 @@ Selections contain immutable inventory row id, location/root, canonical path
 key, display path, expected current state/stat, retained `Attestation` (if any),
 scope token, and reappearance state. `IntegritySelection` adds the mutable
 completed-item state, processed-byte high-water, and nondecreasing admitted
-physical-read budget needed for pause/resume. Workflow
+physical-read budget needed for pause/resume. Each selection retains one
+immutable known-id index derived from its fixed candidate tuple; completion and
+progress share that index, while the mutable completed map remains the first
+replay check. Workflow
 must inventory or scoped-refresh before constructing selections; verifier never
 silently inventories, changes mappings, or scans unselected paths.
 

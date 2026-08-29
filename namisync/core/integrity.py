@@ -41,6 +41,7 @@ from .scalars import (
 
 
 _PLATFORM_PATH_TYPE = type(Path())
+_UNINITIALIZED_KNOWN_ITEM_IDS = object()
 
 
 class InventoryState(StrEnum):
@@ -289,12 +290,29 @@ class PostCopySelection:
     candidates: tuple[PostCopyCandidate, ...]
     _completed_bytes: dict[str, int] = field(default_factory=dict, repr=False)
     _processed_bytes: int = field(default=0, repr=False)
+    _known_item_ids: frozenset[str] = field(
+        default=_UNINITIALIZED_KNOWN_ITEM_IDS,
+        init=False,
+        repr=False,
+        compare=False,
+    )  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         item_ids = [candidate.item_id for candidate in self.candidates]
-        if len(item_ids) != len(set(item_ids)):
+        known_ids = frozenset(item_ids)
+        if len(item_ids) != len(known_ids):
             raise ValueError("post-copy candidate ids must be unique")
-        known_ids = set(item_ids)
+        try:
+            retained_known_ids = self._known_item_ids
+        except AttributeError as error:
+            raise TypeError("post-copy known-item index is missing") from error
+        if retained_known_ids is _UNINITIALIZED_KNOWN_ITEM_IDS:
+            self._known_item_ids = known_ids
+        else:
+            if type(retained_known_ids) is not frozenset:
+                raise TypeError("post-copy known-item index has the wrong type")
+            if retained_known_ids != known_ids:
+                raise ValueError("post-copy known-item index changed")
         if not set(self._completed_bytes).issubset(known_ids):
             raise ValueError("post-copy continuation contains an unknown item id")
         completed_bytes = 0
@@ -388,7 +406,7 @@ class PostCopySelection:
         if item_id in self._completed_bytes:
             raise ValueError(f"post-copy item already completed: {item_id}")
         require_signed_64(bytes_read, "completed post-copy byte count")
-        if not any(candidate.item_id == item_id for candidate in self.candidates):
+        if item_id not in self._known_item_ids:
             raise ValueError(f"unknown post-copy item: {item_id}")
         self._completed_bytes[item_id] = bytes_read
 
@@ -443,10 +461,17 @@ class IntegritySelection:
     _completed_bytes: dict[str, int] = field(default_factory=dict, repr=False)
     _processed_bytes: int = field(default=0, repr=False)
     _bytes_total_high_water: int = field(default=0, repr=False)
+    _known_item_ids: frozenset[str] = field(
+        default=_UNINITIALIZED_KNOWN_ITEM_IDS,
+        init=False,
+        repr=False,
+        compare=False,
+    )  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
         item_ids = [item.item_id for item in self.items]
-        if len(item_ids) != len(set(item_ids)):
+        known_ids = frozenset(item_ids)
+        if len(item_ids) != len(known_ids):
             raise ValueError("integrity selection item ids must be unique")
         row_keys = [(item.location_id, item.row_id) for item in self.items]
         if len(row_keys) != len(set(row_keys)):
@@ -454,7 +479,17 @@ class IntegritySelection:
         path_keys = [(item.location_id, item.rel_path_key) for item in self.items]
         if len(path_keys) != len(set(path_keys)):
             raise ValueError("a canonical path may appear only once per location")
-        known_ids = set(item_ids)
+        try:
+            retained_known_ids = self._known_item_ids
+        except AttributeError as error:
+            raise TypeError("integrity known-item index is missing") from error
+        if retained_known_ids is _UNINITIALIZED_KNOWN_ITEM_IDS:
+            self._known_item_ids = known_ids
+        else:
+            if type(retained_known_ids) is not frozenset:
+                raise TypeError("integrity known-item index has the wrong type")
+            if retained_known_ids != known_ids:
+                raise ValueError("integrity known-item index changed")
         if not set(self._completed_bytes).issubset(known_ids):
             raise ValueError("continuation contains an unknown item id")
         completed_bytes = 0
@@ -522,7 +557,7 @@ class IntegritySelection:
         if item_id in self._completed_bytes:
             raise ValueError(f"integrity item already completed: {item_id}")
         require_signed_64(bytes_read, "completed integrity byte count")
-        if not any(item.item_id == item_id for item in self.items):
+        if item_id not in self._known_item_ids:
             raise ValueError(f"unknown integrity item: {item_id}")
         self._completed_bytes[item_id] = bytes_read
 

@@ -1531,6 +1531,14 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
+- MODERATE - FIXED (2026-08-30). Linear completion membership. Completing each
+  linked or standalone integrity item scanned the immutable candidate tuple to
+  confirm its id, making complete settlement quadratic even after workflow
+  authority reconciliation became constant-time. Cause: the mutable completed
+  map was indexed, but known selection membership was not. Fixed with one
+  selection-owned immutable id index, validated against the fixed tuple and
+  reused by verifier progress. Replay still checks the completed map first;
+  continuation shapes, item order, authority, and outcome behavior are unchanged.
 - MODERATE - FIXED (2026-08-27). Source primitive admission gaps. Core path,
   volume, capability, warning, filter, assignment, scan-scope, and inventory
   binding values could retain subclasses, malformed Unicode, or source-sized
@@ -1700,20 +1708,15 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- SEVERE - OPEN (2026-08-29). Population-scaled authority revalidation.
+- SEVERE - FIXED (2026-08-30). Population-scaled authority revalidation.
   Execution, post-copy, and standalone-integrity workflows rebuilt or rescanned
-  their complete immutable authority around item callbacks, making a linear
-  result stream quadratic and rendering the declared 120,000-item wall
-  impractical. Cause: immutable base facts and mutable stream deltas shared one
-  whole-graph validator at both transfer points and per-item seams. The
-  execution-outcome, linked-verification, and standalone-integrity streams now
-  reconcile each synchronous settlement/completion delta in constant time and
-  run one producer audit when their module returns. Checkpoint 4P.20 removed
-  execution plan hashing, duplicate operation facts, and immutable evidence/
-  issue reconstruction from authority guards. Required callback guards still
-  compare shallow fixed-reference and prior-overlay baselines and can scale
-  with already-settled state, so this broader entry remains open; no wall or
-  acceptance constant changed.
+  complete immutable authority around item callbacks, making their result
+  streams quadratic. Cause: immutable base facts and mutable stream deltas
+  shared one whole-graph validator at both transfer points and per-item seams.
+  Fixed by reconciling each synchronous settlement/completion delta in constant
+  time, auditing each producer once on return, and removing execution plan
+  hashing and duplicate immutable facts from callback guards. The separate core
+  completion-membership defect is recorded above; no wall changed.
 - MODERATE - FIXED (2026-08-29). Pre-checkpoint settlement gap. A direct
   workflow adapter's checkpoint callback could run after an executor changed
   settlement but before the workflow reconciled that change into its accepted

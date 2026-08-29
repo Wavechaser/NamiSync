@@ -473,7 +473,7 @@ pass merely because it affects a named file or test neighborhood.
 | --- | --- | --- | --- |
 | 4P-R.0 | Freeze this corrective scope, ordering, non-goals, stop classes, and review boundary before implementation. | Documentation authority review, baseline/worktree check, targeted status searches, and `git diff --check`. | Complete |
 | 4P-R.1 | Restore same-run provenance for exact plan and inventory review-limit signals without restoring `fresh()` or changing any legitimate refusal fact, status, save boundary, exception retirement, or domain separation; update the rung/provenance documents and defect ledger in the same change. | Legitimate current-run producer/retained/logical and inventory first-excess signals, including re-raise and graph retirement; direct/untagged same-domain and well-formed different-run signals from scanner, correspondence, planner, observer, preflight, phase delivery, destination policy, nested owners, and inventory scanner; cross-domain, lookalike, malformed, plan/inventory/workflow departments, import contracts, and targeted provenance/rung documentation searches. | Complete |
-| 4P-R.2 | Replace repeated linear completion membership in both `PostCopySelection` and `IntegritySelection` with one immutable known-id index per selection while preserving construction, equality, continuation, payload, authority, progress, and outcome behavior; correct the stale workflow BUGS mechanism and owning component docs in the same change. | Core integrity, verifier engine, payload round-trip, post-execution and standalone-integrity workflows; at fixed sizes 1, 4, and 16, after bounded construction each successful completion performs no candidate/item-tuple `item_id` access and exactly one known-id-index lookup, while the existing completed-id replay lookup remains. | Pending |
+| 4P-R.2 | Replace repeated linear completion membership in both `PostCopySelection` and `IntegritySelection` with one immutable known-id index per selection while preserving construction, equality, continuation, payload, authority, progress, and outcome behavior; correct the stale workflow BUGS mechanism and owning component docs in the same change. | Core integrity, verifier engine, payload round-trip, post-execution and standalone-integrity workflows; at fixed sizes 1, 4, and 16, after bounded construction each successful completion performs no candidate/item-tuple `item_id` access and exactly one known-id-index lookup, while the existing completed-id replay lookup remains. | Complete |
 | 4P-R.3 | Record that 120,000 is one shared M1 performance/safety support target, with no promise beyond it and no claim that 120,001 breaks NamiSync; retain the existing independent hard refusals only as unchanged M1 behavior; defer neutral constant/primitive ownership and `core/review.py` naming to checkpoint 4; and document current weakref support precisely. | DEFENSE/architecture/component/H2 authority review, current-wall and future-owner searches, production/test weakref-usage search, links/anchors, and `git diff --check`. | Pending |
 | 4P-R.4 | Reconcile BUGS, task history, and handoff; run the integrated affected and ordinary gates; and conduct an independent final review without absorbing optional cleanup. | Affected departments, ordinary Node-enabled suite, import contracts, protected gates required by touched behavior, links/anchors, stale-contract searches, `git diff --check`, and independent review. | Pending |
 
@@ -540,6 +540,24 @@ code, public/wire/status, save-boundary, or regression-test blocker. Its two
 active-document findings were corrected, bounded re-review passed, targeted
 stale-contract searches and `git diff --check` were clean, and checkpoint 4
 remains unstarted.
+
+#### 4P-R.2 review receipt
+
+Linked and standalone integrity selections now retain one immutable known-id
+index derived from their fixed tuple. Completion checks the existing completed
+map first and then performs one indexed membership lookup; verifier progress
+aliases the same index. Authority validation rejects a missing, wrong-type, or
+wrong-value index without repairing it. Construction, equality, continuation,
+explicit payloads, progress, outcomes, and both current 120,000-item refusals
+are unchanged. `BUGS.md` now assigns the pre-existing quadratic completion
+cost to this core mechanism and closes the separate workflow authority-scaling
+entry without attributing residual cost to its callback guards.
+
+The focused integrity, verifier, payload, post-execution, and inventory set
+passed 622 tests. The core, verifier, and workflows department union passed
+2,342 tests with one skip, and all 11 import contracts held. Independent review
+repeated the deterministic 1/4/16 witness, deletion/tamper probes, and contract
+inspection and found no blocker; `git diff --check` was clean.
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
