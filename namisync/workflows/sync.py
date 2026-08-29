@@ -107,8 +107,8 @@ from namisync.core.session import (
 from namisync.modules.executor import ExecutorPolicies
 from namisync.modules.planner import (
     admit_retained_plan_candidate,
+    adopt_plan_candidate,
     snapshot_mapping_snapshot,
-    snapshot_plan_candidate,
     snapshot_plan_options,
 )
 from namisync.modules.preflight import (
@@ -420,7 +420,7 @@ def _run_plan(
             Scope.everything(),
             review_admission=retained_admission.fresh(),
         )
-        plan = snapshot_plan_candidate(
+        plan = adopt_plan_candidate(
             raw_plan,
             source_scan,
             target_scan,

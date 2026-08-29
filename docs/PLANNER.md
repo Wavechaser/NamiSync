@@ -85,16 +85,18 @@ populations and the combined operation population each retain their independent
 first-excess gates; no mapping index, operation builder, dependency sort, or
 callback-input copy is charged as retained state.
 
-Workflow reconstructs the hostile planner result with exact constructors and
-contract validators. Canonical `plan_fingerprint(snapshot)` revalidation uses
-the existing complete semantic projection to reject hostile field drift; that
-validation belongs to the exact-snapshot prerequisite, while this source wall
-does not charge or freeze the projection's construction cost. Workflow then
-charges the final operation rows and only the unavoidable operation/dependency,
-assignment, and required-volume shallow slots once. Selection remains ordinary
-workflow policy and is neither copied nor charged by this prerequisite. First
-excess raises the shared typed review-limit error without publishing a partial
-plan.
+Workflow exact-adopts the fallible internal planner result once and retains
+that same immutable `Plan` identity. Admission validates the exact outer plan,
+operations, endpoints, profiles, policies, filters, assignment, required
+volumes and bytes, deterministic operation ids, and declared fingerprint
+without rebuilding the plan graph. Canonical `plan_fingerprint(value)`
+revalidation deliberately keeps the existing complete semantic projection to
+reject compound field drift; this row neither redesigns that identity contract
+nor charges or freezes its construction cost. Workflow then charges the final
+operation rows and only the unavoidable operation/dependency, assignment, and
+required-volume shallow slots once. Selection remains ordinary workflow policy
+and is neither copied nor charged by this prerequisite. First excess raises the
+shared typed review-limit error without publishing a partial plan.
 
 Review-limit authority belongs to the workflow's current admission family;
 planner receives one zeroed member. Planner logical-byte accumulation and
@@ -105,11 +107,13 @@ classifies an unissued review-limit signal as ordinary failure. Reviewed
 fingerprinting uses the one captured policy identity instead of rereading
 hostile policy properties.
 
-`snapshot_plan_options`, `plan`, and `snapshot_plan_candidate` now isolate their
+`snapshot_plan_options`, `plan`, and `adopt_plan_candidate` isolate their
 public call frame and retire traceback/cause/context links before an error
 escapes. Property, assignment, fingerprint, and validation failures therefore
 preserve their existing public type, identity, and behavior without retaining
-stage-dependent policy, callback, shared scan, or input frames. The one
+stage-dependent policy, callback, shared scan, or input frames. Successful plan
+adoption returns the exact producer value; retained-plan admission remains a
+separate workflow step. The one
 required logical-byte `ReviewFactLimitError` cause remains by identity after its
 own frames retire. Arbitrary custom exception state leaves with the caller and
 is not retained planner custody.

@@ -17,7 +17,6 @@ from namisync.core.models import (
     FileRecord,
     FileStat,
     MANAGED_FILE_ATTRIBUTE_MASK,
-    MetadataSnapshot,
     Root,
     ScanResult,
     VolumeEvidence,
@@ -1100,66 +1099,7 @@ def plan(
         raise
 
 
-def _snapshot_root(value: object) -> Root:
-    if type(value) is not Root:
-        raise TypeError("plan root has the wrong type")
-    return Root(value.path, value.root_id)
-
-
-def _snapshot_evidence(
-    value: object,
-) -> VolumeEvidence | None:
-    if value is None:
-        return None
-    if type(value) is not VolumeEvidence:
-        raise TypeError("plan volume evidence has the wrong type")
-    return VolumeEvidence(value.label, value.device_id, value.clone_ambiguous)
-
-
-def _snapshot_profile(value: object) -> CapabilityProfile:
-    if type(value) is not CapabilityProfile:
-        raise TypeError("plan capability profile has the wrong type")
-    return CapabilityProfile(
-        value.fs_type,
-        value.mtime_granularity_ns,
-        value.stable_file_identity,
-        value.incurs_seek_penalty,
-        value.max_path,
-        value.supports_ads,
-        value.supports_hardlinks,
-    )
-
-
-def _snapshot_metadata(
-    value: object,
-) -> MetadataSnapshot | None:
-    if value is None:
-        return None
-    if type(value) is not MetadataSnapshot:
-        raise TypeError("plan metadata has the wrong type")
-    return MetadataSnapshot(value.attributes, value.created_ns)
-
-
-def _snapshot_stat(value: object) -> FileStat | None:
-    if value is None:
-        return None
-    if type(value) is not FileStat:
-        raise TypeError("plan file stat has the wrong type")
-    metadata = _snapshot_metadata(value.metadata)
-    assert metadata is not None
-    return FileStat(
-        value.kind,
-        value.size,
-        value.mtime_ns,
-        _snapshot_identity(value.file_identity),
-        value.nlink,
-        metadata,
-    )
-
-
-def _snapshot_operation(
-    value: object,
-) -> PlanOperation:
+def _validate_plan_operation(value: object) -> PlanOperation:
     if type(value) is not PlanOperation:
         raise TypeError("plan operations must contain exact PlanOperation values")
     if type(value.dependencies) is not tuple:
@@ -1180,34 +1120,18 @@ def _snapshot_operation(
         if type(dependency) is not str or not re_fullmatch_op_id(dependency):
             raise TypeError("plan operation dependency has an invalid id")
 
-    snapshot = PlanOperation(
-        op_id=value.op_id,
-        kind=value.kind,
-        source_rel_path=value.source_rel_path,
-        target_rel_path=value.target_rel_path,
-        source_expected=_snapshot_stat(value.source_expected),
-        target_expected=_snapshot_stat(value.target_expected),
-        intended=_snapshot_stat(value.intended),
-        prior_target_rel_path=value.prior_target_rel_path,
-        prior_target_expected=_snapshot_stat(value.prior_target_expected),
-        metadata=_snapshot_metadata(value.metadata),
-        content_bytes=value.content_bytes,
-        dependencies=tuple(dependency for dependency in value.dependencies),
-        reason=value.reason,
-        blocked_reason=value.blocked_reason,
-    )
-    if snapshot.op_id != deterministic_operation_id(
-        snapshot.kind,
-        snapshot.source_rel_path,
-        snapshot.target_rel_path,
-        snapshot.prior_target_rel_path,
-        snapshot.reason,
+    if value.op_id != deterministic_operation_id(
+        value.kind,
+        value.source_rel_path,
+        value.target_rel_path,
+        value.prior_target_rel_path,
+        value.reason,
     ):
         raise ValueError("operation id does not match canonical intent")
-    return snapshot
+    return value
 
 
-def _snapshot_plan_candidate(
+def _adopt_plan_candidate(
     value: object,
     source: ScanResult,
     target: ScanResult,
@@ -1215,7 +1139,7 @@ def _snapshot_plan_candidate(
     *,
     review_admission: PlanReviewAdmission | None = None,
 ) -> Plan:
-    """Validate and detach one planner result before review publication."""
+    """Validate and adopt one exact immutable planner result."""
 
     if type(value) is not Plan:
         raise TypeError("planner must return an exact Plan")
@@ -1253,7 +1177,8 @@ def _snapshot_plan_candidate(
         raise ValueError("plan required volumes exceed the endpoint limit")
 
     retained_options = _snapshot_retained_options(options)
-    assignment = _snapshot_assignment(value.assignment, admission)
+    admission.require_source_rows(len(value.assignment.items))
+    assignment = validate_assignment(value.assignment)
     filtered_source_files = tuple(
         record
         for record in source.files
@@ -1269,27 +1194,36 @@ def _snapshot_plan_candidate(
             "plan assignment policy does not match requested policy"
         )
 
-    operations = tuple(
-        _snapshot_operation(operation) for operation in value.operations
-    )
+    for operation in value.operations:
+        _validate_plan_operation(operation)
 
-    source_root = _snapshot_root(value.source_root)
-    target_root = _snapshot_root(value.target_root)
-    source_volume = _snapshot_volume(value.source_volume_id)
-    target_volume = _snapshot_volume(value.target_volume_id)
-    source_evidence = _snapshot_evidence(value.source_volume_evidence)
-    target_evidence = _snapshot_evidence(value.target_volume_evidence)
-    source_profile = _snapshot_profile(value.source_profile)
-    target_profile = _snapshot_profile(value.target_profile)
+    if type(value.source_root) is not Root:
+        raise TypeError("plan source root has the wrong type")
+    if type(value.target_root) is not Root:
+        raise TypeError("plan target root has the wrong type")
+    for volume in (value.source_volume_id, value.target_volume_id):
+        if volume is not None and type(volume) is not VolumeId:
+            raise TypeError("plan endpoint volume identity has the wrong type")
+    for evidence in (
+        value.source_volume_evidence,
+        value.target_volume_evidence,
+    ):
+        if evidence is not None and type(evidence) is not VolumeEvidence:
+            raise TypeError("plan endpoint volume evidence has the wrong type")
     if (
-        source_root != source.root
-        or target_root != target.root
-        or source_volume != source.volume_id
-        or target_volume != target.volume_id
-        or source_evidence != source.volume_evidence
-        or target_evidence != target.volume_evidence
-        or source_profile != source.profile
-        or target_profile != target.profile
+        type(value.source_profile) is not CapabilityProfile
+        or type(value.target_profile) is not CapabilityProfile
+    ):
+        raise TypeError("plan capability profile has the wrong type")
+    if (
+        value.source_root != source.root
+        or value.target_root != target.root
+        or value.source_volume_id != source.volume_id
+        or value.target_volume_id != target.volume_id
+        or value.source_volume_evidence != source.volume_evidence
+        or value.target_volume_evidence != target.volume_evidence
+        or value.source_profile != source.profile
+        or value.target_profile != target.profile
     ):
         raise ValueError("plan endpoint evidence does not match admitted scans")
     if (
@@ -1304,17 +1238,12 @@ def _snapshot_plan_candidate(
         raise ValueError("plan completeness does not match admitted scans")
     if type(value.preservation) is not PreservationPolicy:
         raise TypeError("plan preservation must be an exact PreservationPolicy")
-    preservation = PreservationPolicy(
-        value.preservation.preserve_ads,
-        value.preservation.preserve_created,
-        value.preservation.preserve_acl,
-    )
-    filter_snapshot = FilterSet(
-        tuple(validate_filter_set(value.filter_snapshot).patterns)
-    )
+    if type(value.filter_snapshot) is not FilterSet:
+        raise TypeError("plan filter snapshot must be an exact FilterSet")
+    validate_filter_set(value.filter_snapshot)
     if (
-        preservation != retained_options.preservation
-        or filter_snapshot != retained_options.filters
+        value.preservation != retained_options.preservation
+        or value.filter_snapshot != retained_options.filters
         or type(value.deletion_policy) is not DeletionPolicy
         or value.deletion_policy is not retained_options.deletion_policy
         or type(value.trash_on_update) is not bool
@@ -1322,23 +1251,19 @@ def _snapshot_plan_candidate(
     ):
         raise ValueError("plan policy snapshot does not match requested options")
 
-    required_volume_items: set[VolumeId] = set()
     for volume in value.required_volumes:
-        snapshot_volume = _snapshot_volume(volume)
-        if snapshot_volume is None:
+        if type(volume) is not VolumeId:
             raise TypeError("plan required volumes must contain VolumeId values")
-        required_volume_items.add(snapshot_volume)
-    required_volumes = frozenset(required_volume_items)
     expected_volumes = frozenset(
         volume
         for volume in (source.volume_id, target.volume_id)
         if volume is not None
     )
-    if required_volumes != expected_volumes:
+    if value.required_volumes != expected_volumes:
         raise ValueError("plan required volumes do not match admitted scans")
     required_bytes = calculate_required_bytes(
-        operations,
-        target_profile=target_profile,
+        value.operations,
+        target_profile=value.target_profile,
         trash_on_update=retained_options.trash_on_update,
         review_admission=admission,
     )
@@ -1350,36 +1275,12 @@ def _snapshot_plan_candidate(
             "plan policy fingerprint does not match requested options"
         )
 
-    snapshot = Plan(
-        source_root=source_root,
-        target_root=target_root,
-        source_volume_id=source_volume,
-        target_volume_id=target_volume,
-        source_volume_evidence=source_evidence,
-        target_volume_evidence=target_evidence,
-        source_profile=source_profile,
-        target_profile=target_profile,
-        source_complete=value.source_complete,
-        target_complete=value.target_complete,
-        operations=operations,
-        assignment=assignment,
-        preservation=preservation,
-        filter_snapshot=filter_snapshot,
-        deletion_policy=value.deletion_policy,
-        trash_on_update=value.trash_on_update,
-        policy_fingerprint=expected_policy_fingerprint,
-        required_volumes=required_volumes,
-        required_bytes=required_bytes,
-        fingerprint=value.fingerprint,
-    )
-    if value.fingerprint != plan_fingerprint(snapshot):
+    if value.fingerprint != plan_fingerprint(value):
         raise ValueError("plan fingerprint does not match canonical plan")
-    if snapshot != value:
-        raise ValueError("plan candidate is not canonical")
-    return snapshot
+    return value
 
 
-def snapshot_plan_candidate(
+def adopt_plan_candidate(
     value: object,
     source: ScanResult,
     target: ScanResult,
@@ -1387,10 +1288,10 @@ def snapshot_plan_candidate(
     *,
     review_admission: PlanReviewAdmission | None = None,
 ) -> Plan:
-    """Validate a candidate after retiring rejected input traceback links."""
+    """Adopt a candidate after retiring rejected input traceback links."""
 
     try:
-        return _snapshot_plan_candidate(
+        return _adopt_plan_candidate(
             value,
             source,
             target,

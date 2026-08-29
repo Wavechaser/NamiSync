@@ -117,6 +117,14 @@ declared fields, plan identity, fingerprints, payload shape, validation, and
 selection semantics are unchanged. Exact-type and declared-field validation
 remain the hostile-boundary authority.
 
+Planner-result admission validates the exact compound `Plan` contract and
+returns the producer's immutable plan by identity instead of rebuilding its
+operation and evidence graph. Endpoint evidence, profiles, policy and filter
+snapshots, assignment, required volumes and bytes, deterministic operation ids,
+and the declared fingerprint must still agree with the admitted inputs.
+`plan_fingerprint()` keeps its existing canonical projection and wire/hash
+identity; retained-plan capacity admission remains a separate workflow step.
+
 The six preflight observation/verdict dataclasses and the two remaining
 integrity command/context dataclasses are also frozen and slotted. This excludes
 undeclared outer instance state without changing observation, refusal,

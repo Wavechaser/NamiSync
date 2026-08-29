@@ -196,10 +196,13 @@ keeps its ordinary two-argument protocol; its concrete database query is
 structurally bounded by admitted scan keys and identities, then workflow
 captures the hostile result under a fresh family admission. Each raw population
 has a stateless first-excess gate. Each scanner result is exact-adopted once and
-then shared by identity with first-party read-only consumers; fallible mapping,
-plan, world, and verdict results retain their separately declared admission
-boundaries. Unsupported reflective mutation of a slotted scan is not treated as
-a supported collaborator result.
+then shared by identity with first-party read-only consumers. Workflow still
+copies the fallible mapping result, but it exact-adopts the planner's immutable
+`Plan` once after compound validation and shares that same plan identity with
+review, artifact, and later first-party consumers. World and verdict results
+retain their separate copying/admission boundaries through checkpoint 4P.18.
+Unsupported reflective mutation of a slotted scan or plan is not treated as a
+supported collaborator result.
 
 Only unavoidable shallow slots that coexist in the final scans, plan,
 observed world, and verdict commit to the retained ledger, together with the

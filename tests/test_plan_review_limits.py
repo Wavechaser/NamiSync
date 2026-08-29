@@ -28,7 +28,7 @@ from namisync.core.models import (
 from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import (
     Assignment, FilterSet, MappingPair, MappingSnapshot, OperationKind,
-    OperationReason, Plan, Scope, SyncOptions,
+    OperationReason, Plan, PlanOperation, Scope, SyncOptions,
 )
 from namisync.core.preflight import (
     ObservedWorld, Refusal, RefusalCode, RootObservation, StatObservation,
@@ -43,7 +43,7 @@ from namisync.core.review import (
 from namisync.core.session import Disposition, RunContext, SessionState
 from namisync.core.scalars import MAX_SIGNED_64, ScalarDomainError
 from namisync.modules.planner import (
-    plan, snapshot_mapping_snapshot, snapshot_plan_candidate,
+    adopt_plan_candidate, plan, snapshot_mapping_snapshot,
 )
 from namisync.modules.preflight import (
     observe, preflight, snapshot_plan_observed_world, snapshot_plan_verdict,
@@ -134,16 +134,6 @@ def _scan(
         ScanScope.full(),
         complete,
     )
-
-def _forge(value: object, **changes: object) -> object:
-    forged = object.__new__(type(value))
-    for field in fields(value):
-        object.__setattr__(
-            forged,
-            field.name,
-            changes.get(field.name, getattr(value, field.name)),
-        )
-    return forged
 
 def _mapping(source: ScanResult, target: ScanResult) -> MappingSnapshot:
     return MappingSnapshot.empty(source.volume_id, target.volume_id)
@@ -548,7 +538,7 @@ def test_scan_adoption_preserves_identity_without_constructor_validation(
     assert adopted.files[0] is record
 
 
-def test_mapping_and_plan_snapshots_preserve_semantics() -> None:
+def test_mapping_snapshot_and_plan_adoption_preserve_semantics() -> None:
     source = _scan(SOURCE_ROOT, files=(_file("file.bin"),))
     target = _scan(TARGET_ROOT)
     mapping = _mapping(source, target)
@@ -556,23 +546,133 @@ def test_mapping_and_plan_snapshots_preserve_semantics() -> None:
     assert copied_mapping == mapping and copied_mapping is not mapping
 
     raw_plan = _planned(source, target, mapping)
-    copied_plan = snapshot_plan_candidate(raw_plan, source, target, SyncOptions())
-    assert copied_plan == raw_plan
-    assert copied_plan.fingerprint == raw_plan.fingerprint
-    assert copied_plan is not raw_plan
-    assert copied_plan.operations[0] is not raw_plan.operations[0]
+    adopted_plan = adopt_plan_candidate(raw_plan, source, target, SyncOptions())
+    assert adopted_plan is raw_plan
+    assert adopted_plan.operations[0] is raw_plan.operations[0]
 
-    hostile_fingerprint = replace(raw_plan, fingerprint="f" * 64)
+    wrong_fingerprint = replace(raw_plan, fingerprint="f" * 64)
     with pytest.raises(ValueError, match="fingerprint"):
-        snapshot_plan_candidate(
-            hostile_fingerprint,
+        adopt_plan_candidate(
+            wrong_fingerprint,
             source,
             target,
             SyncOptions(),
         )
 
 
-def test_plan_candidate_failure_keeps_identity_after_frame_retirement(
+def test_plan_adoption_does_not_reconstruct_plan_graph(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _scan(SOURCE_ROOT, files=(_file("file.bin"),))
+    target = _scan(TARGET_ROOT)
+    raw_plan = _planned(source, target)
+
+    def forbid_construction(_value: object) -> None:
+        raise AssertionError("plan adoption reconstructed a plan contract")
+
+    monkeypatch.setattr(Plan, "__post_init__", forbid_construction)
+    monkeypatch.setattr(PlanOperation, "__post_init__", forbid_construction)
+
+    adopted = adopt_plan_candidate(raw_plan, source, target, SyncOptions())
+
+    assert adopted is raw_plan
+    assert adopted.operations[0] is raw_plan.operations[0]
+
+
+def test_plan_adoption_accepts_asymmetric_endpoint_evidence() -> None:
+    source = replace(_scan(SOURCE_ROOT), volume_evidence=None)
+    target = _scan(TARGET_ROOT)
+    raw_plan = _planned(source, target)
+
+    adopted = adopt_plan_candidate(raw_plan, source, target, SyncOptions())
+
+    assert adopted is raw_plan
+    assert adopted.source_volume_evidence is None
+    assert adopted.target_volume_evidence is target.volume_evidence
+
+
+def test_plan_adoption_rejects_ordinary_wrong_shapes_and_compound_drift() -> None:
+    source = _scan(SOURCE_ROOT, files=(_file("file.bin"),))
+    target = _scan(TARGET_ROOT)
+    raw_plan = _planned(source, target)
+    operation = raw_plan.operations[0]
+
+    plan_lookalike = SimpleNamespace(
+        **{
+            field.name: getattr(raw_plan, field.name)
+            for field in fields(raw_plan)
+        }
+    )
+    with pytest.raises(TypeError, match="exact Plan"):
+        adopt_plan_candidate(plan_lookalike, source, target, SyncOptions())
+
+    list_operations = replace(
+        raw_plan,
+        operations=list(raw_plan.operations),  # type: ignore[arg-type]
+    )
+    with pytest.raises(TypeError, match="exact tuple"):
+        adopt_plan_candidate(list_operations, source, target, SyncOptions())
+
+    operation_lookalike = SimpleNamespace(
+        **{
+            field.name: getattr(operation, field.name)
+            for field in fields(operation)
+        }
+    )
+    lookalike_operation_plan = replace(
+        raw_plan,
+        operations=(operation_lookalike,),  # type: ignore[arg-type]
+    )
+    with pytest.raises(TypeError, match="exact PlanOperation"):
+        adopt_plan_candidate(
+            lookalike_operation_plan,
+            source,
+            target,
+            SyncOptions(),
+        )
+
+    wrong_op_id = "0" * 32 if operation.op_id != "0" * 32 else "f" * 32
+    wrong_operation = replace(operation, op_id=wrong_op_id)
+    wrong_intent_plan = replace(raw_plan, operations=(wrong_operation,))
+    with pytest.raises(ValueError, match="canonical intent"):
+        adopt_plan_candidate(wrong_intent_plan, source, target, SyncOptions())
+
+    wrong_endpoint_plan = replace(
+        raw_plan,
+        source_root=Root(r"C:\other", "other"),
+    )
+    with pytest.raises(ValueError, match="endpoint evidence"):
+        adopt_plan_candidate(wrong_endpoint_plan, source, target, SyncOptions())
+
+    wrong_policy_plan = replace(
+        raw_plan,
+        filter_snapshot=FilterSet(("*.tmp",)),
+    )
+    with pytest.raises(ValueError, match="policy snapshot"):
+        adopt_plan_candidate(wrong_policy_plan, source, target, SyncOptions())
+
+    wrong_volumes_plan = replace(raw_plan, required_volumes=frozenset())
+    with pytest.raises(ValueError, match="required volumes"):
+        adopt_plan_candidate(wrong_volumes_plan, source, target, SyncOptions())
+
+    wrong_bytes_plan = replace(raw_plan, required_bytes=raw_plan.required_bytes + 1)
+    with pytest.raises(ValueError, match="required bytes"):
+        adopt_plan_candidate(wrong_bytes_plan, source, target, SyncOptions())
+
+    wrong_policy_fingerprint_plan = replace(
+        raw_plan,
+        policy_fingerprint="0" * 64,
+    )
+    with pytest.raises(ValueError, match="policy fingerprint"):
+        adopt_plan_candidate(
+            wrong_policy_fingerprint_plan,
+            source,
+            target,
+            SyncOptions(),
+        )
+
+
+def test_plan_adoption_failure_keeps_identity_after_frame_retirement(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = _scan(SOURCE_ROOT, files=(_file("source.bin"),))
@@ -588,7 +688,7 @@ def test_plan_candidate_failure_keeps_identity_after_frame_retirement(
     monkeypatch.setattr(planner_module, "plan_fingerprint", fail_fingerprint)
 
     with pytest.raises(ValueError) as raised:
-        snapshot_plan_candidate(raw_plan, source, target, SyncOptions())
+        adopt_plan_candidate(raw_plan, source, target, SyncOptions())
 
     assert raised.value is failure
     gc.collect()
@@ -1079,6 +1179,30 @@ def test_each_raw_population_refuses_first_excess_before_save(
     _patch_workflow_roots(monkeypatch)
     calls: list[str] = []
     saved: list[PlanArtifact] = []
+    original_plan_adoption = sync_workflow_module.adopt_plan_candidate
+
+    def track_plan_adoption(
+        value: object,
+        source: ScanResult,
+        target: ScanResult,
+        options: SyncOptions,
+        *,
+        review_admission: PlanReviewAdmission | None = None,
+    ) -> Plan:
+        calls.append("plan-adoption")
+        return original_plan_adoption(
+            value,
+            source,
+            target,
+            options,
+            review_admission=review_admission,
+        )
+
+    monkeypatch.setattr(
+        sync_workflow_module,
+        "adopt_plan_candidate",
+        track_plan_adoption,
+    )
 
     def scanner(
         root: Root,
@@ -1130,9 +1254,11 @@ def test_each_raw_population_refuses_first_excess_before_save(
         if population == "plan-operations":
             return _scan(
                 root,
-                files=(_file("one.bin"),)
-                if root.root_id == "target"
-                else (),
+                files=(
+                    _file(
+                        "new.bin" if root.root_id == "source" else "old.bin"
+                    ),
+                ),
             )
         return _scan(root)
 
@@ -1195,17 +1321,11 @@ def test_each_raw_population_refuses_first_excess_before_save(
         )
         if population == "plan-assignment":
             item = value.assignment.items[0]
-            assignment = _forge(
-                value.assignment,
-                items=(item, item),
-            )
-            return _forge(value, assignment=assignment)  # type: ignore[return-value]
+            assignment = replace(value.assignment, items=(item, item))
+            return replace(value, assignment=assignment)
         if population == "plan-operations":
-            operation = value.operations[0]
-            return _forge(  # type: ignore[return-value]
-                value,
-                operations=(operation, operation),
-            )
+            assert len(value.operations) == 2
+            calls.append("planner-return")
         del review_admission
         return value
 
@@ -1284,7 +1404,11 @@ def test_each_raw_population_refuses_first_excess_before_save(
     elif population.startswith("mapping-"):
         assert "correspondence" in calls and "planner" not in calls
     elif population.startswith("plan-"):
-        assert "planner" in calls and "observer" not in calls
+        assert "planner" in calls
+        assert "plan-adoption" in calls
+        assert "observer" not in calls
+        if population == "plan-operations":
+            assert "planner-return" in calls
     elif population.startswith("world-"):
         assert "observer" in calls and "preflight" not in calls
     else:
@@ -1657,7 +1781,7 @@ def test_producer_accounting_cannot_poison_outer_final_ledger(
     assert result.status is SessionState.COMPLETED
     assert len(saved) == 1
 
-def test_workflow_adopts_scans_once_and_detaches_fallible_results(
+def test_workflow_adopts_scans_and_plan_once_and_detaches_other_results(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _patch_workflow_roots(monkeypatch)
@@ -1665,8 +1789,8 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
     raw: dict[str, object] = {}
     adoption_calls: list[ScanResult] = []
     original_adopt = sync_workflow_module.adopt_plan_scan_result
-    plan_snapshot_calls: list[object] = []
-    original_plan_snapshot = sync_workflow_module.snapshot_plan_candidate
+    plan_adoption_calls: list[object] = []
+    original_plan_adoption = sync_workflow_module.adopt_plan_candidate
 
     def track_adoption(
         value: ScanResult,
@@ -1681,7 +1805,7 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
         track_adoption,
     )
 
-    def track_plan_snapshot(
+    def track_plan_adoption(
         value: object,
         source: ScanResult,
         target: ScanResult,
@@ -1689,8 +1813,8 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
         *,
         review_admission: PlanReviewAdmission | None = None,
     ) -> Plan:
-        plan_snapshot_calls.append(value)
-        return original_plan_snapshot(
+        plan_adoption_calls.append(value)
+        return original_plan_adoption(
             value,
             source,
             target,
@@ -1700,8 +1824,8 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
 
     monkeypatch.setattr(
         sync_workflow_module,
-        "snapshot_plan_candidate",
-        track_plan_snapshot,
+        "adopt_plan_candidate",
+        track_plan_adoption,
     )
 
     def scanner(
@@ -1763,7 +1887,7 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
     ) -> ObservedWorld:
         del review_admission
         assert type(review) is ExecutionReview
-        assert review.plan is not raw["plan"]
+        assert review.plan is raw["plan"]
         assert len(review.plan.operations) == 1
         with pytest.raises(TypeError):
             review.status[review.plan.operations[0].op_id] = Outcome.SUCCEEDED
@@ -1802,7 +1926,7 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
     assert result.status is SessionState.COMPLETED
     artifact = saved[0]
     assert len(adoption_calls) == 2
-    assert plan_snapshot_calls == [raw["plan"]]
+    assert plan_adoption_calls == [raw["plan"]]
     assert adoption_calls[0] is raw["source"]
     assert adoption_calls[1] is raw["target"]
     assert artifact.source_scan is raw["source"]
@@ -1812,6 +1936,7 @@ def test_workflow_adopts_scans_once_and_detaches_fallible_results(
     ]
     assert len(artifact.plan.operations) == 1
     assert artifact.verdict.observed.stats
+    assert artifact.plan is raw["plan"]
     assert artifact.plan is raw["review"].plan
     assert artifact.verdict.observed is raw["adopted_world"]
     assert artifact.verdict is not raw["verdict"]
