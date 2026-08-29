@@ -129,7 +129,7 @@ def test_br_g_10_payload_roundtrip_preserves_direct_and_fallout_outcomes() -> No
             ok=False,
             refusals=(),
         ),
-        open_recording=lambda _xset: _Recording(finished),
+        open_recording=lambda _spec: _Recording(finished),
     )
 
     result = run_execution(
@@ -185,7 +185,7 @@ def test_br_g_10_tampered_execute_and_verify_resume_fail_before_preflight(
     deps = SimpleNamespace(
         save_execution_details=lambda _details: None,
         observer=lambda *_args: pytest.fail("preflight observation ran"),
-        open_recording=lambda _xset: _Recording(finished),
+        open_recording=lambda _spec: _Recording(finished),
     )
 
     result = run_execution(
@@ -298,7 +298,7 @@ def test_canceled_execution_settlement_releases_custody_on_recording_failure(
         ) -> None:
             raise RuntimeError("finish failed")
 
-    def open_recording(_xset):
+    def open_recording(_spec):
         if failure == "open":
             raise RuntimeError("open failed")
         return FailingRecording()

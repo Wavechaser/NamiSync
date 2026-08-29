@@ -585,13 +585,19 @@ Each external edge still requires the same admitted selection container,
 candidate tuple, and immutable execution identities, so ordinary callback
 replacement cannot redirect later verifier work; frozen candidate-leaf
 reflection remains outside the supported fault model.
-Recorder `finish` and
-context exit receive exact hostile-boundary snapshots of the execution set and,
-when present, the post-copy selection; mutation is reported as failed execution
-or incomplete verification while the already accepted item prefix is preserved.
-Terminal items, counters, and phases are projected before `finish`; mutation
-provenance and those saved facts also govern paused cancellation and fallback
-finishing, so later reconciliation cannot replace them with corrupted aliases.
+Immediately before each recording-open or existing-run finish callback, the
+workflow projects the already-admitted execution set to one frozen
+`RecordingSpec(plan, selection, run_id, commitment)`. The open callback receives
+that spec; the production `_LedgerRunRecording` retains the same object through
+`finish` and context exit. Recording callbacks and the local
+recorder runtime therefore receive no mutable execution status, evidence,
+progress, or recording-attribution container. Workflow helpers keep the
+execution set only to attribute callback failures and derive aggregate
+recording truth. Existing execution/candidate authority guards and the
+terminal projection remain through checkpoint 4P.20, preserving the accepted
+item prefix across ordinary failure, paused cancellation, fallback finishing,
+and context exit. Settlement order, callback count, wire shape, and recorder
+outcomes are unchanged.
 
 Fresh preflight still runs on every resume. If an already-started execute
 continuation is refused or faults there, workflow reopens the same run only to

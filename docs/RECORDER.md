@@ -49,6 +49,15 @@ volumes, plan, selection, and token, then returns a run-bound
 keeps run and plan context out of every per-operation call without making
 operation ids globally unique across reruns.
 
+The workflow opens or finishes that run from a frozen `RecordingSpec` carrying
+the already-admitted plan, selection, run id, and optional commitment by
+identity. `LocalWorkflowRuntime` passes this projection to its production
+`_LedgerRunRecording`, which retains the spec rather than the mutable
+`ExecutionSet`; status, publication evidence, byte progress, and recording
+attribution remain workflow/executor state. This custody change does not alter
+ledger commands, run tokens, selection digests, callback order, settlement, or
+schema.
+
 Volume, location, and inventory entry points reconstruct the exact typed
 command before any transaction. Volume identity/evidence use the core text and
 path ceilings, location paths are freshly validated and canonicalized, and an

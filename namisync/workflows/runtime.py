@@ -14,7 +14,12 @@ from uuid import uuid4
 
 from xxhash import xxh3_128
 
-from namisync.core.execution import Commitment, ExecutionSet, TaskRecordingIssue
+from namisync.core.execution import (
+    Commitment,
+    ExecutionSet,
+    RecordingSpec,
+    TaskRecordingIssue,
+)
 from namisync.core.evidence import RecordingStatus
 from namisync.core.integrity import (
     IntegrityMode,
@@ -1072,13 +1077,13 @@ class LocalWorkflowRuntime:
         )
 
     def _open_recording(
-        self, xset: ExecutionSet
+        self, spec: RecordingSpec
     ) -> AbstractContextManager[_LedgerRunRecording]:
         with self._lock:
-            started_at = self._execution_started.get(str(xset.run_id))
+            started_at = self._execution_started.get(str(spec.run_id))
         if started_at is None:
             raise RuntimeError("execution start time was not established")
-        return _LedgerRunRecording(self, xset, started_at)
+        return _LedgerRunRecording(self, spec, started_at)
 
     def _validate_execution_start(self, request: ExecutionRequest) -> None:
         started_at = request.started_at
@@ -1132,11 +1137,11 @@ class LocalWorkflowRuntime:
 
     def _finish_existing_recording(
         self,
-        xset: ExecutionSet,
+        spec: RecordingSpec,
         status: SessionState,
         recording: RecordingStatus,
     ) -> None:
-        run_token = str(xset.run_id)
+        run_token = str(spec.run_id)
         with self._lock:
             if run_token not in self._execution_started:
                 raise RuntimeError(
@@ -1394,17 +1399,17 @@ class _LedgerRunRecording:
     def __init__(
         self,
         runtime: LocalWorkflowRuntime,
-        xset: ExecutionSet,
+        spec: RecordingSpec,
         started_at: datetime,
     ) -> None:
         self._runtime = runtime
-        self._xset = xset
+        self._spec = spec
         self._owner = LedgerRecorder(
             runtime.ledger_path,
             clock=runtime.clock,
             managed_roots=(
-                xset.plan.source_root.path,
-                xset.plan.target_root.path,
+                spec.plan.source_root.path,
+                spec.plan.target_root.path,
             ),
         )
         try:
@@ -1414,13 +1419,13 @@ class _LedgerRunRecording:
             raise
 
     def _begin(self, started_at: datetime) -> SyncRunRecorder:
-        plan_value = self._xset.plan
+        plan_value = self._spec.plan
         if (
             plan_value.source_volume_id is None
             or plan_value.target_volume_id is None
             or plan_value.source_volume_evidence is None
             or plan_value.target_volume_evidence is None
-            or self._xset.commitment is None
+            or self._spec.commitment is None
         ):
             raise ValueError("executable plan lacks volume or commitment evidence")
         now = self._runtime.clock.now()
@@ -1466,14 +1471,14 @@ class _LedgerRunRecording:
         )
         return self._owner.begin_sync_run(
             SyncRunCommand(
-                run_token=str(self._xset.run_id),
+                run_token=str(self._spec.run_id),
                 host_id=host_id,
                 mapping_id=mapping_id,
                 source_location_id=source_location,
                 target_location_id=target_location,
                 plan=plan_value,
-                selection=self._xset.selection,
-                selection_digest=self._xset.commitment.selection_digest,
+                selection=self._spec.selection,
+                selection_digest=self._spec.commitment.selection_digest,
                 started_at=started_at,
             )
         )
@@ -1483,7 +1488,7 @@ class _LedgerRunRecording:
     ) -> None:
         self.recorder.finish(
             FinishRunCommand(
-                str(self._xset.run_id),
+                str(self._spec.run_id),
                 status,
                 recording,
                 self._runtime.clock.now(),
@@ -1491,7 +1496,7 @@ class _LedgerRunRecording:
         )
         with self._runtime._lock:
             self._runtime._execution_started.pop(
-                str(self._xset.run_id),
+                str(self._spec.run_id),
                 None,
             )
 

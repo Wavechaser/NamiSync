@@ -38,6 +38,7 @@ from namisync.core.execution import (
     ItemRecordingReason,
     PublishedCopyEvidence,
     RecordedCopyIdentity,
+    RecordingSpec,
     TaskRecordingIssueReason,
     validated_run_id,
 )
@@ -217,6 +218,22 @@ def _execution_set(*operations: PlanOperation) -> ExecutionSet:
             NOW,
         ),
     )
+
+
+def _assert_recording_spec(
+    value: object,
+    xset: ExecutionSet,
+) -> RecordingSpec:
+    assert type(value) is RecordingSpec
+    assert value.plan is xset.plan
+    assert value.selection is xset.selection
+    assert value.run_id is xset.run_id
+    assert value.commitment is xset.commitment
+    assert not hasattr(value, "__dict__")
+    assert not hasattr(value, "status")
+    assert not hasattr(value, "published_evidence")
+    assert not hasattr(value, "recording_reasons")
+    return value
 
 
 def _evidence(
@@ -418,7 +435,7 @@ def _deps(
             if verdict is not None
             else Verdict(True, (), observed)
         ),
-        open_recording=lambda execution_set: (
+        open_recording=lambda _spec: (
             recordings.append(_Recording()) or recordings[-1]
         ),
         executor=executor,
@@ -1818,9 +1835,263 @@ def test_verify_retains_an_accepted_item_when_candidate_tuple_changes() -> None:
     )
 
 
+def test_recording_spec_rejects_invalid_shallow_shape() -> None:
+    xset = _execution_set(_operation(122, 5))
+
+    class _SelectionSubclass(frozenset):
+        pass
+
+    class _RunIdSubclass(str):
+        pass
+
+    cases = (
+        (
+            (SimpleNamespace(), xset.selection, xset.run_id, xset.commitment),
+            TypeError,
+            "plan has the wrong type",
+        ),
+        (
+            (
+                xset.plan,
+                _SelectionSubclass(xset.selection),
+                xset.run_id,
+                xset.commitment,
+            ),
+            TypeError,
+            "selection must be an exact frozenset",
+        ),
+        (
+            (
+                xset.plan,
+                xset.selection,
+                _RunIdSubclass(str(xset.run_id)),
+                xset.commitment,
+            ),
+            TypeError,
+            "run id must be exact text",
+        ),
+        (
+            (xset.plan, xset.selection, "A" * 32, xset.commitment),
+            ValueError,
+            "32 lowercase hex digits",
+        ),
+        (
+            (xset.plan, xset.selection, xset.run_id, SimpleNamespace()),
+            TypeError,
+            "commitment has the wrong type",
+        ),
+    )
+
+    for arguments, error_type, match in cases:
+        with pytest.raises(error_type, match=match):
+            RecordingSpec(*arguments)
+
+
+@pytest.mark.parametrize("owner", ("execute", "verify"))
+def test_recording_boundary_exposes_one_immutable_identity_preserving_spec(
+    owner: str,
+) -> None:
+    operation = _operation(123, 5)
+    if owner == "execute":
+        continuation: ExecuteContinuation | VerifyContinuation = (
+            ExecuteContinuation(_execution_set(operation))
+        )
+    else:
+        continuation = _verify_continuation_fixture(operation)
+    xset = continuation.execution_set
+    seams: list[tuple[str, RecordingSpec]] = []
+
+    class InspectingRecording(_Recording):
+        def __init__(self, spec: RecordingSpec) -> None:
+            super().__init__()
+            self.spec = spec
+
+        def __enter__(self):
+            seams.append(("enter", self.spec))
+            return super().__enter__()
+
+        def finish(
+            self,
+            status: SessionState,
+            recording: RecordingStatus,
+        ) -> None:
+            super().finish(status, recording)
+            seams.append(("finish", self.spec))
+
+        def __exit__(self, exc_type, exc, traceback) -> None:
+            seams.append(("exit", self.spec))
+            return super().__exit__(exc_type, exc, traceback)
+
+    opened: list[RecordingSpec] = []
+
+    def open_recording(value: object) -> InspectingRecording:
+        spec = _assert_recording_spec(value, xset)
+        with pytest.raises(AttributeError):
+            setattr(spec, "run_id", validated_run_id("b" * 32))
+        with pytest.raises(AttributeError):
+            setattr(spec, "status", {})
+        opened.append(spec)
+        return InspectingRecording(spec)
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(execution_set, context, operation)
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=operation.content_bytes,
+            bytes_total=operation.content_bytes,
+        )
+
+    dependencies = _deps(
+        executor=(
+            executor
+            if owner == "execute"
+            else lambda *args: pytest.fail("execution phase repeated")
+        ),
+        verifier=_verify_all,
+        recordings=[],
+    )
+    dependencies.open_recording = open_recording
+
+    result = run_execution(
+        continuation,
+        RunContext(lambda _body: None, lambda: None),
+        dependencies,
+        resumed=owner == "verify",
+    )
+
+    assert result.error is None
+    assert [item.item_id for item in result.items] == [str(operation.op_id)]
+    assert result.items[0].path == operation.target_rel_path
+    assert len(opened) == 1
+    assert [name for name, _spec in seams] == ["enter", "finish", "exit"]
+    assert all(spec is opened[0] for _name, spec in seams)
+    if owner == "execute":
+        assert result.status is SessionState.COMPLETED
+        assert result.bytes_done == operation.content_bytes
+        assert result.bytes_total == operation.content_bytes
+        assert xset.status == {operation.op_id: Outcome.SUCCEEDED}
+    else:
+        assert result.status is SessionState.COMPLETED
+        assert result.phases[-1].status is PhaseStatus.COMPLETED
+        assert result.phases[-1].items_done == 1
+        assert result.phases[-1].bytes_done == operation.content_bytes
+        assert result.phases[-1].bytes_total == operation.content_bytes
+
+
+@pytest.mark.parametrize("owner", ("execute", "verify"))
+@pytest.mark.parametrize("route", ("paused-cancel", "fallback-finish"))
+def test_cancel_and_fallback_recording_callbacks_receive_only_spec(
+    owner: str,
+    route: str,
+) -> None:
+    operation = _operation(132, 5)
+    if owner == "execute":
+        xset = _execution_set(operation)
+        xset.status[operation.op_id] = Outcome.SUCCEEDED
+        xset.note_bytes_done(operation.content_bytes)
+        continuation: ExecuteContinuation | VerifyContinuation = ExecuteContinuation(
+            xset,
+            verify_after_execute=True,
+        )
+    else:
+        continuation = _verify_continuation_fixture(operation)
+        continuation.candidates.note_bytes_processed(operation.content_bytes)
+        continuation.candidates.mark_completed(
+            str(operation.op_id),
+            operation.content_bytes,
+        )
+        xset = continuation.execution_set
+    seams: list[tuple[str, RecordingSpec]] = []
+
+    if route == "paused-cancel":
+        class InspectingRecording(_Recording):
+            def __init__(self, spec: RecordingSpec) -> None:
+                super().__init__()
+                self.spec = spec
+
+            def __enter__(self):
+                seams.append(("enter", self.spec))
+                return super().__enter__()
+
+            def finish(self, status, recording):
+                super().finish(status, recording)
+                seams.append(("finish", self.spec))
+
+            def __exit__(self, exc_type, exc, traceback) -> None:
+                seams.append(("exit", self.spec))
+                return super().__exit__(exc_type, exc, traceback)
+
+        def open_recording(value: object) -> InspectingRecording:
+            spec = _assert_recording_spec(value, xset)
+            seams.append(("open", spec))
+            return InspectingRecording(spec)
+
+        result = settle_canceled_execution(
+            continuation,
+            Disposition.RAN,
+            SimpleNamespace(open_recording=open_recording),
+        )
+    else:
+        dependencies = _deps(
+            executor=lambda *args: pytest.fail("execution unexpectedly started"),
+            verifier=lambda *args: pytest.fail("verification unexpectedly started"),
+            recordings=[],
+        )
+        dependencies.observer = lambda *args: (_ for _ in ()).throw(
+            OSError("preflight unavailable")
+        )
+
+        def finish_existing_recording(
+            value: object,
+            status: SessionState,
+            recording: RecordingStatus,
+        ) -> None:
+            spec = _assert_recording_spec(value, xset)
+            seams.append(("fallback", spec))
+
+        dependencies.finish_existing_recording = finish_existing_recording
+        result = run_execution(
+            continuation,
+            RunContext(lambda _body: None, lambda: None),
+            dependencies,
+            resumed=True,
+        )
+
+    assert seams
+    assert all(spec is seams[0][1] for _name, spec in seams)
+    if route == "paused-cancel":
+        assert [name for name, _spec in seams] == [
+            "open",
+            "enter",
+            "finish",
+            "exit",
+        ]
+        assert result.canceled
+        assert result.error is None
+        assert result.status is (
+            SessionState.CANCELED
+            if owner == "execute"
+            else SessionState.COMPLETED
+        )
+    else:
+        assert [name for name, _spec in seams] == ["fallback"]
+        assert not result.canceled
+        assert result.error == FailureDetail(
+            "OSError",
+            "preflight unavailable",
+        )
+        assert result.status is (
+            SessionState.FAILED
+            if owner == "execute"
+            else SessionState.COMPLETED
+        )
+
+
 @pytest.mark.parametrize("owner", ("execute", "verify"))
 @pytest.mark.parametrize("seam", ("finish", "exit"))
-def test_recording_boundary_mutation_cannot_overwrite_reliable_truth(
+def test_captured_alias_mutation_at_recording_boundary_preserves_truth(
     owner: str,
     seam: str,
 ) -> None:
@@ -1832,7 +2103,7 @@ def test_recording_boundary_mutation_cannot_overwrite_reliable_truth(
     else:
         continuation = _verify_continuation_fixture(operation)
 
-    def mutate() -> None:
+    def mutate_captured_alias() -> None:
         if owner == "execute":
             continuation.execution_set.status.clear()
             continuation.execution_set.bytes_done_high_water = 0
@@ -1849,11 +2120,11 @@ def test_recording_boundary_mutation_cannot_overwrite_reliable_truth(
         ) -> None:
             super().finish(status, recording)
             if seam == "finish":
-                mutate()
+                mutate_captured_alias()
 
         def __exit__(self, exc_type, exc, traceback) -> None:
             if seam == "exit":
-                mutate()
+                mutate_captured_alias()
             return super().__exit__(exc_type, exc, traceback)
 
     recording = MutatingRecording()
@@ -1877,7 +2148,7 @@ def test_recording_boundary_mutation_cannot_overwrite_reliable_truth(
         verifier=_verify_all,
         recordings=[],
     )
-    dependencies.open_recording = lambda _execution_set: recording
+    dependencies.open_recording = lambda _spec: recording
 
     result = run_execution(
         continuation,
@@ -1908,7 +2179,7 @@ def test_recording_boundary_mutation_cannot_overwrite_reliable_truth(
 
 @pytest.mark.parametrize("owner", ("execute", "verify"))
 @pytest.mark.parametrize("route", ("paused-cancel", "fallback-finish"))
-def test_recording_finish_mutation_preserves_canceled_and_fallback_truth(
+def test_captured_alias_mutation_preserves_cancel_and_fallback_truth(
     owner: str,
     route: str,
 ) -> None:
@@ -1930,7 +2201,7 @@ def test_recording_finish_mutation_preserves_canceled_and_fallback_truth(
         )
         xset = continuation.execution_set
 
-    def mutate() -> None:
+    def mutate_captured_alias() -> None:
         if owner == "execute":
             xset.status.clear()
             xset.bytes_done_high_water = 0
@@ -1943,13 +2214,13 @@ def test_recording_finish_mutation_preserves_canceled_and_fallback_truth(
         class MutatingRecording(_Recording):
             def finish(self, status, recording):
                 super().finish(status, recording)
-                mutate()
+                mutate_captured_alias()
 
         result = settle_canceled_execution(
             continuation,
             Disposition.RAN,
             SimpleNamespace(
-                open_recording=lambda execution_set: MutatingRecording()
+                open_recording=lambda _spec: MutatingRecording()
             ),
         )
     else:
@@ -1962,7 +2233,7 @@ def test_recording_finish_mutation_preserves_canceled_and_fallback_truth(
             OSError("preflight unavailable")
         )
         dependencies.finish_existing_recording = (
-            lambda execution_set, status, recording: mutate()
+            lambda _spec, status, recording: mutate_captured_alias()
         )
         result = run_execution(
             continuation,
@@ -2702,7 +2973,7 @@ def test_canceled_settlement_revalidates_direct_verify_continuation() -> None:
             continuation,
             Disposition.RAN,
             SimpleNamespace(
-                open_recording=lambda execution_set: (
+                open_recording=lambda _spec: (
                     recordings.append(_Recording()) or recordings[-1]
                 )
             ),
@@ -3625,7 +3896,7 @@ def test_compound_exclusion_close_failure_retains_terminal_truth(
         verifier=lambda *args: pytest.fail("verification unexpectedly started"),
         recordings=[],
     )
-    deps.open_recording = lambda execution_set: recording
+    deps.open_recording = lambda _spec: recording
     outcome = run_session(
         lambda context: run_execution(
             ExecuteContinuation(xset, verify_after_execute=verify_after_execute),
@@ -3701,9 +3972,9 @@ def test_dispatcher_compound_exclusion_close_failure_survives_payload_scrub(
         raise OSError("execution failed before exclusions")
 
     @contextmanager
-    def close_failed_recording(execution_set):
+    def close_failed_recording(spec):
         try:
-            with original_open(execution_set) as recording:
+            with original_open(spec) as recording:
                 def finish(status, recording_status):
                     finishes.append((status, recording_status))
                     recording.finish(status, recording_status)
@@ -3835,7 +4106,7 @@ def test_verify_present_close_failure_retains_execution_task_issue() -> None:
         )
 
     deps = _deps(executor=executor, verifier=_verify_all, recordings=[])
-    deps.open_recording = lambda execution_set: recording
+    deps.open_recording = lambda _spec: recording
     result = run_execution(
         ExecuteContinuation(xset, verify_after_execute=True),
         RunContext(lambda body: None, lambda: None),
@@ -3863,7 +4134,7 @@ def test_canceled_open_failure_passes_degraded_axis_to_fallback_finisher() -> No
         Disposition.RAN,
         SimpleNamespace(
             open_recording=fail_open,
-            finish_existing_recording=lambda execution_set, status, recording: (
+            finish_existing_recording=lambda _spec, status, recording: (
                 finished.append((status, recording))
             ),
         ),
@@ -3907,9 +4178,9 @@ def test_recording_boundary_failure_preserves_execution_truth(boundary: str) -> 
         verifier=lambda *args: pytest.fail("verification unexpectedly started"),
         recordings=[],
     )
-    deps.open_recording = lambda execution_set: recording
+    deps.open_recording = lambda _spec: recording
     deps.finish_existing_recording = (
-        lambda execution_set, status, recording_status: finished_without_open.append(
+        lambda _spec, status, recording_status: finished_without_open.append(
             (status, recording_status)
         )
     )
@@ -4031,7 +4302,7 @@ def test_recording_diagnostic_failure_preserves_workflow_truth(
 
     recording = Recording()
 
-    def open_recording(execution_set):
+    def open_recording(_spec):
         if boundary == "factory":
             _raise_with_private_workflow_frame(primary, references)
         return recording
@@ -4162,7 +4433,7 @@ def test_recording_exit_truth_tests_once_and_retires_suppressed_failure() -> Non
     result = settle_canceled_execution(
         ExecuteContinuation(xset, verify_after_execute=False),
         Disposition.RAN,
-        SimpleNamespace(open_recording=lambda execution_set: Recording()),
+        SimpleNamespace(open_recording=lambda _spec: Recording()),
     )
 
     assert result.status is SessionState.CANCELED
@@ -4199,7 +4470,7 @@ def test_recording_exit_truthiness_failure_preserves_python_behavior() -> None:
         verifier=lambda *args: pytest.fail("verification unexpectedly started"),
         recordings=[],
     )
-    deps.open_recording = lambda execution_set: Recording()
+    deps.open_recording = lambda _spec: Recording()
 
     with pytest.raises(LookupError) as raised:
         run_execution(
@@ -4226,7 +4497,7 @@ def test_recording_close_diagnostic_failure_preserves_primary_filesystem_error()
         raise primary
 
     deps = _deps(executor=executor, verifier=lambda *args: None, recordings=[])
-    deps.open_recording = lambda execution_set: Recording()
+    deps.open_recording = lambda _spec: Recording()
     result = run_execution(
         ExecuteContinuation(_execution_set(_operation(65)), verify_after_execute=False),
         RunContext(lambda body: None, lambda: None),
@@ -4266,7 +4537,7 @@ def test_recording_diagnostic_failure_cannot_mask_escaping_primary(
             raise _UnrenderableRecordingError()
 
     deps = _deps(executor=executor, verifier=lambda *args: None, recordings=[])
-    deps.open_recording = lambda execution_set: Recording()
+    deps.open_recording = lambda _spec: Recording()
     with pytest.raises(primary_type) as raised:
         run_execution(
             ExecuteContinuation(xset, verify_after_execute=False),
@@ -4316,7 +4587,7 @@ def test_recording_diagnostic_failure_preserves_canceled_settlement(boundary: st
     result = settle_canceled_execution(
         ExecuteContinuation(xset, verify_after_execute=False),
         Disposition.RAN,
-        SimpleNamespace(open_recording=lambda execution_set: Recording()),
+        SimpleNamespace(open_recording=lambda _spec: Recording()),
     )
 
     reason = {
@@ -4357,6 +4628,10 @@ def test_recording_diagnostic_failure_contains_fallback_finish(fallback: str) ->
         def finish(self, status, recording_status) -> None:
             fail_finish()
 
+    def open_reopened_recording(value: object) -> Recording:
+        _assert_recording_spec(value, xset)
+        return Recording()
+
     deps = _deps(
         executor=lambda *args: pytest.fail("execution unexpectedly started"),
         verifier=lambda *args: pytest.fail("verification unexpectedly started"),
@@ -4370,7 +4645,7 @@ def test_recording_diagnostic_failure_contains_fallback_finish(fallback: str) ->
         if fallback == "preflight":
             deps.finish_existing_recording = fail_finish
         else:
-            deps.open_recording = lambda execution_set: Recording()
+            deps.open_recording = open_reopened_recording
 
     result = run_execution(
         ExecuteContinuation(xset, verify_after_execute=False),
@@ -4453,9 +4728,9 @@ def test_recording_entry_pause_remains_cooperative_control(boundary: str) -> Non
         def __exit__(self, exc_type, exc, traceback) -> None:
             pytest.fail("recording exit unexpectedly reached")
 
-    def open_recording(execution_set):
+    def open_recording(spec):
         nonlocal open_calls
-        assert execution_set is xset
+        _assert_recording_spec(spec, xset)
         open_calls += 1
         if boundary == "factory":
             raise PauseRequested()
@@ -4474,7 +4749,7 @@ def test_recording_entry_pause_remains_cooperative_control(boundary: str) -> Non
     )
     deps.open_recording = open_recording
     deps.finish_existing_recording = (
-        lambda execution_set, status, recording_status: finished_without_open.append(
+        lambda _spec, status, recording_status: finished_without_open.append(
             (status, recording_status)
         )
     )
@@ -4515,9 +4790,9 @@ def test_recording_entry_cancel_uses_continuation_authority_without_reopen(
         def __exit__(self, exc_type, exc, traceback) -> None:
             pytest.fail("recording exit unexpectedly reached")
 
-    def open_recording(execution_set):
+    def open_recording(spec):
         nonlocal open_calls
-        assert execution_set is xset
+        _assert_recording_spec(spec, xset)
         open_calls += 1
         if boundary == "factory":
             raise Canceled()
@@ -4536,7 +4811,7 @@ def test_recording_entry_cancel_uses_continuation_authority_without_reopen(
     )
     deps.open_recording = open_recording
     deps.finish_existing_recording = (
-        lambda execution_set, status, recording_status: finished_without_open.append(
+        lambda _spec, status, recording_status: finished_without_open.append(
             (status, recording_status)
         )
     )
@@ -4598,12 +4873,12 @@ def test_recording_entry_cancel_attributes_fallback_finish_failure() -> None:
     operation = _operation(72, 9)
     xset = _execution_set(operation)
 
-    def cancel_open(execution_set):
-        assert execution_set is xset
+    def cancel_open(spec):
+        _assert_recording_spec(spec, xset)
         raise Canceled()
 
-    def fail_finish(execution_set, status, recording_status):
-        assert execution_set is xset
+    def fail_finish(spec, status, recording_status):
+        _assert_recording_spec(spec, xset)
         assert status is SessionState.CANCELED
         assert recording_status is RecordingStatus.OK
         raise OSError("fallback finish failed")
@@ -4645,7 +4920,7 @@ def test_pause_recording_exit_failure_persists_degraded_continuation() -> None:
         verifier=lambda *args: pytest.fail("verification unexpectedly started"),
         recordings=[],
     )
-    deps.open_recording = lambda execution_set: recording
+    deps.open_recording = lambda _spec: recording
 
     with pytest.raises(PauseRequested) as raised:
         run_execution(
@@ -4735,7 +5010,7 @@ def test_verify_recording_open_failure_does_not_rewrite_execution_axis() -> None
         verifier=lambda *args: pytest.fail("verification unexpectedly started"),
         recordings=[],
     )
-    deps.open_recording = lambda execution_set: _Recording(enter_fails=True)
+    deps.open_recording = lambda _spec: _Recording(enter_fails=True)
 
     result = run_execution(
         continuation,
@@ -5303,7 +5578,7 @@ def test_paused_verify_cancel_preserves_execute_truth_and_finish_failure_axis() 
     recording = _Recording(finish_fails=True)
 
     deps = SimpleNamespace(
-        open_recording=lambda execution_set: recording,
+        open_recording=lambda _spec: recording,
     )
     result = settle_canceled_execution(
         continuation,
@@ -5332,7 +5607,7 @@ def test_paused_execute_cancel_finishes_without_starting_verify() -> None:
     result = settle_canceled_execution(
         ExecuteContinuation(xset, verify_after_execute=True),
         Disposition.RAN,
-        SimpleNamespace(open_recording=lambda execution_set: recording),
+        SimpleNamespace(open_recording=lambda _spec: recording),
     )
 
     assert result.status is SessionState.CANCELED
@@ -5365,7 +5640,7 @@ def test_paused_execute_cancel_preserves_continuation_on_recording_fault(
     result = settle_canceled_execution(
         ExecuteContinuation(xset, verify_after_execute=False),
         Disposition.RAN,
-        SimpleNamespace(open_recording=lambda execution_set: recording),
+        SimpleNamespace(open_recording=lambda _spec: recording),
     )
 
     assert result.status is SessionState.CANCELED
@@ -6345,9 +6620,16 @@ def test_xv_2_copy_record_failure_still_builds_rowless_candidate(
         def finish(self, status, recording) -> None:
             self._inner.finish(status, recording)
 
+    def open_faulting_recording(value: object) -> FaultingRecording:
+        assert type(value) is RecordingSpec
+        inner = original_open(value)
+        assert inner._spec is value
+        assert not hasattr(inner, "_xset")
+        return FaultingRecording(inner)
+
     runtime._deps = replace(
         runtime._deps,
-        open_recording=lambda xset: FaultingRecording(original_open(xset)),
+        open_recording=open_faulting_recording,
     )
     context = RunContext(lambda body: None, lambda: None)
     try:

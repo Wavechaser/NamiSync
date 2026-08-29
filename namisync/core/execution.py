@@ -133,6 +133,27 @@ class Commitment:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordingSpec:
+    """Immutable reviewed inputs exposed to run-recording collaborators."""
+
+    plan: Plan
+    selection: frozenset[OpId]
+    run_id: RunId
+    commitment: Commitment | None
+
+    def __post_init__(self) -> None:
+        if type(self.plan) is not Plan:
+            raise TypeError("recording spec plan has the wrong type")
+        if type(self.selection) is not frozenset:
+            raise TypeError("recording spec selection must be an exact frozenset")
+        if type(self.run_id) is not str:
+            raise TypeError("recording spec run id must be exact text")
+        validated_run_id(self.run_id)
+        if self.commitment is not None and type(self.commitment) is not Commitment:
+            raise TypeError("recording spec commitment has the wrong type")
+
+
+@dataclass(frozen=True, slots=True)
 class RecordedCopyIdentity:
     """Durable ledger identity returned by one successful copy transaction."""
 

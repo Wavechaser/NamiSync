@@ -44,9 +44,9 @@ attestation format.
 - Stable identifier value types: session, run, operation, row, mapping, host,
   volume, and file identity.
 - Immutable scan (`FileRecord`, `DirRecord`, `UnsupportedRecord`), plan,
-  observation, content-evidence, attestation, item-result, run-result, and
-  read-only execution-review dataclasses; `ExecutionSet` is the explicit
-  mutable execution-status carrier.
+  observation, content-evidence, attestation, item-result, run-result,
+  execution-review, and recording-spec dataclasses; `ExecutionSet` is the
+  explicit mutable execution-status carrier.
 - `MappingSnapshot`, root-qualified `Subject`, `Commitment`,
   `PreservationPolicy`, `MetadataSnapshot`, capability profile,
   and the stable `VolumeId`/corroborating `VolumeEvidence` split.
@@ -172,14 +172,18 @@ evidence, contributes zero content bytes, and never implies update/trash
 semantics.
 
 Executor continuation and collaborator contracts are implemented in
-`core/execution.py`: the mutable `ExecutionSet`, immutable `ExecutionReview`,
-fixed-format `RunId`, typed failure decisions/reasons, copy digest, and
-filesystem/copy/recorder protocols. `ExecutionReview` exposes only the exact
-plan, selected operation ids, run id, and a private read-only copy of current
-status to observation and judgment. It admits exact dict or mapping-proxy
-status input, checks fixed ids and selection/status subsets without rebuilding
-the plan, and shares the same plan-ordered remaining-operation helper with
-`ExecutionSet`.
+`core/execution.py`: the mutable `ExecutionSet`, immutable `ExecutionReview`
+and `RecordingSpec`, fixed-format `RunId`, typed failure decisions/reasons,
+copy digest, and filesystem/copy/recorder protocols. `ExecutionReview` exposes
+only the exact plan, selected operation ids, run id, and a private read-only
+copy of current status to observation and judgment. It admits exact dict or
+mapping-proxy status input, checks fixed ids and selection/status subsets
+without rebuilding the plan, and shares the same plan-ordered
+remaining-operation helper with `ExecutionSet`. `RecordingSpec` is the
+shallower recording projection: it retains the already-admitted plan,
+selection, run id, and optional commitment by identity after exact shallow
+checks, and exposes no mutable status, evidence, progress, or recording
+attribution.
 `ExecutionSet.bytes_done_high_water` is public continuation state: callers may
 restore it through the dataclass constructor, `replace()` preserves it, and it
 participates in equality because it changes later progress behavior. The

@@ -1788,15 +1788,14 @@ defect, and move implementation-level test choreography out of the log.
   The five pre-run failure/refusal sites now share one typed owner dispatcher,
   removing the divergent copies that produced this defect while retaining the
   distinct cancellation control path.
-- SEVERE - FIXED (2026-08-28). Recording boundary authority mutation. Recording
-  `finish`, fallback finishing, and context exit received mutable execution-set
-  aliases, while linked recording owners could also retain candidate aliases.
-  A hostile collaborator could alter settlement, progress, identity, or
-  candidate truth after the last workflow check and produce false terminal
-  success or overwrite the detected mutation with a later reconciliation error.
-  Fixed with exact pre/post authorities, pre-finish terminal projection, and
-  typed failed/incomplete results from saved facts across ordinary, paused-
-  cancellation, fallback-finish, and exit paths.
+- SEVERE - FIXED (2026-08-28; hardened 2026-08-29). Recording boundary authority mutation.
+  Recording open/fallback callbacks and linked run owners received mutable
+  execution-set aliases, so a fallible collaborator could alter settlement,
+  progress, identity, or recording truth after the last workflow check. Fixed
+  by exposing only a frozen identity-preserving `RecordingSpec` and retaining
+  the mutable execution set inside workflow attribution. Exact authority and
+  terminal projections remain as defense through 4P.20; ordinary, paused-
+  cancellation, fallback-finish, and context-exit regressions cover the seam.
 - MODERATE - FIXED (2026-08-27). Verify-continuation diagnostic retention.
   Linked execution bounded failure type and message separately, then retained
   their unchecked concatenation in paused verify custody. The continuation also

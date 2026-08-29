@@ -21,6 +21,7 @@ from namisync.core.execution import (
     ItemRecordingReason,
     PublishedCopyEvidence,
     Recorder,
+    RecordingSpec,
     TaskRecordingIssue,
     TaskRecordingIssueReason,
     revalidate_execution_set_authority,
@@ -198,7 +199,7 @@ class _RecordingBoundary:
     def __init__(
         self,
         factory: Callable[
-            [ExecutionSet], AbstractContextManager[RunRecording]
+            [RecordingSpec], AbstractContextManager[RunRecording]
         ],
         snapshot_exit_revalidator: (
             Callable[[], Callable[[], None]] | None
@@ -212,11 +213,9 @@ class _RecordingBoundary:
         self.exit_failure: _ClosedRecordingFailure | None = None
         self.integrity_failure: FailureDetail | None = None
 
-    def open(
-        self, execution_set: ExecutionSet
-    ) -> AbstractContextManager[RunRecording]:
+    def open(self, spec: RecordingSpec) -> AbstractContextManager[RunRecording]:
         try:
-            context = self._factory(execution_set)
+            context = self._factory(spec)
         except (PauseRequested, Canceled):
             raise
         except Exception as error:
@@ -298,11 +297,11 @@ class SyncDependencies:
     executor_fs: ExecutorFileSystem
     verifier: PostCopyVerifier
     verifier_context: Callable[[RunContext], VerifierContext]
-    open_recording: Callable[[ExecutionSet], AbstractContextManager[RunRecording]]
+    open_recording: Callable[[RecordingSpec], AbstractContextManager[RunRecording]]
     save_plan: Callable[[PlanArtifact], None]
     save_execution_details: Callable[[ExecutionDetails], None]
     finish_existing_recording: (
-        Callable[[ExecutionSet, SessionState, RecordingStatus], None] | None
+        Callable[[RecordingSpec, SessionState, RecordingStatus], None] | None
     ) = None
     ignores: IgnoreSet = IgnoreSet()
 
@@ -816,7 +815,7 @@ def _run_execution(
     continuation_sink: Callable[[ExecutionContinuation], None] | None = None,
     resumed: bool = False,
     open_recording: (
-        Callable[[ExecutionSet], AbstractContextManager[RunRecording]] | None
+        Callable[[RecordingSpec], AbstractContextManager[RunRecording]] | None
     ) = None,
     recording_integrity_sink: (
         Callable[[FailureDetail, ExecutionSetAuthority], None] | None
@@ -1040,7 +1039,7 @@ def _run_execution(
     del decision, refusals, review_admission, verdict, world
 
     recording_factory = open_recording or deps.open_recording
-    with recording_factory(xset) as recording:
+    with recording_factory(_recording_spec(xset)) as recording:
         revalidate_preflight_authority()
         finished = False
         finished_recording = xset.recording
@@ -1940,7 +1939,7 @@ def settle_canceled_execution(
     recording_failure: _ClosedRecordingFailure | None = None
     integrity_failure: FailureDetail | None = None
     try:
-        with boundary.open(xset) as recording:
+        with boundary.open(_recording_spec(xset)) as recording:
             finish_authority = snapshot_execution_set_authority(xset)
             try:
                 recording_status = _finish_recording(
@@ -3090,6 +3089,17 @@ def _combined_recording(
     )
 
 
+def _recording_spec(xset: ExecutionSet) -> RecordingSpec:
+    """Project one immutable recording input without rebuilding reviewed facts."""
+
+    return RecordingSpec(
+        xset.plan,
+        xset.selection,
+        xset.run_id,
+        xset.commitment,
+    )
+
+
 def _finish_existing_recording(
     deps: SyncDependencies,
     xset: ExecutionSet,
@@ -3100,7 +3110,7 @@ def _finish_existing_recording(
     if finisher is not None:
         authority = snapshot_execution_set_authority(xset)
         try:
-            finisher(xset, status, recording_status)
+            finisher(_recording_spec(xset), status, recording_status)
         except Exception as error:
             try:
                 revalidate_execution_set_authority(
@@ -3128,7 +3138,7 @@ def _finish_existing_recording(
         lambda: _strict_execution_revalidator(xset),
     )
     try:
-        with boundary.open(xset) as recording:
+        with boundary.open(_recording_spec(xset)) as recording:
             recording_status = _finish_recording(
                 recording,
                 xset,
@@ -3175,7 +3185,7 @@ def _finish_recording_without_open(
         return _combined_recording(recording_status, xset.recording)
     authority = snapshot_execution_set_authority(xset)
     try:
-        finisher(xset, status, recording_status)
+        finisher(_recording_spec(xset), status, recording_status)
     except Exception as error:
         try:
             revalidate_execution_set_authority(
