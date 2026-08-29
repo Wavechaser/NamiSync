@@ -401,6 +401,15 @@ object keys and the nonstandard numeric constants `NaN`, `Infinity`, and
 `-Infinity`; no payload may acquire a non-finite value through Python's
 otherwise-permissive JSON parser.
 
+Execution encoding keeps a fixed admission order. It first charges and validates
+the complete typed request and every wire-bound primitive against the existing
+occurrence and byte walls, then validates `ExecutionSet`'s mutable overlay and
+compound publication relations in place, and only then performs continuation
+normalization and JSON projection. The semantic pass does not rebuild the
+already-valid plan or published-evidence graph, and a contradiction cannot
+reach projection. Codec versions, schemas, canonical bytes, and quantitative
+walls are unchanged.
+
 M0 automatically selects the maximal safe dependency-closed subset. Directly
 blocked items remain in the reviewed plan as `BLOCKED`; operations touching
 their source/target correspondence region or depending on an exclusion become

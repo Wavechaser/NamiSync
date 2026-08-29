@@ -160,7 +160,16 @@ failure decisions/reasons, copy digest, and filesystem/copy/recorder protocols.
 restore it through the dataclass constructor, `replace()` preserves it, and it
 participates in equality because it changes later progress behavior. The
 selected-content bound remains a derived, non-comparing validation cache. The
-workflow continuation wire key remains `bytes_done_high_water`; plan payloads
+exact mutable-overlay validator rechecks selection, settlement, recording, byte
+progress, and published-evidence relations in place. It does not reconstruct
+the already-valid immutable `Plan`, attestation, file-stat, or recorded-identity
+graphs. Published evidence still requires copy provenance, a regular-file
+subject, matching attestation/reviewed sizes, successful byte-producing status,
+the execution run scope and reviewed target path, one recorded location, and
+consistent operation-local recording attribution. Authority comparison retains
+its immutable evidence facts through checkpoint 4P.20.
+
+The workflow continuation wire key remains `bytes_done_high_water`; plan payloads
 remain exact v5 while execution payloads are exact v7. The execute-only
 `reported_exclusion_count` is a nonnegative JavaScript-safe integer; v6 has no
 compatibility decoder.

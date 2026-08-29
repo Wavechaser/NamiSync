@@ -13,6 +13,7 @@ from typing import BinaryIO, NewType, Protocol, TypeAlias
 
 from .evidence import (
     Attestation,
+    ContentEvidence,
     Outcome,
     Provenance,
     RecordingStatus,
@@ -181,6 +182,53 @@ class PublishedCopyEvidence:
         return self.recorded_identity is not None
 
 
+def _validate_published_evidence_shape(
+    value: object,
+) -> PublishedCopyEvidence:
+    """Validate immutable evidence shape and its local compound relations."""
+
+    if type(value) is not PublishedCopyEvidence:
+        raise TypeError("published evidence must have the exact public shape")
+    attestation = value.attestation
+    if type(attestation) is not Attestation:
+        raise TypeError("published evidence attestation has the wrong type")
+    content = attestation.content
+    subject = attestation.subject
+    if type(content) is not ContentEvidence:
+        raise TypeError("published evidence content has the wrong type")
+    if type(subject) is not FileStat:
+        raise TypeError("published evidence subject has the wrong type")
+    if type(content.algorithm) is not str:
+        raise TypeError("published evidence algorithm must be exact text")
+    if type(content.digest) is not bytes:
+        raise TypeError("published evidence digest must be exact bytes")
+    if type(content.observed_at) is not datetime:
+        raise TypeError("published evidence time must be an exact datetime")
+    if type(content.size) is not int or type(subject.size) is not int:
+        raise TypeError("published evidence sizes must be exact integers")
+    if content.provenance is not Provenance.COPY_ATTESTED:
+        raise ValueError("published copy evidence must be copy-attested")
+    if subject.kind is not EntryKind.FILE:
+        raise ValueError("published copy evidence must attest a regular file")
+    if content.size != subject.size:
+        raise ValueError("attestation content size must match its subject")
+    recorded = value.recorded_identity
+    if recorded is not None:
+        if type(recorded) is not RecordedCopyIdentity:
+            raise TypeError("recorded copy identity has the wrong type")
+        if any(
+            type(field_value) is not str
+            for field_value in (
+                recorded.row_id,
+                recorded.location_id,
+                recorded.scope_token,
+                recorded.rel_path_key,
+            )
+        ):
+            raise TypeError("recorded copy identity fields must be exact text")
+    return value
+
+
 @dataclass(slots=True)
 class ExecutionSet:
     """A selected plan plus mutable continuation state for pause/resume."""
@@ -283,9 +331,7 @@ class ExecutionSet:
             raise ValueError("execution byte high-water exceeds selected content")
         recorded_location_id: str | None = None
         for op_id, evidence in self.published_evidence.items():
-            if not isinstance(evidence, PublishedCopyEvidence):
-                raise TypeError("published evidence values have the wrong type")
-            _published_evidence_fact(evidence)
+            _validate_published_evidence_shape(evidence)
             operation = operations[op_id]
             if operation.kind not in byte_kinds:
                 raise ValueError(
@@ -459,7 +505,6 @@ def validate_execution_set(value: object) -> None:
             for op_id in population
         ):
             raise TypeError("execution operation identities must be exact ids")
-    Plan.__post_init__(value.plan)
     ExecutionSet.__post_init__(value)
 
 

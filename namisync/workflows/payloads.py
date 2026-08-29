@@ -22,6 +22,7 @@ from namisync.core.execution import (
     RecordedCopyIdentity,
     TaskRecordingIssue,
     TaskRecordingIssueReason,
+    validate_execution_set,
     validated_run_id,
 )
 from namisync.core.integrity import (
@@ -1395,24 +1396,6 @@ def _charge_execution_request(request: object) -> JsonEnvelopeCounter:
     return counter
 
 
-def _readmit_execution_set(value: ExecutionSet) -> None:
-    """Re-run mutable continuation invariants after bounded typed walking."""
-
-    ExecutionSet(
-        plan=value.plan,
-        selection=value.selection,
-        run_id=value.run_id,
-        status=value.status,
-        commitment=value.commitment,
-        published_evidence=value.published_evidence,
-        recording_reasons=value.recording_reasons,
-        recording_issues=value.recording_issues,
-        omitted_detail_count=value.omitted_detail_count,
-        user_deselected=value.user_deselected,
-        bytes_done_high_water=value.bytes_done_high_water,
-    )
-
-
 def _json_bytes(value: object) -> bytes:
     return json.dumps(
         value,
@@ -2566,7 +2549,7 @@ def decode_plan_request(payload: bytes) -> PlanRequest:
 def encode_execution_request(request: ExecutionRequest) -> bytes:
     admission = _charge_execution_request(request)
     continuation = request.continuation
-    _readmit_execution_set(continuation.execution_set)
+    validate_execution_set(continuation.execution_set)
     if isinstance(continuation, VerifyContinuation):
         continuation = _exact_verify_continuation(continuation)
     value: dict[str, object] = {

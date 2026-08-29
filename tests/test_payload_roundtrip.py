@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+import namisync.core.execution as execution_module
 import namisync.workflows.payloads as payload_module
 from namisync.core.evidence import (
     Attestation,
@@ -35,6 +36,7 @@ from namisync.core.execution import (
     RecordedCopyIdentity,
     TaskRecordingIssue,
     TaskRecordingIssueReason,
+    validate_execution_set,
     validated_run_id,
 )
 from namisync.core.integrity import (
@@ -47,7 +49,6 @@ from namisync.core.models import (
     EntryKind,
     FileIdentity,
     FileStat,
-    MAX_ROOT_ID_UTF8_BYTES,
     MetadataSnapshot,
     Root,
     VolumeEvidence,
@@ -682,6 +683,175 @@ def test_execution_payload_is_a_lossless_round_trip() -> None:
     assert decoded.execution_set.recording is RecordingStatus.DEGRADED
     assert decoded.execution_set.bytes_done_high_water == 17
     assert str(decoded.execution_set.run_id) == str(original.execution_set.run_id)
+
+
+def test_execution_validation_and_encoding_do_not_rebuild_valid_graphs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = _rich_verify_request()
+    encoded = encode_execution_request(original)
+    decoded = decode_execution_request(encoded)
+
+    def forbid_reconstruction(*_args, **_kwargs):
+        raise AssertionError("valid execution validation rebuilt a contract")
+
+    monkeypatch.setattr(Plan, "__post_init__", forbid_reconstruction)
+    monkeypatch.setattr(ExecutionSet, "__init__", forbid_reconstruction)
+    monkeypatch.setattr(
+        execution_module,
+        "_published_evidence_fact",
+        forbid_reconstruction,
+    )
+
+    validate_execution_set(decoded.execution_set)
+
+    assert encode_execution_request(decoded) == encoded
+
+
+@pytest.mark.parametrize(
+    ("field_name", "replacement", "message"),
+    (
+        ("algorithm", type("TextSubtype", (str,), {})("xxh3_128"), "algorithm"),
+        ("digest", type("BytesSubtype", (bytes,), {})(b"\x02" * 16), "digest"),
+        (
+            "observed_at",
+            type("DatetimeSubtype", (datetime,), {})(
+                2026,
+                7,
+                19,
+                12,
+                30,
+                tzinfo=timezone.utc,
+            ),
+            "time",
+        ),
+    ),
+)
+def test_execution_validation_requires_exact_content_evidence_shape(
+    field_name: str,
+    replacement: object,
+    message: str,
+) -> None:
+    execution_set = _rich_execution_request().execution_set
+    copy = execution_set.plan.operations[1]
+    evidence = execution_set.published_evidence[copy.op_id]
+    content = replace(
+        evidence.attestation.content,
+        **{field_name: replacement},
+    )
+    execution_set.published_evidence[copy.op_id] = replace(
+        evidence,
+        attestation=replace(evidence.attestation, content=content),
+    )
+
+    with pytest.raises(TypeError, match=message):
+        validate_execution_set(execution_set)
+
+
+def test_execution_encoder_orders_charge_validation_and_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _rich_execution_request()
+    calls: list[str] = []
+    original_charge = payload_module._charge_execution_request
+    original_validate = payload_module.validate_execution_set
+    original_projection = payload_module._execution_set
+
+    def track_charge(value):
+        calls.append("charge")
+        return original_charge(value)
+
+    def track_validation(value):
+        calls.append("validate")
+        return original_validate(value)
+
+    def track_projection(value):
+        calls.append("project")
+        return original_projection(value)
+
+    monkeypatch.setattr(
+        payload_module,
+        "_charge_execution_request",
+        track_charge,
+    )
+    monkeypatch.setattr(
+        payload_module,
+        "validate_execution_set",
+        track_validation,
+    )
+    monkeypatch.setattr(payload_module, "_execution_set", track_projection)
+
+    encode_execution_request(request)
+
+    assert calls == ["charge", "validate", "project"]
+
+
+@pytest.mark.parametrize(
+    ("contradiction", "message"),
+    (
+        ("status", "successful operation status"),
+        ("content-size", "reviewed content bytes"),
+        ("scope", "scope token does not match"),
+        ("path", "relative path key does not match"),
+        ("location", "share one target location"),
+        ("recording", "cannot carry a recorded identity"),
+    ),
+)
+def test_execution_mutable_contradictions_fail_before_projection(
+    monkeypatch: pytest.MonkeyPatch,
+    contradiction: str,
+    message: str,
+) -> None:
+    request = _rich_verify_request()
+    execution_set = request.execution_set
+    copy = execution_set.plan.operations[1]
+    move_update = execution_set.plan.operations[4]
+    evidence = execution_set.published_evidence[copy.op_id]
+    identity = evidence.recorded_identity
+    assert identity is not None
+
+    if contradiction == "status":
+        execution_set.status[copy.op_id] = Outcome.FAILED
+    elif contradiction == "content-size":
+        content_size = copy.content_bytes + 1
+        execution_set.published_evidence[copy.op_id] = PublishedCopyEvidence(
+            Attestation(
+                replace(evidence.attestation.content, size=content_size),
+                replace(evidence.attestation.subject, size=content_size),
+            ),
+            identity,
+        )
+    elif contradiction == "scope":
+        execution_set.published_evidence[copy.op_id] = replace(
+            evidence,
+            recorded_identity=replace(identity, scope_token="c" * 32),
+        )
+    elif contradiction == "path":
+        execution_set.published_evidence[copy.op_id] = replace(
+            evidence,
+            recorded_identity=replace(identity, rel_path_key="OTHER.BIN"),
+        )
+    elif contradiction == "location":
+        move_evidence = execution_set.published_evidence[move_update.op_id]
+        execution_set.published_evidence[move_update.op_id] = replace(
+            move_evidence,
+            recorded_identity=replace(
+                _copy_identity(move_update, "b" * 32),
+                location_id="10",
+            ),
+        )
+        del execution_set.recording_reasons[move_update.op_id]
+    else:
+        execution_set.recording_reasons[copy.op_id] = (
+            ItemRecordingReason.RECORD_WRITE_FAILED
+        )
+
+    def forbid_projection(*_args, **_kwargs):
+        raise AssertionError("mutable contradiction reached projection")
+
+    monkeypatch.setattr(payload_module, "_execution_set", forbid_projection)
+    with pytest.raises(ValueError, match=message):
+        encode_execution_request(request)
 
 
 def test_execution_v7_round_trips_the_reported_exclusion_count() -> None:
@@ -1460,19 +1630,6 @@ def test_execution_set_rejects_recorded_identities_from_multiple_locations() -> 
         decode_execution_request(json.dumps(value).encode("utf-8"))
 
 
-def test_execution_encoder_revalidates_forged_source_primitives() -> None:
-    request = _rich_execution_request()
-    root = request.execution_set.plan.source_root
-    object.__setattr__(
-        root,
-        "root_id",
-        "r" * (MAX_ROOT_ID_UTF8_BYTES + 1),
-    )
-
-    with pytest.raises(ValueError, match="UTF-8 text bound"):
-        encode_execution_request(request)
-
-
 @pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
 def test_root_contract_rejects_surrogate_code_units(text: str) -> None:
     original = _rich_execution_request()
@@ -1600,49 +1757,22 @@ def test_execution_occurrence_ceiling_precedes_projection_without_mutation(
     encode_execution_request(request)
     monkeypatch.setattr(payload_module, "_EXECUTE_MAX_OCCURRENCE_CHARGE", charge - 1)
 
+    def forbidden_validation(*_args, **_kwargs):
+        raise AssertionError("over-budget continuation reached validation")
+
     def forbidden_projection(*_args, **_kwargs):
         raise AssertionError("over-budget continuation reached projection")
 
+    monkeypatch.setattr(
+        payload_module,
+        "validate_execution_set",
+        forbidden_validation,
+    )
     monkeypatch.setattr(payload_module, "_execution_set", forbidden_projection)
     with pytest.raises(ValueError, match="occurrence bound"):
         encode_execution_request(request)
     assert request.execution_set.status == status_before
     assert request.execution_set.published_evidence == evidence_before
-
-
-def test_execution_preprojection_readmits_nested_operation_paths(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request = _rich_execution_request()
-    operation = request.execution_set.plan.operations[1]
-    object.__setattr__(operation, "target_rel_path", "x" * 32_768)
-
-    def forbidden_projection(*_args, **_kwargs):
-        raise AssertionError("invalid operation reached projection")
-
-    monkeypatch.setattr(payload_module, "_execution_set", forbidden_projection)
-    with pytest.raises(ValueError, match="path bound"):
-        encode_execution_request(request)
-    assert operation.target_rel_path == "x" * 32_768
-
-
-def test_execution_preprojection_readmits_nested_file_identity(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request = _rich_execution_request()
-    source_expected = request.execution_set.plan.operations[1].source_expected
-    assert source_expected is not None
-    identity = source_expected.file_identity
-    assert identity is not None
-    object.__setattr__(identity, "volume_serial", "v" * 261)
-
-    def forbidden_projection(*_args, **_kwargs):
-        raise AssertionError("invalid identity reached projection")
-
-    monkeypatch.setattr(payload_module, "_execution_set", forbidden_projection)
-    with pytest.raises(ValueError, match="UTF-16 text bound"):
-        encode_execution_request(request)
-    assert identity.volume_serial == "v" * 261
 
 
 def test_plan_preprojection_readmits_forged_filter_source(
