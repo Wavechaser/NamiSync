@@ -248,12 +248,13 @@ target; partial, borrowed, or invented identity is unrepresentable.
 `PostCopySelection`. Candidates copy verifier-facing values from published
 evidence without embedding the execution type or requiring a ledger row.
 Completion ids and processed bytes are validated continuation state. Both
-linked and standalone selections derive one non-comparing immutable known-id
-index from their fixed tuple at construction. Later authority checks require
-that exact index to remain equal to the tuple; completion checks the completed
-map first for replay, then performs one known-id lookup without rescanning the
-tuple. The verifier reporter aliases the same immutable index rather than
-retaining a second copy. Equality and continuation payload shapes are unchanged.
+linked and standalone selections derive one non-comparing immutable
+`known_item_ids` snapshot from their fixed tuple at construction. Later
+authority checks require the private retained index to remain equal to the
+tuple; completion checks the completed map first for replay, then performs one
+construction-admitted membership lookup without rescanning the tuple. The
+public read-only property returns that exact `frozenset`, so verifier progress
+aliases it without a copy. Equality and continuation payload shapes are unchanged.
 It also owns the closed `IntegrityCandidateLimitExceeded` fact and its error,
 axes, fixed limits, and user messages. This fact describes standalone-integrity
 candidate custody only; workflows project it as failed work after a durable

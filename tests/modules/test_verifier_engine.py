@@ -129,6 +129,7 @@ def test_verifier_package_boundaries_match_component_ownership() -> None:
     assert relative_imports("__init__.py") == {"engine", "native"}
     assert relative_imports("engine.py") == {"native"}
     assert relative_imports("native.py") == set()
+    assert "_known_item_ids" not in sources["engine.py"]
     for name in ("engine.py", "native.py"):
         assert project_imports(name)
         assert all(
@@ -2735,7 +2736,7 @@ def test_progress_reporter_reuses_the_selection_known_id_index(
         item_type="operation" if post_copy else "integrity",
     )
 
-    assert reporter._selected_item_ids is selection._known_item_ids
+    assert reporter._selected_item_ids is selection.known_item_ids
 
 
 @pytest.mark.parametrize("streamed", (False, True), ids=("nonstream", "stream"))

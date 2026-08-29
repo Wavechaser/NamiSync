@@ -328,6 +328,12 @@ class PostCopySelection:
             raise ValueError("post-copy processed bytes cannot trail completed bytes")
 
     @property
+    def known_item_ids(self) -> frozenset[str]:
+        """Return the item ids admitted when this selection was constructed."""
+
+        return self._known_item_ids
+
+    @property
     def pending(self) -> tuple[PostCopyCandidate, ...]:
         return tuple(
             candidate
@@ -511,6 +517,12 @@ class IntegritySelection:
             raise ValueError(
                 "integrity byte-total high-water cannot trail processed bytes"
             )
+
+    @property
+    def known_item_ids(self) -> frozenset[str]:
+        """Return the item ids admitted when this selection was constructed."""
+
+        return self._known_item_ids
 
     @property
     def pending(self) -> tuple[IntegritySelectionItem, ...]:

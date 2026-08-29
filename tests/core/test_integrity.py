@@ -158,6 +158,20 @@ def test_selection_completion_uses_one_index_lookup_without_tuple_scan(
 
 
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
+def test_selection_exposes_its_construction_admitted_item_ids(kind: str) -> None:
+    subject = _selection_subject(kind, 0)
+    selection = (
+        IntegritySelection((subject,))  # type: ignore[arg-type]
+        if kind == "integrity"
+        else PostCopySelection((subject,))  # type: ignore[arg-type]
+    )
+
+    assert type(selection.known_item_ids) is frozenset
+    assert selection.known_item_ids == frozenset({subject.item_id})
+    assert selection.known_item_ids is selection._known_item_ids
+
+
+@pytest.mark.parametrize("kind", ("post-copy", "integrity"))
 def test_selection_revalidation_rejects_a_replaced_known_id_index(
     kind: str,
 ) -> None:
