@@ -27,7 +27,6 @@ from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityRunResult,
     IntegritySelection,
-    IntegritySelectionAuthority,
     IntegritySelectionItemFact,
     IntegritySelectionItem,
     InventoryState,
@@ -1338,11 +1337,11 @@ def run_integrity(
                         allow_progress=False,
                     )
                     raise
-            revalidate_integrity_selection_authority(
-                selection,
-                selection_authority,
-                allow_progress=False,
-            )
+                revalidate_integrity_selection_authority(
+                    selection,
+                    selection_authority,
+                    allow_progress=False,
+                )
             initial_completed_ids = frozenset(
                 item_id
                 for item_id, _completed_bytes in selection_authority.completed_bytes
@@ -1353,7 +1352,170 @@ def run_integrity(
                 for item in selection_authority.items
                 if item.item_id not in observed_ids
             }
-            ctx.emit(PhaseChanged(request.mode.value))
+            fixed_selection = selection
+            fixed_items = selection.items
+            fixed_completion_map = selection._completed_bytes
+            confirmed_completion_by_id = dict(
+                selection_authority.completed_bytes
+            )
+            confirmed_completion_count = len(confirmed_completion_by_id)
+            confirmed_completed_bytes = 0
+            for completed_bytes in confirmed_completion_by_id.values():
+                confirmed_completed_bytes = checked_add_signed_64(
+                    confirmed_completed_bytes,
+                    completed_bytes,
+                    "completed integrity bytes",
+                )
+            confirmed_processed_bytes = selection_authority.processed_bytes
+            confirmed_bytes_total = selection_authority.bytes_total_high_water
+            pending_completion_id: str | None = None
+            full_reconciliation_attempted = False
+            full_reconciliation_error: BaseException | None = None
+
+            def reconcile_verification_edge(
+                *,
+                allow_pending: bool,
+                allow_progress: bool,
+            ) -> None:
+                nonlocal confirmed_completion_count
+                nonlocal confirmed_completed_bytes
+                nonlocal confirmed_processed_bytes
+                nonlocal confirmed_bytes_total
+                nonlocal pending_completion_id
+                if (
+                    selection is not fixed_selection
+                    or selection.items is not fixed_items
+                ):
+                    raise ValueError(
+                        "integrity selection items changed during collaboration"
+                    )
+                completed = selection._completed_bytes
+                processed_bytes = selection._processed_bytes
+                bytes_total = selection._bytes_total_high_water
+                if type(completed) is not dict:
+                    raise TypeError(
+                        "integrity completion state must be an exact dict"
+                    )
+                if completed is not fixed_completion_map:
+                    raise ValueError(
+                        "integrity completion state changed during collaboration"
+                    )
+                if type(processed_bytes) is not int:
+                    raise TypeError(
+                        "integrity processed bytes have the wrong type"
+                    )
+                if type(bytes_total) is not int:
+                    raise TypeError("integrity byte total has the wrong type")
+                require_signed_64(processed_bytes, "integrity processed bytes")
+                require_signed_64(bytes_total, "integrity byte-total high-water")
+
+                pending_item_id = pending_completion_id
+                if pending_item_id is None:
+                    if len(completed) != confirmed_completion_count:
+                        raise ValueError(
+                            "integrity runner completion must match its "
+                            "emitted outcomes"
+                        )
+                elif len(completed) == confirmed_completion_count:
+                    if not allow_pending or pending_item_id in completed:
+                        raise ValueError(
+                            "integrity runner completion must match its "
+                            "emitted outcomes"
+                        )
+                elif (
+                    len(completed) == confirmed_completion_count + 1
+                    and pending_item_id in completed
+                ):
+                    completed_bytes = completed[pending_item_id]
+                    if type(completed_bytes) is not int:
+                        raise TypeError(
+                            "integrity completion facts have the wrong type"
+                        )
+                    require_signed_64(
+                        completed_bytes,
+                        "completed integrity byte count",
+                    )
+                    confirmed_completed_bytes = checked_add_signed_64(
+                        confirmed_completed_bytes,
+                        completed_bytes,
+                        "completed integrity bytes",
+                    )
+                    confirmed_completion_count += 1
+                    confirmed_completion_by_id[pending_item_id] = completed_bytes
+                    pending_completion_id = None
+                else:
+                    raise ValueError(
+                        "integrity runner completion must match its emitted outcomes"
+                    )
+                if processed_bytes < confirmed_completed_bytes:
+                    raise ValueError(
+                        "integrity processed bytes cannot trail completed bytes"
+                    )
+                if allow_progress:
+                    if processed_bytes < confirmed_processed_bytes:
+                        raise ValueError("integrity processed bytes regressed")
+                    if bytes_total < confirmed_bytes_total:
+                        raise ValueError("integrity byte total regressed")
+                elif (
+                    processed_bytes != confirmed_processed_bytes
+                    or bytes_total != confirmed_bytes_total
+                ):
+                    raise ValueError(
+                        "integrity progress changed during callback"
+                    )
+                if bytes_total < processed_bytes:
+                    raise ValueError(
+                        "integrity byte-total high-water cannot trail processed bytes"
+                    )
+                confirmed_processed_bytes = processed_bytes
+                confirmed_bytes_total = bytes_total
+
+            def revalidate_runner_authority_once() -> None:
+                nonlocal full_reconciliation_attempted
+                nonlocal full_reconciliation_error
+                if full_reconciliation_attempted:
+                    if full_reconciliation_error is not None:
+                        raise full_reconciliation_error
+                    return
+                full_reconciliation_attempted = True
+                try:
+                    revalidate_integrity_selection_authority(
+                        selection,
+                        selection_authority,
+                        allow_progress=True,
+                    )
+                except BaseException as error:
+                    full_reconciliation_error = error
+                    raise
+
+            def reconcile_runner_completion(*, complete: bool) -> None:
+                revalidate_runner_authority_once()
+                reconcile_verification_edge(
+                    allow_pending=False,
+                    allow_progress=True,
+                )
+                if selection._completed_bytes != confirmed_completion_by_id:
+                    raise ValueError(
+                        "integrity completion changed after reconciliation"
+                    )
+                _validate_integrity_runner_completion(
+                    selection,
+                    observed_ids,
+                    pending_by_id,
+                    complete=complete,
+                )
+
+            reconcile_verification_edge(
+                allow_pending=False,
+                allow_progress=True,
+            )
+            try:
+                ctx.emit(PhaseChanged(request.mode.value))
+            finally:
+                reconcile_verification_edge(
+                    allow_pending=False,
+                    allow_progress=False,
+                )
             runner = deps.runners.get(request.mode)
             if runner is None:
                 raise RuntimeError(
@@ -1361,15 +1523,24 @@ def run_integrity(
                 )
 
             def observe_verification(body: object) -> None:
-                nonlocal observed_recording
+                nonlocal observed_recording, pending_completion_id
                 if not isinstance(body, IntegrityOutcome):
-                    ctx.emit(body)
-                    revalidate_integrity_selection_authority(
-                        selection,
-                        selection_authority,
+                    reconcile_verification_edge(
+                        allow_pending=False,
                         allow_progress=True,
                     )
+                    try:
+                        ctx.emit(body)
+                    finally:
+                        reconcile_verification_edge(
+                            allow_pending=False,
+                            allow_progress=False,
+                        )
                     return
+                reconcile_verification_edge(
+                    allow_pending=False,
+                    allow_progress=True,
+                )
                 item_id = body.item_id
                 if type(item_id) is not str:
                     raise TypeError("integrity outcome item id must be text")
@@ -1388,45 +1559,65 @@ def run_integrity(
                     path=candidate.display_path,
                     phase=request.mode.value,
                 )
-                ctx.emit(
-                    snapshot_integrity_outcome(
-                        snapshot,
-                        item_id=snapshot.item_id,
-                        row_id=snapshot.row_id,
-                        location_id=snapshot.location_id,
-                        path=snapshot.path,
-                        phase=snapshot.phase,
+                try:
+                    ctx.emit(
+                        snapshot_integrity_outcome(
+                            snapshot,
+                            item_id=snapshot.item_id,
+                            row_id=snapshot.row_id,
+                            location_id=snapshot.location_id,
+                            path=snapshot.path,
+                            phase=snapshot.phase,
+                        )
                     )
-                )
-                revalidate_integrity_selection_authority(
-                    selection,
-                    selection_authority,
-                    allow_progress=True,
-                )
+                except BaseException:
+                    reconcile_verification_edge(
+                        allow_pending=False,
+                        allow_progress=False,
+                    )
+                    raise
                 observed_outcomes.append(snapshot)
                 observed_ids.add(item_id)
                 pending_by_id.pop(item_id)
                 if snapshot.recording is RecordingStatus.DEGRADED:
                     observed_recording = RecordingStatus.DEGRADED
+                # The outer sink has accepted the reliable item.  Keep that
+                # prefix even when its callback changed custody state, but do
+                # not mistake callback-written completion for module progress.
+                reconcile_verification_edge(
+                    allow_pending=False,
+                    allow_progress=False,
+                )
+                pending_completion_id = item_id
 
             def checkpoint_verification() -> None:
-                ctx.checkpoint()
-                revalidate_integrity_selection_authority(
-                    selection,
-                    selection_authority,
+                reconcile_verification_edge(
+                    allow_pending=False,
                     allow_progress=True,
                 )
+                try:
+                    ctx.checkpoint()
+                finally:
+                    reconcile_verification_edge(
+                        allow_pending=False,
+                        allow_progress=False,
+                    )
 
             owned_run = RunContext(
                 observe_verification,
                 checkpoint_verification,
             )
-            raw_verification_context = deps.verifier_context(owned_run)
-            revalidate_integrity_selection_authority(
-                selection,
-                selection_authority,
+            reconcile_verification_edge(
+                allow_pending=False,
                 allow_progress=True,
             )
+            try:
+                raw_verification_context = deps.verifier_context(owned_run)
+            finally:
+                reconcile_verification_edge(
+                    allow_pending=False,
+                    allow_progress=False,
+                )
             verification_context = bind_verifier_context(
                 raw_verification_context,
                 owned_run,
@@ -1439,30 +1630,43 @@ def run_integrity(
             del raw_verification_context
             try:
                 result = runner(selection, verification_context, recorder)
-            except Exception:
-                revalidate_integrity_selection_authority(
-                    selection,
-                    selection_authority,
-                    allow_progress=True,
-                )
+            except PauseRequested as error:
+                try:
+                    reconcile_runner_completion(complete=False)
+                except Exception as reconciliation_error:
+                    retire_exception_graph(error)
+                    raise reconciliation_error
+                raise
+            except Canceled as error:
+                try:
+                    reconcile_runner_completion(complete=False)
+                except Exception as reconciliation_error:
+                    retire_exception_graph(error)
+                    raise reconciliation_error
+                raise
+            except Exception as error:
+                try:
+                    revalidate_runner_authority_once()
+                    reconcile_verification_edge(
+                        allow_pending=True,
+                        allow_progress=True,
+                    )
+                    if selection._completed_bytes != confirmed_completion_by_id:
+                        raise ValueError(
+                            "integrity completion changed after reconciliation"
+                        )
+                except Exception as reconciliation_error:
+                    retire_exception_graph(error)
+                    raise reconciliation_error
                 raise
             try:
                 aggregate_recording = validate_integrity_run_result(
                     result,
                     observed_outcomes,
                 )
-                _validate_integrity_runner_completion(
-                    selection,
-                    selection_authority,
-                    observed_ids,
-                    pending_by_id,
-                )
+                reconcile_runner_completion(complete=True)
             except Exception:
-                revalidate_integrity_selection_authority(
-                    selection,
-                    selection_authority,
-                    allow_progress=True,
-                )
+                revalidate_runner_authority_once()
                 raise
             finally:
                 del result
@@ -2692,22 +2896,18 @@ def _integrity_selection(
 
 def _validate_integrity_runner_completion(
     selection: IntegritySelection,
-    authority: IntegritySelectionAuthority,
     observed_ids: set[str],
     pending_by_id: dict[str, IntegritySelectionItemFact],
+    *,
+    complete: bool,
 ) -> None:
-    """Require successful verifier completion to match accepted item truth."""
+    """Require verifier completion to match accepted item truth."""
 
-    revalidate_integrity_selection_authority(
-        selection,
-        authority,
-        allow_progress=True,
-    )
-    if frozenset(selection.completed_bytes) != frozenset(observed_ids):
+    if frozenset(selection._completed_bytes) != frozenset(observed_ids):
         raise ValueError(
             "integrity runner completion must match its emitted outcomes"
         )
-    if pending_by_id:
+    if complete and pending_by_id:
         raise ValueError("integrity runner returned with pending candidates")
 
 

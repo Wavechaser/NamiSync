@@ -549,6 +549,14 @@ may remain pending while its first-party verifier returns from the reliable
 emit and marks completion; a second outcome cannot cross that gap. The complete
 execution and candidate authorities are audited once when the verifier returns,
 instead of being rescanned around every emitted item.
+Standalone integrity uses the same pre/post checkpoint rule and incremental
+accepted-outcome/completion handshake. It retains a reliable outcome as soon as
+the caller-owned sink returns, before checking whether that callback changed
+selection custody, and permits pause or cancellation to escape only from a
+settled edge. Its complete selection receives one runner-return audit, plus one
+post-transfer audit only when a selection sink is configured. First-party
+progress is adopted before an external edge; callback return must preserve the
+exact adopted counters rather than manufacture monotonic progress.
 Each external edge still requires the same admitted selection container,
 candidate tuple, and immutable execution identities, so ordinary callback
 replacement cannot redirect later verifier work; frozen candidate-leaf

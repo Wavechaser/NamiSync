@@ -139,11 +139,18 @@ scanner and verifier keep their own fresh native admission.
 
 Integrity selection similarly reconstructs candidate stats, attestations,
 record identities, and invalidation facts into one workflow-owned graph. The
-selection is revalidated after sinks, context construction, events, and runner
-return; public outcomes and verifier context are detached exact base values.
-An accepted outcome is retained before a later hostile seam can fail, so the
-terminal result reports the accepted prefix while classification remains
-`FAILED+RAN` for standalone integrity work.
+initial snapshot validates that graph before exposure, a configured selection
+sink receives one full post-transfer audit, and runner return receives one full
+progress-aware audit. During the run, constant-time edge reconciliation pins
+the selection, item tuple, completion container, current accepted/completed
+delta, and monotonic first-party byte counters around context construction,
+events, and checkpoints instead of rescanning every candidate. Callback return
+requires those counters to equal their pre-transfer values. Public outcomes and verifier
+context are detached exact base values. A reliably accepted outcome is retained
+immediately before post-callback reconciliation, so a later hostile seam cannot
+erase the accepted prefix; classification remains `FAILED+RAN` for standalone
+integrity work. Pause and cancellation remain resumable only when every
+accepted outcome has matching continuation completion.
 
 Inventory scan scopes independently charge the combined raw selected-path and
 subtree-root population against 120,000 before canonical path dictionaries,

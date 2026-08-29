@@ -1706,23 +1706,21 @@ defect, and move implementation-level test choreography out of the log.
   result stream quadratic and rendering the declared 120,000-item wall
   impractical. Cause: immutable base facts and mutable stream deltas shared one
   whole-graph validator at both transfer points and per-item seams. The
-  execution-outcome and linked-verification streams now reconcile each
-  synchronous settlement/completion delta in constant time and run one complete
-  audit when their module returns. Checkpoint 4P.7 owns standalone integrity,
-  and 4P.20 owns the immutable work still embedded in exclusion and other
-  mutable-overlay guards; no producer wall or acceptance constant changes in
-  this repair.
-- MODERATE - OPEN (2026-08-29). Pre-checkpoint settlement gap. A direct
+  execution-outcome, linked-verification, and standalone-integrity streams now
+  reconcile each synchronous settlement/completion delta in constant time and
+  run one complete audit when their module returns. Checkpoint 4P.20 owns the
+  immutable work still embedded in exclusion and other mutable-overlay guards;
+  no producer wall or acceptance constant changes in this repair.
+- MODERATE - FIXED (2026-08-29). Pre-checkpoint settlement gap. A direct
   workflow adapter's checkpoint callback could run after an executor changed
   settlement but before the workflow reconciled that change into its accepted
   stream, exposing a partially owned boundary to reentrant code. The built-in
   dispatcher checkpoint only reads control flags, but `RunContext` also admits
   adapter-owned callbacks. Cause: execution and result workflows checked
-  mutable settlement only after the callback returned or raised. Execution and
-  linked verification now reconcile before and after the callback; an
-  unreported delta blocks re-entry while accepted-prefix and pause/cancel truth
-  remain unchanged. Standalone integrity remains in the closed 4P.7 migration
-  row, so the causal class stays open until that owner lands.
+  mutable settlement only after the callback returned or raised. Execution,
+  linked verification, and standalone integrity now reconcile before and after
+  the callback; an unreported delta blocks re-entry while accepted-prefix and
+  pause/cancel truth remain unchanged.
 - MODERATE - OPEN (2026-08-27). Phase exception-frame retention. Session,
   planning, execution, recording, dispatcher, history, bridge, and document
   callbacks still consume, chain, or rethrow raw errors while request, scan,

@@ -2110,6 +2110,196 @@ def test_integrity_outcome_acceptance_window(
         )
 
 
+def test_integrity_blocks_unreported_completion_before_checkpoint(
+    tmp_path: Path,
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+    checkpoint_calls = 0
+    runner_resumed = False
+
+    def checkpoint() -> None:
+        nonlocal checkpoint_calls
+        checkpoint_calls += 1
+
+    def runner(selection, verifier_context, _recorder):
+        nonlocal runner_resumed
+        item = selection.pending[0]
+        selection.mark_completed(item.item_id, 0)
+        verifier_context.run.checkpoint()
+        runner_resumed = True
+        raise AssertionError("unreported completion crossed the checkpoint")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "unreported-before-checkpoint",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(lambda _body: None, checkpoint),
+        _integrity_dependencies(inventory_deps, runner),
+    )
+
+    assert checkpoint_calls == 0
+    assert runner_resumed is False
+    assert result.status is SessionState.FAILED
+    assert result.items == ()
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        "integrity runner completion must match its emitted outcomes",
+    )
+
+
+def test_integrity_checks_completion_written_by_checkpoint_callback(
+    tmp_path: Path,
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+    selections: list[IntegritySelection] = []
+    runner_resumed = False
+
+    def checkpoint() -> None:
+        selection = selections[0]
+        item = selection.pending[0]
+        selection.mark_completed(item.item_id, 0)
+
+    def runner(_selection, verifier_context, _recorder):
+        nonlocal runner_resumed
+        verifier_context.run.checkpoint()
+        runner_resumed = True
+        raise AssertionError("callback-written completion was accepted")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "callback-completion",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(lambda _body: None, checkpoint),
+        _integrity_dependencies(inventory_deps, runner),
+        selection_sink=selections.append,
+    )
+
+    assert runner_resumed is False
+    assert result.status is SessionState.FAILED
+    assert result.items == ()
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        "integrity runner completion must match its emitted outcomes",
+    )
+
+
+def test_integrity_rejects_progress_written_by_checkpoint_callback(
+    tmp_path: Path,
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+    selections: list[IntegritySelection] = []
+    runner_resumed = False
+
+    def checkpoint() -> None:
+        selections[0].note_bytes_processed(1)
+
+    def runner(_selection, verifier_context, _recorder):
+        nonlocal runner_resumed
+        verifier_context.run.checkpoint()
+        runner_resumed = True
+        raise AssertionError("callback-written progress was accepted")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "callback-progress",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(lambda _body: None, checkpoint),
+        _integrity_dependencies(inventory_deps, runner),
+        selection_sink=selections.append,
+    )
+
+    assert runner_resumed is False
+    assert result.status is SessionState.FAILED
+    assert result.items == ()
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        "integrity progress changed during callback",
+    )
+
+
+def test_integrity_rejects_pause_with_an_uncompleted_accepted_outcome(
+    tmp_path: Path,
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+    emitted: list[object] = []
+
+    def runner(selection, verifier_context, _recorder):
+        verifier_context.run.emit(_integrity_outcome(selection.pending[0]))
+        raise PauseRequested("pause after outcome")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "pause-after-outcome",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(emitted.append, lambda: None),
+        _integrity_dependencies(inventory_deps, runner),
+    )
+
+    reliable = tuple(
+        body for body in emitted if isinstance(body, IntegrityOutcome)
+    )
+    assert len(reliable) == 1
+    assert result.status is SessionState.FAILED
+    assert result.items == reliable
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        "integrity runner completion must match its emitted outcomes",
+    )
+
+
+def test_integrity_keeps_accepted_outcome_when_callback_replaces_items(
+    tmp_path: Path,
+) -> None:
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+    selections: list[IntegritySelection] = []
+    emitted: list[object] = []
+
+    def emit(body: object) -> None:
+        emitted.append(body)
+        if isinstance(body, IntegrityOutcome):
+            selection = selections[0]
+            selection.items = tuple(replace(item) for item in selection.items)
+
+    def runner(selection, verifier_context, _recorder):
+        verifier_context.run.emit(_integrity_outcome(selection.pending[0]))
+        raise AssertionError("replaced selection crossed the reliable event")
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "accepted-before-transfer-failure",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        RunContext(emit, lambda: None),
+        _integrity_dependencies(inventory_deps, runner),
+        selection_sink=selections.append,
+    )
+
+    reliable = tuple(
+        body for body in emitted if isinstance(body, IntegrityOutcome)
+    )
+    assert len(reliable) == 1
+    assert result.status is SessionState.FAILED
+    assert result.items == reliable
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        "integrity selection items changed during collaboration",
+    )
+
+
 @pytest.mark.parametrize(
     (
         "mismatch",
@@ -2351,12 +2541,63 @@ def test_integrity_full_validator_call_profile_is_frozen_for_4p7(
         assert result.status is SessionState.COMPLETED
         profiles[item_count] = tuple(validation_widths)
 
-    # Temporary 4P.4 characterization. 4P.7 intentionally replaces this
-    # population-times-events full-validation profile with incremental work.
+    # One terminal ownership-transfer audit is independent of population and
+    # item/progress/checkpoint event count when there is no selection sink.
     assert profiles == {
-        1: (1, 1, 1, 1),
-        4: (4, 4, 4, 4, 4, 4, 4),
+        1: (1,),
+        4: (4,),
     }
+
+
+def test_integrity_invalid_aggregate_does_not_repeat_terminal_full_audit(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original = inventory_workflow.revalidate_integrity_selection_authority
+    allow_progress_calls: list[bool] = []
+
+    def observe_validation(selection, authority, *, allow_progress):
+        allow_progress_calls.append(allow_progress)
+        return original(
+            selection,
+            authority,
+            allow_progress=allow_progress,
+        )
+
+    monkeypatch.setattr(
+        inventory_workflow,
+        "revalidate_integrity_selection_authority",
+        observe_validation,
+    )
+    prepared, inventory_deps = _seeded_integrity_case(tmp_path)
+
+    def runner(selection, verifier_context, _recorder):
+        item = selection.pending[0]
+        accepted = _integrity_outcome(item)
+        verifier_context.run.emit(accepted)
+        selection.mark_completed(item.item_id, 0)
+        return IntegrityRunResult(
+            (replace(accepted, result=IntegrityResult.BASELINED),),
+            RecordingStatus.OK,
+        )
+
+    result = run_integrity(
+        IntegrityWorkflowRequest(
+            "invalid-aggregate-one-audit",
+            prepared.binding,
+            IntegrityMode.VERIFY,
+        ),
+        _context(),
+        _integrity_dependencies(inventory_deps, runner),
+    )
+
+    assert result.status is SessionState.FAILED
+    assert result.error is not None
+    assert (result.error.type_name, result.error.message) == (
+        "ValueError",
+        "integrity runner outcomes must match emitted outcomes",
+    )
+    assert allow_progress_calls == [True]
 
 
 def test_integrity_uses_emitted_snapshot_when_returned_outcome_mutates(

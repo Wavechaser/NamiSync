@@ -538,8 +538,8 @@ def test_verify_admits_missing_evidence_and_reports_baselined_incomplete(
                 phase=IntegrityMode.VERIFY.value,
                 result=result,
             )
-            selection.mark_completed(item.item_id, 0)
             context.run.emit(outcome)
+            selection.mark_completed(item.item_id, 0)
             outcomes.append(outcome)
         return IntegrityRunResult(tuple(outcomes), RecordingStatus.OK)
 
@@ -824,10 +824,11 @@ def test_integrity_snapshot_orders_completed_rows_by_frozen_selection(
     tmp_path: Path,
 ) -> None:
     def pause_after_completing(selection, context, recorder):
-        del context, recorder
+        del recorder
         for item in selection.items:
             size = 0 if item.expected_stat is None else item.expected_stat.size
             selection.note_bytes_processed(size)
+            context.run.emit(_outcome(item, IntegrityMode.VERIFY))
             selection.mark_completed(item.item_id, size)
         raise PauseRequested("capture ordered continuation")
 
