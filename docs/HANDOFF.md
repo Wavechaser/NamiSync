@@ -1,11 +1,17 @@
 # Session Handoff
 
-Status (2026-08-29): checkpoint 4P's prerequisite consolidation is complete in
-the commit containing this handoff on the active `milestone1` branch. The final
-behavior commit before closeout is `c67c4ed` (`fix(tools): pass immutable
-preflight review`). Checkpoint 4 proper has not started; no ownership/
-reservation model, constant, formula, fixture, validator, lifecycle surface,
-or BR-G-45 evidence is ratified or active.
+Status (2026-08-30): checkpoint 4P remains complete. A separate bounded 4P-R
+corrective register is active on `milestone1` from clean baseline `e7c3601`.
+It owns one refusal-provenance regression, one pre-existing completion-membership
+performance defect, and their final documentation. Checkpoint 4 proper has not
+started; no ownership/reservation model, formula, fixture, validator, lifecycle
+surface, or BR-G-45 evidence is ratified or active.
+
+The 4P-R register and its non-goals are authoritative in `M1_SHELL_H2.md`.
+Every implementation row must be independently reviewed and committed before
+the next begins. Current 120,000-item refusals remain unchanged. Moving or
+renaming their current constants or generic primitives, changing the cap, and
+adding blanket weakref slots are excluded from implementation in this pass.
 
 ## Accepted checkpoint-4P boundary
 
@@ -98,7 +104,7 @@ accepted register by description alone.
 
 ## Next safe action
 
-Begin a fresh checkpoint-4 model derivation from current source and ratified
-documents. Do not recover the rejected model by popping its stash; inspect it by
-stable name only if its fixture or oracle shape is useful, and rederive every
-claim against the current contract.
+Implement only 4P-R.1's same-run review-limit provenance correction with its
+focused regressions and matching rung/provenance documentation. Do not begin
+checkpoint 4, change the 120,000 refusal, move its constants, or add weakref
+slots.

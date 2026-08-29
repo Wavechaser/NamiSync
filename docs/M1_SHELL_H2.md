@@ -5,14 +5,16 @@
 > sequence; this file is the newest checkpoint reslice and owns the detailed
 > acceptance, review, and test boundary for checkpoints 0-12.
 
-Delivery status (2026-08-29): checkpoints 0–3 and the independently reviewed
+Delivery status (2026-08-30): checkpoints 0–3 and the independently reviewed
 3R remediation are complete, including the separately reviewed checkpoint-3.3
 legacy-source removal. Checkpoint 4P's prerequisite consolidation is complete
-under the closed register below. It activates no task surface, reservation
-model, constant, fixture, validator, or BR-G-45 evidence. Checkpoint 4 proper
-has not started, and its rejected draft remains quarantined outside the working
-tree. Checkpoints 5–12 remain pending. No checkpoint-4 command or control is
-active.
+under the closed register below. The bounded 4P-R corrective register is active
+after independent review found one refusal-provenance regression and one
+pre-existing completion-membership performance defect. It activates no task
+surface, reservation model, constant, fixture, validator, or BR-G-45 evidence.
+Checkpoint 4 proper has not started, and its rejected draft remains quarantined
+outside the working tree. Checkpoints 5–12 remain pending. No checkpoint-4
+command or control is active.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
@@ -458,6 +460,54 @@ threshold is reached, stop instance fixes, reorganize by mechanism, and obtain
 review before resuming. Diff size never authorizes a partial checkpoint: when
 one row grows beyond its atomic outcome, stop and reorganize before beginning
 the next row.
+
+### 4P-R. Correct post-consolidation findings before checkpoint 4
+
+This is a new bounded corrective pass based on the clean `e7c3601` baseline. It
+does not reopen checkpoint 4P's denominator and is not checkpoint 4 proper.
+Each implementation row is one separately reviewed, mergeable commit. A
+finding outside this finite register follows `AGENTS.md`; it does not enter the
+pass merely because it affects a named file or test neighborhood.
+
+| Id | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| 4P-R.0 | Freeze this corrective scope, ordering, non-goals, stop classes, and review boundary before implementation. | Documentation authority review, baseline/worktree check, targeted status searches, and `git diff --check`. | Complete |
+| 4P-R.1 | Restore same-run provenance for exact plan and inventory review-limit signals without restoring `fresh()` or changing any legitimate refusal fact, status, save boundary, exception retirement, or domain separation; update the rung/provenance documents and defect ledger in the same change. | Legitimate current-run producer/retained/logical and inventory first-excess signals, including re-raise and graph retirement; direct/untagged same-domain and well-formed different-run signals from scanner, correspondence, planner, observer, preflight, phase delivery, destination policy, nested owners, and inventory scanner; cross-domain, lookalike, malformed, plan/inventory/workflow departments, import contracts, and targeted provenance/rung documentation searches. | Pending |
+| 4P-R.2 | Replace repeated linear completion membership in both `PostCopySelection` and `IntegritySelection` with one immutable known-id index per selection while preserving construction, equality, continuation, payload, authority, progress, and outcome behavior; correct the stale workflow BUGS mechanism and owning component docs in the same change. | Core integrity, verifier engine, payload round-trip, post-execution and standalone-integrity workflows; at fixed sizes 1, 4, and 16, after bounded construction each successful completion performs no candidate/item-tuple `item_id` access and exactly one known-id-index lookup, while the existing completed-id replay lookup remains. | Pending |
+| 4P-R.3 | Record that 120,000 is one shared M1 performance/safety support target, with no promise beyond it and no claim that 120,001 breaks NamiSync; retain the existing independent hard refusals only as unchanged M1 behavior; defer neutral constant/primitive ownership and `core/review.py` naming to checkpoint 4; and document current weakref support precisely. | DEFENSE/architecture/component/H2 authority review, current-wall and future-owner searches, production/test weakref-usage search, links/anchors, and `git diff --check`. | Pending |
+| 4P-R.4 | Reconcile BUGS, task history, and handoff; run the integrated affected and ordinary gates; and conduct an independent final review without absorbing optional cleanup. | Affected departments, ordinary Node-enabled suite, import contracts, protected gates required by touched behavior, links/anchors, stale-contract searches, `git diff --check`, and independent review. | Pending |
+
+Non-goals are changing, relaxing, or removing the M1 120,000-item refusal;
+moving or renaming the current constants or generic primitives; beginning checkpoint 4's
+ownership/reservation model; adding `weakref_slot=True`; rewriting historical
+commit titles; reducing workflow guard counts; and changing schema, wire, wall,
+public status, or continuation versions. Checkpoint 4 must decide the neutral
+owner for the shared 120,000 target before centralizing its constants and
+generic primitives. The target is the supported M1 performance/safety scale,
+not evidence of failure at 120,001 or any larger count, and M1 makes no promise
+beyond it. A later milestone may adjust or remove the refusal only under its
+own ratified evidence and compatibility boundary. The 33 current slotted
+contracts do not support weak references and production uses no weak references
+to them. Blanket support is deferred because it adds per-instance cost; any
+future support is class-specific when an ownership or leak witness requires it.
+
+In addition to the global catastrophic stops, stop this pass if authenticating
+all legitimate limit paths requires a public signal, wire/status change, or
+cross-domain authority; or if completion indexing requires a continuation/
+payload shape change, an unbounded owner, or loss of exact unknown-id and replay
+rejection. The repeated-mechanism and third-unplanned-defect rules remain in
+force. F2 provenance lands before the pre-existing F1 performance fix. Rows
+4P-R.0 through 4P-R.4 remain separate review units and commits; 4P-R.3 is the
+one documentation commit shared by the 120,000-target and weakref dispositions.
+
+#### 4P-R.0 register receipt
+
+The register froze from clean `milestone1` baseline `e7c3601` before any code
+change. Independent review corrected the row/commit boundary, required matching
+documents to travel with each behavior fix, made the different-run provenance
+and finite complexity witnesses explicit, and separated the shared 120,000
+support target from unchanged M1 refusal behavior. Targeted status review and
+`git diff --check` were clean; checkpoint 4 remains unstarted.
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
