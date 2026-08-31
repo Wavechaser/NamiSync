@@ -22,38 +22,36 @@ from namisync.core.session import (
 
 @dataclass(frozen=True, slots=True)
 class PreparedSession:
-    """Opaque workflow bytes plus generic resources required for custody."""
+    """Opaque workflow checkpoint plus generic resources required for custody."""
 
-    payload: bytes
+    checkpoint: object
     resources: frozenset[ResourceId] = frozenset()
 
     def __post_init__(self) -> None:
-        if not isinstance(self.payload, bytes):
-            raise TypeError("prepared workflow payload must be bytes")
         if not all(isinstance(resource, ResourceId) for resource in self.resources):
             raise TypeError("prepared resources must contain ResourceId values")
 
     @classmethod
     def from_resource_keys(
         cls,
-        payload: bytes,
+        checkpoint: object,
         resources: tuple[tuple[str, str], ...],
     ) -> PreparedSession:
         """Build generic custody ids without exposing core types to interfaces."""
 
         return cls(
-            payload,
+            checkpoint,
             frozenset(ResourceId(namespace, key) for namespace, key in resources),
         )
 
 
 class WorkflowInvocation(Protocol):
-    """Adapter-owned decoded invocation; dispatcher never inspects it."""
+    """Adapter-owned invocation; dispatcher never inspects it."""
 
     def run(self, context: RunContext) -> OperationResult: ...
 
-    def snapshot(self) -> bytes:
-        """Serialize continuation after a cooperative pause."""
+    def snapshot(self) -> object:
+        """Return the semantic continuation after a cooperative pause."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,9 +59,9 @@ class WorkflowRegistration:
     """Generic preparation/invocation adapter and capability metadata."""
 
     prepare: Callable[[object], PreparedSession]
-    open: Callable[[bytes], WorkflowInvocation]
+    open: Callable[[object], WorkflowInvocation]
     supports_pause: bool = False
-    settle_canceled: Callable[[bytes, Disposition], OperationResult] | None = None
+    settle_canceled: Callable[[object, Disposition], OperationResult] | None = None
 
 
 Registry = Mapping[str, WorkflowRegistration]

@@ -53,9 +53,9 @@ never turns an otherwise canceled or successful item into a failed item.
 
 Publication evidence remains success-only and process-local. An identityless
 attestation is valid only beside that same operation's
-`record-write-failed` reason. Execution payload v7 preserves these reasons,
+`record-write-failed` reason. The typed execution checkpoint preserves these reasons,
 ordered task issues, permitted attestations, and the accepted exclusion cursor
-across pause/resume, while the dispatcher clears the opaque payload on every
+across pause/resume, while the dispatcher clears the opaque checkpoint on every
 terminal edge. None of this is ledger/history state or desktop presentation
 data.
 

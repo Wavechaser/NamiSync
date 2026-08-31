@@ -92,29 +92,28 @@ def wait_for_admission_cleanup_attempt(
 @dataclass
 class Invocation:
     run_fn: object
-    snapshot_bytes: bytes = b"continued"
+    snapshot_checkpoint: object = b"continued"
 
     def run(self, context):
         return self.run_fn(context)
 
-    def snapshot(self) -> bytes:
-        return self.snapshot_bytes
+    def snapshot(self) -> object:
+        return self.snapshot_checkpoint
 
 
 def registration(
-    run_for_payload,
+    run_for_checkpoint,
     *,
     supports_pause=False,
     resources=(),
     settle_canceled=None,
 ):
     def prepare(request):
-        payload = request if isinstance(request, bytes) else str(request).encode()
-        return PreparedSession(payload, frozenset(resources))
+        return PreparedSession(request, frozenset(resources))
 
     return WorkflowRegistration(
         prepare=prepare,
-        open=lambda payload: Invocation(run_for_payload(payload)),
+        open=lambda checkpoint: Invocation(run_for_checkpoint(checkpoint)),
         supports_pause=supports_pause,
         settle_canceled=settle_canceled,
     )
@@ -138,7 +137,7 @@ def assert_stored_record_matches(
     stored: StoredSessionRecord, live: SessionRecord
 ) -> None:
     assert type(stored) is StoredSessionRecord
-    assert not hasattr(stored, "payload")
+    assert not hasattr(stored, "checkpoint")
     assert stored.session_id == live.session_id
     assert stored.kind == live.kind
     assert stored.state is live.state
@@ -375,7 +374,7 @@ def test_blocked_multi_resource_session_keeps_fifo_on_each_resource() -> None:
     assert dispatcher.shutdown().complete
 
 
-def test_pause_releases_custody_and_resume_reopens_snapshotted_payload() -> None:
+def test_pause_releases_custody_and_resume_reopens_snapshotted_checkpoint() -> None:
     entered = Event()
     opened: list[bytes] = []
 
@@ -401,12 +400,12 @@ def test_pause_releases_custody_and_resume_reopens_snapshotted_payload() -> None
     assert entered.wait(2)
     assert dispatcher.pause(session_id).accepted
     paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
-    assert paused.payload == b"continued"
+    assert paused.checkpoint == b"continued"
     assert dispatcher.resume(session_id).accepted
     completed_record = wait_for(
         dispatcher, session_id, SessionState.COMPLETED
     )
-    assert completed_record.payload is None
+    assert completed_record.checkpoint is None
     assert opened == [b"initial", b"continued"]
     assert dispatcher.shutdown().custody_released
 
@@ -420,7 +419,7 @@ def test_pause_releases_custody_and_resume_reopens_snapshotted_payload() -> None
         SessionState.REFUSED,
     ],
 )
-def test_paused_resumed_terminal_paths_scrub_continuation_payload(
+def test_paused_resumed_terminal_paths_scrub_continuation_checkpoint(
     terminal_state: SessionState,
 ) -> None:
     entered = Event()
@@ -454,16 +453,16 @@ def test_paused_resumed_terminal_paths_scrub_continuation_payload(
     assert entered.wait(2)
     assert dispatcher.pause(session_id).accepted
     paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
-    assert paused.payload == b"continued"
+    assert paused.checkpoint == b"continued"
     assert_stored_record_matches(store.snapshot()[0], paused)
     assert dispatcher.resume(session_id).accepted
 
     terminal = wait_for(dispatcher, session_id, terminal_state)
 
-    assert terminal.payload is None
+    assert terminal.checkpoint is None
     assert_stored_record_matches(store.snapshot()[0], terminal)
     assert all(type(record) is StoredSessionRecord for record in store.attempted)
-    assert all(not hasattr(record, "payload") for record in store.attempted)
+    assert all(not hasattr(record, "checkpoint") for record in store.attempted)
     assert dispatcher.shutdown().complete
 
 
@@ -834,20 +833,20 @@ def test_worker_self_close_is_retryable_without_dropping_session(monkeypatch) ->
         assert dispatcher.shutdown().complete
 
 
-def test_terminal_close_releases_payload_while_scheduler_stays_alive() -> None:
-    payload_refs = []
+def test_terminal_close_releases_checkpoint_while_scheduler_stays_alive() -> None:
+    checkpoint_refs = []
 
-    class Payload(bytes):
+    class Checkpoint:
         pass
 
     class PrivateGraph:
         pass
 
     def prepare(_request):
-        payload = Payload(b"private continuation")
-        payload.graph = PrivateGraph()
-        payload_refs.append(ref(payload.graph))
-        return PreparedSession(payload)
+        checkpoint = Checkpoint()
+        checkpoint.graph = PrivateGraph()
+        checkpoint_refs.append(ref(checkpoint.graph))
+        return PreparedSession(checkpoint)
 
     dispatcher = Dispatcher(
         {"work": WorkflowRegistration(prepare, lambda _payload: Invocation(completed))}
@@ -858,7 +857,7 @@ def test_terminal_close_releases_payload_while_scheduler_stays_alive() -> None:
         dispatcher.close(session_id)
         assert dispatcher._scheduler.is_alive()
         gc.collect()
-        assert payload_refs[0]() is None
+        assert checkpoint_refs[0]() is None
     finally:
         assert dispatcher.shutdown().complete
 
@@ -983,15 +982,15 @@ def test_pause_before_invocation_run_snapshots_before_later_cancel(
     run_core_entered = Event()
     release_run_core = Event()
     invocation_run_entered = Event()
-    settled_payloads = []
+    settled_checkpoints = []
 
     def run(context):
         invocation_run_entered.set()
         return OperationResult(SessionState.COMPLETED)
 
-    def settle_canceled(payload, disposition):
-        settled_payloads.append(payload)
-        if payload != b"continued":
+    def settle_canceled(checkpoint, disposition):
+        settled_checkpoints.append(checkpoint)
+        if checkpoint != b"continued":
             raise ValueError("pause did not retain the continuation")
         return OperationResult(
             SessionState.CANCELED,
@@ -1034,10 +1033,10 @@ def test_pause_before_invocation_run_snapshots_before_later_cancel(
 
     assert dispatcher.cancel(session_id).accepted
     record = wait_for(dispatcher, session_id, SessionState.CANCELED)
-    assert record.payload is None
+    assert record.checkpoint is None
     assert record.result is not None
     assert record.result.disposition is Disposition.RAN
-    assert settled_payloads == [b"continued"]
+    assert settled_checkpoints == [b"continued"]
     assert not invocation_run_entered.is_set()
     assert dispatcher.shutdown().complete
 
@@ -1259,7 +1258,7 @@ def test_cancel_paused_uses_registration_owned_axis_preserving_settlement() -> N
     assert entered.wait(2)
     assert dispatcher.pause(session_id).accepted
     paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
-    assert paused.payload == b"continued"
+    assert paused.checkpoint == b"continued"
     assert dispatcher.cancel(session_id).accepted
     record = wait_for(dispatcher, session_id, SessionState.CANCELED)
 
@@ -1355,7 +1354,7 @@ def test_cancel_during_pausing_snapshot_drain_settles_once_and_releases_custody(
     record = wait_for(dispatcher, session_id, SessionState.CANCELED)
     assert settled == [(b"continued", Disposition.RAN)]
     assert record.started_at is not None
-    assert record.payload is None
+    assert record.checkpoint is None
     assert record.result is not None
     assert [item.item_id for item in record.result.items] == ["e" * 32]
     assert dispatcher.cancel(session_id).code is ControlCode.ILLEGAL_STATE
@@ -1523,7 +1522,7 @@ def test_cancel_resumed_pending_uses_started_settlement_once() -> None:
         for row in store.attempted
     )
     assert all(type(row) is StoredSessionRecord for row in store.attempted)
-    assert all(not hasattr(row, "payload") for row in store.attempted)
+    assert all(not hasattr(row, "checkpoint") for row in store.attempted)
     assert record.result is not None
     assert record.result.status is SessionState.COMPLETED
     assert dispatcher.cancel(session_id).code is ControlCode.ILLEGAL_STATE
@@ -2333,23 +2332,27 @@ def test_control_matrix_is_exhaustive_and_state_preserving_on_rejection() -> Non
             )
 
 
-def test_payload_is_passed_to_adapter_without_dispatcher_decoding() -> None:
-    opaque = b"\x80not-a-valid-domain-encoding\x00"
-    opened: list[bytes] = []
+def test_checkpoint_is_passed_to_adapter_by_identity() -> None:
+    class OpaqueCheckpoint:
+        pass
 
-    def open_payload(payload):
-        opened.append(payload)
+    opaque = OpaqueCheckpoint()
+    opened: list[object] = []
+
+    def open_checkpoint(checkpoint):
+        opened.append(checkpoint)
         return Invocation(completed)
 
     registration_value = WorkflowRegistration(
         prepare=lambda request: PreparedSession(request),
-        open=open_payload,
+        open=open_checkpoint,
     )
     dispatcher = Dispatcher({"opaque": registration_value})
     session_id = dispatcher.submit("opaque", opaque)
     record = wait_for(dispatcher, session_id, SessionState.COMPLETED)
-    assert record.payload is None
-    assert opened == [opaque]
+    assert record.checkpoint is None
+    assert len(opened) == 1
+    assert opened[0] is opaque
     assert dispatcher.shutdown().complete
 
 
@@ -2359,7 +2362,7 @@ def test_in_memory_store_is_honest_about_absent_restart_state() -> None:
     session_id = dispatcher.submit("opaque", b"payload")
     wait_for(dispatcher, session_id, SessionState.COMPLETED)
     assert type(store.snapshot()[0]) is StoredSessionRecord
-    assert not hasattr(store.snapshot()[0], "payload")
+    assert not hasattr(store.snapshot()[0], "checkpoint")
     assert store.load_all() == ()
     assert dispatcher.shutdown().complete
 
@@ -2463,7 +2466,7 @@ def test_contained_failure_retires_traceback_and_cause_graph_after_close(
     assert all(graph() is None for graph in retained)
 
 
-def test_failed_terminal_store_write_does_not_retain_workflow_payload() -> None:
+def test_failed_terminal_store_write_does_not_retain_workflow_checkpoint() -> None:
     class FailingStore(InMemorySessionStore):
         def __init__(self):
             super().__init__()
@@ -2504,14 +2507,17 @@ def test_failed_terminal_store_write_does_not_retain_workflow_payload() -> None:
 
     assert shutdown.complete
     assert shutdown.custody_released
-    assert record.payload is None
+    assert record.checkpoint is None
     assert len(store.attempted) > 1
     (retained,) = store.snapshot()
     assert retained is store.attempted[0]
     assert retained.session_id == session_id
     assert retained.state is SessionState.PENDING
-    assert getattr(retained, "payload", None) is None
-    assert all(getattr(attempt, "payload", None) is None for attempt in store.attempted)
+    assert getattr(retained, "checkpoint", None) is None
+    assert all(
+        getattr(attempt, "checkpoint", None) is None
+        for attempt in store.attempted
+    )
     assert all(type(attempt) is StoredSessionRecord for attempt in store.attempted)
 
 
@@ -2595,7 +2601,7 @@ def test_store_failures_keep_latest_successive_pause_for_resume_or_cancel(
             assert entered[attempt].wait(2)
             assert dispatcher.pause(session_id).accepted
             paused = wait_for(dispatcher, session_id, SessionState.PAUSED)
-            assert paused.payload == snapshot
+            assert paused.checkpoint == snapshot
             assert dispatcher._leases == {}
             assert dispatcher._reserved == {}
             assert store.snapshot()[0].state is SessionState.PENDING
@@ -2630,7 +2636,7 @@ def test_store_failures_keep_latest_successive_pause_for_resume_or_cancel(
         if final_action == "resume" else [b"initial", b"pause-1"]
     )
     assert settled == ([(b"pause-2", Disposition.RAN)] if final_action == "cancel" else [])
-    assert terminal.payload is None
+    assert terminal.checkpoint is None
     assert terminal.result.status is filesystem_status
     assert terminal.result.canceled is (final_action == "cancel")
     assert terminal.result.disposition is Disposition.RAN
@@ -2640,7 +2646,7 @@ def test_store_failures_keep_latest_successive_pause_for_resume_or_cancel(
     assert terminal.result.bytes_done == terminal.result.bytes_total == 7
     assert sum(row.state is SessionState.PAUSED for row in store.attempted) == 2
     assert all(type(row) is StoredSessionRecord for row in store.attempted)
-    assert all(not hasattr(row, "payload") for row in store.attempted)
+    assert all(not hasattr(row, "checkpoint") for row in store.attempted)
     assert store.snapshot() == (store.attempted[0],)
     assert store.snapshot()[0].result is None
     assert_stored_record_matches(store.attempted[-1], terminal)
@@ -2740,7 +2746,7 @@ def test_stored_record_preserves_full_compound_result_axes_without_producer_alia
     assert result.recording_issues is not issues
     assert result.recording_issues[0] is not issues[0]
     assert all(type(row) is StoredSessionRecord for row in store.attempted)
-    assert all(not hasattr(row, "payload") for row in store.attempted)
+    assert all(not hasattr(row, "checkpoint") for row in store.attempted)
 
 
 def test_stored_record_preserves_detached_review_limit_refusal_witness() -> None:
@@ -2775,7 +2781,7 @@ def test_stored_record_preserves_detached_review_limit_refusal_witness() -> None
     assert result.review_fact_limit == witness
     assert result.review_fact_limit is not witness
     assert all(type(row) is StoredSessionRecord for row in store.attempted)
-    assert all(not hasattr(row, "payload") for row in store.attempted)
+    assert all(not hasattr(row, "checkpoint") for row in store.attempted)
 
 
 def test_lock_acquisition_failure_is_failed_unrun_terminal() -> None:
@@ -3175,7 +3181,7 @@ def test_admission_store_accepts_then_raises_and_failed_drop_keeps_metadata_only
         (retained,) = store.snapshot()
         assert retained is store.attempted[0]
         assert type(retained) is StoredSessionRecord
-        assert not hasattr(retained, "payload")
+        assert not hasattr(retained, "checkpoint")
         assert retained.state is SessionState.PENDING
         assert retained.result is None
         session_id = retained.session_id
@@ -4295,13 +4301,13 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
     provisional = dispatcher.get(session_id)
     assert provisional.state is SessionState.COMPLETED
     assert provisional.result is None
-    assert provisional.payload is None
+    assert provisional.checkpoint is None
     assert_stored_record_matches(store.snapshot()[0], provisional)
     with pytest.raises(SessionNotTerminal):
         dispatcher.close(session_id)
     release_finalize.set()
     final = wait_for(dispatcher, session_id, SessionState.COMPLETED)
-    assert final.payload is None
+    assert final.checkpoint is None
     assert final.result is not None
     assert final.result.audit is RecordingStatus.OK
     assert_stored_record_matches(store.snapshot()[0], final)
@@ -4310,7 +4316,7 @@ def test_terminal_record_never_exposes_provisional_audit_ok() -> None:
         for row in store.attempted
     )
     assert all(type(row) is StoredSessionRecord for row in store.attempted)
-    assert all(not hasattr(row, "payload") for row in store.attempted)
+    assert all(not hasattr(row, "checkpoint") for row in store.attempted)
     dispatcher.close(session_id)
     assert store.snapshot() == ()
     assert dispatcher.shutdown().complete

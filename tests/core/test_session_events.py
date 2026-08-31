@@ -541,12 +541,12 @@ def test_compound_cancel_preserves_filesystem_truth_and_projects_lifecycle() -> 
     assert record.result.status is SessionState.COMPLETED
 
 
-def test_session_record_payload_exists_only_while_nonterminal() -> None:
+def test_session_record_checkpoint_exists_only_while_nonterminal() -> None:
     created_at = datetime(2026, 7, 18, tzinfo=timezone.utc)
 
-    with pytest.raises(ValueError, match="terminal session payload"):
+    with pytest.raises(ValueError, match="terminal session checkpoint"):
         SessionRecord(
-            SessionId("terminal-payload"),
+            SessionId("terminal-checkpoint"),
             "sync-execution",
             SessionState.COMPLETED,
             (),
@@ -557,9 +557,9 @@ def test_session_record_payload_exists_only_while_nonterminal() -> None:
             ended_at=created_at,
         )
 
-    with pytest.raises(TypeError, match="nonterminal workflow payload"):
+    with pytest.raises(TypeError, match="nonterminal workflow checkpoint"):
         SessionRecord(
-            SessionId("missing-payload"),
+            SessionId("missing-checkpoint"),
             "sync-execution",
             SessionState.PAUSED,
             (),
@@ -598,13 +598,13 @@ def test_stored_session_record_has_exact_frozen_metadata_shape() -> None:
         "result",
     )
     assert not hasattr(record, "__dict__")
-    assert not hasattr(record, "payload")
+    assert not hasattr(record, "checkpoint")
     with pytest.raises(FrozenInstanceError):
         record.kind = "changed"  # type: ignore[misc]
 
 
-@pytest.mark.parametrize("field_name", ["payload", "live_record"])
-def test_stored_session_record_rejects_payload_and_live_reference_fields(
+@pytest.mark.parametrize("field_name", ["checkpoint", "live_record"])
+def test_stored_session_record_rejects_checkpoint_and_live_reference_fields(
     field_name: str,
 ) -> None:
     with pytest.raises(TypeError, match="unexpected keyword"):
@@ -612,7 +612,7 @@ def test_stored_session_record_rejects_payload_and_live_reference_fields(
 
 
 @pytest.mark.parametrize("state", tuple(SessionState))
-def test_stored_session_record_can_represent_every_lifecycle_without_payload(
+def test_stored_session_record_can_represent_every_lifecycle_without_checkpoint(
     state: SessionState,
 ) -> None:
     record = _stored_record()
@@ -624,7 +624,7 @@ def test_stored_session_record_can_represent_every_lifecycle_without_payload(
 
     assert stored.state is state
     assert stored.result is None
-    assert not hasattr(stored, "payload")
+    assert not hasattr(stored, "checkpoint")
 
 
 @pytest.mark.parametrize(
@@ -681,12 +681,12 @@ def test_in_memory_store_rejects_nonexact_records_before_replacing_metadata(
     stored = _stored_record()
 
     @dataclass(frozen=True, slots=True)
-    class PayloadRecord(StoredSessionRecord):
-        payload: bytes = b"smuggled continuation"
+    class CheckpointRecord(StoredSessionRecord):
+        checkpoint: object = b"smuggled continuation"
 
     class Lookalike:
         session_id = stored.session_id
-        payload = b"smuggled continuation"
+        checkpoint = b"smuggled continuation"
 
     if record_kind == "live":
         invalid = SessionRecord(
@@ -695,7 +695,7 @@ def test_in_memory_store_rejects_nonexact_records_before_replacing_metadata(
             stored.created_at,
         )
     elif record_kind == "subclass":
-        invalid = PayloadRecord(
+        invalid = CheckpointRecord(
             stored.session_id, stored.kind, stored.state, stored.resources,
             stored.supports_pause, stored.admission_order, stored.created_at,
         )
@@ -872,7 +872,7 @@ def test_verify_cancellation_round_trips_terminal_event_and_session_record(
     restored = store.snapshot()[0]
     assert restored is stored
     assert restored.result is record.result
-    assert not hasattr(restored, "payload")
+    assert not hasattr(restored, "checkpoint")
     assert restored.result is not None
     assert restored.result.status is filesystem_status
     assert restored.result.canceled

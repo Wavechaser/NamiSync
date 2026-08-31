@@ -2138,7 +2138,7 @@ def _workflow_registry(
         def prepare_session(request: object) -> PreparedSession:
             prepared = prepare(request)
             return PreparedSession.from_resource_keys(
-                prepared.payload, prepared.resources
+                prepared.checkpoint, prepared.resources
             )
 
         optional = (

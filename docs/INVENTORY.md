@@ -172,35 +172,22 @@ Desktop rebaseline requires explicit acknowledgement of current evidence;
 baseline and verify do not. The bridge owns the exact receipted request shape
 and rejects a mismatched intent before scope, ledger, or native work.
 
-Inventory continuation payloads are strict version 2 because they carry
-`subtree_roots` separately from exact `selected_paths`. Integrity continuations
-independently advance to strict version 2 so a pause retains its physical-read
-total high-water and aggregate recording status beside the exact frozen
-subjects. Their shared decoder validates the exact field set and JSON scalar
-types, rejects duplicate object keys, and checks kind and expected version
-independently. Inventory and integrity details retain the scanner's typed
-warnings; an incomplete refresh therefore preserves the warning code, relative
-path, and detail rather than reporting only `complete=False`.
+Inventory and integrity pause state is a process-local typed checkpoint, not a
+JSON payload or a durable protocol. Inventory retains the exact admitted
+binding, `subtree_roots`, and `selected_paths`; integrity additionally retains
+the exact frozen subjects, physical-read high-water, and aggregate recording
+status. Checkpoint construction detaches mutable collections, while reopening
+materializes fresh mutable state. The request constructors and their existing
+domain limits remain the enforcers; dispatcher custody neither decodes nor
+recertifies the checkpoint.
 
-Before either v2 encoder constructs dictionaries or lists, a typed walk
-re-admits the binding and every serialized occurrence and computes its exact
-canonical byte length. Inventory derives its maximum from the combined 120,000
-`ScanScope` entries, 27 expected mounts, and the request, path, and volume text
-walls. Integrity independently derives its maximum from 120,000 selected paths,
-120,000 database-derived item ids, at most 120,000 completions, five recording
-issues, and the same binding/scalar walls. Item ids retain their existing
-protocol spelling but are bounded to the enclosing two signed-64 database ids
-plus separator, 39 UTF-8 bytes. Repeated paths or ids are charged per wire
-occurrence rather than identity-deduplicated.
-
-Using the shared predeclared JSON coefficient catalog and its conservative
-two-times canonical-byte proof gives raw ceilings of 118,024,959,994 bytes for
-inventory and 118,241,513,170 bytes for integrity. Exact `bytes` and raw length
-are checked before UTF-8 decoding or `json.loads`; encoding rejects any final
-length different from the typed count. These theoretical source maxima are not
-task-retention allowances. Later custody admission must reserve each task's
-actual occurrence charge, and reducing the large duplicated-path ceiling would
-require a versioned continuation-schema change.
+Typed warnings remain part of the inventory and integrity domain values. An
+incomplete refresh therefore preserves the warning code, relative path, and
+detail rather than reporting only `complete=False`. Item ids retain their
+existing protocol spelling and enclosing signed-64 database-id bound. No
+process-local checkpoint byte budget, JSON version, or parallel wire vocabulary
+exists; external interface adapters remain responsible for bounding and
+validating their own requests before constructing these values.
 
 Those details are process-local terminal readback artifacts, not durable
 inventory. Each admitted inventory or integrity session owns its exact request

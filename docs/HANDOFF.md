@@ -1,105 +1,58 @@
 # Session Handoff
 
-Status (2026-08-30): checkpoint-4 prerequisite consolidation and the bounded
-post-review corrections are complete on `milestone1`. Checkpoint 4 proper has
-not started. No process-live task surface or implementation-level ownership/
-reservation formula, constant set, maximum fixture, independent validator,
-command row, or BR-G-45 evidence is ratified or active. The higher-level
-accepted walls and task graph remain authoritative.
+Status (2026-09-01): the ratified initial simplification run is complete through
+SIM-1 on `milestone1-anthony`. Process-local workflow payload serialization has
+been removed and replaced by detached typed checkpoint custody. SIM-2 is the
+only active row. H2 checkpoints 5-8 and every new feature remain out of scope.
 
 ## Delivered
 
-- Repository and process rules now use the four-rung external, reentrant,
-  internal-module, and reflective/forged trust model. The reviewed auxiliary
-  branches were removed after accepted extraction; task containment, recovery,
-  defect escalation, and documentation ownership are ratified. Python support
-  is lower-bound-only at 3.13 with no exact-patch or upper-version gate.
-- Workflow custody now uses incremental execution, linked post-copy, and
-  standalone-integrity reconciliation; one-time adoption of exact immutable
-  scan/plan/world/verdict values; read-only reentrant review inputs; reduced
-  execution authority; and centralized retained-exception projection.
-- Plan and inventory review-limit refusal requires the exact private signal,
-  fact scope, and active same-run domain token. Direct internal, different-run,
-  cross-domain, malformed, and lookalike failures cannot claim refusal
-  authority. Legitimate first-excess status, save boundaries, and raw exception
-  retirement are unchanged.
-- Linked and standalone integrity completion use one validated selection-owned
-  immutable id index exposed to verifier progress through a public read-only
-  property. Completion tests construction-admitted membership without a tuple
-  scan; later authority revalidation rejects a changed selection before the
-  workflow accepts a clean phase or terminal result. Same-length identity
-  replacement again reports the changed item or candidate rather than the
-  derived index. Equality, continuation, payloads, walls, status, and durable
-  outcomes are unchanged.
-- The repeated 120,000-item populations now express one M1 performance-and-
-  safety support target. Existing independent first-excess behavior remains
-  through M1; there is no support promise above the target and no asserted
-  failure cliff at 120,001.
-- Durable references now state active versus accepted-but-unrealized contracts
-  without numbered checkpoint routing or session-local closeout chronology. M1
-  plans, task history, and this handoff retain delivery sequencing; runtime
-  checkpoints and product sessions keep their behavioral names.
-
-## Deferred to checkpoint 4
-
-- Freeze the complete simultaneous owner graph, constants, formula, maximum
-  fixtures, independent validator, reservation outcomes, and BR-G-45 evidence
-  before activating any task surface.
-- Choose a domain-neutral owner for the shared 120,000 target and generic
-  population primitives, centralize the repeated constants, and resolve the
-  plan-specific `core/review.py` name. Current imports and first-excess behavior
-  remain unchanged.
-- Model or eliminate remaining complete-graph, construction, tree/index,
-  container-capacity, shallow callback-guard/overlap, codec, Python/CLR,
-  native/browser, raw-frame, and multi-session owners.
-- Inventory callback edges and their full mutation/control/error policies
-  before considering guard consolidation. Current guards are shallow or
-  fixed-frequency where possible, not necessarily constant-time; no H2
-  workflow refactor is required.
-- The 33 core contracts slotted by the prerequisite pass do not support weak
-  references. Add support only to a named class when a concrete ownership or
-  leak witness requires it and charge that representation cost.
-
-## Repository custody
-
-Only `main` and `milestone1` remain as local branches, with one worktree.
-Preserve these stashes by descriptive name and stable object id:
-
-- `checkpoint 4 model draft before prerequisite consolidation` —
-  `3940df5abf6056435e7d70a309324c0442664a74`
-- `safety: pre-simplicity exception audit 2026-08-27` —
-  `5adbe65a2ed318943429aaeeb439b5918d71b6ad`
-- `recovery: paused exception retirement for source-wall simplicity audit
-  2026-08-27` — `8a639ab77cae98ea3ae0b8db2dc41c328c1b1391`
-- `recovery: interrupted checkpoint-4 audit 2026-08-27` —
-  `33f699448b5940b2aa4b0464b3a238297c68ab86`
-
-The recovery object remains reachable as `33f6994`. The saved model draft is
-recovery context only; do not apply it wholesale or reuse its conclusions
-without rederiving them from current source and ratified requirements.
+- Deleted `namisync/workflows/payloads.py`,
+  `namisync/workflows/_json_envelope.py`, and the inventory/integrity codec and
+  charge closure. All eight internal codec entry points and 134 codec/JSON
+  helper functions are gone.
+- Dispatcher/session custody now carries one opaque object and never inspects
+  its semantics. Frozen plan, inventory, and integrity requests serve directly
+  as checkpoints. Execution adds one `ExecutionCheckpoint` using the existing
+  execution/selection snapshots and returns fresh mutable state from one
+  `materialize()` path; there is no checkpoint authority, adoption, schema,
+  version, generic freezer, or compatibility representation.
+- Planning preparation requires the exact canonical identity policy and retains
+  the callback-free option snapshot before deriving resources. Existing
+  workflow-entry, execution-overlay, verify-continuation, external-ingress, and
+  filesystem/persistence enforcement remains at its authoritative owner.
+- The three-finding SIM-1 stop is recorded in `SIMPLIFICATION.md`: one aliasing,
+  one representation-drift, and one coverage-hole finding. The bounded repairs
+  passed independent rereview. The complete deleted-test denominator is 99:
+  67 public replacements and 32 removed-mechanism tests, with zero knowingly
+  uncovered behavior.
 
 ## Verification
 
-- Node-enabled affected departments: 2,556 passed, 1 capability skip, 2,671
-  deselected.
-- Node-enabled ordinary suite: 5,196 passed, 4 capability skips, 28 headed
-  deselected.
-- Import boundaries: all 11 contracts kept.
-- Integrity boundary follow-up: combined core/verifier departments passed
-  1,484 tests with one capability skip and 3,747 deselections; the verifier
-  source guard contains no cross-object private known-index read.
-- Protected settlement oracle: 30 scenarios across three identical successful
-  prerequisite runs; the corrective follow-up did not change executor
-  settlement.
-- Active documents: 29 documents, 189 relative targets, and 84 Markdown
-  anchors resolve; stale-contract searches, repository custody, and
-  `git diff --check` are clean.
-- Independent final review found no blocking code, documentation-authority,
-  overclaim, or repository-custody finding.
+- Frozen simplification audit: three identical successful runs; all four frozen
+  files unchanged from corpus commit
+  `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
+- Post-repair focused set: 948 passed.
+- Core/dispatcher/workflows/interfaces departments: 3,699 passed, 1 skipped,
+  1,423 deselected.
+- Node-enabled ordinary suite: 5,091 passed, 4 skipped, 28 headed deselected.
+- Import boundaries: 11 kept, 0 broken across 75 files and 333 dependencies.
+- Relocation audit: eight codec entries, 15 runtime codec calls, and 134 helper
+  definitions reduced to zero; production changed +288/-4,084 and tests
+  +1,239/-2,873. These are reported trends, not gates.
+- `git diff --check` and the final exact-path commit review still run immediately
+  before the SIM-1 commit.
 
 ## Next safe action
 
-Begin checkpoint 4 proper from the compact boundary in `M1_SHELL_H2.md`.
-Freeze and independently review the complete analytical model before dormant
-lifecycle machinery or task activation. Do not change current population walls
-or apply the saved model draft as implementation authority.
+Implement SIM-2 exactly as closed in `SIMPLIFICATION.md`: move the reliable
+canonical-byte maximum into `canonical_event_bytes` before any `EventHub`
+mutation, remove downstream Python/JavaScript event-body recertification, and
+preserve byte-for-byte event-v5 persistence plus the durable history envelope.
+Do not change the epoch, event shape, history receipt/hash/watermark logic,
+command validation, unrelated views, or any H2 feature.
+
+After SIM-2 passes its frozen/Node/department/ordinary/import gates, run the
+disposable `PlanOperation.simplification_probe` exit test. The target is no more
+than eight tracked source/test files; revert every probe change and delete its
+branch before final closeout.

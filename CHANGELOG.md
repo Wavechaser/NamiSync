@@ -23,6 +23,30 @@ history, and workflow product while building its secured headed WebView2 shell.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
+#### Run the initial architectural simplification (2026-09-01)
+
+- Removed the process-local plan, execution, inventory, and integrity JSON
+  codecs, their private envelope/charge machinery, and byte-oriented dispatcher
+  custody. Plan, inventory, and standalone-integrity now retain their frozen
+  domain requests directly; execution uses one detached typed checkpoint and
+  materializes fresh mutable continuation state on each open.
+- Kept real enforcement at its owner: planning snapshots its callback-free
+  identity policy before resource derivation, execution preserves its existing
+  overlay and verify-continuation checks, and inventory/integrity retain their
+  workflow-entry admission. CLI and bridge remain bounded adapter ingresses;
+  no checkpoint schema, compatibility alias, adoption API, or generic freezer
+  replaced the deleted wire contract.
+- Closed the three-finding SIM-1 stop through a recorded mechanism table,
+  bounded repairs, and independent rereview. All 99 deleted tests have an exact
+  public-replacement or mechanism-removed disposition, with zero knowingly
+  uncovered behavior; frozen pause/resume/cancel/settlement and event-v5 corpora
+  remain unchanged.
+- SIM-1 removed 3,796 net production lines and 1,634 net test lines while
+  reducing import analysis from 77 files/346 dependencies to 75/333. The
+  ordinary suite passed 5,091 tests with four capability skips and 28 headed
+  deselections; all 11 import contracts remained kept. These counts are trends,
+  not acceptance gates.
+
 #### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-30)
 
 - Moved inventory scan, returned repository-row, tree-input-member, and

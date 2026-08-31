@@ -410,8 +410,8 @@ class _CustodyInvocation:
             )
         )
 
-    def snapshot(self) -> bytes:
-        return f"{self._state.mode}:{self._state.task_index}".encode("ascii")
+    def snapshot(self) -> object:
+        return (self._state.mode, self._state.task_index)
 
 
 class _QueueTracker:
@@ -1231,7 +1231,7 @@ def _run_fixture(
     from namisync.workflows import PLAN_KIND
 
     states = _states(mode, variant)
-    state_by_source: dict[bytes, _RunState] = {}
+    state_by_checkpoint: dict[object, _RunState] = {}
     roots = []
     for state in states:
         source = root / "sources" / f"task-{state.task_index}"
@@ -1239,13 +1239,13 @@ def _run_fixture(
         source.mkdir(parents=True)
         target.mkdir(parents=True)
         roots.append((str(source), str(target)))
-        state_by_source[str(source).encode("utf-8")] = state
+        state_by_checkpoint[str(source)] = state
 
     def prepare(request) -> PreparedSession:
-        return PreparedSession(str(request.source_path).encode("utf-8"))
+        return PreparedSession(str(request.source_path))
 
-    def open_invocation(payload: bytes) -> _CustodyInvocation:
-        return _CustodyInvocation(state_by_source[payload])
+    def open_invocation(checkpoint: object) -> _CustodyInvocation:
+        return _CustodyInvocation(state_by_checkpoint[checkpoint])
 
     tracker = _QueueTracker()
 

@@ -179,11 +179,9 @@ accepted targets until their named checkpoints.
 
 Production core events use exact v5 with no legacy constant, private decoder,
 or positive v3/v4 compatibility fixture. The bridge envelope remains v1 and every live `SessionEventView`
-requires nested `schema_version=5`. Until SIM-1 closes, the process-local sync-
-execution payload is exact v7, the sync-plan payload is exact v5, and inventory
-and standalone-integrity payloads are exact v2. These are current implementation
-facts, not compatibility promises: the ratified simplification replaces them
-with detached semantic checkpoints and deletes their internal wire versions.
+requires nested `schema_version=5`. Process-local workflow custody uses detached
+typed checkpoints with no wire version or JSON representation. Dispatcher and
+session storage treat those checkpoints as opaque and never persist them.
 Transient copy
 attestations may exist only while the same live/paused compound session needs
 linked verification or resume. They never enter either database, retained
@@ -1566,17 +1564,12 @@ selected-id set cannot reconstruct whether an omitted operation was a direct
 user choice or dependency fallout: different user actions can produce the same
 runnable set while requiring different `SKIPPED`/`DEFERRED` explanations.
 `ExecutionSet` therefore carries the canonical immutable `user_deselected`
-operation-id set alongside `selection`; the execution payload and every
-execute/verify continuation serialize it. `run_execution` re-derives the
-selection and typed exclusions from `(plan, user_deselected)` and refuses a
+operation-id set alongside `selection`; `ExecutionCheckpoint` snapshots it with
+the execute/verify continuation state. `run_execution` re-derives the selection
+and typed exclusions from `(plan, user_deselected)` and refuses a
 derived-selection mismatch before preflight. Pause/resume and history then see
-the same explanations that were reviewed.
-
-This provenance entered through a **strict workflow-payload version change**,
-not an unversioned field addition. The shared epoch register owns the current
-and accepted workflow-payload versions; older exact shapes remain rejected.
-The plan-request half changes version with the shared envelope even when its
-body shape is unchanged. M1 has no durable cross-process queued payloads to
+the same explanations that were reviewed. This is process-local semantic state,
+not a workflow wire epoch; M1 has no durable cross-process queued checkpoint to
 migrate.
 
 This provenance is **not an additional `Commitment` field**. The exact four
@@ -1922,24 +1915,19 @@ AND rel_path_key < :root || ']'
 `inventory_location_presence_idx(location_id, presence, rel_path_key)` must
 serve the range; BR-G-27 pins the query plan.
 
-#### Evidence and payload contract
+#### Evidence and checkpoint contract
 
 `InventoryDetails` retains typed scan warnings and
 `InventoryDetailsView` exposes primitives-only code/path/detail beside
 `complete`. Stage 5.5 proves the evidence reaches the facade; Slice 6 must
 render incomplete scope and its reason distinctly from a clean refresh.
 
-Inventory workflow payload v2 carries subtree roots separately from exact
-paths and rejects v1. The independently versioned integrity payload advances to
-strict v2 so paused custody retains its physical-read total high-water and
-aggregate recording status beside frozen exact subjects. The shared decoder
-accepts explicit `(expected_kind, expected_version)` and rejects wrong-kind or
-wrong-version bodies.
-
-Integrity continuation restructuring remains deferred until a late-run pause
-benchmark over representative 10k, 100k, and large-folder subject sets proves a
-problem. Any replacement must preserve paused/unpaused result and phase truth;
-a nested payload alone is not accepted as bounded work.
+Inventory checkpoints retain subtree roots separately from exact paths.
+Integrity checkpoints retain physical-read total high-water and aggregate
+recording status beside frozen exact subjects. Both are exact typed requests:
+construction preserves their distinct modes, detaches mutable collections, and
+reopening creates fresh runtime state. No shared decoder, workflow JSON schema,
+or process-local checkpoint version remains.
 
 > **Rationale (non-normative).**
 >
@@ -3929,8 +3917,8 @@ The table remains as ownership context for its gates; delivery status is in
 | Lane | Owns | Delivery | Depends on |
 | --- | --- | --- | --- |
 | **A — Tree substrate** | `core/pathing.py`, `workflows/node_tree.py`, `modules/planner.py` | Shared path helpers, hierarchy/index, scoped ids, pure tree tests | — |
-| **B — Scan scope** | `core/models.py`, scanner, recorder, inventory workflow | `SUBTREES`, shared walk, literal reconciliation range, inventory v2/warnings | — |
-| **C — Selection semantics** | Selection, execution/payload/view/sync workflows | Deselection provenance, execution payload v7, re-derivation, closure, `all-noop` truth | — |
+| **B — Scan scope** | `core/models.py`, scanner, recorder, inventory workflow | `SUBTREES`, shared walk, literal reconciliation range, typed inventory checkpoint/warnings | — |
+| **C — Selection semantics** | Selection, execution/checkpoint/view/sync workflows | Deselection provenance, typed execution checkpoint, re-derivation, closure, `all-noop` truth | — |
 | **D — Facade** | Service and workflow runtime | Revisions/commitment, inventory lifts, opaque-id commands, receipts, preview | A, B, C |
 
 A, B, and C could land independently; D was the integration point. The table
@@ -4055,14 +4043,14 @@ headings are organizational, not lane ownership.
   path. *Not satisfied by* a `LIKE` query with escaping, an index merely present
   in the schema, or a plan that reports a scan.
 - **BR-G-28 — Inventory and integrity checkpoints remain detached and mode-
-  exact.** SIM-1 replaces both process-local v2 codecs with typed semantic
+  exact.** SIM-1 replaced both process-local v2 codecs with typed semantic
   checkpoints. Construction preserves the exact inventory-versus-integrity
   request mode, detaches every mutable selection or continuation value, and
   retains active scalar, path, source-population, and interface-ingress walls.
   Mutating a source request after construction cannot change dispatcher
   custody, and opening one checkpoint twice yields independent mutable runtime
   state where mutation is required. Internal version round-trips, wrong-wire-
-  kind checks, and malformed-JSON certification retire with the wire form.
+  kind checks, and malformed-JSON certification retired with the wire form.
   *Not satisfied by* passing a live mutable request, introducing a generic
   checkpoint certifier, or preserving the old codec under another name.
 
@@ -4076,7 +4064,7 @@ headings are organizational, not lane ownership.
   and verify continuations cannot acquire execute-only state. Mutation of the
   source execution set after checkpoint construction cannot alter dispatcher
   custody, and each reopen materializes independent mutable state. Internal
-  execution/plan payload versions and round-trip certification retire with the
+  execution/plan payload versions and round-trip certification retired with the
   process-local wire forms. There is no `WorkflowCheckpointAuthority` or
   `adopt_checkpoint()`; detachment is a construction property. *Not satisfied
   by* freezing only the outer dataclass, aliasing a nested mapping, or asserting
@@ -4084,9 +4072,9 @@ headings are organizational, not lane ownership.
   `validate_execution_set` and `_exact_verify_continuation` remain semantic
   enforcers at checkpoint construction/open; removing their former codec call
   sites does not authorize removing those checks.
-  Checkpoint construction admits selection consistency once against
+  Execution workflow admission checks selection consistency once against
   `derive_execution_selection(plan, user_deselected=…)`; a mismatch fails
-  loudly before custody or filesystem mutation. Same-run correlation remains
+  loudly before preflight or filesystem mutation. Same-run correlation remains
   where it prevents stale work from joining another run, but it is not a
   forgery-defense framework. The real dispatcher proof covers both execute and
   verify resume and the already-open ledger run's terminal settlement. *Not

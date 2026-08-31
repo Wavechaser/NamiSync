@@ -12,7 +12,7 @@ accepted but unrealized.
 
 The remaining accepted-but-unrealized bridge contract is mapped in
 `M1_BRIDGE.md`; its scalar and retention hard walls are owned by
-`DEFENSE.md` §1.3. Scoped recording continuation and terminal payload cleanup
+`DEFENSE.md` §1.3. Scoped recording continuation and terminal checkpoint cleanup
 are active below. Every live producer and consumer uses event v5 and data epoch
 6 with the corrected ledger/plan identity hash contract. Private v3/v4 decoders
 and their positive fixtures are absent; only the exact v5 source path remains.
@@ -176,7 +176,7 @@ without turning an internal identifier into an unbounded source primitive.
 
 `SyncOptions.propagate_source_casing` is a fingerprinted planning policy. It
 defaults to false, is available through the primitive semantic-settings
-facade, and survives workflow payload round trips without changing the plan
+facade, and survives typed workflow checkpoint custody without changing the plan
 shape; M1 has no dedicated settings CLI or GUI control.
 `OperationReason.CASE_MISMATCH` and
 `UNICODE_NORMALIZATION_MISMATCH` are non-blocking review advisories; collision
@@ -225,10 +225,10 @@ entries, so work can still scale with the retained overlay population. Public
 workflow admission performs the complete continuation check;
 executor and verifier returns each receive one compound mutable-overlay audit.
 
-The workflow continuation wire key remains `bytes_done_high_water`; plan payloads
-remain exact v5 while execution payloads are exact v7. The execute-only
-`reported_exclusion_count` is a nonnegative JavaScript-safe integer; v6 has no
-compatibility decoder.
+The execution checkpoint retains `bytes_done_high_water` as typed domain state.
+The execute-only `reported_exclusion_count` is a nonnegative JavaScript-safe
+integer. Process-local continuation has no schema version or compatibility
+decoder.
 `ExecutionSet.recording_reasons` sparsely maps only settled degraded operation
 ids to the closed `ItemRecordingReason`, and `recording_issues` retains the
 first bounded `TaskRecordingIssue` for each reason in observation order. Its
@@ -257,10 +257,10 @@ authority checks require the private retained index to remain equal to the
 tuple; completion checks the completed map first for replay, then performs one
 construction-admitted membership lookup without rescanning the tuple. The
 public read-only property returns that exact `frozenset`, so verifier progress
-aliases it without a copy. Broader authority revalidation still walks candidate
-facts and prior completion truth; the index removes the per-completion tuple
-scan but does not make those guards asymptotically constant. Equality and
-continuation payload shapes are unchanged.
+aliases it without a copy. Broader authority revalidation still walks detached
+typed candidates and prior completion truth; the index removes the
+per-completion tuple scan but does not make those guards asymptotically
+constant. Equality and continuation behavior are unchanged.
 It also owns the closed `IntegrityCandidateLimitExceeded` fact and its error,
 axes, fixed limits, and user messages. This fact describes standalone-integrity
 candidate custody only; workflows project it as failed work after a durable
@@ -401,17 +401,17 @@ forming the summary. Bounded phases and failure details retain their identities,
 and item truth, counters, recording, cancellation, and phase status are unchanged.
 This bounds retained header diagnostics, not phase names/count or all workflow
 and audit ownership behind them.
-The registry adapter snapshots continuation bytes before `PAUSED`; the
-dispatcher retains those bytes in the live session record without decoding them
-and opens a fresh adapter invocation on resume.
+The registry adapter constructs a detached semantic checkpoint before `PAUSED`;
+the dispatcher retains that opaque value in the live session record without
+interpreting it and opens a fresh adapter invocation on resume.
 
-`SessionRecord.payload` is opaque bytes only while a session is nonterminal.
+`SessionRecord.checkpoint` is an opaque value only while a session is nonterminal.
 Every terminal record requires null, and dispatcher clears the current live
 reference in the same transition before publishing the terminal state. The
-later result-bearing replacement remains payload-free.
+later result-bearing replacement remains checkpoint-free.
 
 `StoredSessionRecord` is a separate frozen, slotted metadata/result contract,
-not a live record with a relaxed payload invariant. It has no payload field or
+not a live record with a relaxed checkpoint invariant. It has no checkpoint field or
 live-record backreference and preserves the same metadata and result/lifecycle
 checks. `SessionStore` accepts and returns only its exact concrete shape.
 Dispatcher explicitly projects every write, retaining the full result by
@@ -570,11 +570,11 @@ remains. Source-removal guards and live decoder/browser negative cases pin the
 exact v5 boundary. Protected historical measurement and settlement artifacts
 remain historical evidence, not compatibility routes.
 
-Core event versioning is independent of bridge-envelope, continuation,
+Core event versioning is independent of bridge-envelope, workflow-checkpoint,
 database, UI-state, shell, and page versions. The bridge envelope remains
 versioned separately and carries the originating core event version explicitly;
-workflow continuation versions remain phase-specific process-local custody.
-Exact accepted versions and shapes are mapped in `M1_BRIDGE.md`. An
+workflow checkpoints are unversioned process-local typed custody. Exact
+boundary versions and shapes are mapped in `M1_BRIDGE.md`. An
 unversioned browser-facing event is not supported.
 
 Every reliable result item carries an explicit `item_type` and `phase`;
@@ -659,13 +659,11 @@ at most 120,000 combined raw selected-path and subtree-root entries before it
 constructs canonical dictionaries, sets, or sorted tuples; duplicate and
 covered paths retain their established canonicalization after that admission.
 
-Canonical plan/ledger hashes, history JSON, and opaque workflow payloads use
-strict UTF-8. Strings and dictionary keys must contain Unicode scalar values;
-even an explicit high/low surrogate pair in a Python string is refused rather
-than silently becoming one character on JSON decode. Valid supplementary
-characters and literal backslash text keep their established bytes. Workflow
-decoders check every decoded string and key before constructing domain values;
-a valid JSON escaped pair already denotes one scalar and remains accepted.
+Canonical plan/ledger hashes and history JSON use strict UTF-8. Boundary and
+domain text must contain Unicode scalar values; even an explicit high/low
+surrogate pair in a Python string is refused rather than silently rewritten.
+Valid supplementary characters and literal backslash text keep their
+established bytes.
 Bounded optional item diagnostics still omit invalid Unicode and count the
 omission before history serialization. These optional-detail policies do not
 relax required identity text or malformed-filename refusal.
@@ -724,9 +722,9 @@ bytes distinguish a surrogate escape from literal backslash text; the former
 raw-encoding collision claim was not a collision in these JSON hashes.
 
 Identity-bearing durable hashes use the coordinated epoch-6 boundary. The
-ledger contract id differs from epoch 5 while ledger/history schema versions,
-the history contract id, and the plan-v5 wire shape remain unchanged. Execution
-custody requires exact v7; v6 is refused before workflow admission. Database
+ledger contract id differs from epoch 5 while ledger/history schema versions
+and the history contract id remain unchanged. Process-local workflow custody is
+unversioned and has no effect on the data epoch. Database
 admission and the explicit reset boundary remain owned by
 [DATABASE.md](DATABASE.md).
 
@@ -796,7 +794,7 @@ are not additional cancellation requirements.
 
 Declare expensive-to-retrofit shapes now: `DEFERRED`, `BLOCKED`, schema-versioned events,
 all `Scope` kinds, nullable file identity/hardlink group, policy protocols,
-opaque workflow payloads, and attestation provenance. A latent protocol is
+opaque typed workflow checkpoints, and attestation provenance. A latent protocol is
 declared shape-only and has no implementation until its first consumer; this
 provisions the seam without speculative runtime behavior.
 

@@ -14,6 +14,7 @@ from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from time import monotonic
+from types import MappingProxyType
 from typing import Callable, ClassVar, Iterator, Mapping, Protocol, runtime_checkable
 
 from .evidence import (
@@ -22,8 +23,9 @@ from .evidence import (
     Provenance,
     RecordingStatus,
     attestation_fact,
+    snapshot_attestation,
 )
-from .models import FileStat, file_stat_fact
+from .models import FileStat, file_stat_fact, snapshot_file_stat
 from .pathing import (
     fold_validated_path,
     normalize_relative_path,
@@ -603,23 +605,11 @@ class IntegritySelectionAuthority:
 
 
 @dataclass(frozen=True, slots=True)
-class PostCopyCandidateFact:
-    """Flattened workflow authority for one linked verifier candidate."""
-
-    item_id: str
-    root_path: str
-    display_path: str
-    expected_stat: tuple[object, ...]
-    copy_attestation: tuple[object, ...]
-    recorded_identity: tuple[str, str, str, str] | None
-
-
-@dataclass(frozen=True, slots=True)
 class PostCopySelectionAuthority:
-    """Exact admitted facts kept private from linked-verifier collaborators."""
+    """Exact admitted candidates kept private from verifier collaborators."""
 
-    candidates: tuple[PostCopyCandidateFact, ...]
-    completed_bytes: tuple[tuple[str, int], ...]
+    candidates: tuple[PostCopyCandidate, ...]
+    completed_bytes: Mapping[str, int]
     processed_bytes: int
 
 
@@ -711,23 +701,17 @@ def integrity_selection_item_fact(value: object) -> IntegritySelectionItemFact:
     )
 
 
-def post_copy_candidate_fact(value: object) -> PostCopyCandidateFact:
-    """Snapshot one linked candidate without retaining collaborator objects."""
+def _snapshot_post_copy_candidate(value: object) -> PostCopyCandidate:
+    """Detach one exact linked-verifier candidate into typed domain values."""
 
     if type(value) is not PostCopyCandidate:
         raise TypeError("post-copy selection requires exact candidate values")
-    for field_name, field_value in (
-        ("item id", value.item_id),
-        ("display path", value.display_path),
-    ):
-        if type(field_value) is not str:
-            raise TypeError(f"post-copy candidate {field_name} must be exact text")
+    if type(value.item_id) is not str:
+        raise TypeError("post-copy candidate item id must be exact text")
     if type(value.root) is not _PLATFORM_PATH_TYPE:
         raise TypeError("post-copy candidate root has the wrong type")
-    if type(value.expected_stat) is not FileStat:
-        raise TypeError("post-copy expected stat has the wrong type")
-    if type(value.copy_attestation) is not Attestation:
-        raise TypeError("post-copy attestation has the wrong type")
+    if type(value.display_path) is not str:
+        raise TypeError("post-copy candidate display path must be exact text")
     recorded = value.recorded_identity
     if recorded is not None:
         if type(recorded) is not PostCopyRecordIdentity:
@@ -740,20 +724,14 @@ def post_copy_candidate_fact(value: object) -> PostCopyCandidateFact:
         )
         if any(type(field_value) is not str for field_value in fields):
             raise TypeError("post-copy recorded identity fields must be exact text")
-        PostCopyRecordIdentity.__post_init__(recorded)
-        recorded_fact = fields
-    else:
-        recorded_fact = None
-    expected_stat = file_stat_fact(value.expected_stat)
-    copy_attestation = attestation_fact(value.copy_attestation)
-    PostCopyCandidate.__post_init__(value)
-    return PostCopyCandidateFact(
+        recorded = PostCopyRecordIdentity(*fields)
+    return PostCopyCandidate(
         value.item_id,
-        str(value.root),
+        value.root,
         value.display_path,
-        expected_stat,
-        copy_attestation,
-        recorded_fact,
+        snapshot_file_stat(value.expected_stat),
+        snapshot_attestation(value.copy_attestation),
+        recorded,
     )
 
 
@@ -847,8 +825,6 @@ def snapshot_post_copy_selection_authority(
         raise TypeError("post-copy selection must have the exact public shape")
     if type(value.candidates) is not tuple:
         raise TypeError("post-copy candidates must be an exact tuple")
-    if any(type(item) is not PostCopyCandidate for item in value.candidates):
-        raise TypeError("post-copy candidates have the wrong type")
     if type(value._completed_bytes) is not dict:
         raise TypeError("post-copy completion state must be an exact dict")
     if any(
@@ -858,13 +834,13 @@ def snapshot_post_copy_selection_authority(
         raise TypeError("post-copy completion facts have the wrong type")
     if type(value._processed_bytes) is not int:
         raise TypeError("post-copy processed bytes have the wrong type")
-    candidate_facts = tuple(
-        post_copy_candidate_fact(item) for item in value.candidates
+    candidates = tuple(
+        _snapshot_post_copy_candidate(item) for item in value.candidates
     )
     PostCopySelection.__post_init__(value)
     return PostCopySelectionAuthority(
-        candidate_facts,
-        tuple(value._completed_bytes.items()),
+        candidates,
+        MappingProxyType(dict(value._completed_bytes)),
         value._processed_bytes,
     )
 
@@ -886,8 +862,6 @@ def revalidate_post_copy_selection_authority(
         or len(value.candidates) != len(authority.candidates)
     ):
         raise ValueError("post-copy candidates changed during collaboration")
-    if any(type(item) is not PostCopyCandidate for item in value.candidates):
-        raise TypeError("post-copy candidates have the wrong type")
     if type(value._completed_bytes) is not dict:
         raise TypeError("post-copy completion state must be an exact dict")
     if any(
@@ -897,18 +871,13 @@ def revalidate_post_copy_selection_authority(
         raise TypeError("post-copy completion facts have the wrong type")
     if type(value._processed_bytes) is not int:
         raise TypeError("post-copy processed bytes have the wrong type")
-    candidate_facts = tuple(
-        post_copy_candidate_fact(item) for item in value.candidates
+    candidates = tuple(
+        _snapshot_post_copy_candidate(item) for item in value.candidates
     )
-    for candidate, expected in zip(
-        candidate_facts,
-        authority.candidates,
-        strict=True,
-    ):
-        if candidate != expected:
-            raise ValueError("post-copy candidate changed during collaboration")
+    if candidates != authority.candidates:
+        raise ValueError("post-copy candidate changed during collaboration")
     PostCopySelection.__post_init__(value)
-    for item_id, completed_bytes in authority.completed_bytes:
+    for item_id, completed_bytes in authority.completed_bytes.items():
         if value._completed_bytes.get(item_id) != completed_bytes:
             raise ValueError("post-copy prior completion changed during collaboration")
     if allow_progress:

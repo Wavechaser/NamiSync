@@ -116,13 +116,10 @@ from namisync.modules.verifier import verify_post_copy
 from namisync.modules.preflight import observe
 from namisync.workflows.models import (
     ExecuteContinuation,
+    ExecutionCheckpoint,
     ExecutionRequest,
     PlanRequest,
     VerifyContinuation,
-)
-from namisync.workflows.payloads import (
-    decode_execution_request,
-    encode_execution_request,
 )
 from namisync.workflows.sync import (
     run_execution,
@@ -665,9 +662,9 @@ def test_execute_diagnostic_omissions_survive_verify_pause_resume_once() -> None
     paused = captured[-1]
     assert paused.execute_phase.error is None
     assert paused.execution_set.omitted_detail_count == 3
-    restored = decode_execution_request(
-        encode_execution_request(ExecutionRequest(paused, NOW))
-    ).continuation
+    restored = ExecutionCheckpoint(
+        ExecutionRequest(paused, NOW)
+    ).materialize().continuation
     assert isinstance(restored, VerifyContinuation)
     assert restored.execution_set.omitted_detail_count == 3
 
@@ -1739,9 +1736,9 @@ def test_execute_resume_reports_only_the_unaccepted_exclusion_suffix() -> None:
         str(excluded[0].op_id),
     ]
     assert captured[-1].reported_exclusion_count == 1
-    restored = decode_execution_request(
-        encode_execution_request(ExecutionRequest(captured[-1], NOW))
-    ).continuation
+    restored = ExecutionCheckpoint(
+        ExecutionRequest(captured[-1], NOW)
+    ).materialize().continuation
     assert isinstance(restored, ExecuteContinuation)
 
     resumed_events: list[ItemOutcome] = []
@@ -3676,9 +3673,9 @@ def test_verify_progress_retains_missing_evidence_budget_across_pause_resume() -
     assert first_progress[-1].bytes_done == 2
     assert first_progress[-1].bytes_total == 13
 
-    restored = decode_execution_request(
-        encode_execution_request(ExecutionRequest(paused, NOW))
-    ).continuation
+    restored = ExecutionCheckpoint(
+        ExecutionRequest(paused, NOW)
+    ).materialize().continuation
     assert isinstance(restored, VerifyContinuation)
     resumed_events: list[object] = []
     reader = _FakeReader(
@@ -4298,7 +4295,7 @@ def test_execution_retires_consumed_cancellation_frames() -> None:
     assert references and all(reference() is None for reference in references)
 
 
-def test_noncompound_execute_exception_uses_execution_continuation_bytes() -> None:
+def test_noncompound_execute_exception_uses_execution_checkpoint_counters() -> None:
     first = _operation(63, 5)
     second = _operation(64, 7)
     xset = _execution_set(first, second)
@@ -4473,7 +4470,7 @@ def test_compound_exclusion_close_failure_retains_terminal_truth(
 
 
 @pytest.mark.parametrize("verify_after_execute", [False, True])
-def test_dispatcher_compound_exclusion_close_failure_survives_payload_scrub(
+def test_dispatcher_compound_exclusion_close_failure_survives_checkpoint_scrub(
     tmp_path: Path, monkeypatch, verify_after_execute: bool
 ) -> None:
     source, target = tmp_path / "source", tmp_path / "target"
@@ -4528,7 +4525,7 @@ def test_dispatcher_compound_exclusion_close_failure_survives_payload_scrub(
         request = PlanRequest(
             request_id="5" * 32, source_path=str(source), target_path=str(target)
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda body: None, lambda: None)
         )
         plan = runtime.get_plan(request.request_id).plan
@@ -4551,7 +4548,7 @@ def test_dispatcher_compound_exclusion_close_failure_survives_payload_scrub(
 
     assert shutdown.complete
     assert type(stored) is StoredSessionRecord
-    assert not hasattr(stored, "payload")
+    assert not hasattr(stored, "checkpoint")
     assert stored.session_id == record.session_id
     assert stored.kind == record.kind
     assert stored.state is record.state
@@ -4562,7 +4559,7 @@ def test_dispatcher_compound_exclusion_close_failure_survives_payload_scrub(
     assert stored.started_at == record.started_at
     assert stored.ended_at == record.ended_at
     assert stored.result is record.result
-    assert record.payload is None
+    assert record.checkpoint is None
     result = record.result
     assert result is not None
     assert result.recording is RecordingStatus.DEGRADED
@@ -5465,9 +5462,9 @@ def test_pause_recording_exit_failure_persists_degraded_continuation() -> None:
     assert isinstance(captured[-1], ExecuteContinuation)
     assert captured[-1].execution_set.recording is RecordingStatus.DEGRADED
 
-    restored = decode_execution_request(
-        encode_execution_request(ExecutionRequest(captured[-1], NOW))
-    ).continuation
+    restored = ExecutionCheckpoint(
+        ExecutionRequest(captured[-1], NOW)
+    ).materialize().continuation
     assert isinstance(restored, ExecuteContinuation)
     assert tuple(
         issue.reason for issue in restored.execution_set.recording_issues
@@ -5650,9 +5647,9 @@ def test_xv_4_verify_pause_resumes_remaining_without_duplicates() -> None:
     assert captured[-1].recording is RecordingStatus.DEGRADED
     assert captured[-1].candidates.completed_count == 1
 
-    resumed_request = decode_execution_request(
-        encode_execution_request(ExecutionRequest(captured[-1], NOW))
-    )
+    resumed_request = ExecutionCheckpoint(
+        ExecutionRequest(captured[-1], NOW)
+    ).materialize()
     assert isinstance(resumed_request.continuation, VerifyContinuation)
     resumed_recordings: list[_Recording] = []
     resumed_ids: list[str] = []
@@ -5675,12 +5672,12 @@ def test_xv_4_verify_pause_resumes_remaining_without_duplicates() -> None:
 
     outcomes = [item for item in events if isinstance(item, IntegrityOutcome)]
     assert resumed_ids == [str(second.op_id)]
-    decoded_plan = resumed_request.continuation.execution_set.plan
-    target_evidence = decoded_plan.target_volume_evidence
+    resumed_plan = resumed_request.continuation.execution_set.plan
+    target_evidence = resumed_plan.target_volume_evidence
     assert resumed_contexts[0].root_authority == RootAuthority(
-        decoded_plan.target_root.path,
+        resumed_plan.target_root.path,
         None if target_evidence is None else target_evidence.device_id,
-        decoded_plan.target_volume_id,
+        resumed_plan.target_volume_id,
     )
     assert [item.item_id for item in outcomes] == [
         str(first.op_id),
@@ -5788,9 +5785,9 @@ def test_verify_phase_total_retains_abandoned_attempt_work_across_resume() -> No
             continuation_sink=captured.append,
         )
 
-    restored = decode_execution_request(
-        encode_execution_request(ExecutionRequest(captured[-1], NOW))
-    ).continuation
+    restored = ExecutionCheckpoint(
+        ExecutionRequest(captured[-1], NOW)
+    ).materialize().continuation
     assert isinstance(restored, VerifyContinuation)
     assert restored.candidates.processed_bytes == 1
 
@@ -5872,9 +5869,9 @@ def test_xv_5_execute_pause_preserves_exact_evidence_then_verifies_all() -> None
 
     assert first_recordings[0].finishes == []
     assert continuation.execution_set.bytes_done_high_water == 7
-    resumed_request = decode_execution_request(
-        encode_execution_request(ExecutionRequest(continuation, NOW))
-    )
+    resumed_request = ExecutionCheckpoint(
+        ExecutionRequest(continuation, NOW)
+    ).materialize()
     assert isinstance(resumed_request.continuation, ExecuteContinuation)
     resumed_xset = resumed_request.execution_set
     assert resumed_xset.status == {first.op_id: Outcome.SUCCEEDED}
@@ -6420,7 +6417,7 @@ def test_committed_copy_receipt_survives_reliable_sink_failure(
             target_path=str(target),
         )
         plan_result = runtime.open_plan(
-            runtime.prepare_plan(plan_request).payload
+            runtime.prepare_plan(plan_request).checkpoint
         ).run(RunContext(lambda _body: None, lambda: None))
         assert plan_result.status is SessionState.COMPLETED
         execution = runtime.commit_plan(
@@ -6430,7 +6427,7 @@ def test_committed_copy_receipt_survives_reliable_sink_failure(
             verify_after_execute=False,
         )
         invocation = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         )
         session = run_session(
             invocation.run,
@@ -6565,7 +6562,7 @@ def test_real_runtime_copy_readback_uses_one_finished_run(
             target_path=str(target),
         )
         plan_result = runtime.open_plan(
-            runtime.prepare_plan(plan_request).payload
+            runtime.prepare_plan(plan_request).checkpoint
         ).run(context)
         assert plan_result.status is SessionState.COMPLETED
         execution = runtime.commit_plan(
@@ -6575,7 +6572,7 @@ def test_real_runtime_copy_readback_uses_one_finished_run(
             verify_after_execute=True,
         )
         result = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         ).run(context)
     finally:
         runtime.close()
@@ -6713,7 +6710,7 @@ def test_long_path_plan_preflight_execute_verify_and_rerun_converge(
     def cycle(request_id: str, run_id: str):
         request = PlanRequest(request_id, str(source), str(target))
         planned = runtime.open_plan(
-            runtime.prepare_plan(request).payload
+            runtime.prepare_plan(request).checkpoint
         ).run(context)
         assert planned.status is SessionState.COMPLETED
         artifact = runtime.get_plan(request_id)
@@ -6725,7 +6722,7 @@ def test_long_path_plan_preflight_execute_verify_and_rerun_converge(
             verify_after_execute=True,
         )
         result = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         ).run(context)
         return artifact, runtime.get_plan_review(request_id), result
 
@@ -6920,7 +6917,7 @@ def test_terminal_history_retains_rolled_back_attempted_byte_high_water(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda body: None, lambda: None)
         )
         execution = runtime.commit_plan(
@@ -7015,7 +7012,7 @@ def test_xv_6_readback_keeps_copy_success_for_mismatch_and_stat_drift(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(context)
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
         execution = runtime.commit_plan(
             request.request_id,
             run_id="4" * 32,
@@ -7023,7 +7020,7 @@ def test_xv_6_readback_keeps_copy_success_for_mismatch_and_stat_drift(
             verify_after_execute=True,
         )
         result = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         ).run(context)
     finally:
         runtime.close()
@@ -7074,7 +7071,7 @@ def test_xv_6_stale_conditional_recording_degrades_only_recording(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(context)
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
         execution = runtime.commit_plan(
             request.request_id,
             run_id="6" * 32,
@@ -7082,7 +7079,7 @@ def test_xv_6_stale_conditional_recording_degrades_only_recording(
             verify_after_execute=True,
         )
         result = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         ).run(context)
     finally:
         runtime.close()
@@ -7161,7 +7158,7 @@ def test_xv_2_copy_record_failure_still_builds_rowless_candidate(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(context)
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
         execution = runtime.commit_plan(
             request.request_id,
             run_id="8" * 32,
@@ -7169,7 +7166,7 @@ def test_xv_2_copy_record_failure_still_builds_rowless_candidate(
             verify_after_execute=True,
         )
         result = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         ).run(context)
     finally:
         runtime.close()
@@ -7220,7 +7217,7 @@ def test_xv_3_verify_pause_reopens_same_unfinished_run(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda body: None, lambda: None)
         )
         execution = runtime.commit_plan(
@@ -7230,13 +7227,13 @@ def test_xv_3_verify_pause_reopens_same_unfinished_run(
             verify_after_execute=True,
         )
         invocation = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         )
         with pytest.raises(PauseRequested):
             invocation.run(context)
         snapshot = invocation.snapshot()
-        decoded = decode_execution_request(snapshot)
-        assert isinstance(decoded.continuation, VerifyContinuation)
+        resumed = snapshot.materialize()
+        assert isinstance(resumed.continuation, VerifyContinuation)
 
         connection = connect_ledger_reader(runtime.ledger_path)
         try:
@@ -7299,7 +7296,7 @@ def test_resumed_execute_preflight_refusal_finishes_existing_partial_run(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda body: None, lambda: None)
         )
         execution = runtime.commit_plan(
@@ -7309,12 +7306,12 @@ def test_resumed_execute_preflight_refusal_finishes_existing_partial_run(
             verify_after_execute=True,
         )
         invocation = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         )
         with pytest.raises(PauseRequested):
             invocation.run(RunContext(emit, checkpoint))
         snapshot = invocation.snapshot()
-        paused = decode_execution_request(snapshot)
+        paused = snapshot.materialize()
         assert isinstance(paused.continuation, ExecuteContinuation)
         assert len(paused.execution_set.status) == 1
         assert len(settled) == 1
@@ -7410,7 +7407,7 @@ def test_real_resumed_verify_preflight_refusal_finishes_existing_run(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda body: None, lambda: None)
         )
         execution = runtime.commit_plan(
@@ -7420,7 +7417,7 @@ def test_real_resumed_verify_preflight_refusal_finishes_existing_run(
             verify_after_execute=True,
         )
         invocation = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
+            runtime.prepare_execution(execution).checkpoint
         )
         with pytest.raises(PauseRequested):
             invocation.run(RunContext(emit, checkpoint))
@@ -7504,7 +7501,7 @@ def test_dispatcher_paused_execute_cancel_finishes_same_run_without_verify(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda body: None, lambda: None)
         )
         execution = runtime.commit_plan(
@@ -7623,7 +7620,7 @@ def test_dispatcher_pause_resume_retains_v6_item_attribution_and_attestation(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda body: None, lambda: None)
         )
         execution = runtime.commit_plan(
@@ -7640,8 +7637,8 @@ def test_dispatcher_pause_resume_retains_v6_item_attribution_and_attestation(
             session_id,
             SessionState.PAUSED,
         )
-        assert paused.payload is not None
-        carried = decode_execution_request(paused.payload).execution_set
+        assert type(paused.checkpoint) is ExecutionCheckpoint
+        carried = paused.checkpoint.materialize().execution_set
         operation = carried.plan.operations[0]
         assert carried.recording_reasons == {
             operation.op_id: ItemRecordingReason.RECORD_WRITE_FAILED
@@ -7662,7 +7659,7 @@ def test_dispatcher_pause_resume_retains_v6_item_attribution_and_attestation(
 
     assert shutdown.complete
     assert executor_calls == 2
-    assert terminal.payload is None
+    assert terminal.checkpoint is None
     assert terminal.result is not None
     assert terminal.result.recording is RecordingStatus.DEGRADED
 
@@ -7733,7 +7730,7 @@ def test_dispatcher_paused_verify_cancel_uses_runtime_compound_settlement(
             source_path=str(source),
             target_path=str(target),
         )
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda body: None, lambda: None)
         )
         execution = runtime.commit_plan(

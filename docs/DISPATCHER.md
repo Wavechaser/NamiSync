@@ -17,8 +17,8 @@ dispatcher; any implementation of that target must preserve this boundary.
 ## Purpose
 
 Dispatcher admits, schedules, controls, and observes generic sessions. It knows
-session ids, states, required resources, opaque workflow kind/request/result
-payloads, and event delivery classes. It does not know what sync, verify,
+session ids, states, required resources, opaque workflow kind/request/checkpoint/
+result values, and event delivery classes. It does not know what sync, verify,
 baseline, import, or ingest means and never imports modules, database, or
 workflows.
 
@@ -37,10 +37,10 @@ shutdown(timeout) -> ShutdownResult
 ```
 
 An injected registry maps opaque kind to a generic callable/capability adapter.
-`prepare(request)` returns opaque bytes plus a set of generic `ResourceId`
-values. `open(payload)` belongs to the adapter and returns a fresh invocation
+`prepare(request)` returns an opaque semantic checkpoint plus a set of generic
+`ResourceId` values. `open(checkpoint)` belongs to the adapter and returns a fresh invocation
 with `run(ctx)` and `snapshot()` methods. The dispatcher calls those methods but
-never decodes, reflects over, or otherwise interprets the payload. Reopening the
+never reflects over or otherwise interprets the checkpoint. Reopening the
 invocation on every resume is the generic seam through which the owning workflow
 runs its fresh guard.
 
@@ -92,10 +92,10 @@ close, but neither builds the bridge summary nor serializes result items to
 JavaScript.
 
 One optional registration callback,
-`settle_canceled(payload, disposition) -> OperationResult`, handles cancellation
+`settle_canceled(checkpoint, disposition) -> OperationResult`, handles cancellation
 of work that already has a start time but will not re-enter its normal
 invocation (paused work and resume→pending cancellation races). Dispatcher
-passes the opaque payload and generic disposition only, validates that the
+passes the opaque checkpoint and generic disposition only, validates that the
 returned result projects to lifecycle `CANCELED`, then follows the ordinary
 audit/Terminal/custody path. Registrations without the callback retain the
 generic canceled result. A callback failure is an explicit adapter failure and
@@ -138,7 +138,7 @@ results and emit only nonterminal events through `RunContext`; dispatcher owns
 custody around the runner and releases it in every exit path.
 
 Failures raised before invocation entry by lock acquisition, continuation open,
-or retained-payload cancellation settlement are projected to fixed terminal or
+or retained-checkpoint cancellation settlement are projected to fixed terminal or
 control truth before the core runner is called. Dispatcher clears the caught
 exception's traceback, cause, and context after bounded diagnostic projection,
 so the runner closure and terminal store cannot retain collaborator frames or
@@ -149,8 +149,8 @@ worker retry behavior remain unchanged.
 Each process-local runner attempt has a monotonically increasing private
 generation key. A session has at most one current generation; every resource
 reservation and acquired lease is owned by that exact key, and state/result/
-payload callbacks reject stale keys. Generations never enter public records,
-payloads, stores, or databases. This keeps the public lifecycle unchanged while
+checkpoint callbacks reject stale keys. Generations never enter public records,
+checkpoints, stores, or databases. This keeps the public lifecycle unchanged while
 preventing a retiring pause/cancel attempt from settling twice or releasing a
 resumed successor's custody.
 
@@ -180,25 +180,25 @@ paused continuation.
 M0 preserves the adapter's opaque continuation by calling `snapshot()` after a
 pause unwind and before releasing custody or publishing `PAUSED`. This includes
 a pause observed at the runner's entry checkpoint before `invocation.run()`;
-the admitted invocation still establishes and serializes its resumable
+the admitted invocation still establishes its detached resumable
 continuation before the dispatcher reports `PAUSED`. Reliable item outcomes are
 accumulated by session across attempts, so a pause followed by a later cancel or
 failure retains outcomes earned before the pause without asking the workflow to
 emit them twice. If cancel reaches a resumed attempt's RUNNING checkpoint before
-`invocation.run()`, dispatcher uses the registration's retained-payload
+`invocation.run()`, dispatcher uses the registration's retained-checkpoint
 cancellation settlement before publishing the terminal; it cannot substitute a
 generic canceled result that strands workflow custody.
 
-`SessionRecord.payload: bytes | None` is process-local opaque continuation
+`SessionRecord.checkpoint: object | None` is process-local opaque continuation
 state only while nonterminal. Every edge into `COMPLETED`, `FAILED`, `CANCELED`,
-or `REFUSED` atomically clears the current live record's payload before
+or `REFUSED` atomically clears the current live record's checkpoint before
 publishing the terminal state; the state-before-result settlement record and
-the later record with its result are both payload-free. Dispatcher does not
-inspect or decode the bytes. It may pass them to a registered cancellation
+the later record with its result are both checkpoint-free. Dispatcher does not
+inspect the value. It may pass it to a registered cancellation
 settler before the transition. Ordinary return/failure, cooperative cancel,
 queued discard, workflow refusal, paused cancellation, and resume-to-pending
 cancellation all retain this live-record invariant. Separately, admission and
-every later store write project metadata without any payload field. A store
+every later store write project metadata without any checkpoint field. A store
 that accepts one of these values and rejects an update can retain stale
 metadata, not that session's continuation. This is not a claim that all earlier
 Python references have been erased.
@@ -213,7 +213,7 @@ reacquires and revalidates volumes.
 Scheduler selection installs the current generation, its worker registration,
 and all reservations atomically before removing the pending entry or starting
 the thread. The selection loop releases its temporary record reference before
-launching or waiting, so an idle scheduler cannot retain an earlier payload
+launching or waiting, so an idle scheduler cannot retain an earlier checkpoint
 after the session closes. `CANCELING` never creates a second worker while an
 acquisition or pause generation is current. Worker retirement identity-checks
 again under the session publication lock and enqueues any surviving
@@ -398,12 +398,12 @@ join allowance.
 ## Session Store
 
 `SessionStore` accepts exact `StoredSessionRecord` values: a separate frozen,
-slotted core metadata/result contract with neither a payload field nor a
+slotted core metadata/result contract with neither a checkpoint field nor a
 live-record backreference. Its exact shape lives in `core/session.py`.
 Dispatcher explicitly projects that value before admission's `put()` and every
 later `put()`, including pause snapshots and the terminal record before audit
 finalization supplies its result. This does not weaken `SessionRecord`:
-nonterminal live records still require opaque bytes, and terminal live records
+nonterminal live records still require an opaque checkpoint, and terminal live records
 require null. The projection retains the full `OperationResult` by identity,
 including independent filesystem/recording/audit/cancellation axes, item and
 phase detail, errors, recording issues, omission counts, and review-limit
@@ -437,9 +437,9 @@ M2 restart recovery is not enabled by swapping in a SQLite metadata store.
 It requires a separately designed protected continuation/recovery-store
 contract, explicit recovery and retention rules, unique durable queue ownership,
 and fresh workflow authority/custody reconciliation before pending re-admission
-or `RUNNING`→`INTERRUPTED` recovery. The current execution-v7 continuation and
-its transient attestations are not a durable recovery format. Exact active
-continuation and event/database versions remain owned by
+or `RUNNING`→`INTERRUPTED` recovery. The current process-local semantic
+checkpoint and its transient attestations are not a durable recovery format.
+Exact active event/database versions remain owned by
 [M1_BRIDGE.md](M1_BRIDGE.md); none changes for this metadata boundary.
 
 ### Stored-record retention classification
@@ -456,9 +456,8 @@ follows, separately from transport-memory measurement authority:
 - `resources` shares the live record's immutable sorted resource tuple.
   `result` is null or shares the existing full result graph by identity, without
   a second detail graph. Its result contract is unchanged.
-- Continuation bytes and a live-record backreference are structurally absent.
-  The separate `Dispatcher._records` map remains the live continuation owner;
-  its representation has not changed.
+- Workflow checkpoints and a live-record backreference are structurally absent.
+  The separate `Dispatcher._records` map remains the live checkpoint owner.
 
 The stored wrappers and store table are outside the frozen SH-G-8 transport roots
 (replay, subscribers, and adapter queues); their validators, corpus, and byte
@@ -528,7 +527,7 @@ until its owning worker acknowledges control and retires.
 - Core owns states, events, context, store protocol, and generic records.
 - Composition root provides registry, lock provider, clock, store, and event
   capacity policy.
-- Workflows declare resources and deserialize their own opaque request.
+- Workflows declare resources and materialize their own opaque checkpoint.
 - Interfaces only call this public contract and subscribe. Their task registry
   may serialize sessions and retain presentation artifacts, but it does not
   manage a second domain session lifecycle.

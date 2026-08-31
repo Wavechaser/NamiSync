@@ -91,8 +91,8 @@ row.
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | `SIM-0` | Ratify this removal contract; close the removal/enforcement ledger; capture stable behavior and v5-body corpora before implementation. | Three identical snapshots with no skipped or unclassified scenario; ordinary suite and import-law baseline; corpus self-test; clean declared diff. | Complete |
-| `SIM-1` | Remove process-local workflow payload serialization and replace it with structurally detached semantic checkpoints without changing pause/resume/cancel/settlement behavior or losing real ingress enforcement. | Frozen corpora three times; ownership/aliasing tests; affected departments; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Active |
-| `SIM-2` | Remove redundant event certification while preserving exact v5 persisted bodies, history envelopes, browser delivery/recovery, and reducer behavior. | Frozen corpora three times; byte-for-byte persisted-body check; affected departments and Node probes; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Pending on SIM-1 |
+| `SIM-1` | Remove process-local workflow payload serialization and replace it with structurally detached semantic checkpoints without changing pause/resume/cancel/settlement behavior or losing real ingress enforcement. | Frozen corpora three times; ownership/aliasing tests; affected departments; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Complete |
+| `SIM-2` | Remove redundant event certification while preserving exact v5 persisted bodies, history envelopes, browser delivery/recovery, and reducer behavior. | Frozen corpora three times; byte-for-byte persisted-body check; affected departments and Node probes; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Active |
 
 SIM-0 closes only when the corpus artifacts and baseline commit are recorded in
 the resumption block. No implementation or removable test may be changed before
@@ -193,6 +193,35 @@ In addition to the repository-wide stop classes, stop immediately when:
   restore the safe state and do not invent an epoch migration; or
 - a removed check was the sole enforcer of a `DEFENSE.md` hard wall.
 
+### SIM-1 mechanism stop and reorganization (2026-09-01)
+
+The first adversarial review reached the three-finding stop threshold. Work
+stopped before a mergeable SIM-1 commit; the green suite did not waive these
+findings.
+
+| Class | Consequence | Owner | Common choke point / reorganization |
+| --- | --- | --- | --- |
+| `aliasing` | Planning preparation retained the caller's `PlanRequest`; its allowed protocol-typed destination policy could mutate while pending, and the deleted codec had been the only exact identity-policy admission. | `LocalWorkflowRuntime.prepare_plan` | Before resources are derived, require exact `PlanRequest`, `SyncOptions`, and canonical `IdentityDestinationPolicy(name="identity", version="1")`, then retain the callback-free copy from existing planner option-snapshot semantics in one detached `PlanRequest`. Do not add a plan-checkpoint/helper/validator type. |
+| `representation drift` | Inventory/integrity `_exact_*_workflow_request` copies were being promoted into checkpoint certifiers and directly tested as such, relocating the removed codec's role. | Inventory/integrity preparation, invocation snapshot, and canceled settlement | Let binding/request constructors produce the checkpoint at prepare; keep the existing workflow-entry copy as the sole run/open materialization; return immutable inventory state directly; construct the next integrity request directly through `replace`; and let canceled settlement read its already-admitted frozen checkpoint without recertification. Move BR-G-28 proof through public runtime preparation/open/snapshot/cancel paths. |
+| `coverage hole` | Mechanism-test deletion also removed the last focused wiring for surviving domain guarantees: absence of `worker_count`, invalid execute exclusion cursors, verify completion/order drift, and integrity counter/recording relationships. | Existing planning, execution-continuation, verify-continuation, and integrity-request constructors | Replace every mixed deleted test through direct public domain constructors/properties. Restore only the surviving guarantee; do not preserve a wire version, malformed-JSON path, or codec call order. |
+
+The reorganized SIM-1 repair has three bounded outcomes matching the rows above,
+followed by correction of current-contract documentation. Closure requires:
+
+- synchronous planning rejection of subclasses and custom/noncanonical policy,
+  post-prepare source-policy mutation that cannot alter custody, and unchanged
+  ordinary identity planning;
+- a finite search proving `_exact_*_workflow_request` remains only at workflow
+  run-entry materialization, zero private-helper checkpoint tests, and public
+  prepare/open/reopen/cancel evidence; and
+- direct public-domain replacements for every mixed deleted test, including the
+  `reported_exclusion_count` Boolean/negative/`MAX_SAFE_INTEGER + 1` matrix,
+  with a complete per-name deletion disposition.
+
+No SIM-2 work may start until an independent rereview confirms that these
+repairs close the named mechanisms without adding another representation or
+certification path.
+
 ---
 
 ## 5. Closed removal and enforcement ledger
@@ -245,11 +274,283 @@ for this run is **zero**. A test that is eligible for deletion but cannot meet
 that rule remains in place and is listed in the checkpoint recap for a later
 test-specific removal run.
 
+### SIM-1 deleted-test dispositions
+
+The closed denominator is **99 deleted test functions**: **67
+`public-replacement`** and **32 `mechanism-removed`**. Mixed tests are classified
+as `public-replacement` when any real guarantee survives; their deleted
+wire-only assertions do not create a second disposition.
+
+#### `public-replacement`
+
+`tests/core/test_session_events.py`:
+
+- `test_session_record_payload_exists_only_while_nonterminal` ->
+  `test_session_record_checkpoint_exists_only_while_nonterminal`.
+- `test_stored_session_record_rejects_payload_and_live_reference_fields` ->
+  `test_stored_session_record_rejects_checkpoint_and_live_reference_fields`.
+- `test_stored_session_record_can_represent_every_lifecycle_without_payload` ->
+  `test_stored_session_record_can_represent_every_lifecycle_without_checkpoint`.
+
+`tests/dispatcher/test_dispatcher.py`:
+
+- `test_pause_releases_custody_and_resume_reopens_snapshotted_payload` ->
+  `test_pause_releases_custody_and_resume_reopens_snapshotted_checkpoint`.
+- `test_paused_resumed_terminal_paths_scrub_continuation_payload` ->
+  `test_paused_resumed_terminal_paths_scrub_continuation_checkpoint`.
+- `test_terminal_close_releases_payload_while_scheduler_stays_alive` ->
+  `test_terminal_close_releases_checkpoint_while_scheduler_stays_alive`.
+- `test_payload_is_passed_to_adapter_without_dispatcher_decoding` ->
+  `test_checkpoint_is_passed_to_adapter_by_identity`.
+- `test_failed_terminal_store_write_does_not_retain_workflow_payload` ->
+  `test_failed_terminal_store_write_does_not_retain_workflow_checkpoint`.
+
+`tests/test_bridge_resume.py`:
+
+- `test_br_g_10_payload_roundtrip_preserves_direct_and_fallout_outcomes` ->
+  `test_br_g_10_checkpoint_preserves_direct_and_fallout_outcomes`.
+- `test_br_g_10_tampered_real_verify_resume_finishes_the_original_run` ->
+  `test_br_g_10_tampered_execute_and_verify_resume_fail_before_preflight`,
+  `test_resumed_execute_preflight_refusal_finishes_existing_partial_run`, and
+  `test_real_resumed_verify_preflight_refusal_finishes_existing_run`.
+
+`tests/test_bridge_scan_scope.py`:
+
+- `test_br_g_28_inventory_and_integrity_payload_versions_are_kind_aware` ->
+  `test_br_g_28_inventory_and_integrity_checkpoints_are_detached_and_exact`.
+
+`tests/test_inventory_workflow.py`:
+
+- `test_inventory_encoders_revalidate_forged_exact_requests_before_projection`
+  -> `test_inventory_direct_entries_revalidate_before_resolver_or_ledger_work`,
+  `test_workflow_request_id_uses_complete_external_text_wall`, and
+  `test_scan_scope_combined_source_population_has_exact_preallocation_wall`.
+- `test_inventory_decode_counts_combined_scope_before_text_projection` ->
+  `test_scan_scope_combined_source_population_has_exact_preallocation_wall`.
+- `test_inventory_payload_decoding_rejects_escaped_surrogates` ->
+  `test_inventory_workflow_request_rejects_surrogate_code_units`,
+  `test_cli_ingress_rejects_non_exact_or_unencodable_arguments`, and
+  `test_br_g_32_strict_prehandler_refusal_matrix_returns_exact_envelopes`.
+- `test_inventory_and_integrity_payloads_round_trip_continuation` ->
+  `test_br_g_28_inventory_and_integrity_checkpoints_are_detached_and_exact`,
+  `test_integrity_snapshot_orders_completed_rows_by_frozen_selection`,
+  `test_paused_integrity_snapshot_persists_recorder_close_degradation`, and
+  `test_paused_verify_resumes_without_repeating_or_losing_items`.
+- `test_integrity_v2_codec_rejects_invalid_authority_scalars` ->
+  `test_integrity_checkpoint_enforces_recording_relationships`,
+  `test_integrity_request_rejects_boolean_counters`,
+  `test_integrity_request_rejects_non_integer_counter_types`, and
+  `test_integrity_request_rejects_out_of_domain_counters`.
+- `test_integrity_v2_codec_requires_exact_authority_shape` ->
+  `test_integrity_continuation_rejects_progress_without_saved_selection`.
+- `test_integrity_codec_rejects_progress_without_saved_selection` ->
+  `test_integrity_continuation_rejects_progress_without_saved_selection`.
+- `test_inventory_preprojection_rejects_combined_scope_n_plus_one` ->
+  `test_scan_scope_combined_source_population_has_exact_preallocation_wall`.
+- `test_integrity_preprojection_rejects_population_n_plus_one` ->
+  `test_integrity_continuation_refuses_excess_before_duplicate_copies`.
+- `test_inventory_preprojection_readmits_nested_volume_text` ->
+  `test_volume_root_profile_and_warning_source_bounds_are_exact`.
+
+`tests/test_payload_roundtrip.py`:
+
+- `test_plan_request_round_trips_latent_source_casing_policy` ->
+  `test_prepare_plan_retains_a_detached_identity_checkpoint`,
+  `test_source_casing_propagation_is_opt_in_and_plans_zero_byte_recase`, and
+  `test_opt_in_recase_runs_end_to_end_without_copying_or_trashing`.
+- `test_plan_request_decode_rejects_n_plus_one_filters` ->
+  `test_filter_contract_charges_raw_shape_before_canonicalization`.
+- `test_plan_request_requires_fingerprinted_source_casing_policy` ->
+  `test_source_casing_propagation_is_opt_in_and_plans_zero_byte_recase`.
+- `test_worker_count_is_absent_from_contracts_and_payloads` ->
+  `test_plan_domain_contracts_have_no_worker_count`.
+- `test_plan_request_encoding_rejects_surrogate_code_units` ->
+  `test_cli_ingress_rejects_non_exact_or_unencodable_arguments` and
+  `test_br_g_32_strict_prehandler_refusal_matrix_returns_exact_envelopes`.
+- `test_plan_request_decoding_rejects_escaped_surrogates` -> those same two
+  external-ingress tests.
+- `test_execution_request_preserves_the_old_execution_set_keyword` ->
+  `test_execution_request_preserves_execution_set_keyword`.
+- `test_execution_request_rejects_non_utc_start_times` ->
+  `test_execution_request_requires_utc_start`.
+- `test_execution_payload_is_a_lossless_round_trip` ->
+  `test_execution_checkpoint_detaches_and_reopens_independent_state`.
+- `test_execution_validation_requires_exact_content_evidence_shape` ->
+  `test_execution_validation_requires_exact_evidence_shape`.
+- `test_execution_mutable_contradictions_fail_before_projection` ->
+  `test_execution_validation_rejects_mutable_overlay_contradictions`.
+- `test_execution_v7_round_trips_the_reported_exclusion_count` ->
+  `test_execution_checkpoint_detaches_and_reopens_independent_state`.
+- `test_execution_v7_rejects_invalid_reported_exclusion_counts` ->
+  `test_execute_continuation_rejects_invalid_reported_exclusion_count`.
+- `test_execution_payload_preserves_full_width_file_identity_as_text` ->
+  `test_file_index128_text_round_trip_preserves_full_width`.
+- `test_execution_payload_file_identity_preserves_exact_error_family` ->
+  `test_file_index128_decoder_rejects_numeric_and_noncanonical_values` and
+  `test_decimal_decoder_overflow_preserves_exact_error_family`.
+- `test_execution_set_byte_high_water_is_bounded_and_strictly_monotonic` and
+  `test_execution_set_exposes_public_byte_high_water_state` ->
+  `test_execution_byte_high_water_is_bounded_and_monotonic`.
+- `test_execution_set_replace_and_equality_use_only_public_high_water` ->
+  `test_execution_byte_high_water_is_bounded_and_monotonic` and
+  `test_execution_checkpoint_detaches_and_reopens_independent_state`.
+- `test_execution_set_rejects_invalid_initial_byte_high_water` ->
+  `test_execution_set_rejects_invalid_initial_high_water`.
+- `test_execution_payload_round_trips_canonical_user_deselection` ->
+  `test_br_g_10_checkpoint_preserves_direct_and_fallout_outcomes`.
+- `test_execution_payload_v7_keeps_progress_and_recording_attribution` ->
+  `test_execution_checkpoint_detaches_and_reopens_independent_state`.
+- `test_execution_payload_v7_pins_closed_recording_reason_vocabularies` ->
+  `test_br_g_33_browser_event_vocabulary_matches_python_owners`.
+- `test_task_recording_issues_retain_first_reason_in_observation_order` and
+  `test_task_recording_issue_omits_overlimit_detail_without_truncation` ->
+  `test_task_recording_issues_keep_order_and_omit_overlimit_detail`.
+- `test_execution_payload_rejects_invalid_byte_high_water` ->
+  `test_execution_set_rejects_invalid_initial_high_water`.
+- `test_verify_continuation_is_a_lossless_round_trip` ->
+  `test_execution_checkpoint_detaches_and_reopens_independent_state`.
+- `test_verify_continuation_rejects_contradictory_truth_axes` ->
+  `test_verify_continuation_rejects_truth_candidate_and_evidence_drift`.
+- `test_verify_continuation_accepts_only_a_bounded_canonical_execute_error` ->
+  `test_verify_continuation_bounds_the_complete_execute_error` and
+  `test_verify_continuation_detaches_and_revalidates_execute_phase`.
+- `test_verify_continuation_snapshots_phase_subclasses_without_hidden_graphs`,
+  `test_verify_continuation_phase_snapshot_breaks_the_source_alias`, and
+  `test_verify_continuation_rejects_a_forged_phase_instance` ->
+  `test_verify_continuation_detaches_and_revalidates_execute_phase`; the last
+  is also covered by `test_run_execution_revalidates_direct_verify_continuations`.
+- `test_execution_encoder_revalidates_mutated_verify_phase` ->
+  `test_verify_continuation_detaches_and_revalidates_execute_phase`,
+  `test_run_execution_revalidates_direct_verify_continuations`, and
+  `test_canceled_settlement_revalidates_direct_verify_continuation`.
+- `test_verify_continuation_rejects_unknown_completion_and_candidate_drift` ->
+  `test_selection_completion_uses_one_index_lookup_without_tuple_scan`,
+  `test_verify_continuation_rejects_truth_candidate_and_evidence_drift`, and
+  `test_verify_continuation_rejects_candidates_out_of_plan_order`.
+- `test_execution_set_rejects_published_evidence_on_non_byte_operation`,
+  `test_execution_set_rejects_identityless_evidence_with_only_a_task_issue`,
+  `test_execution_set_rejects_record_failure_with_a_durable_identity`,
+  `test_execution_set_rejects_recorded_identity_drift_from_run_or_operation`,
+  and `test_execution_set_rejects_recorded_identities_from_multiple_locations`
+  -> `test_execution_validation_rejects_mutable_overlay_contradictions`.
+- `test_execution_set_accepts_identityless_evidence_for_that_record_failure` ->
+  `test_execution_validation_accepts_attributed_identityless_evidence`.
+- `test_root_contract_rejects_surrogate_code_units` -> same-named test in
+  `tests/test_workflow_domain_checkpoints.py`.
+- `test_execution_payload_decoding_rejects_escaped_surrogates` ->
+  `test_root_contract_rejects_surrogate_code_units`,
+  `test_cli_ingress_rejects_non_exact_or_unencodable_arguments`, and
+  `test_br_g_32_strict_prehandler_refusal_matrix_returns_exact_envelopes`.
+- `test_execution_payload_preserves_scalar_unicode_and_commitment` ->
+  `test_cli_ingress_bound_uses_complete_utf8_byte_size`,
+  `test_execution_checkpoint_detaches_and_reopens_independent_state`, and
+  `test_execution_refuses_plan_content_that_no_longer_matches_fingerprint`.
+- `test_decoded_plan_recomputes_the_same_fingerprint` ->
+  `test_execution_checkpoint_detaches_and_reopens_independent_state` and
+  `test_execution_refuses_plan_content_that_no_longer_matches_fingerprint`.
+- `test_round_tripped_committed_set_would_not_refuse` ->
+  `test_br_g_10_checkpoint_preserves_direct_and_fallout_outcomes` and
+  `test_execution_refuses_plan_content_that_no_longer_matches_fingerprint`.
+
+`tests/test_post_execution_workflow.py`:
+
+- `test_noncompound_execute_exception_uses_execution_continuation_bytes` ->
+  `test_noncompound_execute_exception_uses_execution_checkpoint_counters`.
+- `test_dispatcher_compound_exclusion_close_failure_survives_payload_scrub` ->
+  `test_dispatcher_compound_exclusion_close_failure_survives_checkpoint_scrub`.
+
+#### `mechanism-removed`
+
+`tests/test_inventory_workflow.py`:
+
+- `test_inventory_json_rejects_nested_surrogate_code_units`.
+- `test_inventory_payload_preserves_scalar_unicode_and_literal_escapes`.
+- `test_inventory_and_integrity_codecs_reject_coercive_or_ambiguous_json`.
+- `test_inventory_codec_raw_ceiling_precedes_decode_and_json_parse`.
+- `test_inventory_codec_occurrence_ceiling_precedes_projection_without_mutation`.
+- `test_inventory_codec_rechecks_exact_final_byte_length`.
+
+`tests/test_payload_roundtrip.py`:
+
+- `test_old_workflow_payload_is_refused_after_contract_change`.
+- `test_plan_v5_and_execution_v7_are_independent_exact_payloads`.
+- `test_workflow_json_rejects_nested_surrogate_code_units`.
+- `test_plan_request_preserves_scalar_unicode_and_literal_escapes`.
+- `test_workflow_payload_rejects_non_json_numeric_constants`.
+- `test_execution_validation_and_encoding_do_not_rebuild_valid_graphs`.
+- `test_execution_encoder_orders_charge_validation_and_projection`.
+- `test_execution_payload_requires_exact_byte_high_water_field`.
+- `test_execution_payload_v7_rejects_unknown_raw_item_recording_reason`.
+- `test_execution_payload_v7_rejects_unknown_raw_task_recording_reason`.
+- `test_execution_payload_v7_rejects_aggregate_recording_contradictions`.
+- `test_execution_payload_requires_exact_user_deselection_field`.
+- `test_execute_and_verify_payloads_have_exact_phase_branches`.
+- `test_execution_payload_rejects_missing_unknown_and_contradictory_phase_fields`.
+- `test_execution_payload_rejects_partial_recording_identities`.
+- `test_verify_continuation_reads_the_source_phase_name_once`.
+- `test_execution_v7_refuses_hostile_verify_execute_errors`.
+- `test_workflow_payload_raw_ceiling_precedes_decode_and_json_parse`.
+- `test_plan_occurrence_ceiling_precedes_json_projection`.
+- `test_execution_occurrence_ceiling_precedes_projection_without_mutation`.
+- `test_plan_preprojection_readmits_forged_filter_source`.
+- `test_workflow_encoder_rechecks_exact_final_byte_length`.
+- `test_verify_candidate_walk_charges_every_repeated_root_occurrence`.
+- `test_object_layout_charges_each_schema_key_string_occurrence`.
+- `test_encoding_is_deterministic_and_order_independent`.
+
+`tests/test_workflows.py`:
+
+- `test_frozen_execution_v6_payload_is_rejected`.
+
 ---
 
 ## 7. Complexity-relocation failure audit
 
 Record the pre-change mechanism graph and repeat it after SIM-1 and SIM-2.
+The fixed comparison point is SIM-0 plan commit
+`83e5da140444e14111cc5389d0e03caff6eaa877`:
+
+| Path | Pre-change production nodes | Pre-change test/support nodes | Required terminal change |
+|---|---|---|---|
+| Internal workflow transport | Eight `encode_*_request`/`decode_*_request` entries across `workflows/payloads.py` and `workflows/inventory.py`; shared `_json_envelope.py`; runtime codec calls; byte/charge machinery | Seven referencing files: `test_bridge_resume.py`, `test_bridge_scan_scope.py`, `test_inventory_runtime.py`, `test_inventory_workflow.py`, `test_payload_roundtrip.py`, `test_post_execution_workflow.py`, and `test_workflows.py` | Zero internal codec entries, JSON-envelope helpers, payload limits/charges, or codec references; retained semantic cases use public checkpoint/workflow surfaces. |
+| Dispatcher custody | Byte/payload contracts in `core/session.py`, `dispatcher/contracts.py`, `dispatcher/dispatcher.py`, `interfaces/service.py`, `workflows/models.py`, and `workflows/runtime.py` | Payload-oriented custody assertions in the seven files above and dispatcher/session tests | One opaque checkpoint custody path, one construction path and one open/materialization path per workflow; no compatibility alias or generic checkpoint layer. |
+| Event certification | Semantic body checks in `core/event_v5.py`, `core/events.py`, `workflows/views.py`, `interfaces/web/drain.py`, `interfaces/web/bridge.py`, and `interfaces/web/assets/bridge.js` | Six referencing support/test files under `tests/core`, `tests/assets`, and `tests/interfaces/web` | One domain-to-v5 projector, the persistence decoder validator, the explicit reliable-event byte wall, and a minimal browser transport-envelope check; no downstream body-semantic twin. |
+
+The file sets above come from finite `git grep -l` searches for the eight codec
+entry names and the named Python/JavaScript event validators at that commit.
+Final evidence repeats the same searches at the completed HEAD and records the
+remaining symbols; renamed equivalents count as surviving nodes.
+
+### SIM-1 terminal observation (2026-09-01)
+
+- Eight internal codec entry points across three production files, 15 runtime
+  codec calls, and 134 codec/JSON helper functions fell to zero. The deleted
+  `_json_envelope.py` and `payloads.py` have no remaining imports or aliases.
+- Plan, inventory, and standalone-integrity custody reuse their existing frozen
+  semantic requests. Execution adds only `ExecutionCheckpoint`, two private
+  phase-delta records, and one typed post-copy snapshot helper; the checkpoint
+  is referenced only by `workflows/models.py` and `workflows/runtime.py`.
+  Searches found no replacement schema, version, JSON/codec, generic freezer,
+  checkpoint validator, authority/adoption API, `deepcopy`, or pickle path.
+- The two pre-existing inventory `_exact_*_workflow_request` helpers have
+  exactly two definitions and two workflow run-entry calls, with no checkpoint
+  or test use. Nine runtime `type(checkpoint)` branches perform constant routing
+  only; execution reconstruction remains centralized in one `materialize()`.
+- Production changed by 288 additions and 4,084 deletions (net -3,796). Test
+  source changed by 1,239 additions and 2,873 deletions (net -1,634); the 99
+  deleted tests have the complete dispositions in §6. Collected tests moved
+  from 5,236 to 5,123. These are trend observations, not acceptance gates.
+- The frozen audit passed three identical runs and its four files are unchanged
+  from `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`. Focused checkpoint tests
+  passed 948 cases; the affected departments passed 3,699 with one skip; the
+  ordinary suite passed 5,091 with four skips and 28 headed deselections.
+  Import analysis improved from 77 files/346 dependencies to 75/333 while all
+  11 contracts remained kept.
+- Independent stop-repair rereview and a separate relocation audit found no
+  remaining lost enforcement, replacement certification path, scope drift, or
+  new feature work. The three recorded findings stay counted; they were closed,
+  not erased from the audit history.
+
 Completion requires every statement below:
 
 - No internal workflow JSON schema, payload version, byte ceiling, charge
@@ -327,10 +628,10 @@ after those checks pass.
   Node runtime supplied through `NAMISYNC_TEST_NODE`.
 - Import baseline: 11 contracts kept, 0 broken across 77 files and 346
   dependencies.
-- Active row: `SIM-1`.
-- Next action: land the CLI complete-request bound, then replace internal
-  payload bytes with detached semantic checkpoints and run the frozen corpus
-  before removing any codec.
+- Active row: `SIM-2`.
+- Next action: remove only the redundant event-certification mechanisms closed
+  in §5 while preserving exact v5 persisted bodies and the reliable-event byte
+  wall before all `EventHub` mutation.
 - SIM-0 corpus commit:
   `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
 - Frozen SHA-256 values:
@@ -342,7 +643,7 @@ after those checks pass.
     `a56f1df879e05d268d5228b0522518751289ca1fb40820c0d39c93bbd21d29b3`;
   - `tools/simplification_regression_baseline.json`:
     `97d11b6f69cc0ba8d1cd9e56096e3ccc539f79020f7c2322fe3b0adc805e6dab`.
-- Mechanism counters: aliasing 0; lost enforcement 0; representation drift 0;
-  coverage hole 0.
-- Do not begin SIM-2, modify a frozen corpus artifact, or resume H2 feature
-  work until SIM-1 is complete.
+- Mechanism counters: aliasing 1; lost enforcement 0; representation drift 1;
+  coverage hole 1.
+- Do not modify a frozen corpus artifact, widen SIM-2 beyond §5, or resume H2
+  feature work.

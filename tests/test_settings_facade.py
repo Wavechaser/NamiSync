@@ -361,7 +361,7 @@ def test_xv_11_committed_plan_executes_every_original_semantic_default(
             str(target),
         )
         plan_preparation = runtime.prepare_plan(request)
-        plan_result = runtime.open_plan(plan_preparation.payload).run(context)
+        plan_result = runtime.open_plan(plan_preparation.checkpoint).run(context)
         review = runtime.get_plan_review(request.request_id)
         committed = runtime.commit_plan(request.request_id)
 
@@ -380,7 +380,7 @@ def test_xv_11_committed_plan_executes_every_original_semantic_default(
         )
         execution_preparation = runtime.prepare_execution(committed)
         execution_result = runtime.open_execution(
-            execution_preparation.payload
+            execution_preparation.checkpoint
         ).run(context)
         reviewed_again = runtime.get_plan_review(request.request_id)
 

@@ -373,7 +373,7 @@ class Dispatcher:
             resources = tuple(sorted(prepared.resources))
             return self._admit_owned(
                 kind,
-                prepared.payload,
+                prepared.checkpoint,
                 resources,
                 registration,
                 attach=attach,
@@ -406,7 +406,7 @@ class Dispatcher:
     def _admit_owned(
         self,
         kind: str,
-        payload: bytes,
+        checkpoint: object,
         resources: tuple[ResourceId, ...],
         registration: WorkflowRegistration,
         *,
@@ -426,7 +426,7 @@ class Dispatcher:
             kind=kind,
             state=SessionState.PENDING,
             resources=resources,
-            payload=payload,
+            checkpoint=checkpoint,
             supports_pause=registration.supports_pause,
             admission_order=admission_order,
             created_at=created_at,
@@ -1367,11 +1367,11 @@ class Dispatcher:
                 return
             projected_failure = None
             try:
-                if current.payload is None:
+                if current.checkpoint is None:
                     raise RuntimeError(
-                        "nonterminal session lost its continuation payload"
+                        "nonterminal session lost its continuation checkpoint"
                     )
-                invocation = registration.open(current.payload)
+                invocation = registration.open(current.checkpoint)
             except Exception as error:
                 projected_failure = _project_worker_exception(
                     error,
@@ -1499,7 +1499,7 @@ class Dispatcher:
                     raise
                 if not registration.supports_pause:
                     raise RuntimeError("registered invocation paused without capability")
-                self._replace_payload(key, invocation.snapshot())
+                self._replace_checkpoint(key, invocation.snapshot())
                 raise
 
         try:
@@ -1529,11 +1529,11 @@ class Dispatcher:
     ) -> OperationResult | None:
         if record.started_at is None or registration.settle_canceled is None:
             return None
-        if record.payload is None:
+        if record.checkpoint is None:
             raise RuntimeError(
-                "nonterminal canceled session lost its continuation payload"
+                "nonterminal canceled session lost its continuation checkpoint"
             )
-        result = registration.settle_canceled(record.payload, disposition)
+        result = registration.settle_canceled(record.checkpoint, disposition)
         if result_terminal_state(result) is not SessionState.CANCELED:
             raise ValueError("canceled settlement must project to CANCELED")
         return result
@@ -1570,12 +1570,10 @@ class Dispatcher:
             self._persist_locked(updated)
             self._condition.notify_all()
 
-    def _replace_payload(self, key: _WorkerKey, payload: bytes) -> None:
-        if not isinstance(payload, bytes):
-            raise TypeError("workflow continuation snapshot must be bytes")
+    def _replace_checkpoint(self, key: _WorkerKey, checkpoint: object) -> None:
         with self._condition:
             record = self._require_current_worker_locked(key)
-            updated = replace(record, payload=payload)
+            updated = replace(record, checkpoint=checkpoint)
             self._records[key.session_id] = updated
             self._persist_locked(updated)
 
@@ -1595,7 +1593,7 @@ class Dispatcher:
         updated = replace(
             record,
             state=state,
-            payload=None if is_terminal(state) else record.payload,
+            checkpoint=None if is_terminal(state) else record.checkpoint,
             started_at=started_at,
             ended_at=ended_at,
             result=result,

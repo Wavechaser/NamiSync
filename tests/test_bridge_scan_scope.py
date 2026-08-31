@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import stat as stat_module
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
@@ -48,16 +47,19 @@ from namisync.modules.scanner import (
     WalkingScanner,
 )
 from namisync.workflows.inventory import (
+    IntegrityRequest,
     IntegrityWorkflowRequest,
+    InventoryRequest,
     InventoryWorkflowRequest,
-    LocationBinding,
-    decode_integrity_request,
-    decode_inventory_request,
-    encode_integrity_request,
-    encode_inventory_request,
 )
+from namisync.workflows.runtime import LocalWorkflowRuntime
 
 from _db_fixtures import NOW, file_stat, plan, setup_recorder
+from _inventory_fixtures import (
+    _Resolver as _InventoryResolver,
+    _Scanner as _InventoryScanner,
+    _runtime as _inventory_runtime,
+)
 
 
 _VOLUME_ID = VolumeId("source-serial", "NTFS")
@@ -934,82 +936,67 @@ def test_br_g_27_subtree_range_uses_declared_inventory_index(
     assert "LIKE" not in _SUBTREE_DESCENDANT_PREDICATE.upper()
 
 
-def test_br_g_28_inventory_and_integrity_payload_versions_are_kind_aware() -> None:
-    binding = LocationBinding(
-        _VOLUME_ID,
-        "managed",
-        "C:\\",
-        ("C:\\",),
-        False,
-        7,
+def test_br_g_28_inventory_and_integrity_checkpoints_are_detached_and_exact(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    (mount / "managed").mkdir(parents=True)
+    runtime, location_id = _inventory_runtime(
+        tmp_path,
+        _InventoryResolver(mount),
+        _InventoryScanner(mount, ()),
+        {},
     )
-    inventory = InventoryWorkflowRequest(
+    inventory = InventoryRequest(
         "inventory",
-        binding,
-        (r"Exact\File.bin",),
-        ("Folder",),
+        location_id=location_id,
+        selected_paths=(r"Exact\File.bin",),
+        subtree_roots=("Folder",),
     )
-    integrity = IntegrityWorkflowRequest(
+    integrity = IntegrityRequest(
         "integrity",
-        binding,
         IntegrityMode.VERIFY,
-        (r"Exact\File.bin",),
+        location_id=location_id,
+        selected_paths=(r"Exact\File.bin",),
     )
 
-    encoded_inventory = encode_inventory_request(inventory)
-    encoded_integrity = encode_integrity_request(integrity)
-    assert json.loads(encoded_inventory)["version"] == 2
-    assert json.loads(encoded_integrity)["version"] == 2
-    assert decode_inventory_request(encoded_inventory) == inventory
-    assert decode_integrity_request(encoded_integrity) == integrity
+    try:
+        inventory_checkpoint = runtime.prepare_inventory(inventory).checkpoint
+        integrity_checkpoint = runtime.prepare_verify(integrity).checkpoint
 
-    inventory_v1 = json.loads(encoded_inventory)
-    inventory_v1["version"] = 1
-    with pytest.raises(ValueError):
-        decode_inventory_request(
-            json.dumps(inventory_v1, separators=(",", ":")).encode()
-        )
-    wrong_inventory_kind = json.loads(encoded_inventory)
-    wrong_inventory_kind["kind"] = "integrity"
-    with pytest.raises(ValueError):
-        decode_inventory_request(
-            json.dumps(
-                wrong_inventory_kind,
-                separators=(",", ":"),
-            ).encode()
-        )
-    wrong_integrity_kind = json.loads(encoded_integrity)
-    wrong_integrity_kind["kind"] = "inventory"
-    with pytest.raises(ValueError):
-        decode_integrity_request(
-            json.dumps(
-                wrong_integrity_kind,
-                separators=(",", ":"),
-            ).encode()
-        )
-    integrity_v1 = json.loads(encoded_integrity)
-    integrity_v1["version"] = 1
-    with pytest.raises(ValueError):
-        decode_integrity_request(
-            json.dumps(integrity_v1, separators=(",", ":")).encode()
-        )
-    for malformed in (2.0, "2", True):
-        malformed_inventory = json.loads(encoded_inventory)
-        malformed_inventory["version"] = malformed
-        with pytest.raises(ValueError):
-            decode_inventory_request(
-                json.dumps(
-                    malformed_inventory,
-                    separators=(",", ":"),
-                ).encode()
-            )
-    for malformed in (2.0, "2", True):
-        malformed_integrity = json.loads(encoded_integrity)
-        malformed_integrity["version"] = malformed
-        with pytest.raises(ValueError):
-            decode_integrity_request(
-                json.dumps(
-                    malformed_integrity,
-                    separators=(",", ":"),
-                ).encode()
-            )
+        assert type(inventory_checkpoint) is InventoryWorkflowRequest
+        assert type(integrity_checkpoint) is IntegrityWorkflowRequest
+        assert inventory_checkpoint.request_id == "inventory"
+        assert integrity_checkpoint.request_id == "integrity"
+        assert integrity_checkpoint.mode is IntegrityMode.VERIFY
+
+        object.__setattr__(inventory, "request_id", "mutated-inventory")
+        object.__setattr__(inventory, "selected_paths", ("mutated.txt",))
+        object.__setattr__(integrity, "request_id", "mutated-integrity")
+        object.__setattr__(integrity, "mode", IntegrityMode.BASELINE)
+        assert inventory_checkpoint.request_id == "inventory"
+        assert inventory_checkpoint.selected_paths == (r"Exact\File.bin",)
+        assert integrity_checkpoint.request_id == "integrity"
+        assert integrity_checkpoint.mode is IntegrityMode.VERIFY
+
+        with pytest.raises(TypeError, match="InventoryWorkflowRequest"):
+            runtime.open_inventory(integrity_checkpoint)
+        with pytest.raises(TypeError, match="IntegrityWorkflowRequest"):
+            runtime.open_verify(inventory_checkpoint)
+        with pytest.raises(ValueError, match="baseline invocation checkpoint"):
+            runtime.open_baseline(integrity_checkpoint)
+
+        first = runtime.open_verify(integrity_checkpoint)
+        second = runtime.open_verify(integrity_checkpoint)
+        first_snapshot = first.snapshot()
+        second_snapshot = second.snapshot()
+
+        assert first is not second
+        assert first_snapshot == second_snapshot
+        assert first_snapshot is not second_snapshot
+        object.__setattr__(first_snapshot, "omitted_detail_count", 3)
+        assert first_snapshot.omitted_detail_count == 3
+        assert second_snapshot.omitted_detail_count == 0
+        assert integrity_checkpoint.omitted_detail_count == 0
+    finally:
+        runtime.close()

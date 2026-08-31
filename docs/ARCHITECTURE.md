@@ -287,11 +287,11 @@ retained Progress.
 
 Version numbers are boundary-specific, not one global product number. The
 active core event envelope is exact v5; the desktop bridge command/response
-envelope remains v1, plan continuation remains v5, execution continuation is
-v7, and the persistence cut is ledger v4/history v6 at data epoch 6. The exact
-browser-facing `SessionEventView` carries nested core version 5, and current
-history cannot contain another event version. No private compatibility decoder
-or positive older-version fixture remains.
+envelope remains v1; and the persistence cut is ledger v4/history v6 at data
+epoch 6. Process-local workflow continuation is an unversioned typed semantic
+checkpoint, not a wire protocol. The exact browser-facing `SessionEventView`
+carries nested core version 5, and current history cannot contain another event
+version.
 
 Protocol evidence is intentionally layered:
 
@@ -338,8 +338,8 @@ the already-settled filesystem/recording truth.
 Phase is explicit; it is never inferred from past events. The workflow alone
 translates executor-owned publication evidence into verifier-owned candidates,
 so executor and verifier remain independent modules. Process-local resume is
-active. Live session records hold continuation bytes; the separate stored
-metadata/result contract has no continuation or live-record reference. Durable
+active. Live session records hold opaque typed checkpoints; the separate stored
+metadata/result contract has no checkpoint or live-record reference. Durable
 restart recovery requires a separate protected continuation/recovery contract
 and fresh authority/custody reconciliation in a later milestone.
 
@@ -390,7 +390,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Integrity state, selections, outcomes, commands, and verifier/recorder protocols | `namisync/core/integrity.py` |
 | Ledger-bound host, volume, location, mapping, run, and inventory commands | `namisync/core/recording.py` |
 
-Workflow-owned continuation envelopes and interface wire views are not core
+Workflow-owned typed checkpoints and interface wire views are not core
 contracts. Their owning workflow or interface source defines exact shape,
 subject to the meanings and invariants established here.
 
@@ -519,8 +519,8 @@ The core declares narrow protocols for infrastructure and replaceable policy:
 - `CopyBackend` owns byte transfer, not publication, retry, or recording.
 - `DestinationPolicy` assigns target paths for a batch before diffing.
 - `SessionStore` retains exact `StoredSessionRecord` metadata and full results,
-  without continuation bytes or a live-record backreference. `SessionRecord`
-  retains the separate live lifecycle/payload invariant. Durable metadata and
+  without checkpoints or a live-record backreference. `SessionRecord`
+  retains the separate live lifecycle/checkpoint invariant. Durable metadata and
   protected continuation recovery are unrealized M2 contracts, not one
   interchangeable store implementation.
 
@@ -705,7 +705,7 @@ subscribe, list, get, and close operations.
 Owns domain-blind admission, volume-scoped concurrency, worker-generation
 custody, cross-process mutation exclusion, lifecycle control, event sequencing,
 bounded replay, and orderly teardown. Workflow kinds and pause capability are
-registry data; the dispatcher never interprets domain payloads.
+registry data; the dispatcher never interprets domain checkpoints.
 
 The active store is process-local metadata; dispatcher reads its live records
 for session state and continuation. Durable queue ownership, startup
@@ -720,7 +720,7 @@ See `DISPATCHER.md`.
 **Tier:** Interface coordination · **Status:** Active
 
 Plain workflow functions are the only place modules meet. They sequence typed
-calls, translate between sibling component contracts, own continuation payloads,
+calls, translate between sibling component contracts, own continuation checkpoints,
 derive authoritative safe/user selections, and maintain one logical recording
 across compound phases.
 
@@ -905,7 +905,7 @@ and the first production use of `INTERRUPTED`, durable committed plans, launch
 policy, and cross-process task visibility. Restartable continuations require a
 separate protected recovery-store contract with explicit retention and fresh
 workflow authority/custody reconciliation; persisting current process-local
-payloads through the metadata store is not that design. Coordination remains
+checkpoints through the metadata store is not that design. Coordination remains
 domain-blind and workflow-owned continuation meaning remains outside dispatcher.
 
 ### M3+ — maintenance, scale, and new workflows

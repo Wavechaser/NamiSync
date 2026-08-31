@@ -55,7 +55,7 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/test_database_contracts.py",
         "tests/test_inventory_runtime.py",
         "tests/test_inventory_workflow.py",
-        "tests/test_payload_roundtrip.py",
+        "tests/test_workflow_domain_checkpoints.py",
         "tests/test_post_execution_workflow.py",
         "tests/test_runtime_readers.py",
         "tests/test_verifier_recorder_integration.py",

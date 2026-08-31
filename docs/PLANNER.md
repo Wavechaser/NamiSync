@@ -182,12 +182,11 @@ implementation state. Unsupported objects or keys and nonfinite numbers refuse
 at the shared closed JSON boundary described in [CORE.md](CORE.md).
 
 The shared epoch-6 cutover changes identity-bearing hashes; frozen identityless
-plan bytes remain identical. Plan-v5 and the
-then-current execution-v6 workflow wire shapes were unchanged, so workflow
-refingerprinting rejected an old numeric-identity fingerprint before execution
-while unchanged identityless fingerprints remained compatible. Current exact-v7
-execution admission refuses v6 before that check; database reset does not
-silently rewrite old commitments.
+plan bytes remain identical. Workflow refingerprinting rejects an old
+numeric-identity fingerprint before execution while unchanged identityless
+fingerprints remain compatible. Current process-local workflow checkpoints are
+unversioned typed values; database reset does not silently rewrite old
+commitments.
 
 Valid Unicode strings retain their established UTF-8 encoding, including
 supplementary characters and literal backslash text. Malformed surrogate code

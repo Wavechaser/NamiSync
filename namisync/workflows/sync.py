@@ -37,7 +37,6 @@ from namisync.core.integrity import (
     IntegrityRecorder,
     IntegrityRunResult,
     PostCopyCandidate,
-    PostCopyCandidateFact,
     PostCopyRecordIdentity,
     PostCopySelection,
     PostCopySelectionAuthority,
@@ -2348,10 +2347,10 @@ def _validate_executor_result(
 
 def _canonical_integrity_outcome(
     value: IntegrityOutcome,
-    candidate_by_id: dict[str, PostCopyCandidateFact],
+    candidate_by_id: dict[str, PostCopyCandidate],
     completed_ids: set[str],
 ) -> IntegrityOutcome:
-    """Bind a verifier outcome to its admitted post-copy candidate facts."""
+    """Bind a verifier outcome to its admitted post-copy candidate."""
 
     item_id = value.item_id
     if type(item_id) is not str:
@@ -2365,8 +2364,8 @@ def _canonical_integrity_outcome(
     return snapshot_integrity_outcome(
         value,
         item_id=candidate.item_id,
-        row_id=None if identity is None else identity[0],
-        location_id=None if identity is None else identity[1],
+        row_id=None if identity is None else identity.row_id,
+        location_id=None if identity is None else identity.location_id,
         path=candidate.display_path,
         phase="verify",
     )
@@ -2375,7 +2374,7 @@ def _canonical_integrity_outcome(
 def _validate_post_copy_verifier_completion(
     selection: PostCopySelection,
     authority: PostCopySelectionAuthority,
-    pending_by_id: dict[str, PostCopyCandidateFact],
+    pending_by_id: dict[str, PostCopyCandidate],
     *,
     complete: bool,
 ) -> None:

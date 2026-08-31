@@ -662,8 +662,8 @@ class _IntegratedInvocation:
             assert state.finish.wait(2)
         return OperationResult(SessionState.COMPLETED)
 
-    def snapshot(self) -> bytes:
-        return self.name.encode("utf-8")
+    def snapshot(self) -> object:
+        return self.name
 
 
 @dataclass
@@ -721,8 +721,8 @@ class _EnvelopeInvocation:
             state.tick_emitted[tick].set()
         return OperationResult(SessionState.COMPLETED)
 
-    def snapshot(self) -> bytes:
-        return self.run_state.name.encode("utf-8")
+    def snapshot(self) -> object:
+        return self.run_state.name
 
 
 def _wait_terminal(dispatcher: Dispatcher, session_id: str) -> None:
@@ -793,10 +793,10 @@ def test_failed_admission_observer_retains_task_capacity_until_dispatcher_retry(
         {
             PLAN_KIND: WorkflowRegistration(
                 prepare=lambda request: PreparedSession(
-                    request.request_id.encode("utf-8")
+                    request.request_id
                 ),
-                open=lambda payload: _IntegratedInvocation(
-                    payload.decode("utf-8"),
+                open=lambda checkpoint: _IntegratedInvocation(
+                    checkpoint,
                     run,
                 ),
             ),
@@ -938,10 +938,10 @@ def test_br_g_33_integrated_admission_and_visible_overflow_gap(
 
     def prepare_plan(request) -> PreparedSession:
         name = Path(request.source_path).name
-        return PreparedSession(name.encode("utf-8"))
+        return PreparedSession(name)
 
-    def open_plan(payload: bytes) -> _IntegratedInvocation:
-        name = payload.decode("utf-8")
+    def open_plan(checkpoint: object) -> _IntegratedInvocation:
+        name = checkpoint
         return _IntegratedInvocation(name, runs[name])
 
     dispatcher = Dispatcher(
@@ -1143,10 +1143,10 @@ def test_sh_g_8_br_g_42_normal_event_envelope_is_bounded_and_lossless(
 
     def prepare_plan(request) -> PreparedSession:
         name = Path(request.source_path).name
-        return PreparedSession(name.encode("utf-8"))
+        return PreparedSession(name)
 
-    def open_plan(payload: bytes) -> _EnvelopeInvocation:
-        return _EnvelopeInvocation(runs[payload.decode("utf-8")])
+    def open_plan(checkpoint: object) -> _EnvelopeInvocation:
+        return _EnvelopeInvocation(runs[checkpoint])
 
     dispatcher = Dispatcher(
         {PLAN_KIND: WorkflowRegistration(prepare_plan, open_plan)}

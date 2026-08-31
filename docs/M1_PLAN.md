@@ -491,8 +491,8 @@ binding contracts:
    verification incomplete.
 
    This must live in continuation rather than only an executor return value:
-   the executor does not return when it pauses. The execution payload encodes
-   `published_evidence` alongside status, so a same-process pause during
+   the executor does not return when it pauses. The typed execution checkpoint
+   retains `published_evidence` alongside status, so a same-process pause during
    execution preserves evidence for already published operations. M1's
    process-local session store still means no pause or evidence continuation
    survives closing/restarting the application; durable resume remains M2.
@@ -525,14 +525,14 @@ binding contracts:
    `core/execution.py` because `ExecutionSet` stores it.
    `PostCopyCandidate` lives in `core/integrity.py` because it is a
    verifier-input contract shared across the workflow/module boundary. The
-   discriminated `ExecuteContinuation | VerifyContinuation` payload is owned
+   discriminated `ExecuteContinuation | VerifyContinuation` checkpoint is owned
    by `workflows/` and may reference those core types; core never imports a
    workflow continuation type. The sync workflow alone translates published
    evidence into verification candidates. `PostCopyCandidate` contains the
    verifier-facing values rather than embedding or importing
    `PublishedCopyEvidence`, so executor and verifier remain sibling modules
-   with no direct dependency. The dispatcher continues to hold only opaque,
-   schema-versioned payload bytes.
+   with no direct dependency. The dispatcher continues to hold only an opaque
+   typed checkpoint and never interprets it.
 
 4. **Filesystem, integrity, recording, and audit remain separate truths.**
    A publish may be `succeeded`, its readback `verified`, and its ledger
@@ -555,8 +555,8 @@ binding contracts:
    any verification item exists remains visible. Unexpected exceptions are
    not blanket-converted into item errors and `BaseException` is not caught.
 
-7. **Explicit continuation state.** The payload is a discriminated
-   continuation, not an execution request plus optional fields:
+7. **Explicit continuation state.** The process-local checkpoint is a
+   discriminated continuation, not an execution request plus optional fields:
    `phase=execute` carries the execution set/status/published evidence;
    `phase=verify` additionally carries transient candidates and completed
    verification ids/bytes. Resume never infers phase from emitted items and
@@ -593,9 +593,9 @@ competing writers.
 vertical integration slice after standalone integrity works. The slice may be
 reviewed as ordered commits, but it does not merge dormant compound-only seams:
 
-1. executor evidence and its payload round-trip;
+1. executor evidence and its detached checkpoint custody;
 2. transient verifier candidates sharing the existing classifier;
-3. compound phase/result and continuation encoding;
+3. compound phase/result and typed continuation state;
 4. `run_execution` wiring plus recorder lifetime;
 5. history/view/facade consumption and end-to-end pause/failure tests.
 
@@ -828,9 +828,9 @@ or direct UI SQL.
 ### Stage 1 — Contracts and Semantics
 
 **Implemented 2026-07-24.** The code-bearing Stage 1 prerequisites are live:
-`worker_count` and the false live-settings drift path are removed; opaque
-workflow payloads first became v2 here and were globally advanced to strict v3
-by Stage 4's discriminated execute/verify continuation; ledger v2/history v3 refuse old schemas and reserve
+`worker_count` and the false live-settings drift path are removed; the former
+internal workflow payload versions were later retired by SIM-1 in favor of
+typed process-local checkpoints; ledger v2/history v3 refuse old schemas and reserve
 generic item/phase storage; the explicit development reset recreates both
 databases; semantic settings and cosmetic UI state have their split owners;
 the compatible `xxhash>=3.8.1,<4` runtime dependency is declared; and the
@@ -949,9 +949,9 @@ the inventory selection producer.
 default remains the M0 execute-only path. COPY, UPDATE, and MOVE_UPDATE publish
 exact post-copy attestations and an atomic recorded-row identity when available;
 the workflow translates those values into ledger-neutral `PostCopyCandidate`
-inputs and verifies even when copy recording degraded. Strict workflow payload
-v3 encodes an explicit execute or verify continuation, exact evidence,
-candidates, completion bytes, timestamps, and phase truth; v1/v2 are rejected.
+inputs and verifies even when copy recording degraded. A typed execution
+checkpoint retains the explicit execute or verify continuation, exact evidence,
+candidates, completion bytes, timestamps, and phase truth.
 Pause may close and idempotently reopen the same run token, but the process-local
 session store offers no restart resume.
 
@@ -969,11 +969,11 @@ zero phase rows.
 Land DR-M1-12/13 as one vertical integration gate:
 
 - core-owned `PublishedCopyEvidence` in `core/execution.py`, stored by
-  `ExecutionSet`, plus its workflow payload round-trip;
+  `ExecutionSet`, plus detached workflow-checkpoint custody;
 - core-owned `PostCopyCandidate` in `core/integrity.py`, constructed by the
   workflow from published evidence and sharing the standalone verifier's
   guarded classifier;
-- workflow-owned discriminated continuation payloads that depend only on core
+- workflow-owned discriminated typed continuations that depend only on core
   contracts and remain opaque to the dispatcher;
 - conditional verification recording without making ledger-row existence a
   prerequisite for byte classification;
@@ -1073,9 +1073,9 @@ lanes followed by facade integration, specified exhaustively in
   subtree indexes, and id-to-path resolution;
 - scan scope: `FULL`/exact `PATHS`/recursive `SUBTREES`, parameterized recursive
   walking, three-way recorder reconciliation with a wildcard-free indexed
-  subtree range, inventory payload v2 under a kind-aware validator, and typed
+  subtree range, mode-exact typed inventory checkpoints, and typed
   warning retention; and
-- selection semantics: separate `user_deselected` provenance, payload v4,
+- selection semantics: separate `user_deselected` provenance, detached typed custody,
   upward reselection closure, execution re-derivation/mismatch refusal, replan
   discard, and the corrected all-noop/all-skipped distinction.
 
@@ -1333,7 +1333,7 @@ ledger query and silently drop every candidate whose copy-ledger write was
   after k of n items; resume and assert exactly the remaining n−k items are
   produced (none repeated, none lost) and the terminal phase came from the
   explicit `phase=verify` discriminator, not inferred from accumulated items;
-  the serialized continuation contains phase + candidates + completed-
+  the detached typed checkpoint retains the phase, candidates, and completed-
   verification ids/bytes. *Not satisfied by* pausing only in the execute phase.
 - **XV-5 — Published evidence survives an in-process pause (only).** Pause
   execution after some COPYs published but before settle; resume same-process

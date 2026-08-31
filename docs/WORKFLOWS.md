@@ -4,12 +4,12 @@ Status (2026-08-27): M0 reviewed sync/history plus M1 Stages 1-5.5 are
 implemented. The local
 composition root now owns role-free inventory and standalone
 baseline/verify/rebaseline, their production dispatcher registrations,
-strict execute/verify continuation payloads, optional post-execution
+typed execute/verify checkpoints, optional post-execution
 verification, compound history/views, generic history reads, semantic-settings
 snapshot/patch translation, and the shared facade used by the location CLI
 commands. Stage 5.5's workflow-owned selection semantics are now implemented:
 direct user deselection remains distinct from safety exclusion, execution
-re-derives the authoritative set, and plan payload v5 plus execution payload v7
+re-derives the authoritative set, and the workflow-owned typed checkpoints
 preserve that provenance and executor continuation truth.
 Stage 5.5 facade integration is complete; the planning-source ownership wall is
 active while the complete task-artifact reservation model remains unrealized;
@@ -20,21 +20,21 @@ maintenance/retention, replay, undo/repair, and ingest remain later work.
 
 Exact event/result and task protocols live in [M1_BRIDGE.md](M1_BRIDGE.md), and
 numeric/retention walls in [DEFENSE.md](DEFENSE.md) §1.3. Workflows consume
-those contracts without
-treating a continuation version as a global epoch or receiving an
-interface-owned task claim.
+those contracts without receiving an interface-owned task claim.
 
-Execution continuation is opaque process-local custody. Its exact v7 codec now
-carries sparse operation recording reasons, ordered task issues, aggregate byte
-high-water, and transient publication evidence needed for same-session
-pause/resume or automatic linked verification. Execute continuations also carry
-the exact count of plan-ordered exclusion outcomes already accepted by the
-reliable session sink. Execution payload v6 and every older version are refused;
-there is no compatibility branch. The plan
-codec remains exact v5. Transient evidence never becomes history, ledger,
+Execution continuation is opaque process-local custody. The frozen
+`ExecutionCheckpoint` reuses an `ExecutionSetAuthority` snapshot for shared
+execution truth: status, sparse recording reasons, ordered task issues,
+aggregate byte high-water, and transient publication evidence. It adds only the
+phase-specific remainder: verification choice and exclusion cursor for execute,
+or candidate selection and compound phase/result axes for verify. Construction
+validates the admitted domain request and detaches mutable state; reopening
+materializes fresh mutable overlays. There is no checkpoint schema version,
+JSON form, checkpoint-specific authority/adoption wrapper, or
+`adopt_checkpoint()` path. Transient evidence never becomes history, ledger,
 desktop artifact, or JavaScript state. Dispatcher terminal settlement clears
-the current live record's opaque reference, and its separate metadata-store
-projection never forwards continuation bytes at admission or later writes.
+the current live record's opaque checkpoint, and its separate metadata-store
+projection never persists it.
 This is not whole-process reference erasure; the scope and M2 protected
 recovery requirement are defined in [DISPATCHER.md](DISPATCHER.md#session-store).
 Manual exact post-copy verification remains unrealized; its accepted contract
@@ -57,33 +57,11 @@ populations remain independently bounded at every applicable rung. Fresh
 filesystem observation, callback ordering, and exception-graph retirement
 remain separate requirements.
 
-Both opaque codecs admit the complete typed graph before building their JSON
-object/list projection. The walk rechecks nested operations, stats, metadata,
-file/record identities, assignments, evidence, candidates, and mutable
-continuation invariants while counting the canonical byte length and every
-serialization occurrence; repeated references are charged each time they
-appear on the wire. Plan operations and assignment items each use the 120,000
-row source wall. Execute/verify status, evidence, candidate, completion, and
-missing-id populations use their corresponding 120,000 source walls, while the
-dependency term is the dependency-ordered maximum `N*(N-1)/2`. Text terms come
-from their owning path, volume, request-id, diagnostic, filter, and database-id
-bounds. The predeclared analytical JSON coefficients price text as
-`128 + 5*UTF8`, scalars as 64, lists as `128 + 16*slots`, and objects as
-`256 + 160*entries`, with every fixed or dynamic object key also charged as a
-text occurrence; this codec use does not freeze or validate BR-G-45.
-
-The raw decoder wall is twice that source-maximum occurrence charge: the text
-term covers the six-byte canonical escape of a one-byte control scalar and the
-remaining coefficients dominate scalar and container spelling. This yields
-2,818,330 bytes for plan v5 and 327,820,141,609,094 bytes for execution v7.
-Exact `bytes` and raw length are checked before UTF-8 decoding or `json.loads`;
-encoding rechecks the counted canonical length after serialization. The very
-large execution maximum is an honest consequence of the current duplicated
-graph schema, especially per-assignment annotation fields and dependency
-occurrences. It is not a four-task custody allowance. Later task admission must
-reserve the actual prewalk occurrence charge and may refuse an individually
-valid continuation for retention capacity; materially reducing the theoretical
-wire wall requires a versioned schema that removes duplication.
+Checkpoint populations remain subject to their existing domain limits at the
+constructors that own them. Internal custody does not repeat those checks or
+translate the graph into a parallel primitive vocabulary. External interface
+adapters retain complete-request bounds at ingress, while the dispatcher treats
+an admitted checkpoint as an opaque domain object.
 
 Workflow aggregation preserves operation-local recording truth and the
 first observation of each task issue in order: later failure cannot rewrite an
@@ -359,8 +337,8 @@ selection rather than replacing the old artifact or carrying authorization.
 `LocalWorkflowRuntime` is the local composition root: it injects every module,
 derives immutable prior-correspondence query bounds from the current source and
 target file scans, resolves that subset through a one-snapshot read-only
-repository query, declares physical-volume resource keys, owns schema-versioned
-JSON continuation payloads, starts ledger recording only after commitment and
+repository query, declares physical-volume resource keys, owns detached typed
+process-local checkpoints, starts ledger recording only after commitment and
 fresh preflight, and supplies the dispatcher history observer. Planning and declined review do
 not create either database. Invalid database locations are rejected before the
 plan session, and an execution refusal may still create independent audit
@@ -369,76 +347,23 @@ Execution start custody is established only when the invocation actually enters
 workflow work, or when a pre-run pause snapshots a resumable start. Terminal
 refusal or failure before ledger recording releases that custody; a cooperative
 pause retains it for exact resume/cancel settlement.
-Execution recomputes the decoded plan fingerprint before comparing commitment,
-so payload content cannot change behind a retained fingerprint. This makes
-lossless payload encoding a correctness invariant, not a convenience: every plan
-field that feeds the fingerprint must survive the JSON codec unchanged, or
-execution refuses a faithfully committed plan. A round-trip/fingerprint-stability
-test exercises the codec over every operation kind and optional field, so a
-dropped or renormalized field fails the build instead of silently refusing every
-execution.
-
-The identity-hash correction did not change the then-current execution-v6 wire
-shape. Execution custody is now exact v7 for the exclusion acceptance cursor,
-so every v6 continuation is
-rejected at schema admission rather than entering fingerprint or domain work.
-This adds no process-restart recovery; the live continuation and store boundary
-remain as described above.
-
-Stage 1 advanced the opaque plan/execution codec to version 2 and removed
-`worker_count` from `SyncOptions`, `Plan`, fingerprints, and both payloads
-without adding a replacement execution setting. Stage 4 advances the global
-codec to strict version 3 because execute decoding now has phase-specific
-required fields. Stage 5.5 advances both plan and execution payloads to strict
-version 4 and requires canonical `user_deselected` on every execution set;
-version 1-3 payloads are refused instead of being guessed into the changed
-contract. Progress-continuation hardening advances the shared plan/execution
-codec to strict version 5, requires an exact bounded byte high-water on every
-execution set, and refuses versions 1-4 rather than resetting a resumed task's
-aggregate bar. The recording-attribution cutover kept plan payload v5 and
-advanced only the process-local execution payload to exact v6 for sparse
-recording reasons,
-ordered task issues, and transient attestation consistency; execution payload
-v5 is refused. Prerequisite stabilization advances only execution to exact v7
-for the required reliable-exclusion cursor and refuses v6 without a legacy
-fallback. Inventory request payloads advance to version 2 for recursive
-subtree scope. The independent standalone-integrity continuation also advances
-to strict version 2 to retain its physical-read total high-water and aggregate
-recording status; the shared validator remains kind-aware rather than treating
-either number as a global workflow-schema version.
-
-The payload round-trips the fingerprinted
-`SyncOptions.propagate_source_casing` seam as a required field. A payload that
-omits a fingerprint input is rejected instead of decoding to false and
-re-encoding into a different payload. Stage 5 exposes the complete semantic
-snapshot through primitive service read/partial-commit views, but adds no
-settings CLI command. Whatever interface commits the source-casing choice,
-review and commitment bind it rather than letting execution reinterpret
-filename spelling.
+Execution recomputes the checkpoint's plan fingerprint before comparing
+commitment, so resumed execution cannot hide a changed plan behind retained
+custody. `ExecutionCheckpoint` construction preserves every fingerprint input,
+including `SyncOptions.propagate_source_casing`, and snapshots the mutable
+execution overlays. Its `materialize()` operation creates fresh overlays for
+each open. The complete semantic snapshot remains available through primitive
+service read/partial-commit views, but no settings CLI command is added.
+Whatever interface commits the source-casing choice, review and commitment bind
+it rather than letting execution reinterpret filename spelling.
 The interface-facing `PlanOperationView` retains `prior_target_path` separately
 from source and planned target paths. Review adapters use it as the displayed
 origin for recase, move, and move-update rows, so the target-side rename is not
 lost while translating the immutable core plan into a presentation model.
-Workflow JSON keeps valid-Unicode bytes stable and uses strict UTF-8, matching
-plan, ledger-hash, and history serialization. Python surrogate code units,
-including an explicit high/low pair, are refused rather than changing meaning
-on round trip. Both payload decoders validate every decoded string and key
-before domain construction, including nested continuation fields. JSON escaped
-pairs that decode to one valid supplementary character remain accepted, as does
-literal backslash text. This changes neither wire versions nor valid committed
-plan fingerprints. Decoding also rejects duplicate
-object keys and the nonstandard numeric constants `NaN`, `Infinity`, and
-`-Infinity`; no payload may acquire a non-finite value through Python's
-otherwise-permissive JSON parser.
-
-Execution encoding keeps a fixed admission order. It first charges and validates
-the complete typed request and every wire-bound primitive against the existing
-occurrence and byte walls, then validates `ExecutionSet`'s mutable overlay and
-compound publication relations in place, and only then performs continuation
-normalization and JSON projection. The semantic pass does not rebuild the
-already-valid plan or published-evidence graph, and a contradiction cannot
-reach projection. Codec versions, schemas, canonical bytes, and quantitative
-walls are unchanged.
+Domain text retains the existing valid-Unicode and bounded-value rules at the
+constructors that own it. Ledger hashes, history persistence, and interface
+messages keep their own boundary serialization; process-local checkpoints do
+not share or emulate those wire contracts.
 
 M0 automatically selects the maximal safe dependency-closed subset. Directly
 blocked items remain in the reviewed plan as `BLOCKED`; operations touching
@@ -467,8 +392,8 @@ published operation's post-publish attestation plus its complete recorded
 identity, or no identity only when the same operation carries
 `record-write-failed`, then turns those values into transient verifier
 candidates. This survives an in-process pause because evidence, recording
-attribution, task issues, and aggregate byte high-water are encoded beside
-execution status;
+attribution, task issues, and aggregate byte high-water are retained in the
+typed checkpoint beside execution status;
 neither the continuation nor process-local plans survive closing/restarting
 the M1 application. Later standalone integrity sessions use durable ledger
 evidence.
@@ -478,17 +403,17 @@ the core 1,024-byte whole-value diagnostic policy to the executor result's phase
 and failure inputs. Each newly omitted input advances the retained
 `ExecutionSet.omitted_detail_count` once. The executor result's incoming count
 must already equal that execution-set authority; a contradiction fails before
-continuation publication instead of being lost during final reattachment. The
+checkpoint publication instead of being lost during final reattachment. The
 execute-phase error is then formed from the bounded failure type and message
 and checked again as one whole value. Individually bounded components do not
 exempt an oversized combined value. An invalid or oversized combination is
 omitted with one additional witness. `VerifyContinuation` reconstructs every
 execute-phase field into a fresh exact `PhaseResult`, so subclasses, forged
-counters, invalid text, and caller aliases cannot enter custody; the exact v7
-decoder inherits the same refusal. Encoding repeats that reconstruction before
-projection, and both public execution entry points do the same before workflow
-or canceled-settlement use. Reflective post-admission corruption is therefore
-refused rather than serialized or retained in a direct result. Once candidates
+counters, invalid text, and caller aliases cannot enter custody. Checkpoint
+construction performs that detachment, and both public execution entry points
+admit the typed request before workflow or canceled-settlement use. Reflective
+post-admission corruption is therefore refused rather than retained in a direct
+result. Once candidates
 exist, the normalized executor result is released before the continuation sink;
 only its bounded phase projection and the already-selected item tuple remain in
 the workflow frame. The count therefore survives sink failure, pause, resume,
@@ -534,7 +459,7 @@ ordinary sink failure takes precedence over cancellation. A secondary recording
 close failure is then attached before the generic runner publishes terminal
 and dispatcher clears its live continuation reference. This needs no
 domain-specific generic runner hook or change to dispatcher custody.
-After each accepted exclusion, the execute continuation advances its exact v7
+After each accepted exclusion, the execute checkpoint advances its
 `reported_exclusion_count` before invoking the hostile continuation sink, then
 publishes that custody before another sibling is offered. Sink cancellation
 therefore continues from the next suffix item rather than replaying the accepted
@@ -622,10 +547,10 @@ progress, or recording-attribution container. Workflow helpers keep the
 execution set only to attribute callback failures and derive aggregate
 recording truth. Shallow fixed-reference and prior-overlay guards remain around
 recording open/enter, finish, context exit, existing-run fallback, cancellation,
-continuation/exclusion sinks, and verify-degradation publication. They retain
+checkpoint/exclusion sinks, and verify-degradation publication. They retain
 the first safe pre-callback issue/counter baseline and preserve the accepted
 item prefix across ordinary failure, paused cancellation, fallback finishing,
-and context exit. Settlement order, callback count, wire shape, and recorder
+and context exit. Settlement order, callback count, checkpoint state, and recorder
 outcomes are unchanged.
 
 Fresh preflight still runs on every resume. If an already-started execute
@@ -664,7 +589,7 @@ hostile `BaseException` and cannot replace the primary. An escaping primary
 keeps its identity and caller-owned custom state without keeping the execution
 phase frame.
 A resumed execution canceled at the dispatcher's entry checkpoint is settled
-from its retained payload before `invocation.run()`, so the same finish-once
+from its retained semantic checkpoint before `invocation.run()`, so the same finish-once
 ledger boundary runs. Once that exact cancellation settlement is elected, its
 validated process-local start claim is released in `finally` even if recorder
 open throws or finalization degrades.
@@ -715,13 +640,13 @@ cooperatively cancelable. The production interface registry contains all six
 current workflow kinds, and the CLI reaches each through the shared service.
 
 After integrity selection, running cancellation or ordinary failure derives
-terminal item and byte counters from that live continuation rather than the
+terminal item and byte counters from that live checkpoint rather than the
 latest lossy Progress snapshot. Canceling a paused baseline, verify, or
-rebaseline session decodes and settles the latest in-memory continuation without
-reopening the workflow. Its strict v2 payload carries `processed_bytes`, the
-nondecreasing physical-read `bytes_total_high_water`, and one-way aggregate
-`recording`; a resumed invocation or paused cancellation cannot regress those
-axes. The byte pair measures attempted physical work rather than durable
+rebaseline session settles the latest typed checkpoint without reopening the
+workflow. It carries `processed_bytes`, the nondecreasing physical-read
+`bytes_total_high_water`, and one-way aggregate `recording`; a resumed
+invocation or paused cancellation cannot regress those axes. The byte pair
+measures attempted physical work rather than durable
 publication, while accumulated reliable outcomes and recorded evidence remain
 the independent settlement and durability authority. The same request-level
 `FAILED+RAN` projection applies if resumed volume resolution is offline or
@@ -745,8 +670,8 @@ saved resume validates every exact id and order. The first post-refresh excess
 returns `FAILED+RAN` with the core-owned candidate fact's type and message,
 without invoking the selection sink, verifier context, runner, hashing, or
 outcome collection. Recorder open/close failure remains authoritative over a
-simultaneous scale fact. The retained-byte and payload-envelope axes await a
-complete frozen graph/occurrence model.
+simultaneous scale fact. Aggregate process-retention capacity remains a
+separate dispatcher concern rather than a checkpoint wire model.
 
 Inventory scan composition now requires the scanner's structural population
 admission argument. The scanner checks each next domain/warning append and the
@@ -847,8 +772,8 @@ phase summaries and projects execute at the top level rather than summing
 copy and verification. Consumers must use reliable item outcomes, published
 evidence, and ledger state—never the byte high-water—to infer durable content.
 
-Paused compound execution continues from an explicit discriminated
-continuation after fresh preflight. `phase=execute` carries execution status
+Paused compound execution continues from an explicit discriminated typed
+checkpoint after fresh preflight. `phase=execute` carries execution status
 and published evidence; `phase=verify` carries `PostCopySelection`'s transient
 candidates plus completed ids/bytes, settled filesystem status, the execute
 phase, compound-current recording, and ordered missing-evidence ids. Its phase
@@ -862,20 +787,17 @@ run's recorder may close at pause-drain and reopen the same token idempotently
 on resume; it attempts finalization once after both entered phases settle, and
 a finish failure degrades recording. Paused standalone
 baseline/verify/rebaseline already use their exact candidate and item-status
-continuation plus fresh remaining-selection guard. Unsupported pause requests
+checkpoint plus fresh remaining-selection guard. Unsupported pause requests
 for inventory/plan/import are typed control rejections with no lifecycle
 mutation.
 
-The continuation is process-local custody state, not a durable recovery
+The checkpoint is process-local custody state, not a durable recovery
 format. Session storage contains metadata/results only, and
 `InMemorySessionStore.load_all()` deliberately returns no sessions; closing
 the process offers no execute/verify resume. A future durable metadata store
-alone cannot restore that capability. Exact active/accepted
-payload versions are centralized in [M1_BRIDGE.md](M1_BRIDGE.md).
-Splitting standalone-integrity continuation payloads is deferred: its exact v2
-candidate/completed/authority payload remains until a named late-run pause
-reserialization benchmark over large `completed_bytes` demonstrates that it
-misses the bridge pause-latency budget.
+alone cannot restore that capability. A future durable-resume design would
+require an explicit persistence boundary and schema; the current checkpoint is
+not that format.
 
 Refusal is distinct from failure and has zero managed-data mutation. Partial
 failure derives from item outcomes, not merely whether any bytes moved. An

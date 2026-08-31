@@ -276,7 +276,7 @@ metadata, logs, filenames, database markers, mutex names, CLI behavior,
 protocol/schema checks, and every version comparison remain tied only to
 `VERSION` or to their existing contract-owned versions.
 
-Database schemas, settings, event envelopes, workflow payloads, bridge
+Database schemas, settings, event envelopes, durable persistence, bridge
 messages, semantic policies, contract markers, dependency constraints, and
 native-runtime floors keep independent versions beside the contracts that own
 them. They are neither stored in nor derived from `version.py`, and changing
@@ -284,6 +284,8 @@ one does not mechanically select a product version. A future support view may
 aggregate owner-supplied values at the composition root, but it must not copy
 them into a second registry. The Python and JavaScript bridge declarations are
 the intentional two-language exception and require an agreement test.
+Process-local typed workflow checkpoints are unversioned and are not included
+in that version registry.
 
 The existing GPLv3 `LICENSE` is declared as
 `license-files = ["LICENSE"]` in `[project]` during Phase 0. Third-party

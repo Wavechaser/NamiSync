@@ -6,7 +6,7 @@ import ast
 from dataclasses import fields, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 
@@ -273,6 +273,19 @@ def test_selection_authority_reports_changed_item_before_derived_index(
         revalidate = revalidate_integrity_selection_authority
     else:
         authority = snapshot_post_copy_selection_authority(selection)
+        assert authority.candidates == (subject,)
+        assert authority.candidates is not selection.candidates
+        assert authority.candidates[0] is not subject
+        assert type(authority.candidates[0]) is PostCopyCandidate
+        assert authority.candidates[0].expected_stat is not subject.expected_stat
+        assert (
+            authority.candidates[0].copy_attestation
+            is not subject.copy_attestation
+        )
+        assert type(authority.completed_bytes) is MappingProxyType
+        selection._completed_bytes[subject.item_id] = 1
+        assert dict(authority.completed_bytes) == {}
+        selection._completed_bytes.clear()
         setattr(
             selection,
             "candidates",
