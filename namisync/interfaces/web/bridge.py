@@ -19,8 +19,7 @@ from uuid import uuid4
 from namisync.dispatcher import retire_exception_graph
 from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.workflows.views import (
-    OperationResultView, SessionEventView, SessionRecordView,
-    validate_operation_result_view, validate_session_event_view,
+    OperationResultView, SessionRecordView, validate_operation_result_view,
     validate_session_record_view,
 )
 
@@ -40,7 +39,6 @@ if TYPE_CHECKING:
 
 
 _VIEW_VALIDATORS = {
-    SessionEventView: validate_session_event_view,
     SessionRecordView: validate_session_record_view,
     OperationResultView: validate_operation_result_view,
     TaskDrainView: validate_task_drain_view,

@@ -64,14 +64,15 @@ Run it for phase integration, global fixtures or pytest configuration, the
 department manifest, broad shared contracts, uncertain blast radius, and before
 considering a non-headed phase complete.
 
-The production drain-manager Progress validator/replay probe is an ordinary,
-non-skippable JavaScript gate. Node.js must be available through
-`NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
+The production drain-manager live-event transport/replay and Progress-reducer
+probe is an ordinary, non-skippable JavaScript gate. Node.js must be available
+through `NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
 precedence. A missing or unusable executable fails this gate rather than
 silently reducing the ordinary suite to source-text inspection. The probe
-executes the packaged validator and proves whole-batch rejection: malformed
-Progress cannot partially deliver co-batched reliable updates or advance the
-accepted cursor, and a clean replay delivers those reliable updates. It also
+executes the packaged transport check and proves whole-batch rejection: an
+invalid event envelope, wrapper, lifecycle transition, or reducer transition
+cannot partially deliver co-batched reliable updates or advance the accepted
+cursor, and a clean replay delivers those reliable updates. It also
 executes the Progress reducer across reliable phase authority, numeric holes,
 Gap recovery without retained `PhaseChanged` (including a newer self-described
 phase in the retained tail), retry attempts, overshoot,
@@ -85,15 +86,18 @@ to child-copy activity without treating it as settlement. These are behavior
 checks against production producers and the packaged JavaScript, not
 source-text witnesses.
 
-Current decoder-boundary guards freeze one exact event-v5 graph across Python,
-the live `event` drain arm, service/history projections, and packaged
-JavaScript. Duplicate-key, wrong-version, noncanonical `Scalar64`, Boolean-as-
-integer, cross-field, and reliable-envelope-bound corpora must fail before
-cursor or queue mutation; the exact maximum event is drained alone. History-v6
-pages cannot carry a prior event version. Source-removal guards pin the absence
-of private v3/v4 decoders and their exclusive helpers. Live decoder and browser
-tests reject retired versions across every event family, including whole-batch
-v3/v4 drain rejection with an unchanged cursor and clean replay.
+Current boundary guards divide responsibilities instead of running one event
+graph through duplicate semantic validators. Persistence-decoder tests reject
+wrong-version, noncanonical `Scalar64`, Boolean-as-integer, exact-shape, and
+cross-field corruption before returning a stored value. Producer tests pin the
+exact reliable-envelope maximum and first excess before `EventHub` mutation;
+the exact maximum event drains alone. Browser tests admit all seven canonical
+producer projections, then atomically reject invalid transport version,
+session, sequence, tag, body-object, lifecycle, or reducer input without
+advancing the cursor; clean replay remains exact. History-v6 pages cannot carry
+a prior event version. The SIM-2 closeout search found no downstream event-body
+certifier; the retained core guard continues to pin private v3/v4 decoder
+absence.
 
 ```powershell
 $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'

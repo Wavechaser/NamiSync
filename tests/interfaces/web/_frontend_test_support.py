@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import shutil
 from pathlib import Path
 
@@ -42,33 +41,3 @@ def _node_executable() -> Path | None:
         return Path(configured)
     installed = shutil.which("node")
     return Path(installed) if installed is not None else None
-
-
-def _assert_exact_v5_event_routes(source: str) -> None:
-    live = source.split(
-        "function validateLiveSessionEvent(event, sessionId) {", 1
-    )[1].split("function validateSessionRecord(record, sessionId) {", 1)[0]
-    assert re.fullmatch(
-        r"\s*return validateSessionEventV5\(event, sessionId\);\s*}\s*",
-        live,
-    )
-    for name in (
-        "validateLegacySessionEvent", "validateProgress", "validateOperationItem",
-        "validateIntegrityItem", "validatePhaseResult", "validateCoreOperationResult",
-        "validateResultItem", "isJsonValue", "isValidText", "isNullableText",
-        "isValidNonemptyText",
-    ):
-        assert f"function {name}(" not in source
-    assert "LIVE_CORE_EVENT_SCHEMA_VERSION" not in source
-    assert "validateDormant" not in source
-    assert "DORMANT_" not in source
-    assert "validateLegacySessionEvent" not in source
-    assert source.count("validateLiveSessionEvent(") == 2
-    assert "return validateLiveSessionEvent(update.event, sessionId);" in source
-    assert "const CORE_EVENT_SCHEMA_VERSION = 5;" in source
-    assert source.count("CORE_EVENT_SCHEMA_VERSION") == 2
-    v5 = source.split(
-        "export function validateSessionEventV5(event, sessionId) {", 1
-    )[1].split("function validateProgressV5(value) {", 1)[0]
-    assert "event.schema_version !== CORE_EVENT_SCHEMA_VERSION" in v5
-    assert 'case "Progress":\n      return validateProgressV5(event.body);' in v5

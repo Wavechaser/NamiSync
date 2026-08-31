@@ -92,7 +92,7 @@ row.
 | --- | --- | --- | --- |
 | `SIM-0` | Ratify this removal contract; close the removal/enforcement ledger; capture stable behavior and v5-body corpora before implementation. | Three identical snapshots with no skipped or unclassified scenario; ordinary suite and import-law baseline; corpus self-test; clean declared diff. | Complete |
 | `SIM-1` | Remove process-local workflow payload serialization and replace it with structurally detached semantic checkpoints without changing pause/resume/cancel/settlement behavior or losing real ingress enforcement. | Frozen corpora three times; ownership/aliasing tests; affected departments; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Complete |
-| `SIM-2` | Remove redundant event certification while preserving exact v5 persisted bodies, history envelopes, browser delivery/recovery, and reducer behavior. | Frozen corpora three times; byte-for-byte persisted-body check; affected departments and Node probes; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Active |
+| `SIM-2` | Remove redundant event certification while preserving exact v5 persisted bodies, history envelopes, browser delivery/recovery, and reducer behavior. | Frozen corpora three times; byte-for-byte persisted-body check; affected departments and Node probes; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Complete |
 
 SIM-0 closes only when the corpus artifacts and baseline commit are recorded in
 the resumption block. No implementation or removable test may be changed before
@@ -239,15 +239,15 @@ with that file; no similarly named helper elsewhere is implied.
 | SIM-1: `LocalWorkflowRuntime` calls to the eight codec entry points and `_PlanInvocation.snapshot`, `_ExecutionInvocation.snapshot`, `_InventoryInvocation.snapshot`, `_IntegrityInvocation.snapshot` byte returns | Workflow reopen receives a complete request/continuation | Retain snapshot/open behavior while removing encoding. | One checkpoint-construction and one materialization/open path per workflow; frozen traces prove exact observable behavior. |
 | SIM-1: internal payload-version, duplicate-key, malformed-JSON, charge-ceiling, and round-trip checks rooted in `tests/test_payload_roundtrip.py` and the codec-only blocks in inventory/resume tests | Compatibility with arbitrary process-local bytes | Not a supported property after the wire form is deleted. | Any test that also covers selection, provenance, freshness, path/population bounds, cancellation, recording, or settlement must be replaced at a public surface or retained. Zero uncovered behavior is permitted. |
 | SIM-1: any forgery interpretation attached to plan/inventory same-run signal tokens | Resistance to forged first-party private values | Remove only the unsupported forgery role; do not sweep the token mechanism. | Same-run freshness/correlation remains until separately adjudicated. Exact first-excess behavior and real boundary admission remain tested. |
-| SIM-2: the `validate_event_v5_envelope(...)` self-check inside `core.events.envelope_to_dict` | A typed domain producer certifies its own projected output; today the same call is also the sole enforcer of `MAX_RELIABLE_EVENT_CANONICAL_BYTES` | Remove semantic encode-time recertification, not the canonical projector, persistence validator, or byte wall. Before that call is removed, `canonical_event_bytes` must explicitly enforce the maximum before `EventHub` sequence/replay/subscriber mutation. | Typed event constructors own domain semantics; `validate_event_v5_envelope` remains at persistence decode; `canonical_event_bytes` becomes the named byte-wall enforcer; exact bytes and first-excess behavior are frozen. |
+| SIM-2: the `validate_event_v5_envelope(...)` self-check inside `core.events.envelope_to_dict` | A typed domain producer certifies its own projected output; today the same call is also the sole enforcer of `MAX_RELIABLE_EVENT_CANONICAL_BYTES` | Remove semantic encode-time recertification, not the canonical projector, persistence validator, or byte wall. Before that call is removed, `canonical_event_bytes` must explicitly enforce the maximum before `EventHub` sequence/replay/subscriber mutation. | Supported typed producer paths own live semantics and `envelope_to_dict` is the sole domain-to-v5 projector; `validate_event_v5_envelope` remains at persistence decode/readback; `canonical_event_bytes` becomes the named byte-wall enforcer; exact bytes and first-excess behavior are frozen. |
 | SIM-2: `core.event_v5.validate_session_event_view_v5` and `workflows.views.validate_session_event_view` | Downstream Python layers independently certify event-body semantics | Remove. Trusted internal projections do not independently reinterpret domain truth. | Canonical projector plus persistence decode validation; browser transport-envelope checks; frozen body and delivery corpora. |
-| SIM-2: the duplicate event-body projection/revalidation in `workflows.views.session_event_view` | Presentation reconstructs and certifies the body | Collapse to the one canonical body projection; retain the view and its boundary representation. | Exact corpus bytes and public view tests. |
+| SIM-2: the duplicate event-body projection/revalidation in `workflows.views.session_event_view` | Presentation reconstructs and certifies the body | Reuse the one canonical body mapping while retaining the distinct live `sequence` wrapper, persisted `seq` envelope, and durable history envelope. | Exact corpus bytes and public view tests. |
 | SIM-2: event-body calls in `interfaces.web.drain._validate_task_observation`, `validate_task_update_view`, and `validate_task_drain_view` | Drain/task layers certify body fields again | Remove only body-semantic certification. Keep task/session matching, wrapper shape, sequence, batch, ordering, and lifecycle checks. | Reduced transport-wrapper checks and existing drain/recovery/reducer tests. |
 | SIM-2: event-related `_VIEW_VALIDATORS` entries and traversal in `interfaces.web.bridge`; do not remove validators for unrelated command/result types | Native response traversal certifies trusted event bodies | Remove event semantic recertification while preserving response ownership, JSON bounds, and projection. | Bridge response budget/ownership checks and browser transport checks remain. |
-| SIM-2: JavaScript `validateSessionEventV5`, `validateProgressV5`, `validateOperationItemV5`, `validateTerminalSummaryV5`, and their body-semantic-only private helper closure | Browser independently implements Python's event schema | Replace with one minimal transport-envelope check: plain object, v5 marker, matching session, positive safe sequence, recognized body tag, object body, and atomic batch staging. | Canonical Python producer owns body semantics; browser delivery/reducer probes prove transport and behavior. |
+| SIM-2: JavaScript `validateSessionEventV5`, `validateProgressV5`, `validateOperationItemV5`, `validateTerminalSummaryV5`, and their body-semantic-only private helper closure | Browser independently implements Python's event schema | Replace with one minimal transport-envelope check: plain object, retained exact wrapper shape, v5 marker, matching session, positive safe sequence, recognized body tag, object body, and atomic batch staging. | The supported Python producer path owns body semantics; browser delivery/reducer probes prove transport and behavior. |
 | SIM-2: Python-to-JavaScript vocabulary mirrors and v5 body mutation gates | Two independent semantic implementations stay synchronized | Remove only tests of deleted certification. | Valid reducer/lifecycle cases, persistence corruption negatives, receipt/hash checks, and boundary-envelope rejection remain. Zero uncovered behavior is permitted. |
 
-`validate_event_v5_envelope` at persistence ingress, history receipt/hash/
+`validate_event_v5_envelope` at persistence decode/readback, history receipt/hash/
 watermark checks, all JavaScript-to-Python command validation, filesystem
 freshness, bridge origin/security rules, complete external-request bounds, and
 active scalar/population/handler/queue walls are explicitly kept.
@@ -502,6 +502,64 @@ wire-only assertions do not create a second disposition.
 
 - `test_frozen_execution_v6_payload_is_rejected`.
 
+### SIM-2 deleted-test dispositions
+
+The closed denominator is **20 deleted or renamed test functions**: **15
+`public-replacement`** and **5 `mechanism-removed`**. The same-name EventHub
+byte-wall test only gained a parameterized signature and is not counted as a
+deletion. The knowingly-uncovered count is **zero**.
+
+#### `public-replacement`
+
+- `test_dormant_v5_session_view_rejects_another_session` -> the wrong-session
+  cases in `test_task_offer_validates_before_queue_or_custody_mutation` and
+  `test_br_g_36_node_drain_validates_transport_before_batch_delivery`.
+- `test_public_v5_view_enforces_canonical_envelope_byte_ceiling` and
+  `test_required_node_reliable_ceiling_uses_the_public_envelope_bytes` ->
+  `test_reliable_oversize_refuses_before_sequence_queue_or_audit_mutation`,
+  parameterized over ASCII/control-escaped and mixed-Unicode exact-wall bodies.
+- `test_live_node_v5_consumer_accepts_and_rejects_the_exact_target`,
+  `test_required_node_consumes_real_python_public_view_codec`, and
+  `test_required_node_live_events_accept_only_v5_and_canonical_scalars` ->
+  `test_required_node_accepts_each_canonical_python_event_projection`,
+  `test_br_g_36_node_drain_validates_transport_before_batch_delivery`, and the
+  retained persistence-decoder scalar/version cases.
+- `test_required_node_operation_truth_matches_public_python_projections` ->
+  `test_required_node_operation_result_keeps_cancellation_truth` and the
+  retained persisted-Terminal cancellation corpus.
+- `test_required_node_uses_the_shared_timestamp_grammar_and_calendar` ->
+  `test_required_node_session_record_keeps_timestamp_boundary` and
+  `test_v5_timestamp_grammar_and_calendar_are_exact`.
+- `test_required_node_preserves_logical_byte_review_facts` ->
+  `test_required_node_operation_result_keeps_review_fact_truth` and the
+  retained persisted-Terminal review-limit corpus.
+- `test_required_node_canonical_byte_inputs_require_real_unicode` ->
+  `test_reliable_v5_canonical_bytes_require_real_unicode` and the mixed-Unicode
+  EventHub byte-wall parameter.
+- `test_br_g_33_browser_event_vocabulary_matches_python_owners` and
+  `test_v5_vocabulary_gate_rejects_changed_sets` ->
+  `test_browser_bridge_and_public_result_vocabularies_match_python_owners` for
+  surviving result/record vocabularies plus the seven production projections
+  for live event tags.
+- `test_br_g_36_live_event_validator_is_current_only_and_not_for_history` ->
+  `test_browser_bridge_and_public_result_vocabularies_match_python_owners`,
+  `test_br_g_36_node_drain_validates_transport_before_batch_delivery`, and the
+  retained persistence decoder cases.
+- `test_br_g_36_node_drain_validates_progress_before_batch_delivery` -> renamed
+  `test_br_g_36_node_drain_validates_transport_before_batch_delivery`, which
+  retains transport, atomic staging, reducer, replay, and real-producer evidence.
+- `test_transport_gate_live_fixtures_match_exact_v5_contract` -> renamed
+  `test_transport_gate_live_fixtures_use_typed_public_views`; headed transport
+  still consumes the production projection without recertifying body semantics.
+
+#### `mechanism-removed`
+
+- `test_final_protocol_stop_routes_the_live_browser_through_exact_v5`.
+- `test_event_route_gate_rejects_in_memory_source_mutations`.
+- `test_v5_vocabulary_gate_rejects_changed_detail_classes`.
+- `test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape`.
+- `test_v5_progress_gate_rejects_in_memory_active_validator_mutations`.
+
 ---
 
 ## 7. Complexity-relocation failure audit
@@ -550,6 +608,54 @@ remaining symbols; renamed equivalents count as surviving nodes.
   remaining lost enforcement, replacement certification path, scope drift, or
   new feature work. The three recorded findings stay counted; they were closed,
   not erased from the audit history.
+
+### SIM-2 stop and reorganization record (2026-09-01)
+
+The deletion audit reached the predeclared three-of-any-kind stop threshold:
+three mixed-purpose test cuts would have removed surviving coverage along with
+the event-body certifier. No additional removal candidate was started. The
+current atomic SIM-2 outcome was reorganized around these owners, then
+independently rereviewed before broad verification resumed.
+
+| Consequence | Owner retained after reorganization | Common choke point |
+| --- | --- | --- |
+| The seven-family Node witness used hand-built dictionaries rather than the production projector. | `test_required_node_accepts_each_canonical_python_event_projection` now runs `envelope_from_dict` → `session_event_view` → `to_primitive_view` before Node. | The one Python domain-to-live-view projection path. |
+| Event-only vocabulary tests also owned surviving public result/record arrays and bridge schema use. | One narrow static owner test retains only those result/record vocabularies and bridge-envelope assertions. | The surviving public result/record validators and bridge envelope. |
+| Removing the browser byte-ceiling matrix left mixed-Unicode first-excess behavior without a pre-mutation witness. | The EventHub hard-wall test now covers both frozen ASCII/control-escaped and mixed-Unicode factories. | `canonical_event_bytes` before every EventHub mutation. |
+
+These are three `coverage hole` findings under one causal mechanism: deleting a
+mixed-purpose test as though every assertion belonged to the removed
+certifier. Their public replacements landed before any test was deleted from a
+mergeable commit. Independent rereview found no remaining last-enforcer loss.
+
+### SIM-2 terminal observation (2026-09-01)
+
+- The downstream Python event-view validators, projector self-certification,
+  bridge `_VIEW_VALIDATORS` event entry, JavaScript semantic event validators,
+  and their body-only helper closure are gone. Finite searches find none of the
+  deleted names in production or active tests.
+- Event flow now has one domain-to-v5 projector, one exact persistence
+  decode/readback validator, one explicit reliable-byte wall, and one browser
+  transport check. The browser retains exact wrapper/session/v5/tag/positive
+  SafeInt/body-object admission, Gap routing, atomic staging, and reducer
+  behavior; public result/record validators remain separate.
+- No database file changed. Event schema 5, ledger 4, history 6, data epoch 6,
+  history envelopes, receipts, hashes, and watermarks are unchanged. The frozen
+  corpus passed three identical runs and its four files remain byte-identical to
+  `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
+- Production changed by 65 additions and 597 deletions (net -532). Test source
+  changed by 252 additions and 1,221 deletions (net -969); all 20 deleted or
+  renamed functions have dispositions in §6 and knowingly-uncovered remains
+  zero. Collected tests moved from 5,123 to 4,913. These are reported trends,
+  not acceptance gates.
+- Focused event/history/bridge/Node verification passed 1,223 cases. The five
+  affected departments passed 3,854 with one skip; the ordinary suite passed
+  4,881 with four skips and 28 headed deselections. Import analysis kept all 11
+  contracts across 75 files and 334 dependencies, down from the SIM-0 baseline
+  of 77 files and 346 dependencies.
+- Independent enforcement, JavaScript, and relocation reviews found no new
+  codec, authority/adoption type, constructor-hardening sweep, body-semantic
+  twin, epoch drift, feature work, or relocated certification mechanism.
 
 Completion requires every statement below:
 
@@ -628,10 +734,9 @@ after those checks pass.
   Node runtime supplied through `NAMISYNC_TEST_NODE`.
 - Import baseline: 11 contracts kept, 0 broken across 77 files and 346
   dependencies.
-- Active row: `SIM-2`.
-- Next action: remove only the redundant event-certification mechanisms closed
-  in §5 while preserving exact v5 persisted bodies and the reliable-event byte
-  wall before all `EventHub` mutation.
+- Active row: none; the implementation register is complete.
+- Next action: perform and revert the disposable §8 field-fanout exit test, then
+  close the task documentation without starting feature work.
 - SIM-0 corpus commit:
   `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
 - Frozen SHA-256 values:
@@ -644,6 +749,7 @@ after those checks pass.
   - `tools/simplification_regression_baseline.json`:
     `97d11b6f69cc0ba8d1cd9e56096e3ccc539f79020f7c2322fe3b0adc805e6dab`.
 - Mechanism counters: aliasing 1; lost enforcement 0; representation drift 1;
-  coverage hole 1.
+  coverage hole 4. The SIM-2 three-of-any-kind stop and reorganization are
+  recorded above.
 - Do not modify a frozen corpus artifact, widen SIM-2 beyond §5, or resume H2
   feature work.

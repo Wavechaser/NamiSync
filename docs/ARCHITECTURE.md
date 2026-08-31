@@ -163,8 +163,10 @@ wait for an event consumer to decide what happens next.
 
 #### Progress v5 protocol
 
-The active exact core event-envelope v5 contract below is the shared authority for
-Progress producers, adapters, and consumers.
+The active exact core event-envelope v5 contract below is the shared semantic
+authority for supported Progress producers and persistence. Live adapters carry
+its tagged transport projection; they do not implement a second field-by-field
+body schema.
 
 Under this protocol, a forced Progress emission bypasses source throttling but
 remains lossy and coalescible. It is always derived from authoritative live
@@ -208,9 +210,11 @@ known `0/0` counter pair.
 
 Item counts, sequences, and other bounded counters are exact JavaScript-safe
 integers. Byte-work counters are checked nonnegative signed-64 integers in
-Python and canonical decimal `Scalar64` strings on event/public wires. Every
-reliable envelope is validated and bounded to 1,048,576 canonical bytes before
-sequence, replay, audit, or subscriber mutation.
+Python and canonical decimal `Scalar64` strings on event/public wires. Before
+sequence, replay, audit, or subscriber mutation, `canonical_event_bytes`
+measures the supported producer's canonical projection and enforces the
+1,048,576-byte reliable-envelope wall. Persisted readback separately validates
+the exact v5 structure.
 
 The normative reporter transitions are below. They describe authoritative
 reporter state; because Progress is lossy, a transition guarantees delivery
@@ -295,15 +299,16 @@ version.
 
 Protocol evidence is intentionally layered:
 
-1. Core and JavaScript validation prove snapshot structure and cross-field
-   coherence.
+1. Supported producer/projector tests prove live snapshot semantics, while the
+   persistence decoder proves exact corrupt-input refusal.
 2. Reporter transition tests prove executor and verifier state machines.
 3. Workflow/session tests prove phase coordination, continuation, and terminal
    authority.
 4. The settlement oracle proves integrated executor policy across its complete
    settlement matrix and stable normalized traces.
-5. Browser tests prove delivery, replay, Gap recovery, atomic batch rejection,
-   and consumer precedence.
+5. Browser tests prove the transport envelope, delivery, replay, Gap recovery,
+   atomic batch staging, reducer behavior, and consumer precedence without
+   recertifying every body field.
 
 ### 2.4 Review, commitment, and execution
 
@@ -378,7 +383,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | --- | --- |
 | Live/stored session records, phase/run results, and `SessionStore` | `namisync/core/session.py` |
 | Exception lifecycle-link retirement and rendered retained-failure projection | `namisync/core/exception_graph.py` |
-| Event bodies, envelopes, delivery classes, codec, and exact-v5 validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
+| Event bodies, envelopes, delivery classes, domain-to-v5 projector, and persistence decoder validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
 | Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
 | Safe integer, signed-64, canonical scalar/file-index codecs, shared population-measure/excess primitives, distinct retained-plan and counter-free producer admissions, admission-bound private exact plan-review signals, scanner population-admission protocol, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |

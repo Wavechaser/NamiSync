@@ -16,9 +16,9 @@ from uuid import uuid4
 
 from namisync.dispatcher import retire_exception_graph
 from namisync.interfaces.service import PlanSession, SessionUpdate
+from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.workflows.views import (
-    SessionEventView, SessionRecordView, validate_session_event_view,
-    validate_session_record_view,
+    SessionEventView, SessionRecordView, validate_session_record_view,
 )
 
 
@@ -237,7 +237,17 @@ def _validate_task_observation(
     update: object, *, expected_session_id: str | None = None,
 ) -> None:
     if type(update) is SessionEventView:
-        validate_session_event_view(update, expected_session_id=expected_session_id)
+        if (
+            expected_session_id is not None
+            and update.session_id != expected_session_id
+        ):
+            raise ValueError("session event belongs to another session")
+        if type(update.sequence) is not int:
+            raise TypeError("task event sequence must be an exact integer")
+        if not 1 <= update.sequence <= MAX_JAVASCRIPT_SAFE_INTEGER:
+            raise ValueError(
+                "task event sequence must be a positive JavaScript-safe integer"
+            )
     elif type(update) is SessionRecordView:
         validate_session_record_view(update, expected_session_id=expected_session_id)
         if update.kind != "sync-plan" or update.supports_pause or update.result is None:

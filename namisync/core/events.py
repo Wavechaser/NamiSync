@@ -15,6 +15,7 @@ from namisync.core.event_v5 import (
     EVENT_V5_SCHEMA_VERSION,
     MAX_DETAIL_LEAVES,
     MAX_DETAIL_PATH_LEAVES,
+    MAX_RELIABLE_EVENT_CANONICAL_BYTES,
     validate_event_v5_envelope,
 )
 from namisync.core.execution import (
@@ -653,7 +654,7 @@ def _project_detail_entries(
 
 
 def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
-    """Serialize and validate one exact core-event v5 envelope."""
+    """Project one exact core-event v5 envelope."""
 
     body = envelope.body
     if isinstance(body, StateChanged):
@@ -680,19 +681,24 @@ def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
         "body_type": type(body).__name__,
         "body": body_data,
     }
-    validate_event_v5_envelope(value)
     return value
 
 
 def canonical_event_bytes(envelope: Envelope) -> bytes:
     """Return the exact bytes used for reliable-event admission."""
 
-    return json.dumps(
+    encoded = json.dumps(
         envelope_to_dict(envelope),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
+    if (
+        delivery_class(envelope.body) is DeliveryClass.RELIABLE
+        and len(encoded) > MAX_RELIABLE_EVENT_CANONICAL_BYTES
+    ):
+        raise ValueError("reliable event exceeds the canonical byte ceiling")
+    return encoded
 
 
 def envelope_from_dict(data: Mapping[str, object]) -> Envelope:

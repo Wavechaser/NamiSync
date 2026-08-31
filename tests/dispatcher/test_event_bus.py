@@ -8,7 +8,10 @@ from weakref import ref
 
 import pytest
 
-from _event_v5_fixtures import maximum_reliable_envelope
+from _event_v5_fixtures import (
+    maximum_non_ascii_reliable_envelope,
+    maximum_reliable_envelope,
+)
 import namisync.dispatcher.event_bus as event_bus
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.events import (
@@ -79,8 +82,14 @@ def test_audit_flush_interval_must_be_positive() -> None:
         make_hub(audit_flush_interval=0)
 
 
-def test_reliable_oversize_refuses_before_sequence_queue_or_audit_mutation() -> None:
-    raw = maximum_reliable_envelope()["body"]
+@pytest.mark.parametrize(
+    "factory",
+    [maximum_reliable_envelope, maximum_non_ascii_reliable_envelope],
+)
+def test_reliable_oversize_refuses_before_sequence_queue_or_audit_mutation(
+    factory,
+) -> None:
+    raw = factory()["body"]
     assert isinstance(raw, dict)
     path = raw["path"]
     detail = raw["detail"]

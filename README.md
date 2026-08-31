@@ -142,7 +142,8 @@ no Python upper bound; exact runtime profiles in project evidence identify
 measured configurations rather than launch admission. Runtime dependencies are
 `xxhash` 3.x and the reality-tested `pywebview` 6.2.1 host stack.
 Development dependencies are `pytest` and `import-linter`. The ordinary test
-suite also requires a Node.js executable for the packaged Progress validator;
+suite also requires a Node.js executable for the packaged live-event
+transport/reducer probe;
 provide it through `NAMISYNC_TEST_NODE` or `PATH` as described in
 [Tests](docs/TESTS.md).
 
@@ -271,8 +272,9 @@ claims explicit, independently reviewable, and regression-backed.
 ### M1 Maintenance Refactor
 
 Shared root authority, stable executor/verifier package boundaries, an oracle-
-guarded typed settlement reducer, and layered test operations made internal
-ownership explicit without changing public or persisted contracts.
+guarded typed settlement reducer, semantic workflow checkpoints, and removal of
+redundant live-event certification made internal ownership explicit without
+changing public behavior, exact persisted event-v5 bytes, or history envelopes.
 
 ### M1 GUI
 

@@ -163,36 +163,31 @@ fabricating a live session event for a hash-only receipt. All detail readback
 remains page-bounded. Every current event view requires nested schema version 5;
 byte/size/nanosecond fields in public views are canonical `Scalar64` strings,
 while counts, cursors, and revisions remain exact JavaScript-safe integers.
-Packaged event validation checks the relationship between filesystem outcome
-and item recording reason, not only each closed vocabulary in isolation.
-Terminal events and result views enforce the same compound/execute-
-cancellation rules as the core result; their exact meanings remain in
-[CORE.md](CORE.md). Literal matrix and cancellation corpora exercise both
-Python boundaries and the required Node gate, with valid production view
-projections and independently mutated negative cases.
+Packaged public result and terminal-record validation checks compound
+cancellation, recording, and review facts against its surviving closed
+vocabularies; their exact meanings remain in [CORE.md](CORE.md). Live event
+bodies are supported Python producer projections rather than a second browser
+schema. Required Node coverage sends all seven production event projections
+through the live transport check and keeps public result/record negative cases.
 
-The browser has no private legacy event validator; live task events delegate
-only to `validateSessionEventV5` and its
-`CORE_EVENT_SCHEMA_VERSION` constant. Its validator helpers and vocabulary
-constants use active v5 names, not the former `Dormant` prefix. Source gates
-pin that constant's definition
-and sole use, isolate the live function and active v5 Progress shape, compare the
-complete v5 vocabularies and detail classes with their Python owners, and
-reject in-memory route, shape, scalar, and vocabulary mutations. Required Node
-coverage sends all seven event families and the relevant public-view witnesses
-through the real Python projection/primitive codec into the packaged browser
-consumer. Source-removal guards reject reintroduced legacy helpers, and live
-task events reject retired versions for every event family. The drain probe
-also rejects both v3 and v4 batches without advancing the cursor.
+The browser has one live-event transport check,
+`validateLiveSessionEvent`: an exact wrapper, matching session, positive
+SafeInt sequence, current v5 marker, recognized tag, and plain-object body. It
+does not mirror Python body vocabularies, timestamp grammar, cross-field rules,
+or reliable-byte accounting. The drain still validates update unions, strict
+sequence order, Gap recovery cursors, terminal ordering, batch capacity, and
+reducer transitions before any callback or cursor mutation. The SIM-2
+relocation audit found no surviving legacy helper or semantic twin, and live
+task events reject a retired transport version without advancing the cursor.
 
-Event and record timestamps use CORE's exact UTC service grammar. Python's
-event-view validator and the packaged browser enforce the reliable-event byte
-ceiling on the reconstructed persistence envelope, not the longer public-view
-shape. Invalid Unicode is refused before UTF-8 accounting. Shared timestamp,
-Unicode, exact-maximum/plus-one, and logical-byte review-fact corpora cover both
-consumers. The browser rejects an oversized event's entire batch before
-callback, cursor, reducer, or terminal-release mutation; a clean replay retains
-the previously unaccepted prefix.
+Session-record timestamps use CORE's exact UTC service grammar at the external
+browser boundary. Live event timestamps are producer-owned. The reliable-event
+byte wall is enforced once by `canonical_event_bytes` before EventHub mutation;
+ASCII and mixed-Unicode exact-maximum/plus-one cases prove its UTF-8 accounting.
+Persistence readback retains exact timestamp, Unicode, scalar, and cross-field
+validation. Browser whole-batch refusal remains for transport, ordering,
+lifecycle, and reducer failures, with clean replay of previously unaccepted
+updates.
 
 The current public service surface includes:
 
@@ -384,10 +379,13 @@ bridge. Plan task records retain the workflow's exact `sync-plan` kind across
 the service and browser boundary; the adapter does not rename it. Retained
 database history remains independent of adapter task cleanup.
 
-The active plan-task adapter validates exact v5 views at offer, recovery,
-candidate drain, command return, and bridge serialization. A drain constructs
-and validates its complete candidate before popping queued updates, clearing a
-pending terminal, or earning a terminal-delivery receipt. A terminal record
+The active plan-task adapter retains exact view types, task/session identity,
+positive SafeInt event sequences, wrapper/batch/order/lifecycle checks, and
+terminal record/result validation. It does not recertify trusted event-body
+semantics at offer, recovery, drain, command return, or bridge serialization. A
+drain constructs and validates its complete candidate before popping queued
+updates, clearing a pending terminal, or earning a terminal-delivery receipt. A
+terminal record
 update must carry a non-null valid result agreeing with its lifecycle state;
 both Python and the packaged browser refuse result-free or malformed updates.
 Bare result-free re-observation snapshots remain valid but cannot earn that
@@ -790,8 +788,8 @@ second path-policy authority.
 The explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed. Numeric holes
 alone are not recovery signals. Browserless/Node probes remain supplemental
-except for the ordinary non-skippable drain-manager Progress validator/replay
-gate, which resolves `NAMISYNC_TEST_NODE` before `PATH` and owns atomic batch
+except for the ordinary non-skippable live-event transport/reducer drain gate,
+which resolves `NAMISYNC_TEST_NODE` before `PATH` and owns atomic batch
 rejection plus clean replay. The remaining named browser-behavior witnesses
 run through the installed production bridge and renderer in real WebView2.
 The frozen v1 SH-G-8/BR-G-42 event-and-transport-custody claim is closed by the

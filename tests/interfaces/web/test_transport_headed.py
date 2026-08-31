@@ -305,18 +305,23 @@ def test_transport_recorder_publishes_startup_error_as_failure(
 
 
 @pytest.mark.parametrize("fixture", ("initial", "items", "terminal"))
-def test_transport_gate_live_fixtures_match_exact_v5_contract(fixture: str) -> None:
+def test_transport_gate_live_fixtures_use_typed_public_views(fixture: str) -> None:
     from namisync.workflows.views import (
-        validate_session_event_view,
+        SessionEventView,
         validate_session_record_view,
     )
 
     session_id = "d" * 32
     if fixture == "initial":
+        events = []
         transport_gate_child._deliver_initial_events(
-            validate_session_event_view,
+            events.append,
             session_id,
         )
+        assert all(type(event) is SessionEventView for event in events)
+        assert [event.body_type for event in events] == [
+            "StateChanged", "Progress",
+        ]
     elif fixture == "items":
         events = []
         transport_gate_child._deliver_result_items(
@@ -327,8 +332,7 @@ def test_transport_gate_live_fixtures_match_exact_v5_contract(fixture: str) -> N
         assert [event.body_type for event in events] == [
             "ItemOutcome", "IntegrityOutcome",
         ]
-        for event in events:
-            validate_session_event_view(event)
+        assert all(type(event) is SessionEventView for event in events)
     else:
         validate_session_record_view(
             transport_gate_child._terminal_record(session_id)

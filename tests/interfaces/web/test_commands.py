@@ -1889,8 +1889,11 @@ def _invalid_task_update_views():
     )
     record = _valid_task_record()
     return [
-        TaskEventUpdateView("event", replace(event, schema_version=4)),
-        TaskEventUpdateView("event", replace(event, body={})),
+        TaskEventUpdateView("event", replace(event, sequence=True)),
+        TaskEventUpdateView("event", replace(event, sequence=0)),
+        TaskEventUpdateView(
+            "event", replace(event, sequence=9_007_199_254_740_992)
+        ),
         TaskEventUpdateView("event", replace(event, session_id="1" * 32)),
         TaskRecordUpdateView("record", replace(record, result=None)),
         TaskRecordUpdateView("record", replace(record, state="pending", ended_at=None, result=None)),
@@ -1939,6 +1942,25 @@ def test_task_serializer_rechecks_body_mutated_after_command_return() -> None:
     event.body["state"] = "invented"
     assert to_primitive_view(accepted)["updates"][0]["event"]["body"] == {
         "state": "running"
+    }
+
+
+def test_task_serializer_does_not_recertify_trusted_event_body() -> None:
+    event = SessionEventView(
+        SESSION_ID, 1, "producer timestamp", 5,
+        "StateChanged", {"state": "producer-owned", "detail": {"kept": True}},
+    )
+    returned = TaskDrainView(
+        TASK_ID, SESSION_ID, DRAIN_ID, (TaskEventUpdateView("event", event),),
+    )
+
+    assert to_primitive_view(returned)["updates"][0]["event"] == {
+        "session_id": SESSION_ID,
+        "sequence": 1,
+        "at": "producer timestamp",
+        "schema_version": 5,
+        "body_type": "StateChanged",
+        "body": {"state": "producer-owned", "detail": {"kept": True}},
     }
 
 

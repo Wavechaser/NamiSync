@@ -463,29 +463,32 @@ The runner then constructs and releases the one immutable `Terminal` to
 ordinary subscribers. History never needs to consume or parse that Terminal,
 so no corrective second terminal or circular acknowledgement exists.
 
-The active codec emits and accepts only exact core event-envelope v5 for
-`StateChanged`, `PhaseChanged`, `Progress`, nominal `ItemOutcome` and
-`IntegrityOutcome` values, `Gap`, and item-free `TerminalSummary`. Exact keys,
-closed primitive variants, cross-field invariants, canonical scalar text, and
-the 1,048,576-byte reliable-envelope ceiling are validated before sequence,
-queue, replay, or history mutation. Reliable `PhaseChanged.phase` is an exact
-nonempty string, matching the phase authority required by Progress consumers
-rather than allowing an empty phase token below the browser boundary.
+Supported typed producer paths project `StateChanged`, `PhaseChanged`,
+`Progress`, nominal `ItemOutcome` and `IntegrityOutcome` values, `Gap`, and
+item-free `TerminalSummary` through the sole domain-to-v5 projector,
+`envelope_to_dict`. `canonical_event_bytes` measures that exact projection and
+rejects a reliable envelope over 1,048,576 bytes before sequence, queue,
+replay, audit, or subscriber mutation. Persisted readback separately uses
+`validate_event_v5_envelope` as the exact adversarial decoder for keys, closed
+primitive variants, cross-field invariants, and canonical scalar text.
 
-Event/service timestamps use the exact ASCII grammar
+Supported event producers and persisted event decoding use the exact ASCII
+grammar
 `YYYY-MM-DDTHH:MM:SS[.ffffff]+00:00`: four-digit years 0001–9999, a real
 Gregorian calendar date and time, and either no fraction or exactly six digits.
 Other offsets, `Z`, alternative ISO spellings, rollover dates, and trailing
-characters refuse. Python constructs the datetime after checking grammar;
-the browser checks the same calendar fields without permissive date parsing.
+characters refuse. Python constructs the datetime after checking grammar. The
+browser retains the same check for external session-record values; a live event
+timestamp is trusted producer data rather than independently recertified.
 
-The Python event-view validator reconstructs the persistence envelope and
-delegates to its authority. The browser validates all reliable body fields
-before counting compact UTF-8 JSON bytes for that same envelope, with `seq`
-rather than the longer view key `sequence`. Property ordering does not change
-the byte count of these closed v5 primitives. Both reject unpaired UTF-16
-surrogates; valid non-ASCII and supplementary characters retain their actual
-UTF-8 byte lengths. Progress remains exempt from the reliable-event ceiling.
+The Python live event view reuses the canonical projected body and changes only
+the surrounding sequence key from persisted `seq` to browser `sequence`; it
+does not decode or certify the body again. The browser checks the exact live
+wrapper, matching session, positive SafeInt sequence, v5 marker, recognized
+body tag, and plain-object body before atomic batch staging. Body semantics and
+timestamp grammar remain owned by the supported producer path. Exact UTF-8
+byte accounting, including valid non-ASCII and supplementary characters, is a
+producer-side hard wall; Progress remains exempt from that reliable ceiling.
 
 `core/event_v5.py` also validates the exact primitive public result and session
 record shapes. Public results share the terminal summary's phase, scalar,
@@ -543,8 +546,9 @@ opaque and deliberately are not persisted generation counters.
 
 Scalar decoding is non-coercive: schema, sequence, and item counts require
 exact SafeInt integers; byte quantities use canonical decimal Scalar64 text.
-Booleans cannot impersonate numbers. Shared text decoders and the public v5
-envelope/view boundary raise `TypeError` for a wrong runtime type and
+Booleans cannot impersonate numbers. Shared text decoders, the persisted v5
+envelope decoder, and retained public result/record boundaries raise
+`TypeError` for a wrong runtime type and
 `ValueError` for malformed decimal grammar. Canonical Scalar64 overflow raises
 `ScalarDomainError` (a `ValueError`), including text beyond Python's integer-
 conversion limit; domain comparison precedes conversion. `item_type` names
@@ -557,17 +561,18 @@ transition table, authority order, and Gap/replay rules live in
 
 ### Decoder version boundaries
 
-Production now has one exact boundary: every reliable producer, live consumer,
-history observer, persisted event projection, service view, CLI adapter, and
-packaged browser validator requires event v5. The coordinated ledger-v4 /
-history-v6 reset means no readable current database can contain an older event
-epoch. The live bridge validator and durable projection consume the same
+Supported producers emit only event v5. Persisted readback requires an exact v5
+envelope, while live browser delivery requires the v5 transport marker and
+recognized tag; trusted internal projections are not decoded again. The
+coordinated ledger-v4 / history-v6 reset means no readable current database can
+contain an older event epoch. Live and durable wrappers consume the same
 admitted immutable core snapshot without treating either representation as the
 other's decoder.
 
 No private v3/v4 decoder, legacy-only helper, or positive compatibility fixture
-remains. Source-removal guards and live decoder/browser negative cases pin the
-exact v5 boundary. Protected historical measurement and settlement artifacts
+remains. Source-removal guards, persistence-decoder negatives, and browser
+transport-marker negatives pin the v5 boundary. Protected historical
+measurement and settlement artifacts
 remain historical evidence, not compatibility routes.
 
 Core event versioning is independent of bridge-envelope, workflow-checkpoint,
@@ -775,8 +780,9 @@ verify cancellation may retain filesystem `COMPLETED` or `FAILED`, while
 `CANCELED`. These combinations require `Disposition.RAN`, matching execute
 truth, and a canceled verify phase; execute cancellation cannot claim a
 completed execute phase. One shared validator enforces those rules for
-`OperationResult`, `TerminalSummary`, and Python v5 decoding; the browser
-terminal and result validators enforce the same rules. Ordinary phase-free
+`OperationResult`, `TerminalSummary`, and persisted v5 decoding; the browser
+public result and session-record validators enforce the same rules. Live
+Terminal event bodies remain trusted producer projections. Ordinary phase-free
 cancellation may be ran or unrun. Phase order and an exactly-two-phase shape
 are not additional cancellation requirements.
 

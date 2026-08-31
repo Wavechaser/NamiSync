@@ -3399,11 +3399,10 @@ def _malformed_task_updates():
     event = _event(2)
     record = _record()
     return [
-        replace(event, schema_version=4),
-        replace(event, body={}),
         replace(event, sequence=True),
-        replace(event, at="2026-01-01T00:00:00Z"),
-        replace(event, body={"state": "invented"}),
+        replace(event, sequence=0),
+        replace(event, sequence=9_007_199_254_740_992),
+        replace(event, session_id="f" * 32),
         replace(record, result=None),
         replace(record, state="pending", ended_at=None, result=None),
         replace(record, ended_at=None),
@@ -3427,7 +3426,7 @@ def test_task_offer_validates_before_queue_or_custody_mutation(update) -> None:
         task.terminal_pending, task.terminal_delivered, task.cleanup,
     )
 
-    with pytest.raises((TypeError, ValueError)):
+    with pytest.raises((TypeError, ValueError, ObservationConflictError)):
         service.sink(update)
 
     assert (
@@ -3454,7 +3453,7 @@ def test_task_drain_validates_whole_candidate_before_consuming(pending_record) -
     else:
         service.sink(terminal)
     # This mutation bypasses offer admission, as a retained collaborator can.
-    mutable.body["state"] = "invented"
+    object.__setattr__(mutable, "sequence", 0)
     before = (
         tuple(task.queue), task.progress_available_at, task.terminal_record,
         task.terminal_pending, task.terminal_delivered,
@@ -3472,7 +3471,7 @@ def test_task_drain_validates_whole_candidate_before_consuming(pending_record) -
         registry.release_terminal_session(start.task_id, SESSION)
     assert service.cleanup == []
 
-    mutable.body["state"] = "running"
+    object.__setattr__(mutable, "sequence", 2)
     drained = registry.drain(start.task_id, SESSION, DRAIN, replay_from=None)
     assert [update.event.sequence for update in drained.updates[:-1]] == [1, 2, 3]
     assert drained.updates[-1].record == terminal

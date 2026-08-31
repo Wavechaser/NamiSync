@@ -91,16 +91,6 @@ _RELIABLE_BODY_TYPES = frozenset(
 _ENVELOPE_KEYS = frozenset(
     {"session_id", "seq", "at", "schema_version", "body_type", "body"}
 )
-_SESSION_EVENT_VIEW_KEYS = frozenset(
-    {
-        "session_id",
-        "sequence",
-        "at",
-        "schema_version",
-        "body_type",
-        "body",
-    }
-)
 _PROGRESS_KEYS = frozenset(
     {
         "phase",
@@ -271,30 +261,6 @@ def validate_event_v5_envelope(value: object) -> None:
             raise ValueError("reliable event must be canonical JSON") from error
         if len(encoded) > MAX_RELIABLE_EVENT_CANONICAL_BYTES:
             raise ValueError("reliable event exceeds the canonical byte ceiling")
-
-
-def validate_session_event_view_v5(
-    value: object,
-    *,
-    expected_session_id: str | None = None,
-) -> None:
-    """Validate the exact v5 event shape consumed by service/browser clients."""
-
-    event = _exact_object(value, _SESSION_EVENT_VIEW_KEYS, "session event view")
-    session_id = _hex_id(event["session_id"], "session event session_id")
-    if expected_session_id is not None and session_id != expected_session_id:
-        raise ValueError("session event belongs to another session")
-    # Reliable bytes belong to the persistence envelope, whose key is "seq".
-    validate_event_v5_envelope(
-        {
-            "session_id": session_id,
-            "seq": event["sequence"],
-            "at": event["at"],
-            "schema_version": event["schema_version"],
-            "body_type": event["body_type"],
-            "body": event["body"],
-        }
-    )
 
 
 def validate_operation_result_view_v5(value: object) -> None:

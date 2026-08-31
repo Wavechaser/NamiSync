@@ -70,13 +70,11 @@ recording and omission fields, while its item-free terminal summary carries
 task issues and aggregate witnesses. Presentation-only omissions remain outside
 the core result and history contracts.
 
-`workflows/views.py` supplies rejecting validators for exact session event,
-session record, and operation result views. They explicitly project only the
-declared dataclass and bounded tuple children into the shared core v5 primitive
-validators; they neither deep-copy arbitrary objects nor implement a second
-serializer. Existing frozen body mappings remain supported. Validation is
-separate from construction so each consuming boundary can recheck collaborator
-data, including event bodies changed after initial admission. Generic
+`workflows/views.py` reuses `envelope_to_dict`'s one canonical event-body mapping
+and changes only the live wrapper key from persisted `seq` to browser
+`sequence`. It does not reconstruct or certify a trusted body. Exact validators
+remain for public session-record and operation-result views at their consuming
+boundaries. Existing frozen body mappings remain supported, and generic
 result-free session snapshots remain legal without implying terminal delivery.
 
 Workflow accumulation follows the active exact checked-arithmetic contract in

@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Mapping
+from typing import Mapping, cast
 
 from namisync.core.event_v5 import (
     validate_operation_result_view_v5,
-    validate_session_event_view_v5,
     validate_session_record_view_v5,
 )
 from namisync.core.events import (
@@ -169,18 +168,6 @@ class SessionRecordView:
     started_at: str | None
     ended_at: str | None
     result: OperationResultView | None
-
-
-def validate_session_event_view(
-    value: object, *, expected_session_id: str | None = None,
-) -> None:
-    if type(value) is not SessionEventView or not isinstance(value.body, Mapping):
-        raise TypeError("session event must be an exact view with a body mapping")
-    validate_session_event_view_v5({
-        "session_id": value.session_id, "sequence": value.sequence,
-        "at": value.at, "schema_version": value.schema_version,
-        "body_type": value.body_type, "body": dict(value.body),
-    }, expected_session_id=expected_session_id)
 
 
 def _operation_result_view_data(value: object) -> dict[str, object]:
@@ -480,18 +467,14 @@ def phase_result_view(phase: PhaseResult) -> PhaseResultView:
 def session_event_view(envelope: Envelope) -> SessionEventView:
     from namisync.core.events import envelope_to_dict
 
-    body = envelope.body
-    raw = envelope_to_dict(envelope)["body"]
-    if not isinstance(raw, Mapping):
-        raise TypeError("serialized event body must be a mapping")
-    payload: Mapping[str, object] = dict(raw)
+    projected = envelope_to_dict(envelope)
     return SessionEventView(
-        session_id=str(envelope.session_id),
-        sequence=envelope.seq,
-        at=envelope.at.isoformat(),
-        schema_version=envelope.schema_version,
-        body_type=type(body).__name__,
-        body=payload,
+        session_id=cast(str, projected["session_id"]),
+        sequence=cast(int, projected["seq"]),
+        at=cast(str, projected["at"]),
+        schema_version=cast(int, projected["schema_version"]),
+        body_type=cast(str, projected["body_type"]),
+        body=cast(Mapping[str, object], projected["body"]),
     )
 
 

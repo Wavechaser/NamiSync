@@ -823,28 +823,29 @@ defect, and move implementation-level test choreography out of the log.
   tests guard that dependency assumption; a runtime upgrade must revalidate it.
 - MINOR - FIXED (2026-08-26). Cross-version gate aliasing. The unreachable
   private browser seam accepted v5-stamped numeric-v4 bodies and rejected v4,
-  while source gates could find legacy text instead of the live route or active
-  Progress validator. Cause: a shared version constant and overbroad source
-  slices conflated retained and current contracts. Fixed with literal v4 at the
-  private seam, exact live-function isolation, active-v5 shape/vocabulary checks,
-  and mutation regressions. No production legacy route was added.
+  while source gates could find legacy text instead of the live route. Cause: a
+  shared version constant and overbroad source slices conflated retained and
+  current contracts. Fixed by isolating the live route and its exact version;
+  SIM-2 later removed the redundant body-schema mirror while retaining
+  wrong-version batch refusal and reducer regressions. No legacy route was added.
 - MINOR - FIXED (2026-08-26). Unbound producer fixtures. Separate Python public
   view witnesses and browser literals could stay green while the real codec
   drifted away from JavaScript. Cause: no differential check passed the actual
   Python primitive projection to the packaged consumer. Fixed by binding all
-  seven event families and relevant public-view witnesses through that codec
-  and the live event arm, retaining independent literal expectations and
-  post-projection negative mutations.
+  seven event families and relevant public-view witnesses through that projector
+  and the live event arm. SIM-2 retains those positive producer witnesses while
+  persistence and transport/reducer negatives remain with their real boundaries.
 - MODERATE - FIXED (2026-08-26). Shallow view admission. Exact dataclass wrappers
   could carry old-version events, malformed nested results, or result-free
   terminal records through Python task drains and bridge serialization. Queue
   consumption and terminal-delivery receipts could precede semantic refusal,
   while the browser accepted null terminal results and released session custody.
-  Cause: outer type checks substituted for the v5 view contract. Fixed with
-  shared primitive/typed validation at each consuming boundary, whole-candidate
-  validation before drain mutation, and matching result-bearing terminal gates.
-  Valid result-free recovery snapshots do not earn receipts; replay cache
-  invalidation does not revoke a prior validated delivery receipt.
+  Cause: outer type checks substituted for the required boundary checks. Current
+  enforcement keeps event transport/session/sequence checks, whole-candidate
+  admission before drain mutation, and exact result-bearing terminal gates;
+  body semantics stay with supported producers and persistence decode. Valid
+  result-free recovery snapshots do not earn receipts, and replay invalidation
+  does not revoke a prior validated delivery receipt.
 - MODERATE - FIXED (2026-08-25). Execution-authority state conflation. The
   accepted desktop design permanently froze a committed selection even when
   submission failed or the attached attempt terminated `unrun`, making its
@@ -879,13 +880,14 @@ defect, and move implementation-level test choreography out of the log.
   live-only validator, and keeping mixed persisted v3/v4 `HistoryEventView`
   validation version-dispatched per row.
 - MINOR - FIXED (2026-08-21). Executable consumer-evidence omission. The
-  ordinary suite checked the expanded Progress validator through source-text
-  tokens while its actual JavaScript behavior lived in an optional Node probe,
+  ordinary suite checked packaged Progress behavior through source-text tokens
+  while its actual JavaScript behavior lived in an optional Node probe,
   so dead or unconditional validation could pass when Node was unavailable.
   Fixed by making the packaged drain-manager probe non-skippable, resolving an
-  explicit `NAMISYNC_TEST_NODE` before `PATH`, and executing malformed-batch
-  rejection plus clean reliable replay. Other Node probes remain supplemental;
-  installed WebView2 still owns their named browser-behavior acceptance.
+  explicit `NAMISYNC_TEST_NODE` before `PATH`, and executing transport/reducer
+  batch rejection plus clean reliable replay. Other Node probes remain
+  supplemental; installed WebView2 still owns their named browser-behavior
+  acceptance.
 - MODERATE - FIXED (2026-08-19). Partial-attachment rollback gap. If `loaded`
   event registration failed and removal of the already-installed `before_load`
   handler also raised, appearance configuration escaped without aborting its
@@ -1601,29 +1603,28 @@ defect, and move implementation-level test choreography out of the log.
   structurally valid reliable event above 1,048,576 canonical bytes could pass
   Python's public-view validator and the browser, then advance browser state
   despite persistence-envelope refusal. Cause: those validators checked field
-  shapes but omitted the shared envelope ceiling. Fixed by reconstructing the
-  persistence shape (`seq`, not `sequence`) and applying its UTF-8 byte wall.
-  Exact-maximum/plus-one public projections include mixed Unicode; rejected
-  batches preserve callbacks, replay cursor, reducer phase, and release state.
+  shapes but omitted the shared envelope ceiling. SIM-2 made
+  `canonical_event_bytes` the sole production enforcer before `EventHub`
+  sequence, replay, audit, or subscriber mutation and removed the redundant
+  downstream checks. Exact-maximum/plus-one canonical bytes remain frozen.
 - MODERATE - FIXED (2026-08-26). Cross-runtime primitive grammar drift.
   Python and JavaScript admitted different timestamp spellings, and the browser
   normalized impossible dates. Its Unicode guard also admitted a trailing lone
   high surrogate because comparisons with the missing next unit's NaN did not
   reject. Cause: permissive runtime parsers and an incomplete surrogate-pair
-  predicate. Fixed with one literal UTC timestamp grammar, real Gregorian
-  calendar validation, and mandatory valid low-surrogate pairing before byte
-  accounting. Shared positive/negative Python and Node corpora preserve valid
-  early/leap dates and non-ASCII text while refusing the divergent inputs.
+  predicate. Exact persistence decode and public record/result validation retain
+  the UTC calendar and Unicode rules. SIM-2 removed their duplicate live-event
+  browser copy; supported producer projection and canonical UTF-8 encoding own
+  that path instead.
 - MODERATE - FIXED (2026-08-26). Cross-axis validation omission. Item and
   terminal projections could admit recording reasons that contradicted the
   filesystem outcome, or cancellation without matching execute/verify truth,
   even though continuation/full-result contracts rejected those combinations.
   Cause: projection validators checked each closed field independently and
-  omitted their relationships. Fixed by sharing the existing recording matrix
-  and cancellation rules across core objects and Python decoders and mirroring
-  them in browser event/result validation. A literal complete recording matrix
-  and cancellation corpus include public-view Node witnesses; valid plain and
-  compound cancellation behavior is preserved.
+  omitted their relationships. Fixed by sharing the recording matrix and
+  cancellation rules across core objects and persistence decoding, with browser
+  public record/result validation retained. SIM-2 removed only the live-event
+  semantic mirror; valid plain and compound cancellation remains covered.
 - MINOR - FIXED (2026-08-26). Scalar error-family drift. Shared decimal and
   public event decoders classified malformed strings as wrong types, while
   very long canonical Scalar64 overflow escaped as Python's generic conversion
@@ -1631,7 +1632,7 @@ defect, and move implementation-level test choreography out of the log.
   carried a redundant optimization-sensitive assertion. Cause: combined
   type/grammar checks and conversion before domain validation. Fixed with
   exact type/grammar/domain error families, bounded-domain comparison before
-  conversion, shared public event decoding, and explicit 16-byte unsigned
+  conversion, persistence event decoding, and explicit 16-byte unsigned
   construction. Public payload and optimized-mode regressions preserve valid
   full-width identity and unchanged volume/hash/epoch semantics.
 - MODERATE - FIXED (2026-08-25). Native file-identity narrowing. Scanner and

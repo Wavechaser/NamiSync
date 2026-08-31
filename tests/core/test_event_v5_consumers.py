@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from copy import deepcopy
-from dataclasses import asdict
 from datetime import datetime
 import json
 from pathlib import Path
@@ -18,11 +17,9 @@ from _event_v5_fixtures import (
     cancellation_terminal_cases,
     envelope,
     integrity_item_body,
-    maximum_non_ascii_reliable_envelope,
     maximum_reliable_envelope,
     operation_item_body,
     review_limit_terminal_summary,
-    session_event_view,
     terminal_summary,
 )
 from namisync.core import events as events_module
@@ -31,7 +28,6 @@ from namisync.core.event_v5 import (
     EVENT_V5_SCHEMA_VERSION,
     MAX_RELIABLE_EVENT_CANONICAL_BYTES,
     validate_event_v5_envelope,
-    validate_session_event_view_v5,
 )
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
@@ -58,27 +54,17 @@ from namisync.core.session import (
     SessionState,
 )
 
-from namisync.workflows.views import session_event_view as project_session_event
-
-
 PROJECT_ROOT = Path(__file__).parents[2]
 
 
 @pytest.mark.parametrize("body_type", tuple(bodies()))
 def test_dormant_v5_consumers_accept_each_exact_body(body_type: str) -> None:
     validate_event_v5_envelope(envelope(body_type))
-    validate_session_event_view_v5(
-        session_event_view(body_type), expected_session_id=SESSION_ID
-    )
 
 
 def test_dormant_v5_consumer_accepts_exact_review_limit_terminal() -> None:
     body = {"result": review_limit_terminal_summary()}
     validate_event_v5_envelope(envelope("Terminal", body=body))
-    validate_session_event_view_v5(
-        session_event_view("Terminal", body=body),
-        expected_session_id=SESSION_ID,
-    )
 
 
 @pytest.mark.parametrize(
@@ -137,7 +123,7 @@ def test_dormant_v5_progress_rejects_noncanonical_scalar64(
         validate_event_v5_envelope(value)
 
 
-@pytest.mark.parametrize("route", ("envelope-validator", "envelope-decoder", "view-validator"))
+@pytest.mark.parametrize("route", ("envelope-validator", "envelope-decoder"))
 @pytest.mark.parametrize(
     ("invalid", "error_type"),
     (
@@ -152,19 +138,13 @@ def test_dormant_v5_progress_rejects_noncanonical_scalar64(
 def test_public_event_scalar64_boundary_preserves_exact_error_family(
     route: str, invalid: object, error_type: type[Exception]
 ) -> None:
-    value = (
-        session_event_view("Progress")
-        if route == "view-validator"
-        else envelope("Progress")
-    )
+    value = envelope("Progress")
     value["body"]["bytes_done"] = invalid  # type: ignore[index]
     with pytest.raises(error_type) as raised:
         if route == "envelope-validator":
             validate_event_v5_envelope(value)
-        elif route == "envelope-decoder":
-            envelope_from_dict(value)
         else:
-            validate_session_event_view_v5(value, expected_session_id=SESSION_ID)
+            envelope_from_dict(value)
     assert type(raised.value) is error_type
 
 
@@ -461,13 +441,6 @@ def test_dormant_v5_review_limit_requires_exact_refused_unrun_truth(
         )
 
 
-def test_dormant_v5_session_view_rejects_another_session() -> None:
-    with pytest.raises(ValueError, match="another session"):
-        validate_session_event_view_v5(
-            session_event_view(), expected_session_id="f" * 32
-        )
-
-
 def test_final_protocol_stop_keeps_only_exact_v5_python_routes() -> None:
     assert EVENT_V5_SCHEMA_VERSION == 5
     assert CORE_EVENT_SCHEMA_VERSION == 5
@@ -521,7 +494,7 @@ def test_operation_recording_corpus_has_exact_closed_coverage() -> None:
     assert sum(accepted for *_axes, accepted in OPERATION_RECORDING_CASES) == 10
 
 
-@pytest.mark.parametrize("route", ("item", "envelope", "decoder", "view"))
+@pytest.mark.parametrize("route", ("item", "envelope", "decoder"))
 @pytest.mark.parametrize(("outcome", "recording", "reason", "accepted"), OPERATION_RECORDING_CASES)
 def test_v5_operation_recording_matrix(
     route: str, outcome: str, recording: str, reason: str | None, accepted: bool
@@ -540,15 +513,11 @@ def test_v5_operation_recording_matrix(
             )
         elif route == "envelope":
             validate_event_v5_envelope(envelope("ItemOutcome", body=item))
-        elif route == "decoder":
-            envelope_from_dict(envelope("ItemOutcome", body=item))
         else:
-            validate_session_event_view_v5(
-                session_event_view("ItemOutcome", body=item), expected_session_id=SESSION_ID
-            )
+            envelope_from_dict(envelope("ItemOutcome", body=item))
 
 
-@pytest.mark.parametrize("route", ("result", "summary", "envelope", "decoder", "view"))
+@pytest.mark.parametrize("route", ("result", "summary", "envelope", "decoder"))
 @pytest.mark.parametrize(
     ("name", "accepted", "summary"),
     cancellation_terminal_cases(),
@@ -583,15 +552,10 @@ def test_v5_terminal_cancellation_truth(
                 TerminalSummary(recording_degraded_items=0, **fields)
         elif route == "envelope":
             validate_event_v5_envelope(envelope("Terminal", body={"result": summary}))
-        elif route == "decoder":
-            envelope_from_dict(envelope("Terminal", body={"result": summary}))
         else:
-            validate_session_event_view_v5(
-                session_event_view("Terminal", body={"result": summary}),
-                expected_session_id=SESSION_ID,
-            )
+            envelope_from_dict(envelope("Terminal", body={"result": summary}))
 
-@pytest.mark.parametrize("route", ("envelope", "decoder", "public-view"))
+@pytest.mark.parametrize("route", ("envelope", "decoder"))
 @pytest.mark.parametrize(
     ("name", "timestamp", "accepted"),
     UTC_TIMESTAMP_CASES,
@@ -601,41 +565,14 @@ def test_v5_timestamp_grammar_and_calendar_are_exact(
     route: str, name: str, timestamp: object, accepted: bool
 ) -> None:
     value = envelope("PhaseChanged")
-    if route == "public-view":
-        value = asdict(project_session_event(envelope_from_dict(value)))
     value["at"] = timestamp
     with nullcontext() if accepted else pytest.raises((TypeError, ValueError)):
         if route == "envelope":
             validate_event_v5_envelope(value)
-        elif route == "decoder":
-            envelope_from_dict(value)
         else:
-            validate_session_event_view_v5(value, expected_session_id=SESSION_ID)
+            envelope_from_dict(value)
 
 
-@pytest.mark.parametrize(
-    "factory",
-    (maximum_reliable_envelope, maximum_non_ascii_reliable_envelope),
-    ids=("escaped-ascii", "mixed-unicode"),
-)
-def test_public_v5_view_enforces_canonical_envelope_byte_ceiling(factory) -> None:
-    raw = factory()
-    canonical = json.dumps(
-        raw, ensure_ascii=False, sort_keys=True, separators=(",", ":")
-    ).encode("utf-8")
-    assert len(canonical) == 1_048_576
-    view = asdict(project_session_event(envelope_from_dict(raw)))
-    assert view == {**{key: value for key, value in raw.items() if key != "seq"}, "sequence": raw["seq"]}
-    # The view's longer key is not the persistence-envelope accounting unit.
-    assert len(json.dumps(view, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")) == 1_048_581
-    validate_session_event_view_v5(view, expected_session_id=SESSION_ID)
-
-    oversized = deepcopy(view)
-    oversized["body"]["path"] += "x"
-    with pytest.raises(ValueError, match="canonical byte ceiling"):
-        validate_session_event_view_v5(oversized, expected_session_id=SESSION_ID)
-
-@pytest.mark.parametrize("route", ("envelope", "public-view"))
 @pytest.mark.parametrize("field", ("path", "detail-message", "recording_detail"))
 @pytest.mark.parametrize(
     ("name", "value", "accepted"),
@@ -643,17 +580,12 @@ def test_public_v5_view_enforces_canonical_envelope_byte_ceiling(factory) -> Non
     ids=[case[0] for case in UNICODE_TEXT_CASES],
 )
 def test_reliable_v5_canonical_bytes_require_real_unicode(
-    route: str, field: str, name: str, value: str, accepted: bool
+    field: str, name: str, value: str, accepted: bool
 ) -> None:
     event = envelope("ItemOutcome")
-    if route == "public-view":
-        event = asdict(project_session_event(envelope_from_dict(event)))
     if field == "detail-message":
         event["body"]["detail"] = {"message": value}
     else:
         event["body"][field] = value
     with nullcontext() if accepted else pytest.raises(ValueError, match="valid Unicode"):
-        if route == "envelope":
-            validate_event_v5_envelope(event)
-        else:
-            validate_session_event_view_v5(event, expected_session_id=SESSION_ID)
+        validate_event_v5_envelope(event)

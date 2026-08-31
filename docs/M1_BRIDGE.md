@@ -3437,12 +3437,12 @@ immediately. This includes the first progress-only response: under an active
 long poll it may consume the full 150 ms, while receipt and reliable state
 bypass that linger. The 25-second long-poll deadline remains the outer bound.
 
-The browser validates the whole response before applying it. Validation and
-application are atomic: if any member, including a Progress body, is malformed,
-no callback runs, the accepted-sequence cursor remains unchanged, and reliable
-siblings in that batch are not partially consumed. Uncertainty recovery can
-then cleanly replay the reliable siblings from both sides of the malformed
-event, which are applied exactly once. On an
+The browser checks the whole response before applying it. Staging and
+application are atomic: if any transport wrapper, ordering, lifecycle, Gap
+cursor, or reducer relation is invalid, no callback runs, the accepted-sequence
+cursor remains unchanged, and reliable siblings in that batch are not
+partially consumed. Uncertainty recovery can then cleanly replay those reliable
+siblings, which are applied exactly once. On an
 ordinary or uncertainty-recovery response, the first `Gap` remains visible,
 stops application of later updates, and arms recovery from its
 `first_missed_seq`. A recovery response may begin with the matching `Gap` whose
@@ -4476,10 +4476,9 @@ headings are organizational, not lane ownership.
   primitive leaves/eight paths; diagnostics over 1,024 UTF-8 bytes become null
   with checked omission witnesses rather than truncation. The complete
   reliable envelope is at most 1,048,576 canonical bytes before sequence/queue
-  mutation. `canonical_event_bytes` must enforce
-  `MAX_RELIABLE_EVENT_CANONICAL_BYTES` explicitly before `EventHub` advances
-  `_seq` or mutates replay/subscriber queues; removing semantic self-
-  certification must not remove this hard-wall enforcer. Its bridge projection
+  mutation. `canonical_event_bytes` enforces
+  `MAX_RELIABLE_EVENT_CANONICAL_BYTES` before `EventHub` advances `_seq` or
+  mutates replay, audit, or subscriber queues. Its bridge projection
   always fits as one drain head. Both
   reporters emit the row-namespace pair (`operation` for executor and linked
   post-copy ids, `integrity` for standalone rows), phase self-description, and

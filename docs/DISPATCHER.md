@@ -281,13 +281,15 @@ never starts with more buffered envelopes than its capacity.
 
 Core event v5 is active under the coordinated cutover defined by
 [M1_BRIDGE.md](M1_BRIDGE.md). Dispatcher accepts only that exact event version;
-it does not version-dispatch a mixed live stream. The core projector
-validates, deeply copies, and size-checks one immutable emitter-owned snapshot
-before sequence, replay, history, or subscriber publication. All consumers see
-that same snapshot, and every schema-valid queue head remains drainable under
-the independent bridge response bound. Exact event fields, scalar domains,
-path/detail limits, omission witnesses, and byte ceilings remain centralized in
-the bridge and defense authorities.
+it does not version-dispatch a mixed live stream. The hub wraps one supported
+emitter-owned domain value in an envelope, then `canonical_event_bytes`
+projects it and enforces the reliable byte wall before sequence, replay,
+history, or subscriber publication. All consumers see that same envelope, and
+every admitted queue head remains drainable under the independent bridge
+response bound. Supported producers and the persistence decoder own body
+semantics; dispatcher does not recertify them. Exact event fields, scalar
+domains, path/detail limits, omission witnesses, and byte ceilings remain
+centralized in the core, bridge, and defense authorities.
 
 That full initial buffer is deliberate for now. No finite number of reserved
 slots is a contract-derived burst tolerance: a workflow can emit an arbitrarily
