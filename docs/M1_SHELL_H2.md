@@ -5,13 +5,16 @@
 > sequence; this file is the newest checkpoint reslice and owns the detailed
 > acceptance, review, and test boundary for checkpoints 0-12.
 
-Delivery status (2026-08-30): checkpoints 0–3 and the independently reviewed
+Delivery status (2026-09-01): checkpoints 0–3 and the independently reviewed
 3R remediation are complete, including the separately reviewed checkpoint-3.3
 legacy-source removal. Checkpoint-4 prerequisite consolidation and its bounded
-corrections are complete under the combined closeout below. Checkpoint 4 proper
-has not started; no task surface, reservation model, constant set, fixture,
-validator, BR-G-45 evidence, command, or control is active. Checkpoints 5–12
-remain pending.
+corrections are complete under the combined closeout below. Checkpoint 4 under
+its former complete owner-graph and retained-byte rules is retired by the
+ratified initial simplification run; it did not start and activated no task
+surface, command, control, or containment guarantee. Checkpoints 5–12 remain
+pending and do not become active merely because the former prerequisite was
+removed. `../SIMPLIFICATION.md` owns the two replacement removal checkpoints;
+feature delivery resumes only under a later finite register.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views
@@ -29,7 +32,7 @@ and explicit sorting reset use canonical path-key order.
 The exact accepted target is not duplicated in this checklist.
 `M1_BRIDGE.md`'s file map and mapped DR-BR records own field shapes, wire
 schemas, command rows, authority order, refusal precedence, and bridge gates.
-`DEFENSE.md` §1.3 owns the numeric and retained-resource hard walls. The
+`DEFENSE.md` §1.3 owns the active numeric and resource hard walls. The
 locked-contract summaries below define scope and dependencies; the checkpoint
 section retains detailed acceptance and test categories without redefining the
 exact schemas or hard-wall values. A conflict is resolved in the owning mapped
@@ -94,9 +97,11 @@ decision record, not by treating this prose as a second authority.
 - Plan and inventory trees are server-owned, immutable-generation projections
   with bounded search, filters, windows, anchors, and action scope. A complete
   candidate publishes atomically or not at all.
-- Task and projection retention obey `DEFENSE.md` §1.3. The bridge records own
-  the complete charged graph, reservation mechanics, retry receipts,
-  tombstones, publication-fault behavior, and exact capacity results.
+- Task and projection retention must obey whatever finite active walls their
+  future delivery register ratifies. The former complete charged-graph and
+  task-artifact byte model is retired and cannot be inferred from this target
+  prose. Retry, publication, and recovery behavior remain feature contracts,
+  not active containment claims.
 - Setup, plan/execution, inventory/integrity, and task-lifecycle command
   families land only in their named checkpoints. Exact command names, request
   shapes, retry classes, deadlines, and activation rows remain in
@@ -135,12 +140,15 @@ not `complete` until this closure lands.
 Run focused tests while editing. Before an activation/closure commit, run every
 affected producer and consumer department and the ordinary suite for a shared
 or cross-department contract; run `lint-imports` when dependency boundaries
-move and the installed headed witnesses when a user surface activates. A BR-G
-gate closes only with the exact production entry point, counterexample, and
-collected `test_br_g_<number>_*` nodes required by `M1_BRIDGE.md`; skipped,
-xfail, comment-only, dormant, or uncollected evidence does not count. Record
-measurement fixtures and validators before observing acceptance evidence, as
-required by `DEFENSE.md`.
+move. Installed headed witnesses are required only when a checkpoint materially
+activates or changes the named user workflow, not merely because code is near
+the interface. BR-G prose records contracts, rationale, and counterexamples;
+it blocks a checkpoint only when that checkpoint names an executable check, a
+finite artifact, or a specifically required headed witness. When such a gate
+names collected `test_br_g_<number>_*` nodes, skipped, xfail, comment-only,
+dormant, or uncollected evidence does not count. A production-entry recital is
+not an additional gate by itself. Record measurement fixtures and validators
+before observing acceptance evidence, as required by `DEFENSE.md`.
 
 If a gate exposes a policy defect already named by the active register, land
 that policy fix and its persistent regression in a separate commit, invalidate
@@ -425,101 +433,18 @@ are clean, and independent review found no remaining blocker.
 
 ### 4. Install task-centric lifecycle and compact artifacts
 
-**Status:** Pending. The prerequisite closeout above is complete, but no
-process-live task surface or implementation derivation, formula, constant set,
-maximum fixture, independent validator, or BR-G-45 evidence is ratified or
-active. The higher-level accepted walls and task graph remain authoritative.
+**Status:** Retired under these rules; no implementation started. The former
+delivery order depended on an unbounded complete owner graph and
+representation-specific byte model. Those accepted-but-unrealized targets and
+BR-G-45 are no longer acceptance gates and confer no production guarantee.
 
-**Objective:** Remove the one-session assumption before adding production task
-surfaces.
-
-**Delivery order:**
-
-1. `test(web): pin task artifact reservation model` — freeze the complete
-   analytical graph, constants, formula, maximum fixtures, validator, and typed
-   capacity outcomes before measurement or production reachability.
-2. `feat(web): install dormant task lifecycle` — install the registry,
-   ownership/lifecycle machinery, bounded artifacts, and dormant consumers
-   while the current nine-row production map and one-session behavior remain
-   exact.
-3. `feat(web): retain multi-session task artifacts` — activate the coherent task
-   rail, replace superseded aliases, and move the production map to exactly 12
-   rows without changing the frozen model.
-
-#### Inputs to settle
-
-- Freeze the complete simultaneous current-process owner graph across task,
-  session, runtime, service, dispatcher, observers, subscribers, workers,
-  callbacks, retries, close, tombstones, and overlapping generations. Every
-  owner needs an exact charge or finite retirement witness; timeout alone is
-  not retirement.
-- Account for retained and construction graphs across planning, execution,
-  inventory, integrity, post-copy verification, tree projection, selection,
-  continuations, sorting/index storage, container high-water capacity, shallow
-  callback guards, and callback overlap.
-- Derive representation-specific charges for codec/text/JSON, Python,
-  CLR/WebView2, browser, and native copies from their actual representations.
-- Make the independent validator cover slotted and non-slotted values,
-  mapping-proxy backing stores, mutable-container capacity, `Path` caches,
-  complete detail entries, and native/browser copies.
-- Close or explicitly charge the remaining app-owned raw exception frames at
-  host and document boundaries. Arbitrary caller-owned exception attributes are
-  not retained task artifacts.
-- Treat current population refusals, including the shared 120,000-item M1
-  target, as count containment only. They do not substitute for the complete
-  retained-byte and copy model. Any weakref support remains class-specific and
-  must be charged.
-- Choose a domain-neutral owner for that shared target and its generic
-  population primitives before centralizing repeated constants or resolving
-  the plan-origin `core/review.py` name. Preserve current domain-specific count
-  semantics, precedence, and typed outcomes through M1.
-
-`BUGS.md` owns current open causal entries; `M1_BRIDGE.md` owns exact task,
-claim, lease, publication, retry, and command contracts; `DEFENSE.md` owns hard
-walls and measurement authority. The saved model draft is recovery context
-only; rederive any useful fixture shape from current source and ratified
-requirements rather than applying it wholesale.
-
-#### Acceptance criteria
-
-- Implement the mapped one-current-session task model with distinct plan,
-  execution, inventory, integrity, and post-copy result authority.
-- Implement the owner claim, transactional observation attachment,
-  publication/compensation rules, exact-session release, task close, compact
-  overlays/results, bounded terminal summaries, and page rehydration.
-- Enforce the complete conservative pre-surface reservation floor from
-  `DEFENSE.md`; checkpoint 11 later calibrates and proves the active containment
-  model.
-- Retain the four bootstrap/cosmetic and two Setup rows while replacing the
-  three current task/session rows with the six checkpoint-4 task rows, for
-  exactly 12 unique production commands.
-
-#### Regression guards
-
-- No task lock spans facade, JSON, database, or filesystem work.
-- Start/control/release/close replay and races preserve one effect owner,
-  exact-intent join, compensation, and successor isolation.
-- Terminal event, record, observer, publication, close, and reservation release
-  cannot reorder into false success, duplicate settlement, or early capacity
-  release.
-- Plan, execution, inventory, integrity, and post-copy generations never mix;
-  adapters and callbacks retain no uncharged full-result graph or native copy.
-- Capacity refusal, pinned-generation replacement, delayed cleanup, shutdown,
-  and handler saturation remain bounded and retryable.
-
-#### Verification and review
-
-- At the analytical stop, prove the independent validator rejects drift in
-  every accepted constant, formula, root class, fixture, and refusal boundary.
-- At the dormant stop, prove the current nine-row map and one-session behavior
-  remain reachable while every new task command and rendered control remains
-  unreachable.
-- At activation, run dispatcher/interfaces/service and ordinary gates,
-  concurrency and capacity matrices, Python/JavaScript policy mirrors, required
-  headed witnesses, and checkpoint-4 BR-G-32, BR-G-45, and BR-G-46 evidence.
-- Update `ARCHITECTURE.md`, `M1_BRIDGE.md`, `DEFENSE.md`, `DESKTOP_UI.md`,
-  `INTERFACES.md`, and `DISPATCHER.md`. Independently review the complete
-  ownership graph and initial analytical model before activation.
+The process-live task surface, its commands, lifecycle, recovery behavior, and
+containment policy remain unrealized product work. Removing the former blocker
+does not activate them and does not authorize checkpoints 5–8. Before any task
+surface is built, replace this row through the ordinary closed-register process
+with finite accepted outcomes, named runtime enforcers, and proportionate
+public behavior checks. Do not revive the retired model by reference or treat
+the saved model draft as implementation authority.
 
 ### 5. Unify probing, recents, and typed directory admission
 
@@ -811,29 +736,11 @@ Commit: `feat(web): add integrity and post-copy verification`
 
 ### 11. Close early Slice 7 lifecycle and scale
 
-Closure commit: `feat(web): close task lifecycle and retention budgets`
-
-- **Objective:** Prove cleanup, shutdown, and retained-task containment across the completed surfaces.
-- **Acceptance:** Calibrate and verify without post-selecting or silently
-  changing the checkpoint-4-frozen analytical constants; prove the aggregate
-  task guarantee and count wall owned by `DEFENSE.md` §1.3, plus
-  reservation/shrink/refusal, live closing, terminal presentation/release
-  retry, explicit close, repeated create/release/close, complete response/native/
-  browser transients, and concurrent shutdown. Any policy defect lands
-  separately, revises the enforced constant before a new run, and resets the
-  evidence run. The named commit lands only after any such fix commits and is
-  the final evidence/status closure, not the sole allowed commit for checkpoint
-  11.
-- **Regression watch:** Silent eviction, count-only enforcement, uncharged receipts/string pools/full results/native copies, diagnostic bypass, browser callback copies, blocked close handlers, cleanup before terminal record, task rail reconstructed from dispatcher sessions, and authority surviving declared release points.
-- **Tests:** BR-G-41 lifecycle tests; BR-G-45 complete artifact-root and
-  aggregate-retention instrumentation, including the accepted maximum handler
-  and terminal-reconciler reservations; maximum-task guarantee plus refusal;
-  repeated cycles; live/paused/terminal close; delayed terminal at handler
-  saturation; issue/close barriers racing readers, durable mutations,
-  replacement pins, and `next_events` long-polls; shutdown during starts/drains/
-  close; current-source event/custody; plan/inventory scale gates and installed
-  headed witnesses.
-- **Docs/review:** Update DEFENSE measurement authority, M1_BRIDGE, M1_SHELL, TESTS, INTERFACES, and DESKTOP_UI with predeclared fixtures/budgets and evidence. Close BR-G-41 and BR-G-45 only after independent artifact-graph and shutdown reviews.
+**Status:** Pending redefinition after the task surface receives a new finite
+delivery register. Lifecycle cleanup and shutdown remain real future behavior;
+the former checkpoint-4-frozen aggregate byte model and BR-G-45 do not. This
+row has no executable delivery or closure commit until that replacement is
+ratified.
 
 ### 12. Overall adversarial and documentation sweep
 
@@ -842,7 +749,7 @@ Commit: `docs(gui): close stage 6 surface verification`
 - **Objective:** Reconcile the reslice as one system and land any discovered fixes separately before final documentation.
 - **Acceptance:** No v3/v4 runtime machinery, dormant bridge rows, operation-time hash persistence, path ingress outside the shared admission workflow, unbounded task/result response, stale documentation, or undeclared task artifact remains.
 - **Regression review:** Executor settlement/order; per-item versus task recording truth; stale bridge actions and lost responses; exact request/result keys; origin/readiness/handler-capacity rules; path-parser abuse; unsafe scalars; DOM text/layout safety; projection races; manual-handoff supersession; memory-budget bypass; shutdown and cleanup authority.
-- **Tests:** Settlement oracle three identical runs; ordinary `pytest -q`; headed interfaces with cleared default addopts; complete suite with `-o "addopts="`; `lint-imports`; `git diff --check`; installed-wheel v5 bridge and product-DOM gates; every `test_br_g_*` collected with no unsupported skip/xfail; final BR-G-42/45 evidence.
+- **Tests:** Settlement oracle three identical runs; ordinary `pytest -q`; headed interfaces with cleared default addopts; complete suite with `-o "addopts="`; `lint-imports`; `git diff --check`; installed-wheel v5 bridge and product-DOM gates; each executable gate named by the active delivery register collected with no unsupported skip/xfail; final BR-G-42 evidence.
 - **Docs/review:** Reconcile ARCHITECTURE, DEFENSE, FEATURES, README, all owning documents, M1_BRIDGE/M1_SHELL gate status, and TESTS. Extend one CHANGELOG task across checkpoints and replace HANDOFF at closure. Use a separate reviewer for the final security, executor, bridge, and requirement-drift audit.
 
 ## Explicit deferrals

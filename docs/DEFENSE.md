@@ -73,11 +73,14 @@ excuse NamiSync crossing a hard wall during supported use.
 ### 1.3 Stage 6 scalar and retention walls
 
 The scalar/native-identity, source-population, reliable-result-occurrence, and
-bridge-handler walls named below are active. Complete-graph and task-artifact
-retention walls are accepted but unrealized and confer no production guarantee.
-`M1_BRIDGE.md` owns the mapped decision records, exact wire shapes, accounting
-graph, reservation order, and refusal schemas; other active documents point
-here instead of reproducing these limits.
+bridge-handler walls named below are active. The former complete retained-
+graph and task-artifact byte targets were never production-enforced, had no
+finite derivation domain, and are retired by the initial simplification run;
+they confer no production guarantee and block no delivery checkpoint. Any
+future task surface must ratify its own finite, production-enforceable
+containment rule in its delivery register. `M1_BRIDGE.md` owns the mapped
+decision records, exact wire shapes, and active refusal schemas; other active
+documents point here instead of reproducing these limits.
 
 - Every durable or externally presented byte quantity and filesystem
   nanosecond is in `0..9_223_372_036_854_775_807`. Typed relational values use
@@ -105,9 +108,8 @@ here instead of reproducing these limits.
   substitute for this public component bound.
 - Destination-policy name/version and optional assignment annotations have no
   narrower production grammar yet. Constructors and projections enforce only
-  the plan-domain ceiling per value; the unrealized completed-plan graph wall
-  must still admit their combined retained occurrences before publication.
-  Neither boundary is claimed as an empirical source-primitive maximum.
+  the plan-domain ceiling per value. No aggregate retained-graph byte guarantee
+  is claimed. This boundary is not an empirical source-primitive maximum.
 - A plan-capacity refusal requires the private exact plan-limit signal carrying
   the active same-run admission token and an exact PLAN fact. Plan and inventory
   use different private signal types and tokens; workflow copies the fact,
@@ -175,40 +177,21 @@ The following population and process-live admission walls are active now:
   repeated reference remains a retained occurrence. Admission precedes event
   publication, audit observation, and accumulator mutation; an excess producer
   result is an internal failure, not truncation or a review-limit refusal.
+- One reliable event admits at most 1,048,576 canonical UTF-8 bytes before
+  dispatcher sequence, replay, subscriber, or audit mutation.
+  `canonical_event_bytes` is the named production enforcer; removing a semantic
+  self-validation pass must not remove or move this byte check after mutation.
 - The bridge admits at most 64 concurrent handlers before invoking command
-  work. This ingress concurrency wall is independent of the accepted but
-  unrealized task and artifact reservation model.
+  work. This ingress concurrency wall is independent of any future task and
+  artifact containment model.
 
-The remaining complete-graph and process-live containment walls below are
-accepted but unrealized and do not constitute active production guarantees:
-
-- Complete retained-graph ceilings are 128 MiB for a plan domain and 192 MiB
-  independently for an inventory domain and either informational population.
-  These byte walls must charge every simultaneously retained occurrence behind
-  the already-active source-row gates.
-- A standalone-integrity candidate's complete identity-deduplicated custody
-  graph has a proposed 192 MiB wall. A combined task must additionally charge
-  every simultaneous refresh, candidate, continuation, outcome, and completion
-  owner; the active candidate-row limit does not prove that retained-byte wall.
-- Process-live task custody is capped at 48 tasks and a mechanically derived
-  byte budget that must admit at least four simultaneously complete
-  maximum-scale combined tasks. The separate immutable-projection cache holds
-  at most six generations. Neither cap is activated by the independent bridge-
-  handler wall above.
-- Each task reserves at most 4,096 mutation receipts, including one cell that
-  ordinary commands cannot consume so an accepted close remains recoverable.
-  Setup retains at most 128 receipts for 30 minutes and 32 admitted location
-  slots; each task retains at most 64 release tombstones for five minutes, and
-  completed close tombstones are separately byte-budgeted for five minutes.
-- Admission reserves the next phase's maximum reachable permanent and
-  transient graph before work begins. It never evicts an open task or pinned
-  generation, and capacity exhaustion may refuse new work but cannot make an
-  admitted release or close fail for capacity.
-
-An activated wall is a production-enforced containment claim, not a sampled
-memory ceiling. Its implementation constants must be derived from the complete
-reachable graph and independently validated under §7 before the owning gate
-can close.
+The retired complete-graph figures, proposed task count/byte model, receipt and
+tombstone reservations, projection-generation count, and phase-ahead graph
+reservation are not active walls. They may remain historical design context,
+but they are not acceptance evidence and may not be revived by reference. A
+future production containment wall must have a finite search domain, a named
+runtime enforcer, and independent evidence under §7 before its owning delivery
+row can close.
 
 ---
 
@@ -231,7 +214,7 @@ Validation and custody follow four distinct rungs:
 
 | Rung | Scope | Obligation | Violation |
 | --- | --- | --- | --- |
-| **1 — external** | Filesystem, persisted state, browser and command inputs, and user-supplied values | Treat as adversarial; validate and bound at ingress. | Typed product refusal or contained failure. |
+| **1 — external** | Filesystem and persisted state; interface-adapter ingress, currently the bridge and CLI and equally any future API; user-supplied values | Treat as adversarial; validate and bound at ingress. | Typed product refusal or contained failure. |
 | **2 — reentrant** | Reentrant or extension-owned callbacks | Commit local reliable state before the call and hand out only immutable values. | Ordering, replay, or retention defect. |
 | **3 — internal** | NamiSync-owned modules inside the trusted computing base | Treat as trusted but fallible; validate once at the boundary-owning module's public return or other named ownership transfer, then trust immutable base values. | Loud internal invariant failure, never a user refusal path. |
 | **4 — reflective/forged** | Reflective mutation and forged private internal exceptions or signals | Unsupported unless promoted to a named fault class under §2.2. | Programming or trusted-base defect outside the product fault model. |
@@ -243,13 +226,20 @@ every applicable rung, while `RootAuthority` consumers re-probe at their
 existing points of use. Exception-graph retirement is likewise a lifetime
 obligation, not a trust defense.
 
-Private exception or signal type identity is not provenance by itself. Plan
-and inventory review-limit signals carry a distinct opaque same-run admission
-token; workflow maps an exact, well-scoped signal to typed refusal only when
-that token matches the active admission. A tokenless or different-run exact
-same-domain signal raised by a first-party module is a rung-3 invariant failure,
-not a rung-4 forgery and not a user refusal. Reflective extraction or mutation
-of the private token remains rung 4.
+Serialization belongs at a real process, browser, persistence, or filesystem
+boundary. Inside one process, a typed domain value that has crossed its owning
+constructor or named transfer is not converted to a wire form merely so the
+next trusted module can certify it again. A mutable value crossing ownership is
+detached by construction; detachment is not a new authority or adoption
+framework.
+
+Private exception or signal type identity is not provenance by itself. A plan
+or inventory review-limit signal may carry same-run freshness/correlation so a
+workflow cannot mistake stale work for its current admission. That role is not
+a defense against forged first-party values: reflective construction or token
+extraction remains unsupported rung 4. Until the simplification checkpoint
+changes the mechanism, a tokenless or different-run exact same-domain signal
+continues to fail loudly rather than become a user refusal.
 
 The production document channel's atomic current-document send relies on the
 pinned WebView2 `PostWebMessageAsJson` call not synchronously re-entering a

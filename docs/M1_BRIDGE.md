@@ -14,8 +14,9 @@ ordering that cannot be defined coherently inside one DR-BR record; its
 ownership table binds every subsection back to those records. Sections 1–8
 retain the decisions, rationale, and rules local to one owner. Section 9 records
 only deferred, rejected, and resolved dispositions. Section 10 retains the
-normative BR-G gate register and the remaining M1 delivery order; a lane or
-slice closes only when all applicable gates and regressions pass. Dated build
+BR-G contract and evidence register and the remaining M1 delivery order. BR-G
+prose is not independently blocking unless an active checkpoint names its
+executable check, finite artifact, or required headed witness. Dated build
 status and evidence are recorded under [M1 GUI in the changelog](../CHANGELOG.md#m1-gui).
 
 ---
@@ -178,9 +179,12 @@ accepted targets until their named checkpoints.
 
 Production core events use exact v5 with no legacy constant, private decoder,
 or positive v3/v4 compatibility fixture. The bridge envelope remains v1 and every live `SessionEventView`
-requires nested `schema_version=5`. The process-local sync-execution payload
-is exact v7; the sync-plan payload remains exact v5, and inventory and
-standalone-integrity payloads remain exact v2. Its transient copy
+requires nested `schema_version=5`. Until SIM-1 closes, the process-local sync-
+execution payload is exact v7, the sync-plan payload is exact v5, and inventory
+and standalone-integrity payloads are exact v2. These are current implementation
+facts, not compatibility promises: the ratified simplification replaces them
+with detached semantic checkpoints and deletes their internal wire versions.
+Transient copy
 attestations may exist only while the same live/paused compound session needs
 linked verification or resume. They never enter either database, retained
 task artifacts, service presentation values, or JavaScript.
@@ -207,18 +211,25 @@ The following primitive grammars are exact:
 | `ExecutionStartReason` | `scope-empty` |
 | `LocationStartReason` | `candidate-changed` or `scope-empty` |
 
-Production freezes these complete-graph walls:
+**Retired checkpoint-4 target.** The complete-graph byte table and every
+derived sizer, task-byte, four-maximum-task, phase-ahead reservation, and
+representation-copy obligation in this register are historical context only.
+They were never production-enforced and are no longer accepted targets or gate
+prerequisites. This notice supersedes later wording that calls those byte
+figures a production wall. The active row, scalar, reliable-occurrence,
+request, handler, and queue bounds remain governed by `DEFENSE.md` §1.3.
+
+Historical complete-graph figures:
 
 | Population | Rows | Plan bytes | Inventory bytes |
 | --- | ---: | ---: | ---: |
 | Domain | 120,000 | 134,217,728 | 201,326,592 |
 | Informational | 120,000 | 201,326,592 | 201,326,592 |
 
-Domain means every non-informational row plus backing objects, strings, ids,
-containers, indexes, and rollups; informational means the complete plan-notice
-or inventory-warning graph. Shared objects are charged once, each full tree is
-at most 240,000 rows, and these remain production walls rather than diagnostic
-measurements or empirical failure thresholds. The repeated 120,000 row value
+Domain meant every non-informational row plus backing objects, strings, ids,
+containers, indexes, and rollups; informational meant the complete plan-notice
+or inventory-warning graph. Shared objects were to be charged once. These byte
+figures are neither production walls nor acceptance measurements. The repeated 120,000 row value
 also defines the one M1 performance-and-safety support target for each
 applicable plan, inventory, and standalone-integrity population; it makes no
 promise above that scale and does not predict failure at 120,001.
@@ -900,6 +911,14 @@ absence. Free-form diagnostics are bounded whole before retained publication.
 close behavior, DR-BR-24 owns concurrency and teardown, and DR-BR-03,
 DR-BR-16.1, DR-BR-17, and DR-BR-27 own the narrower authorities named below.
 
+The lifecycle and ordering prose below remains an unrealized feature target.
+Every count/byte reservation, complete old/new charge, guaranteed four-task
+capacity, projection-generation cap, receipt/tombstone allocation, and
+`retention_full` rule derived from the former BR-G-45 model is retired and has
+no production or acceptance authority. A later task-surface register must
+restate any containment mechanism it actually chooses; reference to this
+section cannot reactivate the retired model.
+
 A desktop task is process-live adapter state, owns zero or one current session,
 and retains the reviewed plan, selection, separately named compact overlays and
 results, sparse reasons/diagnostics, run identity, views, and bounded receipts
@@ -1229,8 +1248,9 @@ bounds prove one maximum row fits; the fixed 37-ASCII-character `NodeId`
 grammar and 32,767-UTF-16-code-unit plan-path ceiling prove the at-most-16,385
 immutable plan ancestors fit. Tests cover the UTF-8 worst case for that UTF-16
 ceiling: BMP code points that encode to three bytes per one code unit, plus
-astral four-byte code points that consume two code units. The same ceiling and all
-native/browser callback copies are charged by BR-G-45.
+astral four-byte code points that consume two code units. The same value
+ceiling remains; the former whole-task charge for native/browser callback
+copies was retired with BR-G-45 and is not an active guarantee.
 
 `R` is a 5,000 ms local read: at most two total identical-payload attempts, the
 second immediate only after transport timeout/uncertainty. `M` is a receipted
@@ -2916,10 +2936,10 @@ plan and removes the adapter task.
 
 The shared register's item-free `TerminalSummary` and compact-overlay rules keep
 the full `OperationResult` only in the dispatcher terminal record through one
-reconciliation and exact-session release. BR-G-45 owns the complete task,
-transient completion, native-return, browser-window, and projection-cache
-artifact graph; neither the task-count bound nor successful session release
-alone proves byte containment.
+reconciliation and exact-session release. No active gate claims complete byte
+containment for the task, transient completion, native-return, browser-window,
+or projection-cache graph; the former BR-G-45 model was retired without
+activating this task surface.
 
 For a compound execute-then-verify run, the two phases are one session
 producing one result with ordered `PhaseResultView`s. The rail summarizes the
@@ -3136,9 +3156,10 @@ The queue substructure of each shared-register `TaskState` remains one bounded
 progress alone is replaceable, while reliable events and records remain ordered
 and backpressured. **Never hold a task lock across a facade call, JSON encoding,
 or other I/O.** DR-BR-11's deterministic ids avoid a node-table lock site.
-BR-G-45 measures the identity-deduplicated replay/subscriber/task-queue graph
-and terminal subgraphs; shell-owned SH-G-15 alone measures whole-process and
-renderer/runtime growth.
+The existing queue-count and transport-custody guards remain independently
+owned. No current gate certifies the complete task and terminal subgraphs;
+shell-owned SH-G-15 remains separate whole-process and renderer/runtime
+measurement context.
 
 ---
 
@@ -3509,15 +3530,13 @@ retry. Browser drain, session-release, and explicit-close recovery use finite
 delayed schedules and become visibly retryable when their budget is exhausted;
 no uncertainty path implicitly disposes of the task.
 
-Checkpoint 4 retains that count cap but replaces the current close LRU
-with the globally charged, non-evictable five-minute release and close
-tombstones defined above. It also closes the BR-G-45 representation decision:
-the dispatcher terminal record alone temporarily owns the full result through
-terminal reconciliation; the task then retains the compact summary, frozen
-overlays, and reviewed artifacts until explicit close, while history retains
-the attempt independently. The mechanically derived task/transient byte budget,
-not the count cap, enforces that target. Its implementation and evidence remain
-open until checkpoints 4 and 11; the contract itself is no longer undecided.
+The former checkpoint-4 target would have replaced that close LRU with globally
+charged release/close tombstones and a mechanically derived task/transient byte
+budget. That BR-G-45 representation and reservation model is retired, was never
+implemented, and supplies no current command, capacity result, or containment
+guarantee. Terminal reconciliation and truthful release remain requirements for
+any later task design, which must state its actual ownership and bounds in a
+new finite register.
 
 Task start is single-flight per `(command_id, resolved source, resolved target,
 deletion policy)`. One provisional adapter task exists while the facade call is
@@ -3880,7 +3899,7 @@ artifact documents.
 | User selection, subtree scope, partial subject-local integrity, and page size use the contracts in DR-BR-01–06 and DR-BR-15. | [Add scoped review trees and revisioned selection](../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30) |
 | Recorder mutations use reproducible row receipts; session-creating commands use service-held lifecycle receipts. | [Close the M1 safety and post-refactor audit](../CHANGELOG.md#close-the-m1-safety-and-post-refactor-audit-2026-08-08--2026-08-11) |
 | Drain recovery triggers only on explicit `Gap` or uncertain drain failure; legal progress sequence holes do not trigger it. | [Close transport custody and realign the bridge boundary](../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14) |
-| The 100,000-subject performance fixture and transport-custody authority are governed by BR-G-42; terminal artifacts remain separate under BR-G-45. | [Ratify measurement and documentation authority](../CHANGELOG.md#ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18) |
+| The 100,000-subject performance fixture and transport-custody authority are governed by BR-G-42; the former separate BR-G-45 terminal-artifact model is retired. | [Ratify measurement and documentation authority](../CHANGELOG.md#ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18) |
 | Move-ghost filtering removes synthetic-only ancestors with the ghost. | [Complete and harden the accessible desktop foundation](../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18) |
 
 ---
@@ -3923,14 +3942,17 @@ desktop presentation.
 
 ### Acceptance gates
 
-A BR-G gate is closed only by its stated production entry point and
-counterexample. Every gate has a collected `test_br_g_<number>_*` pytest at
-each named level; fault injection may replace a dependency, never the unit under
-test. A skipped, xfailed, uncollected, or comment-only counterexample leaves the
-gate open.
+BR-G prose records the contract, its failure mode, and useful counterexamples.
+It blocks a delivery checkpoint only when that checkpoint names an executable
+check, finite artifact, or specifically required headed witness. When a gate
+names `test_br_g_<number>_*` nodes, those nodes must be collected at the named
+level; skipped, xfailed, uncollected, or comment-only evidence does not close
+it. Fault injection may replace a dependency, never the unit under test.
 
-Only a gate-required installed-WebView2 check, source/import scan, or recorded
-measurement may supplement pytest. Those artifacts link from the implementation
+A production-entry recital is not a second acceptance condition. Installed
+WebView2 is required only when a delivery row materially activates or changes
+the named user workflow; source/import scans and measurements are required only
+where that row names them. Evidence artifacts link from the implementation
 change. BR-G-42 owns its exact reference profile and budgets below. Gate
 headings are organizational, not lane ownership.
 
@@ -4032,38 +4054,44 @@ headings are organizational, not lane ownership.
   constrained. The hostile-root fixtures from BR-G-6 execute through this exact
   path. *Not satisfied by* a `LIKE` query with escaping, an index merely present
   in the schema, or a plan that reports a scan.
-- **BR-G-28 — Inventory and integrity codecs version independently.** Inventory
-  v2 round-trips and rejects v1; integrity v2 round-trips and rejects v1; a wrong-kind
-  body is rejected at either version; and the shared validator's version guard
-  is proven kind-aware and exact-type (`2.0`, `"2"`, and `true` do not denote
-  either v2 contract).
-  *Not satisfied by* separate test-only decoders or by testing only the two
-  accepted payloads, which misses cross-kind and coercible-version acceptance.
+- **BR-G-28 — Inventory and integrity checkpoints remain detached and mode-
+  exact.** SIM-1 replaces both process-local v2 codecs with typed semantic
+  checkpoints. Construction preserves the exact inventory-versus-integrity
+  request mode, detaches every mutable selection or continuation value, and
+  retains active scalar, path, source-population, and interface-ingress walls.
+  Mutating a source request after construction cannot change dispatcher
+  custody, and opening one checkpoint twice yields independent mutable runtime
+  state where mutation is required. Internal version round-trips, wrong-wire-
+  kind checks, and malformed-JSON certification retire with the wire form.
+  *Not satisfied by* passing a live mutable request, introducing a generic
+  checkpoint certifier, or preserving the old codec under another name.
 
 **Lane C — selection semantics**
 
-- **BR-G-10 — Provenance survives the payload.** Current execution payload v7 round-trips
-  `user_deselected` and validated `bytes_done_high_water` through a real pause
-  and resume; direct choices settle `SKIPPED` and dependency fallout settles
-  `DEFERRED` **after** the round trip, not only before it; execution versions 1-6
-  are rejected. Plan payloads retain their independent v5 contract.
-  The execute-only `reported_exclusion_count` likewise survives the real
-  snapshot/reopen path: accepted plan exclusions are not replayed, and verify
-  continuations reject that field.
-  *Not satisfied by* asserting a field
-  encodes and decodes, which a payload that is never consulted also satisfies.
-  Additionally: a continuation whose `selection` differs by one operation from
-  `derive_execution_selection(plan, user_deselected=…)` is refused before
-  execution preflight with no filesystem mutation — and that refusal is injected
-  on **an execute resume and a verify resume**, not only on a fresh submission,
-  so the resumed run still finishes `FAILED+RAN` rather than a fresh
-  `REFUSED+UNRUN` (XV-7's contract). *Not satisfied by* the commitment digest
-  check, which compares the carried selection against a digest computed from
-  that same carried selection and is therefore circular.
-  The pause/resume proof drives the real dispatcher snapshot/reopen path. A
-  real-ledger tampered verify continuation must also settle the already-open
-  run terminally; it may not re-begin recording from the tampered selection and
-  strand the run on a start-token conflict.
+- **BR-G-10 — Provenance survives a detached semantic checkpoint.** SIM-1
+  snapshots `user_deselected`, validated `bytes_done_high_water`, and the
+  execute-only `reported_exclusion_count` by value through the real dispatcher
+  pause/reopen path. Direct choices settle `SKIPPED` and dependency fallout
+  settles `DEFERRED` after resume; accepted plan exclusions are not replayed,
+  and verify continuations cannot acquire execute-only state. Mutation of the
+  source execution set after checkpoint construction cannot alter dispatcher
+  custody, and each reopen materializes independent mutable state. Internal
+  execution/plan payload versions and round-trip certification retire with the
+  process-local wire forms. There is no `WorkflowCheckpointAuthority` or
+  `adopt_checkpoint()`; detachment is a construction property. *Not satisfied
+  by* freezing only the outer dataclass, aliasing a nested mapping, or asserting
+  field equality without driving the resumed behavior.
+  `validate_execution_set` and `_exact_verify_continuation` remain semantic
+  enforcers at checkpoint construction/open; removing their former codec call
+  sites does not authorize removing those checks.
+  Checkpoint construction admits selection consistency once against
+  `derive_execution_selection(plan, user_deselected=…)`; a mismatch fails
+  loudly before custody or filesystem mutation. Same-run correlation remains
+  where it prevents stale work from joining another run, but it is not a
+  forgery-defense framework. The real dispatcher proof covers both execute and
+  verify resume and the already-open ledger run's terminal settlement. *Not
+  satisfied by* a commitment digest computed only from the same carried
+  selection, a forged-private-value mutation suite, or a test-only reopen path.
 - **BR-G-11 — `all-noop` reads kinds, not outcomes.** Run as a **classifier-level
   unit test** over a constructed `OperationResult`/selection pair, not as an
   end-to-end session: the live path may make a divergence unreachable, and a
@@ -4337,7 +4365,11 @@ headings are organizational, not lane ownership.
   synthetic return-table loss stays explicitly renderer-only: it resets the
   JavaScript bridge while the already-open native document generation remains
   unchanged, and does not stand in for the separate production startup and
-  native reinjection evidence.
+  native reinjection evidence. Event-body semantics are owned by the canonical
+  Python producer and the persistence decoder. This gate requires the browser
+  transport envelope, session/sequence, batch staging, delivery, and reducer
+  behavior above; it does not require drain, bridge, and JavaScript to
+  independently certify every body field.
   *Not satisfied by* a single drain, a naturally finishing session, one task,
   or a queue that stays below capacity.
 - **BR-G-34 — One visible-sequence implementation defines both trees.** The
@@ -4441,19 +4473,26 @@ headings are organizational, not lane ownership.
   *Not satisfied by* a move-only happy path, a synthetic operation standing in
   for a folder, or a renderer that relabels inferred groups as renames.
 - **BR-G-36 — Progress compatibility and follow mode use identity, never
-  display paths.** Core serialization, Python bridge projection, and the
-  browser require exact event v5 inside `SessionEventView`; no v3/v4 producer,
-  tolerant decoder, JavaScript branch, public constant, or positive fixture
-  remains after the atomic cutover. One malformed event rejects its complete
-  batch without advancing the cursor, and a clean replay delivers the reliable
-  siblings. All byte counters use checked signed-64 arithmetic internally and
+  display paths.** Core produces one canonical event-v5 body and history
+  persists those body bytes unchanged inside its durable envelope. Persistence
+  decode validates corrupt or mismatched v5 input; trusted Python presentation
+  layers do not recertify it. The browser admits only the transport envelope:
+  plain object, exact v5 marker, matching session, positive safe sequence,
+  recognized body tag, object body, and atomic batch staging. It does not carry
+  a second field-by-field body schema. A malformed transport event rejects its
+  complete batch without advancing the cursor, and a clean replay delivers the
+  reliable siblings. All byte counters use checked signed-64 arithmetic internally and
   canonical decimal strings externally; Boolean, sign, leading zero, exponent,
   fraction, unsafe Python integer, and above-domain values are refused. Both
   reporters project reliable detail through exact variants capped at 32
   primitive leaves/eight paths; diagnostics over 1,024 UTF-8 bytes become null
   with checked omission witnesses rather than truncation. The complete
   reliable envelope is at most 1,048,576 canonical bytes before sequence/queue
-  mutation, and its bridge projection always fits as one drain head. Both
+  mutation. `canonical_event_bytes` must enforce
+  `MAX_RELIABLE_EVENT_CANONICAL_BYTES` explicitly before `EventHub` advances
+  `_seq` or mutates replay/subscriber queues; removing semantic self-
+  certification must not remove this hard-wall enforcer. Its bridge projection
+  always fits as one drain head. Both
   reporters emit the row-namespace pair (`operation` for executor and linked
   post-copy ids, `integrity` for standalone rows), phase self-description, and
   an opaque attempt id at byte-pipeline entry. Retry or reconstructed resume
@@ -4466,8 +4505,9 @@ headings are organizational, not lane ownership.
   A static/counterexample test proves `current_path` is never used for identity
   or lookup. **Status: OPEN until checkpoints 3, 7, and 8 jointly close the
   protocol, plan-follow, and execution-review portions.** *Not satisfied by*
-  testing only a currently materialized operation, retaining a legacy decoder,
-  or joining an id to a matching display path.
+  testing only a currently materialized operation, retaining a downstream
+  semantic validator, checking encoded length only after queue mutation, or
+  joining an id to a matching display path.
 - **BR-G-37 — Virtualization cannot own or narrow selection.** Rows destroyed
   and recreated by scrolling recover the server's current selection; a folder
   gesture covers filtered, collapsed, and off-window descendants; tri-state
@@ -4668,24 +4708,25 @@ headings are organizational, not lane ownership.
   | Incremental plan projection memory | 320 MiB maximum (128 MiB base plus 192 MiB informational); Tier 2 Slice 5 acceptance |
   | Incremental inventory projection memory | 384 MiB each, 2,304 MiB for six; Tier 2 Slice 6 acceptance |
   | Identity-deduplicated transport custody | 1,966,080 bytes; frozen protected authority plus Tier 1 live guard |
-  | Terminal artifacts plus completed-task retention | Mechanically derive and freeze the byte budget at checkpoint 4 to admit four maximum tasks under the retained-task cap; BR-G-45 implementation/measurement evidence remains open through checkpoints 4 and 11 |
+  | Terminal artifacts plus completed-task retention | Former checkpoint-4/BR-G-45 target retired; no active aggregate byte guarantee |
 
-  The 128/192-MiB domain and 192-MiB informational hard walls are frozen
-  deterministic complete-graph sizer contracts with an independent validator;
-  these Tier-2 process-memory measurements neither derive nor validate them.
+  The historical 128/192-MiB domain and 192-MiB informational figures are not
+  active hard walls or deterministic acceptance contracts. These Tier-2
+  process-memory measurements do not create such a guarantee.
   The 100,000-plus-20,000 rows above are the plan/inventory performance fixtures
   for the shared 120,000-item M1 support target, not separate production
-  maxima. First-excess production admission is governed by the 120,000-row and
-  matching complete-graph byte walls; component-specific acceptance evidence
-  remains required rather than inferred from the target.
+  maxima. Active first-excess row admission remains governed by the 120,000-row
+  walls; component-specific performance evidence remains required rather than
+  inferred from the target.
 
   **Transport-custody clause.** Custody is the identity-deduplicated live graph
   rooted at dispatcher replay deques, subscriber deques, and adapter task
   queues. It includes containers and nonterminal event values. A terminal value
   occupies its queue slot, but the subject-scaled result graph is cut and
-  charged to BR-G-45. The instrument reports every root class and their
-  deduplicated union; payload bytes and whole-process memory are invalid
-  substitutes.
+  intentionally excluded from this transport-only measurement. BR-G-45 no
+  longer supplies a separate complete-task guarantee. The instrument reports
+  every transport root class and their deduplicated union; payload bytes and
+  whole-process memory are invalid substitutes.
 
   The frozen `sh-g-8-transport-v1` corpus drives four tasks through the
   production dispatcher/service/task-registry path, covers the ordinary
@@ -4807,34 +4848,26 @@ headings are organizational, not lane ownership.
   independent holdout recorded in
   [Close transport custody and realign the bridge boundary](../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14).
   Current-source event timing and the Slice 5–7 product-view rows remain open on
-  their owning slices. BR-G-45 terminal retention and shell-owned SH-G-15
-  whole-runtime containment are separate gates. *Not satisfied by* changing
+  their owning slices. The former BR-G-45 terminal-retention model is retired;
+  shell-owned SH-G-15 whole-runtime containment remains separate. *Not satisfied by* changing
   fixtures after measurement, reporting averages in place of the declared
   statistic, using empty history runs or shared short strings, omitting a
   custody root/high-water mark, including terminal artifacts in custody, or
   treating payload/whole-process bytes as the retained transport graph.
-- **BR-G-45 — Terminal artifacts and completed-task retention are bounded
-  separately.** Checkpoint 4 freezes conservative analytical per-artifact
-  constants before any surface/calibration. The exact [task-authority and
-  retention register](#task-and-authority-ordering) owns the count/byte caps,
-  maximum combined graph, replacement overlaps, handler/callback/window roots,
-  projection cache, receipts, pins/leases, and release/close tombstones. Its
-  production admission must always fit four canonical maximum combined tasks;
-  smaller tasks may consume remaining count and bytes, while first excess
-  growth returns `retention_full` without eviction or early truth release.
+- **BR-G-45 — Retired: complete task/artifact graph certification.** The former
+  gate required an unbounded owner census and representation-specific byte
+  charges before a task surface existed. It never had a production enforcer,
+  conferred no guarantee, and is not a prerequisite for another checkpoint.
+  The proposed four-task byte budget, projection-generation cap, receipt and
+  tombstone reservations, phase-ahead graph reservation, instrumentation, and
+  checkpoint-11 calibration are retired as acceptance authority.
 
-  Instrumentation walks every production root before presentation, with all
-  handler-response reservations occupied, during terminal-callback/release
-  retry, through generation pins and both close seals, and after release/close,
-  neither omitting nor double-charging shared pools. Irreducible native/renderer
-  copies are classified under `DEFENSE.md` §7. The four-task fixture, first
-  refused excess phase, terminal reconciliation at handler saturation, repeated
-  create/release/close cycles, and concurrent shutdown must match the declared
-  release points and budget. **Status: OPEN until checkpoint 11 calibrates,
-  verifies, and hardens the checkpoint-4-frozen model.**
-  *Not satisfied by* a task-count cap, measuring a summary-only result, omitting
-  browser/native transients, clearing truth before retry ends, or selecting a
-  ceiling after observing the fixture.
+  This does not activate task lifecycle work or waive active handler, queue,
+  request, scalar, population, truth-retention, cleanup, or shutdown contracts.
+  A future task surface must state a finite containment outcome, its runtime
+  enforcer, refusal behavior, and independent evidence in a new closed delivery
+  register. It may reuse historical analysis as context but cannot revive this
+  gate by reference.
 - **BR-G-46 — Command-map revisions and cosmetic state remain exact, bounded,
   and non-authoritative.** The current exact nine-row native mapping and browser
   policy mirror agree on both cosmetic rows, their `OPEN` phase, five-second deadline,
@@ -5007,21 +5040,21 @@ its row and the applicable regression rows are green.
 | DR-BR-12 | BR-G-12, BR-G-24, BR-G-29, BR-G-37, BR-G-39 |
 | DR-BR-13 | BR-G-34, BR-G-35 |
 | DR-BR-14 | BR-G-32, BR-G-36, BR-G-48 |
-| DR-BR-15 | BR-G-2, BR-G-14, BR-G-16, BR-G-22, BR-G-23, BR-G-32, BR-G-34–39, BR-G-42, BR-G-45 |
-| DR-BR-16 | BR-G-27, BR-G-34, BR-G-38, BR-G-40, BR-G-42, BR-G-45 |
-| DR-BR-16.1 | BR-G-22, BR-G-23, BR-G-38, BR-G-42, BR-G-45 |
+| DR-BR-15 | BR-G-2, BR-G-14, BR-G-16, BR-G-22, BR-G-23, BR-G-32, BR-G-34–39, BR-G-42 |
+| DR-BR-16 | BR-G-27, BR-G-34, BR-G-38, BR-G-40, BR-G-42 |
+| DR-BR-16.1 | BR-G-22, BR-G-23, BR-G-38, BR-G-42 |
 | DR-BR-16.2 | BR-G-11, BR-G-40, BR-G-42, BR-G-48 |
 | DR-BR-17 | BR-G-14, BR-G-24, BR-G-37 |
 | DR-BR-18 | BR-G-34, BR-G-36 |
 | DR-BR-19 | BR-G-34, BR-G-36 |
 | DR-BR-20 | BR-G-16, BR-G-23, BR-G-38, BR-G-39 |
-| DR-BR-21 | BR-G-35, BR-G-41, BR-G-45, BR-G-48 |
-| DR-BR-22 | BR-G-21, BR-G-33, BR-G-41, BR-G-45, BR-G-48 |
+| DR-BR-21 | BR-G-35, BR-G-41, BR-G-48 |
+| DR-BR-22 | BR-G-21, BR-G-33, BR-G-41, BR-G-48 |
 | DR-BR-23 | BR-G-31 |
-| DR-BR-24 | BR-G-14, BR-G-15, BR-G-21–23, BR-G-33, BR-G-38, BR-G-41, BR-G-42, BR-G-45 |
+| DR-BR-24 | BR-G-14, BR-G-15, BR-G-21–23, BR-G-33, BR-G-38, BR-G-41, BR-G-42 |
 | DR-BR-25 | BR-G-32, BR-G-35, BR-G-39 |
 | DR-BR-26 | BR-G-1–3, BR-G-35 |
-| DR-BR-27 | BR-G-9, BR-G-14–16, BR-G-23, BR-G-29, BR-G-33, BR-G-41, BR-G-45, BR-G-47, BR-G-48 |
+| DR-BR-27 | BR-G-9, BR-G-14–16, BR-G-23, BR-G-29, BR-G-33, BR-G-41, BR-G-47, BR-G-48 |
 | DR-BR-28 | BR-G-46 |
 
 BR-G-19, BR-G-43, and BR-G-44 are cross-cutting release gates and therefore

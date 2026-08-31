@@ -1,534 +1,348 @@
-# NamiSync Simplification Proposal
+# NamiSync Initial Simplification Run
 
-Draft, 2026-08-31, revised the same day after review. **This document is a
-proposal, not an authority.** It does
-not override `DEFENSE.md`, `ARCHITECTURE.md`, or `FEATURES.md`, and it carries
-no checkpoint register, delivery order, or acceptance criteria. It is an
-itemized record of what an adversarial audit found removable, why, and what
-evidence supports each claim. Sequencing, scoping, and ratification are
-separate decisions that have not been made.
+**Standing (2026-09-01): ratified delivery authority.** This document owns the
+closed register, evidence, stop rules, and resumption state for the initial
+simplification run. It instantiates `AGENTS.md` **Task Containment And
+Recovery**; it does not replace or restate that protocol. Only an explicit user
+decision may change the accepted register after implementation starts.
 
-Scope of the audit behind it: `core/`, `modules/`, `db/`, `workflows/`,
-`dispatcher/`, and `interfaces/`, plus their tests, `tools/`, and the planning
-documents. HTML and CSS were deliberately excluded; JavaScript was not.
-
----
-
-## 1. Why this exists
-
-Adding one field to one core dataclass currently requires touching **20 to 27
-files** (measured on `PlanOperation.prior_target_rel_path`, `content_bytes`,
-and `blocked_reason`). Roughly half of those touch points are marshaling layers
-and the tests of marshaling layers rather than domain logic.
-
-The cause is not any single bad decision. It is that trusted, typed, immutable
-values are converted, re-validated, re-shaped, and re-checked at every internal
-boundary, so each new feature must satisfy every prior representation. One
-`Progress` event is schema-validated **six to eight times**, in two languages,
-before a pixel moves.
-
-The measured effect on delivery, from `git log`:
-
-| Week | commits | feat | fix | docs | refactor | feat share |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| 2026-W33 | 134 | 5 | 10 | 20 | 0 | 3% |
-| 2026-W34 | 89 | 17 | 27 | 21 | 4 | 19% |
-| 2026-W35 | 131 | 1 | 57 | 33 | 25 | 0% |
-
-The last commit that changed something a user can touch was 2026-08-22.
-
-The purpose of this proposal is to reduce the number of standing obligations
-each future change must satisfy, because effort alone cannot compensate for a
-cost curve that grows with every completed checkpoint.
+This is a removal plan. A green suite is necessary but not sufficient because
+the same work removes tests and enforcers. Completion therefore requires both
+unchanged public behavior and proof that no guarantee lost its last enforcer.
+The run fails if complexity is moved into new wrappers, authorities, generic
+freezing machinery, duplicate DTOs, compatibility shims, or a replacement
+oracle instead of being removed.
 
 ---
 
-## 2. Explicitly preserved — not in scope for removal
+## 1. Objective and fixed boundary
 
-These were raised in an earlier draft and are withdrawn. Each is implemented
-work waiting on a blocked consumer, not dead weight. They are recorded here so
-the boundary is explicit.
+The run removes two high-fanout mechanisms before any new feature work:
 
-- **Pause and resume, and `ExecuteContinuation`.** Stop-and-replan is
-  functionally equivalent but requires rescanning both roots, re-diffing,
-  re-reviewing, and re-selecting; that is a materially worse product, not a
-  substitute. The machinery is close to integration and blocked only by the
-  checkpoint-4 stall. See §5 for the parts of the pause mechanism that are
-  genuinely separable from the feature itself.
-- **Volume-scoped concurrency.** `FEATURES.md` already ratifies it: sessions
-  whose required resources do not overlap may run concurrently. The actual
-  arbitration costs 112 lines in `dispatcher.py` plus 163 in `custody.py` and
-  is preserved intact. §8 records a performance limit in how the arbitrated
-  resource is identified; it is not a safety defect, and the volume remains
-  the correct safety resource.
-- **`interfaces/web/visible_sequence.py`.** Plan-unaware tree filtering and
-  search returning a bounded window is the correct design; server-side
-  windowing is necessary once trees reach the 120,000-row target, because the
-  full tree cannot be shipped to the browser and filtered there. It has no
-  importer because its consumer is checkpoint 7, which has not started.
-- **`NamiSyncService.mutate_selection`.** Revision-guarded deselect and
-  reselect with `command_id` idempotency receipts is exactly the shape a
-  filter-then-deselect interaction needs, including its conflict and no-op
-  handling. Blocked on the same checkpoint.
-- **The `annotations` table.** Retained. It has named consumers in
-  `FEATURES.md`, so §4 asks only whether the schema is reserved now or added
-  with the feature that first writes it.
+1. Replace process-local workflow JSON payloads with detached immutable domain
+   checkpoints.
+2. Remove redundant event certification downstream of the domain owner while
+   preserving the exact current v5 persisted body.
 
-None of the removals proposed below collide with any of these five. The bulk of
-what follows is marshaling and re-validation that sits *beneath* these features
-rather than inside them. The one genuine interaction — pause versus payload
-serialization — resolves in favour of both, but only under the detached
-checkpoint described in §5, not by passing live objects across the dispatcher.
+The behavioral exit is that adding one named domain field no longer requires
+editing internal codecs or validators. Source, test, and collected-test counts
+are reported trends, never acceptance gates. Atomic outcome, not diff size,
+continues to determine commit scope.
 
----
+### Non-goals
 
-## 3. Provably dead — no consumer exists and none is blocked
+The following are outside every register row even when a removal exposes an
+apparently convenient edit:
 
-Distinct from §2: no waiting consumer, no `FEATURES.md` entry, and no
-checkpoint that would activate it. This section was the least reliable part of
-the first draft and is now mostly a record of what it got wrong; the surviving
-claim is one unwired reader.
+- the history chain;
+- executor fact algebra or settlement restructuring;
+- ledger receipt consolidation;
+- `MOVE_UPDATE`;
+- task-ownership or task-lifecycle restructuring;
+- View types beyond the event-certification path in SIM-2;
+- a broad `adopt_*`, `snapshot_*_authority`, `revalidate_*_authority`, or
+  provenance-token sweep;
+- H2 checkpoints 5–8 or any other new feature, including pause/resume
+  expansion, volume concurrency changes, `visible_sequence`,
+  `mutate_selection`, and annotations.
 
-- **`LedgerRepository.get_run()` and its `RunSnapshot`** — zero production
-  callers and zero test callers. This is a reader that was built and never
-  wired. Note carefully that this does *not* generalize to the table it reads;
-  see the correction below.
+Existing pause/resume/cancel behavior is a protected regression subject, not a
+feature delivered by this run. H2 checkpoint 4 under its former complete owner-
+graph and retained-byte rules is retired, not implemented. Later feature work
+requires a fresh finite delivery register; this run does not activate a task
+surface or any checkpoint-5–8 command or control.
 
-**Correction to an earlier draft.** Three items previously listed here were
-wrong and have been withdrawn:
+Only five existing BR-G records change in this run: BR-G-10, BR-G-28,
+BR-G-33, BR-G-36, and retired BR-G-45. All other gate prose and executable
+evidence remain outside the register.
 
-- **The ledger `runs` and `operations` tables are live, not write-only.** They
-  carry durable uncertain-retry protection that nothing else provides:
-  `recorder.py:564` compares `start_payload_hash` on a reused run token and
-  raises `TokenConflictError` when the input changed; `recorder.py:633`
-  validates start/finish ordering and returns `NOOP` on exact finish replay
-  while rejecting a changed one; `recorder.py:1573` does the same for each
-  operation token, making evidence mutation and its receipt atomic. Because
-  they are durable rather than in-memory, they survive the crash-then-retry
-  case that is the entire reason for a run token. `M1_SHELL_H2.md` also
-  provisions future manual exact verification on a join through the original
-  `runs.run_token`. The claim that these tables are what force
-  `RecordingStatus` was also wrong: a filesystem publication can succeed while
-  a later inventory or evidence write fails, no matter which schema holds the
-  evidence. That independent truth axis is a hard-wall consequence, not schema
-  baggage, and it stays. What is genuinely available here is consolidation, not
-  deletion — see §7.
-- **`runtime_profile_match` is live code.** It is a local boolean in
-  `tests/bridge_event_benchmark.py:1936` used in benchmark evaluation, not a
-  reference to a removed module.
-- **`security_spike` is not a dangling reference.** Its one active-document
-  occurrence, `M1_SHELL.md:449`, is a completed delivery step recording the
-  rename to `bridge.py`. That prose can be archived with the rest of §10's
-  resolved history, but it is not a broken pointer.
+### Architectural decisions
+
+- The four validation rungs in `DEFENSE.md` remain authoritative. External
+  validation belongs at filesystem/persistence edges and interface-adapter
+  ingress, currently the bridge and CLI and equally any future API.
+- Internal contracts are typed domain values. Serialization is allowed only at
+  a real process, browser, persistence, or filesystem boundary.
+- A concept has at most its domain value and one boundary representation. One
+  canonical event body may be wrapped by a separate durable history envelope.
+- Dispatcher custody is domain-blind. It holds an opaque checkpoint and does
+  not inspect, certify, or reinterpret it.
+- Detachment is a construction property. There is no
+  `WorkflowCheckpointAuthority`, `adopt_checkpoint()`, generic checkpoint
+  protocol, recursive deep-freeze utility, `deepcopy` framework, pickle, or
+  replacement wire format.
+- Existing frozen requests are checkpoints where they are already safe.
+  Execution may add one narrowly scoped frozen checkpoint that reuses existing
+  detached execution and selection snapshots; it must not duplicate their
+  fields in another DTO.
+- Same-run tokens may retain a freshness or correlation role. They are not
+  internal forgery defenses, and removing that role does not authorize losing
+  staleness detection.
+- Event v5 remains the persistence contract. SIM-2 may remove certification
+  but may not change persisted bytes or trigger a data epoch.
 
 ---
 
-## 4. Contested — retained pending a product decision
+## 2. Closed checkpoint register
 
-- **The `annotations` table.** An earlier draft called this an unnamed table.
-  That was wrong, and the error was mine: it has three named consumers in
-  `FEATURES.md` — **Origin Provenance** at line 74, where ingest stamps each
-  library file's ledger row with its origin evidence "through the generic
-  annotations table"; **Generic Annotations** at line 256, which names the
-  `(kind, id, key, value)` shape directly and states its purpose as avoiding a
-  schema change each time a new place wants a small label; and **Task
-  Annotations** at line 293. It is ratified future work, not a guess.
+The accepted rows below are the completion denominator. Findings never add a
+row.
 
-  What remains genuinely open is narrower and is a matter of taste rather than
-  correctness: whether to reserve the schema now or add it with the feature
-  that first writes to it. The argument for reserving it is that the table sits
-  inside the reset-only ledger-v4 epoch boundary, so adding it later is not
-  free either — it is a schema-version event unless it lands before the
-  boundary closes. The argument against is that ten lines of DDL with an
-  unexercised `CHECK` constraint fix a shape before the first real consumer can
-  object to it, and ingest is the consumer most likely to have opinions.
-  **Decision needed: reserve a future schema, or not.** This is the only item
-  in the document whose answer is a preference rather than an inference.
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| `SIM-0` | Ratify this removal contract; close the removal/enforcement ledger; capture stable behavior and v5-body corpora before implementation. | Three identical snapshots with no skipped or unclassified scenario; ordinary suite and import-law baseline; corpus self-test; clean declared diff. | Complete |
+| `SIM-1` | Remove process-local workflow payload serialization and replace it with structurally detached semantic checkpoints without changing pause/resume/cancel/settlement behavior or losing real ingress enforcement. | Frozen corpora three times; ownership/aliasing tests; affected departments; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Active |
+| `SIM-2` | Remove redundant event certification while preserving exact v5 persisted bodies, history envelopes, browser delivery/recovery, and reducer behavior. | Frozen corpora three times; byte-for-byte persisted-body check; affected departments and Node probes; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Pending on SIM-1 |
+
+SIM-0 closes only when the corpus artifacts and baseline commit are recorded in
+the resumption block. No implementation or removable test may be changed before
+that point.
 
 ---
 
-## 5. Mechanical — provable identity, no behavior change
+## 3. Frozen regression corpora
 
-Every item here can be verified by inspection, by an equality check, or by an
-ownership test. None changes what a user observes.
+Before implementation, capture:
 
-- **`workflows/payloads.py` (2,822 lines), `_json_envelope.py` (230), and
-  `tests/test_payload_roundtrip.py` (1,876).** `payloads.py` has exactly one
-  importer, `workflows/runtime.py`, and exists solely to satisfy
-  `PreparedSession.payload: bytes`. The observed behavior is `prepare_plan()`
-  calling `encode_plan_request(request)` and `open_plan()` immediately calling
-  `decode_plan_request(payload)` in the same call chain on the same thread;
-  `decode(encode(x)) == x` was verified empirically.
-  `InMemorySessionStore.load_all()` deliberately returns nothing, so no payload
-  is ever persisted, restored, or crosses a process boundary.
+- `tests/_event_v5_fixtures.py`;
+- `tools/simplification_regression_audit.py`;
+- `tools/simplification_regression_baseline.json`; and
+- `tests/test_tools_simplification_regression_audit.py`.
 
-  **This does not make bytes and objects interchangeable, and an earlier draft
-  was wrong to imply it did.** The serialization is doing a second job besides
-  transport: it produces a *detached snapshot* that crosses thread ownership.
-  `ExecutionSet` in `core/execution.py:327` is `@dataclass(slots=True)`, not
-  frozen, and its own docstring calls it "mutable continuation state for
-  pause/resume" — `status`, `published_evidence`, and `recording_reasons` are
-  live dictionaries, and `omitted_detail_count` and `bytes_done_high_water` are
-  live counters. Handing that object to the dispatcher would publish queued and
-  paused continuation state through aliases, including through dispatcher
-  records, and the round-trip equality check that motivated the original claim
-  would not have detected it.
+The audit follows the evidence pattern of `tools/executor_settlement_audit.py`
+but remains small. It may contain fixtures and normalization; it may not
+reimplement a codec, validator, workflow reducer, settlement policy, or other
+production decision. Existing positive event-v5 fixtures are moved or shared,
+not copied into a second independently maintained vocabulary.
 
-  The correct replacement is a **dispatcher-private, detached, immutable
-  checkpoint**: share the immutable `Plan` and the `frozenset` selections by
-  reference, freeze or copy the mutable maps, evidence, counters, and
-  selections at the boundary, keep continuation authority off the public
-  `SessionRecord`, and rebuild fresh mutable workflow state on resume. That
-  still deletes essentially all of the JSON encoding and the charge accounting
-  below, because none of it is needed to detach an object — but the tests that
-  justify it are aliasing and ownership tests, not round-trip equality.
-- **The `_charge_*` and `_max_*_charge` accounting** — 991 lines in
-  `payloads.py` and 323 in `inventory.py`. Hand-written worst-case byte
-  analysis of a JSON encoding that only exists to be undone microseconds later.
-  It disappears with the encoding it measures.
-- **`WorkflowInvocation.snapshot() -> bytes`.** This is the part of the pause
-  mechanism that forces every continuation type through the serializer above.
-  Returning a detached immutable checkpoint instead preserves pause completely
-  and removes the tax; this is the item that makes §2's first entry cheaper
-  rather than costlier. The signature stays a snapshot — what changes is that
-  it is detached by construction rather than by encoding.
-- **`core/event_v5.py` (837 lines) invoked at construction time.**
-  `envelope_to_dict` builds a plain dict from an already-typed frozen dataclass
-  and then validates that dict against an independently written schema. The
-  validator can only fire if `core/events.py` itself is defective, which is the
-  rung-3 case `DEFENSE.md` §2.1 says should be validated once at the owning
-  module's public return rather than re-checked downstream.
-- **The JavaScript twin of that validator** — `assets/bridge.js` lines
-  1720–2360, roughly 641 lines, plus 100 lines of hand-mirrored enum arrays.
-  `validateSessionEventV5`, `validateProgressV5`, `validateOperationItemV5`,
-  `validateTerminalSummaryV5` and their helpers are a second implementation of
-  the same schema, kept in sync by dedicated tests and mutation gates. In
-  total, 986 of 2,300 function lines in `bridge.js` (42%) are validators — more
-  than half the size of the entire user interface, which is 1,843 lines across
-  every other JavaScript module combined. The direction being validated is
-  Python to JavaScript, meaning the backend checks its own output in a second
-  language. The genuinely untrusted direction, JavaScript to Python, is handled
-  separately in `bridge.py` and is preserved.
-- **The duplicate `envelope_to_dict` call at `workflows/views.py:481`.**
-  `session_event_view` re-serializes and re-validates an envelope that was
-  already serialized and validated once on the same path.
-- **Five of the six-to-eight validation passes per event.** The full observed
-  chain for one `Progress`: dataclass `__post_init__`; `envelope_to_dict`
-  validation; the duplicate `envelope_to_dict` in `views.py`;
-  `validate_session_event_view_v5`; `drain.py:240`; `drain.py:273`, which
-  explicitly re-calls `value.__post_init__()` under the comment "Recheck the
-  outer contract"; `bridge.py`'s `_VIEW_VALIDATORS` table on the response; and
-  the JavaScript port. Only one of these sits at a real trust boundary.
-- **The `adopt_*` and `admit_retained_*` family** in `modules/preflight.py` and
-  `core/review.py`. `adopt_plan_verdict` re-runs `type(value) is not Verdict`
-  on a `Verdict` that `preflight()` in the same module just returned.
-  `admit_retained_plan_verdict` charges `len(refusals) * 8` bytes against a
-  memory wall `DEFENSE.md` itself lists as accepted but unrealized, using
-  pointer-slot counts as a proxy for Python object memory.
-- **The `snapshot_*_authority` / `revalidate_*_authority` / `audit_*_authority`
-  triplets** in `core/execution.py` and `core/integrity.py` — the same
-  re-adoption pattern applied to execution sets, integrity selections, and
-  post-copy selections.
-- **`VerifyContinuation.__post_init__`, 147 lines.** It re-derives the set of
-  successful byte-producing operation ids from the plan in order to check
-  inputs the workflow itself constructed. Separately from its length, it
-  bundles four unrelated concerns — execute-to-verify phase handoff, filesystem
-  status, recording status, and missing-evidence reconciliation — onto the
-  pause mechanism. Those are a phase result, not a continuation.
+### Workflow checkpoint corpus
 
-Aggregate measurement for context: across `core/`, `modules/`, `db/`,
-`workflows/`, and `dispatcher/`, functions classified as validate, require,
-snapshot, revalidate, audit, projection, or fact total **4,625 lines across 241
-functions**, roughly 12% of all function lines in those layers.
+Drive production runtime/dispatcher paths through these exact scenarios:
+
+1. execution pause -> resume -> settle;
+2. execution pause -> cancel -> settle;
+3. linked verification pause -> resume;
+4. linked verification pause -> cancel and compound settlement;
+5. standalone baseline, verify, and rebaseline pause -> resume; and
+6. standalone baseline, verify, and rebaseline pause -> cancel.
+
+Normalize only nondeterministic ids, timestamps, temporary roots, and explicitly
+unordered facts. Preserve state/event order, terminal axes and items, recording
+disposition, byte high-water values, omission facts, and durable terminal
+state. No scenario may skip or remain unclassified.
+
+### Canonical v5 body corpus
+
+Freeze all seven event-body kinds, the review-limit terminal case, and the
+maximum-size envelope case. Record exact canonical JSON bytes and hashes and
+the exact `history_events.envelope_json` write/read value. Parsed-object
+equality is not a substitute for byte equality.
+
+Snapshot and check each corpus three times. SIM-0 is accepted only when all
+three normalized observations are identical. After the SIM-0 corpus commit,
+the audit, corpus definitions, baseline, and audit test are immutable for this
+run and must pass `git diff --exit-code` against that commit at every checkpoint.
+
+The corpora are exempt from every test-cut disposition: the suite may shrink;
+the corpora may not.
+
+Official capture and check commands are:
+
+```powershell
+.\.venv\Scripts\python.exe -m tools.simplification_regression_audit snapshot --baseline tools\simplification_regression_baseline.json --repeat 3
+.\.venv\Scripts\python.exe -m tools.simplification_regression_audit check --repeat 3
+```
+
+`--replace` is permitted only while finalizing the pre-freeze SIM-0 snapshot;
+it is forbidden after the corpus commit.
 
 ---
 
-## 6. Over-built relative to the stated threat model
+## 4. Regression, defect, and stop routing
 
-`DEFENSE.md` §2.1 places installed NamiSync Python inside the trusted computing
-base and disclaims confidentiality against the same Windows user. The items
-below defend against adversaries the model does not admit.
+A regression has two independent limbs:
 
-- **The history event chain, specifically.** Unkeyed hashes cannot authenticate
-  against the same Windows user who owns the file and can delete it with one
-  command; that is the same category as the confidentiality claim `DEFENSE.md`
-  §1.1 already declines. But the decisive argument is narrower and stronger:
-  **the chain is never reconstructed from stored events on readback.**
-  `history.py:1347` loads `event_chain_hash` from the run row,
-  `history.py:1541` advances it with each new receipt, and
-  `_prefix_projection_hash_from_row` at `history.py:2745` recomputes the prefix
-  projection *from that stored column*. Nothing ever recomputes the chain from
-  the event rows it is supposed to attest, so a tampered event row and its
-  chain column stay mutually consistent. It is an accumulator that carries
-  itself.
+1. **Behavioral:** a frozen corpus produces different output.
+2. **Enforcement:** a supported guarantee loses its last enforcer, even with a
+   green suite.
 
-  Likely removable, then: the chain accumulator and the stored chain hash; the
-  chain-derived prefix machinery, replaceable by explicit state, count, and
-  watermark validation; and triggers made redundant by the categorical
-  append-only triggers that shadow them.
+For each removed check, the ledger in §5 must name what still enforces the
+property or record that the claimed property was not part of the supported
+contract.
 
-  Still required, and not proposed for removal: stable run, event, and item
-  identity; exact replay distinguished from conflicting replay; transactional
-  window publication; the durable prefix watermark; the finalized-versus-
-  incomplete distinction; and the minimal database constraints that stop the
-  official writer from rewriting finalized history. The incremental pump should
-  survive independently of the raw event protocol — it is the part that works.
-- **Rung-4 forgery defenses.** The plan and inventory review-limit signals
-  carry a private same-run admission token, and `bridge.py` uses a module-level
-  `_TASK_DRAIN_ADMISSION_ISSUER = object()` sentinel identity-checked on
-  `_AdmittedTaskDrainResponse`. Both prove that an in-process value arrived
-  through the intended in-process path. An attacker able to construct those
-  objects can call the executor directly, so the defense costs a documented
-  policy, two signal types, token plumbing in two workflows, and tests, while
-  raising no real adversary's cost.
-- **The `readiness.py` challenge handshake.** A `secrets.token_hex` nonce so
-  the host can verify the identity of the page it itself just loaded, from a
-  CSP-locked local origin it itself bound, into a WebView2 instance it itself
-  created.
-- **`ui_state.py`'s `MAX_SAFE_INTEGER` guard on the appearance revision
-  counter.** Unreachable in roughly 285,000 years of continuous theme toggling.
-- **The cosmetic revision and conflict protocol** — `expectedRevision`, and
-  `applied` / `noop` / `conflict` dispositions — is optimistic concurrency
-  control for a three-value enum in a single-window, single-user application.
-  The native layer of `appearance.py` (DWM immersive dark mode, accent palette,
-  high contrast) is real work and is not proposed for removal; the revisioned
-  persistence protocol wrapped around it is.
-- **Two of the three 120,000-row walls.** Planning, inventory, and standalone
-  integrity each own an independent constant, count semantics, precedence, and
-  first-excess behavior for what `DEFENSE.md` describes as one shared support
-  target. Either one shared constant, or none.
+Route findings through `AGENTS.md`:
+
+- A corpus failure introduced by the active checkpoint is corrected before its
+  mergeable commit.
+- If the corpus passes but removal exposes a bounded pre-existing defect, that
+  defect may land in a separate fix commit only when no stop rule fires.
+- Every other finding is logged and deferred.
+- A finding never expands the register.
+
+Classify each unplanned mechanism as `aliasing`, `lost enforcement`,
+`representation drift`, or `coverage hole`. Counters are cumulative across this
+run. Two findings of one class, or three findings total, stop new work after the
+current safety-preserving atomic outcome and require the mechanism table from
+`AGENTS.md` before reorganization and review.
+
+In addition to the repository-wide stop classes, stop immediately when:
+
+- resumed execution mutates a checkpoint still in dispatcher custody; this is
+  a design failure and must not be patched in place;
+- persisted-body inequality is first discovered after an encoder was removed;
+  restore the safe state and do not invent an epoch migration; or
+- a removed check was the sole enforcer of a `DEFENSE.md` hard wall.
 
 ---
 
-## 7. Structural — collapse rather than delete
+## 5. Closed removal and enforcement ledger
 
-These are net reductions achieved by unifying duplicated mechanisms, not by
-removing capability. Each is larger and riskier than §5 and would need its own
-scoping.
+Only the exact mechanisms below may be removed. A newly discovered candidate
+is deferred. Private helpers wholly owned by a file listed for deletion travel
+with that file; no similarly named helper elsewhere is implied.
 
-- **Admission-failure recovery in `dispatcher.py`** — 149 lines covering the
-  admission liability flag, the admission cleanup worker, its retries, joins,
-  and reaping — plus 67 lines of worker generations, stale-attempt handling,
-  and per-session publication locks. This is failure recovery *for admission*,
-  distinct from the 275 lines of resource arbitration preserved in §2. Note
-  that `_admission_liability_claimed` is a single global boolean that
-  serializes admission, so it works against the concurrency feature it sits
-  beside.
-- **Three stacked session machines.** `dispatcher.Dispatcher` owns
-  `SessionState`, worker generations, custody, and replay/subscriber/audit
-  capacities of 128/64/64. `interfaces/service.py` owns `SessionObserver`,
-  `PlanSession`, and `_SessionReceipt`. `web/drain.py` owns `TaskRegistry`,
-  `_TaskState`, its own generations, `_DrainClaim`, `_Compensation`,
-  `_TaskCleanup`, `_TaskReservation`, and capacities of 64/48/48. The drain
-  layer largely re-implements, for the GUI, the subscription and lifecycle the
-  dispatcher already provides. Four id namespaces exist across them:
-  `[0-9a-f]{32}`, `task-`, `slot-`, and `ack:`.
-- **`_DurableState`'s 37 members, in `modules/executor/runtime.py:246`.** An
-  earlier draft said 35 and framed this as motivating a journal and central
-  reducer. Both were stale: `_EffectJournalEntry` and `_EffectJournal` already
-  exist at `runtime.py:441` and `:452`, `ExecutionState.effects` is already a
-  journal field at `:615`, and settlement is already reduced centrally. That
-  work is done, and the count is 37.
+| Checkpoint and exact mechanism | Property previously claimed | Disposition | Remaining authority and proof |
+| --- | --- | --- | --- |
+| SIM-1: complete modules `namisync/workflows/payloads.py` and `namisync/workflows/_json_envelope.py`, including public `encode_plan_request`, `decode_plan_request`, `encode_execution_request`, and `decode_execution_request` | Process-local transport compatibility, byte bounds, and detached continuation state | Remove the internal transport contract. Compatibility and byte bounds are not supported properties inside one process; detachment is real. | Frozen/request constructors enforce domain shape; checkpoint construction snapshots mutable state; ownership tests and the workflow corpus prove detachment and behavior. |
+| SIM-1: codec-embedded calls to `core.execution.validate_execution_set` and `workflows.models._exact_verify_continuation` | Mutable execution-overlay validity and exact verify-continuation phase/handoff semantics | **Keep the enforcers.** Move their named invocation to semantic checkpoint construction/open as appropriate; deleting the codec does not delete these checks or their public behavior. | The existing functions remain authoritative; focused construction/open tests plus frozen execute/verify traces prove they still run before unsafe state is used. |
+| SIM-1 / BR-G-28: inventory codec entry points `encode_inventory_request`, `decode_inventory_request`, `encode_integrity_request`, `decode_integrity_request`; their codec-only `_charge_inventory_*`, `_charge_integrity_*`, `_payload`, `_json_bytes`, `_mapping`, `_list`, `_unique_object`, `_reject_json_constant`, `_expect_keys`, `_string`, `_integer`, and `_boolean` helpers | Internal inventory/integrity JSON shape, version, wrong-wire-kind separation, and encoded-size admission | Remove. These requests never cross a process or persistence boundary. | Existing frozen workflow-request constructors preserve mode and domain shape; detached checkpoint construction plus real source-population/path and adapter-ingress admission remain. The corpus and public workflow tests prove behavior. |
+| SIM-1: `PreparedSession.payload: bytes`, `WorkflowInvocation.snapshot() -> bytes`, `WorkflowRegistration.open(bytes)`, `SessionRecord.payload`, dispatcher `_replace_payload`, and the byte-type branches attached to them | Opaque dispatcher custody and pause detachment | Replace only the representation and names needed to carry an opaque semantic checkpoint. | Frozen checkpoint construction is the enforcer; dispatcher must not inspect it. Mutation-after-snapshot and repeated-open tests prove non-aliasing. |
+| SIM-1: `LocalWorkflowRuntime` calls to the eight codec entry points and `_PlanInvocation.snapshot`, `_ExecutionInvocation.snapshot`, `_InventoryInvocation.snapshot`, `_IntegrityInvocation.snapshot` byte returns | Workflow reopen receives a complete request/continuation | Retain snapshot/open behavior while removing encoding. | One checkpoint-construction and one materialization/open path per workflow; frozen traces prove exact observable behavior. |
+| SIM-1: internal payload-version, duplicate-key, malformed-JSON, charge-ceiling, and round-trip checks rooted in `tests/test_payload_roundtrip.py` and the codec-only blocks in inventory/resume tests | Compatibility with arbitrary process-local bytes | Not a supported property after the wire form is deleted. | Any test that also covers selection, provenance, freshness, path/population bounds, cancellation, recording, or settlement must be replaced at a public surface or retained. Zero uncovered behavior is permitted. |
+| SIM-1: any forgery interpretation attached to plan/inventory same-run signal tokens | Resistance to forged first-party private values | Remove only the unsupported forgery role; do not sweep the token mechanism. | Same-run freshness/correlation remains until separately adjudicated. Exact first-excess behavior and real boundary admission remain tested. |
+| SIM-2: the `validate_event_v5_envelope(...)` self-check inside `core.events.envelope_to_dict` | A typed domain producer certifies its own projected output; today the same call is also the sole enforcer of `MAX_RELIABLE_EVENT_CANONICAL_BYTES` | Remove semantic encode-time recertification, not the canonical projector, persistence validator, or byte wall. Before that call is removed, `canonical_event_bytes` must explicitly enforce the maximum before `EventHub` sequence/replay/subscriber mutation. | Typed event constructors own domain semantics; `validate_event_v5_envelope` remains at persistence decode; `canonical_event_bytes` becomes the named byte-wall enforcer; exact bytes and first-excess behavior are frozen. |
+| SIM-2: `core.event_v5.validate_session_event_view_v5` and `workflows.views.validate_session_event_view` | Downstream Python layers independently certify event-body semantics | Remove. Trusted internal projections do not independently reinterpret domain truth. | Canonical projector plus persistence decode validation; browser transport-envelope checks; frozen body and delivery corpora. |
+| SIM-2: the duplicate event-body projection/revalidation in `workflows.views.session_event_view` | Presentation reconstructs and certifies the body | Collapse to the one canonical body projection; retain the view and its boundary representation. | Exact corpus bytes and public view tests. |
+| SIM-2: event-body calls in `interfaces.web.drain._validate_task_observation`, `validate_task_update_view`, and `validate_task_drain_view` | Drain/task layers certify body fields again | Remove only body-semantic certification. Keep task/session matching, wrapper shape, sequence, batch, ordering, and lifecycle checks. | Reduced transport-wrapper checks and existing drain/recovery/reducer tests. |
+| SIM-2: event-related `_VIEW_VALIDATORS` entries and traversal in `interfaces.web.bridge`; do not remove validators for unrelated command/result types | Native response traversal certifies trusted event bodies | Remove event semantic recertification while preserving response ownership, JSON bounds, and projection. | Bridge response budget/ownership checks and browser transport checks remain. |
+| SIM-2: JavaScript `validateSessionEventV5`, `validateProgressV5`, `validateOperationItemV5`, `validateTerminalSummaryV5`, and their body-semantic-only private helper closure | Browser independently implements Python's event schema | Replace with one minimal transport-envelope check: plain object, v5 marker, matching session, positive safe sequence, recognized body tag, object body, and atomic batch staging. | Canonical Python producer owns body semantics; browser delivery/reducer probes prove transport and behavior. |
+| SIM-2: Python-to-JavaScript vocabulary mirrors and v5 body mutation gates | Two independent semantic implementations stay synchronized | Remove only tests of deleted certification. | Valid reducer/lifecycle cases, persistence corruption negatives, receipt/hash checks, and boundary-envelope rejection remain. Zero uncovered behavior is permitted. |
 
-  What is still available is narrower. Six members —
-  `MOVE_STATE_UNVERIFIED`, `TRASH_STATE_UNVERIFIED`, `DELETE_STATE_UNVERIFIED`,
-  `UPDATE_STATE_UNVERIFIED`, `MKDIR_STATE_UNVERIFIED`, and
-  `RECASE_STATE_UNVERIFIED` — carry identical meaning and differ only by an
-  operation kind already present on the operation being settled, and the
-  `*_STATE_AMBIGUOUS` members repeat the pattern. Folding those is plausible.
-  It will **not** by itself collapse the publication, backup and trash,
-  old-target, mutation, ambiguity, and recording facts, which are genuinely
-  distinct and are most of the enum. The realistic goal is a simpler fact
-  algebra and operation vocabulary, not a small enum. Downstream context for
-  why it is worth doing at all: `runtime.py` is 4,946 lines and
-  `workflows/sync.py`'s `_run_execution` is 1,131 lines in one function.
-- **`tools/executor_settlement_audit.py` (8,602 lines) and
-  `tests/test_tools_executor_settlement_audit.py` (2,594).** An independent
-  oracle re-implementing settlement policy in order to differentially test it —
-  roughly 11,200 lines validating about 1,500 lines of settlement. It is a
-  rational response to a state space nobody can hold in their head. Retiring it
-  is an outcome, not a first step, and the order matters: simplify the fact
-  algebra and operation vocabulary; prove identical normalized traces using the
-  existing oracle as the reference; replace the procedural oracle with a much
-  smaller, independently authored decision table and invariant suite; and only
-  then revise `AGENTS.md` and retire the 11,200-line pair. `AGENTS.md`
-  currently forbids deleting it during the executor split, so this is a
-  deliberate rules change at the end of that sequence, never a quiet one
-  alongside it.
-- **The ledger replay receipts, as a consolidation rather than a deletion.**
-  Per §3 the `runs` and `operations` tables are load-bearing. What is
-  repetitive is the *shape*: run start, run finish, and each operation each
-  carry their own bespoke payload-hash comparison, conflict error, and NOOP
-  path. One generic durable receipt mechanism — token, payload hash, exact
-  replay, changed-payload conflict, atomic mutation-plus-receipt — would cover
-  all three. This preserves every property §3 defends and is the only defensible
-  reduction in this area.
-- **Most of the 37 `*View` types.** One concept, a plan operation, currently has
-  six representations: `PlanOperation`, the encode/decode/charge trio in
-  `payloads.py`, `operation_projection`, `PlanOperationView`,
-  `_validate_operation_item` in `event_v5.py`, and `validateOperationItemV5` in
-  `bridge.js`. This is the direct mechanism behind the 20-to-27-file change
-  amplification in §1.
-- **The `MOVE_UPDATE` operation kind.** A rename combined with a content change
-  within one scan interval is rare, and copy-plus-trash reaches the same final
-  state on the success path. Removing it retires a continuation type, a verdict
-  type, and a settlement branch. `MOVE` and `RECASE` are worth keeping:
-  renaming a large file instead of recopying it is a real user benefit, and
-  `RECASE` is cheap.
-
-  This is an **accepted behavior change, not an identity refactor**, and an
-  earlier draft understated that. Copy-plus-trash differs from a single atomic
-  operation during partial failure, cancellation, selection, and audit, so the
-  new contract has to be stated rather than assumed: the trash step depends on
-  a successful copy; a successful copy with a failed trash truthfully leaves
-  both paths present rather than reporting a completed move; rerun and replan
-  converge from that state; and presentation may relate the two rows to each
-  other without pretending they are still one atomic operation. Accepting those
-  four consequences is the decision. If they are acceptable the removal is
-  sound; if the paired presentation is not acceptable, keep the kind.
+`validate_event_v5_envelope` at persistence ingress, history receipt/hash/
+watermark checks, all JavaScript-to-Python command validation, filesystem
+freshness, bridge origin/security rules, complete external-request bounds, and
+active scalar/population/handler/queue walls are explicitly kept.
+`MAX_RELIABLE_EVENT_CANONICAL_BYTES` is likewise kept and must never have a
+window in which size is checked only after sequence or queue mutation.
 
 ---
 
-## 8. A performance observation inside preserved scope
+## 6. Test deletion rule
 
-Not a simplification, and — correcting an earlier draft — **not a correctness
-defect either.**
+Tests travel with their removed mechanism in the same commit. The frozen
+corpora remove the need for an artificial intermediate green-suite commit, but
+they do not authorize deleting unique coverage.
 
-`_volume_resource_key(volume)` returns `f"{volume.serial}:{volume.fs_type}"`,
-and `VolumeId` is `(serial, fs_type)`, so the scheduler arbitrates on volume
-rather than on physical device. Two partitions of one NVMe or spinning disk get
-distinct keys and run concurrently, contending for a single device queue; on a
-spinning disk that is slower than running them serially.
+For every deleted test, record one disposition:
 
-That is a throughput property, not a safety one. It creates no namespace
-collision and no mutation conflict, and `FEATURES.md:84` ratifies exactly this
-scope: sessions whose required *volumes* do not overlap may run concurrently.
-The implementation matches its contract. The earlier draft also misattributed
-its supporting quote — `FEATURES.md:188` ("a real multi-device or small-file
-workload leaving relevant devices underutilized") is the gate on **Conditional
-Parallel File Execution**, meaning future file-level workers inside one
-session, and says nothing about dispatcher session custody.
+- `mechanism-removed`, when it asserts only the deleted internal contract; or
+- `public-replacement`, naming the public-surface test that preserves the real
+  guarantee.
 
-Nor is the fix local. Volumes can be virtual, composite, or span multiple
-extents, so there is no reliable one-to-one volume-to-spindle map to resolve at
-binding time. The sound disposition is to leave the volume as the safety
-resource permanently, and treat physical extents — if they are ever resolved at
-all — as performance hints layered above it. If M1 ever needs to guarantee
-parallelism only across proven-disjoint devices, the conservative rule is that
-unknown topology serializes, which is a scheduling policy question for a later
-milestone rather than a repair to existing code.
+A test that is the only node for a surviving gate or `DEFENSE.md` hard wall may
+be deleted only through `public-replacement`. The knowingly-uncovered allowance
+for this run is **zero**. A test that is eligible for deletion but cannot meet
+that rule remains in place and is listed in the checkpoint recap for a later
+test-specific removal run.
 
 ---
 
-## 9. Tests
+## 7. Complexity-relocation failure audit
 
-Test mass is largely downstream of the items above; most of it is expected to
-shrink with them rather than needing separate work.
+Record the pre-change mechanism graph and repeat it after SIM-1 and SIM-2.
+Completion requires every statement below:
 
-Current shape: 2,633 test functions collecting 5,196 tests, averaging **54
-lines per test function**, supported by **16 pytest fixtures in the entire
-suite**. Private `_record`, `_plan`, `_operation`, `_stat`, and `_scan` helpers
-are re-declared four to ten times across files. Roughly 59,000 of 142,873 test
-lines (41%) belong to the interface layer.
+- No internal workflow JSON schema, payload version, byte ceiling, charge
+  calculator, or encode/decode path remains.
+- Dispatcher/session custody contains checkpoint objects, not serialized
+  continuation bytes.
+- There is no new generic freeze, authority, adoption, recertification,
+  serialization, compatibility, or checkpoint framework.
+- There is no checkpoint DTO duplicating an existing immutable domain value or
+  detached snapshot field-for-field.
+- Each workflow has one checkpoint construction path and one open/materialize
+  path.
+- Event flow has one domain-to-v5 projector and one persistence decoder
+  validator, with no downstream Python event-body certifier or JavaScript
+  semantic twin.
+- The browser retains only its real transport-envelope checks.
+- The frozen audit does not encode production policy or become a substitute
+  implementation of what was removed.
+- Dependency paths and standing mechanisms are fewer, not renamed or displaced
+  into tests, docs, adapters, or generic helpers.
 
-- **78 tests, 4,131 lines, asserting on `gc` and `weakref`.** These verify
-  CPython reference-counting behavior rather than NamiSync behavior.
-- **182 of 693 `monkeypatch.setattr` calls target private, underscore-prefixed
-  symbols.** This couples tests directly to implementation internals and is a
-  principal reason each refactor costs thousands of test lines.
-- **6,772 lines of subprocess gate children** — `_component_gallery_child`,
-  `_shell_gate_child`, `_native_gate_child`, `_transport_gate_child`, and
-  `_materials_gate_child`. These exist because every protocol invariant
-  receives a headed browser test and a subprocess gate; they shrink as the
-  protocol shrinks.
-- **Tests of scaffolding proposed for removal** — `test_payload_roundtrip.py`,
-  `tests/core/test_event_v5_consumers.py`, and the Python-to-JavaScript
-  vocabulary mirror and v5 mutation-gate tests. These are correct tests of code
-  that would no longer exist. One caveat: `test_payload_roundtrip.py` does not
-  vanish without replacement. Per §5 the detached-checkpoint design needs
-  aliasing and ownership tests in its place — smaller than 1,876 lines, but not
-  zero, and they must exist before the encoder is removed rather than after.
+Any failed statement fails the task. Do not compensate with line-count gains.
 
 ---
 
-## 10. Process and planning
+## 8. Finite terminal exit test
 
-The plan documents are not badly reasoned; every gate traces to a real failure
-mode someone thought about. The problem is that each individually justified
-obligation becomes a permanent tax on every subsequent checkpoint, and the sum
-was never priced.
+After SIM-2, create disposable branch
+`codex/simplification-field-probe` from the completed simplification HEAD and
+add this scratch-only field:
 
-Measured shape of `M1_PLAN.md` §3: stages 1 through 5.5 total 260 specification
-lines; Stage 6 is 631 lines and additionally spawned `M1_SHELL.md` (1,334),
-`M1_SHELL_H2.md` (950), and `M1_BRIDGE.md` (5,047) — roughly a 30-to-1 ratio.
-Within `M1_SHELL.md`, the delivery sequence is 381 lines and the acceptance
-gates are 431.
+```python
+PlanOperation.simplification_probe: str | None = None
+```
 
-Within `M1_SHELL_H2.md`, checkpoints 0, 1, 2, 3, 3R, and 4P are complete,
-totalling 261 specification lines, and **none of them activated a user
-surface**. Every feature lives in checkpoints 5 through 10, all pending, all
-gated behind checkpoint 4. Checkpoint 4 alone plus its prerequisite is 178
-lines, more than checkpoints 5 through 8 combined at 163 — the foundation costs
-more to specify than everything it exists to enable.
+A non-null value must participate in domain equality and the existing plan
+fingerprint/projection, survive semantic dispatcher checkpoint pause/resume,
+and appear in the single `PlanOperationView` boundary projection. It has no
+executor-policy effect. Construct probes with `dataclasses.replace` so
+mechanical constructor churn cannot dominate the observation.
 
-- **63 of 83 prose-only gates.** There are 48 BR-G gates, 15 SH-G gates, and 20
-  DR-M1 decisions, appearing **384 times in documentation, 38 times in tests,
-  and once in production code**. A gate with no collected test node is a
-  re-reading obligation rather than a check. Those with real
-  `test_br_g_<number>_*` nodes should reduce to a one-line pointer; the rest
-  are prose.
-- **Checkpoint 4's analytical prerequisite.** Its first delivery step requires
-  freezing a complete simultaneous owner graph across task, session, runtime,
-  service, dispatcher, observers, subscribers, workers, callbacks, retries,
-  close, tombstones, and overlapping generations, each with an exact charge or
-  finite retirement witness, plus representation-specific charges for
-  codec/text/JSON, Python, CLR/WebView2, browser, and native copies.
-  `AGENTS.md` states that a quantified criterion closes only when its search
-  domain, procedure, and terminal observation are finite; this search domain is
-  not finite, because every added type creates a new owner. It has been
-  unratified since at least 2026-08-27. Separately, the checkpoint's stated
-  objective is to remove the one-session assumption, while the dispatcher
-  already runs disjoint-resource sessions concurrently — what checkpoint 4
-  actually builds is the task rail and its retention model.
-- **The complete retained-byte and owner-graph walls in `DEFENSE.md` §1.3**
-  that checkpoint 4 must satisfy. `DEFENSE.md` already marks them accepted but
-  unrealized; they are the unclosable term blocking every remaining feature.
-- **The headed-witness and BR-G-production-entry requirement at every
-  user-surface activation.** The checkpoint execution protocol requires
-  installed headed witnesses "when a user surface activates" and, for each BR-G
-  gate, an exact production entry point, counterexample, and collected test
-  nodes. Checkpoints that touch no user surface skip both clauses. The effect
-  is that work closer to the user costs strictly more, which is inverted for a
-  product whose stated first principle is that user experience outranks
-  technical preference.
-- **Roughly 400 lines of resolved history inside active documents** —
-  `M1_PLAN.md` §6 sanity-review notes and its resolved-findings list, and
-  `M1_SHELL_H2.md`'s checkpoint-0 audit and resolution record. Both sit inside
-  documents an implementer is required to reread before every checkpoint.
-  `docs/obsolete/` or `CHANGELOG.md` is the right home.
+Count every tracked source and test file required to make the focused public
+workflow/dispatcher/view check pass. Test fixtures count; generated artifacts
+and caches do not. Record the exact file list and command, then revert the
+scratch changes, return to the source branch, and delete the disposable branch.
+Nothing from the probe is committed or merged.
+
+- Historical baseline: 20–27 files.
+- Declared target: **at most 8 files**.
+- More than 8 means the run is incomplete. Record the residual fanout and stop;
+  do not expand the register with opportunistic cleanup.
 
 ---
 
-## 11. What is not proposed for removal
+## 9. Verification and resumption
 
-Stated so the rest is credible.
+After each implementation checkpoint, run the frozen audit three times, the
+affected producer and consumer departments, the ordinary suite, and
+`lint-imports`. SIM-2 also runs the direct Node drain/reducer probes. No headed
+witness is required because this run activates and changes no user workflow;
+that does not waive ordinary packaged-JavaScript and transport verification.
 
-- `bridge.py`'s WebView2 hardening: origin binding, the navigation guard,
-  new-window blocking, CSP enforcement, and the JavaScript-to-Python command
-  envelope bound. This is genuine rung-1 security at a genuine trust boundary.
-- The native layer of `appearance.py`: DWM attributes, accent palette, and
-  high-contrast handling.
-- Atomic publication, fresh preflight, the reviewed dry-run plan, and the
-  verifier's cache-honest reads. These are the product.
-- The ledger `runs` and `operations` tables and their durable replay and
-  changed-payload conflict guards, per §3. Only their bespoke per-site shape is
-  proposed for consolidation, in §7.
-- `RecordingStatus` as an independent truth axis. Filesystem success and
-  durable-evidence success can genuinely diverge; that is a hard wall, not
-  schema baggage.
-- The history properties listed in §6: identity, exact versus conflicting
-  replay, transactional window publication, the durable prefix watermark, the
-  finalized-versus-incomplete distinction, the minimal write constraints, and
-  the incremental pump. Only the self-carrying chain accumulator is in scope.
-- The volume as the concurrency safety resource, per §8.
-- The five items in §2.
+The final sweep reconciles every ledger row, proves the zero-uncovered rule,
+runs repository-wide searches for forbidden replacement mechanisms, compares
+before/after representation and dependency counts, records line/test trends,
+and performs the field probe in §8. `CHANGELOG.md` and `HANDOFF.md` close only
+after those checks pass.
+
+### Resumption block
+
+- Planning branch: `milestone1-anthony`.
+- Planning base: `42fae4d3b498175a4884e64b6995287188f616e3`.
+- Committed SIM-0 collection: 5,208 of 5,236 tests collected, 28 deselected.
+- Ordinary baseline: 5,204 passed, 4 skipped, 28 deselected, with the bundled
+  Node runtime supplied through `NAMISYNC_TEST_NODE`.
+- Import baseline: 11 contracts kept, 0 broken across 77 files and 346
+  dependencies.
+- Active row: `SIM-1`.
+- Next action: land the CLI complete-request bound, then replace internal
+  payload bytes with detached semantic checkpoints and run the frozen corpus
+  before removing any codec.
+- SIM-0 corpus commit:
+  `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
+- Frozen SHA-256 values:
+  - `tests/_event_v5_fixtures.py`:
+    `52d36cdab200d047225a604de50e0b5118268074c21d243c896ea94e9c9b94e6`;
+  - `tests/test_tools_simplification_regression_audit.py`:
+    `7e8e2f106c4ed638d5f9026970bf95bffe0a0ef92556951a8e4e79d85bf0b897`;
+  - `tools/simplification_regression_audit.py`:
+    `a56f1df879e05d268d5228b0522518751289ca1fb40820c0d39c93bbd21d29b3`;
+  - `tools/simplification_regression_baseline.json`:
+    `97d11b6f69cc0ba8d1cd9e56096e3ccc539f79020f7c2322fe3b0adc805e6dab`.
+- Mechanism counters: aliasing 0; lost enforcement 0; representation drift 0;
+  coverage hole 0.
+- Do not begin SIM-2, modify a frozen corpus artifact, or resume H2 feature
+  work until SIM-1 is complete.
