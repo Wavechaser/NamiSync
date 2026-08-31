@@ -12,6 +12,10 @@ deferred.
 `nami-sync` and `python -m namisync` execute the same `main()` and read real
 `sys.argv[1:]` when no explicit test argument is supplied. Tests exercise both
 real process entry points. No command is reachable only through injected argv.
+Before parser construction, the CLI bounds the complete argument vector to
+65,536 UTF-8 bytes, including one separator byte between arguments. Non-string
+or non-UTF-8 arguments and a first-excess vector receive the same non-reflecting
+usage refusal; no rejected argument content enters parser diagnostics.
 The CLI delegates process composition, session observation, and typed result
 classification to `interfaces/service.py`; it does not construct a dispatcher
 or workflow runtime.
