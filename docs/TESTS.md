@@ -64,12 +64,16 @@ Run it for phase integration, global fixtures or pytest configuration, the
 department manifest, broad shared contracts, uncertain blast radius, and before
 considering a non-headed phase complete.
 
-The production drain-manager live-event transport/replay and Progress-reducer
-probe is an ordinary, non-skippable JavaScript gate. Node.js must be available
-through `NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
-precedence. A missing or unusable executable fails this gate rather than
-silently reducing the ordinary suite to source-text inspection. The probe
-executes the packaged transport check and proves whole-batch rejection: an
+Exactly five ordinary, unmarked, non-skippable JavaScript tests require Node.js.
+Four execute the packaged public event consumers: together they send all seven
+canonical event-v5 projections through the live transport and exercise the
+retained operation-result and session-record rejection paths. The fifth
+executes the production drain-manager live-event transport/replay and
+Progress reducer. Node.js must be available through `NAMISYNC_TEST_NODE` or
+`PATH`; the explicit environment setting takes precedence. A missing or
+unusable executable fails these gates rather than silently reducing the
+ordinary suite to source-text inspection. The drain probe executes the packaged
+transport check and proves whole-batch rejection: an
 invalid event envelope, wrapper, lifecycle transition, or reducer transition
 cannot partially deliver co-batched reliable updates or advance the accepted
 cursor, and a clean replay delivers those reliable updates. It also
@@ -213,11 +217,11 @@ module. No Python source under `tests/` may import a collected test module.
   configured `-m "not headed"` ordinary default. A filename containing
   `headed` does not determine marker behavior; some headed-harness modules also
   contain ordinary contract tests.
-- `supplemental_node` identifies the remaining optional deterministic
+- `supplemental_node` identifies exactly eleven optional deterministic
   JavaScript probes. They may skip when Node.js is unavailable and do not
   replace native or headed acceptance evidence. They use the same
-  `NAMISYNC_TEST_NODE`-then-`PATH` resolution as the required ordinary drain
-  validator gate, but that gate is deliberately unmarked and cannot skip.
+  `NAMISYNC_TEST_NODE`-then-`PATH` resolution as the five required ordinary
+  tests, which are deliberately unmarked and cannot skip.
 - Other skips must name a concrete unavailable platform capability. Review
   skip reasons in verification output; a skipped required gate cannot sign off
   that gate.

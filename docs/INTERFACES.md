@@ -174,7 +174,8 @@ cancellation, recording, and review facts against its surviving closed
 vocabularies; their exact meanings remain in [CORE.md](CORE.md). Live event
 bodies are supported Python producer projections rather than a second browser
 schema. Required Node coverage sends all seven production event projections
-through the live transport check and keeps public result/record negative cases.
+through four public-consumer probes and keeps public result/record negative
+cases. A fifth required probe owns drain transport/reducer behavior.
 
 The browser has one live-event transport check,
 `validateLiveSessionEvent`: an exact wrapper, matching session, positive
@@ -798,11 +799,13 @@ second path-policy authority.
 
 The explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed. Numeric holes
-alone are not recovery signals. Browserless/Node probes remain supplemental
-except for the ordinary non-skippable live-event transport/reducer drain gate,
-which resolves `NAMISYNC_TEST_NODE` before `PATH` and owns atomic batch
-rejection plus clean replay. The remaining named browser-behavior witnesses
-run through the installed production bridge and renderer in real WebView2.
+alone are not recovery signals. Exactly five ordinary Node probes are
+non-skippable: four public event-consumer probes and the live-event
+transport/reducer drain gate. They resolve `NAMISYNC_TEST_NODE` before `PATH`;
+the drain gate owns atomic batch rejection plus clean replay. The eleven tests
+marked `supplemental_node` may skip without Node. The remaining named browser-
+behavior witnesses run through the installed production bridge and renderer in
+real WebView2.
 The frozen v1 SH-G-8/BR-G-42 event-and-transport-custody claim is closed by the
 historical evidence below. Independently, the current ordinary deterministic
 fixture proves four observations precede tick zero, the exact 60-logical-second

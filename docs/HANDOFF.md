@@ -58,8 +58,11 @@ scope; there is no active delivery row.
   infrastructure.
 - SIM-F1 history verification: focused regression passed; database department
   passed 365 tests.
-- Web ownership cleanup: interfaces department passed 1,377 tests with the
-  required bundled-Node gates active.
+- Web ownership cleanup: interfaces department passed 1,377 tests with all five
+  required bundled-Node gates active; the eleven `supplemental_node` probes
+  remained optional by policy.
+- Node policy audit: all five required tests passed with the bundled runtime;
+  marker collection found exactly eleven optional `supplemental_node` tests.
 - Oracle retirement: the 14-case public replacement set passed. The current
   ordinary suite passed 4,879 tests with 4 capability skips and 28 headed
   deselections.

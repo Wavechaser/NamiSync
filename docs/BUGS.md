@@ -885,8 +885,10 @@ defect, and move implementation-level test choreography out of the log.
   so dead or unconditional validation could pass when Node was unavailable.
   Fixed by making the packaged drain-manager probe non-skippable, resolving an
   explicit `NAMISYNC_TEST_NODE` before `PATH`, and executing transport/reducer
-  batch rejection plus clean reliable replay. Other Node probes remain
-  supplemental; installed WebView2 still owns their named browser-behavior
+  batch rejection plus clean reliable replay. At that fix, the other Node
+  probes remained supplemental. The current suite also requires four public
+  event-v5 consumer probes; `TESTS.md` owns the exact five-required/eleven-
+  supplemental policy. Installed WebView2 still owns named browser-behavior
   acceptance.
 - MODERATE - FIXED (2026-08-19). Partial-attachment rollback gap. If `loaded`
   event registration failed and removal of the already-installed `before_load`

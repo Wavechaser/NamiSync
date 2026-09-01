@@ -800,11 +800,12 @@ unused synchronous callback-registry entries without changing the return
 channel. [INTERFACES.md](INTERFACES.md) owns those compatibility mechanisms and
 their remaining containment boundary. The exact pythonnet 3.1.0 pin is equally
 part of that boundary because native delegate subscription, WinForms thread
-affinity, and `CoreWebView2` access pass through it. Browserless/Node probes are
-supplemental; the exception is the ordinary, non-skippable drain-manager Progress
-validator/replay gate, which resolves Node.js from `NAMISYNC_TEST_NODE` before
-`PATH` and proves atomic rejection before cursor or reliable-sibling delivery.
-The installed real-WebView2 witnesses own the remaining named
+affinity, and `CoreWebView2` access pass through it. Exactly five ordinary Node
+probes are non-skippable: four packaged public event-consumer probes plus the
+drain-manager Progress validator/replay gate, which proves atomic rejection
+before cursor or reliable-sibling delivery. All five resolve Node.js from
+`NAMISYNC_TEST_NODE` before `PATH`; the eleven `supplemental_node` probes may
+skip. The installed real-WebView2 witnesses own the remaining named
 browser-behavior gates.
 
 The host must force `gui="edgechromium"` and fail with an install action if the

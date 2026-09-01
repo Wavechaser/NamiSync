@@ -142,9 +142,9 @@ no Python upper bound; exact runtime profiles in project evidence identify
 measured configurations rather than launch admission. Runtime dependencies are
 `xxhash` 3.x and the reality-tested `pywebview` 6.2.1 host stack.
 Development dependencies are `pytest` and `import-linter`. The ordinary test
-suite also requires a Node.js executable for the packaged live-event
-transport/reducer probe;
-provide it through `NAMISYNC_TEST_NODE` or `PATH` as described in
+suite also requires a Node.js executable for five packaged live-event consumer
+and drain probes; eleven separately marked supplemental Node probes may skip.
+Provide Node through `NAMISYNC_TEST_NODE` or `PATH` as described in
 [Tests](docs/TESTS.md).
 
 Create a virtual environment, then install the editable development package:

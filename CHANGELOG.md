@@ -79,6 +79,9 @@ claims explicit, independently reviewable, and regression-backed.
   baseline across three identical runs. Active consumers retain the shared v5
   fixtures plus focused exact-byte and public checkpoint-ownership coverage;
   no standing hash or corpus-maintenance apparatus replaced the oracle.
+- Reconciled the active Node verification documentation with the executable
+  suite: five unmarked public-consumer/drain probes require Node, while exactly
+  eleven `supplemental_node` probes may skip. No marker or test policy changed.
 - From the ratified SIM-0 comparison through the implementation head,
   production changed +373/-4,681 (net -4,308) and tests +1,543/-4,094 (net
   -2,551), including bounded CLI-ingress fix `e3683a1` (+20 production and +52
@@ -654,7 +657,8 @@ later workflow surfaces and beta packaging remain future phases.
   whole-runtime containment remain separate gates.
 - Coalesced progress-only drains behind a fixed 150 ms maximum wait while
   receipts, reliable state, terminal, recovery, and lifecycle feedback bypass
-  it; installed WebView2 witnesses are authoritative and Node is supplemental.
+  it; installed WebView2 witnesses are authoritative and Node is supplemental
+  for that historical custody claim.
 
 #### Establish the secured WebView2 bridge foundation (2026-07-31 – 2026-08-03)
 
