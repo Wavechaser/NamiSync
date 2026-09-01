@@ -17,11 +17,13 @@ scope; there is no active delivery row.
   materialization path, with no checkpoint authority, adoption API, schema,
   compatibility form, or generic freezer.
 - `f73dd98` removes downstream Python and JavaScript event-body certification.
-  The domain projector owns live semantics, the persistence decoder retains
-  exact v5 validation, EventHub owns the reliable-byte wall before mutation,
-  and the browser retains only transport/session/sequence/routing/reducer
-  checks. Persisted event bytes, history envelopes, database contracts, schema
-  versions, and data epoch are unchanged.
+  The domain projector owns live semantics, EventHub owns the reliable-byte
+  wall before mutation, and the browser retains only transport/session/
+  sequence/routing/reducer checks. The SIM-F1 follow-up reuses the one retained
+  history-boundary validator at admission and decode/readback, closing the
+  write/read asymmetry before any persisted-byte, hash, flush, queue, receipt,
+  chain, or watermark mutation. Persisted event bytes, history envelopes,
+  database contracts, schema versions, and data epoch are unchanged.
 - Both three-finding stop events are preserved in `SIMPLIFICATION.md` with
   mechanism tables and owner-specific repairs. Across SIM-1 and SIM-2, all 119
   deleted or renamed test functions have an exact disposition: 82 public

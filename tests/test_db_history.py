@@ -3275,6 +3275,70 @@ def test_history_event_failure_retires_traceback_and_cause_before_propagating_id
         store.close()
 
 
+def test_invalid_event_projection_breaks_prefix_before_queue_or_durable_mutation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = tmp_path / "history.db"
+    record = _record()
+    first = _envelope(record, 1, PhaseChanged("scan"))
+    first_size = len(history_module._json_bytes(envelope_to_dict(first)))
+    store = HistoryStore(
+        path,
+        clock=FakeClock(),
+        window_policy=HistoryWindowPolicy(
+            max_bytes=first_size + 1,
+            max_event_bytes=first_size + 1,
+        ),
+    )
+    observer = store.observer(record, HistoryContext("run-invalid", "host-1"))
+    observer.on_event(first)
+    pending_bytes = observer.pending_bytes
+    calls = 0
+
+    def invalid_projection(envelope: Envelope) -> dict[str, object]:
+        nonlocal calls
+        calls += 1
+        projection = envelope_to_dict(envelope)
+        projection["body"] = {"phase": 7}
+        return projection
+
+    monkeypatch.setattr(history_module, "envelope_to_dict", invalid_projection)
+    monkeypatch.setattr(
+        history_module,
+        "_json_bytes",
+        lambda value: pytest.fail(
+            f"invalid projection reached persisted serialization: {value!r}"
+        ),
+    )
+    try:
+        with pytest.raises(
+            HistoryIntegrityError,
+            match="history event projection is invalid",
+        ) as raised:
+            observer.on_event(_envelope(record, 2, PhaseChanged("execute")))
+
+        assert raised.value.__cause__ is None
+        assert raised.value.__context__ is None
+        assert calls == 1
+        assert observer.pending_event_count == 1
+        assert observer.pending_bytes == pending_bytes
+    finally:
+        observer.close()
+        store.close()
+
+    connection = connect_history_reader(path)
+    try:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM history_runs"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM history_events"
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()
+
+
 def test_history_flush_failure_preserves_window_and_retires_traceback_and_cause(
     tmp_path: Path,
     monkeypatch,

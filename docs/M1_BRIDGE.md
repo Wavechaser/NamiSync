@@ -4354,7 +4354,8 @@ headings are organizational, not lane ownership.
   JavaScript bridge while the already-open native document generation remains
   unchanged, and does not stand in for the separate production startup and
   native reinjection evidence. Event-body semantics are owned by the canonical
-  Python producer and the persistence decoder. This gate requires the browser
+  Python producer and one history-boundary validator reused at admission and
+  readback. This gate requires the browser
   transport envelope, session/sequence, batch staging, delivery, and reducer
   behavior above; it does not require drain, bridge, and JavaScript to
   independently certify every body field.

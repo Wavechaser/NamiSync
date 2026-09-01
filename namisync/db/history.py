@@ -13,6 +13,7 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Callable, Mapping, Protocol
 
+from namisync.core.event_v5 import validate_event_v5_envelope
 from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
@@ -103,7 +104,7 @@ class Clock(Protocol):
 
 
 class HistoryIntegrityError(RecordingError):
-    """The reliable event stream was duplicated or reordered inconsistently."""
+    """The reliable event prefix violates the history integrity contract."""
 
 
 class HistoryEventDisposition(StrEnum):
@@ -946,7 +947,14 @@ class HistoryObserver:
                 f"unsupported reliable event body: {type(envelope.body).__name__}"
             )
 
-        encoded = _json_bytes(envelope_to_dict(envelope))
+        projection = envelope_to_dict(envelope)
+        try:
+            validate_event_v5_envelope(projection)
+        except (TypeError, ValueError) as error:
+            raise HistoryIntegrityError(
+                "history event projection is invalid"
+            ) from error
+        encoded = _json_bytes(projection)
         encoded_size = len(encoded)
         digest = hashlib.sha256(encoded).digest()
         item_identity_hash = (

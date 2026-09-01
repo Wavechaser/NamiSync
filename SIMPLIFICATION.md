@@ -94,6 +94,26 @@ row.
 | `SIM-1` | Remove process-local workflow payload serialization and replace it with structurally detached semantic checkpoints without changing pause/resume/cancel/settlement behavior or losing real ingress enforcement. | Frozen corpora three times; ownership/aliasing tests; affected departments; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Complete |
 | `SIM-2` | Remove redundant event certification while preserving exact v5 persisted bodies, history envelopes, browser delivery/recovery, and reducer behavior. | Frozen corpora three times; byte-for-byte persisted-body check; affected departments and Node probes; ordinary suite; import law; enforcement ledger; test-deletion and relocation audits. | Complete |
 
+### History-admission follow-up register
+
+The closed implementation register above remains unchanged. A post-closeout
+review identified one persistence-boundary asymmetry and authorized this
+separate finite follow-up before the implementation-time oracle is retired.
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| `SIM-F1` | Validate the single event-v5 projection at history admission before persisted-byte serialization, hashing, flushing, or queue mutation, without changing valid persisted bytes, v5-valid receipts under a stricter history byte policy, schema, or data epoch. | Focused invalid-projection no-queue-or-durable-mutation regression; database department; frozen simplification audit with three identical runs and no baseline drift. | Complete |
+
+The existing non-goals still apply. This row does not authorize projector or
+EventHub self-certification, another validator, an event representation change,
+history migration, or an epoch bump. Persisted-body inequality is the
+task-specific stop class; if observed, preserve the work state and stop rather
+than updating the frozen baseline.
+
+Verification closed with the focused no-queue-or-durable-mutation regression,
+365 passing database-department tests, three identical frozen-audit runs, and
+no corpus or baseline drift. No persisted-body inequality was observed.
+
 SIM-0 closes only when the corpus artifacts and baseline commit are recorded in
 the resumption block. No implementation or removable test may be changed before
 that point.
@@ -239,7 +259,7 @@ with that file; no similarly named helper elsewhere is implied.
 | SIM-1: `LocalWorkflowRuntime` calls to the eight codec entry points and `_PlanInvocation.snapshot`, `_ExecutionInvocation.snapshot`, `_InventoryInvocation.snapshot`, `_IntegrityInvocation.snapshot` byte returns | Workflow reopen receives a complete request/continuation | Retain snapshot/open behavior while removing encoding. | One checkpoint-construction and one materialization/open path per workflow; frozen traces prove exact observable behavior. |
 | SIM-1: internal payload-version, duplicate-key, malformed-JSON, charge-ceiling, and round-trip checks rooted in `tests/test_payload_roundtrip.py` and the codec-only blocks in inventory/resume tests | Compatibility with arbitrary process-local bytes | Not a supported property after the wire form is deleted. | Any test that also covers selection, provenance, freshness, path/population bounds, cancellation, recording, or settlement must be replaced at a public surface or retained. Zero uncovered behavior is permitted. |
 | SIM-1: any forgery interpretation attached to plan/inventory same-run signal tokens | Resistance to forged first-party private values | Remove only the unsupported forgery role; do not sweep the token mechanism. | Same-run freshness/correlation remains until separately adjudicated. Exact first-excess behavior and real boundary admission remain tested. |
-| SIM-2: the `validate_event_v5_envelope(...)` self-check inside `core.events.envelope_to_dict` | A typed domain producer certifies its own projected output; today the same call is also the sole enforcer of `MAX_RELIABLE_EVENT_CANONICAL_BYTES` | Remove semantic encode-time recertification, not the canonical projector, persistence validator, or byte wall. Before that call is removed, `canonical_event_bytes` must explicitly enforce the maximum before `EventHub` sequence/replay/subscriber mutation. | Supported typed producer paths own live semantics and `envelope_to_dict` is the sole domain-to-v5 projector; `validate_event_v5_envelope` remains at persistence decode/readback; `canonical_event_bytes` becomes the named byte-wall enforcer; exact bytes and first-excess behavior are frozen. |
+| SIM-2: the `validate_event_v5_envelope(...)` self-check inside `core.events.envelope_to_dict` | A typed domain producer certifies its own projected output; today the same call is also the sole enforcer of `MAX_RELIABLE_EVENT_CANONICAL_BYTES` | Remove semantic encode-time recertification, not the canonical projector, persistence validator, or byte wall. Before that call is removed, `canonical_event_bytes` must explicitly enforce the maximum before `EventHub` sequence/replay/subscriber mutation. | Supported typed producer paths own live semantics and `envelope_to_dict` is the sole domain-to-v5 projector; one retained `validate_event_v5_envelope` contract is reused at history admission and decode/readback; `canonical_event_bytes` becomes the named byte-wall enforcer; exact bytes and first-excess behavior are frozen. |
 | SIM-2: `core.event_v5.validate_session_event_view_v5` and `workflows.views.validate_session_event_view` | Downstream Python layers independently certify event-body semantics | Remove. Trusted internal projections do not independently reinterpret domain truth. | Canonical projector plus persistence decode validation; browser transport-envelope checks; frozen body and delivery corpora. |
 | SIM-2: the duplicate event-body projection/revalidation in `workflows.views.session_event_view` | Presentation reconstructs and certifies the body | Reuse the one canonical body mapping while retaining the distinct live `sequence` wrapper, persisted `seq` envelope, and durable history envelope. | Exact corpus bytes and public view tests. |
 | SIM-2: event-body calls in `interfaces.web.drain._validate_task_observation`, `validate_task_update_view`, and `validate_task_drain_view` | Drain/task layers certify body fields again | Remove only body-semantic certification. Keep task/session matching, wrapper shape, sequence, batch, ordering, and lifecycle checks. | Reduced transport-wrapper checks and existing drain/recovery/reducer tests. |
@@ -247,7 +267,7 @@ with that file; no similarly named helper elsewhere is implied.
 | SIM-2: JavaScript `validateSessionEventV5`, `validateProgressV5`, `validateOperationItemV5`, `validateTerminalSummaryV5`, and their body-semantic-only private helper closure | Browser independently implements Python's event schema | Replace with one minimal transport-envelope check: plain object, retained exact wrapper shape, v5 marker, matching session, positive safe sequence, recognized body tag, object body, and atomic batch staging. | The supported Python producer path owns body semantics; browser delivery/reducer probes prove transport and behavior. |
 | SIM-2: Python-to-JavaScript vocabulary mirrors and v5 body mutation gates | Two independent semantic implementations stay synchronized | Remove only tests of deleted certification. | Valid reducer/lifecycle cases, persistence corruption negatives, receipt/hash checks, and boundary-envelope rejection remain. Zero uncovered behavior is permitted. |
 
-`validate_event_v5_envelope` at persistence decode/readback, history receipt/hash/
+`validate_event_v5_envelope` at history admission/readback, history receipt/hash/
 watermark checks, all JavaScript-to-Python command validation, filesystem
 freshness, bridge origin/security rules, complete external-request bounds, and
 active scalar/population/handler/queue walls are explicitly kept.
@@ -572,7 +592,7 @@ The fixed comparison point is SIM-0 plan commit
 |---|---|---|---|
 | Internal workflow transport | Eight `encode_*_request`/`decode_*_request` entries across `workflows/payloads.py` and `workflows/inventory.py`; shared `_json_envelope.py`; runtime codec calls; byte/charge machinery | Seven referencing files: `test_bridge_resume.py`, `test_bridge_scan_scope.py`, `test_inventory_runtime.py`, `test_inventory_workflow.py`, `test_payload_roundtrip.py`, `test_post_execution_workflow.py`, and `test_workflows.py` | Zero internal codec entries, JSON-envelope helpers, payload limits/charges, or codec references; retained semantic cases use public checkpoint/workflow surfaces. |
 | Dispatcher custody | Byte/payload contracts in `core/session.py`, `dispatcher/contracts.py`, `dispatcher/dispatcher.py`, `interfaces/service.py`, `workflows/models.py`, and `workflows/runtime.py` | Payload-oriented custody assertions in the seven files above and dispatcher/session tests | One opaque checkpoint custody path, one construction path and one open/materialization path per workflow; no compatibility alias or generic checkpoint layer. |
-| Event certification | Semantic body checks in `core/event_v5.py`, `core/events.py`, `workflows/views.py`, `interfaces/web/drain.py`, `interfaces/web/bridge.py`, and `interfaces/web/assets/bridge.js` | Six referencing support/test files under `tests/core`, `tests/assets`, and `tests/interfaces/web` | One domain-to-v5 projector, the persistence decoder validator, the explicit reliable-event byte wall, and a minimal browser transport-envelope check; no downstream body-semantic twin. |
+| Event certification | Semantic body checks in `core/event_v5.py`, `core/events.py`, `workflows/views.py`, `interfaces/web/drain.py`, `interfaces/web/bridge.py`, and `interfaces/web/assets/bridge.js` | Six referencing support/test files under `tests/core`, `tests/assets`, and `tests/interfaces/web` | One domain-to-v5 projector, one history-boundary validator reused at admission and readback, the explicit reliable-event byte wall, and a minimal browser transport-envelope check; no downstream body-semantic twin. |
 
 The file sets above come from finite `git grep -l` searches for the eight codec
 entry names and the named Python/JavaScript event validators at that commit.
@@ -634,8 +654,8 @@ mergeable commit. Independent rereview found no remaining last-enforcer loss.
   bridge `_VIEW_VALIDATORS` event entry, JavaScript semantic event validators,
   and their body-only helper closure are gone. Finite searches find none of the
   deleted names in production or active tests.
-- Event flow now has one domain-to-v5 projector, one exact persistence
-  decode/readback validator, one explicit reliable-byte wall, and one browser
+- Event flow now has one domain-to-v5 projector, one exact history-boundary
+  validator reused at admission and readback, one explicit reliable-byte wall, and one browser
   transport check. The browser retains exact wrapper/session/v5/tag/positive
   SafeInt/body-object admission, Gap routing, atomic staging, and reducer
   behavior; public result/record validators remain separate.
@@ -669,8 +689,8 @@ Completion requires every statement below:
   detached snapshot field-for-field.
 - Each workflow has one checkpoint construction path and one open/materialize
   path.
-- Event flow has one domain-to-v5 projector and one persistence decoder
-  validator, with no downstream Python event-body certifier or JavaScript
+- Event flow has one domain-to-v5 projector and one history-boundary validator
+  reused at admission and readback, with no downstream Python event-body certifier or JavaScript
   semantic twin.
 - The browser retains only its real transport-envelope checks.
 - The frozen audit does not encode production policy or become a substitute

@@ -13,8 +13,13 @@ boundary, and reset instructions; there is no in-place migration.
 History v6 accepts only the coordinated exact core-event-v5 receipts, including
 duplicate and bounded rejection receipts; it has no mixed-version page or
 compatibility decoder. The observer stores the canonical envelope and matching
-typed projection from the same admitted snapshot. `M1_BRIDGE.md` owns the exact
-event/result shapes, bounds, and codec rules.
+typed projection from the same admitted snapshot. At admission it projects an
+envelope once, validates that exact projection against the retained v5
+persistence contract, and only then performs the observer's persisted-byte
+serialization, hashing, flushing, or queue mutation. A malformed projection
+therefore breaks the audit prefix before any event row, receipt, chain, or
+watermark mutation. `M1_BRIDGE.md` owns the exact event/result shapes, bounds,
+and codec rules.
 
 Reliable item rows retain their accepted recording and omission facts as part
 of receipt identity. Once committed, an item receipt is immutable: later task,
@@ -137,11 +142,11 @@ these defaults:
 - `max_event_bytes = 1_048_576` serialized bytes
 - `max_age_seconds = 1.0`
 
-An observer serializes and hashes a reliable envelope before retaining it. The
-production event-v5 hub rejects an envelope over the same per-event ceiling
-before assigning a sequence; history's bounded hash-only `event-too-large`
-receipt remains a defensive observer seam for direct injection or a deliberately
-stricter policy. Before accepting an
+An observer validates, serializes, and hashes a reliable envelope before
+retaining it. The production event-v5 hub rejects an envelope over the same
+per-event ceiling before assigning a sequence. History's bounded hash-only
+`event-too-large` receipt remains a defensive observer seam for a v5-valid
+event admitted under a deliberately stricter history policy. Before accepting an
 event that would cross the window byte or count bound, the existing window is
 committed. Reaching either bound commits immediately. `StateChanged(PAUSED)`
 forces a commit after that event is admitted. The audit pump commits by the
@@ -350,11 +355,12 @@ internal degraded cleanup state, but that post-finalization state is not a
 public session-health axis. A persistent dispatcher/store projection is
 unrealized and must be defined and tested before activation.
 
-A supported, canonically serializable event exceeding `max_event_bytes` is the
-single contained per-event failure. Its bounded durable receipt degrades audit,
-later events and finalization continue, and reopening/replay derives the same
-degraded result from durable rejection count. Exact replay of its sequence and
-payload hash is idempotent; a changed hash is fatal.
+A v5-valid event exceeding a deliberately stricter history
+`max_event_bytes` is the single contained per-event failure. Its bounded
+durable receipt degrades audit, later events and finalization continue, and
+reopening/replay derives the same degraded result from durable rejection count.
+Exact replay of its sequence and payload hash is idempotent; a changed hash is
+fatal.
 
 Finalization remains a two-party ownership decision. If the caller reaches its
 cutoff before the pump owns finalization, both live and any late retained
