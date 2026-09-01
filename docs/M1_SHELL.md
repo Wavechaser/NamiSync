@@ -692,10 +692,9 @@ This slice maps SH-G-3 to the transport/privacy portion of BR-G-32. The Python
 boundary, picker confinement, origin refusal, and hostile-text path are
 implemented. The named gate now runs those wrapper cases through the real
 installed WebView2 composition; Node probes for those wrapper cases remain
-supplemental evidence. The later Slice 3 drain-manager Progress validator/replay
-probe is one of five current ordinary non-skippable Node gates; four public
-event-consumer probes own the other required coverage, while the eleven tests
-marked `supplemental_node` may skip.
+supplemental evidence. Current required ordinary Node probes are unmarked and
+non-skippable; optional probes carry `supplemental_node`. The later Slice 3
+drain-manager Progress validator/replay probe remains required.
 
 ### Slice 3 - Event drain
 

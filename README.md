@@ -142,9 +142,9 @@ no Python upper bound; exact runtime profiles in project evidence identify
 measured configurations rather than launch admission. Runtime dependencies are
 `xxhash` 3.x and the reality-tested `pywebview` 6.2.1 host stack.
 Development dependencies are `pytest` and `import-linter`. The ordinary test
-suite also requires a Node.js executable for five packaged live-event consumer
-and drain probes; eleven separately marked supplemental Node probes may skip.
-Provide Node through `NAMISYNC_TEST_NODE` or `PATH` as described in
+suite also requires a Node.js executable for its unmarked packaged live-event
+consumer and drain probes; probes marked `supplemental_node` may skip. Provide
+Node through `NAMISYNC_TEST_NODE` or `PATH` as described in
 [Tests](docs/TESTS.md).
 
 Create a virtual environment, then install the editable development package:
@@ -264,6 +264,11 @@ README intentionally stops at milestone and phase summaries.
 M1 expands the reviewed-sync runtime into a complete headless integrity,
 history, and workflow product while building its secured headed WebView2 shell.
 
+### M1 Consolidation
+
+Redundant in-process transports and certification layers were removed while
+preserving public behavior, real boundary checks, and persisted contracts.
+
 ### M1 Hardening
 
 Safety, settlement, authority, and measurement work made high-risk release
@@ -272,9 +277,8 @@ claims explicit, independently reviewable, and regression-backed.
 ### M1 Maintenance Refactor
 
 Shared root authority, stable executor/verifier package boundaries, an oracle-
-guarded typed settlement reducer, semantic workflow checkpoints, and removal of
-redundant live-event certification made internal ownership explicit without
-changing public behavior, exact persisted event-v5 bytes, or history envelopes.
+guarded typed settlement reducer, and layered test operations made internal
+ownership explicit without changing public or persisted contracts.
 
 ### M1 GUI
 

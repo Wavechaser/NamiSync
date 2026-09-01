@@ -542,6 +542,9 @@ deletion. The knowingly-uncovered count is **zero**.
 
 ### Oracle-retirement deleted-test dispositions
 
+This subsection is a historical deletion ledger. Its test names identify what
+was removed and do not name live test paths or standing rerun requirements.
+
 The retirement denominator is **3 deleted test functions**: **2
 `public-replacement`** and **1 `mechanism-removed`**. This is separate from the
 119-function SIM-1/SIM-2 denominator above. The knowingly-uncovered count

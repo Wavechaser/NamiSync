@@ -174,8 +174,8 @@ cancellation, recording, and review facts against its surviving closed
 vocabularies; their exact meanings remain in [CORE.md](CORE.md). Live event
 bodies are supported Python producer projections rather than a second browser
 schema. Required Node coverage sends all seven production event projections
-through four public-consumer probes and keeps public result/record negative
-cases. A fifth required probe owns drain transport/reducer behavior.
+through the public consumer and keeps public result/record negative cases. The
+required drain probe separately owns transport/reducer behavior.
 
 The browser has one live-event transport check,
 `validateLiveSessionEvent`: an exact wrapper, matching session, positive
@@ -183,8 +183,8 @@ SafeInt sequence, current v5 marker, recognized tag, and plain-object body. It
 does not mirror Python body vocabularies, timestamp grammar, cross-field rules,
 or reliable-byte accounting. The drain still validates update unions, strict
 sequence order, Gap recovery cursors, terminal ordering, batch capacity, and
-reducer transitions before any callback or cursor mutation. The SIM-2
-relocation audit found no surviving legacy helper or semantic twin, and live
+reducer transitions before any callback or cursor mutation. The consolidation
+audit found no surviving legacy helper or semantic twin, and live
 task events reject a retired transport version without advancing the cursor.
 
 Session-record timestamps use CORE's exact UTC service grammar at the external
@@ -799,13 +799,12 @@ second path-policy authority.
 
 The explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed. Numeric holes
-alone are not recovery signals. Exactly five ordinary Node probes are
-non-skippable: four public event-consumer probes and the live-event
-transport/reducer drain gate. They resolve `NAMISYNC_TEST_NODE` before `PATH`;
-the drain gate owns atomic batch rejection plus clean replay. The eleven tests
-marked `supplemental_node` may skip without Node. The remaining named browser-
-behavior witnesses run through the installed production bridge and renderer in
-real WebView2.
+alone are not recovery signals. Required ordinary Node probes are unmarked and
+non-skippable; probes marked `supplemental_node` may skip without Node. Both use
+`NAMISYNC_TEST_NODE` before `PATH`. The required drain gate owns atomic batch
+rejection plus clean replay, while the remaining named browser-behavior
+witnesses run through the installed production bridge and renderer in real
+WebView2.
 The frozen v1 SH-G-8/BR-G-42 event-and-transport-custody claim is closed by the
 historical evidence below. Independently, the current ordinary deterministic
 fixture proves four observations precede tick zero, the exact 60-logical-second

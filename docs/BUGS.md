@@ -826,15 +826,17 @@ defect, and move implementation-level test choreography out of the log.
   while source gates could find legacy text instead of the live route. Cause: a
   shared version constant and overbroad source slices conflated retained and
   current contracts. Fixed by isolating the live route and its exact version;
-  SIM-2 later removed the redundant body-schema mirror while retaining
-  wrong-version batch refusal and reducer regressions. No legacy route was added.
+  the consolidation pass later removed the redundant body-schema mirror while
+  retaining wrong-version batch refusal and reducer regressions. No legacy
+  route was added.
 - MINOR - FIXED (2026-08-26). Unbound producer fixtures. Separate Python public
   view witnesses and browser literals could stay green while the real codec
   drifted away from JavaScript. Cause: no differential check passed the actual
   Python primitive projection to the packaged consumer. Fixed by binding all
   seven event families and relevant public-view witnesses through that projector
-  and the live event arm. SIM-2 retains those positive producer witnesses while
-  persistence and transport/reducer negatives remain with their real boundaries.
+  and the live event arm. The consolidation pass retained those positive
+  producer witnesses while persistence and transport/reducer negatives remain
+  with their real boundaries.
 - MODERATE - FIXED (2026-08-26). Shallow view admission. Exact dataclass wrappers
   could carry old-version events, malformed nested results, or result-free
   terminal records through Python task drains and bridge serialization. Queue
@@ -886,10 +888,10 @@ defect, and move implementation-level test choreography out of the log.
   Fixed by making the packaged drain-manager probe non-skippable, resolving an
   explicit `NAMISYNC_TEST_NODE` before `PATH`, and executing transport/reducer
   batch rejection plus clean reliable replay. At that fix, the other Node
-  probes remained supplemental. The current suite also requires four public
-  event-v5 consumer probes; `TESTS.md` owns the exact five-required/eleven-
-  supplemental policy. Installed WebView2 still owns named browser-behavior
-  acceptance.
+  probes remained supplemental. The current suite also requires public
+  event-v5 consumer probes; `TESTS.md` owns the unmarked-required versus
+  `supplemental_node` policy. Installed WebView2 still owns named browser-
+  behavior acceptance.
 - MODERATE - FIXED (2026-08-19). Partial-attachment rollback gap. If `loaded`
   event registration failed and removal of the already-installed `before_load`
   handler also raised, appearance configuration escaped without aborting its
@@ -1605,7 +1607,7 @@ defect, and move implementation-level test choreography out of the log.
   structurally valid reliable event above 1,048,576 canonical bytes could pass
   Python's public-view validator and the browser, then advance browser state
   despite persistence-envelope refusal. Cause: those validators checked field
-  shapes but omitted the shared envelope ceiling. SIM-2 made
+  shapes but omitted the shared envelope ceiling. The consolidation pass made
   `canonical_event_bytes` the sole production enforcer before `EventHub`
   sequence, replay, audit, or subscriber mutation and removed the redundant
   downstream checks. Exact-maximum/plus-one canonical bytes remain frozen.
@@ -1615,9 +1617,9 @@ defect, and move implementation-level test choreography out of the log.
   high surrogate because comparisons with the missing next unit's NaN did not
   reject. Cause: permissive runtime parsers and an incomplete surrogate-pair
   predicate. Exact persistence decode and public record/result validation retain
-  the UTC calendar and Unicode rules. SIM-2 removed their duplicate live-event
-  browser copy; supported producer projection and canonical UTF-8 encoding own
-  that path instead.
+  the UTC calendar and Unicode rules. The consolidation pass removed their
+  duplicate live-event browser copy; supported producer projection and
+  canonical UTF-8 encoding own that path instead.
 - MODERATE - FIXED (2026-08-26). Cross-axis validation omission. Item and
   terminal projections could admit recording reasons that contradicted the
   filesystem outcome, or cancellation without matching execute/verify truth,
@@ -1625,8 +1627,9 @@ defect, and move implementation-level test choreography out of the log.
   Cause: projection validators checked each closed field independently and
   omitted their relationships. Fixed by sharing the recording matrix and
   cancellation rules across core objects and persistence decoding, with browser
-  public record/result validation retained. SIM-2 removed only the live-event
-  semantic mirror; valid plain and compound cancellation remains covered.
+  public record/result validation retained. The consolidation pass removed only
+  the live-event semantic mirror; valid plain and compound cancellation remains
+  covered.
 - MINOR - FIXED (2026-08-26). Scalar error-family drift. Shared decimal and
   public event decoders classified malformed strings as wrong types, while
   very long canonical Scalar64 overflow escaped as Python's generic conversion

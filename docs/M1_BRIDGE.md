@@ -4043,9 +4043,9 @@ headings are organizational, not lane ownership.
   path. *Not satisfied by* a `LIKE` query with escaping, an index merely present
   in the schema, or a plan that reports a scan.
 - **BR-G-28 — Inventory and integrity checkpoints remain detached and mode-
-  exact.** SIM-1 replaced both process-local v2 codecs with typed semantic
-  checkpoints. Construction preserves the exact inventory-versus-integrity
-  request mode, detaches every mutable selection or continuation value, and
+  exact.** The consolidation pass replaced both process-local v2 codecs with
+  typed semantic checkpoints. Construction preserves the exact inventory-
+  versus-integrity request mode, detaches every mutable selection or continuation value, and
   retains active scalar, path, source-population, and interface-ingress walls.
   Mutating a source request after construction cannot change dispatcher
   custody, and opening one checkpoint twice yields independent mutable runtime
@@ -4056,8 +4056,9 @@ headings are organizational, not lane ownership.
 
 **Lane C — selection semantics**
 
-- **BR-G-10 — Provenance survives a detached semantic checkpoint.** SIM-1
-  snapshots `user_deselected`, validated `bytes_done_high_water`, and the
+- **BR-G-10 — Provenance survives a detached semantic checkpoint.** The
+  consolidation pass snapshots `user_deselected`, validated
+  `bytes_done_high_water`, and the
   execute-only `reported_exclusion_count` by value through the real dispatcher
   pause/reopen path. Direct choices settle `SKIPPED` and dependency fallout
   settles `DEFERRED` after resume; accepted plan exclusions are not replayed,

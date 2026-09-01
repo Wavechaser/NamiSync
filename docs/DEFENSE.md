@@ -237,9 +237,9 @@ Private exception or signal type identity is not provenance by itself. A plan
 or inventory review-limit signal may carry same-run freshness/correlation so a
 workflow cannot mistake stale work for its current admission. That role is not
 a defense against forged first-party values: reflective construction or token
-extraction remains unsupported rung 4. Until the simplification checkpoint
-changes the mechanism, a tokenless or different-run exact same-domain signal
-continues to fail loudly rather than become a user refusal.
+extraction remains unsupported rung 4. A tokenless or different-run exact same-
+domain signal continues to fail loudly because the token enforces freshness,
+not resistance to forged first-party values.
 
 The production document channel's atomic current-document send relies on the
 pinned WebView2 `PostWebMessageAsJson` call not synchronously re-entering a
