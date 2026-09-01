@@ -238,6 +238,8 @@ never hides the other result axes in rendered output.
   [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
   and diagnostic commands.
+- [Task lifecycle simplification](docs/TASK_LIFECYCLE_SIMPLIFICATION.md) —
+  active ownership-consolidation register, boundary guards, and evidence.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the

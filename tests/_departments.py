@@ -110,11 +110,13 @@ DEPARTMENTS: dict[str, tuple[str, ...]] = {
         "tests/test_result_classification.py",
         "tests/test_service.py",
         "tests/test_settings_facade.py",
+        "tests/test_task_lifecycle.py",
         "tests/test_version.py",
         "tests/test_wheel_metadata.py",
     ),
     "tools": (
         "tests/test_department_policy.py",
+        "tests/test_task_lifecycle_audit.py",
         "tests/test_tools_cli.py",
         "tests/test_tools_corpus.py",
         "tests/test_tools_executor.py",
