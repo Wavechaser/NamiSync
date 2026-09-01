@@ -1,10 +1,10 @@
 # NamiSync Initial Simplification Run
 
-**Standing (2026-09-01): ratified delivery authority.** This document owns the
-closed register, evidence, stop rules, and resumption state for the initial
+**Standing (2026-09-01): completed delivery record.** This document owns the
+closed register, evidence, stop rules, and terminal state for the initial
 simplification run. It instantiates `AGENTS.md` **Task Containment And
-Recovery**; it does not replace or restate that protocol. Only an explicit user
-decision may change the accepted register after implementation starts.
+Recovery**; it does not replace or restate that protocol. The accepted register
+was not expanded during implementation.
 
 This is a removal plan. A green suite is necessary but not sufficient because
 the same work removes tests and enforcers. Completion therefore requires both
@@ -709,6 +709,47 @@ Nothing from the probe is committed or merged.
 - More than 8 means the run is incomplete. Record the residual fanout and stop;
   do not expand the register with opportunistic cleanup.
 
+### Terminal result (2026-09-01)
+
+The probe passed from completed implementation HEAD `f73dd98` and was then
+fully reverted. The disposable `codex/simplification-field-probe` branch was
+deleted without a commit or merge. Exactly six tracked files were required:
+
+- `namisync/core/planning.py`: the frozen domain field and its one canonical
+  plan projection;
+- `namisync/workflows/models.py`: the single `PlanOperationView` field;
+- `namisync/workflows/runtime.py`: the domain-to-view mapping;
+- `tests/test_bridge_resume.py`: one real plan -> commit -> dispatcher pause ->
+  checkpoint reopen -> resume -> completion check;
+- `tests/interfaces/web/_public_view_witnesses.py`: the exact public bridge
+  witness for both the operation and containing plan review; and
+- `tests/test_core_scanplan.py`: the kept exact-field completeness alarm,
+  exercised with a non-null operation so optional default omission could not
+  hide an unprojected semantic value.
+
+The scratch test used `dataclasses.replace`. A non-null value changed generated
+domain equality and the canonical plan fingerprint, retained its operation id,
+appeared in `operation_projection` and `PlanOperationView`, survived both real
+`open_execution` calls and paused checkpoint materialization, and had no effect
+on successful execution. The canonical projection omitted only the default
+`None` value, so the existing epoch-5 plan identity bytes remained unchanged;
+their focused full-identity and identityless checks passed without editing the
+frozen vector or its hash owner.
+
+No dispatcher, checkpoint, database, persistence decoder, interface codec,
+JavaScript validator, executor policy, authority/adoption API, compatibility
+layer, or generic helper required a field-specific edit. The exact focused
+command was:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests/test_bridge_resume.py::test_br_g_10_dispatcher_pause_resume_reopens_the_same_run tests/interfaces/web/test_transport.py::test_br_g_32_every_approved_public_view_crosses_real_dispatch_exactly tests/test_core_scanplan.py::test_plan_fingerprint_uses_explicit_identity_text tests/test_core_scanplan.py::test_identityless_plan_bytes_preserve_the_epoch5_capture tests/test_core_scanplan.py::test_core_hash_projections_cover_exact_known_dataclasses -q
+```
+
+It passed **52 tests**. The measured result is **6 files**, below the declared
+maximum of 8 and the historical 20–27-file baseline. After reversal,
+`git diff --exit-code` was clean and `simplification_probe` had no match under
+`namisync` or `tests`.
+
 ---
 
 ## 9. Verification and resumption
@@ -729,14 +770,28 @@ after those checks pass.
 
 - Planning branch: `milestone1-anthony`.
 - Planning base: `42fae4d3b498175a4884e64b6995287188f616e3`.
-- Committed SIM-0 collection: 5,208 of 5,236 tests collected, 28 deselected.
+- Committed SIM-0 collection: 5,236 total tests, with 5,208 selected and 28
+  deselected.
 - Ordinary baseline: 5,204 passed, 4 skipped, 28 deselected, with the bundled
   Node runtime supplied through `NAMISYNC_TEST_NODE`.
 - Import baseline: 11 contracts kept, 0 broken across 77 files and 346
   dependencies.
-- Active row: none; the implementation register is complete.
-- Next action: perform and revert the disposable §8 field-fanout exit test, then
-  close the task documentation without starting feature work.
+- Final collection: 4,913 total tests, 28 headed deselections, and 4,885
+  ordinary executions.
+- Final ordinary result: 4,881 passed and 4 capability-skipped. Final import
+  analysis: 11 contracts kept, 0 broken across 75 files and 334 dependencies.
+- From the fixed SIM-0 plan comparison `83e5da1` through implementation HEAD
+  `f73dd98`, production changed by 373 additions and 4,681 deletions (net
+  -4,308), while tests changed by 1,543 additions and 4,094 deletions (net
+  -2,551). These totals include bounded CLI-ingress fix `e3683a1` (+20
+  production and +52 test lines, no deletions); the SIM-1 and SIM-2 removal
+  subtotals otherwise sum exactly. These are terminal trend measurements, not
+  acceptance gates.
+- Active row: none; the implementation register and §8 exit test are complete.
+- Next action: none within this run. Any H2 checkpoint, new feature, or broader
+  ownership restructure requires its own finite register and user direction.
+- Implementation commits: CLI ingress `e3683a1`, semantic checkpoints
+  `370cfa5`, and redundant event-certification removal `f73dd98`.
 - SIM-0 corpus commit:
   `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
 - Frozen SHA-256 values:
@@ -751,5 +806,5 @@ after those checks pass.
 - Mechanism counters: aliasing 1; lost enforcement 0; representation drift 1;
   coverage hole 4. The SIM-2 three-of-any-kind stop and reorganization are
   recorded above.
-- Do not modify a frozen corpus artifact, widen SIM-2 beyond §5, or resume H2
-  feature work.
+- Do not modify a frozen corpus artifact or treat this closed run as authority
+  to resume H2 feature work.

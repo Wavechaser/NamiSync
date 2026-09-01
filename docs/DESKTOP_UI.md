@@ -29,9 +29,10 @@ event/transport-custody claim only. The v4 diagnostic event evidence and Tier-1
 custody drift evidence remain historical, not a new calibration or acceptance;
 `M1_BRIDGE.md` owns the exact disposition. A separate current-source one-child
 guard requires both live custody shapes to remain within that frozen ceiling on
-ordinary suite runs;
-BR-G-45 separately leaves full terminal-artifact retention open, and
-shell-owned SH-G-15 leaves version-bound whole-runtime containment open. The
+ordinary suite runs.
+The former BR-G-45 full terminal-artifact model is retired and supplies no
+active aggregate-retention guarantee, while shell-owned SH-G-15 version-bound
+whole-runtime containment remains open. The
 earlier whole-Job delta is diagnostic input only, not a result for any of those
 new predicates. GUI Break 1 and Slice 4 completed their audited realignment and
 were hardened and reverified on 2026-08-17 with ordinary, scale, and real

@@ -31,9 +31,10 @@ runs pass, closing realigned SH-G-8 and BR-G-42 event/transport custody for the
 frozen historical v1 representation only. The 2026-08-22 v4 event diagnostic
 and Tier-1 current-source custody drift runs passed without recalibrating or
 extending that acceptance; `M1_BRIDGE.md` owns their exact disposition.
-Other BR-G-42 rows remain on their owning slices. BR-G-45
-separately keeps terminal artifact/retention scale open, and
-shell-owned SH-G-15 keeps version-bound whole-runtime containment open. GUI
+Other BR-G-42 rows remain on their owning slices. The initial simplification
+run retires the former BR-G-45 terminal-artifact model without activating a task
+surface or replacement guarantee; shell-owned SH-G-15 keeps version-bound
+whole-runtime containment open. GUI
 Break 1's token,
 component, icon, motion, and native-material
 foundation and Slice 4's presentation core/shell frame completed their audited
@@ -45,8 +46,12 @@ removal and the independently reviewed 3R remediation, are complete.
 Checkpoint 4P's bounded prerequisite consolidation is complete under
 `M1_SHELL_H2.md`'s closed register. It repairs and simplifies the already-landed
 source/custody prerequisites but activates no task command, lifecycle, retention
-model, constant, fixture, validator, or BR-G-45 evidence. Checkpoint 4 proper
-has not started. Checkpoints 5–12 remain pending. NamiSync remains
+model, constant, fixture, validator, or BR-G-45 evidence. Checkpoint 4 under its
+former complete owner-graph and retained-byte rules is retired; it did not
+start. Checkpoints 5–12 remain pending and require a fresh finite register
+before implementation. Later checkpoint-4/BR-G-45 references in this older
+shell plan preserve the superseded design record; `M1_SHELL_H2.md` and
+`../SIMPLIFICATION.md` own current status. NamiSync remains
 version `0.1.0` until M1 is complete. Finishing M1 makes the product beta-ready;
 any later version change is a separate release decision.
 

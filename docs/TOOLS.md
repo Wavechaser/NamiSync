@@ -136,10 +136,12 @@ guard from clean committed source. Record the live drift and its ceiling margin;
 passing that guard is regression evidence, not a new calibration or acceptance
 artifact.
 
-BR-G-45 must first define and enforce its production aggregate-retention policy
-and derive analytical containment from the complete admitted domain. Only a
-separately identified native or renderer residual that production cannot bound
-analytically may become an empirical claim. SH-G-15's whole headed runtime is
+The former BR-G-45 complete-graph model is retired. Any future task surface must
+define and enforce a finite production aggregate-retention policy in its own
+closed register and derive analytical containment from the admitted domain.
+Only a separately identified native or renderer residual that production cannot
+bound analytically may become an empirical claim.
+SH-G-15's whole headed runtime is
 the anticipated empirical Tier 3 consumer because WebView2, CLR, allocator,
 topology, and version effects are irreducibly runtime-dependent. Shared `tools`
 support may be extracted for an actual empirical consumer, but only for

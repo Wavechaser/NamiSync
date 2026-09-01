@@ -1,58 +1,65 @@
 # Session Handoff
 
-Status (2026-09-01): the ratified initial simplification run is complete through
-SIM-1 on `milestone1-anthony`. Process-local workflow payload serialization has
-been removed and replaced by detached typed checkpoint custody. SIM-2 is the
-only active row. H2 checkpoints 5-8 and every new feature remain out of scope.
+Status (2026-09-01): the initial architectural simplification run is complete
+on `milestone1-anthony`. SIM-0, SIM-1, SIM-2, and the disposable terminal field
+probe are closed. H2 checkpoints 5–8 and every new feature remained out of
+scope; there is no active delivery row.
 
 ## Delivered
 
-- Deleted `namisync/workflows/payloads.py`,
-  `namisync/workflows/_json_envelope.py`, and the inventory/integrity codec and
-  charge closure. All eight internal codec entry points and 134 codec/JSON
-  helper functions are gone.
-- Dispatcher/session custody now carries one opaque object and never inspects
-  its semantics. Frozen plan, inventory, and integrity requests serve directly
-  as checkpoints. Execution adds one `ExecutionCheckpoint` using the existing
-  execution/selection snapshots and returns fresh mutable state from one
-  `materialize()` path; there is no checkpoint authority, adoption, schema,
-  version, generic freezer, or compatibility representation.
-- Planning preparation requires the exact canonical identity policy and retains
-  the callback-free option snapshot before deriving resources. Existing
-  workflow-entry, execution-overlay, verify-continuation, external-ingress, and
-  filesystem/persistence enforcement remains at its authoritative owner.
-- The three-finding SIM-1 stop is recorded in `SIMPLIFICATION.md`: one aliasing,
-  one representation-drift, and one coverage-hole finding. The bounded repairs
-  passed independent rereview. The complete deleted-test denominator is 99:
-  67 public replacements and 32 removed-mechanism tests, with zero knowingly
+- `83e5da1` ratifies bridge and CLI as interface-adapter ingresses; bounded fix
+  `e3683a1` gives CLI the equal complete-request bound before command handling
+  without changing supported in-bound commands.
+- `370cfa5` removes all process-local workflow JSON codecs, payload versions,
+  charge machinery, and byte custody. Dispatcher now holds opaque semantic
+  checkpoints. Frozen plan, inventory, and standalone-integrity requests are
+  reused directly; execution has one detached `ExecutionCheckpoint` and one
+  materialization path, with no checkpoint authority, adoption API, schema,
+  compatibility form, or generic freezer.
+- `f73dd98` removes downstream Python and JavaScript event-body certification.
+  The domain projector owns live semantics, the persistence decoder retains
+  exact v5 validation, EventHub owns the reliable-byte wall before mutation,
+  and the browser retains only transport/session/sequence/routing/reducer
+  checks. Persisted event bytes, history envelopes, database contracts, schema
+  versions, and data epoch are unchanged.
+- Both three-finding stop events are preserved in `SIMPLIFICATION.md` with
+  mechanism tables and owner-specific repairs. Across SIM-1 and SIM-2, all 119
+  deleted or renamed test functions have an exact disposition: 82 public
+  replacements, 37 removed-mechanism dispositions, and zero knowingly
   uncovered behavior.
+- The scratch `PlanOperation.simplification_probe` exit test passed in six
+  tracked files against a maximum of eight and a historical 20–27 baseline. It
+  proved equality/fingerprint participation, exact public view delivery, the
+  retained exact-field completeness alarm, and real dispatcher
+  pause/reopen/resume without a field-specific checkpoint, codec, validator,
+  persistence, JavaScript, authority, or executor edit. The scratch changes
+  were reverted and the disposable branch was deleted without a commit.
 
 ## Verification
 
 - Frozen simplification audit: three identical successful runs; all four frozen
-  files unchanged from corpus commit
+  files remain byte-identical to corpus commit
   `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
-- Post-repair focused set: 948 passed.
-- Core/dispatcher/workflows/interfaces departments: 3,699 passed, 1 skipped,
-  1,423 deselected.
-- Node-enabled ordinary suite: 5,091 passed, 4 skipped, 28 headed deselected.
-- Import boundaries: 11 kept, 0 broken across 75 files and 333 dependencies.
-- Relocation audit: eight codec entries, 15 runtime codec calls, and 134 helper
-  definitions reduced to zero; production changed +288/-4,084 and tests
-  +1,239/-2,873. These are reported trends, not gates.
-- `git diff --check` and the final exact-path commit review still run immediately
-  before the SIM-1 commit.
+- Final affected event/history/bridge/Node set: 1,223 passed, 6 deselected.
+- Final affected departments: 3,854 passed, 1 skipped, 1,059 deselected.
+- Final ordinary suite: 4,881 passed, 4 skipped, 28 headed deselected.
+- Import analysis: 11 contracts kept, 0 broken across 75 files and 334
+  dependencies, down from 77 files and 346 dependencies.
+- Terminal field probe: 52 focused tests passed; six exact tracked paths;
+  default-null epoch-5 identity bytes also remained green. Reversal left no
+  `simplification_probe` reference and a clean implementation tree.
+- From fixed comparison `83e5da1` through implementation head `f73dd98`,
+  production changed +373/-4,681 (net -4,308), tests changed +1,543/-4,094
+  (net -2,551), and ordinary selected tests moved from 5,208 to 4,885. The totals
+  include bounded CLI-ingress fix `e3683a1` (+20 production and +52 test lines,
+  no deletions); the removal subtotals otherwise sum exactly. These values are
+  reported trends, not gates.
 
 ## Next safe action
 
-Implement SIM-2 exactly as closed in `SIMPLIFICATION.md`: move the reliable
-canonical-byte maximum into `canonical_event_bytes` before any `EventHub`
-mutation, remove downstream Python/JavaScript event-body recertification, and
-preserve byte-for-byte event-v5 persistence plus the durable history envelope.
-Do not change the epoch, event shape, history receipt/hash/watermark logic,
-command validation, unrelated views, or any H2 feature.
-
-After SIM-2 passes its frozen/Node/department/ordinary/import gates, run the
-disposable `PlanOperation.simplification_probe` exit test. The target is no more
-than eight tracked source/test files; revert every probe change and delete its
-branch before final closeout.
+Do not extend this closed register. Any H2 checkpoint, new feature, broad
+authority cleanup, or task-ownership restructure needs explicit user direction
+and a new finite delivery register. Preserve the simplified ownership rules:
+typed values inside the process, validation at real boundaries, one truth owner,
+one canonical boundary projection, opaque dispatcher custody, and no new
+certification framework.

@@ -33,10 +33,11 @@ contract freezes the 1,966,080-byte ceiling. Three fresh holdout-b runs then
 pass at 1,351,794 ordinary and 1,513,014 exact-maximum bytes. Realigned SH-G-8
 and BR-G-42 event/transport custody are closed; other BR-G-42 rows remain on
 their owning slices.
-BR-G-45 separately leaves aggregate completed-task containment open, while
-shell-owned SH-G-15 leaves version-bound
-whole-runtime containment open. The earlier whole-Job delta is diagnostic input
-to SH-G-15 design, not SH-G-8 custody evidence or a limit for either gate.
+The initial simplification run retires the former BR-G-45 aggregate completed-
+task model without activating a task surface or creating a replacement
+guarantee. Shell-owned SH-G-15 version-bound whole-runtime containment remains
+open. The earlier whole-Job delta is diagnostic input to SH-G-15 design, not
+SH-G-8 custody evidence or a limit for either contract.
 
 **Completed maintenance refactor (2026-08-11).** The cross-cutting executor,
 verifier, root-authority, and test-maintenance cleanup is closed; its retained

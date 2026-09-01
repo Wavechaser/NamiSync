@@ -466,8 +466,10 @@ The stored wrappers and store table are outside the frozen SH-G-8 transport root
 ceiling are unchanged. Field-shape and fault tests establish the store handoff
 contract, not a total-memory reduction or a new measured acceptance ceiling.
 The shared full result remains a subject-scaled terminal artifact, separately
-observed through live dispatcher result roots. The terminal-artifact and whole-
-runtime gates (BR-G-45 and SH-G-15) remain open; this change claims neither bound.
+observed through live dispatcher result roots. The former BR-G-45 aggregate
+terminal-artifact model is retired and supplies no active bound. SH-G-15 whole-
+runtime containment remains open; this change claims neither a replacement
+aggregate bound nor whole-runtime containment.
 Contained store-write and custody-release failures retain only separate sticky
 Boolean failure markers. The dispatcher does not retain the exception, its
 arguments, attributes, cause, context, or traceback: any of those can keep an
@@ -486,7 +488,9 @@ keeping the existing failed-prefix audit behavior without retaining factory
 frames.
 Caller-owned exceptions and audit observers
 may still reference earlier records; this boundary does not promise
-whole-process or secure-memory erasure. BR-G-45 remains open.
+whole-process or secure-memory erasure. Any future task-surface aggregate-
+retention contract requires a new finite register rather than revival of the
+retired BR-G-45 model.
 
 Dispatcher construction occurs before any desktop task exists. An
 unsuccessful scheduler-thread construction and an independently injected second

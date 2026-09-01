@@ -37,15 +37,45 @@ claims explicit, independently reviewable, and regression-backed.
   no checkpoint schema, compatibility alias, adoption API, or generic freezer
   replaced the deleted wire contract.
 - Closed the three-finding SIM-1 stop through a recorded mechanism table,
-  bounded repairs, and independent rereview. All 99 deleted tests have an exact
-  public-replacement or mechanism-removed disposition, with zero knowingly
-  uncovered behavior; frozen pause/resume/cancel/settlement and event-v5 corpora
-  remain unchanged.
+  bounded repairs, and independent rereview. All 99 SIM-1 deleted test functions
+  have an exact public-replacement or mechanism-removed disposition, with zero
+  knowingly uncovered behavior; frozen pause/resume/cancel/settlement and
+  event-v5 corpora remain unchanged.
 - SIM-1 removed 3,796 net production lines and 1,634 net test lines while
   reducing import analysis from 77 files/346 dependencies to 75/333. The
   ordinary suite passed 5,091 tests with four capability skips and 28 headed
   deselections; all 11 import contracts remained kept. These counts are trends,
   not acceptance gates.
+- Removed downstream Python event-body recertification, the bridge event-view
+  validator entry, and the JavaScript semantic mirror. The event owner now
+  projects once; persistence retains its exact v5 decoder, EventHub owns the
+  pre-mutation reliable-byte wall, and the browser checks only its exact
+  transport wrapper, session/sequence routing, atomic staging, and reducer
+  behavior. Persisted bodies, history envelopes, receipts, hashes, watermarks,
+  schema versions, and data epoch did not change.
+- Stopped SIM-2 after three mixed-purpose test cuts exposed coverage holes,
+  moved each surviving guarantee to its public owner, and passed independent
+  rereview before resuming verification. Its 20 deleted or renamed test
+  functions have 15 public replacements and five removed-mechanism
+  dispositions. Across both removal checkpoints the denominator is 119 test
+  functions, with 82 public replacements, 37 removed-mechanism dispositions,
+  and zero knowingly uncovered behavior.
+- Passed the disposable terminal domain-field probe in six tracked files
+  against the declared maximum of eight and historical 20–27-file baseline. A
+  non-null `PlanOperation` field changed equality and its canonical fingerprint,
+  crossed the single public view, satisfied the retained exact-field
+  completeness alarm, survived real dispatcher pause/reopen/resume, and
+  required no field-specific checkpoint, database, codec, JavaScript,
+  validator, authority, or executor edit. All 52 focused cases passed; all
+  scratch changes and the branch were removed without a commit.
+- From the ratified SIM-0 comparison through the implementation head,
+  production changed +373/-4,681 (net -4,308) and tests +1,543/-4,094 (net
+  -2,551), including bounded CLI-ingress fix `e3683a1` (+20 production and +52
+  test lines, no deletions); the removal subtotals otherwise sum exactly. The
+  final ordinary run passed 4,881 tests with four capability skips
+  and 28 headed deselections; the frozen audit passed three identical runs and
+  all 11 import contracts remained kept across 75 files/334 dependencies. These
+  counts are trends, not acceptance gates.
 
 #### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-30)
 

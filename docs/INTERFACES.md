@@ -28,9 +28,9 @@ current-source event timing and later feature surfaces, remain open on their
 owning slices. One current-source child runs as a separate ordinary-suite drift
 guard and requires both live custody shapes to remain within the frozen
 1,966,080-byte ceiling without modifying the accepted validator or artifacts.
-BR-G-45 terminal-artifact
-retention and shell-owned SH-G-15 whole-runtime containment remain independently
-open.
+The former BR-G-45 terminal-artifact model is retired by the initial
+simplification run and supplies no aggregate-retention guarantee. Shell-owned
+SH-G-15 whole-runtime containment remains independently open.
 GUI Break 1 and Slice 4 completed their audited realignment and were hardened
 and reverified on 2026-08-17; the user-facing
 Setup, plan, inventory, integrity, and control surfaces remain. The history and
@@ -576,7 +576,8 @@ including entries paused before reservation. Shutdown joins exact worker
 objects outside the bridge lock; an expired close deadline retains the position
 and leaves close retryable. This bounds admitted return custody, not pywebview's
 pre-admission thread creation, renderer allocation, or representation-specific
-copy bytes; BR-G-45 remains separately open.
+copy bytes. The former BR-G-45 aggregate-retention model is retired; any future
+task-surface containment contract requires a new finite delivery register.
 Before exposing the bridge, the host installs a per-window callback registry
 that discards only pywebview's unused synchronous `None` entries. Callable
 asynchronous entries keep their upstream lookup/delete behavior. Pinned-source
