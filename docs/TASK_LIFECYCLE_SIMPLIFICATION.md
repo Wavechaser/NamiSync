@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-02): active closed register; user-authorized LC-0a
-complete, LC-1a next.** This
+**Standing (2026-09-02): active closed register; LC-0a complete and LC-1a
+stopped on a preexisting LS-1 boundary defect.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -280,7 +280,7 @@ duplicate authorities rather than rename them.
 | --- | --- | --- | --- | --- |
 | `LC-0` | Ratify this register/census, freeze boundary-only T1, record both observation barriers, and install four baseline T2 detectors. | None | Three identical T1 runs; corruption self-tests; recorded barriers; detector fault self-tests; ordinary/import baseline. | Complete |
 | `LC-0a` | Freeze generated-ID equality/distinctness, corpus-version governance, exact LC-6 department retirement, and the retained-guard cost before production work. | `LC-0` | Focused oracle tests; unchanged frozen hash; documentation inspection; no production diff. | Complete |
-| `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0a` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Pending |
+| `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0a` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Stopped: preexisting LS-1 defect |
 | `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1a` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Pending |
 | `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0a` only; independent of `LC-2` | Core/dispatcher, exact stored projection, T1 persisted bytes. | Pending |
 | `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Pending |
@@ -407,16 +407,26 @@ test-consolidation checkpoint and is not authorized here.
 | T1 stability | Three fresh processes and the frozen baseline are byte-identical: SHA-256 `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`. The oracle rejects bridge, CLI, event-sequence, fixed drain-identity, persistence, and filesystem corruptions. |
 | `DISC-B1` | With the CLI push callback blocked after `PhaseChanged`, cancellation is accepted and dispatcher truth reaches canceled before callback release; release then yields one Terminal, one terminal record, canceled exit mapping, exact stdout, and exact stderr. |
 | `DISC-B2` | `begin_close` marks delivery closing, increments its generation, and wakes the blocked bounded offer before current `unsubscribe_all`; the baseline then releases the observer once and orders offer withdrawal, adapter unsubscribe, session close, and service close. This records current behavior, not target ownership. |
-| T2 baseline | LS-1, LS-2, LS-4a, and LS-5 pass on untouched production. LS-4a covers F1-F5, R1-R4, and D1-D4; the full focused LC-0 set is `28 passed`. LS-3/LS-4b remain absent until LC-1a. |
+| T2 baseline | LC-0 initially observed LS-1, LS-2, LS-4a, and LS-5 passing on untouched production, with LS-4a covering F1-F5, R1-R4, and D1-D4 (`28 passed`). During LC-1a, LS-1 intermittently produced out-of-order delivery; an untouched `197a2fc` clone then reproduced the identical `[1, 2, 3, 68, 4, 141, ...]` trace on its first isolated run. This supersedes the insufficient earlier pass observation and is recorded as a preexisting boundary defect in `BUGS.md`. LS-3/LS-4b remain introduced LC-1a guarantees. |
 | Test census | `docs/TASK_LIFECYCLE_TEST_LEDGER.md` contains 129 unique behavioral rows and eight unique helper rows over the exact seven-file corpus; all dispositions remain pending. |
 | Broad baseline | Ordinary suite with required bundled Node: `4907 passed, 4 skipped, 28 deselected`; import law: 11 kept, 0 broken. |
 | Adversarial review | A separate read-only review found five guard defects; all were corrected and independently re-reviewed closed. No production file or lifecycle behavior changed. |
 | LC-0a amendment | Ordered `[A, B, A, B]` normalization and fixed-ID preservation are explicit; runner/baseline format remain literal 1; frozen SHA-256 remains `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`; oracle plus department checks are `27 passed`; the diff contains only this register and the oracle self-test. |
 
-- **Current checkpoint:** LC-0a complete; LC-1a has not started.
-- **Next action:** begin LC-1a from the frozen guard baseline.
-- **Recovery rule:** do not merge or cherry-pick `59affc4`; rebuild LC-0 as one
-  coherent guard-only commit. The recovery snapshot remains isolated.
+- **Current checkpoint:** LC-1a stopped from guard commit `197a2fc`; incomplete
+  task-owned work is preserved at recovery commit `dc94aef` only.
+- **Next action:** obtain adjudication for the preexisting LS-1 post-ejection
+  replay cursor defect. Fix it separately or explicitly accept it before
+  rebuilding and resuming LC-1a.
+- **Recovery rule:** do not merge or cherry-pick `59affc4` or `dc94aef`; both
+  recovery snapshots remain isolated and are not review units.
 - **Stop:** any supported baseline defect, real-boundary drift, baseline LS
   consequence, nondeterministic T1, repeated-defect threshold, inability to
   preserve work, or required event/capacity change.
+- **Triggered stop evidence (2026-09-02):** the migrated LS-1 detector failed
+  twice intermittently, including the sequence prefix
+  `[1, 2, 3, 68, 4, 141, ...]`; the unchanged detector on an untouched
+  `197a2fc` clone reproduced that exact prefix on its first run. The frozen T1
+  corpus still matched because its one complete plan session does not force
+  subscriber ejection/replay. No later register work is authorized until the
+  defect is adjudicated.
