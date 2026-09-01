@@ -866,6 +866,107 @@ def test_integrity_snapshot_orders_completed_rows_by_frozen_selection(
 
 
 @pytest.mark.parametrize(
+    "mode, kind, expected_path",
+    [
+        (IntegrityMode.BASELINE, BASELINE_KIND, "b.txt"),
+        (IntegrityMode.REBASELINE, REBASELINE_KIND, "a.txt"),
+    ],
+)
+def test_paused_baseline_and_rebaseline_resume_without_repeating_or_losing_items(
+    tmp_path: Path,
+    mode: IntegrityMode,
+    kind: str,
+    expected_path: str,
+) -> None:
+    started = Event()
+    release = Event()
+    calls = 0
+
+    def runner(selection, context, recorder):
+        nonlocal calls
+        del recorder
+        calls += 1
+        if calls == 1:
+            item = selection.pending[0]
+            size = 0 if item.expected_stat is None else item.expected_stat.size
+            selection.note_bytes_processed(size)
+            selection.advance_bytes_total_high_water(
+                sum(
+                    0
+                    if selected.expected_stat is None
+                    else selected.expected_stat.size
+                    for selected in selection.items
+                )
+            )
+            outcome = IntegrityOutcome(
+                item_id=item.item_id,
+                row_id=item.row_id,
+                location_id=item.location_id,
+                path=item.display_path,
+                phase=mode.value,
+                result=IntegrityResult.BASELINED,
+            )
+            context.run.emit(outcome)
+            selection.mark_completed(item.item_id, size)
+            started.set()
+            assert release.wait(2)
+            context.run.checkpoint()
+            raise AssertionError("pause checkpoint must stop the runner")
+        return IntegrityRunResult((), RecordingStatus.OK)
+
+    runtime, location_id, scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {mode: runner},
+    )
+    scanner_calls_before = len(scanner.calls)
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    request_id = f"pause-resume-{mode.value}"
+    try:
+        session_id = dispatcher.submit(
+            kind,
+            IntegrityRequest(request_id, mode, location_id=location_id),
+        )
+        assert started.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release.set()
+        _wait_for(dispatcher, session_id, SessionState.PAUSED)
+
+        assert dispatcher.resume(session_id).accepted
+        completed = _wait_for(dispatcher, session_id, SessionState.COMPLETED)
+
+        assert completed.result is not None
+        assert completed.result.status is SessionState.COMPLETED
+        assert completed.result.canceled is False
+        assert [
+            (item.path, item.phase, item.result)
+            for item in completed.result.items
+        ] == [
+            (expected_path, mode.value, IntegrityResult.BASELINED)
+        ]
+        assert calls == 2
+        assert len(scanner.calls) == scanner_calls_before + 2
+
+        history = runtime.get_history_summary(request_id)
+        history_items = runtime.get_history_items(request_id)
+        assert history.activity_kind == mode.value
+        assert history.current_state == SessionState.COMPLETED.value
+        assert history.item_count == 1
+        assert [
+            (retained.item.path, retained.item.phase, retained.item.result)
+            for retained in history_items.items
+        ] == [(expected_path, mode.value, IntegrityResult.BASELINED.value)]
+    finally:
+        release.set()
+        assert dispatcher.shutdown().complete
+        runtime.close()
+
+
+@pytest.mark.parametrize(
     "mode, kind",
     [
         (IntegrityMode.BASELINE, BASELINE_KIND),

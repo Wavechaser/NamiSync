@@ -6772,7 +6772,7 @@ def test_long_path_plan_preflight_execute_verify_and_rerun_converge(
     assert rerun.status is SessionState.COMPLETED
 
 
-def test_xv_8_retained_compound_history_projects_phases_after_reopen(
+def test_xv_8_pause_resume_runs_linked_verify_and_retains_terminal_history(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
@@ -6784,6 +6784,21 @@ def test_xv_8_retained_compound_history_projects_phases_after_reopen(
     content = b"retained compound history"
     (source / "file.bin").write_bytes(content)
     runtime = LocalWorkflowRuntime(ledger_path, history_path)
+    original_executor = runtime._deps.executor
+    entered = Event()
+    executor_calls = 0
+
+    def pause_once_then_execute(execution_set, context, recorder, policies, fs):
+        nonlocal executor_calls
+        executor_calls += 1
+        if executor_calls == 1:
+            entered.set()
+            while True:
+                context.checkpoint()
+                sleep(0.005)
+        return original_executor(execution_set, context, recorder, policies, fs)
+
+    runtime._deps = replace(runtime._deps, executor=pause_once_then_execute)
     dispatcher = Dispatcher(
         _workflow_registry(runtime),
         lock_provider=InProcessResourceLockProvider(),
@@ -6811,6 +6826,10 @@ def test_xv_8_retained_compound_history_projects_phases_after_reopen(
             verify_after_execute=True,
         )
         execution_session = dispatcher.submit(EXECUTION_KIND, execution)
+        assert entered.wait(2)
+        assert dispatcher.pause(execution_session).accepted
+        _wait_for_session(dispatcher, execution_session, SessionState.PAUSED)
+        assert dispatcher.resume(execution_session).accepted
         execution_record = _wait_for_session(
             dispatcher,
             execution_session,
@@ -6822,6 +6841,30 @@ def test_xv_8_retained_compound_history_projects_phases_after_reopen(
         shutdown = dispatcher.shutdown()
         runtime.close()
     assert shutdown.complete
+    assert executor_calls == 2
+    assert (target / "file.bin").read_bytes() == content
+    assert [
+        (phase.phase, phase.status, phase.bytes_done, phase.bytes_total)
+        for phase in execution_record.result.phases
+    ] == [
+        ("execute", PhaseStatus.COMPLETED, len(content), len(content)),
+        ("verify", PhaseStatus.COMPLETED, len(content), len(content)),
+    ]
+
+    connection = connect_ledger_reader(ledger_path)
+    try:
+        ledger_rows = connection.execute(
+            """SELECT run_token, ended_at, filesystem_status, recording_status
+                 FROM runs"""
+        ).fetchall()
+    finally:
+        connection.close()
+    assert len(ledger_rows) == 1
+    ledger = ledger_rows[0]
+    assert ledger["run_token"] == run_id
+    assert ledger["ended_at"] is not None
+    assert ledger["filesystem_status"] == SessionState.COMPLETED.value
+    assert ledger["recording_status"] == RecordingStatus.OK.value
 
     reopened = LocalWorkflowRuntime(ledger_path, history_path)
     try:
@@ -6831,6 +6874,9 @@ def test_xv_8_retained_compound_history_projects_phases_after_reopen(
     finally:
         reopened.close()
 
+    assert retained.completion_status == "finalized"
+    assert retained.filesystem_status == SessionState.COMPLETED.value
+    assert retained.recording_status == RecordingStatus.OK.value
     assert retained.canceled is False
     assert retained.integrity_status == live.integrity
     assert retained.headline == live.headline

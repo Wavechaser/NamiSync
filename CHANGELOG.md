@@ -39,8 +39,8 @@ claims explicit, independently reviewable, and regression-backed.
 - Closed the three-finding SIM-1 stop through a recorded mechanism table,
   bounded repairs, and independent rereview. All 99 SIM-1 deleted test functions
   have an exact public-replacement or mechanism-removed disposition, with zero
-  knowingly uncovered behavior; frozen pause/resume/cancel/settlement and
-  event-v5 corpora remain unchanged.
+  knowingly uncovered behavior. The temporary pause/resume/cancel/settlement
+  and event-v5 corpora matched their committed baseline through closeout.
 - SIM-1 removed 3,796 net production lines and 1,634 net test lines while
   reducing import analysis from 77 files/346 dependencies to 75/333. The
   ordinary suite passed 5,091 tests with four capability skips and 28 headed
@@ -68,14 +68,25 @@ claims explicit, independently reviewable, and regression-backed.
   required no field-specific checkpoint, database, codec, JavaScript,
   validator, authority, or executor edit. All 52 focused cases passed; all
   scratch changes and the branch were removed without a commit.
+- Closed the post-run seams without restoring internal certification: history
+  now validates its one exact event-v5 projection before serializing, hashing,
+  or mutating durable state; the redundant drain-side JavaScript-safe integer
+  bound is gone; and checkpoint detachment is explicit at the central workflow
+  registration contract. Persisted event bytes and the shared data epoch remain
+  unchanged.
+- Retired the completed simplification oracle, its committed baseline, its
+  self-test, and its department wiring after the history change matched the
+  baseline across three identical runs. Active consumers retain the shared v5
+  fixtures plus focused exact-byte and public checkpoint-ownership coverage;
+  no standing hash or corpus-maintenance apparatus replaced the oracle.
 - From the ratified SIM-0 comparison through the implementation head,
   production changed +373/-4,681 (net -4,308) and tests +1,543/-4,094 (net
   -2,551), including bounded CLI-ingress fix `e3683a1` (+20 production and +52
   test lines, no deletions); the removal subtotals otherwise sum exactly. The
-  final ordinary run passed 4,881 tests with four capability skips
-  and 28 headed deselections; the frozen audit passed three identical runs and
-  all 11 import contracts remained kept across 75 files/334 dependencies. These
-  counts are trends, not acceptance gates.
+  follow-up ordinary run passed 4,879 tests with four capability skips and 28
+  headed deselections. Before retirement, the temporary audit passed three
+  identical runs; all 11 import contracts remained kept across 75 files/334
+  dependencies. These counts are trends, not acceptance gates.
 
 #### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-30)
 

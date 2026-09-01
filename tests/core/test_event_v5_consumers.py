@@ -35,6 +35,7 @@ from namisync.core.events import (
     ItemOutcome,
     PhaseChanged,
     TerminalSummary,
+    canonical_event_bytes,
     envelope_from_dict,
 )
 from namisync.core.execution import (
@@ -65,6 +66,25 @@ def test_dormant_v5_consumers_accept_each_exact_body(body_type: str) -> None:
 def test_dormant_v5_consumer_accepts_exact_review_limit_terminal() -> None:
     body = {"result": review_limit_terminal_summary()}
     validate_event_v5_envelope(envelope("Terminal", body=body))
+
+
+def test_canonical_v5_projection_preserves_exact_literal_body_bytes() -> None:
+    cases = {
+        **{body_type: envelope(body_type) for body_type in bodies()},
+        "Terminal.review-limit": envelope(
+            "Terminal",
+            body={"result": review_limit_terminal_summary()},
+        ),
+    }
+    for name, expected in cases.items():
+        expected_bytes = json.dumps(
+            expected,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        actual_bytes = canonical_event_bytes(envelope_from_dict(expected))
+        assert actual_bytes == expected_bytes, name
 
 
 @pytest.mark.parametrize(

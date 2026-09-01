@@ -33,11 +33,16 @@ scope; there is no active delivery row.
   preparation and pause snapshots transfer detached custody, reopening treats
   it as read-only and materializes fresh invocation state, and dispatcher adds
   no authority, adoption, freezer, or domain certification mechanism.
+- The closed simplification oracle is retired: its runner, committed baseline,
+  self-test, and department entry are deleted. The active shared event-v5
+  fixtures remain, with one compact core test preserving exact projection bytes
+  for all seven body kinds and the review-limit terminal.
 - Both three-finding stop events are preserved in `SIMPLIFICATION.md` with
   mechanism tables and owner-specific repairs. Across SIM-1 and SIM-2, all 119
   deleted or renamed test functions have an exact disposition: 82 public
   replacements, 37 removed-mechanism dispositions, and zero knowingly
-  uncovered behavior.
+  uncovered behavior. Oracle retirement separately disposes its three deleted
+  tests as two public replacements and one removed temporary mechanism.
 - The scratch `PlanOperation.simplification_probe` exit test passed in six
   tracked files against a maximum of eight and a historical 20–27 baseline. It
   proved equality/fingerprint participation, exact public view delivery, the
@@ -48,12 +53,16 @@ scope; there is no active delivery row.
 
 ## Verification
 
-- Frozen simplification audit: three identical successful runs; all four frozen
-  files remain byte-identical to corpus commit
-  `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
-- Final affected event/history/bridge/Node set: 1,223 passed, 6 deselected.
-- Final affected departments: 3,854 passed, 1 skipped, 1,059 deselected.
-- Final ordinary suite: 4,881 passed, 4 skipped, 28 headed deselected.
+- Before retirement, the simplification audit produced three identical runs
+  after SIM-F1 with no baseline drift. It is no longer ordinary-suite or rerun
+  infrastructure.
+- SIM-F1 history verification: focused regression passed; database department
+  passed 365 tests.
+- Web ownership cleanup: interfaces department passed 1,377 tests with the
+  required bundled-Node gates active.
+- Oracle retirement: the 14-case public replacement set passed. The current
+  ordinary suite passed 4,879 tests with 4 capability skips and 28 headed
+  deselections.
 - Import analysis: 11 contracts kept, 0 broken across 75 files and 334
   dependencies, down from 77 files and 346 dependencies.
 - Terminal field probe: 52 focused tests passed; six exact tracked paths;

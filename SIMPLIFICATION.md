@@ -117,75 +117,32 @@ Verification closed with the focused no-queue-or-durable-mutation regression,
 365 passing database-department tests, three identical frozen-audit runs, and
 no corpus or baseline drift. No persisted-body inequality was observed.
 
-SIM-0 closes only when the corpus artifacts and baseline commit are recorded in
-the resumption block. No implementation or removable test may be changed before
-that point.
+SIM-0 closed only after its implementation-time corpus and baseline were
+committed. No implementation or removable test changed before that point.
 
 ---
 
-## 3. Frozen regression corpora
+## 3. Retired implementation-time regression corpora
 
-Before implementation, capture:
+SIM-0 captured normalized workflow pause/resume/cancel/settlement traces and
+canonical event-v5 bytes before removal began. The temporary runner, committed
+baseline, and self-test stayed unchanged through SIM-1, SIM-2, and SIM-F1; the
+final SIM-F1 check again produced three identical runs with no baseline drift.
 
-- `tests/_event_v5_fixtures.py`;
-- `tools/simplification_regression_audit.py`;
-- `tools/simplification_regression_baseline.json`; and
-- `tests/test_tools_simplification_regression_audit.py`.
-
-The audit follows the evidence pattern of `tools/executor_settlement_audit.py`
-but remains small. It may contain fixtures and normalization; it may not
-reimplement a codec, validator, workflow reducer, settlement policy, or other
-production decision. Existing positive event-v5 fixtures are moved or shared,
-not copied into a second independently maintained vocabulary.
-
-### Workflow checkpoint corpus
-
-Drive production runtime/dispatcher paths through these exact scenarios:
-
-1. execution pause -> resume -> settle;
-2. execution pause -> cancel -> settle;
-3. linked verification pause -> resume;
-4. linked verification pause -> cancel and compound settlement;
-5. standalone baseline, verify, and rebaseline pause -> resume; and
-6. standalone baseline, verify, and rebaseline pause -> cancel.
-
-Normalize only nondeterministic ids, timestamps, temporary roots, and explicitly
-unordered facts. Preserve state/event order, terminal axes and items, recording
-disposition, byte high-water values, omission facts, and durable terminal
-state. No scenario may skip or remain unclassified.
-
-### Canonical v5 body corpus
-
-Freeze all seven event-body kinds, the review-limit terminal case, and the
-maximum-size envelope case. Record exact canonical JSON bytes and hashes and
-the exact `history_events.envelope_json` write/read value. Parsed-object
-equality is not a substitute for byte equality.
-
-Snapshot and check each corpus three times. SIM-0 is accepted only when all
-three normalized observations are identical. After the SIM-0 corpus commit,
-the audit, corpus definitions, baseline, and audit test are immutable for this
-run and must pass `git diff --exit-code` against that commit at every checkpoint.
-
-The corpora are exempt from every test-cut disposition: the suite may shrink;
-the corpora may not.
-
-Official capture and check commands are:
-
-```powershell
-.\.venv\Scripts\python.exe -m tools.simplification_regression_audit snapshot --baseline tools\simplification_regression_baseline.json --repeat 3
-.\.venv\Scripts\python.exe -m tools.simplification_regression_audit check --repeat 3
-```
-
-`--replace` is permitted only while finalizing the pre-freeze SIM-0 snapshot;
-it is forbidden after the corpus commit.
+Those closed-register artifacts are now retired and deleted. Their enduring
+behavior is covered by public workflow/dispatcher ownership tests and focused
+history tests. `tests/_event_v5_fixtures.py` remains active shared support for
+core, dispatcher, and browser tests; a compact core test compares all seven
+body projections plus the review-limit terminal byte-for-byte with those
+literal fixtures. No standing corpus rerun, hash, or freeze rule remains.
 
 ---
 
 ## 4. Regression, defect, and stop routing
 
-A regression has two independent limbs:
+A regression during the removal run had two independent limbs:
 
-1. **Behavioral:** a frozen corpus produces different output.
+1. **Behavioral:** the implementation-time corpus produces different output.
 2. **Enforcement:** a supported guarantee loses its last enforcer, even with a
    green suite.
 
@@ -195,12 +152,12 @@ contract.
 
 Route findings through `AGENTS.md`:
 
-- A corpus failure introduced by the active checkpoint is corrected before its
+- A corpus failure introduced by the active checkpoint was corrected before its
   mergeable commit.
-- If the corpus passes but removal exposes a bounded pre-existing defect, that
-  defect may land in a separate fix commit only when no stop rule fires.
-- Every other finding is logged and deferred.
-- A finding never expands the register.
+- If the corpus passed but removal exposed a bounded pre-existing defect, that
+  defect could land in a separate fix commit only when no stop rule fired.
+- Every other finding was logged and deferred.
+- A finding never expanded the register.
 
 Classify each unplanned mechanism as `aliasing`, `lost enforcement`,
 `representation drift`, or `coverage hole`. Counters are cumulative across this
@@ -281,9 +238,9 @@ window in which size is checked only after sequence or queue mutation.
 
 ## 6. Test deletion rule
 
-Tests travel with their removed mechanism in the same commit. The frozen
-corpora remove the need for an artificial intermediate green-suite commit, but
-they do not authorize deleting unique coverage.
+Tests traveled with their removed mechanism in the same commit. During SIM-1
+and SIM-2, the temporary corpora removed the need for an artificial intermediate
+green-suite commit but did not authorize deleting unique coverage.
 
 For every deleted test, record one disposition:
 
@@ -583,6 +540,34 @@ deletion. The knowingly-uncovered count is **zero**.
 - `test_br_g_36_browser_progress_validator_owns_the_expanded_exact_shape`.
 - `test_v5_progress_gate_rejects_in_memory_active_validator_mutations`.
 
+### Oracle-retirement deleted-test dispositions
+
+The retirement denominator is **3 deleted test functions**: **2
+`public-replacement`** and **1 `mechanism-removed`**. This is separate from the
+119-function SIM-1/SIM-2 denominator above. The knowingly-uncovered count
+remains **zero**.
+
+#### `public-replacement`
+
+- `test_event_corpus_freezes_all_v5_bodies_and_exact_reliable_wall` ->
+  `test_canonical_v5_projection_preserves_exact_literal_body_bytes`,
+  `test_dormant_reliable_ceiling_accepts_the_exact_bound_and_refuses_one_more`,
+  and `test_reliable_oversize_refuses_before_sequence_queue_or_audit_mutation`.
+- `test_committed_simplification_corpus_matches_production` ->
+  `test_paused_baseline_and_rebaseline_resume_without_repeating_or_losing_items`,
+  `test_paused_verify_resumes_without_repeating_or_losing_items`,
+  `test_paused_integrity_cancel_uses_exact_continuation_without_reopening`,
+  `test_xv_8_pause_resume_runs_linked_verify_and_retains_terminal_history`,
+  `test_br_g_10_dispatcher_pause_resume_reopens_the_same_run`,
+  `test_dispatcher_paused_execute_cancel_finishes_same_run_without_verify`,
+  `test_dispatcher_paused_verify_cancel_uses_runtime_compound_settlement`, and
+  the exact-v5 public replacements above.
+
+#### `mechanism-removed`
+
+- `test_frozen_corpus_paths_are_closed_and_present`; the closed-register
+  artifact-presence policy ended when the temporary oracle was retired.
+
 ---
 
 ## 7. Complexity-relocation failure audit
@@ -621,8 +606,8 @@ remaining symbols; renamed equivalents count as surviving nodes.
   source changed by 1,239 additions and 2,873 deletions (net -1,634); the 99
   deleted tests have the complete dispositions in §6. Collected tests moved
   from 5,236 to 5,123. These are trend observations, not acceptance gates.
-- The frozen audit passed three identical runs and its four files are unchanged
-  from `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`. Focused checkpoint tests
+- At the SIM-1 checkpoint, the temporary audit passed three identical runs and
+  its four artifacts matched the committed baseline. Focused checkpoint tests
   passed 948 cases; the affected departments passed 3,699 with one skip; the
   ordinary suite passed 5,091 with four skips and 28 headed deselections.
   Import analysis improved from 77 files/346 dependencies to 75/333 while all
@@ -658,14 +643,14 @@ mergeable commit. Independent rereview found no remaining last-enforcer loss.
   validators, and their body-only helper closure are gone. Finite searches find
   none of the deleted names in production or active tests.
 - Event flow now has one domain-to-v5 projector, one exact history-boundary
-  validator reused at admission and readback, one explicit reliable-byte wall, and one browser
-  transport check. The browser retains exact wrapper/session/v5/tag/positive
+  validator reused at admission and readback, one explicit reliable-byte wall,
+  and one browser transport check. The browser retains exact wrapper/session/v5/tag/positive
   SafeInt/body-object admission, Gap routing, atomic staging, and reducer
   behavior; public result/record validators remain separate.
 - No database file changed. Event schema 5, ledger 4, history 6, data epoch 6,
-  history envelopes, receipts, hashes, and watermarks are unchanged. The frozen
-  corpus passed three identical runs and its four files remain byte-identical to
-  `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
+  history envelopes, receipts, hashes, and watermarks are unchanged. At SIM-2
+  close, the temporary corpus passed three identical runs and its four
+  artifacts matched the committed baseline.
 - Production changed by 65 additions and 597 deletions (net -532). Test source
   changed by 252 additions and 1,221 deletions (net -969); all 20 deleted or
   renamed functions have dispositions in §6 and knowingly-uncovered remains
@@ -696,8 +681,8 @@ Completion requires every statement below:
   reused at admission and readback, with no downstream Python event-body certifier or JavaScript
   semantic twin.
 - The browser retains only its real transport-envelope checks.
-- The frozen audit does not encode production policy or become a substitute
-  implementation of what was removed.
+- The implementation-time audit was retired instead of becoming standing
+  infrastructure or a substitute implementation of what was removed.
 - Dependency paths and standing mechanisms are fewer, not renamed or displaced
   into tests, docs, adapters, or generic helpers.
 
@@ -775,19 +760,16 @@ maximum of 8 and the historical 20–27-file baseline. After reversal,
 
 ---
 
-## 9. Verification and resumption
+## 9. Closed verification record
 
-After each implementation checkpoint, run the frozen audit three times, the
-affected producer and consumer departments, the ordinary suite, and
-`lint-imports`. SIM-2 also runs the direct Node drain/reducer probes. No headed
-witness is required because this run activates and changes no user workflow;
-that does not waive ordinary packaged-JavaScript and transport verification.
-
-The final sweep reconciles every ledger row, proves the zero-uncovered rule,
-runs repository-wide searches for forbidden replacement mechanisms, compares
-before/after representation and dependency counts, records line/test trends,
-and performs the field probe in §8. `CHANGELOG.md` and `HANDOFF.md` close only
-after those checks pass.
+During implementation, each checkpoint ran the temporary audit three times,
+the affected producer and consumer departments, the ordinary suite, and
+`lint-imports`; SIM-2 also ran the direct Node drain/reducer probes. No headed
+witness was required because the run activated and changed no user workflow.
+The terminal sweep reconciled every ledger row, proved the zero-uncovered rule,
+searched for forbidden replacement mechanisms, measured dependency trends, and
+completed the field probe in §8. The temporary audit is now retired; this
+section creates no standing rerun instruction.
 
 ### Resumption block
 
@@ -799,10 +781,11 @@ after those checks pass.
   Node runtime supplied through `NAMISYNC_TEST_NODE`.
 - Import baseline: 11 contracts kept, 0 broken across 77 files and 346
   dependencies.
-- Final collection: 4,913 total tests, 28 headed deselections, and 4,885
-  ordinary executions.
-- Final ordinary result: 4,881 passed and 4 capability-skipped. Final import
-  analysis: 11 contracts kept, 0 broken across 75 files and 334 dependencies.
+- Current post-follow-up collection: 4,911 total tests, 28 headed deselections,
+  and 4,883 ordinary executions.
+- Current post-follow-up ordinary result: 4,879 passed and 4 capability-skipped.
+  Import analysis: 11 contracts kept, 0 broken across 75 files and 334
+  dependencies.
 - From the fixed SIM-0 plan comparison `83e5da1` through implementation HEAD
   `f73dd98`, production changed by 373 additions and 4,681 deletions (net
   -4,308), while tests changed by 1,543 additions and 4,094 deletions (net
@@ -815,19 +798,10 @@ after those checks pass.
   ownership restructure requires its own finite register and user direction.
 - Implementation commits: CLI ingress `e3683a1`, semantic checkpoints
   `370cfa5`, and redundant event-certification removal `f73dd98`.
-- SIM-0 corpus commit:
-  `144cbbceb7841d31cc5c85fa04ea1a34d89a74ec`.
-- Frozen SHA-256 values:
-  - `tests/_event_v5_fixtures.py`:
-    `52d36cdab200d047225a604de50e0b5118268074c21d243c896ea94e9c9b94e6`;
-  - `tests/test_tools_simplification_regression_audit.py`:
-    `7e8e2f106c4ed638d5f9026970bf95bffe0a0ef92556951a8e4e79d85bf0b897`;
-  - `tools/simplification_regression_audit.py`:
-    `a56f1df879e05d268d5228b0522518751289ca1fb40820c0d39c93bbd21d29b3`;
-  - `tools/simplification_regression_baseline.json`:
-    `97d11b6f69cc0ba8d1cd9e56096e3ccc539f79020f7c2322fe3b0adc805e6dab`.
+- The implementation-time simplification runner, committed baseline, and
+  self-test were retired after SIM-F1's final three-run match. The shared event
+  fixtures and focused public contract tests remain.
 - Mechanism counters: aliasing 1; lost enforcement 0; representation drift 1;
   coverage hole 4. The SIM-2 three-of-any-kind stop and reorganization are
   recorded above.
-- Do not modify a frozen corpus artifact or treat this closed run as authority
-  to resume H2 feature work.
+- This closed run is not authority to resume H2 feature work.
