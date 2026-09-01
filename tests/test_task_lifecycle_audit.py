@@ -36,17 +36,31 @@ def test_committed_boundary_baseline_matches_current_capture(
     audit.verify_captures(audit.read_capture(BASELINE), boundary_capture)
 
 
-def test_normalization_changes_only_declared_generated_opaque_ids(
+def test_corpus_format_version_is_frozen_for_active_register() -> None:
+    assert audit.FORMAT_VERSION == 1
+    assert audit.read_capture(BASELINE)["format_version"] == 1
+
+
+def test_normalization_preserves_generated_identity_relationships_and_fixed_ids(
     tmp_path: Path,
 ) -> None:
-    generated = "task-" + "e" * 32
+    first = "task-" + "e" * 32
+    second = "d" * 32
     fixed = "f" * 32
     normalized = audit.normalize_capture(
-        {"generated": generated, "fixed": fixed},
+        {"generated": [first, second, first, second], "fixed": fixed},
         tmp_path,
-        frozenset({generated}),
+        frozenset({first, second}),
     )
-    assert normalized == {"fixed": fixed, "generated": "$OPAQUE_0001"}
+    assert normalized == {
+        "fixed": fixed,
+        "generated": [
+            "$OPAQUE_0001",
+            "$OPAQUE_0002",
+            "$OPAQUE_0001",
+            "$OPAQUE_0002",
+        ],
+    }
 
 
 def _mutate_bridge_response(capture: dict[str, object]) -> None:

@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-02): active closed register; LC-0 complete and paused for
-review.** This
+**Standing (2026-09-02): active closed register; user-authorized LC-0a
+complete, LC-1a next.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -213,6 +213,28 @@ prose/exits, contents, persisted hashes, or repeated-id relationships.
 Self-tests corrupt each boundary family. Three fresh-process captures must
 normalize identically. Freeze once; delete only in LC-6.
 
+### Corpus format and re-freeze authority
+
+`format_version` identifies only the corpus JSON schema. `FORMAT_VERSION`
+remains exactly 1 and the frozen baseline, normalization, fixture inputs,
+captured boundary domain, fixed fixture root, and fixed free-space input remain
+byte-exact through the final pre-LC-6 verification. LC-1a through LC-5 may not
+change them. A corpus-schema deficiency is not permission to update the oracle
+from an implementation tree; changing the number alone authorizes no other
+change.
+
+Any legitimate schema change stops the active checkpoint and requires explicit
+user/register adjudication plus a new guard-only row. In an isolated checkout
+of the LC-0a closing commit, whose production tree remains the untouched
+`5631066` tree, enumerate the exact schema additions; run the candidate runner
+without production changes; prove every overlapping boundary observation is
+equal and every added field derives from that untouched baseline; retain all
+corruption sensitivity; produce three identical fresh captures; and record the
+old/new schemas and hashes. A bump may not accompany production changes. Any
+overlap difference, or any re-freeze whose purpose or effect is to make current
+implementation output pass, is boundary drift and a checkpoint-owned
+regression rather than schema migration.
+
 ### Observation-only barriers
 
 - `DISC-B1`: block the CLI callback after a running update, issue cancellation,
@@ -257,12 +279,31 @@ duplicate authorities rather than rename them.
 | ID | Accepted outcome | Depends on | Verification | Status |
 | --- | --- | --- | --- | --- |
 | `LC-0` | Ratify this register/census, freeze boundary-only T1, record both observation barriers, and install four baseline T2 detectors. | None | Three identical T1 runs; corruption self-tests; recorded barriers; detector fault self-tests; ordinary/import baseline. | Complete |
-| `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Pending |
+| `LC-0a` | Freeze generated-ID equality/distinctness, corpus-version governance, exact LC-6 department retirement, and the retained-guard cost before production work. | `LC-0` | Focused oracle tests; unchanged frozen hash; documentation inspection; no production diff. | Complete |
+| `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0a` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Pending |
 | `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1a` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Pending |
-| `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0` only; independent of `LC-2` | Core/dispatcher, exact stored projection, T1 persisted bytes. | Pending |
+| `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0a` only; independent of `LC-2` | Core/dispatcher, exact stored projection, T1 persisted bytes. | Pending |
 | `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Pending |
 | `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1a`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Pending |
 | `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1a`-`LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Pending |
+
+### LC-0a guard-governance amendment
+
+- One normalization test must prove all relationships together with ordered
+  `[A, B, A, B]`: repeated declared IDs keep their tokens, distinct declared
+  IDs remain distinct in first-seen order, and an undeclared fixed
+  opaque-looking value stays exact.
+- A literal guard pins `FORMAT_VERSION == 1` in both runner and baseline. The
+  re-freeze policy above is the only authorized way to change it.
+- LC-6 deletes exactly `tools/task_lifecycle_audit.py`,
+  `tools/task_lifecycle_baseline.json`, and
+  `tests/test_task_lifecycle_audit.py`, then removes only the latter's `tools`
+  department entry. It retains `tests/test_task_lifecycle.py` and its
+  `interfaces` department entry, then runs the department-manifest check.
+- No production source, frozen baseline, boundary expectation, or test
+  disposition changes in LC-0a.
+
+Commit gate: `test(interfaces): harden lifecycle oracle governance`.
 
 ### LC-1a mandatory disappearance and positive proof
 
@@ -343,12 +384,26 @@ not an independent complexity threshold. A thirteenth file or lifecycle-
 specific field logic fails the disposable probe. Default-null bytes remain
 unchanged; all scratch changes reverse and `rg simplification_probe` ends empty.
 
+### LC-6 exact retirement and retained cost
+
+LC-6 removes only the three temporary T1 artifacts and the single matching
+`tools` department entry named in LC-0a. The enduring stop detectors,
+observation barriers, positive-owner tests, `tests/test_task_lifecycle.py`, and
+its `interfaces` department entry remain. The exact retiring and retained line
+cost is recorded when LC-0a closes. The pre-amendment measurements were 1,653
+temporary lines (905 runner + 601 baseline + 147 self-test) and 1,290 retained
+guard lines. LC-0a measures 1,667 temporary lines (905 + 601 + 161) and the
+same 1,290 retained lines. Remeasure again at LC-6: ordinary
+`mechanism-removed`/`reanchored-owner` dispositions may shrink the retained
+module, but wholesale teardown belongs to a separately reviewed post-register
+test-consolidation checkpoint and is not authorized here.
+
 ## 6. Evidence and resumption
 
 | Evidence | Result |
 | --- | --- |
 | Base | Clean `milestone1-anthony` at `5631066`; prior recovery commit `59affc4` remains isolated and is not a review unit. |
-| Register refinement | User-adjudicated refinements incorporated 2026-09-02; saved `.codex` plan also updated. |
+| Register refinement | User-adjudicated refinements incorporated 2026-09-02; saved `.codex` plan also updated. LC-0a is an explicit later amendment for four nonblocking review findings. |
 | T1 stability | Three fresh processes and the frozen baseline are byte-identical: SHA-256 `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`. The oracle rejects bridge, CLI, event-sequence, fixed drain-identity, persistence, and filesystem corruptions. |
 | `DISC-B1` | With the CLI push callback blocked after `PhaseChanged`, cancellation is accepted and dispatcher truth reaches canceled before callback release; release then yields one Terminal, one terminal record, canceled exit mapping, exact stdout, and exact stderr. |
 | `DISC-B2` | `begin_close` marks delivery closing, increments its generation, and wakes the blocked bounded offer before current `unsubscribe_all`; the baseline then releases the observer once and orders offer withdrawal, adapter unsubscribe, session close, and service close. This records current behavior, not target ownership. |
@@ -356,11 +411,10 @@ unchanged; all scratch changes reverse and `rg simplification_probe` ends empty.
 | Test census | `docs/TASK_LIFECYCLE_TEST_LEDGER.md` contains 129 unique behavioral rows and eight unique helper rows over the exact seven-file corpus; all dispositions remain pending. |
 | Broad baseline | Ordinary suite with required bundled Node: `4907 passed, 4 skipped, 28 deselected`; import law: 11 kept, 0 broken. |
 | Adversarial review | A separate read-only review found five guard defects; all were corrected and independently re-reviewed closed. No production file or lifecycle behavior changed. |
+| LC-0a amendment | Ordered `[A, B, A, B]` normalization and fixed-ID preservation are explicit; runner/baseline format remain literal 1; frozen SHA-256 remains `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`; oracle plus department checks are `27 passed`; the diff contains only this register and the oracle self-test. |
 
-- **Current checkpoint:** LC-0 complete; implementation is paused for user
-  review. LC-1a has not started.
-- **Next action after review:** begin LC-1a only if the guard/register outcome is
-  accepted; first assign factual dispositions as old-owner tests change.
+- **Current checkpoint:** LC-0a complete; LC-1a has not started.
+- **Next action:** begin LC-1a from the frozen guard baseline.
 - **Recovery rule:** do not merge or cherry-pick `59affc4`; rebuild LC-0 as one
   coherent guard-only commit. The recovery snapshot remains isolated.
 - **Stop:** any supported baseline defect, real-boundary drift, baseline LS
