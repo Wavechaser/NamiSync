@@ -45,6 +45,8 @@ _VIEW_VALIDATORS = {
     TaskEventUpdateView: validate_task_update_view,
     TaskRecordUpdateView: validate_task_update_view,
 }
+# SessionEventView is intentionally absent: the bridge does not recertify a
+# trusted producer's event-body semantics.
 
 
 BRIDGE_SCHEMA_VERSION = 1
@@ -1272,7 +1274,7 @@ def _snapshot_response_value(
 
 
 def _validate_owned_response_tree(value: object, active: set[int]) -> None:
-    """Invoke only the first complete public-view validator for each subtree."""
+    """Invoke the retained type-specific validator when one exists."""
 
     validator = _VIEW_VALIDATORS.get(type(value))
     if validator is not None:

@@ -24,6 +24,11 @@ scope; there is no active delivery row.
   write/read asymmetry before any persisted-byte, hash, flush, queue, receipt,
   chain, or watermark mutation. Persisted event bytes, history envelopes,
   database contracts, schema versions, and data epoch are unchanged.
+- The task drain now retains only exact-integer positivity and session custody
+  for event sequences. Bridge response snapshotting is the sole Python-side
+  pre-serialization JavaScript-safe upper-bound enforcer; browser transport
+  admission retains its independent PositiveSafeInt check. `SessionEventView`
+  remains intentionally absent from the bridge's partial validator table.
 - Both three-finding stop events are preserved in `SIMPLIFICATION.md` with
   mechanism tables and owner-specific repairs. Across SIM-1 and SIM-2, all 119
   deleted or renamed test functions have an exact disposition: 82 public

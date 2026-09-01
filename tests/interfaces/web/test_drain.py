@@ -3401,7 +3401,6 @@ def _malformed_task_updates():
     return [
         replace(event, sequence=True),
         replace(event, sequence=0),
-        replace(event, sequence=9_007_199_254_740_992),
         replace(event, session_id="f" * 32),
         replace(record, result=None),
         replace(record, state="pending", ended_at=None, result=None),

@@ -380,9 +380,13 @@ the service and browser boundary; the adapter does not rename it. Retained
 database history remains independent of adapter task cleanup.
 
 The active plan-task adapter retains exact view types, task/session identity,
-positive SafeInt event sequences, wrapper/batch/order/lifecycle checks, and
-terminal record/result validation. It does not recertify trusted event-body
-semantics at offer, recovery, drain, command return, or bridge serialization. A
+exact-integer positive event sequences, wrapper/batch/order/lifecycle checks,
+and terminal record/result validation. The bridge response snapshot is the
+sole Python-side pre-serialization adapter enforcer of the JavaScript-safe
+upper bound; browser transport admission independently retains PositiveSafeInt,
+and core envelopes already construct sequences in that domain. The adapter
+does not recertify trusted event-body semantics at offer, recovery, drain,
+command return, or bridge serialization. A
 drain constructs and validates its complete candidate before popping queued
 updates, clearing a pending terminal, or earning a terminal-delivery receipt. A
 terminal record

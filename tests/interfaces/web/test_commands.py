@@ -1891,9 +1891,6 @@ def _invalid_task_update_views():
     return [
         TaskEventUpdateView("event", replace(event, sequence=True)),
         TaskEventUpdateView("event", replace(event, sequence=0)),
-        TaskEventUpdateView(
-            "event", replace(event, sequence=9_007_199_254_740_992)
-        ),
         TaskEventUpdateView("event", replace(event, session_id="1" * 32)),
         TaskRecordUpdateView("record", replace(record, result=None)),
         TaskRecordUpdateView("record", replace(record, state="pending", ended_at=None, result=None)),
