@@ -105,6 +105,12 @@ views. Runtime plan storage remains the existing process-local dictionary behind
 named `save_plan`/`get_plan`/`drop_plan` methods; it is not a `PlanStore` and
 does not survive process exit.
 
+`_workflow_registry` is the single production workflow-registration surface.
+It wires workflow-owned constructors and materializers to the detachment
+contract in [DISPATCHER.md](DISPATCHER.md#public-contract). Constructors
+establish the built-in checkpoints' ownership; public tests prove it. The
+service adds no checkpoint certification or authority/adoption wrapper.
+
 Every admitted execution, inventory, baseline, verify, or rebaseline session
 also receives one exact process-local detail owner: the dispatcher session id
 maps to either its execution run id or its inventory request id. Terminal detail

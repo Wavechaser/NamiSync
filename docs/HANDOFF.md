@@ -29,6 +29,10 @@ scope; there is no active delivery row.
   pre-serialization JavaScript-safe upper-bound enforcer; browser transport
   admission retains its independent PositiveSafeInt check. `SessionEventView`
   remains intentionally absent from the bridge's partial validator table.
+- `WorkflowRegistration` now states the existing central detachment contract:
+  preparation and pause snapshots transfer detached custody, reopening treats
+  it as read-only and materializes fresh invocation state, and dispatcher adds
+  no authority, adoption, freezer, or domain certification mechanism.
 - Both three-finding stop events are preserved in `SIMPLIFICATION.md` with
   mechanism tables and owner-specific repairs. Across SIM-1 and SIM-2, all 119
   deleted or renamed test functions have an exact disposition: 82 public

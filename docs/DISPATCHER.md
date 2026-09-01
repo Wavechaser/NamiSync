@@ -37,12 +37,22 @@ shutdown(timeout) -> ShutdownResult
 ```
 
 An injected registry maps opaque kind to a generic callable/capability adapter.
-`prepare(request)` returns an opaque semantic checkpoint plus a set of generic
-`ResourceId` values. `open(checkpoint)` belongs to the adapter and returns a fresh invocation
-with `run(ctx)` and `snapshot()` methods. The dispatcher calls those methods but
-never reflects over or otherwise interprets the checkpoint. Reopening the
+Each registration must make `prepare(request)` return a semantic checkpoint
+detached from request- and workflow-owned mutable state plus a set of generic
+`ResourceId` values. `snapshot()` has the same detachment obligation after a
+cooperative pause. `open(checkpoint)` belongs to the adapter, treats the retained
+checkpoint as read-only, and materializes a fresh invocation with `run(ctx)` and
+`snapshot()` methods. `settle_canceled`, when present, likewise treats the
+checkpoint as read-only. The dispatcher calls those methods but never reflects
+over or otherwise interprets or certifies the checkpoint. Reopening the
 invocation on every resume is the generic seam through which the owning workflow
 runs its fresh guard.
+
+This is a mandatory workflow-registration contract. Each workflow's checkpoint
+constructor establishes detachment, and public ownership tests prove it.
+Detachment is a construction property: there is no
+`WorkflowCheckpointAuthority`, `adopt_checkpoint()`, generic freezer,
+certification flag, or dispatcher domain check.
 
 The optional domain-blind admission `attach` callback receives only a newly
 allocated session id and preopened `EventStream`, and returns an idempotent

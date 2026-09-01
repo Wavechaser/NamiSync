@@ -67,6 +67,9 @@ evidence remain outside the register.
   canonical event body may be wrapped by a separate durable history envelope.
 - Dispatcher custody is domain-blind. It holds an opaque checkpoint and does
   not inspect, certify, or reinterpret it.
+- Every workflow registration must transfer detached checkpoint custody, treat
+  it as read-only, and materialize fresh invocation state on open. Workflow
+  constructors establish that obligation; public ownership tests prove it.
 - Detachment is a construction property. There is no
   `WorkflowCheckpointAuthority`, `adopt_checkpoint()`, generic checkpoint
   protocol, recursive deep-freeze utility, `deepcopy` framework, pickle, or

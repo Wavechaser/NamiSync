@@ -22,7 +22,11 @@ from namisync.core.session import (
 
 @dataclass(frozen=True, slots=True)
 class PreparedSession:
-    """Opaque workflow checkpoint plus generic resources required for custody."""
+    """Detached opaque checkpoint plus generic resources required for custody.
+
+    The registering adapter must detach request- and workflow-owned mutable
+    state before construction; dispatcher deliberately cannot certify it.
+    """
 
     checkpoint: object
     resources: frozenset[ResourceId] = frozenset()
@@ -46,17 +50,22 @@ class PreparedSession:
 
 
 class WorkflowInvocation(Protocol):
-    """Adapter-owned invocation; dispatcher never inspects it."""
+    """Fresh adapter-owned invocation materialized from a read-only checkpoint."""
 
     def run(self, context: RunContext) -> OperationResult: ...
 
     def snapshot(self) -> object:
-        """Return the semantic continuation after a cooperative pause."""
+        """Return continuation detached from invocation-owned mutable state."""
 
 
 @dataclass(frozen=True, slots=True)
 class WorkflowRegistration:
-    """Generic preparation/invocation adapter and capability metadata."""
+    """Detached-checkpoint adapter contract and capability metadata.
+
+    ``prepare`` and invocation ``snapshot`` transfer detached checkpoints;
+    ``open`` and ``settle_canceled`` treat them as read-only, and ``open``
+    materializes fresh invocation-owned state.
+    """
 
     prepare: Callable[[object], PreparedSession]
     open: Callable[[object], WorkflowInvocation]

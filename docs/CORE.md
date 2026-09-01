@@ -401,9 +401,11 @@ forming the summary. Bounded phases and failure details retain their identities,
 and item truth, counters, recording, cancellation, and phase status are unchanged.
 This bounds retained header diagnostics, not phase names/count or all workflow
 and audit ownership behind them.
-The registry adapter constructs a detached semantic checkpoint before `PAUSED`;
-the dispatcher retains that opaque value in the live session record without
-interpreting it and opens a fresh adapter invocation on resume.
+The registry adapter transfers a detached semantic checkpoint at initial
+preparation and after every cooperative pause. The dispatcher retains that
+opaque value in the live session record without interpreting or certifying it;
+the adapter treats it as read-only and creates fresh invocation state on each
+open, including resume.
 
 `SessionRecord.checkpoint` is an opaque value only while a session is nonterminal.
 Every terminal record requires null, and dispatcher clears the current live

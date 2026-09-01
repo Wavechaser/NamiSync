@@ -713,6 +713,12 @@ custody, cross-process mutation exclusion, lifecycle control, event sequencing,
 bounded replay, and orderly teardown. Workflow kinds and pause capability are
 registry data; the dispatcher never interprets domain checkpoints.
 
+Every workflow registration must transfer a checkpoint detached from producer-
+owned mutable state, treat retained custody as read-only, and materialize fresh
+invocation state on open. This is a workflow-construction obligation, not a
+dispatcher certification; no `WorkflowCheckpointAuthority`,
+`adopt_checkpoint()`, or generic freezer exists.
+
 The active store is process-local metadata; dispatcher reads its live records
 for session state and continuation. Durable queue ownership, startup
 reconciliation, and cross-process task visibility belong to M2. A durable
