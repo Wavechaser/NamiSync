@@ -1,11 +1,15 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-02): active closed register; LC-0a complete and LC-1a
-stopped on a preexisting LS-1 boundary defect.** This
+**Standing (2026-09-02): active closed register; LC-0b complete and LC-1a
+pending path-by-path recovery.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
 this register after implementation begins.
+
+This repository document is the sole maintained plan for the task. The older
+`.codex` plan is a historical snapshot and is neither updated nor used as a
+second completion authority.
 
 This is subtractive work. A regression is an observable change at a real
 boundary; a red test may not be one, and a green suite does not prove its
@@ -126,7 +130,7 @@ do not assert target architecture against the untouched tree.
 
 | Stop class | Tier and detector |
 | --- | --- |
-| `LS-1` silent loss/duplicate | **Baseline, LC-0.** `test_ls_1_delivery_has_no_silent_loss_or_duplicate` reconciles non-`Gap` delivery with producer sequence, exact `Gap` coverage, unique sequence/terminal, and terminal-last. |
+| `LS-1` silent loss/duplicate | **Baseline, corrected in LC-0b.** `test_ls_1_delivery_has_no_silent_loss_or_duplicate` barrier-forces ejection and recovery, maps every delivered reliable producer event exactly and at most once, requires every missing reliable producer sequence to fall within a finite interval announced by a delivered `Gap`, and checks terminal uniqueness/last separately. |
 | `LS-2` wrong/unreachable session control | **Baseline, LC-0.** `test_ls_2_session_control_reaches_only_corresponding_dispatcher_record` proves service `pause`/`resume`/`cancel` mutate only the exact dispatcher record; unknown or retired sessions mutate none. |
 | `LS-3` false terminal reconciliation | **Introduced, LC-1a.** `test_ls_3_terminal_reconciliation_matches_dispatcher_truth` compares delivered Terminal/record with dispatcher truth before settlement; injected disagreement prevents close and success replay. An injected internal disagreement alone is not a baseline defect; an actual supported baseline disagreement is. |
 | `LS-4a` missing/duplicate admission rollback | **Baseline, LC-0.** `test_ls_4a_submit_session_rollback_converges` closes over the finite F1-F5/R1-R4 application-admission table and D1-D4 dispatcher cleanup table below. It records exact attempts and successful state transitions: each physical transition succeeds once, while the baseline may make an idempotent follow-up call. |
@@ -136,6 +140,14 @@ do not assert target architecture against the untouched tree.
 LS-4a is a pre-migration characterization of the machinery LC-1a removes. It
 is dispositioned and removed only after LS-4b passes at the new owner. The
 enduring stop-detector set after LC-1a is LS-1, LS-2, LS-3, LS-4b, and LS-5.
+
+Synthetic `Gap` envelopes are recovery-control values, not producer-event
+identities for cross-subscription uniqueness or ordering. Their envelope
+sequence may repeat or move backward when recovery restarts at
+`first_missed_seq`; consumers retain the last accepted non-`Gap` producer
+cursor. Within-response validation and producer-event sequence guarantees are
+unchanged. No active normative contract promises globally monotonic raw
+envelope arrival across `Gap` recovery.
 
 ### LS-4a finite baseline fault domain
 
@@ -280,9 +292,10 @@ duplicate authorities rather than rename them.
 | --- | --- | --- | --- | --- |
 | `LC-0` | Ratify this register/census, freeze boundary-only T1, record both observation barriers, and install four baseline T2 detectors. | None | Three identical T1 runs; corruption self-tests; recorded barriers; detector fault self-tests; ordinary/import baseline. | Complete |
 | `LC-0a` | Freeze generated-ID equality/distinctness, corpus-version governance, exact LC-6 department retirement, and the retained-guard cost before production work. | `LC-0` | Focused oracle tests; unchanged frozen hash; documentation inspection; no production diff. | Complete |
-| `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0a` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Stopped: preexisting LS-1 defect |
+| `LC-0b` | Settle the LS-1 normative contract, replace its timing-sensitive raw-order assertion with deterministic loss/duplication accounting, and withdraw the unsupported defect classification. | `LC-0a` | Finite normative audit; duplicate/loss self-tests; 30 fresh deterministic runs; T1 and production unchanged; ordinary/import gate. | Complete |
+| `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0b` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Pending rebuild |
 | `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1a` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Pending |
-| `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0a` only; independent of `LC-2` | Core/dispatcher, exact stored projection, T1 persisted bytes. | Pending |
+| `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0b` only; independent of `LC-2` | Core/dispatcher, exact stored projection, T1 persisted bytes. | Pending |
 | `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Pending |
 | `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1a`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Pending |
 | `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1a`-`LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Pending |
@@ -304,6 +317,60 @@ duplicate authorities rather than rename them.
   disposition changes in LC-0a.
 
 Commit gate: `test(interfaces): harden lifecycle oracle governance`.
+
+### LC-0b LS-1 guard correction
+
+The finite normative audit covered `ARCHITECTURE.md`, `CORE.md`,
+`DISPATCHER.md`, `INTERFACES.md`, `HISTORY.md`, `M1_BRIDGE.md`, the core event
+contract and validator, `EventHub`/`EventStream`, `SessionObserver`, the browser
+drain, and their Gap/recovery witnesses. Producer envelopes have a gap-free
+per-session sequence, but no clause extends that promise to synthetic Gap
+markers across subscription recovery. The specific rules instead retain the
+last accepted non-Gap cursor, recover from exact `first_missed_seq`, and permit
+a matching leading recovery Gap. `DISPATCHER.md` names the cost as duplicate
+work and a stuttering consumer, not silent loss; the required browser witness
+intentionally accepts repeated raw Gap sequence values.
+
+The corrected detector uses explicit barriers: direct session start and
+observation precede emission; the first callback blocks; a fixed reliable flood
+synchronously ejects the captured 64-slot stream; terminalization remains
+blocked until a non-null recovery subscription is installed and its retained
+tail is delivered. Synthetic Gap values are excluded from producer-event
+uniqueness. A recovery interval ends immediately before the next delivered
+producer event, not at the synthetic Gap envelope's sequence. Separate
+corruption self-tests prove duplicate reliable delivery and unannounced
+reliable loss fail the detector. No production file, T1 artifact, department
+entry, capacity, or event mechanism changes in LC-0b; `event_bus.py` remains
+untouched.
+
+Commit gate: `test(interfaces): correct lifecycle loss detector`.
+
+### LC-1a recovery protocol
+
+Recovery commit `dc94aef` is input, not a review unit. Create a fresh LC-1a
+branch from the corrected guard baseline and inspect only
+`git diff 197a2fc dc94aef -- <path>`. Reintroduce accepted content path by path;
+never merge or cherry-pick the recovery commit. Retain the WIP branch until the
+rebuilt atomic LC-1a commit passes its full gate. The port and strong indirect
+import contract remain inside LC-1a. Command stripes remain only with explicit
+single-flight and disjoint-command concurrency proof.
+
+| Path | Recovery status | Required review |
+| --- | --- | --- |
+| `namisync/interfaces/task_lifecycle.py` | New | High: state model, locking, settlement retry, receipt retirement, retention bounds. |
+| `namisync/interfaces/task_port.py` | New | High: exact public surface and absence of raw cleanup capabilities. |
+| `namisync/interfaces/service.py` | Existing | High diff against `197a2fc`. |
+| `namisync/interfaces/web/drain.py` | Existing | High: retained transport replay versus removed domain authority. |
+| `namisync/interfaces/web/host.py` | Existing | High or medium-high: shutdown ordering and DISC-B2 boundary. |
+| `namisync/workflows/views.py` | Existing | High despite its size because it participates in LS-3 terminal truth. |
+| `pyproject.toml` | Existing | High structural evidence, not routine configuration. |
+| `tests/test_service.py` | Existing | High: substantial new-owner acceptance evidence. |
+| `tests/test_task_lifecycle.py` | Existing | Discard WIP diff; rebuild from corrected guard version. |
+| `tests/test_bridge_service.py` | Existing | Discard WIP diff; rework from the test-disposition ledger. |
+| `tests/interfaces/web/test_host.py` | Existing | Medium: shutdown and delivery-withdrawal evidence. |
+| `namisync/interfaces/web/bridge.py`, `namisync/interfaces/web/commands.py`, `tests/interfaces/web/_public_view_witnesses.py` | Existing | Low. |
+| Register and test ledger | Existing | Rebuild carefully: they carry the completion denominator and evidence. |
+| Other explanatory documents | Existing | Recreate only after behavior settles. |
 
 ### LC-1a mandatory disappearance and positive proof
 
@@ -393,7 +460,8 @@ its `interfaces` department entry remain. The exact retiring and retained line
 cost is recorded when LC-0a closes. The pre-amendment measurements were 1,653
 temporary lines (905 runner + 601 baseline + 147 self-test) and 1,290 retained
 guard lines. LC-0a measures 1,667 temporary lines (905 + 601 + 161) and the
-same 1,290 retained lines. Remeasure again at LC-6: ordinary
+same 1,290 retained lines. LC-0b makes the deterministic detector and its
+fault self-test 1,389 retained lines. Remeasure again at LC-6: ordinary
 `mechanism-removed`/`reanchored-owner` dispositions may shrink the retained
 module, but wholesale teardown belongs to a separately reviewed post-register
 test-consolidation checkpoint and is not authorized here.
@@ -403,30 +471,28 @@ test-consolidation checkpoint and is not authorized here.
 | Evidence | Result |
 | --- | --- |
 | Base | Clean `milestone1-anthony` at `5631066`; prior recovery commit `59affc4` remains isolated and is not a review unit. |
-| Register refinement | User-adjudicated refinements incorporated 2026-09-02; saved `.codex` plan also updated. LC-0a is an explicit later amendment for four nonblocking review findings. |
+| Register refinement | User-adjudicated refinements incorporated 2026-09-02. LC-0a closes four nonblocking guard findings; LC-0b corrects LS-1. This repository document is now the sole maintained plan, and the `.codex` snapshot is intentionally left unchanged. |
 | T1 stability | Three fresh processes and the frozen baseline are byte-identical: SHA-256 `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`. The oracle rejects bridge, CLI, event-sequence, fixed drain-identity, persistence, and filesystem corruptions. |
 | `DISC-B1` | With the CLI push callback blocked after `PhaseChanged`, cancellation is accepted and dispatcher truth reaches canceled before callback release; release then yields one Terminal, one terminal record, canceled exit mapping, exact stdout, and exact stderr. |
 | `DISC-B2` | `begin_close` marks delivery closing, increments its generation, and wakes the blocked bounded offer before current `unsubscribe_all`; the baseline then releases the observer once and orders offer withdrawal, adapter unsubscribe, session close, and service close. This records current behavior, not target ownership. |
-| T2 baseline | LC-0 initially observed LS-1, LS-2, LS-4a, and LS-5 passing on untouched production, with LS-4a covering F1-F5, R1-R4, and D1-D4 (`28 passed`). During LC-1a, LS-1 intermittently produced out-of-order delivery; an untouched `197a2fc` clone then reproduced the identical `[1, 2, 3, 68, 4, 141, ...]` trace on its first isolated run. This supersedes the insufficient earlier pass observation and is recorded as a preexisting boundary defect in `BUGS.md`. LS-3/LS-4b remain introduced LC-1a guarantees. |
+| T2 baseline | LS-1, LS-2, LS-4a, and LS-5 pass untouched production. The old LS-1 assertion intermittently rejected `[1, 2, 3, Gap@68(first_missed=4), Gap@4(first_missed=4), 141, ...]`; the finite normative audit established that this is permitted recovery rewind, not evidence of LS-1 loss or duplication. The corrected module is `19 passed`; its final barrier-forced LS-1 path is 30/30 across fresh processes, and deliberate duplicate/unannounced-loss corruptions fail. LS-3/LS-4b remain introduced LC-1a guarantees. |
 | Test census | `docs/TASK_LIFECYCLE_TEST_LEDGER.md` contains 129 unique behavioral rows and eight unique helper rows over the exact seven-file corpus; all dispositions remain pending. |
-| Broad baseline | Ordinary suite with required bundled Node: `4907 passed, 4 skipped, 28 deselected`; import law: 11 kept, 0 broken. |
+| Broad baseline | LC-0b ordinary suite with required bundled Node: `4909 passed, 4 skipped, 28 deselected`; import law: 11 kept, 0 broken. An initial run without required Node had only the five expected runtime-availability failures and was rerun with the bundled executable. |
 | Adversarial review | A separate read-only review found five guard defects; all were corrected and independently re-reviewed closed. No production file or lifecycle behavior changed. |
 | LC-0a amendment | Ordered `[A, B, A, B]` normalization and fixed-ID preservation are explicit; runner/baseline format remain literal 1; frozen SHA-256 remains `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`; oracle plus department checks are `27 passed`; the diff contains only this register and the oracle self-test. |
+| LC-0b amendment | No normative global raw-Gap monotonicity clause exists; existing required browser witnesses intentionally repeat a synthetic Gap sequence. The corrected LS-1 detector uses explicit ejection/recovery/terminal barriers and finite missing-reliable intervals. T1 still matches, production and `event_bus.py` are unchanged, and the unsupported `BUGS.md` entry is removed rather than marked fixed. |
 
-- **Current checkpoint:** LC-1a stopped from guard commit `197a2fc`; incomplete
-  task-owned work is preserved at recovery commit `dc94aef` only.
-- **Next action:** obtain adjudication for the preexisting LS-1 post-ejection
-  replay cursor defect. Fix it separately or explicitly accept it before
-  rebuilding and resuming LC-1a.
+- **Current checkpoint:** LC-0b complete; LC-1a is pending a fresh rebuild from
+  this corrected guard baseline.
+- **Next action:** create the fresh LC-1a branch, use only path-scoped
+  `git diff 197a2fc dc94aef -- <path>` recovery input, and reintroduce reviewed
+  content according to the matrix above.
 - **Recovery rule:** do not merge or cherry-pick `59affc4` or `dc94aef`; both
   recovery snapshots remain isolated and are not review units.
 - **Stop:** any supported baseline defect, real-boundary drift, baseline LS
   consequence, nondeterministic T1, repeated-defect threshold, inability to
   preserve work, or required event/capacity change.
-- **Triggered stop evidence (2026-09-02):** the migrated LS-1 detector failed
-  twice intermittently, including the sequence prefix
-  `[1, 2, 3, 68, 4, 141, ...]`; the unchanged detector on an untouched
-  `197a2fc` clone reproduced that exact prefix on its first run. The frozen T1
-  corpus still matched because its one complete plan session does not force
-  subscriber ejection/replay. No later register work is authorized until the
-  defect is adjudicated.
+- **Resolved guard stop (2026-09-02):** the observed recovery rewind violated
+  only an unsupported detector assertion. It did not establish the stated
+  LS-1 consequence, so no product defect or production fix is authorized. The
+  deterministic replacement closes the guard issue and permits LC-1a recovery.

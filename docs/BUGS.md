@@ -478,16 +478,6 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - OPEN (2026-09-02). Post-ejection replay cursor regression. A
-  supported observer whose callback stalls long enough to eject its bounded
-  stream can receive a later `Gap` and then a replay `Gap` with a lower
-  sequence, violating delivered-event order; the frozen LS-1 path reproduced
-  `[1, 2, 3, 68, 4, 141, ...]` on untouched commit `197a2fc`. Cause: after an
-  ejection, `SessionObserver` advances its retry cursor only to the gap's
-  `first_missed_seq`, while the delivered ejection envelope already carries a
-  later sequence; resubscription therefore synthesizes an earlier-sequenced
-  gap. No persistence or filesystem drift was observed. The active lifecycle
-  migration is stopped pending separate adjudication of this boundary defect.
 - MODERATE - OPEN (2026-08-27). Task-adjacent owner-count gap. The desktop
   registry caps live cards, but the complete runtime/service/dispatcher graphs
   and close-time owners do not yet share one task-wide byte reservation.

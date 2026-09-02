@@ -13,7 +13,13 @@ from weakref import ref
 import pytest
 
 from namisync.core.evidence import RecordingStatus
-from namisync.core.events import CORE_EVENT_SCHEMA_VERSION, Envelope, PhaseChanged
+from namisync.core.events import (
+    CORE_EVENT_SCHEMA_VERSION,
+    DeliveryClass,
+    Envelope,
+    PhaseChanged,
+    delivery_class,
+)
 from namisync.core.session import OperationResult, ResourceId, SessionState
 from namisync.dispatcher import (
     Dispatcher,
@@ -251,6 +257,21 @@ def _task_event(session_id: str, sequence: int) -> SessionEventView:
     )
 
 
+def _gap_event(
+    session_id: str,
+    sequence: int,
+    first_missed_seq: int,
+) -> SessionEventView:
+    return SessionEventView(
+        session_id,
+        sequence,
+        "2026-01-01T00:00:00+00:00",
+        CORE_EVENT_SCHEMA_VERSION,
+        "Gap",
+        {"first_missed_seq": first_missed_seq},
+    )
+
+
 def test_disc_b2_adapter_shutdown_wakes_offer_before_baseline_unsubscribe(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
@@ -391,22 +412,98 @@ class _TraceAudit:
             return tuple(self._events)
 
 
+def _assert_ls_1_reliable_delivery(
+    producer_by_sequence: dict[int, SessionEventView],
+    events: list[SessionEventView],
+) -> None:
+    delivered_producer_events = [
+        event for event in events if event.body_type != "Gap"
+    ]
+    delivered_sequences = [
+        event.sequence for event in delivered_producer_events
+    ]
+    assert len(delivered_sequences) == len(set(delivered_sequences))
+    for delivered in delivered_producer_events:
+        produced = producer_by_sequence[delivered.sequence]
+        assert (delivered.body_type, delivered.body) == (
+            produced.body_type,
+            produced.body,
+        )
+
+    missing = sorted(set(producer_by_sequence) - set(delivered_sequences))
+    assert missing
+    coverage: list[tuple[int, int]] = []
+    for index, event in enumerate(events):
+        if event.body_type != "Gap":
+            continue
+        following = next(
+            (
+                candidate.sequence
+                for candidate in events[index + 1 :]
+                if candidate.body_type != "Gap"
+            ),
+            None,
+        )
+        assert following is not None
+        first = event.body["first_missed_seq"]
+        # Gap.sequence is a synthetic marker. The next producer event closes
+        # the finite interval whose unavailable prefix this Gap announced.
+        last = following - 1
+        if first <= last:
+            coverage.append((first, last))
+    assert all(
+        any(first <= sequence <= last for first, last in coverage)
+        for sequence in missing
+    )
+
+
+def test_ls_1_detector_rejects_duplicate_and_unannounced_loss() -> None:
+    producer = {
+        sequence: _task_event(_SESSION, sequence)
+        for sequence in range(1, 4)
+    }
+    with pytest.raises(AssertionError):
+        _assert_ls_1_reliable_delivery(
+            producer,
+            [
+                producer[1],
+                producer[1],
+                _gap_event(_SESSION, 2, 2),
+                producer[3],
+            ],
+        )
+    with pytest.raises(AssertionError):
+        _assert_ls_1_reliable_delivery(
+            producer,
+            [producer[1], producer[3]],
+        )
+
+
 def test_ls_1_delivery_has_no_silent_loss_or_duplicate(
     tmp_path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     callback_entered = Event()
     release_callback = Event()
+    allow_workflow = Event()
+    allow_flood = Event()
     flood_done = Event()
+    allow_terminal = Event()
+    recovery_subscribed = Event()
+    recovery_tail_delivered = Event()
+    recovery_from: list[int] = []
     audit = _TraceAudit()
 
     def run(_checkpoint):
         def action(context):
+            assert allow_workflow.wait(10)
             context.emit(PhaseChanged("phase-0"))
-            assert callback_entered.wait(2)
+            assert callback_entered.wait(10)
+            assert allow_flood.wait(10)
             for index in range(1, 200):
                 context.emit(PhaseChanged(f"phase-{index}"))
             flood_done.set()
+            assert allow_terminal.wait(10)
             return OperationResult(SessionState.COMPLETED)
 
         return action
@@ -417,6 +514,18 @@ def test_ls_1_delivery_has_no_silent_loss_or_duplicate(
         audit_capacity=512,
     )
     service = _service_for_dispatcher(tmp_path, monkeypatch, dispatcher)
+    subscribe = dispatcher.subscribe
+    subscriptions = []
+
+    def record_recovery_subscription(session_id, from_seq=None):
+        stream = subscribe(session_id, from_seq)
+        subscriptions.append((from_seq, stream))
+        if from_seq is not None:
+            recovery_from.append(from_seq)
+            recovery_subscribed.set()
+        return stream
+
+    monkeypatch.setattr(dispatcher, "subscribe", record_recovery_subscription)
     deliveries: list[SessionEventView | SessionRecordView] = []
 
     def receive(update: SessionEventView | SessionRecordView) -> None:
@@ -427,29 +536,45 @@ def test_ls_1_delivery_has_no_silent_loss_or_duplicate(
             and update.body == {"phase": "phase-0"}
         ):
             callback_entered.set()
-            assert release_callback.wait(2)
+            assert release_callback.wait(10)
+        if (
+            type(update) is SessionEventView
+            and update.body_type == "PhaseChanged"
+            and update.body == {"phase": "phase-199"}
+        ):
+            recovery_tail_delivered.set()
 
     source = tmp_path / "source"
     target = tmp_path / "target"
     source.mkdir()
     target.mkdir()
-    session = service.start_plan(
-        str(source),
-        str(target),
-        observation_sink=receive,
-    )
+    session = service.start_plan(str(source), str(target))
+    service.observe(session.session_id, receive)
     try:
-        assert callback_entered.wait(1)
-        assert flood_done.wait(2)
-    finally:
+        assert len(subscriptions) == 1 and subscriptions[0][0] is None
+        initial_stream = subscriptions[0][1]
+        allow_workflow.set()
+        assert callback_entered.wait(10)
+        allow_flood.set()
+        assert flood_done.wait(10)
+        assert initial_stream.ejected
         release_callback.set()
+        assert recovery_subscribed.wait(10)
+        assert recovery_tail_delivered.wait(10)
+        allow_terminal.set()
+    finally:
+        allow_workflow.set()
+        allow_flood.set()
+        release_callback.set()
+        allow_terminal.set()
 
     terminal = service.wait(session.session_id)
     assert terminal.result is not None
     hub = dispatcher._hubs[session.session_id]
-    producer_by_sequence = {
+    reliable_producer_by_sequence = {
         envelope.seq: session_event_view(envelope)
         for envelope in (*audit.snapshot(), *tuple(hub._replay))
+        if delivery_class(envelope.body) is DeliveryClass.RELIABLE
     }
     events = [
         update for update in deliveries if type(update) is SessionEventView
@@ -457,48 +582,22 @@ def test_ls_1_delivery_has_no_silent_loss_or_duplicate(
     records = [
         update for update in deliveries if type(update) is SessionRecordView
     ]
-    sequences = [event.sequence for event in events]
     gaps = [event for event in events if event.body_type == "Gap"]
-    non_gap = [event for event in events if event.body_type != "Gap"]
 
-    assert len(sequences) == len(set(sequences))
-    assert sequences == sorted(sequences)
     assert gaps
+    assert recovery_from == [gaps[0].body["first_missed_seq"]]
+    assert any(
+        gap.body["first_missed_seq"] == recovery_from[0]
+        for gap in gaps[1:]
+    )
     assert len(records) == 1 and records[0] == terminal
     assert deliveries[-1] == records[0]
-    assert [event.body_type for event in events].count("Terminal") <= 1
-    if any(event.body_type == "Terminal" for event in events):
-        assert events[-1].body_type == "Terminal"
-    for delivered in non_gap:
-        produced = producer_by_sequence[delivered.sequence]
-        assert (delivered.body_type, delivered.body) == (
-            produced.body_type,
-            produced.body,
-        )
-
-    delivered_sequences = {event.sequence for event in non_gap}
-    missing = sorted(set(producer_by_sequence) - delivered_sequences)
-    assert missing
-    coverage: list[tuple[int, int]] = []
-    maximum = max(producer_by_sequence)
-    for index, event in enumerate(events):
-        if event.body_type != "Gap":
-            continue
-        following = next(
-            (
-                candidate.sequence
-                for candidate in events[index + 1 :]
-                if candidate.body_type != "Gap"
-            ),
-            maximum + 1,
-        )
-        coverage.append((event.body["first_missed_seq"], following - 1))
-    covered = {
-        sequence
-        for first, last in coverage
-        for sequence in range(first, last + 1)
-    }
-    assert covered == set(missing)
+    assert [event.body_type for event in events].count("Terminal") == 1
+    assert events[-1].body_type == "Terminal"
+    _assert_ls_1_reliable_delivery(
+        reliable_producer_by_sequence,
+        events,
+    )
 
     service.unsubscribe(session.session_id)
     service.close_session(session.session_id)
