@@ -1,51 +1,51 @@
 # Session Handoff
 
-Status (2026-09-03): LC-1a and LC-1b are complete on
-`milestone1-anthony`. A separate pre-LC-2 stabilization commit is the current
-`HEAD`; LC-2 is authorized and has not yet changed production.
+Status (2026-09-03): LC-2 is complete on `milestone1-anthony`; its atomic
+observer-lifetime commit is the current `HEAD` once this handoff is committed.
+LC-3 is the next pending register row.
 
-## Stabilization outcome
+## LC-2 outcome
 
-- `TaskLifecycle` plan retirement now has one tolerant exact-token claim
-  acquisition. Service cleanup and explicit plan drop both retire selection
-  state only for the exact plan token, while runtime calls remain outside the
-  service lock.
-- The lifecycle structural guard rejects cleanup progress/cursor vocabulary
-  without freezing imports or complete private field sets. A separate guard
-  retains the no-delivery/no-observer-resource contract, and the public task
-  port surface remains exact.
-- Cleanup replay continues to call the fixed observer, Dispatcher, detail, and
-  plan owners from the beginning. Tests now state the real contract: calls may
-  repeat, completed observable transitions may not.
-- The duplicate rollback test name is disambiguated. Every current-owner test
-  reference in `docs/TASK_LIFECYCLE_TEST_LEDGER.md` resolves; historical names
-  remain only as previous-test/crosswalk evidence.
-- The detailed LC-2 observer-lifetime checkpoint was recovered from the
-  historical `.codex` plan into the sole active register. It distinguishes
-  external release from callback self-release and retained adopted streams
-  from transient Dispatcher offers. The `.codex` plan remains untouched.
-- The adapter-local exception-graph helper remains an intentional duplicate:
-  the strong drain import contract makes the core helper unreachable, and this
-  stabilization does not relax that boundary.
+- `namisync/interfaces/session_observer.py` now owns `SessionObserver` and its
+  private `SessionSubscription`, including adopted streams, sinks, callbacks,
+  worker threads, recovery, stop/done state, and release.
+- `SessionObserver.adopt` closes a rejected offer and returns no rollback
+  capability. `NamiSyncService` retains its public `unsubscribe` surface but
+  delegates it, admission rollback, and settlement cleanup to observer
+  `release`.
+- External release waits for physical worker retirement. Callback self-release
+  skips self-join and leaves only the retiring subscription in observer
+  custody until unwind, so a concurrent external release remains truthful.
+  The established Terminal-event then terminal-record callback pair is
+  unchanged.
+- Web delivery shutdown remains adapter-local. The strong indirect import
+  contract now also prevents drain-side reach into `session_observer`.
+- Five obsolete returned-observer-rollback parameter cases were removed and
+  two owner-level tests were added. The affected ledger rows are closed; no
+  boundary test was deleted.
+- The production move is net 56 lines, attributable to explicit self-release
+  physical custody. No application cursor/progress, adapter cleanup authority,
+  pull loop, delivery queue, or capacity change was introduced.
 
 ## Verification
 
-- Focused lifecycle/service/bridge: `179 passed`.
+- Focused observer/CLI/lifecycle/host: `298 passed`.
+- Interfaces/dispatcher departments with bundled Node:
+  `1583 passed, 3390 deselected`.
+- Bridge/drain focus: `136 passed`.
+- Observer fault/release slice: `54 passed`.
 - Ordinary suite with bundled Node:
-  `4944 passed, 4 skipped, 28 deselected`.
+  `4941 passed, 4 skipped, 28 deselected`.
 - Frozen task-lifecycle T1 corpus: exact baseline match.
 - Import law: `12 kept, 0 broken`.
-- Active current-owner ledger references: `119 checked, 0 missing`.
-- `git diff --check`: clean apart from expected line-ending notices.
+- Two independent adversarial reviews: no remaining blocker.
 
 ## Next action
 
-Begin LC-2 exactly as specified in
-`docs/TASK_LIFECYCLE_SIMPLIFICATION.md`: move retained observation lifetime
-from `service.py` to `session_observer.py`, preserve CLI push timing and web
-delivery withdrawal, and keep whole-operation application cleanup replay free
-of observer-internal progress. Commit LC-2 only after its focused barriers,
-T1/T2, ordinary, and import-law gates pass.
+Begin LC-3 from the active register. Compose live `SessionRecord` around the
+exact frozen `StoredSessionRecord`, preserve constructor/read-only field
+compatibility, explicitly accept the registered dataclass-introspection change,
+and make no scheduler, condition, concurrency, map, or persistence-byte change.
 
-The old recovery/WIP refs remain isolated and are not review units; never
-merge or cherry-pick them.
+The historical `.codex` plan remains untouched. Old recovery/WIP refs remain
+isolated and are not review units.

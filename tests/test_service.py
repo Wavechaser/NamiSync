@@ -53,9 +53,9 @@ from namisync.interfaces.service import (
     ResultClassificationView,
     SemanticSettingsView,
     SessionEventView,
-    SessionObserver,
     SessionRecordView,
 )
+from namisync.interfaces.session_observer import SessionObserver
 from namisync.interfaces.task_lifecycle import (
     LifecycleAssociationError,
     TASK_EFFECT_CAPACITY,
@@ -316,6 +316,7 @@ def test_observe_returns_finished_record_without_subscribing() -> None:
 
     assert current.result is not None
     assert updates == []
+    assert observer._subscriptions == {}
     observer.close()
 
 
@@ -879,7 +880,7 @@ def test_finish_between_get_and_subscribe_returns_terminal_record(
     observer.close()
 
 
-def test_unsubscribe_closes_blocking_stream_and_uses_no_poll_timeout() -> None:
+def test_release_closes_stream_and_waits_for_worker_without_poll_timeout() -> None:
     stream = _BlockingStream("live")
 
     class Dispatcher:
@@ -892,12 +893,17 @@ def test_unsubscribe_closes_blocking_stream_and_uses_no_poll_timeout() -> None:
     observer = SessionObserver(Dispatcher())
     observer.observe("live", lambda _update: None)
     assert stream.entered.wait(0.5)
+    subscription = observer._subscriptions["live"]
 
-    observer.unsubscribe("live")
-    observer.unsubscribe("live")
+    observer.release("live")
+    observer.release("live")
 
     assert stream.closed
     assert stream.next_arguments == [()]
+    assert subscription.done.is_set()
+    assert subscription.thread is not None
+    assert not subscription.thread.is_alive()
+    assert observer._subscriptions == {}
     observer.close()
 
 
@@ -959,23 +965,23 @@ def test_observer_close_timeout_retains_thread_for_retry() -> None:
     observer = SessionObserver(Dispatcher(), join_timeout=0.05)
     observer.observe(session_id, sink)
     assert sink_entered.wait(0.5)
-    observation = observer._observations[session_id]
+    subscription = observer._subscriptions[session_id]
 
     with pytest.raises(TimeoutError) as raised:
         observer.close()
     assert str(raised.value) == "session observers did not stop"
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
-    assert observer._observations[session_id] is observation
+    assert observer._subscriptions[session_id] is subscription
 
     release_sink.set()
-    assert observation.done.wait(0.5)
+    assert subscription.done.wait(0.5)
     observer.close()
     observer.close()
-    assert observer._observations == {}
+    assert observer._subscriptions == {}
 
 
-@pytest.mark.parametrize("cleanup", ("close", "rollback", "unsubscribe"))
+@pytest.mark.parametrize("cleanup", ("close", "release"))
 @pytest.mark.parametrize(
     ("exception_base", "expected_type", "expected_message"),
     (
@@ -1025,18 +1031,10 @@ def test_observer_direct_join_failure_retires_private_graph_and_stopped_stream(
             return pending_streams.pop()
 
     observer = SessionObserver(Dispatcher())
-    rollback = None
-    if cleanup == "rollback":
-        rollback = observer.adopt(
-            session_id,
-            lambda _update: None,
-            pending_streams.pop(),
-        )
-    else:
-        observer.observe(session_id, lambda _update: None)
-    observation = observer._observations[session_id]
-    stream_reference = ref(observation.stream)
-    assert observation.stream.entered.wait(0.5)
+    observer.observe(session_id, lambda _update: None)
+    subscription = observer._subscriptions[session_id]
+    stream_reference = ref(subscription.stream)
+    assert subscription.stream.entered.wait(0.5)
     original_join = observer._join_threads
     join_attempts = 0
 
@@ -1056,27 +1054,20 @@ def test_observer_direct_join_failure_retires_private_graph_and_stopped_stream(
     with pytest.raises(expected_type) as raised:
         if cleanup == "close":
             observer.close()
-        elif cleanup == "rollback":
-            assert rollback is not None
-            rollback()
         else:
-            observer.unsubscribe(session_id)
+            observer.release(session_id)
 
     assert str(raised.value) == expected_message
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
-    assert observer._observations == {}
-    del observation
+    assert observer._subscriptions == {}
+    del subscription
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
     assert stream_reference() is None
-    if cleanup == "rollback":
-        assert rollback is not None
-        rollback()
-        assert join_attempts == 1
-    elif cleanup == "unsubscribe":
-        observer.unsubscribe(session_id)
+    if cleanup == "release":
+        observer.release(session_id)
         assert join_attempts == 1
     observer.close()
 
@@ -1145,7 +1136,7 @@ def test_observer_join_failure_retires_stopped_and_retains_only_live_retry(
     assert str(raised.value) == "session observer cleanup failed"
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
-    assert tuple(observer._observations) == (live_id,)
+    assert tuple(observer._subscriptions) == (live_id,)
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
@@ -1153,7 +1144,7 @@ def test_observer_join_failure_retires_stopped_and_retains_only_live_retry(
 
     release_live_sink.set()
     observer.close()
-    assert observer._observations == {}
+    assert observer._subscriptions == {}
 
 
 def test_gap_recovery_resubscribes_from_first_undelivered_sequence() -> None:
@@ -1253,13 +1244,13 @@ def test_gap_recovery_releases_retired_streams_while_observation_is_live() -> No
         assert current.entered.wait(0.5)
         assert retired_closed == list(range(32))
         assert all(reference() is None for reference in retired_refs)
-        assert observer._observations[session_id].stream is current
+        assert observer._subscriptions[session_id].stream is current
         assert not current.closed
     finally:
         observer.close()
 
 
-@pytest.mark.parametrize("stop_method", ("unsubscribe", "close"))
+@pytest.mark.parametrize("stop_method", ("release", "close"))
 @pytest.mark.parametrize("blocked_stage", ("subscribe", "retire"))
 def test_gap_recovery_stop_closes_racing_replacement_outside_observer_lock(
     stop_method: str,
@@ -1317,8 +1308,8 @@ def test_gap_recovery_stop_closes_racing_replacement_outside_observer_lock(
 
     def stop() -> None:
         try:
-            if stop_method == "unsubscribe":
-                observer.unsubscribe(session_id)
+            if stop_method == "release":
+                observer.release(session_id)
             else:
                 observer.close()
         except Exception as error:
@@ -1328,12 +1319,12 @@ def test_gap_recovery_stop_closes_racing_replacement_outside_observer_lock(
 
     closer = Thread(target=stop)
     observer.observe(session_id, lambda _update: None)
-    observation = observer._observations[session_id]
+    subscription = observer._subscriptions[session_id]
     try:
         assert subscribed.wait(0.5)
         if blocked_stage == "retire":
             assert first_closed.wait(0.5)
-            assert observation.stream is replacement
+            assert subscription.stream is replacement
         closer.start()
         assert first_closed.wait(0.5)
         if blocked_stage == "retire":
@@ -1349,9 +1340,9 @@ def test_gap_recovery_stop_closes_racing_replacement_outside_observer_lock(
     assert close_errors == []
     assert first.closed and replacement.closed
     assert close_outside_lock == [True]
-    assert observation.done.is_set()
-    assert not observation.failed
-    assert observer._observations == {}
+    assert subscription.done.is_set()
+    assert not subscription.failed
+    assert observer._subscriptions == {}
 
 
 def test_sink_exception_closes_stream_and_does_not_block_shutdown() -> None:
@@ -1388,7 +1379,7 @@ def test_sink_exception_closes_stream_and_does_not_block_shutdown() -> None:
     observer.close()
 
 
-@pytest.mark.parametrize("cleanup", ("unsubscribe", "close"))
+@pytest.mark.parametrize("cleanup", ("release", "close"))
 @pytest.mark.parametrize(
     "exception_base",
     (Exception, BaseException),
@@ -1420,12 +1411,12 @@ def test_observer_failure_retires_private_graph_before_wait_and_cleanup(
 
     observer = SessionObserver(Dispatcher())
     observer.observe(session_id, explode)
-    observation = observer._observations[session_id]
-    assert observation.done.wait(0.5)
-    assert observation.thread is not None
-    observation.thread.join(0.5)
-    assert not observation.thread.is_alive()
-    assert observation.failed
+    subscription = observer._subscriptions[session_id]
+    assert subscription.done.wait(0.5)
+    assert subscription.thread is not None
+    subscription.thread.join(0.5)
+    assert not subscription.thread.is_alive()
+    assert subscription.failed
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
@@ -1441,11 +1432,11 @@ def test_observer_failure_retires_private_graph_before_wait_and_cleanup(
     assert all(error.__cause__ is None for error in failures)
     assert all(error.__context__ is None for error in failures)
 
-    if cleanup == "unsubscribe":
-        observer.unsubscribe(session_id)
+    if cleanup == "release":
+        observer.release(session_id)
     else:
         observer.close()
-    assert observer._observations == {}
+    assert observer._subscriptions == {}
     observer.close()
 
 
@@ -1486,12 +1477,12 @@ def test_observer_stream_close_base_exception_is_contained(
 
     observer = SessionObserver(Dispatcher())
     observer.observe(session_id, lambda _update: None)
-    observation = observer._observations[session_id]
-    assert observation.done.wait(0.5)
-    assert observation.thread is not None
-    observation.thread.join(0.5)
-    assert not observation.thread.is_alive()
-    assert observation.failed
+    subscription = observer._subscriptions[session_id]
+    assert subscription.done.wait(0.5)
+    assert subscription.thread is not None
+    subscription.thread.join(0.5)
+    assert not subscription.thread.is_alive()
+    assert subscription.failed
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
@@ -1540,7 +1531,7 @@ def test_observer_close_continues_after_private_base_exception_and_retires_all(
     for session_id in streams:
         observer.observe(session_id, lambda _update: None)
     assert all(stream.entered.wait(0.5) for stream in streams.values())
-    observations = tuple(observer._observations.values())
+    subscriptions = tuple(observer._subscriptions.values())
 
     with pytest.raises(RuntimeError) as raised:
         observer.close()
@@ -1550,10 +1541,10 @@ def test_observer_close_continues_after_private_base_exception_and_retires_all(
     assert raised.value.__context__ is None
     assert all(stream.closed for stream in streams.values())
     assert all(
-        observation.thread is not None and not observation.thread.is_alive()
-        for observation in observations
+        subscription.thread is not None and not subscription.thread.is_alive()
+        for subscription in subscriptions
     )
-    assert observer._observations == {}
+    assert observer._subscriptions == {}
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
@@ -1561,7 +1552,7 @@ def test_observer_close_continues_after_private_base_exception_and_retires_all(
     observer.close()
 
 
-def test_observer_close_failure_traceback_does_not_own_retired_observations(
+def test_observer_close_failure_traceback_does_not_own_retired_subscriptions(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session_id = "8" * 32
@@ -1607,14 +1598,14 @@ def test_observer_close_failure_traceback_does_not_own_retired_observations(
     assert graph_references
     assert all(reference() is None for reference in graph_references)
     assert all(reference() is None for reference in retired_references)
-    assert observer._observations == {}
+    assert observer._subscriptions == {}
     assert excepthook_calls == []
     observer.close()
 
 
-@pytest.mark.parametrize("cleanup", ("unsubscribe", "rollback"))
+@pytest.mark.parametrize("admission", ("observe", "adopt"))
 def test_observer_single_cleanup_retires_after_private_close_base_exception(
-    cleanup: str,
+    admission: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session_id = "8" * 32
@@ -1632,7 +1623,7 @@ def test_observer_single_cleanup_retires_after_private_close_base_exception(
                 exception_base=BaseException,
             )
 
-    stream = Stream(cleanup)
+    stream = Stream(admission)
 
     class Dispatcher:
         def get(self, requested: str) -> SessionRecord:
@@ -1642,24 +1633,23 @@ def test_observer_single_cleanup_retires_after_private_close_base_exception(
             return stream
 
     observer = SessionObserver(Dispatcher())
-    if cleanup == "unsubscribe":
+    if admission == "observe":
         observer.observe(session_id, lambda _update: None)
-        action = lambda: observer.unsubscribe(session_id)
     else:
-        action = observer.adopt(session_id, lambda _update: None, stream)
+        assert observer.adopt(session_id, lambda _update: None, stream) is None
     assert stream.entered.wait(0.5)
-    observation = observer._observations[session_id]
+    subscription = observer._subscriptions[session_id]
 
     with pytest.raises(RuntimeError) as raised:
-        action()
+        observer.release(session_id)
 
     assert str(raised.value) == "session observer cleanup failed"
     assert raised.value.__cause__ is None
     assert raised.value.__context__ is None
     assert stream.closed
-    assert observation.thread is not None
-    assert not observation.thread.is_alive()
-    assert observer._observations == {}
+    assert subscription.thread is not None
+    assert not subscription.thread.is_alive()
+    assert observer._subscriptions == {}
     gc.collect()
     assert graph_references
     assert all(reference() is None for reference in graph_references)
@@ -1667,7 +1657,7 @@ def test_observer_single_cleanup_retires_after_private_close_base_exception(
     observer.close()
 
 
-def test_sink_can_unsubscribe_itself_without_self_join_or_deadlock() -> None:
+def test_callback_self_release_retires_atomically_without_self_join() -> None:
     session_id = "9" * 32
     stream = _SequenceStream(
         _envelope(session_id, 1, PhaseChanged("inventory"))
@@ -1681,62 +1671,170 @@ def test_sink_can_unsubscribe_itself_without_self_join_or_deadlock() -> None:
             return stream
 
     observer = SessionObserver(Dispatcher())
+    callback_entered = Event()
+    allow_release = Event()
+    self_release_returned = Event()
+    allow_callback_return = Event()
+    external_release_started = Event()
+    external_release_returned = Event()
     returned = Event()
+    retained_after_release: list[bool] = []
 
     def receive(_update) -> None:
-        observer.unsubscribe(session_id)
+        callback_entered.set()
+        assert allow_release.wait(2)
+        observer.release(session_id)
+        retained_after_release.append(session_id in observer._subscriptions)
+        self_release_returned.set()
+        assert allow_callback_return.wait(2)
         returned.set()
 
     observer.observe(session_id, receive)
+    assert callback_entered.wait(0.5)
+    subscription = observer._subscriptions[session_id]
+    allow_release.set()
 
+    assert self_release_returned.wait(0.5)
+    external_release = Thread(
+        target=lambda: (
+            external_release_started.set(),
+            observer.release(session_id),
+            external_release_returned.set(),
+        )
+    )
+    external_release.start()
+    assert external_release_started.wait(0.5)
+    assert not external_release_returned.wait(0.05)
+    allow_callback_return.set()
     assert returned.wait(0.5)
+    external_release.join(0.5)
+    assert not external_release.is_alive()
+    assert external_release_returned.is_set()
     assert stream.closed
+    assert retained_after_release == [False]
+    assert subscription.done.wait(0.5)
+    assert subscription.thread is not None
+    subscription.thread.join(0.5)
+    assert not subscription.thread.is_alive()
     observer.close()
 
 
-def test_adopt_rollback_is_idempotent_and_cannot_remove_replacement() -> None:
+def test_terminal_callback_self_release_preserves_terminal_record_pair() -> None:
+    session_id = f"{90_001:032x}"
+    terminal = OperationResult(SessionState.COMPLETED)
+    stream = _SequenceStream(
+        _envelope(
+            session_id,
+            1,
+            Terminal(TerminalSummary.from_result(terminal)),
+        )
+    )
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.get_count = 0
+
+        def get(self, requested: str) -> SessionRecord:
+            self.get_count += 1
+            return _record(requested, terminal=self.get_count > 1)
+
+        def subscribe(self, requested: str, from_seq=None):
+            del requested, from_seq
+            return stream
+
+    observer = SessionObserver(Dispatcher())
+    updates: list[SessionEventView | SessionRecordView] = []
+    complete = Event()
+
+    def receive(update: SessionEventView | SessionRecordView) -> None:
+        updates.append(update)
+        if type(update) is SessionEventView:
+            observer.release(session_id)
+        else:
+            complete.set()
+
+    observer.observe(session_id, receive)
+
+    assert complete.wait(0.5)
+    assert [type(update) for update in updates] == [
+        SessionEventView,
+        SessionRecordView,
+    ]
+    assert updates[0].body_type == "Terminal"
+    assert updates[1].result is not None
+    observer.close()
+
+
+def test_adopt_rejection_closes_offer_and_returns_no_rollback_capability() -> None:
+    accepted_stream = _BlockingStream("accepted")
+    rejected_stream = _BlockingStream("rejected")
+    invalid_stream = _BlockingStream("invalid")
+
+    observer = SessionObserver(SimpleNamespace())
+
+    result = observer.adopt(
+        "same-session",
+        lambda _update: None,
+        accepted_stream,
+    )
+    assert result is None
+    assert accepted_stream.entered.wait(0.5)
+
+    with pytest.raises(ValueError, match="already observed"):
+        observer.adopt(
+            "same-session",
+            lambda _update: None,
+            rejected_stream,
+        )
+
+    assert rejected_stream.closed
+    assert not rejected_stream.entered.is_set()
+    with pytest.raises(TypeError, match="callable"):
+        observer.adopt("invalid", object(), invalid_stream)
+    assert invalid_stream.closed
+    assert not invalid_stream.entered.is_set()
+    observer.release("same-session")
+    observer.close()
+
+
+def test_stale_subscription_release_cannot_remove_replacement() -> None:
     first_stream = _BlockingStream("first-generation")
     second_stream = _BlockingStream("second-generation")
-    first_sink = lambda _update: None
-    second_sink = lambda _update: None
 
     class Dispatcher:
         pass
 
     observer = SessionObserver(Dispatcher())
-    first_rollback = observer.adopt(
+    assert observer.adopt(
         "same-session",
-        first_sink,
+        lambda _update: None,
         first_stream,
-    )
+    ) is None
     assert first_stream.entered.wait(0.5)
-    assert observer.retains_observation("same-session", first_sink)
-    assert not observer.retains_observation("same-session", second_sink)
-    first_rollback()
-    assert not observer.retains_observation("same-session", first_sink)
+    retired = observer._subscriptions["same-session"]
+    observer.release("same-session")
 
-    second_rollback = observer.adopt(
+    assert observer.adopt(
         "same-session",
-        second_sink,
+        lambda _update: None,
         second_stream,
-    )
+    ) is None
     assert second_stream.entered.wait(0.5)
-    replacement = observer._observations["same-session"]
-    assert observer.retains_observation("same-session", second_sink)
+    replacement = observer._subscriptions["same-session"]
 
-    first_rollback()
+    observer._release_subscription(retired)
 
-    assert observer._observations["same-session"] is replacement
-    assert observer.retains_observation("same-session", second_sink)
+    assert observer._subscriptions["same-session"] is replacement
     assert not second_stream.closed
-    second_rollback()
-    assert observer._observations == {}
+    observer.release("same-session")
+    assert observer._subscriptions == {}
     observer.close()
 
 
 def test_reobserve_replaces_stream_from_exact_positive_sequence() -> None:
     first_stream = _BlockingStream("initial")
     replacement_stream = _BlockingStream("replacement")
+    retired_subscriptions = []
 
     class Dispatcher:
         def __init__(self) -> None:
@@ -1748,16 +1846,19 @@ def test_reobserve_replaces_stream_from_exact_positive_sequence() -> None:
         def subscribe(self, session_id: str, from_seq=None):
             del session_id
             self.subscribe_calls.append(from_seq)
-            return (
-                first_stream
-                if len(self.subscribe_calls) == 1
-                else replacement_stream
-            )
+            if len(self.subscribe_calls) == 1:
+                return first_stream
+            retired = retired_subscriptions[0]
+            assert retired.done.is_set()
+            assert retired.thread is not None
+            assert not retired.thread.is_alive()
+            return replacement_stream
 
     dispatcher = Dispatcher()
     observer = SessionObserver(dispatcher)
     observer.observe("recovering", lambda _update: None)
     assert first_stream.entered.wait(0.5)
+    retired_subscriptions.append(observer._subscriptions["recovering"])
 
     current = observer.reobserve(
         "recovering",
@@ -1802,18 +1903,18 @@ def test_invalid_reobserve_preserves_existing_observation() -> None:
     observer = SessionObserver(Dispatcher())
     observer.observe("retained", lambda _update: None)
     assert stream.entered.wait(0.5)
-    retained = observer._observations["retained"]
+    retained = observer._subscriptions["retained"]
 
     with pytest.raises(ValueError, match="positive integer"):
         observer.reobserve("retained", lambda _update: None, 0)
 
-    assert observer._observations["retained"] is retained
+    assert observer._subscriptions["retained"] is retained
     assert not stream.closed
 
     with pytest.raises(TypeError, match="callable"):
         observer.reobserve("retained", object(), 1)
 
-    assert observer._observations["retained"] is retained
+    assert observer._subscriptions["retained"] is retained
     assert not stream.closed
     observer.close()
 
@@ -1835,7 +1936,7 @@ def test_reobserve_terminal_session_installs_no_stream() -> None:
     )
 
     assert current.result is not None
-    assert observer._observations == {}
+    assert observer._subscriptions == {}
     observer.close()
 
 
@@ -2520,7 +2621,7 @@ def test_lifecycle_cleanup_sequences_are_fixed_and_owner_idempotent() -> None:
     class Observer:
         present = True
 
-        def unsubscribe(self, session_id: str) -> None:
+        def release(self, session_id: str) -> None:
             calls.append(("observer", session_id))
             if self.present:
                 self.present = False
@@ -2609,7 +2710,7 @@ def test_cleanup_retry_uses_current_owner_truth_not_application_progress() -> No
     close_transitions = 0
 
     class Observer:
-        def unsubscribe(self, session_id: str) -> None:
+        def release(self, session_id: str) -> None:
             pass
 
     class Dispatcher:
@@ -2666,7 +2767,7 @@ def test_blocked_session_retirement_keeps_details_until_close_returns() -> None:
     close_done = Event()
 
     class Observer:
-        def unsubscribe(self, session_id: str) -> None:
+        def release(self, session_id: str) -> None:
             pass
 
     class Dispatcher:
@@ -2769,7 +2870,7 @@ def _detail_lifecycle_service(runtime, dispatcher) -> NamiSyncService:
     service._dispatcher = dispatcher
     service._observer = SimpleNamespace(
         close=lambda: None,
-        unsubscribe=lambda _session_id: None,
+        release=lambda _session_id: None,
     )
     service._lock = Lock()
     service._close_lock = Lock()
@@ -2880,7 +2981,7 @@ def test_observed_start_adoption_rejection_retires_exact_liabilities() -> None:
             offered_stream.close()
             raise RuntimeError("observer adoption rejected")
 
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             release_calls.append(candidate)
 
     class Dispatcher:
@@ -3016,9 +3117,9 @@ def test_ls_4a_admission_rollback_owner_fault_retries_from_observer(
     class Observer:
         def adopt(self, candidate: str, sink, offered_stream):
             observations[candidate] = (sink, offered_stream)
-            return lambda: self.unsubscribe(candidate)
+            return None
 
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             calls.append(("observer", candidate))
             fault("observer", "before")
             retained = observations.pop(candidate, None)
@@ -3103,9 +3204,9 @@ def test_whole_admission_rollback_singleflights_concurrent_callers(
             assert candidate == session_id
             assert callable(sink)
             self.stream = stream
-            return lambda: None
+            return None
 
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             nonlocal observer_releases
             assert candidate == session_id
             observer_releases += 1
@@ -3224,7 +3325,7 @@ def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> 
     service = object.__new__(NamiSyncService)
     service._runtime = Runtime()
     service._dispatcher = Dispatcher()
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = SimpleNamespace(release=lambda _session_id: None)
     service._lock = Lock()
     service._plan_selections = {}
     service._lifecycle = TaskLifecycle()
@@ -3284,7 +3385,7 @@ def test_location_commands_submit_exact_typed_workflow_requests() -> None:
 
     service = object.__new__(NamiSyncService)
     service._dispatcher = Dispatcher()
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = SimpleNamespace(release=lambda _session_id: None)
     service._lifecycle = TaskLifecycle()
     service._lock = Lock()
     service._closed = False
@@ -3395,7 +3496,7 @@ def test_location_resolution_is_primitive_and_precedes_admission(
     service._runtime = SimpleNamespace(
         drop_inventory_details=lambda _request_id: None,
     )
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = SimpleNamespace(release=lambda _session_id: None)
     service._lifecycle = TaskLifecycle()
     service._lock = Lock()
     service._closed = False
@@ -3442,7 +3543,7 @@ def test_ambiguous_resolution_preserves_only_a_real_explicit_choice() -> None:
     service._runtime = SimpleNamespace(
         drop_inventory_details=lambda _request_id: None,
     )
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = SimpleNamespace(release=lambda _session_id: None)
     service._lifecycle = TaskLifecycle()
     service._lock = Lock()
     service._closed = False
@@ -3729,7 +3830,7 @@ def test_direct_start_replay_waits_for_close_and_admits_successor() -> None:
     service = object.__new__(NamiSyncService)
     service._runtime = runtime
     service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = SimpleNamespace(release=lambda _session_id: None)
     service._lifecycle = TaskLifecycle()
     service._lock = Lock()
     service._closed = False
@@ -3879,7 +3980,7 @@ def test_direct_starts_associate_and_retire_exact_session_receipts(
     service = object.__new__(NamiSyncService)
     service._runtime = runtime
     service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = SimpleNamespace(release=lambda _session_id: None)
     service._lifecycle = TaskLifecycle()
     service._lock = Lock()
     service._plan_selections = {}
@@ -4011,7 +4112,7 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
     runtime = Runtime()
     service = object.__new__(NamiSyncService)
     service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = SimpleNamespace(release=lambda _session_id: None)
     service._runtime = runtime
     service._lifecycle = lifecycle
     service._lock = Lock()
@@ -4114,7 +4215,7 @@ def test_task_association_gates_reobserve_release_and_close_effects() -> None:
             self.observing = True
             return running
 
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             self.release_calls.append(candidate)
             if self.observing:
                 self.observing = False
@@ -4268,7 +4369,7 @@ def test_ls_4b_whole_operation_cleanup_replay_converges(
             transitions.append((name, subject))
 
     class Observer:
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             assert candidate == session_id
             effect("observer", candidate)
 
@@ -4351,7 +4452,7 @@ def test_ls_4b_whole_operation_cleanup_singleflights_concurrent_callers(
     transitions: list[tuple[str, str]] = []
 
     class Observer:
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             assert candidate == session_id
             transitions.append(("observer", candidate))
             observer_entered.set()
@@ -4449,7 +4550,7 @@ def test_cleanup_post_effect_interrupt_replays_calls_not_effects() -> None:
     class Observer:
         present = True
 
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             calls.append(("observer", candidate))
             if self.present:
                 self.present = False
@@ -4527,7 +4628,7 @@ def test_s6_cleanup_replay_repeats_owner_calls_not_effects() -> None:
             self.calls: list[str] = []
             self.transitions: list[str] = []
 
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             self.calls.append(candidate)
             if self.present:
                 self.present = False
@@ -4669,7 +4770,7 @@ def test_disjoint_session_settlements_overlap_at_lower_owner_barrier() -> None:
     release = Event()
 
     class Observer:
-        def unsubscribe(self, candidate: str) -> None:
+        def release(self, candidate: str) -> None:
             with entered_lock:
                 entered.add(candidate)
                 if candidate == first_session:

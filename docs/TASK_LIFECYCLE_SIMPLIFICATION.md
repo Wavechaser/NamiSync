@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-03): active closed register; LC-1a and LC-1b plus the
-separate pre-LC-2 stabilization are complete, and LC-2 is next.** This
+**Standing (2026-09-03): active closed register; LC-1a, LC-1b, and LC-2 plus
+the separate pre-LC-2 stabilization are complete, and LC-3 is next.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -354,7 +354,7 @@ duplicate authorities rather than rename them.
 | `LC-0b` | Settle the LS-1 normative contract, replace its timing-sensitive raw-order assertion with deterministic loss/duplication accounting, and withdraw the unsupported defect classification. | `LC-0a` | Finite normative audit; duplicate/loss self-tests; 30 fresh deterministic runs; T1 and production unchanged; ordinary/import gate. | Complete |
 | `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0b` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Complete |
 | `LC-1b` | Replace application cleanup step cursors and marker repair with whole-operation replay over exact, monotone owner operations while retaining LC-1a authority, receipts, association, terminal truth, and plan-retirement exclusion. | `LC-1a` | Finite disappearance list; reanchored LS-4a/LS-4b fault matrices and concurrency detectors; T1/enduring T2; focused, ordinary, and import gates; net-subtractive production diff. | Complete |
-| `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1b` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Pending |
+| `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1b` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Complete |
 | `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0b` only; independent of `LC-2` | Core/dispatcher, exact stored projection, T1 persisted bytes. | Pending |
 | `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Pending |
 | `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1b`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Pending |
@@ -654,9 +654,12 @@ cleanup replay.
 - `release(session_id)` is idempotent and solely owns stop, stream close,
   callback/thread completion, join, and subscription retirement. An external
   release returns only after worker retirement. Callback self-release removes
-  the subscription atomically, prevents future callback delivery, skips
-  self-join, and lets that worker finish as the current callback unwinds. A
-  retry may repeat the release call but may not repeat an observable transition.
+  the subscription atomically, prevents a later stream/worker from using that
+  identity, skips self-join, and lets that worker finish under the unchanged
+  current-delivery behavior as its callback unwinds. The observer retains that
+  retiring physical subscription until unwind so a concurrent external
+  release can still wait for it. A retry may repeat the release call but may
+  not repeat an observable transition.
 - `adopt` closes a rejected stream itself and returns no cleanup or rollback
   authority.
 - Keep only the exact session association and observer liability needed to
@@ -697,7 +700,8 @@ cleanup replay.
 - `test_disc_b1_blocked_cli_callback_preserves_cancel_responsiveness` retains
   the baseline callback/control/terminal ordering without converting the CLI
   push callback into a pull loop or inserting another queue.
-- `test_disc_b2_delivery_shutdown_wakes_offer_before_observer_release` retains
+- `test_disc_b2_adapter_shutdown_wakes_offer_before_service_observer_release`
+  retains
   adapter delivery withdrawal, blocked-offer wake, handler departure, and
   eventual observer release while the physical subscription owner moves.
 - The web-drain import contract forbids `session_observer`, and structural
@@ -854,15 +858,15 @@ test-consolidation checkpoint and is not authorized here.
 | LC-1b reduction | Removed application cleanup steps, cursors, per-step acknowledgements, marker-repair calls, and the service step interpreter. The two production files are net 440 lines smaller; the two lifecycle/service test modules plus bridge fixture are net 74 lines smaller. The 22 renamed/removed tests have closed dispositions, all replacement names resolve, and no boundary test changed. |
 | LC-1b verification | Focused lifecycle/service/bridge: 176 passed. Bundled-Node interfaces/workflows/dispatcher neighborhood: 2,328 passed and 2,645 deselected. Frozen T1 matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,941 passed, four skipped, and 28 deselected in 220.72 seconds. The bounded independent reviews found one introduced admission-waiter shutdown defect, fixed before commit, and no remaining production or test finding. |
 | Pre-LC-2 stabilization | Without adding a register row, one separate mergeable amendment replaces the brittle exact lifecycle-state snapshot with two negative structural guards, consolidates plan retirement to one tolerant exact-token acquisition, aligns exact plan-selection retirement, states whole-operation owner idempotency, disambiguates the rollback concurrency test name, restores this document's detailed LC-2 contract from the historical `.codex` snapshot, and reanchors every active ledger proof. Focused lifecycle/service/bridge: 179 passed; frozen T1 matches; import law: 12 kept, 0 broken; ordinary with bundled Node: 4,944 passed, four skipped, 28 deselected in 214.64 seconds. |
+| LC-2 observation ownership | `SessionObserver` and private `SessionSubscription` moved to `interfaces/session_observer.py`; `adopt` returns no rollback capability, `release` is the one physical teardown operation, and service/application state retains only session association. Callback self-release keeps its exact physical subscription observer-owned until unwind, so a concurrent external release can join it; the baseline terminal event-plus-record callback pair remains unchanged. The strong indirect drain prohibition now includes the observer module. The production move is net 56 lines because this self-release custody is explicit; no cursor, application progress, adapter cleanup capability, or second delivery queue was added. |
+| LC-2 verification | Focused observer/CLI/lifecycle/host: 298 passed; interfaces/dispatcher departments with bundled Node: 1,583 passed and 3,390 deselected; bridge/drain: 136 passed; observer fault slice: 54 passed. Frozen T1 matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,941 passed, four skipped, and 28 deselected in 213.01 seconds. Five obsolete returned-rollback parameter cases were removed and two owner-level tests added; every changed test has a closed ledger disposition. Two independent reviews found the self-release external-join gap in the draft, verified its owner-local fix, and reported no remaining blocker. |
 
-- **Current checkpoint:** pre-LC-2 stabilization complete; LC-2 has not begun.
-- **Next action:** begin LC-2 from the restored detailed observer-lifetime
-  checkpoint above.
+- **Current checkpoint:** LC-2 complete; LC-3 has not begun.
+- **Next action:** implement the independently authorized LC-3 live/stored
+  record composition without touching lifecycle scheduling or locks.
 - **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
-  `codex/wip-20260902-2029-task-lifecycle-lc1a`; the recovery snapshots remain
-  isolated and are not review units. Retain the latest WIP ref until the
-  rebuilt atomic LC-1a commit passes its full gate; delete it only after that
-  commit is reviewed.
+  `codex/wip-20260902-2029-task-lifecycle-lc1a`; those recovery snapshots
+  remain isolated and are not review units.
 - **Stop:** any supported baseline defect, real-boundary drift, baseline LS
   consequence, nondeterministic T1, repeated-defect threshold, inability to
   preserve work, or required event/capacity change.

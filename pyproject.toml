@@ -157,6 +157,7 @@ type = "forbidden"
 source_modules = ["namisync.interfaces.web.drain"]
 forbidden_modules = [
     "namisync.dispatcher",
+    "namisync.interfaces.session_observer",
     "namisync.interfaces.service",
     "namisync.interfaces.task_lifecycle",
 ]

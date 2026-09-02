@@ -98,8 +98,9 @@ machine output, and the desktop action layer remain deferred.
 
 ## M1 Shared Service
 
-`interfaces/service.py` owns one process-local `LocalWorkflowRuntime`, the
-domain-blind dispatcher, the exact six-kind registration table, sync
+`interfaces/service.py` composes one process-local `LocalWorkflowRuntime`, the
+domain-blind dispatcher, `SessionObserver`, the exact six-kind registration
+table, sync
 plan/review/commit sequencing, history access, controls, and primitive workflow
 views. Runtime plan storage remains the existing process-local dictionary behind
 named `save_plan`/`get_plan`/`drop_plan` methods; it is not a `PlanStore` and
@@ -257,8 +258,12 @@ lifecycle owns command effects, domain-effect receipts, exact task/session
 association, compensation, and logical settlement. Every admitted session,
 including a direct CLI session without a desktop task, receives an application
 association. Dispatcher independently owns session admission, custody,
-concurrency, control, and close. The current service-owned `SessionObserver`
-owns stream, callback, thread, and subscription lifetime.
+concurrency, control, and close. The service-owned `SessionObserver` is
+implemented in `interfaces/session_observer.py`; it alone owns adopted stream,
+callback, thread, and subscription lifetime. External release waits for every
+retained worker. Callback self-release skips self-join but leaves the exact
+physical subscription observer-owned until that callback unwinds, so a
+concurrent external release can still wait truthfully.
 
 The adapter owns only bounded intent and response replay plus queue, drain,
 connection, delivery-generation, terminal-delivery, and presentation state.
@@ -410,7 +415,8 @@ shutdown marks delivery closed, invalidates generations, supersedes drains, and
 wakes blocked offers before service observer release. It never owns observer
 release, dispatcher/session close, detail retirement, plan drop, or
 compensation. The strong import contract `Web task drain cannot reach domain
-lifecycle owners` forbids both direct and indirect drain paths to those owners.
+lifecycle owners` forbids both direct and indirect drain paths to those owners,
+including `SessionObserver`.
 The application admits at most 48 active desktop task effects before invoking a
 delivery factory or lower application work. Independently, the adapter keeps at
 most 48 successful/in-flight start-response entries, retiring successful entries
@@ -526,9 +532,10 @@ cleanup error. An unexpected ordinary join failure follows that fixed path;
 an unexpected join `KeyboardInterrupt`, `SystemExit`, or `GeneratorExit` becomes
 a fresh fixed `KeyboardInterrupt`, and a join timeout remains a fresh fixed
 `TimeoutError`. Stopped observations are retired in every case, while only live
-observations remain for retry. An identity-bound rollback capability returned
-during adoption remains observer-owned and is discarded by the service call
-frame; it is never retained by `TaskLifecycle` or an adapter. The service
+observations remain for retry. Adoption closes an offer that it cannot retain
+and returns no rollback or cleanup capability; an accepted subscription can be
+released only through `SessionObserver`. Neither `TaskLifecycle` nor an adapter
+retains observer cleanup authority. The service
 converts any observer close exception to one ordinary/interrupted
 Boolean before dispatcher and runtime shutdown, clears its
 traceback/cause/context without formatting it, then raises a fresh fixed

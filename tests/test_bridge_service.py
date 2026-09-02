@@ -132,7 +132,7 @@ def _service(runtime, dispatcher=None) -> NamiSyncService:
     service._runtime = runtime
     service._dispatcher = dispatcher or _Dispatcher()
     service._observer = SimpleNamespace(
-        unsubscribe=lambda _session_id: None,
+        release=lambda _session_id: None,
         close=lambda: None,
     )
     service._lock = Lock()
@@ -1012,7 +1012,7 @@ def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     service = _service(runtime, dispatcher)
     service._observer = SimpleNamespace(
         close=lambda: None,
-        unsubscribe=lambda _session_id: None,
+        release=lambda _session_id: None,
     )
     errors: list[Exception] = []
 
@@ -1139,7 +1139,7 @@ def test_task_receipt_publication_does_not_reread_dispatcher_after_attach(
     delivery_tasks: list[str] = []
     service = _service(Runtime(), Dispatcher())
     service._observer = SimpleNamespace(
-        adopt=lambda session_id, _sink, _stream: lambda: None,
+        adopt=lambda session_id, _sink, _stream: None,
     )
 
     def delivery_factory(task_id: str):

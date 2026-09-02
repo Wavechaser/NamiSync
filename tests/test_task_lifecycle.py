@@ -364,7 +364,7 @@ def test_disc_b2_adapter_shutdown_wakes_offer_before_service_observer_release(
         with task.condition:
             assert task.closing
             assert task.generation == generation + 1
-        assert service._observer._observations != {}
+        assert service._observer._subscriptions != {}
     finally:
         registry.begin_close()
         finish_workflow.set()
@@ -377,7 +377,7 @@ def test_disc_b2_adapter_shutdown_wakes_offer_before_service_observer_release(
     )
     assert service.close(timeout=2).complete
     shutdown_order.append("service.close.complete")
-    assert service._observer._observations == {}
+    assert service._observer._subscriptions == {}
     assert shutdown_order == [
         "adapter.offer.withdrawn",
         "service.close.complete",
@@ -1108,7 +1108,7 @@ def test_ls_5_release_retires_stream_and_callback(
     service.unsubscribe(session.session_id)
     service.unsubscribe(session.session_id)
     callback_count = len(callbacks)
-    assert service._observer._observations == {}
+    assert service._observer._subscriptions == {}
     assert dispatcher._hubs[session.session_id]._subscribers == []
 
     del receive, owner

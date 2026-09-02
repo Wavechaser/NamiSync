@@ -81,6 +81,17 @@ preserving public behavior, real boundary checks, and persisted contracts.
   179 cases, the frozen boundary corpus remained exact, ordinary passed 4,944
   with four capability skips and 28 deselected, and all 12 import contracts
   remained intact.
+- LC-2 moved the complete stream, sink, callback, worker, recovery, and
+  subscription lifetime into `interfaces/session_observer.py`. Observer
+  adoption returns no rollback capability; application cleanup requests one
+  idempotent release, and the web drain is structurally forbidden from
+  reaching the observer as well as the lifecycle/service/Dispatcher owners.
+- Callback self-release retains only its exact retiring physical subscription
+  until unwind, allowing a concurrent external release to join without
+  changing the established terminal event-plus-record callback pair. Focused
+  tests passed 298 cases, interface/dispatcher departments passed 1,583,
+  ordinary passed 4,941 with four capability skips and 28 deselected, the
+  frozen boundary corpus matched, and all 12 import contracts remained intact.
 
 ### M1 Hardening
 

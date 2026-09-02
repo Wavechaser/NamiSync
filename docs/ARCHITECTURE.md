@@ -786,10 +786,11 @@ active retirement, and supported callers do not intentionally reuse fresh
 service-minted plan request ids. A live or retiring collision is not a waitable
 key-reuse protocol.
 
-The current `SessionObserver` remains implemented in `interfaces/service.py`.
-It alone owns stream, callback, worker-thread, and subscription lifetime; the
-application aggregate records no independent observer-release acknowledgement
-or cursor. Dispatcher alone owns admitted session custody and close.
+`SessionObserver` and its private `SessionSubscription` are implemented in
+`interfaces/session_observer.py`. They alone own adopted stream, callback,
+worker-thread, and subscription lifetime; the application aggregate records no
+independent observer-release acknowledgement or cursor. Dispatcher alone owns
+admitted session custody and close.
 Adapters own only presentation and transport state: bounded response replay,
 queueing, drain claims, connection state, delivery generations, terminal-
 delivery facts, and response delivery.
@@ -827,8 +828,8 @@ delivery factory, exact task/session reobservation, terminal-session release,
 and task close. It exposes no raw unsubscribe, dispatcher/session close, plan
 drop, compensation, stream, or rollback primitive. The import contract named
 `Web task drain cannot reach domain lifecycle owners` forbids every direct or
-indirect path from `interfaces/web/drain.py` to the dispatcher, service, or
-private lifecycle aggregate.
+indirect path from `interfaces/web/drain.py` to the dispatcher, service,
+session observer, or private lifecycle aggregate.
 
 Interface lifecycle source ownership is:
 
@@ -836,7 +837,8 @@ Interface lifecycle source ownership is:
 | --- | --- |
 | Adapter-facing task views and narrow lifecycle port | `namisync/interfaces/task_port.py` |
 | Application effect receipts, association, compensation, and settlement | `namisync/interfaces/task_lifecycle.py` |
-| Current session observation lifetime and service composition | `namisync/interfaces/service.py` |
+| Session observation lifetime | `namisync/interfaces/session_observer.py` |
+| Service composition and application-facing operations | `namisync/interfaces/service.py` |
 | Desktop response replay, queue, drain, generation, and delivery state | `namisync/interfaces/web/drain.py` |
 
 The desktop bridge exposes one versioned, allowlisted command surface and

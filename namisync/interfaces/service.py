@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from hashlib import sha256
 from json import dumps
 from pathlib import Path
-from threading import Event, Lock, Thread, current_thread
-from time import monotonic
+from threading import Lock
 from typing import Callable, Never
 from uuid import uuid4
 
@@ -19,7 +18,6 @@ from namisync.dispatcher import (
     EventStream,
     PreparedSession,
     retire_exception_graph,
-    SessionCleanupPending,
     SessionNotFound,
     WorkflowRegistration,
 )
@@ -70,6 +68,11 @@ from namisync.workflows.views import (
     terminal_result_event_data,
 )
 
+from namisync.interfaces.session_observer import (
+    SessionObserver,
+    SessionSink,
+    SessionUpdate,
+)
 from namisync.interfaces.task_lifecycle import (
     LifecycleAssociationError,
     LifecycleReceiptConflictError,
@@ -90,8 +93,6 @@ from namisync.interfaces.task_port import (
 )
 
 
-SessionUpdate = SessionEventView | SessionRecordView
-SessionSink = Callable[[SessionUpdate], None]
 FINALIZATION_TIMEOUT_MARGIN_SECONDS = 1.0
 # Keep ordinary history retry inside the audit cutoff, and shutdown long enough
 # for a late pump claim to consume both bounds in sequence.
@@ -108,36 +109,10 @@ SERVICE_CLOSE_TIMEOUT_SECONDS = (
 # deliberately independent of the finalization cutoff above and must not scale
 # with the history writer's retry bound.
 AUDIT_OFFER_TIMEOUT_SECONDS = 5.0
-_OBSERVER_CLEANUP_FAILURE = "session observer cleanup failed"
-_OBSERVER_CLEANUP_INTERRUPTED = "session observer cleanup was interrupted"
-_OBSERVER_JOIN_TIMEOUT = "session observers did not stop"
 _SERVICE_OBSERVER_CLEANUP_FAILURE = "service observer cleanup failed"
 _SERVICE_OBSERVER_CLEANUP_INTERRUPTED = (
     "service observer cleanup was interrupted"
 )
-_OBSERVER_FAILURE_ORDINARY = "ordinary"
-_OBSERVER_FAILURE_TIMEOUT = "timeout"
-_OBSERVER_FAILURE_INTERRUPTED = "interrupted"
-
-
-def _classify_observer_join_failure(error: BaseException) -> str:
-    if isinstance(error, TimeoutError):
-        return _OBSERVER_FAILURE_TIMEOUT
-    if not isinstance(error, Exception):
-        return _OBSERVER_FAILURE_INTERRUPTED
-    return _OBSERVER_FAILURE_ORDINARY
-
-
-def _raise_observer_cleanup_failure(failure_code: str) -> Never:
-    if failure_code == _OBSERVER_FAILURE_TIMEOUT:
-        raise TimeoutError(_OBSERVER_JOIN_TIMEOUT) from None
-    if failure_code == _OBSERVER_FAILURE_INTERRUPTED:
-        raise KeyboardInterrupt(_OBSERVER_CLEANUP_INTERRUPTED) from None
-    if failure_code == _OBSERVER_FAILURE_ORDINARY:
-        raise RuntimeError(_OBSERVER_CLEANUP_FAILURE) from None
-    raise RuntimeError("observer cleanup failure code is invalid") from None
-
-
 def _raise_service_observer_failure(*, interrupted: bool) -> Never:
     if interrupted:
         raise KeyboardInterrupt(_SERVICE_OBSERVER_CLEANUP_INTERRUPTED) from None
@@ -294,18 +269,6 @@ class ShutdownView:
 
 
 @dataclass(slots=True)
-class _Observation:
-    session_id: str
-    sink: SessionSink
-    stream: EventStream
-    from_sequence: int = 1
-    stop: Event = field(default_factory=Event)
-    done: Event = field(default_factory=Event)
-    thread: Thread | None = None
-    failed: bool = False
-
-
-@dataclass(slots=True)
 class _PlanSelectionState:
     artifact: object
     plan_token: PlanToken
@@ -315,343 +278,8 @@ class _PlanSelectionState:
     execution_session: ExecutionSession | None = None
 
 
-class SessionObserver:
-    """Translate blocking dispatcher streams into sink-delivered views."""
-
-    def __init__(self, dispatcher: Dispatcher, *, join_timeout: float = 2.0) -> None:
-        if join_timeout <= 0:
-            raise ValueError("observer join timeout must be positive")
-        self._dispatcher = dispatcher
-        self._join_timeout = join_timeout
-        self._lock = Lock()
-        self._observations: dict[str, _Observation] = {}
-        self._closed = False
-
-    def observe(self, session_id: str, sink: SessionSink) -> SessionRecordView:
-        with self._lock:
-            if self._closed:
-                raise RuntimeError("session observer is closed")
-            if session_id in self._observations:
-                raise ValueError(f"session is already observed: {session_id}")
-
-        record = self._dispatcher.get(session_id)
-        current = session_record_view(record)
-        if current.result is not None:
-            return current
-
-        try:
-            stream = self._dispatcher.subscribe(session_id)
-        except (SessionCleanupPending, SessionNotFound):
-            finished = session_record_view(self._dispatcher.get(session_id))
-            if finished.result is None:
-                raise
-            return finished
-        self.adopt(session_id, sink, stream)
-        return current
-
-    def adopt(
-        self,
-        session_id: str,
-        sink: SessionSink,
-        stream: EventStream,
-        *,
-        from_sequence: int = 1,
-    ) -> Callable[[], None]:
-        """Adopt a preopened stream and return its identity-bound rollback."""
-
-        try:
-            if not callable(sink):
-                raise TypeError("session sink must be callable")
-            self._require_positive_sequence(from_sequence)
-        except BaseException:
-            stream.close()
-            raise
-        observation = _Observation(
-            session_id=session_id,
-            sink=sink,
-            stream=stream,
-            from_sequence=from_sequence,
-        )
-        thread = Thread(
-            target=self._run,
-            args=(observation,),
-            name=f"namisync-observer-{session_id}",
-            daemon=True,
-        )
-        observation.thread = thread
-        try:
-            with self._lock:
-                if self._closed:
-                    raise RuntimeError("session observer is closed")
-                if session_id in self._observations:
-                    raise ValueError(
-                        f"session is already observed: {session_id}"
-                    )
-                self._observations[session_id] = observation
-                try:
-                    thread.start()
-                except BaseException:
-                    if self._observations.get(session_id) is observation:
-                        self._observations.pop(session_id, None)
-                    raise
-        except BaseException:
-            with self._lock:
-                observation.stop.set()
-            stream.close()
-            raise
-
-        rollback_observation: _Observation | None = observation
-
-        def rollback() -> None:
-            nonlocal rollback_observation
-            current = rollback_observation
-            if current is None:
-                return
-            try:
-                self._rollback(current)
-            finally:
-                with self._lock:
-                    if (
-                        self._observations.get(current.session_id)
-                        is not current
-                    ):
-                        rollback_observation = None
-                del current
-
-        return rollback
-
-    def reobserve(
-        self,
-        session_id: str,
-        sink: SessionSink,
-        from_sequence: int,
-    ) -> SessionRecordView:
-        """Replace one observation and replay from a positive first sequence."""
-
-        if not callable(sink):
-            raise TypeError("session sink must be callable")
-        self._require_positive_sequence(from_sequence)
-        self.unsubscribe(session_id)
-        with self._lock:
-            if self._closed:
-                raise RuntimeError("session observer is closed")
-
-        record = self._dispatcher.get(session_id)
-        current = session_record_view(record)
-        if current.result is not None:
-            return current
-        try:
-            stream = self._dispatcher.subscribe(session_id, from_sequence)
-        except (SessionCleanupPending, SessionNotFound):
-            finished = session_record_view(self._dispatcher.get(session_id))
-            if finished.result is None:
-                raise
-            return finished
-        self.adopt(
-            session_id,
-            sink,
-            stream,
-            from_sequence=from_sequence,
-        )
-        return current
-
-    def unsubscribe(self, session_id: str) -> None:
-        with self._lock:
-            observation = self._observations.get(session_id)
-        if observation is None:
-            return
-        try:
-            self._rollback(observation)
-        finally:
-            del observation
-
-    def retains_observation(self, session_id: str, sink: SessionSink) -> bool:
-        """Report whether the exact session still retains the supplied sink."""
-
-        with self._lock:
-            observation = self._observations.get(session_id)
-            return observation is not None and observation.sink is sink
-
-    def _rollback(self, observation: _Observation) -> None:
-        with self._lock:
-            observation.stop.set()
-        observations = (observation,)
-        close_failed = self._close_streams(observations)
-        join_failure = self._join_and_retire(observations)
-        del observation, observations
-        if join_failure is not None:
-            _raise_observer_cleanup_failure(join_failure)
-        if close_failed:
-            _raise_observer_cleanup_failure(_OBSERVER_FAILURE_ORDINARY)
-
-    def wait(self, session_id: str) -> SessionRecordView:
-        with self._lock:
-            observation = self._observations.get(session_id)
-        if observation is None:
-            current = session_record_view(self._dispatcher.get(session_id))
-            if current.result is not None:
-                return current
-            raise KeyError(f"session is not observed: {session_id}")
-        observation.done.wait()
-        if observation.failed:
-            raise RuntimeError("session observation failed") from None
-        current = session_record_view(self._dispatcher.get(session_id))
-        if current.result is None:
-            raise RuntimeError(
-                f"session observation stopped before terminal: {session_id}"
-            )
-        return current
-
-    def close(self) -> None:
-        with self._lock:
-            if self._closed and not self._observations:
-                return
-            self._closed = True
-            observations = tuple(self._observations.values())
-            for observation in observations:
-                observation.stop.set()
-            if observations:
-                del observation
-        close_failed = self._close_streams(observations)
-        join_failure = self._join_and_retire(observations)
-        del observations
-        if join_failure is not None:
-            _raise_observer_cleanup_failure(join_failure)
-        if close_failed:
-            _raise_observer_cleanup_failure(_OBSERVER_FAILURE_ORDINARY)
-
-    def _run(self, observation: _Observation) -> None:
-        stream = observation.stream
-        next_sequence = observation.from_sequence
-        try:
-            while not observation.stop.is_set():
-                try:
-                    envelope = stream.next()
-                except StopIteration:
-                    if observation.stop.is_set():
-                        return
-                    record = session_record_view(
-                        self._dispatcher.get(observation.session_id)
-                    )
-                    if record.result is not None:
-                        observation.sink(record)
-                        return
-                    replacement = self._dispatcher.subscribe(
-                        observation.session_id, next_sequence
-                    )
-                    with self._lock:
-                        rejected = (
-                            self._closed
-                            or observation.stop.is_set()
-                            or self._observations.get(observation.session_id)
-                            is not observation
-                        )
-                        if not rejected:
-                            observation.stream = replacement
-                    if rejected:
-                        replacement.close()
-                        return
-                    stream.close()
-                    stream = replacement
-                    continue
-
-                event = session_event_view(envelope)
-                if event.body_type == "Gap":
-                    missed = event.body.get("first_missed_seq")
-                    if isinstance(missed, int):
-                        next_sequence = max(next_sequence, missed)
-                else:
-                    next_sequence = max(next_sequence, event.sequence + 1)
-                observation.sink(event)
-                if event.body_type == "Terminal":
-                    observation.sink(
-                        session_record_view(
-                            self._dispatcher.get(observation.session_id)
-                        )
-                    )
-                    return
-        except BaseException as error:
-            retire_exception_graph(error)
-            observation.failed = True
-        finally:
-            if self._close_streams((observation,)):
-                observation.failed = True
-            observation.done.set()
-
-    @staticmethod
-    def _require_positive_sequence(from_sequence: int) -> None:
-        if (
-            isinstance(from_sequence, bool)
-            or not isinstance(from_sequence, int)
-            or from_sequence < 1
-        ):
-            raise ValueError("from_sequence must be a positive integer")
-
-    def _close_streams(self, observations: tuple[_Observation, ...]) -> bool:
-        with self._lock:
-            streams = tuple(
-                (observation, observation.stream)
-                for observation in observations
-            )
-        failed = False
-        for observation, stream in streams:
-            try:
-                stream.close()
-            except BaseException as error:
-                retire_exception_graph(error)
-                observation.failed = True
-                failed = True
-        return failed
-
-    def _retire_stopped_observations(
-        self,
-        observations: tuple[_Observation, ...],
-    ) -> None:
-        with self._lock:
-            for observation in observations:
-                thread = observation.thread
-                if (
-                    thread is None
-                    or thread is current_thread()
-                    or not thread.is_alive()
-                ):
-                    if (
-                        self._observations.get(observation.session_id)
-                        is observation
-                    ):
-                        self._observations.pop(observation.session_id, None)
-
-    def _join_and_retire(
-        self,
-        observations: tuple[_Observation, ...],
-    ) -> str | None:
-        join_failure: str | None = None
-        try:
-            self._join_threads(observations)
-        except BaseException as error:
-            join_failure = _classify_observer_join_failure(error)
-            retire_exception_graph(error)
-        finally:
-            self._retire_stopped_observations(observations)
-        return join_failure
-
-    def _join_threads(self, observations: tuple[_Observation, ...]) -> None:
-        deadline = monotonic() + self._join_timeout
-        alive: list[str] = []
-        for observation in observations:
-            thread = observation.thread
-            if thread is None or thread is current_thread():
-                continue
-            thread.join(max(0.0, deadline - monotonic()))
-            if thread.is_alive():
-                alive.append(observation.session_id)
-        if alive:
-            joined = ", ".join(sorted(alive))
-            raise TimeoutError(f"session observers did not stop: {joined}")
-
-
 class NamiSyncService:
-    """Own the local workflow runtime, dispatcher, and interface observation."""
+    """Compose the local runtime, dispatcher, and session observer."""
 
     def __init__(
         self,
@@ -1323,7 +951,7 @@ class NamiSyncService:
         except LifecycleAssociationError:
             return
         try:
-            self._observer.unsubscribe(session_id)
+            self._observer.release(session_id)
         finally:
             self._lifecycle.end_observation(claim)
 
@@ -1712,7 +1340,7 @@ class NamiSyncService:
                 return
             try:
                 if claim.session_id is not None:
-                    self._observer.unsubscribe(claim.session_id)
+                    self._observer.release(claim.session_id)
                 self._drop_runtime_details(claim.detail_owner)
             except BaseException:
                 self._lifecycle.abandon_admission_rollback(claim)
@@ -1735,16 +1363,11 @@ class NamiSyncService:
                 else:
                     # SessionObserver.adopt closes a rejected stream itself.
                     stream_needs_close = False
-                    observation_rollback = self._observer.adopt(
+                    self._observer.adopt(
                         str(session_id),
                         observation_sink,
                         stream,
                     )
-                    if not callable(observation_rollback):
-                        raise TypeError(
-                            "session observer must return a rollback callback"
-                        )
-                    del observation_rollback
             except BaseException:
                 if stream_needs_close:
                     try:
@@ -1857,7 +1480,7 @@ class NamiSyncService:
                 dispatcher_truth_observed=dispatcher_truth_observed,
             )
             if not work.replay:
-                self._observer.unsubscribe(work.session_id)
+                self._observer.release(work.session_id)
                 try:
                     self._dispatcher.close(work.session_id)
                 except SessionNotFound:

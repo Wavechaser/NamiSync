@@ -958,7 +958,7 @@ def test_br_g_33_integrated_admission_and_visible_overflow_gap(
         *,
         from_sequence=1,
     ):
-        rollback = real_adopt(
+        result = real_adopt(
             session_id,
             sink,
             stream,
@@ -968,7 +968,7 @@ def test_br_g_33_integrated_admission_and_visible_overflow_gap(
             adopted_session_ids.append(session_id)
             adopt_entered.set()
             assert adopt_release.wait(2)
-        return rollback
+        return result
 
     monkeypatch.setattr(service._observer, "adopt", instrumented_adopt)
     registry = _make_registry(service, drain_wait=1.0)
@@ -1195,14 +1195,14 @@ def test_sh_g_8_br_g_42_normal_event_envelope_is_bounded_and_lossless(
         *,
         from_sequence=1,
     ):
-        rollback = real_adopt(
+        result = real_adopt(
             session_id,
             sink,
             stream,
             from_sequence=from_sequence,
         )
         adopted_session_ids.append(session_id)
-        return rollback
+        return result
 
     monkeypatch.setattr(service._observer, "adopt", instrumented_adopt)
     registry = _make_registry(
