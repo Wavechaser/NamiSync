@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-03): active closed register; LC-1a and LC-1b are complete,
-and work is paused for review before LC-2.** This
+**Standing (2026-09-03): active closed register; LC-1a and LC-1b plus the
+separate pre-LC-2 stabilization are complete, and LC-2 is next.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -190,7 +190,7 @@ do not assert target architecture against the untouched tree.
 | `LS-2` wrong/unreachable session control | **Baseline, LC-0.** `test_ls_2_session_control_reaches_only_corresponding_dispatcher_record` proves service `pause`/`resume`/`cancel` mutate only the exact dispatcher record; unknown or retired sessions mutate none. |
 | `LS-3` false terminal reconciliation | **Introduced, LC-1a.** `test_ls_3_terminal_reconciliation_matches_dispatcher_truth` compares delivered Terminal/record with dispatcher truth before settlement; injected disagreement prevents close and success replay. An injected internal disagreement alone is not a baseline defect; an actual supported baseline disagreement is. |
 | `LS-4a` missing/duplicate admission rollback | **Baseline in LC-0; reanchored in LC-1b.** `test_ls_4a_admission_rollback_owner_fault_retries_from_observer` faults observer release and detail retirement before and after their transitions; adoption rejection and failed publication have focused composition witnesses. Calls may repeat while each exact transition occurs once and unrelated subjects remain untouched. The unchanged `test_ls_4_dispatcher_admission_cleanup_converges` retains D1-D4 at the Dispatcher owner. |
-| `LS-4b` missing/duplicate application settlement effect | **Introduced in LC-1a; redefined and reanchored in LC-1b.** `test_ls_4b_whole_operation_cleanup_replay_converges` faults each finite owner before its transition. Post-effect observer, Dispatcher, detail, and plan failures are proved respectively by `test_cleanup_post_effect_interrupt_replays_calls_not_effects`, `test_cleanup_retry_uses_current_owner_truth_not_application_progress`, `test_lifecycle_cleanup_sequences_are_fixed_and_owner_idempotent`, and `test_s6_plan_retirement_post_effect_fault_replays_call_not_effect`. Exact final absence has no missing, repeated, or wrong-subject observable effect. `test_ls_4b_whole_operation_cleanup_singleflights_concurrent_callers` proves one active whole-operation claim. Repeated invocation of an idempotent cleanup method is not itself an LS-4b consequence. |
+| `LS-4b` missing/duplicate application settlement effect | **Introduced in LC-1a; redefined and reanchored in LC-1b.** `test_ls_4b_whole_operation_cleanup_replay_converges` faults each finite owner before its transition. Post-effect observer, Dispatcher, detail, and plan failures are proved respectively by `test_cleanup_post_effect_interrupt_replays_calls_not_effects`, `test_cleanup_retry_uses_current_owner_truth_not_application_progress`, `test_lifecycle_cleanup_sequences_are_fixed_and_owner_idempotent`, and `test_s6_cleanup_replay_repeats_owner_calls_not_effects`. The S6 witness explicitly repeats observer, Dispatcher, detail, and plan calls while each physical transition remains unique. Exact final absence has no missing, repeated, or wrong-subject observable effect. `test_ls_4b_whole_operation_cleanup_singleflights_concurrent_callers` proves one active whole-operation claim. Repeated invocation of an idempotent cleanup method is not itself an LS-4b consequence. |
 | `LS-5` retained stream/callback | **Baseline, LC-0.** `test_ls_5_release_retires_stream_and_callback` proves observer lookup and subscriber custody disappear, callback count cannot advance, and a weak sink owner is collectible. |
 
 LS-4a's F1-F5/R1-R4 table is the pre-migration characterization of machinery
@@ -475,7 +475,7 @@ concurrency proof.
 | --- | --- |
 | `_StartEntry` domain-effect receipt/single-flight authority | Application replays identical resolved intent and rejects conflict; adapter cache retains only the permitted response fields. |
 | `_TaskReservation.attached_session_id` authority | Exact lifecycle association for reobserve, terminal release, and task close; correct/wrong/retired identities. |
-| Drain `_Compensation` | `test_ls_4_partial_admission_compensates_once` faults every `_submit_session` admission/rollback seam, and `test_ls_4_application_rollback_singleflights_concurrent_callers` proves concurrent retries do not repeat a completed physical step. |
+| Drain `_Compensation` | `test_ls_4a_admission_rollback_owner_fault_retries_from_observer` faults each retained observer/detail rollback owner before and after its transition; the focused attachment/adoption/publication witnesses cover the remaining `_submit_session` seams, and `test_whole_admission_rollback_singleflights_concurrent_callers` proves one exact rollback owner under concurrent retry. Calls may repeat, but each physical transition remains unique. |
 | Drain `_TaskCleanup`/progress booleans | LC-1a proved first-unfinished-step retry at the new owner. LC-1b deliberately retires that proof with the progress machinery and replaces it with whole-operation replay/no-duplicate-effect evidence. |
 | `session_attachment`/`require_session_attachment` | Publication follows association/adoption; failed adoption publishes nothing; direct sessions also associate. |
 | Drain observer/cleanup/release flags | Idempotent release and LS-5. |
@@ -543,7 +543,7 @@ compressed.
 | `SettlementReservation`, `reserve_settlement`, `activate_settlement`, and `abandon_settlement_reservation` | `test_lifecycle_whole_settlement_claim_excludes_reobserve_and_same_session_peer` proves exact sealing, reobservation exclusion, observation-end/abandon wakeup, and disjoint independence. `test_ls_4b_whole_operation_cleanup_singleflights_concurrent_callers` proves completion wakeup; `test_lifecycle_close_wakes_settlement_claim_waiter` proves close wakeup. |
 | `settlement_step`, `complete_settlement_step`, and their service loop | The collective LS-4b pre/post owner-fault witnesses replay the whole sequence from current truth; the deterministic C1 test covers the two-caller race. They assert final owner truth and boundary effects, not a next-step cursor. |
 | `admission_rollback_step`, `complete_admission_rollback_step`, `abandon_admission_rollback_step`, and `AdmissionRollbackClaim.step` | `test_ls_4a_admission_rollback_owner_fault_retries_from_observer`, the adoption-rejection/publication witnesses, and the two whole-rollback replay/single-flight tests cover exact unpublished attachment, detail, and observation liabilities. |
-| `_SessionAssociation.admission_cursor`, `rollback_last_completed`, `settlement_cursor`, `settlement_reservation`, `settlement_last_completed`, and `settlement_last_finished` | `test_lifecycle_state_has_no_cleanup_step_or_marker_progress` inspects the finite aggregate fields and permits only exact identities/liabilities, terminal truth, monotone target, and coarse whole-operation claims. |
+| `_SessionAssociation.admission_cursor`, `rollback_last_completed`, `settlement_cursor`, `settlement_reservation`, `settlement_last_completed`, and `settlement_last_finished` | `test_lifecycle_state_has_no_cleanup_step_or_marker_progress` rejects any aggregate attribute or module-owned dataclass field containing `cursor`, `marker`, `step`, `last_completed`, `progress`, or `reservation` without freezing unrelated imports or field sets. |
 | `_SessionAssociation.observation_last_completed` and marker-repair double calls around observation completion | `test_observation_claim_retries_from_observer_truth_without_marker_history` proves claim identity, stale-end safety, and settlement after claim release without marker history. `test_cleanup_retry_uses_current_owner_truth_not_application_progress` proves cleanup replay derives release from current observer/owner truth. |
 | `_admission_step_locked`, `_apply_admission_rollback_completion_locked`, `_settlement_step_locked`, `_apply_settlement_completion_locked`, and `_settlement_reservation_locked` | The collective LS-4a/LS-4b owner-fault tests cover observer, Dispatcher, detail, and plan failures before and after owner transitions. Each retry begins at observer release and derives the remaining work from current owner truth. |
 | The immediate second-call repair branches around `complete_start`, `mark_published`, `complete_observation`, `complete_plan_retirement`, `complete_admission_rollback_step`, `complete_settlement_step`, and `finish_settlement` | Atomic start publication, observation truth, exact plan retirement, the collective LS-4 owner tests, and the frozen T1 plus retained adapter lost-response tests prove the surviving properties. Post-effect interruption may repeat cleanup calls while each observable cleanup effect and terminal delivery remains unique; each bridge retry receives its specified replay response. No test injects failure inside a pure-memory marker merely to require a second marker call. |
@@ -633,6 +633,135 @@ review; do not begin LC-2.
 
 Commit gate: `refactor(interfaces): simplify lifecycle cleanup replay`.
 
+### LC-2 observation lifetime consolidation
+
+#### Objective
+
+Make observer ownership mechanically complete without changing push delivery,
+recovery, cancellation responsiveness, adapter backpressure, or application
+cleanup replay.
+
+#### Scope and approach
+
+- Move the observer implementation from `service.py` to
+  `session_observer.py`.
+- Replace `_Observation` and returned rollback closures with private
+  `SessionSubscription`.
+- Keep observer operations `observe`, `adopt`, `reobserve`, `release`, `wait`,
+  and `close`. Preserve the public service-facing `observe`, `reobserve`,
+  `unsubscribe`, and `wait` surface; `unsubscribe` delegates to observer
+  `release`.
+- `release(session_id)` is idempotent and solely owns stop, stream close,
+  callback/thread completion, join, and subscription retirement. An external
+  release returns only after worker retirement. Callback self-release removes
+  the subscription atomically, prevents future callback delivery, skips
+  self-join, and lets that worker finish as the current callback unwinds. A
+  retry may repeat the release call but may not repeat an observable transition.
+- `adopt` closes a rejected stream itself and returns no cleanup or rollback
+  authority.
+- Keep only the exact session association and observer liability needed to
+  request release in application state. `TaskLifecycle` records no observer
+  stream, sink, subscription, thread, callback, stop/done state, release
+  cursor, completed-step marker, or physical-release progress. Whole-operation
+  cleanup replay derives completion from current observer truth.
+- Preserve shutdown order: the adapter first marks delivery closed,
+  invalidates generations, supersedes drains, and wakes blocked offers; the
+  service observer then releases subscriptions; Dispatcher/service shutdown
+  follows.
+- Extend the strong import contract so `namisync.interfaces.web.drain` cannot
+  import or indirectly reach `session_observer`, in addition to Dispatcher,
+  service, and `task_lifecycle`. No drain-side path may release observation or
+  close session custody.
+- Retain the forced adapter-local
+  `namisync.interfaces.web._exception_graph.retire_exception_graph` duplicate.
+  LC-2 does not weaken the drain import contract, inject a cleanup callable
+  through transport constructors, move the helper into `task_port`, or
+  otherwise consolidate it. Its existing one-additional-interface-consumer
+  reopening trigger remains unchanged.
+
+#### Acceptance criteria
+
+- `SessionObserver` is the only retained production owner of an adopted
+  observation stream, sink, subscription, observer thread, stop, and done
+  state. Dispatcher creates and custodies subscriber streams; the service
+  admission call frame may only transfer an offered stream to the observer or
+  close an offer that will not be adopted.
+- Application lifecycle and adapters retain no observer resource or cleanup
+  capability. Application replay may request exact-session release again but
+  cannot select or acknowledge an observer-internal step.
+- Reobserve fully releases the old subscription before installing its
+  replacement; a stale release cannot close the replacement stream.
+- A terminal snapshot installs no new subscription.
+- Callback self-release, sink failure, stream-close failure, join timeout, and
+  service-close retry remain truthful and deadlock-free.
+- `test_disc_b1_blocked_cli_callback_preserves_cancel_responsiveness` retains
+  the baseline callback/control/terminal ordering without converting the CLI
+  push callback into a pull loop or inserting another queue.
+- `test_disc_b2_delivery_shutdown_wakes_offer_before_observer_release` retains
+  adapter delivery withdrawal, blocked-offer wake, handler departure, and
+  eventual observer release while the physical subscription owner moves.
+- The web-drain import contract forbids `session_observer`, and structural
+  searches find no adapter call path to observer release or session close.
+- T1 and the enduring LS-1 through LS-5 detectors remain unchanged.
+
+#### Regression watchlist
+
+- A blocked callback delaying cancellation, delivery withdrawal, or shutdown.
+- External release reporting success before callback/thread retirement, or
+  callback self-release claiming that its currently executing frame has
+  already unwound.
+- Reobserve leaving both streams active or a stale release closing the
+  replacement.
+- A callback self-release deadlock or a join timeout reported as successful
+  retirement.
+- A CLI pull loop, new queue, changed callback timing, or changed 128/64/64
+  capacity/backpressure behavior.
+- Observer acquisition of task, receipt, settlement, Dispatcher-custody, or
+  delivery semantics.
+- Observer-release progress or rollback capability reappearing in
+  `TaskLifecycle` under another name.
+- Import-law relaxation or a new generic helper introduced to deduplicate the
+  forced web exception-retirement mechanism.
+
+#### Tests and evidence
+
+Run:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q tests\test_service.py tests\test_cli.py tests\test_task_lifecycle.py tests\interfaces\web\test_host.py
+.\.venv\Scripts\python.exe -m pytest -q --dept interfaces --dept dispatcher
+.\.venv\Scripts\python.exe tools\task_lifecycle_audit.py verify --baseline tools\task_lifecycle_baseline.json --output "$env:TEMP\task-lifecycle-lc2.json"
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\lint-imports.exe
+```
+
+Pass observation includes barrier transition logs proving control advances
+independently of the blocked CLI callback and observer release completes after
+adapter delivery withdrawal. The frozen T1 artifact matches without
+refreezing, every enduring detector passes, all import contracts remain kept,
+and the ordinary suite is green.
+
+#### Documentation and handoff
+
+Update observer lifetime and shutdown ordering in `INTERFACES.md`, update the
+contract-to-source locator in `ARCHITECTURE.md`, record exact evidence here,
+and replace `HANDOFF.md` with the resulting checkpoint state. Update
+`CHANGELOG.md` when the checkpoint closes.
+
+#### Adversarial review
+
+Search for retained rollback closures; stream, sink, subscription, or thread
+references outside observer code; task/receipt/settlement semantics inside the
+observer; observer progress inside application lifecycle; adapter calls to
+observer/session cleanup primitives; and an import-law exception introduced to
+reach either observer code or the shared exception-retirement helper. Review
+release/reobserve identity checks, callback self-release, failure truth, and
+shutdown ordering separately from green-suite status.
+
+#### Commit gate
+
+`refactor(interfaces): consolidate session observation lifetime`
+
 ### LC-3 accepted structural tradeoff
 
 `StoredSessionRecord` becomes the canonical frozen/slotted value and live
@@ -710,7 +839,7 @@ test-consolidation checkpoint and is not authorized here.
 | `DISC-B1` | With the CLI push callback blocked after `PhaseChanged`, cancellation is accepted and dispatcher truth reaches canceled before callback release; release then yields one Terminal, one terminal record, canceled exit mapping, exact stdout, and exact stderr. |
 | `DISC-B2` | `begin_close` marks delivery closing, increments its generation, and wakes the blocked bounded offer before current `unsubscribe_all`; the baseline then releases the observer once and orders offer withdrawal, adapter unsubscribe, session close, and service close. This records current behavior, not target ownership. |
 | T2 baseline | LS-1, LS-2, LS-4a, and LS-5 pass untouched production. The old LS-1 assertion intermittently rejected `[1, 2, 3, Gap@68(first_missed=4), Gap@4(first_missed=4), 141, ...]`; the finite normative audit established that this is permitted recovery rewind, not evidence of LS-1 loss or duplication. The corrected module is `19 passed`; its final barrier-forced LS-1 path is 30/30 across fresh processes, and deliberate duplicate/unannounced-loss corruptions fail. LS-3/LS-4b remain introduced LC-1a guarantees. |
-| Test census | `docs/TASK_LIFECYCLE_TEST_LEDGER.md` contains the original 129 LC-0 behavioral rows plus the authorized plan-selection retirement regression and its distinct successor-identity witness, for 131 current behavioral rows, and eight unique helper rows over the exact seven-file corpus. Every row is closed, zero pending fields remain, all named replacements resolve, removed-mechanism tests/helpers are absent, and retained helpers have live dependents. |
+| Test census | `docs/TASK_LIFECYCLE_TEST_LEDGER.md` contains the original 129 LC-0 behavioral rows plus the authorized plan-selection retirement regression and its distinct successor-identity witness, for 131 behavioral rows, and eight unique helper rows over the exact seven-file corpus. Every row is closed, zero pending fields remain, every current-owner proof resolves, removed-mechanism tests/helpers are absent, and retained helpers have live dependents. Historical test names remain only in the previous-test columns and the finite LC-1b crosswalk. |
 | Broad baseline | LC-0b ordinary suite with required bundled Node: `4909 passed, 4 skipped, 28 deselected`; import law: 11 kept, 0 broken. An initial run without required Node had only the five expected runtime-availability failures and was rerun with the bundled executable. |
 | Adversarial review | A separate read-only review found five guard defects; all were corrected and independently re-reviewed closed. No production file or lifecycle behavior changed. |
 | LC-0a amendment | Ordered `[A, B, A, B]` normalization and fixed-ID preservation are explicit; runner/baseline format remain literal 1; frozen SHA-256 remains `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`; oracle plus department checks are `27 passed`; the diff contains only this register and the oracle self-test. |
@@ -724,12 +853,11 @@ test-consolidation checkpoint and is not authorized here.
 | LC-1b amendment | User-authorized reduction companion to LC-1a. The accepted retry unit is now the whole cleanup operation; repeated exact-subject cleanup calls are permitted while repeated observable effects remain forbidden. The finite disappearance, LS-4b fault/concurrency, non-goal, verification, and pause domains above are the implementation denominator. No production or test result is claimed by this amendment. |
 | LC-1b reduction | Removed application cleanup steps, cursors, per-step acknowledgements, marker-repair calls, and the service step interpreter. The two production files are net 440 lines smaller; the two lifecycle/service test modules plus bridge fixture are net 74 lines smaller. The 22 renamed/removed tests have closed dispositions, all replacement names resolve, and no boundary test changed. |
 | LC-1b verification | Focused lifecycle/service/bridge: 176 passed. Bundled-Node interfaces/workflows/dispatcher neighborhood: 2,328 passed and 2,645 deselected. Frozen T1 matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,941 passed, four skipped, and 28 deselected in 220.72 seconds. The bounded independent reviews found one introduced admission-waiter shutdown defect, fixed before commit, and no remaining production or test finding. |
+| Pre-LC-2 stabilization | Without adding a register row, one separate mergeable amendment replaces the brittle exact lifecycle-state snapshot with two negative structural guards, consolidates plan retirement to one tolerant exact-token acquisition, aligns exact plan-selection retirement, states whole-operation owner idempotency, disambiguates the rollback concurrency test name, restores this document's detailed LC-2 contract from the historical `.codex` snapshot, and reanchors every active ledger proof. Focused lifecycle/service/bridge: 179 passed; frozen T1 matches; import law: 12 kept, 0 broken; ordinary with bundled Node: 4,944 passed, four skipped, 28 deselected in 214.64 seconds. |
 
-- **Current checkpoint:** LC-1b complete; LC-2 has not begun.
-- **Next action:** review the LC-1b reduction, evidence, and remaining lifecycle
-  shape before deciding whether and how to resume LC-2.
-- **Required pause:** do not begin LC-2, LC-3, or another cleanup/bug
-  checkpoint after LC-1b. The next user review decides resumption.
+- **Current checkpoint:** pre-LC-2 stabilization complete; LC-2 has not begun.
+- **Next action:** begin LC-2 from the restored detailed observer-lifetime
+  checkpoint above.
 - **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
   `codex/wip-20260902-2029-task-lifecycle-lc1a`; the recovery snapshots remain
   isolated and are not review units. Retain the latest WIP ref until the

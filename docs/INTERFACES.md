@@ -392,6 +392,13 @@ custody, retires the exact runtime detail, and only then optionally retires the
 plan/task. The fixed cleanup owners are independently idempotent or monotone.
 After failure or interruption, the whole cleanup call sequence may repeat from
 current owner truth; each completed observable effect remains unique. The
+observer and runtime detail/plan owners accept repeated exact-subject absence;
+Dispatcher close remains strict, and only a sealed exact application settlement
+interprets `SessionNotFound` as custody already absent. Plan retirement uses one
+tolerant exact-token claim: a retired token produces no new work, while active
+mutation and retirement remain mutually exclusive. Fresh service-minted plan
+request ids are not intentionally reused by supported callers; a live or
+retiring collision fails instead of treating the id as a reusable key. The
 application retains the exact association, terminal digest, settlement target,
 and one coarse single-flight claim, never physical-step acknowledgements or
 cursors, a sink, stream, callback, observer thread, queue, drain, connection,

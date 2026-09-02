@@ -386,25 +386,11 @@ class TaskLifecycle:
             plan.mutation_claim = None
             self._condition.notify_all()
 
-    def begin_plan_retirement(self, token: PlanToken) -> PlanRetirementClaim:
-        """Exclude new mutations before the caller retires the runtime plan."""
-
-        with self._condition:
-            if self._closed:
-                raise RuntimeError("service is closed")
-            plan = self._plan_locked(token)
-            while plan.retirement_claim is not None:
-                self._condition.wait()
-                if self._closed:
-                    raise RuntimeError("service is closed")
-                plan = self._plan_locked(token)
-            return self._reserve_plan_retirement_locked(plan)
-
-    def begin_exact_plan_retirement(
+    def begin_plan_retirement(
         self,
         token: PlanToken,
     ) -> PlanRetirementClaim | None:
-        """Reserve the exact plan, or report that this old token is retired."""
+        """Reserve the exact plan, or report that its token is retired."""
 
         with self._condition:
             if self._closed:
@@ -443,30 +429,6 @@ class TaskLifecycle:
                 return
             plan.retirement_claim = None
             self._condition.notify_all()
-
-    def retire_missing_plan(self, token: PlanToken) -> bool:
-        """Retire exact application state after runtime absence is observed."""
-
-        with self._condition:
-            if self._closed:
-                raise RuntimeError("service is closed")
-            plan = self._plans.get(token.request_id)
-            if plan is None or plan.identity != token.identity:
-                return False
-            while plan.retirement_claim is not None:
-                self._condition.wait()
-                if self._closed:
-                    raise RuntimeError("service is closed")
-                plan = self._plans.get(token.request_id)
-                if plan is None:
-                    return False
-                if plan.identity != token.identity:
-                    return False
-            claim = self._reserve_plan_retirement_locked(plan)
-            self._validate_plan_retirement_locked(plan, claim)
-            self._plans.pop(token.request_id, None)
-            self._condition.notify_all()
-            return True
 
     def begin_admission(
         self,
@@ -608,6 +570,9 @@ class TaskLifecycle:
                     )
             task = self._task_for_association_locked(admission)
             if admission.kind in {"plan", "task-plan"}:
+                # Plan request IDs are minted fresh by the service. Another
+                # session under this ID is a collision, not a retirement
+                # waiter or a reusable key.
                 plan = self._plans.get(request_id)
                 if plan is None:
                     self._next_identity += 1

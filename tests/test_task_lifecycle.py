@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import ast
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime, timezone
 import gc
 import io
-import inspect
 from threading import Event, Lock, Thread, current_thread
 from time import monotonic
 from weakref import ref
@@ -907,7 +905,7 @@ def test_ls_4_dispatcher_admission_cleanup_converges(stage: str) -> None:
     _exercise_dispatcher_cleanup_stage(stage)
 
 
-def test_whole_admission_rollback_singleflights_concurrent_callers(
+def test_lifecycle_admission_rollback_claim_singleflights_concurrent_callers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     lifecycle = TaskLifecycle()
@@ -1151,52 +1149,60 @@ def _publish_lifecycle_session(
     return token
 
 
+def _lifecycle_state_names() -> set[str]:
+    state_names = set(TaskLifecycle().__dict__)
+    for candidate in vars(lifecycle_module).values():
+        if (
+            isinstance(candidate, type)
+            and candidate.__module__ == lifecycle_module.__name__
+            and is_dataclass(candidate)
+        ):
+            state_names.update(field.name for field in fields(candidate))
+    return state_names
+
+
 def test_lifecycle_state_has_no_cleanup_step_or_marker_progress() -> None:
-    imports = set()
-    for node in ast.walk(ast.parse(inspect.getsource(lifecycle_module))):
-        if isinstance(node, ast.Import):
-            imports.update(alias.name.split(".")[0] for alias in node.names)
-        elif isinstance(node, ast.ImportFrom):
-            imports.add((node.module or "").split(".")[0])
-    assert imports == {
-        "__future__",
-        "contextlib",
-        "dataclasses",
-        "hashlib",
-        "re",
-        "threading",
-        "typing",
-        "uuid",
+    state_names = _lifecycle_state_names()
+
+    forbidden = (
+        "cursor",
+        "marker",
+        "step",
+        "last_completed",
+        "progress",
+        "reservation",
+    )
+    assert not {
+        name
+        for name in state_names
+        if any(part in name.lower() for part in forbidden)
     }
-    assert set(TaskLifecycle().__dict__) == {
-        "_task_capacity",
-        "_condition",
-        "_command_locks",
-        "_start_receipts",
-        "_plans",
-        "_admissions",
-        "_sessions",
-        "_tasks",
-        "_next_identity",
-        "_next_claim_id",
-        "_closed",
+
+
+def test_lifecycle_retained_state_has_no_delivery_or_observer_resources() -> None:
+    state_names = _lifecycle_state_names()
+    forbidden = (
+        "sink",
+        "stream",
+        "callback",
+        "thread",
+        "subscription",
+        "queue",
+        "drain",
+        "connection",
+        "delivery",
+        "response",
+        "rollback_callback",
+    )
+    assert not {
+        name
+        for name in state_names
+        if name.lower() in {"stop", "done"}
+        or any(part in name.lower() for part in forbidden)
     }
-    assert {field.name for field in fields(lifecycle_module._TaskEffect)} == {
-        "task_id", "command_id", "signature", "session_id",
-        "admission_identity", "start_failed",
-    }
-    assert {field.name for field in fields(lifecycle_module._PlanEffect)} == {
-        "identity", "request_id", "session_id", "mutation_receipts",
-        "mutation_claim", "retirement_claim",
-    }
-    assert {
-        field.name for field in fields(lifecycle_module._SessionAssociation)
-    } == {
-        "identity", "kind", "command_id", "signature", "task_id",
-        "session_id", "detail_owner", "rollback_claim", "observation_claim",
-        "request_id", "plan_token", "terminal_digest", "settlement_target",
-        "session_released", "settlement_claim",
-    }
+
+
+def test_task_lifecycle_port_surface_is_exact() -> None:
     assert {
         name
         for name, value in TaskLifecyclePort.__dict__.items()
@@ -1208,6 +1214,8 @@ def test_lifecycle_state_has_no_cleanup_step_or_marker_progress() -> None:
         "close_task",
     }
 
+
+def test_lifecycle_signatures_retain_only_immutable_scalars() -> None:
     retained_resource = object()
     lifecycle = TaskLifecycle()
     with pytest.raises(TypeError, match="immutable scalars"):
@@ -1553,7 +1561,7 @@ def test_lifecycle_task_replay_crosses_release_but_joins_task_close(
         terminal_digest=terminal_digest,
     )
     assert close_work.plan_token is not None
-    retirement = lifecycle.begin_exact_plan_retirement(close_work.plan_token)
+    retirement = lifecycle.begin_plan_retirement(close_work.plan_token)
     assert retirement is not None
     lifecycle.complete_plan_retirement(retirement)
     lifecycle.complete_settlement(close_work)
@@ -1807,6 +1815,7 @@ def test_lifecycle_plan_token_scopes_receipts_and_rejects_revival() -> None:
         signature,
     ).replay
     retirement = lifecycle.begin_plan_retirement(token)
+    assert retirement is not None
     lifecycle.complete_plan_retirement(retirement)
 
     with pytest.raises(LifecycleAssociationError, match="retired"):
@@ -1821,8 +1830,7 @@ def test_lifecycle_plan_token_scopes_receipts_and_rejects_revival() -> None:
     )
     successor_request = f"{int(successor_session, 16) + 1:032x}"
     successor = lifecycle.require_plan(successor_request)
-    with pytest.raises(LifecycleAssociationError, match="retired"):
-        lifecycle.begin_plan_retirement(token)
+    assert lifecycle.begin_plan_retirement(token) is None
     fresh = lifecycle.begin_plan_mutation(successor, command_id, signature)
     assert not fresh.replay
     lifecycle.complete_plan_mutation(fresh)
@@ -1849,6 +1857,7 @@ def test_lifecycle_plan_retirement_excludes_mutation_and_wakes_exactly(
         (0, ("operation-a",), ()),
     )
     waiter_entered = Event()
+    second_retirement_waiting = Event()
     mutation_waiting = Event()
     reader_waiting = Event()
     retirements = []
@@ -1859,7 +1868,9 @@ def test_lifecycle_plan_retirement_excludes_mutation_and_wakes_exactly(
 
     def observe_wait(condition, timeout=None):
         if condition is wait_condition:
-            if current_thread().name == "retirement-mutation-contender":
+            if current_thread().name == "second-plan-retirement":
+                second_retirement_waiting.set()
+            elif current_thread().name == "retirement-mutation-contender":
                 mutation_waiting.set()
             elif current_thread().name == "retirement-plan-reader":
                 reader_waiting.set()
@@ -1915,11 +1926,23 @@ def test_lifecycle_plan_retirement_excludes_mutation_and_wakes_exactly(
     assert not waiter.is_alive()
     assert failures == []
     assert len(retirements) == 1
+    second_retirements = []
+    second_retirement = Thread(
+        target=lambda: second_retirements.append(
+            lifecycle.begin_plan_retirement(token)
+        ),
+        name="second-plan-retirement",
+    )
+    second_retirement.start()
+    assert second_retirement_waiting.wait(1)
     lifecycle.complete_plan_retirement(retirements[0])
+    second_retirement.join(2)
     contender.join(2)
     reader.join(2)
+    assert not second_retirement.is_alive()
     assert not contender.is_alive()
     assert not reader.is_alive()
+    assert second_retirements == [None]
     assert len(mutation_failures) == 1
     assert type(mutation_failures[0]) is LifecycleAssociationError
     assert len(reader_failures) == 1

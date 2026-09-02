@@ -510,7 +510,9 @@ digest, settlement target, and coarse single-flight claims, not physical-step
 acknowledgements or cursors. Fixed cleanup owners are independently idempotent
 or monotone: after failure or interruption, the whole cleanup call sequence may
 repeat from current owner truth, while every completed observable effect remains
-unique. Dispatcher `_AdmissionCleanup` remains unchanged, and this contract
+unique. Dispatcher close itself stays strict; only a sealed exact application
+settlement may interpret `SessionNotFound` as its already-absent postcondition.
+Dispatcher `_AdmissionCleanup` remains unchanged, and this contract
 makes no recovery claim across the inherited gap from `Dispatcher.submit`
 return to application start publication.
 

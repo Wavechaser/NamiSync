@@ -780,6 +780,12 @@ close. Selection-mutation receipts survive artifact replacement and retire with
 the exact plan on plan drop or service shutdown; remaining application receipts
 retire with their owning session, plan, task, or service shutdown.
 
+Plan retirement has one tolerant exact-token claim acquisition. A retired token
+produces no cleanup work, readers and mutation claims remain excluded by an
+active retirement, and supported callers do not intentionally reuse fresh
+service-minted plan request ids. A live or retiring collision is not a waitable
+key-reuse protocol.
+
 The current `SessionObserver` remains implemented in `interfaces/service.py`.
 It alone owns stream, callback, worker-thread, and subscription lifetime; the
 application aggregate records no independent observer-release acknowledgement
@@ -801,7 +807,10 @@ settlement → confirmed observer release → dispatcher close → exact runtime
 detail retirement → optional plan/task retirement. Those fixed cleanup owners
 are independently idempotent or monotone. After failure or interruption, the
 whole cleanup call sequence may repeat from current owner truth; each completed
-observable effect remains unique. Application state uses one coarse
+observable effect remains unique. Observer and runtime absence operations
+accept repetition; Dispatcher close remains strict, with `SessionNotFound`
+treated as already absent only inside a sealed exact application settlement.
+Application state uses one coarse
 single-flight claim rather than a physical-step journal. A task delivery factory
 may construct provisional adapter queue state before admission; its call frame
 discards that state locally on failure. Neither the service nor `TaskLifecycle`

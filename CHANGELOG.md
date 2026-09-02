@@ -74,6 +74,13 @@ preserving public behavior, real boundary checks, and persisted contracts.
   tests passed 176 cases, the three-department neighborhood passed 2,328, the
   ordinary suite passed 4,941 with four capability skips and 28 deselected,
   and all 12 import contracts remained intact.
+- A separate pre-LC-2 stabilization consolidated plan retirement to one
+  tolerant exact-token acquisition, aligned exact selection retirement,
+  replaced a brittle private-state snapshot with negative structural guards,
+  and made whole-operation owner idempotency explicit. Focused tests passed
+  179 cases, the frozen boundary corpus remained exact, ordinary passed 4,944
+  with four capability skips and 28 deselected, and all 12 import contracts
+  remained intact.
 
 ### M1 Hardening
 

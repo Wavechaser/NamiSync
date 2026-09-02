@@ -1252,21 +1252,30 @@ class NamiSyncService:
             plan_token = self._lifecycle.require_plan(request_id)
         except LifecycleAssociationError:
             plan_token = None
+        stale_selection = None
+        if plan_token is None:
+            with self._lock:
+                stale_selection = self._plan_selections.get(request_id)
         retirement = (
             None
             if plan_token is None
             else self._lifecycle.begin_plan_retirement(plan_token)
         )
+        if plan_token is not None and retirement is None:
+            return
         try:
             self._runtime.drop_plan(request_id)
         except BaseException:
             if retirement is not None:
                 self._lifecycle.abandon_plan_retirement(retirement)
             raise
-        with self._lock:
-            self._plan_selections.pop(request_id, None)
         if retirement is not None:
+            self._drop_exact_plan_selection(retirement.token)
             self._lifecycle.complete_plan_retirement(retirement)
+        elif stale_selection is not None:
+            with self._lock:
+                if self._plan_selections.get(request_id) is stale_selection:
+                    self._plan_selections.pop(request_id, None)
 
     def get_session(self, session_id: str) -> SessionRecordView:
         return session_record_view(self._dispatcher.get(session_id))
@@ -1857,19 +1866,13 @@ class NamiSyncService:
                     pass
                 self._drop_runtime_details(work.detail_owner)
                 if work.plan_token is not None:
-                    retirement = self._lifecycle.begin_exact_plan_retirement(
+                    retirement = self._lifecycle.begin_plan_retirement(
                         work.plan_token
                     )
                     if retirement is not None:
                         request_id = work.plan_token.request_id
                         self._runtime.drop_plan(request_id)
-                        with self._lock:
-                            selection = self._plan_selections.get(request_id)
-                            if (
-                                selection is not None
-                                and selection.plan_token == work.plan_token
-                            ):
-                                self._plan_selections.pop(request_id, None)
+                        self._drop_exact_plan_selection(work.plan_token)
                         self._lifecycle.complete_plan_retirement(retirement)
                         retirement = None
             self._lifecycle.complete_settlement(work)
@@ -1932,6 +1935,12 @@ class NamiSyncService:
             return
         raise RuntimeError(f"unknown runtime detail owner kind: {detail_kind}")
 
+    def _drop_exact_plan_selection(self, token: PlanToken) -> None:
+        with self._lock:
+            selection = self._plan_selections.get(token.request_id)
+            if selection is not None and selection.plan_token == token:
+                self._plan_selections.pop(token.request_id, None)
+
     def _selection_state(
         self,
         request_id: str,
@@ -1966,7 +1975,11 @@ class NamiSyncService:
                         self._plan_selections.pop(request_id)
                         removed = True
                 if removed:
-                    self._lifecycle.retire_missing_plan(state.plan_token)
+                    retirement = self._lifecycle.begin_plan_retirement(
+                        state.plan_token
+                    )
+                    if retirement is not None:
+                        self._lifecycle.complete_plan_retirement(retirement)
                 raise
             with self._lock:
                 current = self._plan_selections.get(request_id)

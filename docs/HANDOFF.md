@@ -1,49 +1,51 @@
 # Session Handoff
 
-Status (2026-09-03): LC-1b is complete on `milestone1-anthony` in the
-`refactor(interfaces): simplify lifecycle cleanup replay` commit at `HEAD`.
-The worktree is clean and the branch is ahead of origin. LC-2 has not begun.
+Status (2026-09-03): LC-1a and LC-1b are complete on
+`milestone1-anthony`. A separate pre-LC-2 stabilization commit is the current
+`HEAD`; LC-2 is authorized and has not yet changed production.
 
-## LC-1b outcome
+## Stabilization outcome
 
-- The LC-1a authority boundary remains intact, but its general cleanup
-  transaction interpreter is gone. `TaskLifecycle` retains exact association,
-  terminal truth, monotone settlement target, and one coarse per-operation
-  claim; it retains no cleanup step, cursor, completed-step set, or marker.
-- Admission rollback and session/task settlement replay their fixed owner
-  calls from the beginning after failure. Repeated calls are permitted;
-  observer, Dispatcher, detail, plan, application, and terminal transitions
-  remain unique, while replayed command responses remain identical.
-- Dispatcher `_AdmissionCleanup`, observer implementation, adapter delivery
-  state, bridge/CLI/event/persistence/filesystem behavior, and the inherited
-  Dispatcher-submit-to-application-publication gap are unchanged.
-- The two production files are net 440 lines smaller. The affected lifecycle,
-  service, and bridge-fixture tests are net 74 lines smaller, and all 22
-  removed or renamed tests have closed dispositions with no orphan or
-  knowingly uncovered supported behavior.
+- `TaskLifecycle` plan retirement now has one tolerant exact-token claim
+  acquisition. Service cleanup and explicit plan drop both retire selection
+  state only for the exact plan token, while runtime calls remain outside the
+  service lock.
+- The lifecycle structural guard rejects cleanup progress/cursor vocabulary
+  without freezing imports or complete private field sets. A separate guard
+  retains the no-delivery/no-observer-resource contract, and the public task
+  port surface remains exact.
+- Cleanup replay continues to call the fixed observer, Dispatcher, detail, and
+  plan owners from the beginning. Tests now state the real contract: calls may
+  repeat, completed observable transitions may not.
+- The duplicate rollback test name is disambiguated. Every current-owner test
+  reference in `docs/TASK_LIFECYCLE_TEST_LEDGER.md` resolves; historical names
+  remain only as previous-test/crosswalk evidence.
+- The detailed LC-2 observer-lifetime checkpoint was recovered from the
+  historical `.codex` plan into the sole active register. It distinguishes
+  external release from callback self-release and retained adopted streams
+  from transient Dispatcher offers. The `.codex` plan remains untouched.
+- The adapter-local exception-graph helper remains an intentional duplicate:
+  the strong drain import contract makes the core helper unreachable, and this
+  stabilization does not relax that boundary.
 
 ## Verification
 
-- Focused lifecycle/service/bridge: `176 passed`.
-- Interfaces/workflows/dispatcher neighborhood:
-  `2328 passed, 2645 deselected`.
+- Focused lifecycle/service/bridge: `179 passed`.
 - Ordinary suite with bundled Node:
-  `4941 passed, 4 skipped, 28 deselected`.
+  `4944 passed, 4 skipped, 28 deselected`.
 - Frozen task-lifecycle T1 corpus: exact baseline match.
 - Import law: `12 kept, 0 broken`.
-- Production retirement-symbol search: no match.
-- Two bounded adversarial reviews: one introduced admission-rollback waiter
-  shutdown defect found and fixed before commit; no remaining checkpoint
-  finding.
+- Active current-owner ledger references: `119 checked, 0 missing`.
+- `git diff --check`: clean apart from expected line-ending notices.
 
-## Review pause and next action
+## Next action
 
-Pause for review at LC-1b. Inspect whether the remaining coarse
-`begin/confirm/complete/abandon` claims are the minimum needed for
-single-flight, terminal reconciliation, and exact-token retirement before
-authorizing LC-2. Do not start LC-2, LC-3, or another cleanup checkpoint
-without that review.
+Begin LC-2 exactly as specified in
+`docs/TASK_LIFECYCLE_SIMPLIFICATION.md`: move retained observation lifetime
+from `service.py` to `session_observer.py`, preserve CLI push timing and web
+delivery withdrawal, and keep whole-operation application cleanup replay free
+of observer-internal progress. Commit LC-2 only after its focused barriers,
+T1/T2, ordinary, and import-law gates pass.
 
 The old recovery/WIP refs remain isolated and are not review units; never
-merge or cherry-pick them. The `.codex` plan remains untouched.
-`docs/TASK_LIFECYCLE_SIMPLIFICATION.md` is the sole active register.
+merge or cherry-pick them.

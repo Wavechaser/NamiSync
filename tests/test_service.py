@@ -4493,12 +4493,14 @@ def test_cleanup_post_effect_interrupt_replays_calls_not_effects() -> None:
     ]
 
 
-def test_s6_plan_retirement_post_effect_fault_replays_call_not_effect() -> None:
+def test_s6_cleanup_replay_repeats_owner_calls_not_effects() -> None:
     session_id = f"{45_201:032x}"
     command_id = f"{45_202:032x}"
     mutation_id = f"{45_203:032x}"
     request_id = f"{45_204:032x}"
     unrelated_id = f"{45_205:032x}"
+    detail_id = f"{45_206:032x}"
+    unrelated_detail_id = f"{45_207:032x}"
     signature = ("source", "target", None)
     mutation_signature = (0, ("selected",), ())
     record, delivery = _task_terminal_truth(session_id)
@@ -4509,6 +4511,7 @@ def test_s6_plan_retirement_post_effect_fault_replays_call_not_effect() -> None:
         command_id,
         request_id,
         signature,
+        detail_owner=("inventory", detail_id),
     )
     plan_token = lifecycle.require_plan(request_id)
     mutation = lifecycle.begin_plan_mutation(
@@ -4554,24 +4557,36 @@ def test_s6_plan_retirement_post_effect_fault_replays_call_not_effect() -> None:
                 request_id: object(),
                 unrelated_id: object(),
             }
-            self.calls: list[str] = []
-            self.transitions: list[str] = []
+            self.details = {
+                detail_id: object(),
+                unrelated_detail_id: object(),
+            }
+            self.plan_calls: list[str] = []
+            self.plan_transitions: list[str] = []
+            self.detail_calls: list[str] = []
+            self.detail_transitions: list[str] = []
             self.interrupted = False
 
         def drop_plan(self, candidate: str) -> None:
-            self.calls.append(candidate)
+            self.plan_calls.append(candidate)
             if self.plans.pop(candidate, None) is not None:
-                self.transitions.append(candidate)
+                self.plan_transitions.append(candidate)
                 if not self.interrupted:
                     self.interrupted = True
                     raise RuntimeError(
                         "plan retired before caller acknowledgement"
                     )
 
+        def drop_inventory_details(self, candidate: str) -> None:
+            self.detail_calls.append(candidate)
+            if self.details.pop(candidate, None) is not None:
+                self.detail_transitions.append(candidate)
+
     observer = Observer()
     dispatcher = Dispatcher()
     runtime = Runtime()
     unrelated_plan = runtime.plans[unrelated_id]
+    unrelated_detail = runtime.details[unrelated_detail_id]
     selection = service_module._PlanSelectionState(object(), plan_token)
     unrelated_selection = object()
     service = object.__new__(NamiSyncService)
@@ -4588,8 +4603,10 @@ def test_s6_plan_retirement_post_effect_fault_replays_call_not_effect() -> None:
     with pytest.raises(RuntimeError, match="before caller acknowledgement"):
         service.close_task(task_id, session_id, delivery)
 
-    assert runtime.calls == [request_id]
-    assert runtime.transitions == [request_id]
+    assert runtime.detail_calls == [detail_id]
+    assert runtime.detail_transitions == [detail_id]
+    assert runtime.plan_calls == [request_id]
+    assert runtime.plan_transitions == [request_id]
     assert service._plan_selections[request_id] is selection
     assert lifecycle.require_plan(request_id) == plan_token
 
@@ -4602,9 +4619,12 @@ def test_s6_plan_retirement_post_effect_fault_replays_call_not_effect() -> None:
     assert observer.transitions == [session_id]
     assert dispatcher.calls == [session_id, session_id]
     assert dispatcher.transitions == [session_id]
-    assert runtime.calls == [request_id, request_id]
-    assert runtime.transitions == [request_id]
+    assert runtime.detail_calls == [detail_id, detail_id]
+    assert runtime.detail_transitions == [detail_id]
+    assert runtime.plan_calls == [request_id, request_id]
+    assert runtime.plan_transitions == [request_id]
     assert runtime.plans == {unrelated_id: unrelated_plan}
+    assert runtime.details == {unrelated_detail_id: unrelated_detail}
     assert request_id not in service._plan_selections
     assert service._plan_selections[unrelated_id] is unrelated_selection
     with pytest.raises(LifecycleAssociationError):
