@@ -744,6 +744,21 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Application task lifecycle
+
+- MODERATE - FIXED (2026-09-02). Plan-selection retirement race. A selection
+  mutation could read a retained plan, lose a race to successful `drop_plan`,
+  then return the existing `KeyError` while leaving unreachable selection
+  state and its mutation receipt until shutdown; repeated races could
+  accumulate memory. Persisted bytes, filesystem effects, and later readers
+  remained correct because every reader rechecked runtime plan truth. Cause:
+  `_selection_state` installed or refreshed service state after its initial
+  runtime read without revalidating plan liveness. Fixed by revalidating
+  outside `self._lock`, retiring only the exact stale state while preserving
+  successors and receipt lineage, and retrying observed replacements. A
+  deterministic barrier proves no stale state, receipt, effect, or
+  same-command replay remains.
+
 ### Desktop bridge and native-owner lifecycle
 
 - MODERATE - FIXED (2026-08-29). Orphan analytical admission. Desktop startup

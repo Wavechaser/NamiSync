@@ -4,6 +4,7 @@ import ast
 import gc
 import io
 import json
+import sys
 from hashlib import blake2b
 from collections import deque
 from dataclasses import asdict
@@ -3051,3 +3052,212 @@ def test_ambiguous_resolution_preserves_only_a_real_explicit_choice() -> None:
         service.start_verify(location_id=7)
 
     assert raised.value.resolution.selected_mount == "F:\\"
+
+
+def test_selection_mutation_drop_race_does_not_retain_or_replay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request_id = f"{31_001:032x}"
+    command_id = f"{31_002:032x}"
+    plan_operation = operation(OperationKind.COPY)
+    artifact = SimpleNamespace(
+        request=SimpleNamespace(request_id=request_id),
+        plan=plan((plan_operation,)),
+    )
+
+    class Runtime:
+        def __init__(self) -> None:
+            self._lock = Lock()
+            self.current: object | None = artifact
+            self.drop_calls = 0
+
+        def get_plan(self, candidate: str) -> object:
+            with self._lock:
+                if candidate != request_id or self.current is None:
+                    raise KeyError(candidate)
+                return self.current
+
+        def drop_plan(self, candidate: str) -> None:
+            assert candidate == request_id
+            with self._lock:
+                self.drop_calls += 1
+                self.current = None
+
+    runtime = Runtime()
+    effects: list[object] = []
+    apply_selection = service_module.apply_selection_mutation
+
+    def record_effect(*args, **kwargs):
+        effects.append(args[1])
+        return apply_selection(*args, **kwargs)
+
+    monkeypatch.setattr(
+        service_module,
+        "apply_selection_mutation",
+        record_effect,
+    )
+    service = object.__new__(NamiSyncService)
+    service._runtime = runtime
+    service._lock = Lock()
+    service._plan_selections = {}
+    service._closed = False
+    selection_code = service._selection_state.__func__.__code__
+    artifact_read = Event()
+    allow_selection_install = Event()
+    failures: list[BaseException] = []
+
+    def trace_selection_gap(frame, event, _arg):
+        if (
+            event == "line"
+            and frame.f_code is selection_code
+            and frame.f_locals.get("artifact") is artifact
+            and "state" not in frame.f_locals
+        ):
+            artifact_read.set()
+            assert allow_selection_install.wait(2)
+        return trace_selection_gap
+
+    def mutate() -> None:
+        sys.settrace(trace_selection_gap)
+        try:
+            service.mutate_selection(
+                request_id,
+                0,
+                deselect=(str(plan_operation.op_id),),
+                command_id=command_id,
+            )
+        except BaseException as error:
+            failures.append(error)
+        finally:
+            sys.settrace(None)
+
+    mutation = Thread(target=mutate)
+    mutation.start()
+    assert artifact_read.wait(2)
+
+    service.drop_plan(request_id)
+    assert runtime.current is None
+    assert runtime.drop_calls == 1
+
+    allow_selection_install.set()
+    mutation.join(2)
+
+    assert not mutation.is_alive()
+    assert len(failures) == 1
+    assert type(failures[0]) is KeyError
+    assert failures[0].args == (request_id,)
+    assert request_id not in service._plan_selections
+    assert effects == []
+
+    with pytest.raises(KeyError) as replay:
+        service.mutate_selection(
+            request_id,
+            0,
+            deselect=(str(plan_operation.op_id),),
+            command_id=command_id,
+        )
+
+    assert replay.value.args == (request_id,)
+    assert service._plan_selections == {}
+    assert effects == []
+    assert runtime.drop_calls == 1
+
+
+def test_selection_liveness_retry_preserves_concurrent_successor() -> None:
+    request_id = f"{31_101:032x}"
+    plan_operation = operation(OperationKind.COPY)
+    sync_plan = plan((plan_operation,))
+
+    def plan_artifact() -> object:
+        return SimpleNamespace(
+            request=SimpleNamespace(request_id=request_id),
+            plan=sync_plan,
+        )
+
+    original = plan_artifact()
+    observed_replacement = plan_artifact()
+    first_successor = plan_artifact()
+    final_successor = plan_artifact()
+    fresh_snapshot = Event()
+    allow_fresh_read = Event()
+
+    class Runtime:
+        def __init__(self) -> None:
+            self._lock = Lock()
+            self.current = original
+            self.reads = 0
+
+        def get_plan(self, candidate: str) -> object:
+            assert candidate == request_id
+            with self._lock:
+                self.reads += 1
+                if self.reads == 1:
+                    return original
+                if self.reads == 2:
+                    self.current = observed_replacement
+                    return observed_replacement
+                current = self.current
+                read = self.reads
+            if read == 3:
+                fresh_snapshot.set()
+                assert allow_fresh_read.wait(2)
+            return current
+
+        def save_plan(self, candidate: object) -> None:
+            with self._lock:
+                self.current = candidate
+
+    runtime = Runtime()
+    service = object.__new__(NamiSyncService)
+    service._runtime = runtime
+    service._lock = Lock()
+    service._plan_selections = {}
+    service._closed = False
+    selection_code = service._selection_state.__func__.__code__
+    replacement_read = Event()
+    allow_retry = Event()
+    failures: list[BaseException] = []
+    responses: list[object] = []
+
+    def trace_replacement_gap(frame, event, _arg):
+        if (
+            event == "line"
+            and frame.f_code is selection_code
+            and frame.f_locals.get("artifact") is original
+            and frame.f_locals.get("live_artifact") is observed_replacement
+        ):
+            replacement_read.set()
+            assert allow_retry.wait(2)
+        return trace_replacement_gap
+
+    def preview() -> None:
+        sys.settrace(trace_replacement_gap)
+        try:
+            responses.append(service.preview_selection(request_id))
+        except BaseException as error:
+            failures.append(error)
+        finally:
+            sys.settrace(None)
+
+    reader = Thread(target=preview)
+    reader.start()
+    assert replacement_read.wait(2)
+
+    service.save_plan(first_successor)
+    first_successor_state = service._plan_selections[request_id]
+
+    allow_retry.set()
+    assert fresh_snapshot.wait(2)
+
+    service.save_plan(final_successor)
+    final_successor_state = service._plan_selections[request_id]
+    assert final_successor_state is not first_successor_state
+
+    allow_fresh_read.set()
+    reader.join(2)
+
+    assert not reader.is_alive()
+    assert failures == []
+    assert len(responses) == 1
+    assert runtime.current is final_successor
+    assert service._plan_selections[request_id] is final_successor_state

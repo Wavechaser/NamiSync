@@ -345,6 +345,42 @@ untouched.
 
 Commit gate: `test(interfaces): correct lifecycle loss detector`.
 
+### Pre-LC-1a plan-selection retirement fix
+
+A separately adjudicated baseline defect allowed `_selection_state` to install
+or refresh state after a successful runtime plan read had lost to completed
+`drop_plan`. The supported caller still received the existing `KeyError`;
+persisted bytes, filesystem effects, and later readers remained correct. The
+only product consequence was shutdown-bounded unreachable selection state and
+mutation receipts, although repeated races could accumulate that memory. This
+is one defective site beside `save_plan`'s correct retirement-exclusion
+pattern, not a repeated mechanism instance.
+
+The baseline repair revalidates plan liveness outside `self._lock` after each
+new installation or refresh. A vanished plan removes the entry only when it is
+still the exact state installed by that call and re-raises the existing
+`KeyError`; an observed replacement preserves revision and receipt lineage,
+preserves any concurrently installed successor, and is itself revalidated.
+No runtime method runs while `self._lock` is held. This repair introduces no
+LC-1a lifecycle machinery and does not restructure selection ownership.
+
+`test_selection_mutation_drop_race_does_not_retain_or_replay` is the sole
+regression identity during recovery: it pauses `_selection_state` after its
+initial successful plan read, completes `drop_plan`, resumes the mutation,
+and proves the existing `KeyError`, zero selection effect, no retained
+selection or receipt, and no same-command replay. LC-1a may remove the
+temporary `_selection_state` revalidation only after this same regression is
+reanchored at the application lifecycle owner and proves retirement exclusion
+across the complete mutation receipt/effect operation, or atomic receipt
+rejection against a retired plan token. Do not duplicate the regression.
+`test_selection_liveness_retry_preserves_concurrent_successor` is a distinct
+A→B→C→D identity witness for the cleanup algorithm: neither an observed
+replacement nor a later fresh snapshot may overwrite a concurrently installed
+successor, even transiently. It receives the same owner-level reanchor
+disposition in LC-1a.
+
+Commit gate: `fix(interfaces): close plan selection retirement race`.
+
 ### LC-1a recovery protocol
 
 Recovery commit `dc94aef` is input, not a review unit. Create a fresh LC-1a
@@ -476,19 +512,23 @@ test-consolidation checkpoint and is not authorized here.
 | `DISC-B1` | With the CLI push callback blocked after `PhaseChanged`, cancellation is accepted and dispatcher truth reaches canceled before callback release; release then yields one Terminal, one terminal record, canceled exit mapping, exact stdout, and exact stderr. |
 | `DISC-B2` | `begin_close` marks delivery closing, increments its generation, and wakes the blocked bounded offer before current `unsubscribe_all`; the baseline then releases the observer once and orders offer withdrawal, adapter unsubscribe, session close, and service close. This records current behavior, not target ownership. |
 | T2 baseline | LS-1, LS-2, LS-4a, and LS-5 pass untouched production. The old LS-1 assertion intermittently rejected `[1, 2, 3, Gap@68(first_missed=4), Gap@4(first_missed=4), 141, ...]`; the finite normative audit established that this is permitted recovery rewind, not evidence of LS-1 loss or duplication. The corrected module is `19 passed`; its final barrier-forced LS-1 path is 30/30 across fresh processes, and deliberate duplicate/unannounced-loss corruptions fail. LS-3/LS-4b remain introduced LC-1a guarantees. |
-| Test census | `docs/TASK_LIFECYCLE_TEST_LEDGER.md` contains 129 unique behavioral rows and eight unique helper rows over the exact seven-file corpus; all dispositions remain pending. |
+| Test census | `docs/TASK_LIFECYCLE_TEST_LEDGER.md` contains the original 129 LC-0 behavioral rows plus the authorized plan-selection retirement regression and its distinct successor-identity witness, for 131 current behavioral rows, and eight unique helper rows over the exact seven-file corpus. TL-SVC-040/041 are pre-dispositioned for LC-1a owner reanchoring; all original dispositions remain pending. |
 | Broad baseline | LC-0b ordinary suite with required bundled Node: `4909 passed, 4 skipped, 28 deselected`; import law: 11 kept, 0 broken. An initial run without required Node had only the five expected runtime-availability failures and was rerun with the bundled executable. |
 | Adversarial review | A separate read-only review found five guard defects; all were corrected and independently re-reviewed closed. No production file or lifecycle behavior changed. |
 | LC-0a amendment | Ordered `[A, B, A, B]` normalization and fixed-ID preservation are explicit; runner/baseline format remain literal 1; frozen SHA-256 remains `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`; oracle plus department checks are `27 passed`; the diff contains only this register and the oracle self-test. |
 | LC-0b amendment | No normative global raw-Gap monotonicity clause exists; existing required browser witnesses intentionally repeat a synthetic Gap sequence. The corrected LS-1 detector uses explicit ejection/recovery/terminal barriers and finite missing-reliable intervals. T1 still matches, production and `event_bus.py` are unchanged, and the unsupported `BUGS.md` entry is removed rather than marked fixed. |
+| Pre-LC-1a selection fix | `test_selection_mutation_drop_race_does_not_retain_or_replay` pauses after the initial successful plan read, completes `drop_plan`, then resumes. The old tree returned `KeyError` but retained mutated selection state and its receipt; the fixed tree returns the same `KeyError` with zero effect, no retained state or receipt, and identical-command retry also raises without effect or replay. A distinct A→B→C→D identity witness proves stale retry truth never overwrites a concurrent successor; both witnesses passed in 30 fresh processes. The separate fix commit `fix(interfaces): close plan selection retirement race` is based exactly on `2ad8e35`; service/bridge is 132 passed, ordinary is 4,911 passed/4 skipped/28 deselected with bundled Node, T1 matches, and import law is 11 kept/0 broken. |
 
-- **Current checkpoint:** LC-0b complete; LC-1a is pending a fresh rebuild from
-  this corrected guard baseline.
-- **Next action:** create the fresh LC-1a branch, use only path-scoped
+- **Current checkpoint:** LC-0b and the separately adjudicated baseline fix are
+  complete; LC-1a is pending a fresh rebuild from that fix commit.
+- **Next action:** create the fresh LC-1a branch from the plan-selection fix,
+  use only path-scoped
   `git diff 197a2fc dc94aef -- <path>` recovery input, and reintroduce reviewed
   content according to the matrix above.
-- **Recovery rule:** do not merge or cherry-pick `59affc4` or `dc94aef`; both
-  recovery snapshots remain isolated and are not review units.
+- **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
+  `codex/wip-20260902-2029-task-lifecycle-lc1a`; the recovery snapshots remain
+  isolated and are not review units. Retain the latest WIP ref until the
+  rebuilt atomic LC-1a commit passes its full gate.
 - **Stop:** any supported baseline defect, real-boundary drift, baseline LS
   consequence, nondeterministic T1, repeated-defect threshold, inability to
   preserve work, or required event/capacity change.

@@ -1789,14 +1789,37 @@ class NamiSyncService:
             if state is None:
                 state = _PlanSelectionState(artifact)
                 self._plan_selections[request_id] = state
-            elif state.artifact is not artifact:
+            else:
+                artifact = state.artifact
+
+        while True:
+            try:
+                live_artifact = self._runtime.get_plan(request_id)
+            except KeyError:
+                with self._lock:
+                    if self._plan_selections.get(request_id) is state:
+                        self._plan_selections.pop(request_id)
+                raise
+            with self._lock:
+                current = self._plan_selections.get(request_id)
+                if current is not state:
+                    if current is None:
+                        state = _PlanSelectionState(live_artifact)
+                        self._plan_selections[request_id] = state
+                        artifact = live_artifact
+                    else:
+                        state = current
+                        artifact = current.artifact
+                    continue
+                if live_artifact is artifact:
+                    return state, artifact
                 state = _PlanSelectionState(
-                    artifact,
+                    live_artifact,
                     revision=state.revision + 1,
                     mutation_receipts=dict(state.mutation_receipts),
                 )
                 self._plan_selections[request_id] = state
-            return state, artifact
+                artifact = live_artifact
 
     def _selection_preview_locked(
         self,

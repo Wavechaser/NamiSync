@@ -130,14 +130,14 @@ enumeration:
     - tests/interfaces/web/test_host.py::_commands
 test_rows_by_path:
   tests/dispatcher/test_dispatcher.py: 15
-  tests/test_service.py: 39
+  tests/test_service.py: 41
   tests/test_bridge_service.py: 18
   tests/interfaces/web/test_commands.py: 1
   tests/interfaces/web/test_drain.py: 42
   tests/interfaces/web/test_host.py: 13
   tests/interfaces/web/test_transport.py: 1
 totals:
-  test_rows: 129
+  test_rows: 131
   helper_rows: 8
 allowed_dispositions:
   - mechanism-removed
@@ -213,6 +213,8 @@ Replacement tests are named before an old-owner test is deleted.
 | TL-SVC-037 | tests/test_service.py::test_detail_owner_attachment_precedes_post_admission_shutdown | detail attachment and shutdown race | pending | | pending | pending |
 | TL-SVC-038 | tests/test_service.py::test_service_execution_opt_in_reaches_runtime_without_changing_default | execution session/detail association | pending | | pending | pending |
 | TL-SVC-039 | tests/test_service.py::test_location_commands_submit_exact_typed_workflow_requests | location-session detail association | pending | | pending | pending |
+| TL-SVC-040 | tests/test_service.py::test_selection_mutation_drop_race_does_not_retain_or_replay | plan-selection receipt/effect retirement exclusion | reanchored-owner | same named regression at the application lifecycle owner | baseline fix passing; LC-1a reanchor pending | active |
+| TL-SVC-041 | tests/test_service.py::test_selection_liveness_retry_preserves_concurrent_successor | exact successor preservation during liveness retry | reanchored-owner | application lifecycle plan-token successor witness | baseline fix passing; LC-1a reanchor pending | active |
 | TL-BRS-001 | tests/test_bridge_service.py::test_required_attachment_refuses_execution_before_selection_or_commit | required desktop attachment | pending | | pending | pending |
 | TL-BRS-002 | tests/test_bridge_service.py::test_br_g_16_retry_receipts_apply_mutations_and_multirow_changes_once | mutation receipt idempotency | pending | | pending | pending |
 | TL-BRS-003 | tests/test_bridge_service.py::test_br_g_16_receipt_identity_mismatches_use_the_exact_typed_boundary | receipt conflict boundary | pending | | pending | pending |
