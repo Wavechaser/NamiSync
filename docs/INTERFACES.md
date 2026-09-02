@@ -389,10 +389,13 @@ rollback refers back into the adapter.
 A task-bound release consumes a truthful adapter terminal-delivery fact, advances
 application settlement, confirms service-observer release, closes Dispatcher
 custody, retires the exact runtime detail, and only then optionally retires the
-plan/task. A failed physical step remains the first retry step; an acknowledged
-step is never performed twice. The application retains only association and
-settlement progress, never a sink, stream, callback, observer thread, queue,
-drain, connection, delivery generation, or bridge response.
+plan/task. The fixed cleanup owners are independently idempotent or monotone.
+After failure or interruption, the whole cleanup call sequence may repeat from
+current owner truth; each completed observable effect remains unique. The
+application retains the exact association, terminal digest, settlement target,
+and one coarse single-flight claim, never physical-step acknowledgements or
+cursors, a sink, stream, callback, observer thread, queue, drain, connection,
+delivery generation, or bridge response.
 
 The web drain owns response replay, its 64-update queue, backpressure, drain
 claims, generations, connection state, and terminal-delivery receipt. Delivery
@@ -452,14 +455,21 @@ domain-cleanup flags.
 
 The application admission token owns the exact partial-admission liabilities:
 session association, detail installation, observer adoption or stream
-retirement, and dispatcher publication after attachment. Physical work is
-performed outside the lifecycle condition and reported with its exact claim;
-confirmation may retry without repeating that physical work. Initiating and
-cleanup exception graphs are retired before a fixed
+retirement, and dispatcher publication after attachment. A coarse single-flight
+claim excludes concurrent rollback for the same exact admission. Physical work
+runs outside the lifecycle condition; after failure or interruption, cleanup
+abandons the claim and a retry may replay the whole fixed cleanup sequence from
+current owner truth. Calls may repeat, while completed observable effects remain
+unique. Initiating and cleanup exception graphs are retired before a fixed
 failure escapes. The service's ordinary path-refusal wrapper likewise clears
 the workflow validation graph before raising the existing unchained
 `SyncPathInputError`; bridge and host code retain only their final adapter
 failure frame.
+
+Dispatcher's existing `_AdmissionCleanup` remains unchanged. The application
+cleanup contract does not claim recovery across the inherited gap between
+`Dispatcher.submit` returning and application start publication; closing that
+gap requires separate dispatcher/application reconciliation.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is

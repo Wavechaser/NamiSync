@@ -73,7 +73,6 @@ class PlanMutationClaim:
 class PlanRetirementClaim:
     token: PlanToken
     claim_id: int
-    owner: SettlementClaim | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,33 +82,27 @@ class ObservationClaim:
 
 
 @dataclass(frozen=True, slots=True)
-class SettlementReservation:
+class SettlementClaim:
     token: AssociationToken
     claim_id: int
     close_task: bool
 
 
 @dataclass(frozen=True, slots=True)
-class SettlementClaim:
-    token: AssociationToken
-    claim_id: int
-
-
-@dataclass(frozen=True, slots=True)
-class LifecycleStep:
-    name: str
-    session_id: str | None = None
-    detail_owner: tuple[str, str] | None = None
-    request_id: str | None = None
-    plan_token: PlanToken | None = None
-    plan_retirement: PlanRetirementClaim | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class AdmissionRollbackClaim:
     token: AdmissionToken
     claim_id: int
-    step: LifecycleStep
+    session_id: str | None
+    detail_owner: tuple[str, str] | None
+
+
+@dataclass(frozen=True, slots=True)
+class SettlementWork:
+    claim: SettlementClaim
+    session_id: str
+    detail_owner: tuple[str, str] | None
+    plan_token: PlanToken | None
+    replay: bool
 
 
 @dataclass(slots=True)
@@ -140,31 +133,22 @@ class _SessionAssociation:
     signature: tuple[object, ...]
     task_id: str | None
     session_id: str | None
-    admission_cursor: Literal[
-        "detail_install", "observation", "publish", "published"
-    ]
     detail_owner: tuple[str, str] | None = None
-    observation_active: bool = False
     rollback_claim: AdmissionRollbackClaim | None = None
-    rollback_last_completed: AdmissionRollbackClaim | None = None
     observation_claim: ObservationClaim | None = None
-    observation_last_completed: tuple[ObservationClaim, bool] | None = None
     request_id: str | None = None
+    plan_token: PlanToken | None = None
     terminal_digest: bytes | None = None
     settlement_target: Literal["session", "task"] | None = None
-    settlement_cursor: str | None = None
+    session_released: bool = False
     settlement_claim: SettlementClaim | None = None
-    settlement_reservation: SettlementReservation | None = None
-    settlement_last_completed: tuple[SettlementClaim, str] | None = None
-    settlement_last_finished: SettlementClaim | None = None
 
 
 class TaskLifecycle:
-    """Own receipts, association, and the next legal lifecycle step.
+    """Own receipts, exact association, and logical lifecycle settlement.
 
     This aggregate never calls an adapter, observer, dispatcher, or runtime.
-    Callers perform the returned physical step outside the condition and then
-    report that exact step as complete.
+    Callers perform retry-safe physical cleanup outside the condition.
     """
 
     def __init__(
@@ -240,30 +224,26 @@ class TaskLifecycle:
                     raise RuntimeError(
                         "start receipt belongs to another association"
                     )
-                reservation = association.settlement_reservation
+                settlement = association.settlement_claim
                 blocks_replay = (
                     receipt.task_id is None
                     and (
-                        reservation is not None
-                        or association.settlement_claim is not None
+                        settlement is not None
                         or association.settlement_target is not None
                     )
                 ) or (
                     receipt.task_id is not None
                     and (
                         (
-                            reservation is not None
-                            and reservation.close_task
+                            settlement is not None
+                            and settlement.close_task
                         )
                         or association.settlement_target == "task"
                     )
                 )
                 if not blocks_replay:
                     return receipt
-                if (
-                    reservation is None
-                    and association.settlement_claim is None
-                ):
+                if settlement is None:
                     raise LifecycleAssociationError(
                         "session settlement remains pending"
                     )
@@ -418,7 +398,30 @@ class TaskLifecycle:
                 if self._closed:
                     raise RuntimeError("service is closed")
                 plan = self._plan_locked(token)
-            return self._reserve_plan_retirement_locked(plan, owner=None)
+            return self._reserve_plan_retirement_locked(plan)
+
+    def begin_exact_plan_retirement(
+        self,
+        token: PlanToken,
+    ) -> PlanRetirementClaim | None:
+        """Reserve the exact plan, or report that this old token is retired."""
+
+        with self._condition:
+            if self._closed:
+                raise RuntimeError("service is closed")
+            plan = self._plans.get(token.request_id)
+            while (
+                plan is not None
+                and plan.identity == token.identity
+                and plan.retirement_claim is not None
+            ):
+                self._condition.wait()
+                if self._closed:
+                    raise RuntimeError("service is closed")
+                plan = self._plans.get(token.request_id)
+            if plan is None or plan.identity != token.identity:
+                return None
+            return self._reserve_plan_retirement_locked(plan)
 
     def complete_plan_retirement(self, claim: PlanRetirementClaim) -> None:
         with self._condition:
@@ -459,7 +462,7 @@ class TaskLifecycle:
                     return False
                 if plan.identity != token.identity:
                     return False
-            claim = self._reserve_plan_retirement_locked(plan, owner=None)
+            claim = self._reserve_plan_retirement_locked(plan)
             self._validate_plan_retirement_locked(plan, claim)
             self._plans.pop(token.request_id, None)
             self._condition.notify_all()
@@ -473,7 +476,6 @@ class TaskLifecycle:
         *,
         task_id: str | None = None,
         detail_owner: tuple[str, str] | None = None,
-        expects_observation: bool,
     ) -> AdmissionToken:
         if type(kind) is not str or not kind:
             raise ValueError("effect kind must be a nonempty string")
@@ -486,8 +488,6 @@ class TaskLifecycle:
             or any(type(part) is not str for part in detail_owner)
         ):
             raise TypeError("detail owner must be an exact string pair")
-        if type(expects_observation) is not bool:
-            raise TypeError("expects_observation must be a bool")
         with self._condition:
             if self._closed:
                 raise RuntimeError("service is closed")
@@ -517,9 +517,7 @@ class TaskLifecycle:
                 signature,
                 task_id,
                 None,
-                "detail_install" if detail_owner is not None else "observation",
                 detail_owner,
-                observation_active=expects_observation,
             )
             self._admissions[admission.identity] = admission
             if task_id is not None:
@@ -536,7 +534,11 @@ class TaskLifecycle:
             if self._closed:
                 raise RuntimeError("service is closed")
             admission = self._admission_locked(token)
+            if admission.rollback_claim is not None:
+                raise LifecycleAssociationError("admission rollback is pending")
             if admission.session_id is not None:
+                if admission.session_id == session_id:
+                    return self._association_token(admission)
                 raise RuntimeError("admission already has a session")
             if session_id in self._sessions:
                 raise RuntimeError("dispatcher reused a session id")
@@ -547,51 +549,14 @@ class TaskLifecycle:
             self._sessions[session_id] = admission
             return self._association_token(admission)
 
-    def install_detail_owner(
-        self,
-        token: AssociationToken,
-    ) -> None:
-        with self._condition:
-            association = self._association_locked(token)
-            if (
-                association.admission_cursor != "detail_install"
-                and association.detail_owner is not None
-            ):
-                return
-            if (
-                association.admission_cursor != "detail_install"
-                or association.detail_owner is None
-            ):
-                raise RuntimeError("session detail installation is out of order")
-            association.admission_cursor = "observation"
-
-    def complete_admission_observation(
-        self,
-        token: AssociationToken,
-        *,
-        active: bool,
-    ) -> None:
-        if type(active) is not bool:
-            raise TypeError("active must be a bool")
-        with self._condition:
-            association = self._association_locked(token)
-            if (
-                association.admission_cursor in {"publish", "published"}
-                and active == association.observation_active
-            ):
-                return
-            if association.admission_cursor != "observation":
-                raise RuntimeError("session observation is out of order")
-            if active != association.observation_active:
-                raise RuntimeError("session observation liability is unresolved")
-            association.admission_cursor = "publish"
-
-    def mark_published(
+    def publish_start(
         self,
         token: AdmissionToken,
         session_id: str,
-    ) -> AssociationToken:
+        request_id: str,
+    ) -> tuple[AssociationToken, StartReceipt]:
         self._require_opaque_id(session_id, "session id")
+        self._require_opaque_id(request_id, "request id")
         with self._condition:
             admission = self._admissions.get(token.identity)
             if admission is None:
@@ -599,73 +564,76 @@ class TaskLifecycle:
                 if (
                     association is not None
                     and association.identity == token.identity
-                    and association.admission_cursor == "published"
+                    and association.request_id == request_id
                 ):
-                    return self._association_token(association)
+                    receipt = StartReceipt(
+                        association.kind,
+                        association.signature,
+                        request_id,
+                        session_id,
+                        association.task_id,
+                    )
+                    if association.command_id is not None:
+                        if self._start_receipts.get(
+                            association.command_id
+                        ) != receipt:
+                            raise LifecycleAssociationError(
+                                "published start receipt is unavailable"
+                            )
+                    return self._association_token(association), receipt
                 raise LifecycleAssociationError("admission token is retired")
+            if admission.rollback_claim is not None:
+                raise LifecycleAssociationError("admission rollback is pending")
             if admission.session_id != session_id:
                 raise LifecycleAssociationError(
                     "dispatcher published another admission session"
                 )
-            if admission.admission_cursor != "publish":
-                raise RuntimeError("session publication is out of order")
-            admission.admission_cursor = "published"
-            self._admissions.pop(admission.identity, None)
-            task = self._task_for_association_locked(admission)
-            if task is not None:
-                task.admission_identity = None
-            return self._association_token(admission)
-
-    def complete_start(
-        self,
-        token: AssociationToken,
-        request_id: str,
-    ) -> StartReceipt:
-        self._require_opaque_id(request_id, "request id")
-        with self._condition:
-            association = self._association_locked(token)
             if self._closed:
-                task = self._task_for_association_locked(association)
+                task = self._task_for_association_locked(admission)
                 if task is not None:
                     task.start_failed = True
                 raise RuntimeError("service is closed")
-            if association.admission_cursor != "published":
-                raise RuntimeError("session was not published")
-            association.request_id = request_id
             receipt = StartReceipt(
-                association.kind,
-                association.signature,
+                admission.kind,
+                admission.signature,
                 request_id,
-                association.session_id,
-                association.task_id,
+                session_id,
+                admission.task_id,
             )
-            if association.command_id is not None:
-                existing = self._start_receipts.get(association.command_id)
+            if admission.command_id is not None:
+                existing = self._start_receipts.get(admission.command_id)
                 if existing is not None and existing != receipt:
                     raise LifecycleReceiptConflictError(
                         "command_id raced with a different admitted session"
                     )
-            if association.kind in {"plan", "task-plan"}:
+            task = self._task_for_association_locked(admission)
+            if admission.kind in {"plan", "task-plan"}:
                 plan = self._plans.get(request_id)
                 if plan is None:
                     self._next_identity += 1
-                    self._plans[request_id] = _PlanEffect(
+                    plan = _PlanEffect(
                         self._next_identity,
                         request_id,
-                        association.session_id,
+                        session_id,
                         {},
                     )
-                elif plan.session_id != association.session_id:
+                    self._plans[request_id] = plan
+                elif plan.session_id != session_id:
                     raise RuntimeError("plan request id was reused")
-            if association.command_id is not None:
-                self._start_receipts[association.command_id] = receipt
+                admission.plan_token = self._plan_token(plan)
+            admission.request_id = request_id
+            if admission.command_id is not None:
+                self._start_receipts[admission.command_id] = receipt
+            if task is not None:
+                task.admission_identity = None
+            self._admissions.pop(admission.identity, None)
             self._condition.notify_all()
-            return receipt
+            return self._association_token(admission), receipt
 
-    def admission_rollback_step(
+    def begin_admission_rollback(
         self,
         token: AdmissionToken,
-    ) -> AdmissionRollbackClaim:
+    ) -> AdmissionRollbackClaim | None:
         with self._condition:
             admission = self._admissions.get(token.identity)
             while admission is not None and admission.rollback_claim is not None:
@@ -674,62 +642,31 @@ class TaskLifecycle:
                     raise RuntimeError("service is closed")
                 admission = self._admissions.get(token.identity)
             if admission is None:
-                return AdmissionRollbackClaim(
-                    token,
-                    0,
-                    LifecycleStep("complete"),
-                )
-            step = self._admission_step_locked(admission)
-            if step.name == "complete":
-                return AdmissionRollbackClaim(
-                    token,
-                    0,
-                    step,
-                )
+                return None
             claim = AdmissionRollbackClaim(
                 token,
                 self._mint_claim_id_locked(),
-                step,
+                admission.session_id,
+                admission.detail_owner,
             )
             admission.rollback_claim = claim
             return claim
 
-    def complete_admission_rollback_step(
+    def complete_admission_rollback(
         self,
         claim: AdmissionRollbackClaim,
     ) -> None:
         with self._condition:
-            admission = self._admission_locked(claim.token)
-            if admission.rollback_last_completed == claim:
-                self._apply_admission_rollback_completion_locked(
-                    admission,
-                    claim,
-                )
-                return
-            admission = self._admission_rollback_claim_locked(claim)
-            expected = self._admission_step_locked(admission)
-            if claim.step != expected or expected.name == "complete":
-                raise RuntimeError("admission rollback step is out of order")
-            admission.rollback_last_completed = claim
-            self._apply_admission_rollback_completion_locked(admission, claim)
-
-    def finish_admission_rollback(self, token: AdmissionToken) -> None:
-        """Retire one admission after all of its physical liabilities clear."""
-
-        with self._condition:
-            admission = self._admissions.get(token.identity)
+            admission = self._admissions.get(claim.token.identity)
             if admission is None:
                 return
-            if admission.rollback_claim is not None:
-                raise RuntimeError("admission rollback step remains pending")
-            if self._admission_step_locked(admission).name != "complete":
-                raise RuntimeError("admission rollback remains pending")
+            admission = self._admission_rollback_claim_locked(claim)
             if admission.session_id is not None:
                 self._retire_unpublished_association_locked(admission)
             self._retire_admission_locked(admission)
             self._condition.notify_all()
 
-    def abandon_admission_rollback_step(
+    def abandon_admission_rollback(
         self,
         claim: AdmissionRollbackClaim,
     ) -> None:
@@ -791,9 +728,9 @@ class TaskLifecycle:
                     task_id=task_id,
                     require_live=True,
                 )
-                if association.settlement_reservation is not None:
+                if association.settlement_claim is not None:
                     raise LifecycleAssociationError("session is retired")
-            if association.settlement_reservation is not None:
+            if association.settlement_claim is not None:
                 raise LifecycleAssociationError("session is retired")
             claim_id = self._mint_claim_id_locked()
             claim = ObservationClaim(
@@ -801,47 +738,11 @@ class TaskLifecycle:
                 claim_id,
             )
             association.observation_claim = claim
-            # Adoption may succeed before its marker call begins. Conservatively
-            # retain release liability until the exact claim confirms otherwise.
-            association.observation_active = True
             return claim
 
-    def complete_observation(
-        self,
-        claim: ObservationClaim,
-        *,
-        active: bool,
-    ) -> None:
-        if type(active) is not bool:
-            raise TypeError("active must be a bool")
-        with self._condition:
-            association = self._association_locked(claim.token)
-            if association.observation_last_completed == (claim, active):
-                association.observation_active = active
-                association.observation_claim = None
-                self._condition.notify_all()
-                return
-            association = self._observation_claim_locked(claim)
-            association.observation_last_completed = (claim, active)
-            association.observation_active = active
-            association.observation_claim = None
-            self._condition.notify_all()
-
-    def abandon_observation(self, claim: ObservationClaim) -> None:
+    def end_observation(self, claim: ObservationClaim) -> None:
         with self._condition:
             association = self._sessions.get(claim.token.session_id)
-            if (
-                association is not None
-                and association.identity == claim.token.identity
-                and association.observation_last_completed is not None
-                and association.observation_last_completed[0] == claim
-            ):
-                association.observation_active = (
-                    association.observation_last_completed[1]
-                )
-                association.observation_claim = None
-                self._condition.notify_all()
-                return
             if (
                 association is None
                 or association.identity != claim.token.identity
@@ -851,13 +752,13 @@ class TaskLifecycle:
             association.observation_claim = None
             self._condition.notify_all()
 
-    def reserve_settlement(
+    def begin_settlement(
         self,
         session_id: str,
         *,
         task_id: str | None | object = _ANY_TASK,
         close_task: bool,
-    ) -> SettlementReservation:
+    ) -> SettlementClaim:
         if type(close_task) is not bool:
             raise TypeError("close_task must be a bool")
         with self._condition:
@@ -871,10 +772,7 @@ class TaskLifecycle:
             )
             assert association is not None
             identity = association.identity
-            while (
-                association.settlement_claim is not None
-                or association.settlement_reservation is not None
-            ):
+            while association.settlement_claim is not None:
                 self._condition.wait()
                 if self._closed:
                     raise LifecycleAssociationError("session is unavailable")
@@ -890,12 +788,12 @@ class TaskLifecycle:
                 raise LifecycleAssociationError("direct session has no task")
             if not close_task and association.settlement_target == "task":
                 raise LifecycleAssociationError("task close remains pending")
-            reservation = SettlementReservation(
+            claim = SettlementClaim(
                 self._association_token(association),
                 self._mint_claim_id_locked(),
                 close_task,
             )
-            association.settlement_reservation = reservation
+            association.settlement_claim = claim
             try:
                 while association.observation_claim is not None:
                     self._condition.wait()
@@ -909,204 +807,92 @@ class TaskLifecycle:
                             "session is unavailable"
                         )
             except BaseException:
-                if association.settlement_reservation == reservation:
-                    association.settlement_reservation = None
+                if association.settlement_claim == claim:
+                    association.settlement_claim = None
                     self._condition.notify_all()
                 raise
-            return reservation
+            return claim
 
-    def activate_settlement(
+    def confirm_settlement(
         self,
-        reservation: SettlementReservation,
+        claim: SettlementClaim,
         *,
         terminal_digest: bytes | None = None,
         dispatcher_truth_observed: bool = False,
-    ) -> SettlementClaim:
-        with self._condition:
-            association = self._settlement_reservation_locked(reservation)
-            prior_state = (
-                association.terminal_digest,
-                association.settlement_target,
-                association.settlement_cursor,
-                association.settlement_claim,
-            )
-            try:
-                if type(dispatcher_truth_observed) is not bool:
-                    raise TypeError(
-                        "dispatcher_truth_observed must be a bool"
-                    )
-                if self._closed:
-                    raise LifecycleAssociationError(
-                        "session is unavailable"
-                    )
-                self._reconcile_terminal_locked(
-                    association,
-                    terminal_digest=terminal_digest,
-                    dispatcher_truth_observed=dispatcher_truth_observed,
-                )
-                if reservation.close_task:
-                    association.settlement_target = "task"
-                elif association.settlement_target is None:
-                    association.settlement_target = "session"
-                if association.settlement_cursor is None:
-                    association.settlement_cursor = (
-                        "observer_release"
-                        if association.observation_active
-                        else "dispatcher_close"
-                    )
-                elif (
-                    reservation.close_task
-                    and association.settlement_cursor == "session_complete"
-                ):
-                    association.settlement_cursor = "plan_retire"
-                claim = SettlementClaim(
-                    self._association_token(association),
-                    self._mint_claim_id_locked(),
-                )
-                association.settlement_claim = claim
-                association.settlement_reservation = None
-                self._condition.notify_all()
-                return claim
-            except BaseException:
-                (
-                    association.terminal_digest,
-                    association.settlement_target,
-                    association.settlement_cursor,
-                    association.settlement_claim,
-                ) = prior_state
-                association.settlement_reservation = None
-                self._condition.notify_all()
-                raise
-
-    def abandon_settlement_reservation(
-        self,
-        reservation: SettlementReservation,
-    ) -> None:
-        with self._condition:
-            association = self._sessions.get(reservation.token.session_id)
-            if (
-                association is None
-                or association.identity != reservation.token.identity
-                or association.settlement_reservation != reservation
-            ):
-                return
-            association.settlement_reservation = None
-            self._condition.notify_all()
-
-    def settlement_step(self, claim: SettlementClaim) -> LifecycleStep:
+    ) -> SettlementWork:
         with self._condition:
             association = self._settlement_claim_locked(claim)
-            step = self._settlement_step_locked(association)
-            if step.name != "plan_retire" or step.plan_token is None:
-                return step
-            owner = claim
-            plan = self._plan_locked(step.plan_token)
-            while plan.retirement_claim is not None:
-                if plan.retirement_claim.owner == owner:
-                    retirement = plan.retirement_claim
-                    return LifecycleStep(
-                        "plan_retire",
-                        request_id=plan.request_id,
-                        plan_token=retirement.token,
-                        plan_retirement=retirement,
-                    )
-                self._condition.wait()
-                if self._closed:
-                    raise RuntimeError("service is closed")
-                association = self._settlement_claim_locked(claim)
-                step = self._settlement_step_locked(association)
-                if step.plan_token is None:
-                    return step
-                plan = self._plan_locked(step.plan_token)
-            retirement = self._reserve_plan_retirement_locked(
-                plan,
-                owner=owner,
-            )
-            return LifecycleStep(
-                "plan_retire",
-                request_id=plan.request_id,
-                plan_token=retirement.token,
-                plan_retirement=retirement,
-            )
-
-    def complete_settlement_step(
-        self,
-        claim: SettlementClaim,
-        step_name: str,
-    ) -> None:
-        with self._condition:
-            association = self._settlement_claim_locked(claim)
-            if association.settlement_last_completed == (claim, step_name):
-                self._apply_settlement_completion_locked(
-                    association,
-                    step_name,
-                )
-                return
-            expected = self._settlement_step_locked(association)
-            if step_name != expected.name or step_name == "complete":
-                raise RuntimeError("session settlement step is out of order")
-            association.settlement_last_completed = (claim, step_name)
-            self._apply_settlement_completion_locked(association, step_name)
-
-    def _apply_settlement_completion_locked(
-        self,
-        association: _SessionAssociation,
-        step_name: str,
-    ) -> None:
-        if step_name == "observer_release":
-                association.observation_active = False
-                association.settlement_cursor = "dispatcher_close"
-        elif step_name == "dispatcher_close":
-            association.settlement_cursor = (
-                "detail_retire"
-                if association.detail_owner is not None
-                else self._after_detail_cursor(association)
-            )
-        elif step_name == "detail_retire":
-            association.detail_owner = None
-            association.settlement_cursor = self._after_detail_cursor(
-                association
-            )
-        elif step_name == "plan_retire":
-            request_id = association.request_id
-            if request_id is None:
+            if type(dispatcher_truth_observed) is not bool:
+                raise TypeError("dispatcher_truth_observed must be a bool")
+            if self._closed:
+                raise LifecycleAssociationError("session is unavailable")
+            if claim.close_task and association.plan_token is None:
                 raise RuntimeError("task plan identity is unavailable")
-            plan = self._plans.get(request_id)
-            if plan is not None:
-                if plan.session_id != association.session_id:
-                    raise RuntimeError(
-                        "task plan token belongs to another session"
-                    )
-                raise RuntimeError("plan retirement remains pending")
-            association.settlement_cursor = "complete"
-        else:
-            raise RuntimeError("session settlement step is invalid")
-        self._condition.notify_all()
+            self._reconcile_terminal_locked(
+                association,
+                terminal_digest=terminal_digest,
+                dispatcher_truth_observed=dispatcher_truth_observed,
+            )
+            if claim.close_task:
+                association.settlement_target = "task"
+            elif association.settlement_target is None:
+                association.settlement_target = "session"
+            replay = (
+                not claim.close_task
+                and association.task_id is not None
+                and association.session_released
+            )
+            return SettlementWork(
+                claim,
+                claim.token.session_id,
+                association.detail_owner,
+                association.plan_token if claim.close_task else None,
+                replay,
+            )
 
-    def finish_settlement(self, claim: SettlementClaim) -> None:
+    def complete_settlement(self, work: SettlementWork) -> None:
         with self._condition:
-            association = self._sessions.get(claim.token.session_id)
-            if association is None:
+            association = self._settlement_claim_locked(work.claim)
+            target = "task" if work.claim.close_task else "session"
+            replay = (
+                not work.claim.close_task
+                and association.task_id is not None
+                and association.session_released
+            )
+            expected = SettlementWork(
+                work.claim,
+                work.claim.token.session_id,
+                association.detail_owner,
+                association.plan_token if work.claim.close_task else None,
+                replay,
+            )
+            if work != expected:
+                raise LifecycleAssociationError("settlement work is stale")
+            if association.settlement_target != target:
+                raise RuntimeError("session settlement target is not sealed")
+            if association.task_id is None:
+                if association.terminal_digest is not None:
+                    raise RuntimeError("direct session has terminal delivery state")
+            elif association.terminal_digest is None:
+                raise RuntimeError("task terminal truth is unavailable")
+            if work.replay:
+                association.settlement_claim = None
+                self._condition.notify_all()
                 return
-            if association.identity != claim.token.identity:
-                raise LifecycleAssociationError("settlement claim is stale")
-            if association.settlement_last_finished == claim:
-                self._apply_settlement_finish_locked(association)
-                return
-            association = self._settlement_claim_locked(claim)
-            if self._settlement_step_locked(association).name != "complete":
-                raise RuntimeError("session settlement remains pending")
-            association.settlement_last_finished = claim
-            self._apply_settlement_finish_locked(association)
-
-    def _apply_settlement_finish_locked(
-        self,
-        association: _SessionAssociation,
-    ) -> None:
-        association.settlement_claim = None
-        if association.settlement_target == "task" or association.task_id is None:
-            self._retire_association_locked(association)
-        self._condition.notify_all()
+            if work.claim.close_task:
+                token = association.plan_token
+                if work.plan_token != token or token is None:
+                    raise RuntimeError("task plan identity is unavailable")
+                plan = self._plans.get(token.request_id)
+                if plan is not None and plan.identity == token.identity:
+                    raise RuntimeError("plan retirement remains pending")
+                self._retire_association_locked(association)
+            elif association.task_id is None:
+                self._retire_association_locked(association)
+            else:
+                association.session_released = True
+                association.settlement_claim = None
+            self._condition.notify_all()
 
     def abandon_settlement(self, claim: SettlementClaim) -> None:
         with self._condition:
@@ -1117,32 +903,12 @@ class TaskLifecycle:
                 or association.settlement_claim != claim
             ):
                 return
-            if association.request_id is not None:
-                plan = self._plans.get(association.request_id)
-                owner = claim
-                if (
-                    plan is not None
-                    and plan.retirement_claim is not None
-                    and plan.retirement_claim.owner == owner
-                ):
-                    plan.retirement_claim = None
             association.settlement_claim = None
             self._condition.notify_all()
 
     def close(self) -> None:
         with self._condition:
             self._closed = True
-            for association in self._sessions.values():
-                association.settlement_reservation = None
-            self._condition.notify_all()
-
-    def mark_observer_shutdown_complete(self) -> None:
-        with self._condition:
-            for association in self._sessions.values():
-                association.observation_active = False
-                association.observation_claim = None
-                if association.settlement_cursor == "observer_release":
-                    association.settlement_cursor = "dispatcher_close"
             self._condition.notify_all()
 
     def retire_all(self) -> None:
@@ -1153,78 +919,6 @@ class TaskLifecycle:
             self._sessions.clear()
             self._tasks.clear()
             self._condition.notify_all()
-
-    def _admission_step_locked(
-        self,
-        admission: _SessionAssociation,
-    ) -> LifecycleStep:
-        if admission.session_id is None:
-            if admission.detail_owner is not None:
-                return LifecycleStep(
-                    "detail_retire",
-                    detail_owner=admission.detail_owner,
-                )
-            return LifecycleStep("complete")
-        if admission.admission_cursor == "published":
-            raise RuntimeError("published session is not an admission rollback")
-        if admission.observation_active:
-            return LifecycleStep(
-                "observer_release",
-                session_id=admission.session_id,
-            )
-        if admission.detail_owner is not None:
-            return LifecycleStep(
-                "detail_retire",
-                session_id=admission.session_id,
-                detail_owner=admission.detail_owner,
-            )
-        return LifecycleStep("complete")
-
-    def _apply_admission_rollback_completion_locked(
-        self,
-        admission: _SessionAssociation,
-        claim: AdmissionRollbackClaim,
-    ) -> None:
-        if claim.step.name == "observer_release":
-            admission.observation_active = False
-        elif claim.step.name == "detail_retire":
-            admission.detail_owner = None
-        else:
-            raise RuntimeError("admission rollback step is invalid")
-        admission.rollback_claim = None
-        self._condition.notify_all()
-
-    def _settlement_step_locked(
-        self,
-        association: _SessionAssociation,
-    ) -> LifecycleStep:
-        cursor = association.settlement_cursor
-        if cursor in {"observer_release", "dispatcher_close"}:
-            return LifecycleStep(cursor)
-        if cursor == "detail_retire":
-            return LifecycleStep(cursor, detail_owner=association.detail_owner)
-        if cursor == "plan_retire":
-            if association.request_id is None:
-                raise RuntimeError("task plan identity is unavailable")
-            plan = self._plans.get(association.request_id)
-            if plan is not None and plan.session_id != association.session_id:
-                raise RuntimeError("task plan token belongs to another session")
-            return LifecycleStep(
-                cursor,
-                request_id=association.request_id,
-                plan_token=None if plan is None else self._plan_token(plan),
-            )
-        if cursor in {"session_complete", "complete"}:
-            return LifecycleStep("complete")
-        raise RuntimeError("session settlement cursor is invalid")
-
-    @staticmethod
-    def _after_detail_cursor(association: _SessionAssociation) -> str:
-        return (
-            "plan_retire"
-            if association.settlement_target == "task"
-            else "session_complete"
-        )
 
     @staticmethod
     def _reconcile_terminal_locked(
@@ -1251,11 +945,7 @@ class TaskLifecycle:
                     "delivered terminal truth disagrees with dispatcher truth"
                 )
             return
-        if (
-            association.terminal_digest != terminal_digest
-            or association.settlement_cursor
-            not in {"detail_retire", "plan_retire", "session_complete", "complete"}
-        ):
+        if association.terminal_digest != terminal_digest:
             raise RuntimeError(
                 "delivered terminal truth disagrees with dispatcher truth"
             )
@@ -1282,25 +972,12 @@ class TaskLifecycle:
         admission = self._admission_locked(claim.token)
         if admission.rollback_claim != claim:
             raise LifecycleAssociationError("admission rollback claim is stale")
+        if (
+            admission.session_id != claim.session_id
+            or admission.detail_owner != claim.detail_owner
+        ):
+            raise LifecycleAssociationError("admission rollback subject changed")
         return admission
-
-    def _settlement_reservation_locked(
-        self,
-        reservation: SettlementReservation,
-    ) -> _SessionAssociation:
-        association = self._association_locked(reservation.token)
-        if association.settlement_reservation != reservation:
-            raise LifecycleAssociationError("settlement reservation is stale")
-        return association
-
-    def _observation_claim_locked(
-        self,
-        claim: ObservationClaim,
-    ) -> _SessionAssociation:
-        association = self._association_locked(claim.token)
-        if association.observation_claim != claim:
-            raise LifecycleAssociationError("observation claim is stale")
-        return association
 
     def _plan_locked(self, token: PlanToken) -> _PlanEffect:
         plan = self._plans.get(token.request_id)
@@ -1322,13 +999,11 @@ class TaskLifecycle:
     def _reserve_plan_retirement_locked(
         self,
         plan: _PlanEffect,
-        *,
-        owner: SettlementClaim | None,
     ) -> PlanRetirementClaim:
         if plan.retirement_claim is not None:
             raise RuntimeError("plan retirement is already reserved")
         claim_id = self._mint_claim_id_locked()
-        claim = PlanRetirementClaim(self._plan_token(plan), claim_id, owner)
+        claim = PlanRetirementClaim(self._plan_token(plan), claim_id)
         plan.retirement_claim = claim
         try:
             while plan.mutation_claim is not None:
@@ -1368,8 +1043,8 @@ class TaskLifecycle:
             raise LifecycleAssociationError("session association is stale")
         return association
 
-    @staticmethod
     def _validate_association_locked(
+        self,
         association: _SessionAssociation | None,
         *,
         task_id: str | None | object,
@@ -1377,7 +1052,7 @@ class TaskLifecycle:
     ) -> None:
         if (
             association is None
-            or association.admission_cursor != "published"
+            or self._admissions.get(association.identity) is association
         ):
             raise LifecycleAssociationError("session is unavailable")
         if task_id is not _ANY_TASK and association.task_id != task_id:
@@ -1390,8 +1065,10 @@ class TaskLifecycle:
         association: _SessionAssociation,
     ) -> None:
         assert association.session_id is not None
-        self._sessions.pop(association.session_id, None)
+        if self._sessions.get(association.session_id) is not association:
+            raise LifecycleAssociationError("session association is stale")
         task = self._task_for_association_locked(association)
+        self._sessions.pop(association.session_id)
         if task is not None:
             task.session_id = None
             if task.start_failed:
@@ -1420,10 +1097,12 @@ class TaskLifecycle:
         association: _SessionAssociation,
     ) -> None:
         assert association.session_id is not None
-        self._sessions.pop(association.session_id, None)
+        if self._sessions.get(association.session_id) is not association:
+            raise LifecycleAssociationError("session association is stale")
+        task = self._task_for_association_locked(association)
+        self._sessions.pop(association.session_id)
         if association.command_id is not None:
             self._start_receipts.pop(association.command_id, None)
-        task = self._task_for_association_locked(association)
         if task is not None:
             self._tasks.pop(task.task_id, None)
 
@@ -1506,14 +1185,13 @@ __all__ = [
     "AssociationToken",
     "LifecycleAssociationError",
     "LifecycleReceiptConflictError",
-    "LifecycleStep",
     "LifecycleTaskCapacityError",
     "ObservationClaim",
     "PlanMutationClaim",
     "PlanRetirementClaim",
     "PlanToken",
     "SettlementClaim",
-    "SettlementReservation",
+    "SettlementWork",
     "StartReceipt",
     "TASK_EFFECT_CAPACITY",
     "TaskLifecycle",

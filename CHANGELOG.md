@@ -64,6 +64,16 @@ preserving public behavior, real boundary checks, and persisted contracts.
   departments passed 2,339 tests with 2,645 deselected, ordinary passed 4,952
   with four capability skips and 28 deselected, and all 12 import contracts
   remained intact.
+- Follow-up LC-1b removed the application cleanup step enum, resumption
+  cursors, per-step acknowledgements, marker-repair calls, and service
+  interpreter. Admission rollback and settlement now replay one fixed
+  exact-subject sequence over independently idempotent or monotone owners;
+  cleanup calls may repeat, but completed observable effects remain unique.
+- The LC-1b production pair is net 440 lines smaller and its affected tests are
+  net 74 lines smaller. Its frozen boundary corpus remained exact; focused
+  tests passed 176 cases, the three-department neighborhood passed 2,328, the
+  ordinary suite passed 4,941 with four capability skips and 28 deselected,
+  and all 12 import contracts remained intact.
 
 ### M1 Hardening
 

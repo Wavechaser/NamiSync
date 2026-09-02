@@ -630,8 +630,8 @@ def test_ls_2_session_control_reaches_only_corresponding_dispatcher_record() -> 
     service._lifecycle = TaskLifecycle()
     first = str(dispatcher.submit("control", "first"))
     second = str(dispatcher.submit("control", "second"))
-    _publish_lifecycle_session(service._lifecycle, first, observed=False)
-    _publish_lifecycle_session(service._lifecycle, second, observed=False)
+    _publish_lifecycle_session(service._lifecycle, first)
+    _publish_lifecycle_session(service._lifecycle, second)
     assert entered.setdefault("first", Event()).wait(3)
     assert entered.setdefault("second", Event()).wait(3)
     _wait_for_state(dispatcher, first, SessionState.RUNNING)
@@ -654,19 +654,23 @@ def test_ls_2_session_control_reaches_only_corresponding_dispatcher_record() -> 
         assert dispatcher.get(second).state is SessionState.RUNNING
 
     dispatcher.close(first)
-    retirement = service._lifecycle.reserve_settlement(
+    retirement = service._lifecycle.begin_settlement(
         first,
         close_task=False,
     )
-    retirement_claim = service._lifecycle.activate_settlement(retirement)
-    assert service._lifecycle.settlement_step(retirement_claim).name == (
-        "dispatcher_close"
+    retirement_work = service._lifecycle.confirm_settlement(retirement)
+    assert (
+        retirement_work.session_id,
+        retirement_work.detail_owner,
+        retirement_work.plan_token,
+        retirement_work.replay,
+    ) == (
+        first,
+        None,
+        None,
+        False,
     )
-    service._lifecycle.complete_settlement_step(
-        retirement_claim,
-        "dispatcher_close",
-    )
-    service._lifecycle.finish_settlement(retirement_claim)
+    service._lifecycle.complete_settlement(retirement_work)
     for operation in (service.pause, service.resume, service.cancel):
         result = operation(first)
         assert not result.accepted and result.code == "not-found"
@@ -676,225 +680,6 @@ def test_ls_2_session_control_reaches_only_corresponding_dispatcher_record() -> 
     _wait_for_state(dispatcher, second, SessionState.CANCELED)
     dispatcher.close(second)
     assert dispatcher.shutdown().complete
-
-
-@dataclass
-class _LifecycleCounts:
-    attachment_attempts: int = 0
-    attachment_successes: int = 0
-    stream_close_attempts: int = 0
-    stream_close_successes: int = 0
-    observer_adopt_attempts: int = 0
-    observer_adopt_successes: int = 0
-    publication_attempts: int = 0
-    publication_successes: int = 0
-    application_rollback_attempts: int = 0
-    application_rollback_successes: int = 0
-    observer_rollback_attempts: int = 0
-    observer_rollback_successes: int = 0
-    owner_rollback_attempts: int = 0
-    owner_rollback_successes: int = 0
-
-
-class _LifecycleStream:
-    def __init__(self, counts: _LifecycleCounts, *, fail_once: bool = False) -> None:
-        self._counts = counts
-        self._failures = 1 if fail_once else 0
-        self.closed = False
-
-    def close(self) -> None:
-        self._counts.stream_close_attempts += 1
-        if self._failures:
-            self._failures -= 1
-            raise OSError("sinkless stream retirement failed")
-        if not self.closed:
-            self.closed = True
-            self._counts.stream_close_successes += 1
-
-
-class _CountingOwners(dict[str, tuple[str, str]]):
-    def __init__(self, stage: str) -> None:
-        super().__init__()
-        self.stage = stage
-        self.install_attempts = 0
-        self.install_successes = 0
-        self.retire_attempts = 0
-        self.retire_successes = 0
-
-    def __setitem__(self, key: str, value: tuple[str, str]) -> None:
-        self.install_attempts += 1
-        if self.stage == "F2":
-            raise RuntimeError("detail owner install failed")
-        super().__setitem__(key, value)
-        self.install_successes += 1
-
-    def pop(self, key, *default):
-        self.retire_attempts += 1
-        if self.stage == "R3" and self.retire_attempts == 1:
-            raise RuntimeError("detail owner rollback failed")
-        value = super().pop(key, *default)
-        self.retire_successes += 1
-        return value
-
-
-class _LifecycleObserver:
-    def __init__(
-        self,
-        stage: str,
-        counts: _LifecycleCounts,
-    ) -> None:
-        self.stage = stage
-        self.counts = counts
-        self.observations: dict[str, tuple[object, object]] = {}
-
-    def _count_real_stream_close(self, stream: object) -> None:
-        if isinstance(stream, _LifecycleStream):
-            return
-        original_close = stream.close
-
-        def close() -> None:
-            self.counts.stream_close_attempts += 1
-            was_closed = stream._closed
-            original_close()
-            if not was_closed and stream._closed:
-                self.counts.stream_close_successes += 1
-
-        stream.close = close
-
-    def adopt(self, session_id, sink, stream):
-        self._count_real_stream_close(stream)
-        self.counts.observer_adopt_attempts += 1
-        if self.stage == "F4":
-            stream.close()
-            raise RuntimeError("observer adoption failed")
-        self.observations[session_id] = (sink, stream)
-        self.counts.observer_adopt_successes += 1
-
-        return lambda: self.unsubscribe(session_id)
-
-    def unsubscribe(self, session_id) -> None:
-        self.counts.observer_rollback_attempts += 1
-        attempt = self.counts.observer_rollback_attempts
-        if self.stage == "R1" and attempt == 1:
-            raise TimeoutError("observer rollback retained the sink")
-        retained = self.observations.pop(session_id, None)
-        if retained is not None:
-            retained[1].close()
-            self.counts.observer_rollback_successes += 1
-        if self.stage == "R2" and attempt == 1:
-            raise TimeoutError("observer rollback retired before raising")
-
-    def retains_observation(self, session_id, sink) -> bool:
-        retained = self.observations.get(session_id)
-        return retained is not None and retained[0] is sink
-
-
-class _LifecycleDispatcher:
-    def __init__(
-        self,
-        stage: str,
-        counts: _LifecycleCounts,
-        stream: _LifecycleStream,
-    ) -> None:
-        self.stage = stage
-        self.counts = counts
-        self.stream = stream
-        self.rollback = None
-        self.cleanup_pending = False
-
-    def submit(self, _kind, _request, *, attach):
-        attach_callback, rollback = attach.capture()
-        self.rollback = rollback
-        try:
-            attached = attach_callback(_SESSION, self.stream)
-            assert attached is rollback
-            self.counts.publication_attempts += 1
-            raise RuntimeError("dispatcher publication failed")
-        except BaseException:
-            self.counts.application_rollback_attempts += 1
-            try:
-                rollback()
-            except BaseException:
-                self.cleanup_pending = True
-            else:
-                self.counts.application_rollback_successes += 1
-            try:
-                self.stream.close()
-            except BaseException:
-                self.cleanup_pending = True
-            raise
-
-    def retry(self) -> None:
-        assert self.rollback is not None
-        self.counts.application_rollback_attempts += 1
-        self.rollback()
-        self.counts.application_rollback_successes += 1
-        self.cleanup_pending = False
-
-
-class _FaultLifecycle(TaskLifecycle):
-    def __init__(self, stage, counts, owners) -> None:
-        super().__init__()
-        self.stage = stage
-        self.counts = counts
-        self.owners = owners
-
-    def attach_session(self, token, session_id):
-        self.counts.attachment_attempts += 1
-        if self.stage == "F1":
-            raise RuntimeError("session attachment failed")
-        result = super().attach_session(token, session_id)
-        self.counts.attachment_successes += 1
-        return result
-
-    def install_detail_owner(self, token) -> None:
-        self.owners.install_attempts += 1
-        if self.stage == "F2":
-            raise RuntimeError("detail owner install failed")
-        super().install_detail_owner(token)
-        self.owners.install_successes += 1
-
-    def finish_admission_rollback(self, token) -> None:
-        with self._condition:
-            active = token.identity in self._admissions
-        if active and self.counts.attachment_successes:
-            self.counts.owner_rollback_attempts += 1
-            if self.stage == "R4" and self.counts.owner_rollback_attempts == 1:
-                raise RuntimeError("association retirement failed")
-        super().finish_admission_rollback(token)
-        if active and self.counts.attachment_successes:
-            self.counts.owner_rollback_successes += 1
-
-
-class _LifecycleRuntime:
-    def __init__(self, owners) -> None:
-        self.owners = owners
-
-    def drop_inventory_details(self, request_id) -> None:
-        self.owners.pop(request_id, None)
-
-
-def _lifecycle_service(dispatcher, observer, owners) -> NamiSyncService:
-    dict.__setitem__(owners, "request", ("inventory", "request"))
-    service = object.__new__(NamiSyncService)
-    service._closed = False
-    service._lock = Lock()
-    service._lifecycle = _FaultLifecycle(owners.stage, observer.counts, owners)
-    service._runtime = _LifecycleRuntime(owners)
-    service._dispatcher = dispatcher
-    service._observer = observer
-    return service
-
-
-def _assert_lifecycle_terminal_state(
-    observer: _LifecycleObserver,
-    owners: _CountingOwners,
-    counts: _LifecycleCounts,
-) -> None:
-    assert observer.observations == {}
-    assert owners == {}
-    assert counts.stream_close_successes == 1
-    assert counts.owner_rollback_successes == counts.attachment_successes
 
 
 @dataclass
@@ -1122,23 +907,22 @@ def test_ls_4_dispatcher_admission_cleanup_converges(stage: str) -> None:
     _exercise_dispatcher_cleanup_stage(stage)
 
 
-def test_ls_4_application_rollback_singleflights_concurrent_callers(
+def test_whole_admission_rollback_singleflights_concurrent_callers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     lifecycle = TaskLifecycle()
+    detail_owner = ("inventory", "request")
     admission = lifecycle.begin_admission(
         "inventory",
         f"{60_001:032x}",
         ("inventory",),
-        detail_owner=("inventory", "request"),
-        expects_observation=True,
+        detail_owner=detail_owner,
     )
     lifecycle.attach_session(admission, _SESSION)
-    first_physical_entered = Event()
+    first_claimed = Event()
     release_first = Event()
     contender_waiting = Event()
-    counts = {"observer_release": 0, "detail_retire": 0}
-    counts_lock = Lock()
+    claims = []
     condition_type = type(lifecycle._condition)
     original_wait = condition_type.wait
 
@@ -1149,140 +933,133 @@ def test_ls_4_application_rollback_singleflights_concurrent_callers(
 
     monkeypatch.setattr(condition_type, "wait", observe_wait)
 
-    def rollback() -> None:
-        while True:
-            claim = lifecycle.admission_rollback_step(admission)
-            if claim.step.name == "complete":
-                lifecycle.finish_admission_rollback(admission)
-                return
-            with counts_lock:
-                counts[claim.step.name] += 1
-            if claim.step.name == "observer_release":
-                first_physical_entered.set()
-                assert release_first.wait(2)
-            lifecycle.complete_admission_rollback_step(claim)
+    def owner() -> None:
+        claim = lifecycle.begin_admission_rollback(admission)
+        assert claim is not None
+        claims.append(claim)
+        first_claimed.set()
+        assert release_first.wait(2)
+        lifecycle.complete_admission_rollback(claim)
 
-    first = Thread(target=rollback)
-    second = Thread(target=rollback)
+    def contender() -> None:
+        assert first_claimed.wait(2)
+        claims.append(lifecycle.begin_admission_rollback(admission))
+
+    first = Thread(target=owner)
+    second = Thread(target=contender)
     first.start()
-    assert first_physical_entered.wait(1)
+    assert first_claimed.wait(1)
     second.start()
     assert contender_waiting.wait(1)
-    assert counts == {"observer_release": 1, "detail_retire": 0}
+    assert len(claims) == 1
+    assert (claims[0].session_id, claims[0].detail_owner) == (
+        _SESSION,
+        detail_owner,
+    )
     release_first.set()
     first.join(2)
     second.join(2)
     assert not first.is_alive()
     assert not second.is_alive()
-    assert counts == {"observer_release": 1, "detail_retire": 1}
-    assert lifecycle.admission_rollback_step(admission).step.name == "complete"
+    assert claims[1] is None
+    assert lifecycle.begin_admission_rollback(admission) is None
+    with pytest.raises(LifecycleAssociationError):
+        lifecycle.require_session(_SESSION, live=False)
 
 
-@pytest.mark.parametrize(
-    "stage",
-    (
-        "F1",
-        "F2",
-        "F3",
-        "F4",
-        "F5",
-        "R1",
-        "R2",
-        "R3",
-        "R4",
-    ),
-)
-def test_ls_4_partial_admission_compensates_once(stage: str) -> None:
-    counts = _LifecycleCounts()
-    owners = _CountingOwners(stage)
-    stream = _LifecycleStream(counts, fail_once=stage == "F3")
-    observer = _LifecycleObserver(stage, counts)
-    dispatcher = _LifecycleDispatcher(stage, counts, stream)
-    service = _lifecycle_service(dispatcher, observer, owners)
-    sink = None if stage == "F3" else lambda _update: None
-
-    with pytest.raises((OSError, RuntimeError)):
-        service._submit_session(
-            PLAN_KIND,
-            object(),
-            effect_kind="inventory",
-            command_id=f"{61_002:032x}",
-            signature=("inventory", stage),
-            detail_owner=("inventory", "request"),
-            observation_sink=sink,
-        )
-
-    retained = (
-        bool(observer.observations),
-        bool(owners),
-        counts.attachment_successes > counts.owner_rollback_successes,
-        dispatcher.cleanup_pending,
+def test_whole_admission_rollback_close_wakes_waiter_but_retains_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle = TaskLifecycle()
+    admission = lifecycle.begin_admission(
+        "inventory",
+        f"{60_101:032x}",
+        ("inventory",),
+        detail_owner=("inventory", f"{60_102:032x}"),
     )
-    expected_retained = {
-        "F1": (False, False, False, False),
-        "F2": (False, False, False, False),
-        "F3": (False, False, False, False),
-        "F4": (False, False, False, False),
-        "F5": (False, False, False, False),
-        "R1": (False, False, False, True),
-        "R2": (False, False, False, True),
-        "R3": (False, False, False, True),
-        "R4": (False, False, False, True),
-    }
-    assert retained == expected_retained[stage]
+    session_id = f"{60_103:032x}"
+    lifecycle.attach_session(admission, session_id)
+    owner = lifecycle.begin_admission_rollback(admission)
+    assert owner is not None
 
-    if dispatcher.cleanup_pending:
-        dispatcher.retry()
-    _assert_lifecycle_terminal_state(observer, owners, counts)
+    contender_waiting = Event()
+    failures: list[BaseException] = []
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
 
+    def observe_wait(condition, timeout=None):
+        if (
+            condition is lifecycle._condition
+            and current_thread().name == "admission-close-contender"
+        ):
+            contender_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+
+    def contend() -> None:
+        try:
+            lifecycle.begin_admission_rollback(admission)
+        except BaseException as error:
+            failures.append(error)
+
+    contender = Thread(target=contend, name="admission-close-contender")
+    contender.start()
+    assert contender_waiting.wait(1)
+
+    lifecycle.close()
+    contender.join(2)
+    assert not contender.is_alive()
+    assert len(failures) == 1
+    assert type(failures[0]) is RuntimeError
+    assert str(failures[0]) == "service is closed"
+
+    lifecycle.abandon_admission_rollback(owner)
+    retained_cleanup = lifecycle.begin_admission_rollback(admission)
+    assert retained_cleanup is not None
     assert (
-        counts.application_rollback_attempts,
-        counts.application_rollback_successes,
-    ) == {
-        "F1": (1, 1),
-        "F2": (1, 1),
-        "F3": (1, 1),
-        "F4": (1, 1),
-        "F5": (1, 1),
-        "R1": (2, 1),
-        "R2": (2, 1),
-        "R3": (2, 1),
-        "R4": (2, 1),
-    }[stage]
-    assert (counts.attachment_attempts, counts.attachment_successes) == (
-        (1, 0) if stage == "F1" else (1, 1)
+        retained_cleanup.session_id,
+        retained_cleanup.detail_owner,
+    ) == (owner.session_id, owner.detail_owner)
+    lifecycle.complete_admission_rollback(retained_cleanup)
+    assert lifecycle.begin_admission_rollback(admission) is None
+    with pytest.raises(LifecycleAssociationError):
+        lifecycle.require_session(session_id, live=False)
+
+
+def test_lifecycle_whole_admission_claim_replays_exact_subject() -> None:
+    lifecycle = TaskLifecycle()
+    detail_owner = ("inventory", f"{61_001:032x}")
+    admission = lifecycle.begin_admission(
+        "inventory",
+        f"{61_002:032x}",
+        ("inventory",),
+        detail_owner=detail_owner,
     )
-    assert (owners.install_attempts, owners.install_successes) == {
-        "F1": (0, 0),
-        "F2": (1, 0),
-    }.get(stage, (1, 1))
-    assert (counts.observer_adopt_attempts, counts.observer_adopt_successes) == {
-        "F1": (0, 0),
-        "F2": (0, 0),
-        "F3": (0, 0),
-        "F4": (1, 0),
-    }.get(stage, (1, 1))
-    assert (counts.publication_attempts, counts.publication_successes) == (
-        (1, 0) if stage in {"F5", "R1", "R2", "R3", "R4"} else (0, 0)
+    session_id = f"{61_003:032x}"
+    lifecycle.attach_session(admission, session_id)
+
+    first = lifecycle.begin_admission_rollback(admission)
+    assert first is not None
+    assert (first.session_id, first.detail_owner) == (
+        session_id,
+        detail_owner,
     )
-    assert (counts.observer_rollback_attempts, counts.observer_rollback_successes) == {
-        "F1": (0, 0),
-        "F2": (1, 0),
-        "F3": (0, 0),
-        "F4": (1, 0),
-        "R1": (2, 1),
-        "R2": (2, 1),
-    }.get(stage, (1, 1))
-    assert (owners.retire_attempts, owners.retire_successes) == {
-        "R3": (2, 1),
-    }.get(stage, (1, 1))
-    assert (counts.owner_rollback_attempts, counts.owner_rollback_successes) == {
-        "F1": (0, 0),
-        "R4": (2, 1),
-    }.get(stage, (1, 1))
-    assert (counts.stream_close_attempts, counts.stream_close_successes) == (
-        (3, 1) if stage == "F3" else (2, 1)
+    lifecycle.abandon_admission_rollback(first)
+
+    retry = lifecycle.begin_admission_rollback(admission)
+    assert retry is not None
+    assert retry.claim_id != first.claim_id
+    assert (retry.session_id, retry.detail_owner) == (
+        first.session_id,
+        first.detail_owner,
     )
+    lifecycle.complete_admission_rollback(retry)
+    lifecycle.complete_admission_rollback(retry)
+
+    assert lifecycle.begin_admission_rollback(admission) is None
+    with pytest.raises(LifecycleAssociationError):
+        lifecycle.require_session(session_id, live=False)
 
 
 class _SinkOwner:
@@ -1358,23 +1135,23 @@ def _publish_lifecycle_session(
     session_id: str,
     *,
     command_id: str | None = None,
-    observed: bool,
 ):
     signature = ("source", "target", None)
     admission = lifecycle.begin_admission(
         "plan",
         command_id,
         signature,
-        expects_observation=observed,
     )
-    token = lifecycle.attach_session(admission, session_id)
-    lifecycle.complete_admission_observation(token, active=observed)
-    token = lifecycle.mark_published(admission, session_id)
-    lifecycle.complete_start(token, f"{int(session_id, 16) + 1:032x}")
+    lifecycle.attach_session(admission, session_id)
+    token, _receipt = lifecycle.publish_start(
+        admission,
+        session_id,
+        f"{int(session_id, 16) + 1:032x}",
+    )
     return token
 
 
-def test_lifecycle_retained_state_has_no_delivery_or_observer_resources() -> None:
+def test_lifecycle_state_has_no_cleanup_step_or_marker_progress() -> None:
     imports = set()
     for node in ast.walk(ast.parse(inspect.getsource(lifecycle_module))):
         if isinstance(node, ast.Import):
@@ -1416,12 +1193,9 @@ def test_lifecycle_retained_state_has_no_delivery_or_observer_resources() -> Non
         field.name for field in fields(lifecycle_module._SessionAssociation)
     } == {
         "identity", "kind", "command_id", "signature", "task_id",
-        "session_id", "admission_cursor", "detail_owner",
-        "observation_active", "rollback_claim", "rollback_last_completed",
-        "observation_claim", "observation_last_completed", "request_id",
-        "terminal_digest", "settlement_target", "settlement_cursor",
-        "settlement_claim", "settlement_reservation",
-        "settlement_last_completed", "settlement_last_finished",
+        "session_id", "detail_owner", "rollback_claim", "observation_claim",
+        "request_id", "plan_token", "terminal_digest", "settlement_target",
+        "session_released", "settlement_claim",
     }
     assert {
         name
@@ -1443,12 +1217,10 @@ def test_lifecycle_retained_state_has_no_delivery_or_observer_resources() -> Non
             "plan",
             None,
             (retained_resource,),
-            expects_observation=False,
         )
     token = _publish_lifecycle_session(
         lifecycle,
         f"{40_000:032x}",
-        observed=False,
     )
     plan = lifecycle.require_plan(f"{40_001:032x}")
     with pytest.raises(TypeError, match="immutable scalars"):
@@ -1468,13 +1240,11 @@ def _publish_lifecycle_task(
         command_id,
         signature,
         task_id=task.task_id,
-        expects_observation=False,
     )
     token = lifecycle.attach_session(admission, session_id)
-    lifecycle.complete_admission_observation(token, active=False)
-    token = lifecycle.mark_published(admission, session_id)
-    receipt = lifecycle.complete_start(
-        token,
+    token, receipt = lifecycle.publish_start(
+        admission,
+        session_id,
         f"{int(session_id, 16) + 1:032x}",
     )
     return task, token, receipt
@@ -1590,16 +1360,11 @@ def test_lifecycle_capacity_singleflights_owner_and_joiner_at_limit() -> None:
                 command_id,
                 signature,
                 task_id=task.task_id,
-                expects_observation=False,
             )
-            association = lifecycle.attach_session(admission, session_id)
-            lifecycle.complete_admission_observation(
-                association,
-                active=False,
-            )
-            association = lifecycle.mark_published(admission, session_id)
-            receipt = lifecycle.complete_start(
-                association,
+            lifecycle.attach_session(admission, session_id)
+            _association, receipt = lifecycle.publish_start(
+                admission,
+                session_id,
                 f"{51_002:032x}",
             )
             owner_results.append((task, receipt))
@@ -1632,9 +1397,7 @@ def test_lifecycle_capacity_singleflights_owner_and_joiner_at_limit() -> None:
     assert joiner_results[0].replay == owner_results[0][1]
 
 
-def test_lifecycle_task_start_post_marker_retry_replays_one_receipt(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_lifecycle_task_start_publication_replays_one_receipt() -> None:
     lifecycle = TaskLifecycle()
     command_id = f"{51_101:032x}"
     session_id = f"{51_102:032x}"
@@ -1646,27 +1409,20 @@ def test_lifecycle_task_start_post_marker_retry_replays_one_receipt(
         command_id,
         signature,
         task_id=task.task_id,
-        expects_observation=False,
     )
-    association = lifecycle.attach_session(admission, session_id)
-    lifecycle.complete_admission_observation(association, active=False)
-    association = lifecycle.mark_published(admission, session_id)
-
-    condition_type = type(lifecycle._condition)
-    original_notify = condition_type.notify_all
-    interrupt = True
-
-    def interrupt_after_receipt(condition) -> None:
-        nonlocal interrupt
-        if condition is lifecycle._condition and interrupt:
-            interrupt = False
-            raise KeyboardInterrupt
-        original_notify(condition)
-
-    monkeypatch.setattr(condition_type, "notify_all", interrupt_after_receipt)
-    with pytest.raises(KeyboardInterrupt):
-        lifecycle.complete_start(association, request_id)
-    receipt = lifecycle.complete_start(association, request_id)
+    lifecycle.attach_session(admission, session_id)
+    association, receipt = lifecycle.publish_start(
+        admission,
+        session_id,
+        request_id,
+    )
+    repeated_association, repeated_receipt = lifecycle.publish_start(
+        admission,
+        session_id,
+        request_id,
+    )
+    assert repeated_association == association
+    assert repeated_receipt == receipt
     replay = lifecycle.begin_task_start(command_id, signature)
     assert replay.task_id == task.task_id
     assert replay.replay == receipt
@@ -1686,10 +1442,9 @@ def test_lifecycle_direct_replay_joins_close_and_refuses_sealed_failure(
         lifecycle,
         session_id,
         command_id=command_id,
-        observed=False,
     )
     signature = ("source", "target", None)
-    reservation = lifecycle.reserve_settlement(
+    claim = lifecycle.begin_settlement(
         session_id,
         close_task=False,
     )
@@ -1715,9 +1470,8 @@ def test_lifecycle_direct_replay_joins_close_and_refuses_sealed_failure(
     )
     replay_thread.start()
     assert replay_waiting.wait(1)
-    settlement = lifecycle.activate_settlement(reservation)
-    lifecycle.complete_settlement_step(settlement, "dispatcher_close")
-    lifecycle.finish_settlement(settlement)
+    settlement = lifecycle.confirm_settlement(claim)
+    lifecycle.complete_settlement(settlement)
     replay_thread.join(2)
     assert not replay_thread.is_alive()
     assert replays == [None]
@@ -1729,14 +1483,13 @@ def test_lifecycle_direct_replay_joins_close_and_refuses_sealed_failure(
         sealed,
         sealed_session,
         command_id=sealed_command,
-        observed=False,
     )
-    reservation = sealed.reserve_settlement(
+    claim = sealed.begin_settlement(
         sealed_session,
         close_task=False,
     )
-    settlement = sealed.activate_settlement(reservation)
-    sealed.abandon_settlement(settlement)
+    sealed.confirm_settlement(claim)
+    sealed.abandon_settlement(claim)
     with pytest.raises(LifecycleAssociationError, match="remains pending"):
         sealed.replay_start(sealed_command, "plan", signature)
 
@@ -1754,22 +1507,21 @@ def test_lifecycle_task_replay_crosses_release_but_joins_task_close(
     )
     signature = ("source", "target", None)
     terminal_digest = b"t" * 32
-    release = lifecycle.reserve_settlement(
+    release = lifecycle.begin_settlement(
         session_id,
         task_id=task.task_id,
         close_task=False,
     )
-    release_claim = lifecycle.activate_settlement(
+    release_work = lifecycle.confirm_settlement(
         release,
         terminal_digest=terminal_digest,
         dispatcher_truth_observed=True,
     )
     assert lifecycle.replay_start(command_id, "task-plan", signature) == receipt
-    lifecycle.complete_settlement_step(release_claim, "dispatcher_close")
-    lifecycle.finish_settlement(release_claim)
+    lifecycle.complete_settlement(release_work)
     assert lifecycle.replay_start(command_id, "task-plan", signature) == receipt
 
-    close = lifecycle.reserve_settlement(
+    close = lifecycle.begin_settlement(
         session_id,
         task_id=task.task_id,
         close_task=True,
@@ -1796,22 +1548,21 @@ def test_lifecycle_task_replay_crosses_release_but_joins_task_close(
     )
     replay_thread.start()
     assert replay_waiting.wait(1)
-    close_claim = lifecycle.activate_settlement(
+    close_work = lifecycle.confirm_settlement(
         close,
         terminal_digest=terminal_digest,
     )
-    step = lifecycle.settlement_step(close_claim)
-    assert step.name == "plan_retire"
-    assert step.plan_retirement is not None
-    lifecycle.complete_plan_retirement(step.plan_retirement)
-    lifecycle.complete_settlement_step(close_claim, step.name)
-    lifecycle.finish_settlement(close_claim)
+    assert close_work.plan_token is not None
+    retirement = lifecycle.begin_exact_plan_retirement(close_work.plan_token)
+    assert retirement is not None
+    lifecycle.complete_plan_retirement(retirement)
+    lifecycle.complete_settlement(close_work)
     replay_thread.join(2)
     assert not replay_thread.is_alive()
     assert replays == [None]
 
 
-def test_lifecycle_admission_owns_liabilities_before_physical_markers() -> None:
+def test_lifecycle_admission_claim_owns_exact_liabilities() -> None:
     lifecycle = TaskLifecycle()
     detail_owner = ("execution", f"{41_101:032x}")
     pre_attach = lifecycle.begin_admission(
@@ -1819,266 +1570,221 @@ def test_lifecycle_admission_owns_liabilities_before_physical_markers() -> None:
         f"{41_102:032x}",
         ("execution",),
         detail_owner=detail_owner,
-        expects_observation=True,
     )
-    detail = lifecycle.admission_rollback_step(pre_attach)
-    assert detail.step.name == "detail_retire"
-    assert detail.step.detail_owner == detail_owner
-    assert detail.step.session_id is None
-    lifecycle.complete_admission_rollback_step(detail)
-    retirement = lifecycle.admission_rollback_step(pre_attach)
-    assert retirement.step.name == "complete"
-    lifecycle.finish_admission_rollback(pre_attach)
-    assert lifecycle.admission_rollback_step(pre_attach).step.name == "complete"
+    retirement = lifecycle.begin_admission_rollback(pre_attach)
+    assert retirement is not None
+    assert (retirement.session_id, retirement.detail_owner) == (
+        None,
+        detail_owner,
+    )
+    lifecycle.complete_admission_rollback(retirement)
+    assert lifecycle.begin_admission_rollback(pre_attach) is None
 
     bound = lifecycle.begin_admission(
         "execution",
         f"{41_103:032x}",
         ("execution",),
         detail_owner=detail_owner,
-        expects_observation=True,
     )
     session_id = f"{41_104:032x}"
     association = lifecycle.attach_session(bound, session_id)
-    observation = lifecycle.admission_rollback_step(bound)
-    assert observation.step.name == "observer_release"
-    assert observation.step.session_id == session_id
-    lifecycle.complete_admission_rollback_step(observation)
-    detail = lifecycle.admission_rollback_step(bound)
-    assert detail.step.name == "detail_retire"
-    assert detail.step.detail_owner == detail_owner
-    lifecycle.complete_admission_rollback_step(detail)
-    association_retirement = lifecycle.admission_rollback_step(bound)
-    assert association_retirement.step.name == "complete"
-    lifecycle.finish_admission_rollback(bound)
-    assert lifecycle.admission_rollback_step(bound).step.name == "complete"
+    retirement = lifecycle.begin_admission_rollback(bound)
+    assert retirement is not None
+    assert (retirement.session_id, retirement.detail_owner) == (
+        session_id,
+        detail_owner,
+    )
+    lifecycle.complete_admission_rollback(retirement)
     with pytest.raises(LifecycleAssociationError):
         lifecycle.require_session(association.session_id, live=False)
 
 
-def test_lifecycle_observation_claim_serializes_with_settlement() -> None:
+def test_lifecycle_whole_settlement_claim_excludes_reobserve_and_same_session_peer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     lifecycle = TaskLifecycle()
     session_id = f"{42_001:032x}"
-    _publish_lifecycle_session(lifecycle, session_id, observed=False)
+    _publish_lifecycle_session(lifecycle, session_id)
+    disjoint_id = f"{42_002:032x}"
+    _publish_lifecycle_session(lifecycle, disjoint_id)
     observation = lifecycle.begin_observation(session_id)
-    reservations = []
+    claims = []
     failures: list[BaseException] = []
+    owner_waiting = Event()
+    peer_waiting = Event()
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
 
-    def reserve() -> None:
+    def observe_wait(condition, timeout=None):
+        if condition is lifecycle._condition:
+            if current_thread().name == "settlement-owner":
+                owner_waiting.set()
+            elif current_thread().name == "settlement-peer":
+                peer_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+
+    def settle(label: str) -> None:
         try:
-            reservations.append(
-                lifecycle.reserve_settlement(
-                    session_id,
-                    close_task=False,
+            claims.append(
+                (
+                    label,
+                    lifecycle.begin_settlement(
+                        session_id,
+                        close_task=False,
+                    ),
                 )
             )
         except BaseException as error:
             failures.append(error)
 
-    waiter = Thread(target=reserve)
-    waiter.start()
-    deadline = monotonic() + 1
-    while monotonic() < deadline:
-        with lifecycle._condition:
-            association = lifecycle._sessions[session_id]
-            if association.settlement_reservation is not None:
-                break
-        Event().wait(0.002)
-    else:
-        raise AssertionError("settlement did not reserve before observation")
+    owner = Thread(
+        target=settle,
+        args=("owner",),
+        name="settlement-owner",
+    )
+    owner.start()
+    assert owner_waiting.wait(1)
 
-    assert reservations == []
-    lifecycle.complete_observation(observation, active=True)
-    waiter.join(2)
-    assert not waiter.is_alive()
+    peer = Thread(
+        target=settle,
+        args=("peer",),
+        name="settlement-peer",
+    )
+    peer.start()
+    assert peer_waiting.wait(1)
+    assert claims == []
+
+    disjoint = lifecycle.begin_settlement(
+        disjoint_id,
+        close_task=False,
+    )
+    lifecycle.abandon_settlement(disjoint)
+
+    lifecycle.end_observation(observation)
+    owner.join(2)
+    assert not owner.is_alive()
     assert failures == []
-    assert len(reservations) == 1
+    assert len(claims) == 1
+    assert claims[0][0] == "owner"
     with pytest.raises(LifecycleAssociationError, match="retired"):
         lifecycle.begin_observation(session_id)
+    assert peer.is_alive()
 
-    lifecycle.abandon_settlement_reservation(reservations[0])
+    lifecycle.abandon_settlement(claims[0][1])
+    peer.join(2)
+    assert not peer.is_alive()
+    assert failures == []
+    assert [label for label, _claim in claims] == ["owner", "peer"]
+    lifecycle.abandon_settlement(claims[1][1])
+
     replacement = lifecycle.begin_observation(session_id)
-    with pytest.raises(LifecycleAssociationError, match="stale"):
-        lifecycle.complete_observation(observation, active=False)
-    lifecycle.abandon_observation(replacement)
+    lifecycle.end_observation(replacement)
 
 
-def test_lifecycle_pre_marker_observation_retains_release_liability() -> None:
+def test_observation_claim_retries_from_observer_truth_without_marker_history(
+) -> None:
     lifecycle = TaskLifecycle()
     session_id = f"{42_101:032x}"
-    _publish_lifecycle_session(lifecycle, session_id, observed=False)
-    observation = lifecycle.begin_observation(session_id)
-    lifecycle.abandon_observation(observation)
+    _publish_lifecycle_session(lifecycle, session_id)
+    first = lifecycle.begin_observation(session_id)
+    lifecycle.end_observation(first)
 
-    reservation = lifecycle.reserve_settlement(
+    replacement = lifecycle.begin_observation(session_id)
+    lifecycle.end_observation(first)
+    with lifecycle._condition:
+        assert lifecycle._sessions[session_id].observation_claim == replacement
+    lifecycle.end_observation(replacement)
+
+    settlement = lifecycle.begin_settlement(
         session_id,
         close_task=False,
     )
-    settlement = lifecycle.activate_settlement(reservation)
-    assert lifecycle.settlement_step(settlement).name == "observer_release"
+    work = lifecycle.confirm_settlement(settlement)
+    assert (work.session_id, work.detail_owner, work.plan_token) == (
+        session_id,
+        None,
+        None,
+    )
     lifecycle.abandon_settlement(settlement)
 
 
-def test_lifecycle_interrupted_settlement_wait_restores_exact_state(
+def test_lifecycle_close_wakes_settlement_claim_waiter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    lifecycle = TaskLifecycle()
-    session_id = f"{43_001:032x}"
-    _publish_lifecycle_session(lifecycle, session_id, observed=False)
-    observation = lifecycle.begin_observation(session_id)
-    with lifecycle._condition:
-        association = lifecycle._sessions[session_id]
-        before = (
-            association.terminal_digest,
-            association.settlement_target,
-            association.settlement_cursor,
-            association.settlement_claim,
-            association.settlement_reservation,
-        )
-
-    condition_type = type(lifecycle._condition)
-
-    def interrupt_wait(_condition, _timeout=None):
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(condition_type, "wait", interrupt_wait)
-    with pytest.raises(KeyboardInterrupt):
-        lifecycle.reserve_settlement(session_id, close_task=False)
-
-    with lifecycle._condition:
-        association = lifecycle._sessions[session_id]
-        after = (
-            association.terminal_digest,
-            association.settlement_target,
-            association.settlement_cursor,
-            association.settlement_claim,
-            association.settlement_reservation,
-        )
-    assert after == before
-    lifecycle.abandon_observation(observation)
-    replacement = lifecycle.begin_observation(session_id)
-    lifecycle.abandon_observation(replacement)
-
-
-def test_lifecycle_interrupted_settlement_activation_restores_exact_state(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    lifecycle = TaskLifecycle()
-    command_id = f"{43_101:032x}"
-    session_id = f"{43_102:032x}"
-    task, _token, _receipt = _publish_lifecycle_task(
-        lifecycle,
-        command_id,
-        session_id,
-    )
-    reservation = lifecycle.reserve_settlement(
-        session_id,
-        task_id=task.task_id,
-        close_task=False,
-    )
-    condition_type = type(lifecycle._condition)
-    original_notify_all = condition_type.notify_all
-    interrupt = True
-
-    def interrupt_after_activation(condition) -> None:
-        nonlocal interrupt
-        if condition is lifecycle._condition and interrupt:
-            interrupt = False
-            raise KeyboardInterrupt
-        original_notify_all(condition)
-
-    monkeypatch.setattr(condition_type, "notify_all", interrupt_after_activation)
-    with pytest.raises(KeyboardInterrupt):
-        lifecycle.activate_settlement(
-            reservation,
-            terminal_digest=b"t" * 32,
-            dispatcher_truth_observed=True,
-        )
-
-    with lifecycle._condition:
-        association = lifecycle._sessions[session_id]
-        assert (
-            association.terminal_digest,
-            association.settlement_target,
-            association.settlement_cursor,
-            association.settlement_claim,
-            association.settlement_reservation,
-        ) == (None, None, None, None, None)
-    retry_reservation = lifecycle.reserve_settlement(
-        session_id,
-        task_id=task.task_id,
-        close_task=False,
-    )
-    retry = lifecycle.activate_settlement(
-        retry_reservation,
-        terminal_digest=b"t" * 32,
-        dispatcher_truth_observed=True,
-    )
-    lifecycle.abandon_settlement(retry)
-
-
-def test_lifecycle_close_wakes_settlement_reservation_waiter() -> None:
     lifecycle = TaskLifecycle()
     session_id = f"{44_001:032x}"
-    _publish_lifecycle_session(lifecycle, session_id, observed=False)
+    _publish_lifecycle_session(lifecycle, session_id)
     observation = lifecycle.begin_observation(session_id)
     failures: list[BaseException] = []
+    settlement_waiting = Event()
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
 
-    def reserve() -> None:
+    def observe_wait(condition, timeout=None):
+        if (
+            condition is lifecycle._condition
+            and current_thread().name == "settlement-close-waiter"
+        ):
+            settlement_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+
+    def settle() -> None:
         try:
-            lifecycle.reserve_settlement(session_id, close_task=False)
+            lifecycle.begin_settlement(session_id, close_task=False)
         except BaseException as error:
             failures.append(error)
 
-    waiter = Thread(target=reserve)
+    waiter = Thread(target=settle, name="settlement-close-waiter")
     waiter.start()
-    deadline = monotonic() + 1
-    while monotonic() < deadline:
-        with lifecycle._condition:
-            if (
-                lifecycle._sessions[session_id].settlement_reservation
-                is not None
-            ):
-                break
-        Event().wait(0.002)
-    else:
-        raise AssertionError("settlement waiter did not reserve")
+    assert settlement_waiting.wait(1)
     lifecycle.close()
     waiter.join(2)
     assert not waiter.is_alive()
     assert len(failures) == 1
     assert type(failures[0]) is LifecycleAssociationError
-    lifecycle.abandon_observation(observation)
+    lifecycle.end_observation(observation)
 
 
-def test_lifecycle_post_activation_failure_retries_first_unfinished_step() -> None:
+def test_lifecycle_whole_settlement_claim_retries_exact_subject() -> None:
     lifecycle = TaskLifecycle()
     session_id = f"{45_001:032x}"
-    _publish_lifecycle_session(lifecycle, session_id, observed=True)
+    _publish_lifecycle_session(lifecycle, session_id)
 
-    first_reservation = lifecycle.reserve_settlement(
+    first = lifecycle.begin_settlement(
         session_id,
         close_task=False,
     )
-    with lifecycle._condition:
-        association = lifecycle._sessions[session_id]
-        assert association.settlement_target is None
-        assert association.settlement_cursor is None
-    first = lifecycle.activate_settlement(first_reservation)
-    assert lifecycle.settlement_step(first).name == "observer_release"
+    first_work = lifecycle.confirm_settlement(first)
+    assert (
+        first_work.session_id,
+        first_work.detail_owner,
+        first_work.plan_token,
+        first_work.replay,
+    ) == (session_id, None, None, False)
     lifecycle.abandon_settlement(first)
 
-    retry_reservation = lifecycle.reserve_settlement(
+    retry = lifecycle.begin_settlement(
         session_id,
         close_task=False,
     )
-    retry = lifecycle.activate_settlement(retry_reservation)
-    assert lifecycle.settlement_step(retry).name == "observer_release"
-    lifecycle.complete_settlement_step(retry, "observer_release")
-    assert lifecycle.settlement_step(retry).name == "dispatcher_close"
-    lifecycle.complete_settlement_step(retry, "dispatcher_close")
-    assert lifecycle.settlement_step(retry).name == "complete"
-    lifecycle.finish_settlement(retry)
+    retry_work = lifecycle.confirm_settlement(retry)
+    assert retry_work.claim != first_work.claim
+    assert (
+        retry_work.session_id,
+        retry_work.detail_owner,
+        retry_work.plan_token,
+        retry_work.replay,
+    ) == (
+        first_work.session_id,
+        first_work.detail_owner,
+        first_work.plan_token,
+        first_work.replay,
+    )
+    lifecycle.complete_settlement(retry_work)
     with pytest.raises(LifecycleAssociationError):
         lifecycle.require_session(session_id, live=False)
 
@@ -2089,7 +1795,7 @@ def test_lifecycle_plan_token_scopes_receipts_and_rejects_revival() -> None:
     command_id = f"{46_002:032x}"
     signature = (0, ("operation-a",), ())
     session_id = f"{46_000:032x}"
-    _publish_lifecycle_session(lifecycle, session_id, observed=False)
+    _publish_lifecycle_session(lifecycle, session_id)
     assert request_id == f"{int(session_id, 16) + 1:032x}"
     token = lifecycle.require_plan(request_id)
     mutation = lifecycle.begin_plan_mutation(token, command_id, signature)
@@ -2112,7 +1818,6 @@ def test_lifecycle_plan_token_scopes_receipts_and_rejects_revival() -> None:
     _publish_lifecycle_session(
         lifecycle,
         successor_session,
-        observed=False,
     )
     successor_request = f"{int(successor_session, 16) + 1:032x}"
     successor = lifecycle.require_plan(successor_request)
@@ -2136,7 +1841,7 @@ def test_lifecycle_plan_retirement_excludes_mutation_and_wakes_exactly(
 ) -> None:
     lifecycle = TaskLifecycle()
     session_id = f"{47_000:032x}"
-    _publish_lifecycle_session(lifecycle, session_id, observed=False)
+    _publish_lifecycle_session(lifecycle, session_id)
     token = lifecycle.require_plan(f"{47_001:032x}")
     mutation = lifecycle.begin_plan_mutation(
         token,
@@ -2225,7 +1930,7 @@ def test_lifecycle_plan_retirement_excludes_mutation_and_wakes_exactly(
 
     closing = TaskLifecycle()
     closing_session = f"{47_100:032x}"
-    _publish_lifecycle_session(closing, closing_session, observed=False)
+    _publish_lifecycle_session(closing, closing_session)
     closing_token = closing.require_plan(f"{47_101:032x}")
     closing_mutation = closing.begin_plan_mutation(
         closing_token,
@@ -2254,7 +1959,7 @@ def test_lifecycle_plan_retirement_excludes_mutation_and_wakes_exactly(
 
     reopening = TaskLifecycle()
     reopening_session = f"{47_200:032x}"
-    _publish_lifecycle_session(reopening, reopening_session, observed=False)
+    _publish_lifecycle_session(reopening, reopening_session)
     reopening_token = reopening.require_plan(f"{47_201:032x}")
     reopening_retirement = reopening.begin_plan_retirement(reopening_token)
     mutation_waiting.clear()
@@ -2282,51 +1987,3 @@ def test_lifecycle_plan_retirement_excludes_mutation_and_wakes_exactly(
     assert len(resumed_mutations) == 1
     assert not resumed_mutations[0].replay
     reopening.abandon_plan_mutation(resumed_mutations[0])
-
-
-def test_lifecycle_exact_marker_retry_does_not_repeat_physical_step(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    lifecycle = TaskLifecycle()
-    admission = lifecycle.begin_admission(
-        "inventory",
-        f"{48_001:032x}",
-        ("inventory",),
-        expects_observation=True,
-    )
-    lifecycle.attach_session(admission, f"{48_002:032x}")
-    rollback = lifecycle.admission_rollback_step(admission)
-    physical_releases = 1
-    condition_type = type(lifecycle._condition)
-    original_notify = condition_type.notify_all
-    interrupt = True
-    interrupt_condition = lifecycle._condition
-
-    def interrupt_after_marker(condition) -> None:
-        nonlocal interrupt
-        if condition is interrupt_condition and interrupt:
-            interrupt = False
-            raise KeyboardInterrupt
-        original_notify(condition)
-
-    monkeypatch.setattr(condition_type, "notify_all", interrupt_after_marker)
-    with pytest.raises(KeyboardInterrupt):
-        lifecycle.complete_admission_rollback_step(rollback)
-    lifecycle.complete_admission_rollback_step(rollback)
-    assert physical_releases == 1
-    assert lifecycle.admission_rollback_step(admission).step.name == "complete"
-    lifecycle.finish_admission_rollback(admission)
-
-    settled = TaskLifecycle()
-    session_id = f"{48_101:032x}"
-    _publish_lifecycle_session(settled, session_id, observed=True)
-    reservation = settled.reserve_settlement(session_id, close_task=False)
-    settlement = settled.activate_settlement(reservation)
-    physical_releases += 1
-    interrupt = True
-    interrupt_condition = settled._condition
-    with pytest.raises(KeyboardInterrupt):
-        settled.complete_settlement_step(settlement, "observer_release")
-    settled.complete_settlement_step(settlement, "observer_release")
-    assert physical_releases == 2
-    assert settled.settlement_step(settlement).name == "dispatcher_close"

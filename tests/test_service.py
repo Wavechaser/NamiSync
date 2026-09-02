@@ -11,7 +11,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 import threading
 from types import SimpleNamespace
-from threading import Event, Lock, Thread
+from threading import current_thread, Event, Lock, Thread
 from unittest.mock import Mock
 from weakref import ref
 
@@ -63,6 +63,7 @@ from namisync.interfaces.task_lifecycle import (
 )
 from namisync.interfaces.task_port import (
     TaskCloseView,
+    TaskSessionReleaseView,
     TaskStartView,
     TaskTerminalDelivery,
     TaskUnavailableError,
@@ -198,7 +199,6 @@ def _publish_session(
     signature: tuple[object, ...] = (),
     task_id: str | None = None,
     detail_owner: tuple[str, str] | None = None,
-    observation_active: bool = False,
     request_id: str | None = None,
 ):
     admission = lifecycle.begin_admission(
@@ -207,18 +207,13 @@ def _publish_session(
         signature,
         task_id=task_id,
         detail_owner=detail_owner,
-        expects_observation=observation_active,
     )
-    association = lifecycle.attach_session(admission, session_id)
-    if detail_owner is not None:
-        lifecycle.install_detail_owner(association)
-    lifecycle.complete_admission_observation(
-        association,
-        active=observation_active,
+    lifecycle.attach_session(admission, session_id)
+    association, _receipt = lifecycle.publish_start(
+        admission,
+        session_id,
+        session_id if request_id is None else request_id,
     )
-    association = lifecycle.mark_published(admission, session_id)
-    if request_id is not None:
-        lifecycle.complete_start(association, request_id)
     return association
 
 
@@ -229,7 +224,6 @@ def _publish_task_plan(
     request_id: str,
     signature: tuple[object, ...],
     *,
-    observation_active: bool = False,
     detail_owner: tuple[str, str] | None = None,
 ) -> tuple[str, object]:
     task = lifecycle.begin_task_start(command_id, signature)
@@ -241,7 +235,6 @@ def _publish_task_plan(
         signature=signature,
         task_id=task.task_id,
         detail_owner=detail_owner,
-        observation_active=observation_active,
         request_id=request_id,
     )
     return task.task_id, association
@@ -2514,26 +2507,36 @@ def test_runtime_detail_drops_release_complete_diagnostic_graphs(
     runtime.close()
 
 
-def test_session_close_retires_only_its_exact_runtime_details() -> None:
+def test_lifecycle_cleanup_sequences_are_fixed_and_owner_idempotent() -> None:
     owned_session = f"{9_001:032x}"
     unrelated_session = f"{9_002:032x}"
     owned_request = f"{9_003:032x}"
     unrelated_request = f"{9_004:032x}"
     inventory_details = object()
     unrelated_details = object()
-    events: list[tuple[str, str]] = []
+    calls: list[tuple[str, str]] = []
+    transitions: list[tuple[str, str]] = []
 
     class Observer:
+        present = True
+
         def unsubscribe(self, session_id: str) -> None:
-            events.append(("unsubscribe", session_id))
+            calls.append(("observer", session_id))
+            if self.present:
+                self.present = False
+                transitions.append(("observer", session_id))
 
     class Dispatcher:
         closing = False
+        present = True
 
         def close(self, session_id: str) -> None:
             self.closing = True
-            events.append(("dispatcher", session_id))
+            calls.append(("dispatcher", session_id))
             self.closing = False
+            if self.present:
+                self.present = False
+                transitions.append(("dispatcher", session_id))
 
     dispatcher = Dispatcher()
 
@@ -2550,8 +2553,10 @@ def test_session_close_retires_only_its_exact_runtime_details() -> None:
             assert not dispatcher.closing
             assert service._lock.acquire(blocking=False)
             service._lock.release()
-            events.append(("drop", request_id))
-            self.inventory.pop(request_id, None)
+            calls.append(("detail", request_id))
+            if self.inventory.pop(request_id, None) is not None:
+                transitions.append(("detail", request_id))
+                raise RuntimeError("detail owner interrupted after effect")
 
     service = object.__new__(NamiSyncService)
     service._runtime = Runtime()
@@ -2564,7 +2569,6 @@ def test_session_close_retires_only_its_exact_runtime_details() -> None:
         owned_session,
         kind="inventory",
         detail_owner=("inventory", owned_request),
-        observation_active=True,
         request_id=owned_request,
     )
     unrelated = _publish_session(
@@ -2576,13 +2580,17 @@ def test_session_close_retires_only_its_exact_runtime_details() -> None:
     )
 
     assert service._runtime.get_inventory_details(owned_request) is inventory_details
+    with pytest.raises(RuntimeError, match="interrupted after effect"):
+        service.close_session(owned_session)
     service.close_session(owned_session)
 
-    assert events == [
-        ("unsubscribe", owned_session),
+    expected = [
+        ("observer", owned_session),
         ("dispatcher", owned_session),
-        ("drop", owned_request),
+        ("detail", owned_request),
     ]
+    assert calls == [*expected, *expected]
+    assert transitions == expected
     assert service._runtime.inventory == {
         unrelated_request: unrelated_details,
     }
@@ -2594,10 +2602,11 @@ def test_session_close_retires_only_its_exact_runtime_details() -> None:
     ) == unrelated
 
 
-def test_failed_session_close_preserves_detail_owner_for_retry() -> None:
+def test_cleanup_retry_uses_current_owner_truth_not_application_progress() -> None:
     session_id = f"{9_101:032x}"
     run_id = f"{9_102:032x}"
-    attempts = 0
+    close_calls = 0
+    close_transitions = 0
 
     class Observer:
         def unsubscribe(self, session_id: str) -> None:
@@ -2605,12 +2614,14 @@ def test_failed_session_close_preserves_detail_owner_for_retry() -> None:
 
     class Dispatcher:
         def close(self, session_id: str) -> None:
-            nonlocal attempts
-            attempts += 1
-            if attempts == 1:
+            nonlocal close_calls, close_transitions
+            close_calls += 1
+            if close_calls == 1:
+                close_transitions += 1
                 raise TimeoutError(
-                    "session worker retirement is pending; cleanup did not start"
+                    "session worker retired before acknowledgement"
                 )
+            raise SessionNotFound(session_id)
 
     class Runtime:
         def __init__(self) -> None:
@@ -2633,13 +2644,15 @@ def test_failed_session_close_preserves_detail_owner_for_retry() -> None:
         request_id=run_id,
     )
 
-    with pytest.raises(TimeoutError, match="worker retirement"):
+    with pytest.raises(TimeoutError, match="before acknowledgement"):
         service.close_session(session_id)
     assert tuple(service._runtime.execution) == (run_id,)
     service._lifecycle.require_session(session_id, live=False)
 
     service.close_session(session_id)
 
+    assert close_calls == 2
+    assert close_transitions == 1
     assert service._runtime.execution == {}
     with pytest.raises(LifecycleAssociationError):
         service._lifecycle.require_session(session_id, live=False)
@@ -2801,15 +2814,24 @@ def test_detail_owner_attachment_rolls_back_a_failed_publication() -> None:
 
 def test_detail_owner_attachment_rechecks_service_lifecycle() -> None:
     session_id = f"{9_401:032x}"
+    command_id = f"{9_402:032x}"
     stream = _SequenceStream()
+    request_ids: list[str] = []
+    drops: list[str] = []
+    unrelated_id = f"{9_403:032x}"
+    unrelated_detail = object()
+    details = {unrelated_id: unrelated_detail}
 
     class Runtime:
-        def drop_inventory_details(self, _request_id: str) -> None:
-            pass
+        def drop_inventory_details(self, request_id: str) -> None:
+            assert details.pop(request_id, None) is not None
+            drops.append(request_id)
 
     class Dispatcher:
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             assert attach is not None
+            request_ids.append(request.request_id)
+            details[request.request_id] = object()
             service._lifecycle.close()
             attach(session_id, stream)
             raise AssertionError("closed service attachment returned")
@@ -2817,61 +2839,252 @@ def test_detail_owner_attachment_rechecks_service_lifecycle() -> None:
     service = _detail_lifecycle_service(Runtime(), Dispatcher())
 
     with pytest.raises(RuntimeError, match="service is closed"):
-        service.start_inventory(root_path=r"F:\library")
+        service.start_inventory(
+            root_path=r"F:\library",
+            command_id=command_id,
+        )
 
     assert stream.closed
+    assert len(request_ids) == 1
+    assert drops == request_ids
+    assert details == {unrelated_id: unrelated_detail}
+    assert service._lifecycle._admissions == {}
+    assert service._lifecycle._sessions == {}
+    assert service._lifecycle._start_receipts == {}
 
 
-@pytest.mark.parametrize("interrupt_before_marker", [False, True])
-def test_admission_marker_interruption_does_not_repeat_detail_retirement(
-    interrupt_before_marker: bool,
-) -> None:
+def test_observed_start_adoption_rejection_retires_exact_liabilities() -> None:
+    session_id = f"{9_451:032x}"
+    request_id = f"{9_452:032x}"
+    command_id = f"{9_453:032x}"
+    signature = ("inventory", "observed-rejection")
+    unrelated_id = f"{9_454:032x}"
+    detail = object()
+    unrelated_detail = object()
+    details = {request_id: detail, unrelated_id: unrelated_detail}
+    stream = _SequenceStream()
+    adoption_calls: list[str] = []
+    release_calls: list[str] = []
+    published = False
+
+    class Runtime:
+        def drop_inventory_details(self, candidate: str) -> None:
+            details.pop(candidate, None)
+
+    class Observer:
+        def adopt(self, candidate: str, sink, offered_stream):
+            assert candidate == session_id
+            assert callable(sink)
+            assert offered_stream is stream
+            adoption_calls.append(candidate)
+            offered_stream.close()
+            raise RuntimeError("observer adoption rejected")
+
+        def unsubscribe(self, candidate: str) -> None:
+            release_calls.append(candidate)
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            nonlocal published
+            assert attach is not None
+            attach(session_id, stream)
+            published = True
+            return session_id
+
+    service = _detail_lifecycle_service(Runtime(), Dispatcher())
+    service._observer = Observer()
+
+    with pytest.raises(RuntimeError, match="observer adoption rejected"):
+        service._submit_session(
+            "inventory",
+            object(),
+            effect_kind="inventory",
+            command_id=command_id,
+            signature=signature,
+            request_id=request_id,
+            detail_owner=("inventory", request_id),
+            observation_sink=lambda _update: None,
+        )
+
+    assert stream.closed
+    assert adoption_calls == [session_id]
+    assert release_calls == [session_id]
+    assert not published
+    assert details == {unrelated_id: unrelated_detail}
+    assert service._lifecycle.replay_start(
+        command_id,
+        "inventory",
+        signature,
+    ) is None
+    assert service._lifecycle._admissions == {}
+    assert service._lifecycle._sessions == {}
+    assert service._lifecycle._start_receipts == {}
+    with pytest.raises(LifecycleAssociationError):
+        service._lifecycle.require_session(session_id, live=False)
+
+
+def test_whole_admission_rollback_replays_without_duplicate_effect() -> None:
     session_id = f"{9_501:032x}"
-    drops: list[str] = []
-
-    class Lifecycle(TaskLifecycle):
-        def __init__(self) -> None:
-            super().__init__()
-            self.marker_calls = 0
-
-        def complete_admission_rollback_step(self, claim) -> None:
-            if claim.step.name == "detail_retire":
-                self.marker_calls += 1
-                if self.marker_calls == 1 and interrupt_before_marker:
-                    raise RuntimeError("detail marker interrupted")
-                super().complete_admission_rollback_step(claim)
-                if self.marker_calls == 1:
-                    raise RuntimeError("detail marker interrupted")
-                return
-            super().complete_admission_rollback_step(claim)
+    detail_id = f"{9_502:032x}"
+    details = {detail_id: object()}
+    transitions: list[str] = []
 
     class Runtime:
         def drop_inventory_details(self, request_id: str) -> None:
-            drops.append(request_id)
+            assert request_id == detail_id
+            if details.pop(request_id, None) is not None:
+                transitions.append(request_id)
 
     class Dispatcher:
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             assert attach is not None
             rollback = attach(session_id, _SequenceStream())
-            with pytest.raises(RuntimeError, match="marker interrupted"):
+            rollback()
+            rollback()
+            raise RuntimeError("publication failed")
+
+    service = _detail_lifecycle_service(Runtime(), Dispatcher())
+
+    with pytest.raises(RuntimeError, match="publication failed"):
+        service._submit_session(
+            "inventory",
+            object(),
+            effect_kind="inventory",
+            command_id=None,
+            signature=(),
+            request_id=detail_id,
+            detail_owner=("inventory", detail_id),
+        )
+
+    assert transitions == [detail_id]
+    with pytest.raises(LifecycleAssociationError):
+        service._lifecycle.require_session(session_id, live=False)
+
+
+@pytest.mark.parametrize(
+    ("fault_owner", "fault_timing"),
+    (
+        ("observer", "before"),
+        ("observer", "after"),
+        ("detail", "before"),
+        ("detail", "after"),
+    ),
+)
+def test_ls_4a_admission_rollback_owner_fault_retries_from_observer(
+    fault_owner: str,
+    fault_timing: str,
+) -> None:
+    session_id = f"{9_551:032x}"
+    detail_id = f"{9_552:032x}"
+    unrelated_session = f"{9_553:032x}"
+    unrelated_detail_id = f"{9_554:032x}"
+    command_id = f"{9_555:032x}"
+    signature = ("inventory", fault_owner, fault_timing)
+    stream = _SequenceStream()
+    unrelated_stream = _SequenceStream()
+    unrelated_sink = object()
+    unrelated_detail = object()
+    details = {
+        detail_id: object(),
+        unrelated_detail_id: unrelated_detail,
+    }
+    observations = {
+        unrelated_session: (unrelated_sink, unrelated_stream),
+    }
+    calls: list[tuple[str, str]] = []
+    transitions: list[tuple[str, str]] = []
+    faulted = False
+
+    def fault(owner: str, timing: str) -> None:
+        nonlocal faulted
+        if (
+            owner == fault_owner
+            and timing == fault_timing
+            and not faulted
+        ):
+            faulted = True
+            raise RuntimeError(f"{owner} {timing} fault")
+
+    class Runtime:
+        def drop_inventory_details(self, candidate: str) -> None:
+            calls.append(("detail", candidate))
+            fault("detail", "before")
+            if details.pop(candidate, None) is not None:
+                transitions.append(("detail", candidate))
+            fault("detail", "after")
+
+    class Observer:
+        def adopt(self, candidate: str, sink, offered_stream):
+            observations[candidate] = (sink, offered_stream)
+            return lambda: self.unsubscribe(candidate)
+
+        def unsubscribe(self, candidate: str) -> None:
+            calls.append(("observer", candidate))
+            fault("observer", "before")
+            retained = observations.pop(candidate, None)
+            if retained is not None:
+                retained[1].close()
+                transitions.append(("observer", candidate))
+            fault("observer", "after")
+
+    class Dispatcher:
+        def submit(self, kind: str, request: object, *, attach=None) -> str:
+            assert attach is not None
+            rollback = attach(session_id, stream)
+            with pytest.raises(
+                RuntimeError,
+                match=f"{fault_owner} {fault_timing} fault",
+            ):
                 rollback()
             rollback()
             raise RuntimeError("publication failed")
 
     service = _detail_lifecycle_service(Runtime(), Dispatcher())
-    service._lifecycle = Lifecycle()
+    service._observer = Observer()
 
     with pytest.raises(RuntimeError, match="publication failed"):
-        service.start_inventory(root_path=r"F:\library")
+        service._submit_session(
+            "inventory",
+            object(),
+            effect_kind="inventory",
+            command_id=command_id,
+            signature=signature,
+            request_id=detail_id,
+            detail_owner=("inventory", detail_id),
+            observation_sink=lambda _update: None,
+        )
 
-    assert len(drops) == 1
-    assert service._lifecycle.marker_calls == 2
+    assert faulted
+    assert calls.count(("observer", session_id)) == 2
+    assert calls.count(("detail", detail_id)) == (
+        2 if fault_owner == "detail" else 1
+    )
+    assert transitions == [
+        ("observer", session_id),
+        ("detail", detail_id),
+    ]
+    assert observations == {
+        unrelated_session: (unrelated_sink, unrelated_stream)
+    }
+    assert not unrelated_stream.closed
+    assert details == {unrelated_detail_id: unrelated_detail}
+    assert stream.closed
+    assert service._lifecycle.replay_start(
+        command_id,
+        "inventory",
+        signature,
+    ) is None
+    with pytest.raises(LifecycleAssociationError):
+        service._lifecycle.require_session(session_id, live=False)
 
 
-def test_admission_rollback_is_single_flight_across_observer_and_detail() -> None:
+def test_whole_admission_rollback_singleflights_concurrent_callers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     session_id = f"{9_601:032x}"
     detail_id = f"{9_602:032x}"
     observer_entered = Event()
+    peer_waiting = Event()
     release_observer = Event()
     observer_releases = 0
     detail_drops = 0
@@ -2915,11 +3128,18 @@ def test_admission_rollback_is_single_flight_across_observer_and_detail() -> Non
                 except BaseException as error:
                     failures.append(error)
 
-            first = Thread(target=run_rollback)
-            second = Thread(target=run_rollback)
+            first = Thread(
+                target=run_rollback,
+                name="admission-rollback-owner",
+            )
+            second = Thread(
+                target=run_rollback,
+                name="admission-rollback-peer",
+            )
             first.start()
             assert observer_entered.wait(1)
             second.start()
+            assert peer_waiting.wait(1)
             release_observer.set()
             first.join(2)
             second.join(2)
@@ -2930,6 +3150,18 @@ def test_admission_rollback_is_single_flight_across_observer_and_detail() -> Non
 
     service = _detail_lifecycle_service(Runtime(), Dispatcher())
     service._observer = observer
+    condition_type = type(service._lifecycle._condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if (
+            condition is service._lifecycle._condition
+            and current_thread().name == "admission-rollback-peer"
+        ):
+            peer_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
 
     with pytest.raises(RuntimeError, match="publication failed"):
         service._submit_session(
@@ -2938,6 +3170,7 @@ def test_admission_rollback_is_single_flight_across_observer_and_detail() -> Non
             effect_kind="inventory",
             command_id=None,
             signature=(),
+            request_id=detail_id,
             detail_owner=("inventory", detail_id),
             observation_sink=lambda _update: None,
         )
@@ -3462,77 +3695,6 @@ def test_application_refuses_distinct_49th_task_before_lower_effects(
     ) == before
 
 
-@pytest.mark.parametrize("interrupted_marker", ["publication", "receipt"])
-def test_task_start_post_marker_fault_returns_one_replayable_published_view(
-    tmp_path: Path,
-    interrupted_marker: str,
-) -> None:
-    source = tmp_path / "source"
-    target = tmp_path / "target"
-    source.mkdir()
-    target.mkdir()
-
-    class Lifecycle(TaskLifecycle):
-        def __init__(self) -> None:
-            super().__init__()
-            self.publication_calls = 0
-            self.receipt_calls = 0
-
-        def mark_published(self, token, session_id: str):
-            self.publication_calls += 1
-            association = super().mark_published(token, session_id)
-            if (
-                interrupted_marker == "publication"
-                and self.publication_calls == 1
-            ):
-                raise RuntimeError("publication marker interrupted")
-            return association
-
-        def complete_start(self, token, request_id: str):
-            self.receipt_calls += 1
-            receipt = super().complete_start(token, request_id)
-            if interrupted_marker == "receipt" and self.receipt_calls == 1:
-                raise RuntimeError("start marker interrupted")
-            return receipt
-
-    lifecycle = Lifecycle()
-    service, counts = _task_capacity_service(lifecycle)
-    delivery_calls: list[str] = []
-
-    def delivery_factory(task_id: str):
-        delivery_calls.append(task_id)
-        return lambda _update: None
-
-    command_id = f"{41_999:032x}"
-    first = service.start_task_plan(
-        str(source),
-        str(target),
-        deletion_policy=None,
-        command_id=command_id,
-        delivery_factory=delivery_factory,
-    )
-    replay = service.start_task_plan(
-        str(source),
-        str(target),
-        deletion_policy=None,
-        command_id=command_id,
-        delivery_factory=delivery_factory,
-    )
-
-    assert type(first) is TaskStartView
-    assert replay == first
-    assert delivery_calls == [first.task_id]
-    assert counts.requests == 1
-    assert counts.submissions == 1
-    assert counts.adoptions == 1
-    assert lifecycle.publication_calls == (
-        2 if interrupted_marker == "publication" else 1
-    )
-    assert lifecycle.receipt_calls == (
-        2 if interrupted_marker == "receipt" else 1
-    )
-
-
 def test_direct_start_replay_waits_for_close_and_admits_successor() -> None:
     close_entered = Event()
     release_close = Event()
@@ -3567,11 +3729,7 @@ def test_direct_start_replay_waits_for_close_and_admits_successor() -> None:
     service = object.__new__(NamiSyncService)
     service._runtime = runtime
     service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(
-        unsubscribe=lambda _session_id: (_ for _ in ()).throw(
-            AssertionError("direct admission retained no observation")
-        )
-    )
+    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
     service._lifecycle = TaskLifecycle()
     service._lock = Lock()
     service._closed = False
@@ -3721,11 +3879,7 @@ def test_direct_starts_associate_and_retire_exact_session_receipts(
     service = object.__new__(NamiSyncService)
     service._runtime = runtime
     service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(
-        unsubscribe=lambda _session_id: (_ for _ in ()).throw(
-            AssertionError("direct admission retained no observation")
-        )
-    )
+    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
     service._lifecycle = TaskLifecycle()
     service._lock = Lock()
     service._plan_selections = {}
@@ -3832,6 +3986,7 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
         def __init__(self) -> None:
             self.present = True
             self.close_attempts = 0
+            self.close_transitions = 0
 
         def get(self, candidate: str) -> SessionRecord:
             if candidate != session_id or not self.present:
@@ -3841,7 +3996,9 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
         def close(self, candidate: str) -> None:
             assert candidate == session_id
             self.close_attempts += 1
-            self.present = False
+            if self.present:
+                self.present = False
+                self.close_transitions += 1
 
     class Runtime:
         def __init__(self) -> None:
@@ -3854,11 +4011,7 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
     runtime = Runtime()
     service = object.__new__(NamiSyncService)
     service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(
-        unsubscribe=lambda _session_id: (_ for _ in ()).throw(
-            AssertionError("inactive observation must not be released")
-        )
-    )
+    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
     service._runtime = runtime
     service._lifecycle = lifecycle
     service._lock = Lock()
@@ -3897,6 +4050,7 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
     )
     assert (released.task_id, released.session_id) == (task_id, session_id)
     assert dispatcher.close_attempts == 1
+    assert dispatcher.close_transitions == 1
     assert not dispatcher.present
 
     replayed = service.release_task_session(
@@ -3906,9 +4060,12 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
     )
     assert replayed == released
     assert dispatcher.close_attempts == 1
+    assert dispatcher.close_transitions == 1
 
     closed = service.close_task(task_id, session_id, exact_delivery)
     assert (closed.task_id, closed.session_id) == (task_id, session_id)
+    assert dispatcher.close_attempts == 2
+    assert dispatcher.close_transitions == 1
     assert runtime.dropped == [request_id]
     with pytest.raises(LifecycleAssociationError):
         lifecycle.require_session(session_id, task_id=task_id, live=False)
@@ -3947,20 +4104,27 @@ def test_task_association_gates_reobserve_release_and_close_effects() -> None:
     class Observer:
         def __init__(self) -> None:
             self.reobserved: list[str] = []
-            self.released: list[str] = []
+            self.release_calls: list[str] = []
+            self.release_transitions: list[str] = []
+            self.observing = False
 
         def reobserve(self, candidate: str, sink, from_sequence: int):
             del sink, from_sequence
             self.reobserved.append(candidate)
+            self.observing = True
             return running
 
         def unsubscribe(self, candidate: str) -> None:
-            self.released.append(candidate)
+            self.release_calls.append(candidate)
+            if self.observing:
+                self.observing = False
+                self.release_transitions.append(candidate)
 
     class Dispatcher:
         def __init__(self) -> None:
             self.present = True
-            self.closed: list[str] = []
+            self.close_calls: list[str] = []
+            self.close_transitions: list[str] = []
 
         def get(self, candidate: str) -> SessionRecord:
             if candidate != session_id or not self.present:
@@ -3968,8 +4132,10 @@ def test_task_association_gates_reobserve_release_and_close_effects() -> None:
             return record
 
         def close(self, candidate: str) -> None:
-            self.closed.append(candidate)
-            self.present = False
+            self.close_calls.append(candidate)
+            if self.present:
+                self.present = False
+                self.close_transitions.append(candidate)
 
     class Runtime:
         def __init__(self) -> None:
@@ -4013,8 +4179,8 @@ def test_task_association_gates_reobserve_release_and_close_effects() -> None:
                 delivery,
             )
     assert observer.reobserved == []
-    assert observer.released == []
-    assert dispatcher.closed == []
+    assert observer.release_calls == []
+    assert dispatcher.close_calls == []
     assert runtime.plan_drops == []
 
     assert service.reobserve_task(
@@ -4030,13 +4196,17 @@ def test_task_association_gates_reobserve_release_and_close_effects() -> None:
     )
     assert released.session_id == session_id
     assert observer.reobserved == [session_id]
-    assert observer.released == [session_id]
-    assert dispatcher.closed == [session_id]
+    assert observer.release_calls == [session_id]
+    assert observer.release_transitions == [session_id]
+    assert dispatcher.close_calls == [session_id]
+    assert dispatcher.close_transitions == [session_id]
 
     closed = service.close_task(task_id, session_id, delivery)
     assert closed.task_id == task_id
-    assert observer.released == [session_id]
-    assert dispatcher.closed == [session_id]
+    assert observer.release_calls == [session_id, session_id]
+    assert observer.release_transitions == [session_id]
+    assert dispatcher.close_calls == [session_id, session_id]
+    assert dispatcher.close_transitions == [session_id]
     assert runtime.plan_drops == [request_id]
 
     for retired_operation in (
@@ -4052,151 +4222,18 @@ def test_task_association_gates_reobserve_release_and_close_effects() -> None:
         with pytest.raises(TaskUnavailableError):
             retired_operation()
     assert observer.reobserved == [session_id]
-    assert observer.released == [session_id]
-    assert dispatcher.closed == [session_id]
+    assert observer.release_calls == [session_id, session_id]
+    assert observer.release_transitions == [session_id]
+    assert dispatcher.close_calls == [session_id, session_id]
+    assert dispatcher.close_transitions == [session_id]
     assert runtime.plan_drops == [request_id]
-
-
-@pytest.mark.parametrize("interrupt_before_marker", [False, True])
-def test_observation_marker_interruption_does_not_cleanup_or_repeat_adoption(
-    interrupt_before_marker: bool,
-) -> None:
-    session_id = f"{43_101:032x}"
-    running = session_record_view(_record(session_id))
-
-    class Lifecycle(TaskLifecycle):
-        def __init__(self) -> None:
-            super().__init__()
-            self.marker_calls = 0
-
-        def complete_observation(self, claim, *, active: bool) -> None:
-            self.marker_calls += 1
-            if self.marker_calls == 1 and interrupt_before_marker:
-                raise RuntimeError("observation marker interrupted")
-            super().complete_observation(claim, active=active)
-            if self.marker_calls == 1:
-                raise RuntimeError("observation marker interrupted")
-
-    lifecycle = Lifecycle()
-    _publish_session(lifecycle, session_id, kind="inventory")
-    observation_calls = 0
-    release_calls = 0
-    release_allowed = False
-
-    class Observer:
-        def observe(self, candidate: str, sink) -> SessionRecordView:
-            nonlocal observation_calls
-            assert candidate == session_id
-            assert callable(sink)
-            observation_calls += 1
-            return running
-
-        def unsubscribe(self, candidate: str) -> None:
-            nonlocal release_calls
-            assert candidate == session_id
-            release_calls += 1
-            if not release_allowed:
-                raise AssertionError("marker failure invoked cleanup")
-
-    class Dispatcher:
-        def __init__(self) -> None:
-            self.closes = 0
-
-        def close(self, candidate: str) -> None:
-            assert candidate == session_id
-            self.closes += 1
-
-    observer = Observer()
-    dispatcher = Dispatcher()
-    service = object.__new__(NamiSyncService)
-    service._observer = observer
-    service._dispatcher = dispatcher
-    service._runtime = SimpleNamespace()
-    service._lifecycle = lifecycle
-    service._lock = Lock()
-    service._plan_selections = {}
-
-    with pytest.raises(RuntimeError, match="observation marker interrupted"):
-        service.observe(session_id, lambda _update: None)
-
-    assert observation_calls == 1
-    assert release_calls == 0
-    assert lifecycle.marker_calls == 2
-
-    release_allowed = True
-    service.close_session(session_id)
-    assert release_calls == 1
-    assert dispatcher.closes == 1
-
-
-@pytest.mark.parametrize("interrupt_before_marker", [False, True])
-def test_unsubscribe_marker_interruption_does_not_repeat_physical_release(
-    interrupt_before_marker: bool,
-) -> None:
-    session_id = f"{43_201:032x}"
-
-    class Lifecycle(TaskLifecycle):
-        def __init__(self) -> None:
-            super().__init__()
-            self.marker_calls = 0
-
-        def complete_observation(self, claim, *, active: bool) -> None:
-            self.marker_calls += 1
-            if self.marker_calls == 1 and interrupt_before_marker:
-                raise RuntimeError("release marker interrupted")
-            super().complete_observation(claim, active=active)
-            if self.marker_calls == 1:
-                raise RuntimeError("release marker interrupted")
-
-    lifecycle = Lifecycle()
-    _publish_session(
-        lifecycle,
-        session_id,
-        kind="inventory",
-        observation_active=True,
-    )
-    release_calls = 0
-
-    class Observer:
-        def unsubscribe(self, candidate: str) -> None:
-            nonlocal release_calls
-            assert candidate == session_id
-            release_calls += 1
-            if release_calls > 1:
-                raise AssertionError("physical release repeated")
-
-    class Dispatcher:
-        def __init__(self) -> None:
-            self.closes = 0
-
-        def close(self, candidate: str) -> None:
-            assert candidate == session_id
-            self.closes += 1
-
-    dispatcher = Dispatcher()
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = dispatcher
-    service._runtime = SimpleNamespace()
-    service._lifecycle = lifecycle
-    service._lock = Lock()
-    service._plan_selections = {}
-
-    with pytest.raises(RuntimeError, match="release marker interrupted"):
-        service.unsubscribe(session_id)
-
-    assert release_calls == 1
-    assert lifecycle.marker_calls == 2
-    service.close_session(session_id)
-    assert release_calls == 1
-    assert dispatcher.closes == 1
 
 
 @pytest.mark.parametrize(
     "fault_step",
     ["observer", "dispatcher", "detail", "plan"],
 )
-def test_ls_4b_application_settlement_retries_only_unfinished_step(
+def test_ls_4b_whole_operation_cleanup_replay_converges(
     fault_step: str,
 ) -> None:
     session_id = f"{44_001:032x}"
@@ -4212,49 +4249,50 @@ def test_ls_4b_application_settlement_retries_only_unfinished_step(
         command_id,
         request_id,
         signature,
-        observation_active=True,
         detail_owner=("inventory", detail_id),
     )
-    attempts = {name: 0 for name in ("observer", "dispatcher", "detail", "plan")}
-    completed = {name: 0 for name in attempts}
-    fault_entered = Event()
-    release_fault = Event()
+    order = ("observer", "dispatcher", "detail", "plan")
+    calls: list[tuple[str, str]] = []
+    transitions: list[tuple[str, str]] = []
+    present = {name: True for name in order}
+    faulted = False
 
-    def effect(name: str) -> None:
-        attempts[name] += 1
-        if name == fault_step and attempts[name] == 1:
-            fault_entered.set()
-            assert release_fault.wait(2)
+    def effect(name: str, subject: str) -> None:
+        nonlocal faulted
+        calls.append((name, subject))
+        if name == fault_step and not faulted:
+            faulted = True
             raise RuntimeError(f"{name} fault")
-        completed[name] += 1
+        if present[name]:
+            present[name] = False
+            transitions.append((name, subject))
 
     class Observer:
         def unsubscribe(self, candidate: str) -> None:
             assert candidate == session_id
-            effect("observer")
+            effect("observer", candidate)
 
     class Dispatcher:
-        def __init__(self) -> None:
-            self.present = True
-
         def get(self, candidate: str) -> SessionRecord:
-            if candidate != session_id or not self.present:
+            if candidate != session_id or not present["dispatcher"]:
                 raise SessionNotFound(candidate)
             return record
 
         def close(self, candidate: str) -> None:
             assert candidate == session_id
-            effect("dispatcher")
-            self.present = False
+            if not present["dispatcher"]:
+                calls.append(("dispatcher", candidate))
+                raise SessionNotFound(candidate)
+            effect("dispatcher", candidate)
 
     class Runtime:
         def drop_inventory_details(self, candidate: str) -> None:
             assert candidate == detail_id
-            effect("detail")
+            effect("detail", candidate)
 
         def drop_plan(self, candidate: str) -> None:
             assert candidate == request_id
-            effect("plan")
+            effect("plan", candidate)
 
     service = object.__new__(NamiSyncService)
     service._observer = Observer()
@@ -4262,86 +4300,66 @@ def test_ls_4b_application_settlement_retries_only_unfinished_step(
     service._runtime = Runtime()
     service._lifecycle = lifecycle
     service._lock = Lock()
-    service._plan_selections = {request_id: object()}
+    service._plan_selections = {}
 
-    results: list[TaskCloseView] = []
-    failures: list[BaseException] = []
-    retry_done = Event()
+    with pytest.raises(RuntimeError, match=f"{fault_step} fault"):
+        service.close_task(task_id, session_id, delivery)
+    assert service.close_task(task_id, session_id, delivery) == TaskCloseView(
+        task_id,
+        session_id,
+    )
 
-    def close(*, retry: bool) -> None:
-        try:
-            results.append(service.close_task(task_id, session_id, delivery))
-        except BaseException as error:
-            failures.append(error)
-        finally:
-            if retry:
-                retry_done.set()
-
-    owner = Thread(target=close, kwargs={"retry": False})
-    retry = Thread(target=close, kwargs={"retry": True})
-    owner.start()
-    assert fault_entered.wait(1)
-    retry.start()
-    assert not retry_done.wait(0.05)
-    release_fault.set()
-    owner.join(2)
-    retry.join(2)
-
-    assert not owner.is_alive()
-    assert not retry.is_alive()
-    assert len(results) == 1
-    assert results[0].task_id == task_id
-    assert len(failures) == 1
-    assert type(failures[0]) is RuntimeError
-    assert str(failures[0]) == f"{fault_step} fault"
-    assert attempts == {
-        name: 2 if name == fault_step else 1
-        for name in attempts
+    subjects = {
+        "observer": session_id,
+        "dispatcher": session_id,
+        "detail": detail_id,
+        "plan": request_id,
     }
-    assert completed == {name: 1 for name in completed}
+    assert transitions == [(name, subjects[name]) for name in order]
+    fault_index = order.index(fault_step)
+    assert {
+        name: sum(call_name == name for call_name, _subject in calls)
+        for name in order
+    } == {
+        name: 2 if index <= fault_index else 1
+        for index, name in enumerate(order)
+    }
     with pytest.raises(LifecycleAssociationError):
         lifecycle.require_session(session_id, task_id=task_id, live=False)
 
 
-@pytest.mark.parametrize("interrupt_before_marker", [False, True])
-def test_settlement_marker_interruption_does_not_repeat_dispatcher_close(
-    interrupt_before_marker: bool,
+def test_ls_4b_whole_operation_cleanup_singleflights_concurrent_callers(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     session_id = f"{45_001:032x}"
     command_id = f"{45_002:032x}"
     request_id = f"{45_003:032x}"
     signature = ("source", "target", None)
     record, delivery = _task_terminal_truth(session_id)
-
-    class Lifecycle(TaskLifecycle):
-        def __init__(self) -> None:
-            super().__init__()
-            self.marker_calls = 0
-
-        def complete_settlement_step(self, claim, step_name: str) -> None:
-            if step_name == "dispatcher_close":
-                self.marker_calls += 1
-                if self.marker_calls == 1 and interrupt_before_marker:
-                    raise RuntimeError("dispatcher marker interrupted")
-                super().complete_settlement_step(claim, step_name)
-                if self.marker_calls == 1:
-                    raise RuntimeError("dispatcher marker interrupted")
-                return
-            super().complete_settlement_step(claim, step_name)
-
-    lifecycle = Lifecycle()
+    lifecycle = TaskLifecycle()
     task_id, _association = _publish_task_plan(
         lifecycle,
         session_id,
         command_id,
         request_id,
         signature,
+        detail_owner=("inventory", request_id),
     )
+    observer_entered = Event()
+    peer_waiting = Event()
+    release_observer = Event()
+    transitions: list[tuple[str, str]] = []
+
+    class Observer:
+        def unsubscribe(self, candidate: str) -> None:
+            assert candidate == session_id
+            transitions.append(("observer", candidate))
+            observer_entered.set()
+            assert release_observer.wait(2)
 
     class Dispatcher:
         def __init__(self) -> None:
             self.present = True
-            self.closes = 0
 
         def get(self, candidate: str) -> SessionRecord:
             if candidate != session_id or not self.present:
@@ -4350,95 +4368,349 @@ def test_settlement_marker_interruption_does_not_repeat_dispatcher_close(
 
         def close(self, candidate: str) -> None:
             assert candidate == session_id
-            self.closes += 1
+            transitions.append(("dispatcher", candidate))
             self.present = False
 
     dispatcher = Dispatcher()
-    plan_drops: list[str] = []
+
+    class Runtime:
+        def drop_inventory_details(self, candidate: str) -> None:
+            transitions.append(("detail", candidate))
+
     service = object.__new__(NamiSyncService)
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = Observer()
     service._dispatcher = dispatcher
-    service._runtime = SimpleNamespace(drop_plan=plan_drops.append)
+    service._runtime = Runtime()
+    service._lifecycle = lifecycle
+    service._lock = Lock()
+    service._plan_selections = {}
+    condition_type = type(lifecycle._condition)
+    original_wait = condition_type.wait
+
+    def observe_wait(condition, timeout=None):
+        if (
+            condition is lifecycle._condition
+            and current_thread().name == "settlement-peer"
+        ):
+            peer_waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(condition_type, "wait", observe_wait)
+
+    results: list[TaskSessionReleaseView] = []
+    failures: list[BaseException] = []
+
+    def release() -> None:
+        try:
+            results.append(
+                service.release_task_session(task_id, session_id, delivery)
+            )
+        except BaseException as error:
+            failures.append(error)
+
+    first = Thread(target=release, name="settlement-owner")
+    second = Thread(target=release, name="settlement-peer")
+    first.start()
+    assert observer_entered.wait(1)
+    second.start()
+    assert peer_waiting.wait(1)
+    release_observer.set()
+    first.join(2)
+    second.join(2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert failures == []
+    assert sorted(results, key=repr) == [
+        TaskSessionReleaseView(task_id, session_id),
+        TaskSessionReleaseView(task_id, session_id),
+    ]
+    assert transitions == [
+        ("observer", session_id),
+        ("dispatcher", session_id),
+        ("detail", request_id),
+    ]
+
+
+def test_cleanup_post_effect_interrupt_replays_calls_not_effects() -> None:
+    session_id = f"{45_101:032x}"
+    request_id = f"{45_103:032x}"
+    lifecycle = TaskLifecycle()
+    _publish_session(
+        lifecycle,
+        session_id,
+        kind="inventory",
+        detail_owner=("inventory", request_id),
+        request_id=request_id,
+    )
+    calls: list[tuple[str, str]] = []
+    transitions: list[tuple[str, str]] = []
+
+    class Observer:
+        present = True
+
+        def unsubscribe(self, candidate: str) -> None:
+            calls.append(("observer", candidate))
+            if self.present:
+                self.present = False
+                transitions.append(("observer", candidate))
+                raise TimeoutError(
+                    "observer retired before join acknowledgement"
+                )
+
+    class Dispatcher:
+        def close(self, candidate: str) -> None:
+            calls.append(("dispatcher", candidate))
+            transitions.append(("dispatcher", candidate))
+
+    class Runtime:
+        def drop_inventory_details(self, candidate: str) -> None:
+            calls.append(("detail", candidate))
+            transitions.append(("detail", candidate))
+
+    service = object.__new__(NamiSyncService)
+    service._observer = Observer()
+    service._dispatcher = Dispatcher()
+    service._runtime = Runtime()
     service._lifecycle = lifecycle
     service._lock = Lock()
     service._plan_selections = {}
 
-    with pytest.raises(RuntimeError, match="marker interrupted"):
-        service.close_task(task_id, session_id, delivery)
-    assert service.close_task(task_id, session_id, delivery).task_id == task_id
-    assert dispatcher.closes == 1
-    assert lifecycle.marker_calls == 2
-    assert plan_drops == [request_id]
+    with pytest.raises(TimeoutError, match="before join acknowledgement"):
+        service.close_session(session_id)
+    service.close_session(session_id)
+
+    assert calls == [
+        ("observer", session_id),
+        ("observer", session_id),
+        ("dispatcher", session_id),
+        ("detail", request_id),
+    ]
+    assert transitions == [
+        ("observer", session_id),
+        ("dispatcher", session_id),
+        ("detail", request_id),
+    ]
 
 
-def test_task_close_post_finalizer_fault_returns_exact_completed_view() -> None:
-    session_id = f"{45_101:032x}"
-    command_id = f"{45_102:032x}"
-    request_id = f"{45_103:032x}"
-    detail_id = f"{45_104:032x}"
+def test_s6_plan_retirement_post_effect_fault_replays_call_not_effect() -> None:
+    session_id = f"{45_201:032x}"
+    command_id = f"{45_202:032x}"
+    mutation_id = f"{45_203:032x}"
+    request_id = f"{45_204:032x}"
+    unrelated_id = f"{45_205:032x}"
     signature = ("source", "target", None)
+    mutation_signature = (0, ("selected",), ())
     record, delivery = _task_terminal_truth(session_id)
-
-    class Lifecycle(TaskLifecycle):
-        def __init__(self) -> None:
-            super().__init__()
-            self.finalizer_calls = 0
-
-        def finish_settlement(self, claim) -> None:
-            self.finalizer_calls += 1
-            super().finish_settlement(claim)
-            if self.finalizer_calls == 1:
-                raise RuntimeError("settlement finalizer interrupted")
-
-    lifecycle = Lifecycle()
+    lifecycle = TaskLifecycle()
     task_id, _association = _publish_task_plan(
         lifecycle,
         session_id,
         command_id,
         request_id,
         signature,
-        observation_active=True,
-        detail_owner=("inventory", detail_id),
     )
-    effects: list[tuple[str, str]] = []
+    plan_token = lifecycle.require_plan(request_id)
+    mutation = lifecycle.begin_plan_mutation(
+        plan_token,
+        mutation_id,
+        mutation_signature,
+    )
+    lifecycle.complete_plan_mutation(mutation)
+
+    class Observer:
+        def __init__(self) -> None:
+            self.present = True
+            self.calls: list[str] = []
+            self.transitions: list[str] = []
+
+        def unsubscribe(self, candidate: str) -> None:
+            self.calls.append(candidate)
+            if self.present:
+                self.present = False
+                self.transitions.append(candidate)
 
     class Dispatcher:
+        def __init__(self) -> None:
+            self.present = True
+            self.calls: list[str] = []
+            self.transitions: list[str] = []
+
         def get(self, candidate: str) -> SessionRecord:
-            assert candidate == session_id
+            if candidate != session_id or not self.present:
+                raise SessionNotFound(candidate)
             return record
 
         def close(self, candidate: str) -> None:
-            effects.append(("dispatcher", candidate))
+            self.calls.append(candidate)
+            if not self.present:
+                raise SessionNotFound(candidate)
+            self.present = False
+            self.transitions.append(candidate)
 
     class Runtime:
-        def drop_inventory_details(self, candidate: str) -> None:
-            effects.append(("detail", candidate))
+        def __init__(self) -> None:
+            self.plans = {
+                request_id: object(),
+                unrelated_id: object(),
+            }
+            self.calls: list[str] = []
+            self.transitions: list[str] = []
+            self.interrupted = False
 
         def drop_plan(self, candidate: str) -> None:
-            effects.append(("plan", candidate))
+            self.calls.append(candidate)
+            if self.plans.pop(candidate, None) is not None:
+                self.transitions.append(candidate)
+                if not self.interrupted:
+                    self.interrupted = True
+                    raise RuntimeError(
+                        "plan retired before caller acknowledgement"
+                    )
 
+    observer = Observer()
+    dispatcher = Dispatcher()
+    runtime = Runtime()
+    unrelated_plan = runtime.plans[unrelated_id]
+    selection = service_module._PlanSelectionState(object(), plan_token)
+    unrelated_selection = object()
     service = object.__new__(NamiSyncService)
-    service._observer = SimpleNamespace(
-        unsubscribe=lambda candidate: effects.append(("observer", candidate))
-    )
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
+    service._observer = observer
+    service._dispatcher = dispatcher
+    service._runtime = runtime
     service._lifecycle = lifecycle
     service._lock = Lock()
-    service._plan_selections = {request_id: object()}
+    service._plan_selections = {
+        request_id: selection,
+        unrelated_id: unrelated_selection,
+    }
 
-    result = service.close_task(task_id, session_id, delivery)
+    with pytest.raises(RuntimeError, match="before caller acknowledgement"):
+        service.close_task(task_id, session_id, delivery)
 
-    assert result == TaskCloseView(task_id, session_id)
-    assert effects == [
-        ("observer", session_id),
-        ("dispatcher", session_id),
-        ("detail", detail_id),
-        ("plan", request_id),
-    ]
-    assert lifecycle.finalizer_calls == 2
+    assert runtime.calls == [request_id]
+    assert runtime.transitions == [request_id]
+    assert service._plan_selections[request_id] is selection
+    assert lifecycle.require_plan(request_id) == plan_token
+
+    assert service.close_task(task_id, session_id, delivery) == TaskCloseView(
+        task_id,
+        session_id,
+    )
+
+    assert observer.calls == [session_id, session_id]
+    assert observer.transitions == [session_id]
+    assert dispatcher.calls == [session_id, session_id]
+    assert dispatcher.transitions == [session_id]
+    assert runtime.calls == [request_id, request_id]
+    assert runtime.transitions == [request_id]
+    assert runtime.plans == {unrelated_id: unrelated_plan}
+    assert request_id not in service._plan_selections
+    assert service._plan_selections[unrelated_id] is unrelated_selection
     with pytest.raises(LifecycleAssociationError):
-        lifecycle.require_session(session_id, task_id=task_id, live=False)
+        lifecycle.require_plan(request_id)
+    with pytest.raises(LifecycleAssociationError):
+        lifecycle.begin_plan_mutation(
+            plan_token,
+            mutation_id,
+            mutation_signature,
+        )
+    assert lifecycle.replay_start(
+        command_id,
+        "task-plan",
+        signature,
+    ) is None
+
+
+def test_disjoint_session_settlements_overlap_at_lower_owner_barrier() -> None:
+    first_session = f"{45_301:032x}"
+    second_session = f"{45_302:032x}"
+    first_request = f"{45_303:032x}"
+    second_request = f"{45_304:032x}"
+    lifecycle = TaskLifecycle()
+    _publish_session(
+        lifecycle,
+        first_session,
+        kind="inventory",
+        detail_owner=("inventory", first_request),
+        request_id=first_request,
+    )
+    _publish_session(
+        lifecycle,
+        second_session,
+        kind="inventory",
+        detail_owner=("inventory", second_request),
+        request_id=second_request,
+    )
+    entered: set[str] = set()
+    entered_lock = Lock()
+    first_entered = Event()
+    both_entered = Event()
+    release = Event()
+
+    class Observer:
+        def unsubscribe(self, candidate: str) -> None:
+            with entered_lock:
+                entered.add(candidate)
+                if candidate == first_session:
+                    first_entered.set()
+                if len(entered) == 2:
+                    both_entered.set()
+            assert release.wait(2)
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.closed: list[str] = []
+
+        def close(self, candidate: str) -> None:
+            self.closed.append(candidate)
+
+    class Runtime:
+        def __init__(self) -> None:
+            self.details = {
+                first_request: object(),
+                second_request: object(),
+            }
+            self.dropped: list[str] = []
+
+        def drop_inventory_details(self, candidate: str) -> None:
+            if self.details.pop(candidate, None) is not None:
+                self.dropped.append(candidate)
+
+    dispatcher = Dispatcher()
+    runtime = Runtime()
+    service = object.__new__(NamiSyncService)
+    service._observer = Observer()
+    service._dispatcher = dispatcher
+    service._runtime = runtime
+    service._lifecycle = lifecycle
+    service._lock = Lock()
+    service._plan_selections = {}
+    failures: list[BaseException] = []
+
+    def close(candidate: str) -> None:
+        try:
+            service.close_session(candidate)
+        except BaseException as error:
+            failures.append(error)
+
+    first = Thread(target=close, args=(first_session,))
+    second = Thread(target=close, args=(second_session,))
+    first.start()
+    assert first_entered.wait(1)
+    second.start()
+    assert both_entered.wait(1)
+    assert entered == {first_session, second_session}
+    release.set()
+    first.join(2)
+    second.join(2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert failures == []
+    assert set(dispatcher.closed) == {first_session, second_session}
+    assert set(runtime.dropped) == {first_request, second_request}
+    assert runtime.details == {}
 
 
 def test_selection_mutation_drop_race_does_not_retain_or_replay(

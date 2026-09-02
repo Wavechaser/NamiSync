@@ -766,10 +766,12 @@ inventory, history, session-custody, or domain-effect policy.
 task/session association, admission compensation, detail-owner liability, plan
 mutation retirement exclusion, and logical settlement. Every admitted session,
 including a direct CLI session with no desktop task, receives an exact
-application association. The aggregate retains identifiers, immutable intent,
-and completed-step progress only; it never retains an event stream, sink,
-callback, observer thread, transport queue, drain claim, connection, delivery
-generation, or bridge response.
+application association. The aggregate retains receipts and their immutable
+intent, exact association, terminal digest, settlement target, and coarse
+single-flight claims only. It retains no physical-step acknowledgement or
+cursor and never retains an event stream, sink, callback, observer thread,
+transport queue, drain claim, connection, delivery generation, or bridge
+response.
 
 Receipt retirement follows the effect owner, not dispatcher custody. A direct
 session-start receipt retires after successful direct session close. A
@@ -780,8 +782,8 @@ retire with their owning session, plan, task, or service shutdown.
 
 The current `SessionObserver` remains implemented in `interfaces/service.py`.
 It alone owns stream, callback, worker-thread, and subscription lifetime; the
-application aggregate records only whether observer release remains a physical
-settlement liability. Dispatcher alone owns admitted session custody and close.
+application aggregate records no independent observer-release acknowledgement
+or cursor. Dispatcher alone owns admitted session custody and close.
 Adapters own only presentation and transport state: bounded response replay,
 queueing, drain claims, connection state, delivery generations, terminal-
 delivery facts, and response delivery.
@@ -796,12 +798,20 @@ from them.
 
 Adapter-bound terminal teardown is ordered as delivery fact → application
 settlement → confirmed observer release → dispatcher close → exact runtime
-detail retirement → optional plan/task retirement. One logical settlement may
-retry its first unfinished physical step, but an acknowledged step is never
-performed again. A task delivery factory may construct provisional adapter
-queue state before admission; its call frame discards that state locally on
-failure. Neither the service nor `TaskLifecycle` retains or invokes an adapter
-rollback.
+detail retirement → optional plan/task retirement. Those fixed cleanup owners
+are independently idempotent or monotone. After failure or interruption, the
+whole cleanup call sequence may repeat from current owner truth; each completed
+observable effect remains unique. Application state uses one coarse
+single-flight claim rather than a physical-step journal. A task delivery factory
+may construct provisional adapter queue state before admission; its call frame
+discards that state locally on failure. Neither the service nor `TaskLifecycle`
+retains or invokes an adapter rollback.
+
+Dispatcher's existing `_AdmissionCleanup` remains unchanged and separate from
+this application cleanup rule. No recovery is claimed across the inherited gap
+between `Dispatcher.submit` returning and application start publication;
+closing that gap would require separately authorized dispatcher/application
+reconciliation.
 
 The adapter-facing `TaskLifecyclePort` exposes only task-bound plan start with a
 delivery factory, exact task/session reobservation, terminal-session release,

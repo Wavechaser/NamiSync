@@ -1,36 +1,49 @@
 # Session Handoff
 
-Status (2026-09-03): LC-1a is integrated on `milestone1-anthony` in the
-`refactor(interfaces): centralize task effect lifecycle` commit at `HEAD`.
-The worktree is clean and the branch is ahead of origin. The preexisting
-plan-selection/drop retirement race was fixed separately in parent commit
-`c456cf4` (`fix(interfaces): close plan selection retirement race`).
+Status (2026-09-03): LC-1b is complete on `milestone1-anthony` in the
+`refactor(interfaces): simplify lifecycle cleanup replay` commit at `HEAD`.
+The worktree is clean and the branch is ahead of origin. LC-2 has not begun.
 
-## LC-1a outcome
+## LC-1b outcome
 
-- The service/application lifecycle is now the sole owner of domain-effect
-  receipts, task/session association, compensation, and logical settlement.
-- Dispatcher custody, service-observer lifetime, and adapter-local response
-  replay, queueing, drain, generation, delivery, and shutdown state remain
-  independently owned.
-- The mandatory disappearance and positive-owner test ledger has zero pending
-  rows. LC-2 has not started.
+- The LC-1a authority boundary remains intact, but its general cleanup
+  transaction interpreter is gone. `TaskLifecycle` retains exact association,
+  terminal truth, monotone settlement target, and one coarse per-operation
+  claim; it retains no cleanup step, cursor, completed-step set, or marker.
+- Admission rollback and session/task settlement replay their fixed owner
+  calls from the beginning after failure. Repeated calls are permitted;
+  observer, Dispatcher, detail, plan, application, and terminal transitions
+  remain unique, while replayed command responses remain identical.
+- Dispatcher `_AdmissionCleanup`, observer implementation, adapter delivery
+  state, bridge/CLI/event/persistence/filesystem behavior, and the inherited
+  Dispatcher-submit-to-application-publication gap are unchanged.
+- The two production files are net 440 lines smaller. The affected lifecycle,
+  service, and bridge-fixture tests are net 74 lines smaller, and all 22
+  removed or renamed tests have closed dispositions with no orphan or
+  knowingly uncovered supported behavior.
 
 ## Verification
 
-- Focused LC-1a set: `680 passed`.
-- Department verification: `2339 passed, 2645 deselected`.
-- Ordinary suite: `4952 passed, 4 skipped, 28 deselected`.
+- Focused lifecycle/service/bridge: `176 passed`.
+- Interfaces/workflows/dispatcher neighborhood:
+  `2328 passed, 2645 deselected`.
+- Ordinary suite with bundled Node:
+  `4941 passed, 4 skipped, 28 deselected`.
 - Frozen task-lifecycle T1 corpus: exact baseline match.
 - Import law: `12 kept, 0 broken`.
-- Test-disposition ledger: zero pending rows.
+- Production retirement-symbol search: no match.
+- Two bounded adversarial reviews: one introduced admission-rollback waiter
+  shutdown defect found and fixed before commit; no remaining checkpoint
+  finding.
 
-## Recovery and next action
+## Review pause and next action
 
-The recovery branch `codex/wip-20260902-0633-task-lifecycle-lc1a` remains
-isolated. Its WIP commit is not a review unit and must never be merged or
-cherry-picked. The rebuilt LC-1a outcome on the fresh branch is the only
-integration candidate. The `.codex` plan was untouched; the repository-owned
-`docs/TASK_LIFECYCLE_SIMPLIFICATION.md` remains the sole active register.
+Pause for review at LC-1b. Inspect whether the remaining coarse
+`begin/confirm/complete/abandon` claims are the minimum needed for
+single-flight, terminal reconciliation, and exact-token retirement before
+authorizing LC-2. Do not start LC-2, LC-3, or another cleanup checkpoint
+without that review.
 
-Next, pause for user review. Do not begin LC-2 before that review.
+The old recovery/WIP refs remain isolated and are not review units; never
+merge or cherry-pick them. The `.codex` plan remains untouched.
+`docs/TASK_LIFECYCLE_SIMPLIFICATION.md` is the sole active register.

@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-03): active closed register; LC-1a is complete and work is
-paused for review before LC-2.** This
+**Standing (2026-09-03): active closed register; LC-1a and LC-1b are complete,
+and work is paused for review before LC-2.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -28,15 +28,71 @@ machinery is merely renamed or moved.
 
 One application settlement transition requests teardown. The observer alone
 releases its stream/callback/thread; the dispatcher alone closes custody.
-Application state retains only association and settlement progress, never an
-`EventStream`, sink, observer thread, or observer rollback callback.
+Application state retains exact association, terminal-reconciliation truth,
+the monotone settlement target, and a coarse whole-operation in-flight fact,
+never physical-step progress, an `EventStream`, sink, observer thread, or
+observer rollback callback.
 
 Normal release is:
 
 `adapter delivery fact -> application settlement -> observer release confirmed -> dispatcher close -> detail retirement -> optional plan/task retirement`
 
-A logical settlement may retry its first unfinished physical step; a completed
-step never repeats.
+A logical settlement retries its fixed cleanup sequence as one whole
+operation. Cleanup calls may repeat; a completed observable effect may not.
+The application retains no per-step acknowledgement or resumption cursor.
+Each physical owner instead exposes an exact-subject, monotone operation whose
+postcondition can be ensured again without recreating retired state. One
+whole-operation application claim excludes a concurrent peer for the same
+association while disjoint associations remain independent.
+
+### LC-1b cleanup replay and supported fault model
+
+The supported recovery unit is the same-process command operation, not an
+individual cleanup call. A cleanup owner may raise before changing its state,
+after moving closer to its postcondition, or after reaching the postcondition
+but before the caller observes success. An interrupt may likewise occur
+between an owner return and application finalization. In each case the next
+same-command or authorized close retry starts the fixed cleanup sequence from
+its beginning. Process termination may lose the process-local task and receipt
+state under the existing residual; LC-1b adds no restart journal or
+cross-process recovery guarantee.
+
+That interruption rule applies only to the fixed cleanup owners enumerated
+below. LC-1b does not add recovery across the inherited call-frame gap between
+`Dispatcher.submit()` returning and application start publication beginning;
+closing that gap would require a separate Dispatcher/application admission
+reconciliation contract and is not claimed by this reduction.
+
+Every replayed cleanup operation must satisfy all of these rules:
+
+- it names the exact association, detail owner, or plan token established by
+  admission, never a newly looked-up successor;
+- absence is the required postcondition and cannot recreate state;
+- one successful state transition may have multiple call attempts, but it may
+  produce no extra event, persisted mutation, filesystem effect, terminal, or
+  unprompted transport delivery. Each repeated bridge command still receives
+  exactly its specified identical replay response;
+- failure leaves either the original state or a state closer to absence, and a
+  retry remains valid from either state; and
+- application locks are not held across observer, dispatcher, or runtime
+  calls.
+
+The finite cleanup ownership rules are:
+
+| Operation | Replay rule |
+| --- | --- |
+| Observer release | Repeated exact-session release ensures that the observer lookup, stream, callback, and thread are absent. A live join timeout remains retryable; already absent is success. |
+| Dispatcher close | `Dispatcher.close` remains globally strict. Only an application settlement that already holds the exact sealed association may interpret `SessionNotFound` as custody already absent. Dispatcher-owned close retry remains inside Dispatcher. |
+| Runtime detail retirement | Repeated exact `(kind, request_id)` retirement is an owner-locked `pop(key, None)` and therefore ensures absence. |
+| Plan retirement | Exact `PlanToken` retirement remains mutually exclusive with plan mutation. Runtime plan state, service selection state, mutation receipts, and application plan state may each be ensured absent again, but no retry may retire a successor plan identity. |
+| Application finalization | Repeated finalization against the exact association token converges on the same session-released or task-retired logical state and emits no external effect. |
+
+Admission rollback uses the same algebra: one whole-operation rollback claim
+replays observer release, exact detail retirement, and exact unpublished
+association retirement from the beginning. It retains the attachment identity
+and actual cleanup liabilities, not a rollback-step cursor. Dispatcher
+`_AdmissionCleanup` predates LC-1a, stays wholly Dispatcher-owned, and is not
+changed in LC-1b; it is only a later simplification candidate.
 
 ### Retention and adapter response replay
 
@@ -133,13 +189,15 @@ do not assert target architecture against the untouched tree.
 | `LS-1` silent loss/duplicate | **Baseline, corrected in LC-0b.** `test_ls_1_delivery_has_no_silent_loss_or_duplicate` barrier-forces ejection and recovery, maps every delivered reliable producer event exactly and at most once, requires every missing reliable producer sequence to fall within a finite interval announced by a delivered `Gap`, and checks terminal uniqueness/last separately. |
 | `LS-2` wrong/unreachable session control | **Baseline, LC-0.** `test_ls_2_session_control_reaches_only_corresponding_dispatcher_record` proves service `pause`/`resume`/`cancel` mutate only the exact dispatcher record; unknown or retired sessions mutate none. |
 | `LS-3` false terminal reconciliation | **Introduced, LC-1a.** `test_ls_3_terminal_reconciliation_matches_dispatcher_truth` compares delivered Terminal/record with dispatcher truth before settlement; injected disagreement prevents close and success replay. An injected internal disagreement alone is not a baseline defect; an actual supported baseline disagreement is. |
-| `LS-4a` missing/duplicate admission rollback | **Baseline, LC-0.** `test_ls_4a_submit_session_rollback_converges` closes over the finite F1-F5/R1-R4 application-admission table and D1-D4 dispatcher cleanup table below. It records exact attempts and successful state transitions: each physical transition succeeds once, while the baseline may make an idempotent follow-up call. |
-| `LS-4b` missing/duplicate application settlement | **Introduced, LC-1a.** `test_ls_4b_application_settlement_retries_only_unfinished_step` faults observer release, dispatcher close, exact detail retirement, and plan retirement once under one two-caller race; only the unfinished step retries. Delivery-factory failure is a separate zero-application-compensation row. |
+| `LS-4a` missing/duplicate admission rollback | **Baseline in LC-0; reanchored in LC-1b.** `test_ls_4a_admission_rollback_owner_fault_retries_from_observer` faults observer release and detail retirement before and after their transitions; adoption rejection and failed publication have focused composition witnesses. Calls may repeat while each exact transition occurs once and unrelated subjects remain untouched. The unchanged `test_ls_4_dispatcher_admission_cleanup_converges` retains D1-D4 at the Dispatcher owner. |
+| `LS-4b` missing/duplicate application settlement effect | **Introduced in LC-1a; redefined and reanchored in LC-1b.** `test_ls_4b_whole_operation_cleanup_replay_converges` faults each finite owner before its transition. Post-effect observer, Dispatcher, detail, and plan failures are proved respectively by `test_cleanup_post_effect_interrupt_replays_calls_not_effects`, `test_cleanup_retry_uses_current_owner_truth_not_application_progress`, `test_lifecycle_cleanup_sequences_are_fixed_and_owner_idempotent`, and `test_s6_plan_retirement_post_effect_fault_replays_call_not_effect`. Exact final absence has no missing, repeated, or wrong-subject observable effect. `test_ls_4b_whole_operation_cleanup_singleflights_concurrent_callers` proves one active whole-operation claim. Repeated invocation of an idempotent cleanup method is not itself an LS-4b consequence. |
 | `LS-5` retained stream/callback | **Baseline, LC-0.** `test_ls_5_release_retires_stream_and_callback` proves observer lookup and subscriber custody disappear, callback count cannot advance, and a weak sink owner is collectible. |
 
-LS-4a is a pre-migration characterization of the machinery LC-1a removes. It
-is dispositioned and removed only after LS-4b passes at the new owner. The
-enduring stop-detector set after LC-1a is LS-1, LS-2, LS-3, LS-4b, and LS-5.
+LS-4a's F1-F5/R1-R4 table is the pre-migration characterization of machinery
+LC-1a removes. LC-1b deletes that step-specific harness only after reanchoring
+its surviving consequence at the exact application owners above; Dispatcher
+D1-D4 remains unchanged. The enduring stop-detector set after LC-1b is LS-1,
+LS-2, LS-3, the reanchored LS-4a and LS-4b, and LS-5.
 
 Synthetic `Gap` envelopes are recovery-control values, not producer-event
 identities for cross-subscription uniqueness or ordering. Their envelope
@@ -295,11 +353,12 @@ duplicate authorities rather than rename them.
 | `LC-0a` | Freeze generated-ID equality/distinctness, corpus-version governance, exact LC-6 department retirement, and the retained-guard cost before production work. | `LC-0` | Focused oracle tests; unchanged frozen hash; documentation inspection; no production diff. | Complete |
 | `LC-0b` | Settle the LS-1 normative contract, replace its timing-sensitive raw-order assertion with deterministic loss/duplication accounting, and withdraw the unsupported defect classification. | `LC-0a` | Finite normative audit; duplicate/loss self-tests; 30 fresh deterministic runs; T1 and production unchanged; ordinary/import gate. | Complete |
 | `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0b` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Complete |
-| `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1a` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Pending |
+| `LC-1b` | Replace application cleanup step cursors and marker repair with whole-operation replay over exact, monotone owner operations while retaining LC-1a authority, receipts, association, terminal truth, and plan-retirement exclusion. | `LC-1a` | Finite disappearance list; reanchored LS-4a/LS-4b fault matrices and concurrency detectors; T1/enduring T2; focused, ordinary, and import gates; net-subtractive production diff. | Complete |
+| `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1b` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Pending |
 | `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0b` only; independent of `LC-2` | Core/dispatcher, exact stored projection, T1 persisted bytes. | Pending |
 | `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Pending |
-| `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1a`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Pending |
-| `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1a`-`LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Pending |
+| `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1b`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Pending |
+| `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1b`, `LC-2`, `LC-3`, `LC-4`, `LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Pending |
 
 ### LC-0a guard-governance amendment
 
@@ -417,7 +476,7 @@ concurrency proof.
 | `_StartEntry` domain-effect receipt/single-flight authority | Application replays identical resolved intent and rejects conflict; adapter cache retains only the permitted response fields. |
 | `_TaskReservation.attached_session_id` authority | Exact lifecycle association for reobserve, terminal release, and task close; correct/wrong/retired identities. |
 | Drain `_Compensation` | `test_ls_4_partial_admission_compensates_once` faults every `_submit_session` admission/rollback seam, and `test_ls_4_application_rollback_singleflights_concurrent_callers` proves concurrent retries do not repeat a completed physical step. |
-| Drain `_TaskCleanup`/progress booleans | Settlement retries only its first unfinished physical step. |
+| Drain `_TaskCleanup`/progress booleans | LC-1a proved first-unfinished-step retry at the new owner. LC-1b deliberately retires that proof with the progress machinery and replaces it with whole-operation replay/no-duplicate-effect evidence. |
 | `session_attachment`/`require_session_attachment` | Publication follows association/adoption; failed adoption publishes nothing; direct sessions also associate. |
 | Drain observer/cleanup/release flags | Idempotent release and LS-5. |
 | Drain `unsubscribe_all` and raw unsubscribe/close/drop calls | High-level ordering plus structural proof that no drain path reaches observer release, dispatcher/session close, detail retirement, plan drop, or compensation. |
@@ -443,6 +502,136 @@ the 27-line exception-retirement mechanism. Injecting the callable would spread
 a cleanup capability through seven constructors and contaminate the transport
 codec. Reopen this decision if one additional interface consumer needs the
 same mechanism; do not generalize it before that trigger.
+
+### LC-1b whole-operation cleanup replay reduction
+
+#### Objective and accepted shape
+
+LC-1b removes the general-purpose application transaction interpreter that
+LC-1a introduced for process-local cleanup. It keeps the LC-1a ownership
+boundary and replaces step selection, acknowledgement, and marker repair with
+two straight-line operations:
+
+1. admission rollback ensures observer, exact detail, and exact unpublished
+   association absence; and
+2. session/task settlement ensures observer, Dispatcher custody, exact detail,
+   optional exact plan, and then exact application association/task absence.
+
+Each operation has one coarse, exact-token, whole-operation claim. A contender
+for the same association waits for or joins that operation; a retry after
+failure executes the whole fixed sequence again. The application may retain
+the monotone settlement target (`session` or `task`), truthful terminal
+digest, actual observer/detail/plan liabilities, and whether a whole operation
+is in flight. It retains no physical-step progress. Session release may leave
+the task and plan receipt alive; later task close escalates the target and
+replays the full cleanup sequence before exact plan/task retirement.
+
+#### Finite disappearance and positive-proof symmetry
+
+The production disappearance domain is exactly
+`namisync/interfaces/task_lifecycle.py` and
+`namisync/interfaces/service.py`. The matching test-disposition domain is
+exactly `tests/test_task_lifecycle.py` and `tests/test_service.py`.
+Before production edit, record every AST reference in those four files to the
+symbols and fields below. Each test becomes only `mechanism-removed`,
+`reanchored-owner`, or `boundary-retained`; no unrelated test is merged or
+compressed.
+
+| Required disappearance | Required positive proof after removal |
+| --- | --- |
+| `LifecycleStep` and every string-dispatched cleanup-step branch | `test_lifecycle_cleanup_sequences_are_fixed_and_owner_idempotent` proves straight-line session cleanup and exact subjects; the reanchored LS-4a admission tests prove the separate rollback sequence. No owner returns a step description. |
+| `SettlementReservation`, `reserve_settlement`, `activate_settlement`, and `abandon_settlement_reservation` | `test_lifecycle_whole_settlement_claim_excludes_reobserve_and_same_session_peer` proves exact sealing, reobservation exclusion, observation-end/abandon wakeup, and disjoint independence. `test_ls_4b_whole_operation_cleanup_singleflights_concurrent_callers` proves completion wakeup; `test_lifecycle_close_wakes_settlement_claim_waiter` proves close wakeup. |
+| `settlement_step`, `complete_settlement_step`, and their service loop | The collective LS-4b pre/post owner-fault witnesses replay the whole sequence from current truth; the deterministic C1 test covers the two-caller race. They assert final owner truth and boundary effects, not a next-step cursor. |
+| `admission_rollback_step`, `complete_admission_rollback_step`, `abandon_admission_rollback_step`, and `AdmissionRollbackClaim.step` | `test_ls_4a_admission_rollback_owner_fault_retries_from_observer`, the adoption-rejection/publication witnesses, and the two whole-rollback replay/single-flight tests cover exact unpublished attachment, detail, and observation liabilities. |
+| `_SessionAssociation.admission_cursor`, `rollback_last_completed`, `settlement_cursor`, `settlement_reservation`, `settlement_last_completed`, and `settlement_last_finished` | `test_lifecycle_state_has_no_cleanup_step_or_marker_progress` inspects the finite aggregate fields and permits only exact identities/liabilities, terminal truth, monotone target, and coarse whole-operation claims. |
+| `_SessionAssociation.observation_last_completed` and marker-repair double calls around observation completion | `test_observation_claim_retries_from_observer_truth_without_marker_history` proves claim identity, stale-end safety, and settlement after claim release without marker history. `test_cleanup_retry_uses_current_owner_truth_not_application_progress` proves cleanup replay derives release from current observer/owner truth. |
+| `_admission_step_locked`, `_apply_admission_rollback_completion_locked`, `_settlement_step_locked`, `_apply_settlement_completion_locked`, and `_settlement_reservation_locked` | The collective LS-4a/LS-4b owner-fault tests cover observer, Dispatcher, detail, and plan failures before and after owner transitions. Each retry begins at observer release and derives the remaining work from current owner truth. |
+| The immediate second-call repair branches around `complete_start`, `mark_published`, `complete_observation`, `complete_plan_retirement`, `complete_admission_rollback_step`, `complete_settlement_step`, and `finish_settlement` | Atomic start publication, observation truth, exact plan retirement, the collective LS-4 owner tests, and the frozen T1 plus retained adapter lost-response tests prove the surviving properties. Post-effect interruption may repeat cleanup calls while each observable cleanup effect and terminal delivery remains unique; each bridge retry receives its specified replay response. No test injects failure inside a pure-memory marker merely to require a second marker call. |
+
+The old tests that assert a first-unfinished step, an exact marker replay, or an
+unrepeated cleanup method invocation are removed with that mechanism. Tests of
+receipt replay/retirement, terminal reconciliation, exact association,
+observation exclusion, plan-token successor safety, task capacity, delivery
+shutdown, bridge/CLI/events/persistence/filesystem boundaries, and Dispatcher
+cleanup remain and are reanchored only as needed to the simpler owner.
+
+#### Finite LS-4b fault and concurrency domain
+
+Sequential fault injection is additive rather than Cartesian: each row proves
+one owner's retry algebra, and one separate two-caller test proves the common
+whole-operation exclusion. LC-1b does not claim exhaustion by sampling every
+`step x interruption x peer` combination.
+
+| Row | Fault seam | Required observation |
+| --- | --- | --- |
+| S1 | Observer release raises before retirement | The association stays sealed; retry starts at observer release and reaches full absence. |
+| S2 | Observer release retires the subscription, then raises | Retry calls release again; callback/stream/thread retirement and terminal delivery remain unique. |
+| S3 | Dispatcher close raises before custody close | Retry calls exact-session close again; no later owner runs before custody is absent. |
+| S4 | Dispatcher custody closes, then the caller observes failure | Retry reaches `SessionNotFound`; only the sealed exact application settlement treats it as already absent, and Dispatcher remains strict elsewhere. |
+| S5 | Exact detail retirement raises before or after its owner-locked removal | Retry calls exact detail retirement again; only the admitted detail is absent and no successor is touched. |
+| S6 | Exact plan retirement raises before or after runtime removal | The retirement barrier remains; retry removes only the same `PlanToken`'s runtime, selection, receipt, and application state, never a successor. |
+| S7 | Application finalization is not observed by the caller | Exact-token retry returns or converges on the same released/retired logical state without another domain effect; a new command invocation receives only its existing identical replay response. |
+| C1 | Two same-association callers overlap at a barrier | Exactly one whole cleanup operation is active; the peer joins or retries after it. Invocation counts may exceed one across retries, but every owner transition and boundary effect occurs at most once. |
+| C2 | Two disjoint associations settle at barriers | Both enter lower owner work concurrently; the coarse claim introduces no global lifecycle serialization. |
+
+The harness may inject failure immediately before or after an owner call. It
+does not monkeypatch `Condition.notify_all`, individual field assignments, or
+other bytecodes inside a locked pure-memory transition and then treat that
+synthetic exception point as a supported collaborator boundary. Lifecycle
+critical sections remain small, non-blocking, and retry-derived from retained
+owner identities. Notification is not durable evidence.
+
+#### Non-goals
+
+- No change to LC-1a ownership, task-port surface, receipt keys/lifetimes,
+  48-count bounds, task-id minting, terminal reconciliation, exact association,
+  or plan mutation/retirement exclusion.
+- No bridge, CLI callback, event, persistence, filesystem, adapter replay,
+  queue/drain/generation, backpressure, or shutdown-delivery change.
+- No observer move or subscription redesign; that remains LC-2.
+- No change to Dispatcher public semantics, close implementation,
+  `_AdmissionCleanup`, scheduling, custody, concurrency, or admission.
+- No LC-3 record composition and no LC-4 dispatcher-entry experiment.
+- No replacement transaction, workflow, effect, journal, reducer, saga,
+  generic idempotency, or cleanup framework.
+- No opportunistic bug hunt, test compression, or unrelated cleanup.
+
+#### Acceptance, verification, and commit gate
+
+- Every disappearance row is absent and has its named positive proof.
+- Task lifecycle retains one domain-effect receipt authority, one exact
+  association authority, one plan retirement exclusion, and at most one coarse
+  admission-rollback claim plus one coarse settlement claim per association.
+- Neither lifecycle nor service retains a cleanup step name, physical-step
+  cursor, completed-step set, last-completed/last-finished marker, or
+  collaborator rollback callback.
+- Repeated cleanup calls are accepted; repeated or missing observable effects,
+  wrong-subject cleanup, false terminal reconciliation, and receipt replay
+  drift remain failures.
+- The diff from the LC-1a closing commit is net-subtractive across the two
+  production files, with no new generic abstraction. Line counts are reported
+  evidence, not an independent stop or permission to weaken tests.
+- T1 is unchanged; enduring LS-1/LS-2/LS-3/LS-4a/LS-4b/LS-5 pass; focused
+  lifecycle, service, bridge-service, and affected interface tests pass; the
+  ordinary suite and all import contracts pass.
+
+Run:
+
+```powershell
+rg -n "LifecycleStep|SettlementReservation|admission_cursor|rollback_last_completed|observation_last_completed|settlement_cursor|settlement_reservation|settlement_last_completed|settlement_last_finished|admission_rollback_step|complete_admission_rollback_step|abandon_admission_rollback_step|reserve_settlement|activate_settlement|abandon_settlement_reservation|settlement_step|complete_settlement_step|_admission_step_locked|_apply_admission_rollback_completion_locked|_settlement_step_locked|_apply_settlement_completion_locked|_settlement_reservation_locked" namisync\interfaces\task_lifecycle.py namisync\interfaces\service.py
+.\.venv\Scripts\python.exe -m pytest -q tests\test_task_lifecycle.py tests\test_service.py tests\test_bridge_service.py
+.\.venv\Scripts\python.exe tools\task_lifecycle_audit.py verify --baseline tools\task_lifecycle_baseline.json --output "$env:TEMP\task-lifecycle-lc1b.json"
+.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\lint-imports.exe
+```
+
+The first command's terminal observation is no match. Before commit, update
+`ARCHITECTURE.md`, `INTERFACES.md`, `DEFENSE.md`, this document, the test
+ledger, changelog, and handoff to the implemented contract and exact evidence.
+After the mergeable LC-1b commit passes its full gate, stop for user recap and
+review; do not begin LC-2.
+
+Commit gate: `refactor(interfaces): simplify lifecycle cleanup replay`.
 
 ### LC-3 accepted structural tradeoff
 
@@ -532,10 +721,15 @@ test-consolidation checkpoint and is not authorized here.
 | LC-1a department verification | Bundled-Node department run: 2,339 passed, 2,645 deselected in 83.84 seconds, after reanchoring the sole stale synthetic service fixture. |
 | LC-1a boundary and structure | The frozen T1 output matches baseline without refreezing. All 12 import contracts pass, including the strong indirect drain prohibition. The retained 37-line adapter helper duplicates 27 mechanism lines and has the one-more-interface-consumer reopening trigger stated above. |
 | LC-1a ordinary verification | Bundled-Node ordinary suite: 4,952 passed, four skipped, 28 deselected in 232.55 seconds; exit 0. LC-1a is complete and LC-2 remains paused for review. |
+| LC-1b amendment | User-authorized reduction companion to LC-1a. The accepted retry unit is now the whole cleanup operation; repeated exact-subject cleanup calls are permitted while repeated observable effects remain forbidden. The finite disappearance, LS-4b fault/concurrency, non-goal, verification, and pause domains above are the implementation denominator. No production or test result is claimed by this amendment. |
+| LC-1b reduction | Removed application cleanup steps, cursors, per-step acknowledgements, marker-repair calls, and the service step interpreter. The two production files are net 440 lines smaller; the two lifecycle/service test modules plus bridge fixture are net 74 lines smaller. The 22 renamed/removed tests have closed dispositions, all replacement names resolve, and no boundary test changed. |
+| LC-1b verification | Focused lifecycle/service/bridge: 176 passed. Bundled-Node interfaces/workflows/dispatcher neighborhood: 2,328 passed and 2,645 deselected. Frozen T1 matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,941 passed, four skipped, and 28 deselected in 220.72 seconds. The bounded independent reviews found one introduced admission-waiter shutdown defect, fixed before commit, and no remaining production or test finding. |
 
-- **Current checkpoint:** LC-1a complete; paused for review before LC-2.
-- **Next action:** review the completed LC-1a outcome and evidence. Begin LC-2
-  only after that review authorizes resumption.
+- **Current checkpoint:** LC-1b complete; LC-2 has not begun.
+- **Next action:** review the LC-1b reduction, evidence, and remaining lifecycle
+  shape before deciding whether and how to resume LC-2.
+- **Required pause:** do not begin LC-2, LC-3, or another cleanup/bug
+  checkpoint after LC-1b. The next user review decides resumption.
 - **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
   `codex/wip-20260902-2029-task-lifecycle-lc1a`; the recovery snapshots remain
   isolated and are not review units. Retain the latest WIP ref until the

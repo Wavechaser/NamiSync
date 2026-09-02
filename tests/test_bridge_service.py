@@ -58,12 +58,9 @@ def _install_plan_effect(
         "plan",
         None,
         (),
-        expects_observation=False,
     )
-    association = lifecycle.attach_session(admission, session_id)
-    lifecycle.complete_admission_observation(association, active=False)
-    association = lifecycle.mark_published(admission, session_id)
-    lifecycle.complete_start(association, request_id)
+    lifecycle.attach_session(admission, session_id)
+    lifecycle.publish_start(admission, session_id, request_id)
 
 
 def _artifact(plan_value):

@@ -505,8 +505,14 @@ observer release, dispatcher/session close, detail retirement, plan drop, or
 compensation directly or indirectly. Adapter-bound teardown consumes the
 adapter's delivery fact, advances application settlement, confirms observer
 release, closes dispatcher custody, retires the exact detail, then optionally
-retires the plan/task. Only the first unfinished physical step may retry; an
-acknowledged step cannot run again.
+retires the plan/task. The application retains the exact association, terminal
+digest, settlement target, and coarse single-flight claims, not physical-step
+acknowledgements or cursors. Fixed cleanup owners are independently idempotent
+or monotone: after failure or interruption, the whole cleanup call sequence may
+repeat from current owner truth, while every completed observable effect remains
+unique. Dispatcher `_AdmissionCleanup` remains unchanged, and this contract
+makes no recovery claim across the inherited gap from `Dispatcher.submit`
+return to application start publication.
 
 Appearance enhancement and publication are T1-degradable after the window's
 opaque base surface is known safe. Configuration, observation, read, or

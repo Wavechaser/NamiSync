@@ -71,11 +71,11 @@ from namisync.workflows.views import (
 )
 
 from namisync.interfaces.task_lifecycle import (
-    AssociationToken,
     LifecycleAssociationError,
     LifecycleReceiptConflictError,
     LifecycleTaskCapacityError,
     PlanToken,
+    StartReceipt,
     TaskLifecycle,
 )
 from namisync.interfaces.task_port import (
@@ -731,15 +731,15 @@ class NamiSyncService:
                 str(target_path),
                 deletion_policy=deletion_policy,
             )
-            session_id, association = self._submit_session(
+            session_id, _receipt = self._submit_session(
                 PLAN_KIND,
                 request,
                 effect_kind="plan",
                 command_id=command_id,
                 signature=signature,
+                request_id=request.request_id,
             )
             result = PlanSession(request.request_id, str(session_id))
-            self._complete_start(association, result.request_id)
             return result
 
     def start_task_plan(
@@ -795,18 +795,15 @@ class NamiSyncService:
                     str(target_path),
                     deletion_policy=deletion_policy,
                 )
-                session_id, association = self._submit_session(
+                session_id, receipt = self._submit_session(
                     PLAN_KIND,
                     request,
                     effect_kind="task-plan",
                     command_id=command_id,
                     signature=signature,
+                    request_id=request.request_id,
                     observation_sink=sink,
                     task_id=claim.task_id,
-                )
-                receipt = self._complete_start(
-                    association,
-                    request.request_id,
                 )
                 if receipt.task_id != claim.task_id:
                     raise RuntimeError(
@@ -1088,12 +1085,13 @@ class NamiSyncService:
                 user_deselected=user_deselected,
                 expected_artifact=artifact,
             )
-            session_id, association = self._submit_session(
+            session_id, _receipt = self._submit_session(
                 EXECUTION_KIND,
                 request,
                 effect_kind="execution",
                 command_id=command_id,
                 signature=signature,
+                request_id=str(request.execution_set.run_id),
                 detail_owner=(
                     "execution",
                     str(request.execution_set.run_id),
@@ -1103,7 +1101,6 @@ class NamiSyncService:
                 str(request.execution_set.run_id),
                 str(session_id),
             )
-            self._complete_start(association, result.run_id)
             succeeded = True
             return result
         finally:
@@ -1269,11 +1266,7 @@ class NamiSyncService:
         with self._lock:
             self._plan_selections.pop(request_id, None)
         if retirement is not None:
-            try:
-                self._lifecycle.complete_plan_retirement(retirement)
-            except BaseException:
-                self._lifecycle.complete_plan_retirement(retirement)
-                raise
+            self._lifecycle.complete_plan_retirement(retirement)
 
     def get_session(self, session_id: str) -> SessionRecordView:
         return session_record_view(self._dispatcher.get(session_id))
@@ -1322,18 +1315,8 @@ class NamiSyncService:
             return
         try:
             self._observer.unsubscribe(session_id)
-        except BaseException:
-            self._lifecycle.abandon_observation(claim)
-            raise
-        try:
-            self._lifecycle.complete_observation(claim, active=False)
-        except BaseException:
-            try:
-                self._lifecycle.complete_observation(claim, active=False)
-            except BaseException:
-                self._lifecycle.abandon_observation(claim)
-                raise
-            raise
+        finally:
+            self._lifecycle.end_observation(claim)
 
     def wait(self, session_id: str) -> SessionRecordView:
         return self._observer.wait(session_id)
@@ -1591,7 +1574,6 @@ class NamiSyncService:
             else:
                 with self._lock:
                     self._observer_closed = True
-                self._lifecycle.mark_observer_shutdown_complete()
         with self._lock:
             view = self._shutdown
         if view is None or not view.complete:
@@ -1677,12 +1659,13 @@ class NamiSyncService:
         signature: tuple[object, ...],
     ) -> LocationSession:
         try:
-            session_id, association = self._submit_session(
+            session_id, _receipt = self._submit_session(
                 kind,
                 request,
                 effect_kind=kind,
                 command_id=command_id,
                 signature=signature,
+                request_id=request_id,
                 detail_owner=("inventory", request_id),
             )
         except VolumeResolutionRequired as error:
@@ -1690,7 +1673,6 @@ class NamiSyncService:
                 _location_resolution_view(error.resolution)
             ) from error
         result = LocationSession(request_id, str(session_id))
-        self._complete_start(association, result.request_id)
         return result
 
     def _submit_session(
@@ -1701,10 +1683,11 @@ class NamiSyncService:
         effect_kind: str,
         command_id: str | None,
         signature: tuple[object, ...],
+        request_id: str,
         detail_owner: tuple[str, str] | None = None,
         observation_sink: SessionSink | None = None,
         task_id: str | None = None,
-    ) -> tuple[SessionId, AssociationToken]:
+    ) -> tuple[SessionId, StartReceipt]:
         self._require_open()
         admission = self._lifecycle.begin_admission(
             effect_kind,
@@ -1712,37 +1695,20 @@ class NamiSyncService:
             signature,
             task_id=task_id,
             detail_owner=detail_owner,
-            expects_observation=observation_sink is not None,
         )
 
         def rollback() -> None:
-            while True:
-                claim = self._lifecycle.admission_rollback_step(admission)
-                step = claim.step
-                if step.name == "complete":
-                    self._lifecycle.finish_admission_rollback(admission)
-                    return
-                try:
-                    if step.name == "observer_release":
-                        assert step.session_id is not None
-                        self._observer.unsubscribe(step.session_id)
-                    elif step.name == "detail_retire":
-                        self._drop_runtime_details(step.detail_owner)
-                    else:
-                        raise RuntimeError(
-                            "application admission rollback step is invalid"
-                        )
-                except BaseException:
-                    self._lifecycle.abandon_admission_rollback_step(claim)
-                    raise
-                try:
-                    self._lifecycle.complete_admission_rollback_step(claim)
-                except BaseException:
-                    # The aggregate records effect return before advancing its
-                    # cursor. Retrying this exact claim repairs an interrupted
-                    # marker without repeating the physical effect.
-                    self._lifecycle.complete_admission_rollback_step(claim)
-                    raise
+            claim = self._lifecycle.begin_admission_rollback(admission)
+            if claim is None:
+                return
+            try:
+                if claim.session_id is not None:
+                    self._observer.unsubscribe(claim.session_id)
+                self._drop_runtime_details(claim.detail_owner)
+            except BaseException:
+                self._lifecycle.abandon_admission_rollback(claim)
+                raise
+            self._lifecycle.complete_admission_rollback(claim)
 
         def attach(
             session_id: SessionId,
@@ -1750,19 +1716,13 @@ class NamiSyncService:
         ) -> Callable[[], None]:
             stream_needs_close = True
             try:
-                association = self._lifecycle.attach_session(
+                self._lifecycle.attach_session(
                     admission,
                     str(session_id),
                 )
-                if detail_owner is not None:
-                    self._lifecycle.install_detail_owner(association)
                 if observation_sink is None:
                     stream.close()
                     stream_needs_close = False
-                    self._lifecycle.complete_admission_observation(
-                        association,
-                        active=False,
-                    )
                 else:
                     # SessionObserver.adopt closes a rejected stream itself.
                     stream_needs_close = False
@@ -1776,10 +1736,6 @@ class NamiSyncService:
                             "session observer must return a rollback callback"
                         )
                     del observation_rollback
-                    self._lifecycle.complete_admission_observation(
-                        association,
-                        active=True,
-                    )
             except BaseException:
                 if stream_needs_close:
                     try:
@@ -1801,24 +1757,16 @@ class NamiSyncService:
                 rollback()
             except BaseException as cleanup_error:
                 retire_exception_graph(cleanup_error)
-                try:
-                    rollback()
-                except BaseException as retry_error:
-                    retire_exception_graph(retry_error)
             raise
         try:
-            token = self._lifecycle.mark_published(
+            _association, receipt = self._lifecycle.publish_start(
                 admission,
                 str(session_id),
+                request_id,
             )
-        except BaseException:
-            # Dispatcher publication is already physical. Confirm the exact
-            # aggregate marker and continue so a retry cannot resubmit it.
-            token = self._lifecycle.mark_published(
-                admission,
-                str(session_id),
-            )
-        return session_id, token
+        except LifecycleReceiptConflictError as error:
+            raise CommandIdConflictError(str(error)) from None
+        return session_id, receipt
 
     def _reobserve_session(
         self,
@@ -1850,26 +1798,9 @@ class NamiSyncService:
         operation: Callable[[], SessionRecordView],
     ) -> SessionRecordView:
         try:
-            current = operation()
-        except BaseException:
-            self._lifecycle.abandon_observation(claim)
-            raise
-        try:
-            self._lifecycle.complete_observation(
-                claim,
-                active=current.result is None,
-            )
-        except BaseException:
-            try:
-                self._lifecycle.complete_observation(
-                    claim,
-                    active=current.result is None,
-                )
-            except BaseException:
-                self._lifecycle.abandon_observation(claim)
-                raise
-            raise
-        return current
+            return operation()
+        finally:
+            self._lifecycle.end_observation(claim)
 
     def _has_live_association(self, session_id: str) -> bool:
         try:
@@ -1897,11 +1828,12 @@ class NamiSyncService:
         retire_plan: bool,
         delivery: TaskTerminalDelivery | None = None,
     ) -> None:
-        reservation = self._lifecycle.reserve_settlement(
+        claim = self._lifecycle.begin_settlement(
             session_id,
             task_id=task_id,
             close_task=retire_plan,
         )
+        retirement = None
         try:
             terminal_digest: bytes | None = None
             dispatcher_truth_observed = False
@@ -1910,75 +1842,40 @@ class NamiSyncService:
                     terminal_digest,
                     dispatcher_truth_observed,
                 ) = self._reconcile_terminal_delivery(session_id, delivery)
-            claim = self._lifecycle.activate_settlement(
-                reservation,
+            work = self._lifecycle.confirm_settlement(
+                claim,
                 terminal_digest=terminal_digest,
                 dispatcher_truth_observed=dispatcher_truth_observed,
             )
-        except BaseException:
-            self._lifecycle.abandon_settlement_reservation(reservation)
-            raise
-
-        try:
-            while True:
-                step = self._lifecycle.settlement_step(claim)
-                if step.name == "complete":
-                    try:
-                        self._lifecycle.finish_settlement(claim)
-                    except BaseException:
-                        self._lifecycle.finish_settlement(claim)
-                    return
-                if step.name == "observer_release":
-                    self._observer.unsubscribe(session_id)
-                elif step.name == "dispatcher_close":
-                    self._dispatcher.close(session_id)
-                elif step.name == "detail_retire":
-                    self._drop_runtime_details(step.detail_owner)
-                elif step.name == "plan_retire":
-                    if step.request_id is None:
-                        raise RuntimeError(
-                            "task settlement lacks its plan request"
-                        )
-                    retirement = step.plan_retirement
-                    if retirement is not None:
-                        try:
-                            self._runtime.drop_plan(step.request_id)
-                        except BaseException:
-                            self._lifecycle.abandon_plan_retirement(
-                                retirement
-                            )
-                            raise
-                    with self._lock:
-                        self._plan_selections.pop(
-                            step.request_id,
-                            None,
-                        )
-                    if retirement is not None:
-                        try:
-                            self._lifecycle.complete_plan_retirement(
-                                retirement
-                            )
-                        except BaseException:
-                            self._lifecycle.complete_plan_retirement(
-                                retirement
-                            )
-                            raise
-                else:
-                    raise RuntimeError(
-                        "application settlement step is invalid"
-                    )
+            if not work.replay:
+                self._observer.unsubscribe(work.session_id)
                 try:
-                    self._lifecycle.complete_settlement_step(
-                        claim,
-                        step.name,
+                    self._dispatcher.close(work.session_id)
+                except SessionNotFound:
+                    # Only a confirmed exact application settlement may
+                    # interpret absent Dispatcher custody as already closed.
+                    pass
+                self._drop_runtime_details(work.detail_owner)
+                if work.plan_token is not None:
+                    retirement = self._lifecycle.begin_exact_plan_retirement(
+                        work.plan_token
                     )
-                except BaseException:
-                    self._lifecycle.complete_settlement_step(
-                        claim,
-                        step.name,
-                    )
-                    raise
+                    if retirement is not None:
+                        request_id = work.plan_token.request_id
+                        self._runtime.drop_plan(request_id)
+                        with self._lock:
+                            selection = self._plan_selections.get(request_id)
+                            if (
+                                selection is not None
+                                and selection.plan_token == work.plan_token
+                            ):
+                                self._plan_selections.pop(request_id, None)
+                        self._lifecycle.complete_plan_retirement(retirement)
+                        retirement = None
+            self._lifecycle.complete_settlement(work)
         except BaseException:
+            if retirement is not None:
+                self._lifecycle.abandon_plan_retirement(retirement)
             self._lifecycle.abandon_settlement(claim)
             raise
 
@@ -2222,21 +2119,6 @@ class NamiSyncService:
             )
         except LifecycleReceiptConflictError as error:
             raise CommandIdConflictError(str(error)) from None
-
-    def _complete_start(
-        self,
-        token: AssociationToken,
-        request_id: str,
-    ):
-        try:
-            return self._lifecycle.complete_start(token, request_id)
-        except LifecycleReceiptConflictError as error:
-            raise CommandIdConflictError(str(error)) from None
-        except BaseException:
-            try:
-                return self._lifecycle.complete_start(token, request_id)
-            except LifecycleReceiptConflictError as error:
-                raise CommandIdConflictError(str(error)) from None
 
     def _require_open(self) -> None:
         lock = getattr(self, "_lock", None)
