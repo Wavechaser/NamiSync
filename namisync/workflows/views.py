@@ -15,6 +15,7 @@ from namisync.core.events import (
     ItemOutcome,
     TerminalSummary,
     result_item_to_dict,
+    terminal_summary_to_dict,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.integrity import (
@@ -446,6 +447,12 @@ def operation_result_view(result: OperationResult) -> OperationResultView:
             )
         ),
     )
+
+
+def terminal_result_event_data(result: OperationResult) -> dict[str, object]:
+    """Project the exact Terminal event result for reconciliation."""
+
+    return terminal_summary_to_dict(TerminalSummary.from_result(result))
 
 
 def phase_result_view(phase: PhaseResult) -> PhaseResultView:

@@ -199,37 +199,38 @@ updates.
 The current public service surface includes:
 
 ```python
-NamiSyncService(ledger_path, history_path, *, settings_path=None,
-                require_session_attachment=False)
+NamiSyncService(ledger_path, history_path, *, settings_path=None)
 validate_database_contracts() -> DatabaseContractView
 initialize_database_contracts() -> DatabaseContractView
-start_plan(source, target, *, deletion_policy=None, command_id=None,
-           observation_sink=None, session_attachment=None) -> PlanSession
+start_plan(source, target, *, deletion_policy=None, command_id=None)
+    -> PlanSession
+start_task_plan(source, target, *, deletion_policy, command_id,
+                delivery_factory) -> TaskStartView
 preview_selection(request_id) -> SelectionPreviewView
 mutate_selection(request_id, expected_revision, *,
                  deselect=(), reselect=(), command_id=None)
     -> SelectionMutationView
 start_execution(request_id, *, verify_after_execute=False,
                 expected_revision=None, destructive_acknowledged=False,
-                command_id=None, observation_sink=None,
-                session_attachment=None)
+                command_id=None)
     -> ExecutionSession | ExecutionAdmissionView
 start_inventory(*, root_path=None, location_id=None,
                 selected_paths=(), selected_mount=None,
-                selected_ids=None, command_id=None, observation_sink=None,
-                session_attachment=None) -> LocationSession
+                selected_ids=None, command_id=None) -> LocationSession
 start_baseline(*, root_path=None, location_id=None,
                selected_paths=(), selected_mount=None,
-               selected_ids=None, command_id=None, observation_sink=None,
-               session_attachment=None) -> LocationSession
+               selected_ids=None, command_id=None) -> LocationSession
 start_verify(*, root_path=None, location_id=None,
              selected_paths=(), selected_mount=None,
-             selected_ids=None, command_id=None, observation_sink=None,
-             session_attachment=None) -> LocationSession
+             selected_ids=None, command_id=None) -> LocationSession
 start_rebaseline(*, root_path=None, location_id=None,
                  selected_paths=(), selected_mount=None,
-                 selected_ids=None, command_id=None, observation_sink=None,
-                 session_attachment=None) -> LocationSession
+                 selected_ids=None, command_id=None) -> LocationSession
+reobserve_task(task_id, session_id, sink, from_sequence)
+    -> SessionRecordView
+release_task_session(task_id, session_id, delivery)
+    -> TaskSessionReleaseView
+close_task(task_id, session_id, delivery) -> TaskCloseView
 list_unacknowledged_missing(location_id) -> tuple[InventoryRowView, ...]
 list_stale_inventory(location_id, verified_before) -> tuple[InventoryRowView, ...]
 acknowledge_inventory(command_id, location_id, row_ids, *, changed_at)
@@ -246,18 +247,23 @@ get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
     -> HistoryEventPageView
 ```
 
-### Stage 6 second-half service target
+### Task lifecycle ownership
 
 Exact wire, scalar, task-authority, population, and retention contracts live in
 [M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md).
-The event/scalar/persistence subset is active; task authority, population
-retention, and product-surface rows remain accepted but unrealized.
 
-Workflow owns parsing, fresh admission, and canonical Setup; the adapter owns
-only bounded intent slots and recomputed recent-location handles. Every desktop
-session adopts observation before schedulability. Its process-live task binds
-at most one current session, retains orthogonal named generations, and keeps a
-published H2 plan immutable without inventing domain lifecycle or volume locks.
+Workflow owns parsing, fresh admission, and canonical Setup. The application
+lifecycle owns command effects, domain-effect receipts, exact task/session
+association, compensation, and logical settlement. Every admitted session,
+including a direct CLI session without a desktop task, receives an application
+association. Dispatcher independently owns session admission, custody,
+concurrency, control, and close. The current service-owned `SessionObserver`
+owns stream, callback, thread, and subscription lifetime.
+
+The adapter owns only bounded intent and response replay plus queue, drain,
+connection, delivery-generation, terminal-delivery, and presentation state.
+Its process-live task binds at most one current session and keeps a published
+H2 plan immutable without inventing domain lifecycle or volume locks.
 
 Only complete review generations and compact overlays become task state.
 Terminal reconciliation repairs delivery gaps; full result items and transient
@@ -349,42 +355,62 @@ If a queued or resumed activity becomes unresolved at wake-up, its retained
 same corrective guidance. A provisional ambiguous binding exposes no selected
 mount; only an actual prior explicit choice is reported as selected.
 
-The currently implemented session-creating plan, execution, inventory, and
-integrity commands use bounded command-id single-flight guards around receipt
-lookup, mutable validation, admission, and receipt publication. Plan retries
-check the original path gesture before revalidating a filesystem that may have
-changed after admission; ID-based location retry signatures likewise bind the
-canonical raw opaque-id gesture and are checked before rereading mutable
-inventory. Different command ids remain independently admissible; execution
-keeps its named `in-flight` commitment response. In the current session-oriented
-implementation, closing a retained session releases its receipt, and receipt
-lookup, publication, and removal share one lifecycle gate with dispatcher
-retention. The accepted task target moves desktop receipt lifetime to explicit
-task close so plan and later-session replay remain recoverable after terminal
-session release; session-exact release removes only dispatcher/observation
-authority. Shutdown still prevents a late admission return from repopulating
-cleared receipt state, and close-receipt tombstones remain bounded.
+Session-creating plan, execution, inventory, and integrity commands use bounded
+command-id stripes for same-command single flight while disjoint commands may
+enter lower application work concurrently. `TaskLifecycle` is the sole
+domain-effect receipt authority and owns exact session associations; Dispatcher
+custody is not a receipt lifetime. Every admitted direct or task-bound session
+receives an application association before publication.
 
-The web task boundary owns its linked observation, zero-or-one current session,
-retained plan and pane artifacts, revisions, reservations, and receipts.
-Production desktop composition enables `require_session_attachment`; every
-session-creating service method then rejects before selection, location,
-receipt, ledger, or dispatcher work unless it receives both an observation sink
-and a task attachment callback. The callback binds the exact allocated session
-to its unpublished task reservation before observation adoption. The service
-pre-registers one exact composite rollback before Dispatcher preparation, so a
-partial attachment that raises still leaves one retry authority. Observer and
-detail owners retire first, and the task reservation detaches only after exact
-sink identity is absent. A timed-out observer keeps the reservation charged
-while Dispatcher retries that same callback. Malformed or mismatched successful service returns
-receive exact-session cleanup only; plan-drop authority is granted only after
-the returned and attached session identities agree. The CLI leaves the
-constructor flag false and retains ordinary unobserved session behavior.
-`M1_BRIDGE.md` exclusively defines terminal-session release, explicit task
-close, receipt convergence, and the count/byte capacity exposed through the
-bridge. Plan task records retain the workflow's exact `sync-plan` kind across
-the service and browser boundary; the adapter does not rename it. Retained
-database history remains independent of adapter task cleanup.
+Direct start receipts retire after successful direct `close_session`. A task
+start receipt survives terminal-session release and retires only at task close.
+Selection-mutation receipts survive artifact replacement and retire with the
+exact plan on `drop_plan` or service shutdown. Other application receipts retire
+with their owning session, plan, task, or service shutdown. Receipt lookup joins
+an active direct close or full task close rather than replaying a closing
+session; task replay remains available during terminal-session release.
+
+The adapter may independently retain bounded transport-response replay for
+`start_plan`. One entry contains only command id, wire intent, in-flight/result
+delivery state, and an exact `TaskStartView`; it contains no resolved root,
+session association, compensation, observer resource, or cleanup authority. A
+retained successful response may therefore replay before resolving expired or
+evicted source/target slots. A fresh resolution refusal for which no response is
+retained creates no application receipt, association, observer, or dispatcher
+session; refusal replay is not cached.
+
+`TaskLifecyclePort` exposes only task-bound start with a presentation delivery
+factory, exact task/session reobservation, terminal-session release, and task
+close. The application mints the task id and supplies it to the factory before
+dispatcher admission. The factory may create provisional adapter queue state;
+its own call frame discards that state on failure, and no application or service
+rollback refers back into the adapter.
+
+A task-bound release consumes a truthful adapter terminal-delivery fact, advances
+application settlement, confirms service-observer release, closes Dispatcher
+custody, retires the exact runtime detail, and only then optionally retires the
+plan/task. A failed physical step remains the first retry step; an acknowledged
+step is never performed twice. The application retains only association and
+settlement progress, never a sink, stream, callback, observer thread, queue,
+drain, connection, delivery generation, or bridge response.
+
+The web drain owns response replay, its 64-update queue, backpressure, drain
+claims, generations, connection state, and terminal-delivery receipt. Delivery
+shutdown marks delivery closed, invalidates generations, supersedes drains, and
+wakes blocked offers before service observer release. It never owns observer
+release, dispatcher/session close, detail retirement, plan drop, or
+compensation. The strong import contract `Web task drain cannot reach domain
+lifecycle owners` forbids both direct and indirect drain paths to those owners.
+The application admits at most 48 active desktop task effects before invoking a
+delivery factory or lower application work. Independently, the adapter keeps at
+most 48 successful/in-flight start-response entries, retiring successful entries
+with their tasks, and 48 close-response tombstones with least-recently-used
+eviction. These are exact count bounds and make no retained-byte or whole-runtime
+memory claim.
+
+Plan task records retain the workflow's exact `sync-plan` kind across the
+service and browser boundary; retained database history remains independent of
+task presentation cleanup.
 
 The active plan-task adapter retains exact view types, task/session identity,
 exact-integer positive event sequences, wrapper/batch/order/lifecycle checks,
@@ -407,39 +433,33 @@ refusal precedes callbacks, cursor/reducer advancement, and release; successful
 terminal presentation remains required before the browser requests release.
 Failed single-flight starts retain only a closed four-value failure code for
 observation conflict, task unavailability, interruption, or generic start
-failure. Every participant and cleanup-pending replay receives a fresh fixed
-exception without chaining; the initiating or compensation exception, its
-message, type, traceback, cause, context, and attached graph are never retained.
+failure. Every participant and retained failure replay receives a fresh fixed
+exception without chaining; the initiating exception and any domain-cleanup
+failure, including message, type, traceback, cause, context, and attached graph,
+never enter adapter state.
 Explicit observation recovery applies the same closed-boundary rule before it
-reacquires the task condition: a reobserve, validation, or stale-unsubscribe
+reacquires the task condition: a reobserve, validation, or stale-result
 failure becomes one of four fixed recovery codes, its traceback/cause/context
 and any unadmitted current view are dropped, and generation invalidation and
 queue truth use only that code. Ordinary failures return a fresh fixed
 `RuntimeError`, known conflict/unavailability retains its public category, and
 `KeyboardInterrupt`, `SystemExit`, and `GeneratorExit` each return a fresh fixed
-`KeyboardInterrupt`. A stale successful recovery attempts unsubscribe before
-the waiting release continues; success is recorded exactly once, while failure
-leaves unsubscribe ownership with the release path for its existing retry.
-Compensation authority is created only after the service returns an exact
-`PlanSession` whose request and session ids pass canonical validation; malformed
-or graph-bearing collaborator returns are discarded without cleanup authority.
-Both ids are snapshotted once before validation and the frozen compensation
-value is cloned only from those snapshots, so later candidate mutation cannot
-change the admitted cleanup target.
+`KeyboardInterrupt`. A stale successful recovery cannot grant the drain raw
+unsubscribe authority; service-owned observation release remains part of the
+high-level application release path. Adapter retry state contains only its
+fixed public failure code and transport progress, never compensation or
+domain-cleanup flags.
 
-Start ownership is also separated from compensation: the initiating start
-failure is classified and retired before unsubscribe/close/drop callbacks run,
-so cleanup cannot keep the original request or observation graph alive. Retry
-stores only the established four-value failure code and unfinished cleanup
-bits. Replay interruption and the public release, close, and shutdown-
-unsubscribe boundaries retire dependency traceback/cause/context after restoring
-their existing retry flags; successful steps still advance once and a later
-call retries only unfinished work. The service's ordinary path-refusal wrapper
-likewise clears the workflow validation graph before raising the existing
-unchained `SyncPathInputError`. Path-message rendering itself remains an
-unbounded construction transient outside active admission, and bridge/host
-consumers still own the final escaping adapter frame until their separate
-closure.
+The application admission token owns the exact partial-admission liabilities:
+session association, detail installation, observer adoption or stream
+retirement, and dispatcher publication after attachment. Physical work is
+performed outside the lifecycle condition and reported with its exact claim;
+confirmation may retry without repeating that physical work. Initiating and
+cleanup exception graphs are retired before a fixed
+failure escapes. The service's ordinary path-refusal wrapper likewise clears
+the workflow validation graph before raising the existing unchained
+`SyncPathInputError`; bridge and host code retain only their final adapter
+failure frame.
 
 The runtime owns `SemanticSettingsStore`; the service accepts optional
 keyword-only `settings_path` but imports no database package. Its default is
@@ -488,23 +508,26 @@ its completed observation snapshot and loop alias before raising a fresh fixed
 cleanup error. An unexpected ordinary join failure follows that fixed path;
 an unexpected join `KeyboardInterrupt`, `SystemExit`, or `GeneratorExit` becomes
 a fresh fixed `KeyboardInterrupt`, and a join timeout remains a fresh fixed
-`TimeoutError`. Stopped observations and identity-bound rollback closures are
-retired in every case, while only live observations remain for retry. The
-service converts any observer close exception to one ordinary/interrupted
+`TimeoutError`. Stopped observations are retired in every case, while only live
+observations remain for retry. An identity-bound rollback capability returned
+during adoption remains observer-owned and is discarded by the service call
+frame; it is never retained by `TaskLifecycle` or an adapter. The service
+converts any observer close exception to one ordinary/interrupted
 Boolean before dispatcher and runtime shutdown, clears its
 traceback/cause/context without formatting it, then raises a fresh fixed
 `RuntimeError` or `KeyboardInterrupt` in the same categories. Observer retry,
 cached dispatcher success, runtime-close ordering, and incomplete-shutdown
 truth are unchanged.
-Slice 3 adds an explicit positive-first-desired-sequence resubscribe
-seam. The currently implemented plan start may transactionally adopt a
-preopened stream before `PENDING` and schedulable publication. The accepted
-target makes that path mandatory for every desktop session start. In both forms
-the sink is excluded from receipt identity, and attach failure or a shutdown
-race rolls back the unpublished session and starts no work. Unsubscribe closes
-the current stream before joining its worker; a racing replacement is either
-included in that cleanup or rejected and closed by the worker. Service
-shutdown closes all observer streams and joins all observer threads before
+Reobservation uses an explicit positive-first-desired-sequence seam. A
+task-bound plan start transfers its factory-created sink directly to the
+service observer during admission; direct CLI starts remain session-oriented
+and observe afterward. In both forms the sink is excluded from receipt identity,
+and attach failure or a shutdown race rolls back the unpublished application
+liabilities and starts no work. Unsubscribe delegates only to the service
+observer, which closes the current stream before joining its worker; a racing
+replacement is either included in that cleanup or rejected and closed by the
+worker. Service shutdown closes all observer streams and joins all observer
+threads before
 dispatcher shutdown, then closes the workflow runtime last so audit finalization
 cannot reach a closed history store. A join timeout retains the unjoined
 observation and makes the service close fail; later close retries that join, and
@@ -951,10 +974,10 @@ visible coordinated-database refusal.
 Normal window close is a separate host-owned state machine. An admission
 condition around `BridgeDispatcher.dispatch` rejects new calls and waits a
 bounded interval for admitted calls without adding another JavaScript-facing
-method. The
-synchronous WinForms callback only claims one worker and vetoes; that worker
-  performs reject, close/wake, wait, task-observation unsubscribe, and service
-close in order. Window-owned appearance remains subscribed during every
+method. The synchronous WinForms callback only claims one worker and vetoes;
+that worker rejects new dispatch, marks adapter delivery closed and wakes its
+waiters, waits for admitted handlers, then invokes service close. Window-owned
+appearance remains subscribed during every
 retryable failure. Only a complete shutdown closes appearance exactly once and
 permits programmatic destroy. Incomplete and exceptional
 attempts retain the page status and one owned native Retry/Cancel prompt; Retry
@@ -1006,12 +1029,15 @@ is testable without entering a modal event loop.
 
 ## Session And Worker Boundary
 
-Dispatcher remains each session's lifecycle truth. The adapter task serializes
-attachment and retains presentation without owning volume locks or rewriting
-dispatcher/history truth. Publication faults follow the bridge protocol, and
-queued events cannot repopulate discarded provisional state. Toolkit worker
-release is task/session-checked, delivery is marshaled to the UI thread, and
-close waits without blocking the terminal record needed to finish.
+Dispatcher remains each admitted session's custody and control truth; the
+application lifecycle is the sole owner of domain-effect receipts, association,
+compensation, and settlement. The adapter serializes only presentation and
+transport delivery without owning volume locks or rewriting dispatcher/history
+truth. Publication faults follow the bridge protocol, provisional queue state
+is discarded locally, and queued events cannot repopulate it. Toolkit delivery
+is task/session-checked and marshaled to the UI thread; terminal delivery is a
+fact supplied to high-level settlement, not authority for adapter-side observer
+release or session cleanup.
 
 ## Security And Data Isolation
 

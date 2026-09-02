@@ -76,11 +76,11 @@ The scalar/native-identity, source-population, reliable-result-occurrence, and
 bridge-handler walls named below are active. The former complete retained-
 graph and task-artifact byte targets were never production-enforced, had no
 finite derivation domain, and are retired by the initial simplification run;
-they confer no production guarantee and block no delivery checkpoint. Any
-future task surface must ratify its own finite, production-enforceable
-containment rule in its delivery register. `M1_BRIDGE.md` owns the mapped
-decision records, exact wire shapes, and active refusal schemas; other active
-documents point here instead of reproducing these limits.
+they confer no production guarantee. The active task and response-retention
+rules below are exact count bounds only; they introduce no aggregate byte or
+whole-runtime memory guarantee. `M1_BRIDGE.md` owns the mapped decision records,
+exact wire shapes, and active refusal schemas; other active documents point
+here instead of reproducing these limits.
 
 - Every durable or externally presented byte quantity and filesystem
   nanosecond is in `0..9_223_372_036_854_775_807`. Typed relational values use
@@ -184,14 +184,24 @@ The following population and process-live admission walls are active now:
 - The bridge admits at most 64 concurrent handlers before invoking command
   work. This ingress concurrency wall is independent of any future task and
   artifact containment model.
+- The application admits at most 48 active desktop task effects. The
+  `TaskLifecycle` count check runs before task publication, delivery-factory
+  invocation, workflow work, observer adoption, or dispatcher admission. A
+  same-command joiner replays the one admitted effect; a distinct 49th task is
+  refused without beginning lower work.
+- The adapter retains at most 48 start-response entries, which retire with their
+  successful tasks or failed participants, and 48 close-response tombstones,
+  which use least-recently-used eviction. Those transport caches own response
+  replay only. Retirement or eviction cannot retire or revive application
+  effects, associations, observer subscriptions, or dispatcher sessions.
 
-The retired complete-graph figures, proposed task count/byte model, receipt and
-tombstone reservations, projection-generation count, and phase-ahead graph
-reservation are not active walls. They may remain historical design context,
-but they are not acceptance evidence and may not be revived by reference. A
-future production containment wall must have a finite search domain, a named
-runtime enforcer, and independent evidence under §7 before its owning delivery
-row can close.
+The retired complete-graph figures, task-artifact byte model, 4,096-receipt
+design, projection-generation count, and phase-ahead graph reservation are not
+active walls. They may remain historical design context, but they are not
+acceptance evidence and may not be revived by reference. The active 48-count
+rules above do not revive any byte claim. A future production containment wall
+must have a finite search domain, a named runtime enforcer, and independent
+evidence under §7 before its owning delivery row can close.
 
 ---
 
@@ -470,6 +480,33 @@ The current containment obligations are still strict:
   their owning bridge contract; and
 - renderer failure, malformed requests, expired slots, saturation, and teardown
   may degrade only through bounded T1 outcomes.
+
+Desktop transport does not become backend lifecycle authority. The application
+lifecycle is the sole owner of domain-effect receipts, task/session association,
+admission compensation, and logical settlement. Dispatcher independently owns
+session admission, custody, concurrency, control, and close; the current
+service observer independently owns stream, callback, thread, and subscription
+lifetime. Every admitted session, including a direct CLI session without a
+desktop task, has an exact application association.
+
+The adapter may replay a retained successful `start_plan` response before its
+original opaque location slots are available. That cache contains only command
+id, wire intent, in-flight/result delivery state, and `TaskStartView`; it cannot
+contain resolved roots, task/session association, compensation, observer
+resources, or cleanup authority. A fresh resolution refusal with no retained
+response creates none of those backend objects and is not cached as a refusal
+replay.
+
+Adapter shutdown may mark delivery closed, invalidate delivery generations,
+supersede drains, and wake blocked offers. Those are transport-local actions,
+not observer or session teardown. The web drain has a structural no-path rule
+to service, dispatcher, and the private lifecycle aggregate, so it cannot reach
+observer release, dispatcher/session close, detail retirement, plan drop, or
+compensation directly or indirectly. Adapter-bound teardown consumes the
+adapter's delivery fact, advances application settlement, confirms observer
+release, closes dispatcher custody, retires the exact detail, then optionally
+retires the plan/task. Only the first unfinished physical step may retry; an
+acknowledged step cannot run again.
 
 Appearance enhancement and publication are T1-degradable after the window's
 opaque base surface is known safe. Configuration, observation, read, or

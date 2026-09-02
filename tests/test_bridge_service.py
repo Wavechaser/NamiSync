@@ -28,6 +28,10 @@ from namisync.interfaces.service import (
     NamiSyncService,
     SyncPathInputError,
 )
+from namisync.interfaces.task_lifecycle import (
+    LifecycleAssociationError,
+    TaskLifecycle,
+)
 from namisync.workflows.node_tree import (
     NodeTreeKind,
     NodeTreeMember,
@@ -35,6 +39,31 @@ from namisync.workflows.node_tree import (
 )
 
 from _db_fixtures import NOW, file_stat, operation, plan
+
+
+REQUEST_ID = f"{1:032x}"
+PLAN_SESSION_ID = f"{90_001:032x}"
+
+
+def _opaque_id(value: int) -> str:
+    return f"{value:032x}"
+
+
+def _install_plan_effect(
+    lifecycle: TaskLifecycle,
+    request_id: str,
+    session_id: str,
+) -> None:
+    admission = lifecycle.begin_admission(
+        "plan",
+        None,
+        (),
+        expects_observation=False,
+    )
+    association = lifecycle.attach_session(admission, session_id)
+    lifecycle.complete_admission_observation(association, active=False)
+    association = lifecycle.mark_published(admission, session_id)
+    lifecycle.complete_start(association, request_id)
 
 
 def _artifact(plan_value):
@@ -86,7 +115,7 @@ class _Dispatcher:
 
     def submit(self, kind: str, request: object, *, attach=None) -> str:
         self.submissions.append((kind, request))
-        session_id = f"session-{len(self.submissions)}"
+        session_id = _opaque_id(91_000 + len(self.submissions))
         if attach is not None:
             attach(session_id, SimpleNamespace(close=lambda: None))
         return session_id
@@ -100,21 +129,30 @@ def _service(runtime, dispatcher=None) -> NamiSyncService:
         runtime.drop_execution_details = lambda _run_id: None
     if not hasattr(runtime, "drop_inventory_details"):
         runtime.drop_inventory_details = lambda _request_id: None
+    if not hasattr(runtime, "close"):
+        runtime.close = lambda: None
     service = object.__new__(NamiSyncService)
     service._runtime = runtime
     service._dispatcher = dispatcher or _Dispatcher()
-    service._observer = SimpleNamespace(unsubscribe=lambda _session_id: None)
+    service._observer = SimpleNamespace(
+        unsubscribe=lambda _session_id: None,
+        close=lambda: None,
+    )
     service._lock = Lock()
+    service._close_lock = Lock()
+    service._lifecycle = TaskLifecycle()
+    if isinstance(runtime, _PlanRuntime):
+        _install_plan_effect(
+            service._lifecycle,
+            REQUEST_ID,
+            PLAN_SESSION_ID,
+        )
     service._plan_selections = {}
-    service._session_receipts = {}
-    service._receipt_ids_by_session = {}
-    service._detail_owners_by_session = {}
-    service._runtime_detail_retirement_started = False
-    service._session_receipt_locks = tuple(Lock() for _ in range(64))
-    service._session_receipt_lifecycle = Lock()
     service._visibility_receipts = {}
     service._closed = False
     service._shutdown = None
+    service._runtime_closed = False
+    service._observer_closed = False
     return service
 
 
@@ -151,29 +189,29 @@ def test_br_g_13_replan_discards_selection_even_with_identical_operation_ids() -
     runtime = _PlanRuntime(_artifact(plan_value))
     service = _service(runtime)
 
-    initial = service.preview_selection("request")
+    initial = service.preview_selection(REQUEST_ID)
     changed = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
-        command_id="old-plan-gesture",
+        command_id=_opaque_id(101),
     ).preview
     runtime.artifact = _artifact(plan_value)
-    replanned = service.preview_selection("request")
+    replanned = service.preview_selection(REQUEST_ID)
     replayed = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
-        command_id="old-plan-gesture",
+        command_id=_opaque_id(101),
     )
     stale_mutation = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         changed.revision,
         deselect=(str(copied.op_id),),
-        command_id="late-old-plan-gesture",
+        command_id=_opaque_id(102),
     )
     stale_execution = service.start_execution(
-        "request",
+        REQUEST_ID,
         expected_revision=changed.revision,
     )
 
@@ -189,29 +227,13 @@ def test_br_g_13_replan_discards_selection_even_with_identical_operation_ids() -
     assert stale_execution.disposition == "conflict"
 
 
-def test_required_attachment_refuses_execution_before_selection_or_commit() -> None:
-    copied = operation(OperationKind.COPY, source=file_stat())
-    runtime = _PlanRuntime(_artifact(plan((copied,))))
-    dispatcher = _Dispatcher()
-    service = _service(runtime, dispatcher)
-    service._require_session_attachment = True
-
-    with pytest.raises(RuntimeError, match="attachment is required"):
-        service.start_execution("request")
-
-    assert runtime.commits == []
-    assert service._plan_selections == {}
-    assert service._session_receipts == {}
-    assert dispatcher.submissions == []
-
-
 def test_br_g_13_mutation_racing_replan_returns_the_current_artifact() -> None:
     copied = operation(OperationKind.COPY, source=file_stat())
     plan_value = plan((copied,))
     first_artifact = _artifact(plan_value)
     runtime = _PlanRuntime(first_artifact)
     service = _service(runtime)
-    service.preview_selection("request")
+    service.preview_selection(REQUEST_ID)
     entered = Event()
     release = Event()
     original_resolve = service._resolve_plan_selection_ids
@@ -229,10 +251,10 @@ def test_br_g_13_mutation_racing_replan_returns_the_current_artifact() -> None:
         try:
             responses.append(
                 service.mutate_selection(
-                    "request",
+                    REQUEST_ID,
                     0,
                     deselect=(str(copied.op_id),),
-                    command_id="racing-gesture",
+                    command_id=_opaque_id(103),
                 )
             )
         except Exception as error:
@@ -258,7 +280,7 @@ def test_br_g_13_review_projection_is_bound_to_the_selected_plan_artifact() -> N
     runtime = _PlanRuntime(_artifact(plan((copied,))))
     service = _service(runtime)
     service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
     )
@@ -272,7 +294,7 @@ def test_br_g_13_review_projection_is_bound_to_the_selected_plan_artifact() -> N
     runtime.get_plan_review = replan_before_projection
 
     with pytest.raises(ValueError, match="plan changed before review"):
-        service.get_plan_review("request")
+        service.get_plan_review(REQUEST_ID)
 
 
 def test_br_g_11_service_executes_nonempty_noop_plan_as_all_noop(
@@ -445,38 +467,38 @@ def test_br_g_11_service_refuses_an_all_skipped_selection_before_admission() -> 
         dispatcher,
     )
     service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
     )
 
     with pytest.raises(ValueError, match="Nothing is selected"):
-        service.start_execution("request", expected_revision=1)
+        service.start_execution(REQUEST_ID, expected_revision=1)
     assert dispatcher.submissions == []
 
 
 def test_br_g_14_revision_conflict_noop_and_digest_cycle_are_distinct() -> None:
     copied = operation(OperationKind.COPY, source=file_stat())
     service = _service(_PlanRuntime(_artifact(plan((copied,)))))
-    original = service.preview_selection("request")
+    original = service.preview_selection(REQUEST_ID)
 
     first = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
     )
     stale = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         reselect=(str(copied.op_id),),
     )
     accepted_noop = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         1,
         deselect=(str(copied.op_id),),
     )
     restored = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         2,
         reselect=(str(copied.op_id),),
     )
@@ -504,8 +526,8 @@ def test_br_g_15_admission_failure_unfreezes_selection() -> None:
 
     failed_service = _service(runtime, FailingDispatcher())
     with pytest.raises(RuntimeError, match="admission failed"):
-        failed_service.start_execution("request", expected_revision=0)
-    assert failed_service.preview_selection("request").state == "reviewing"
+        failed_service.start_execution(REQUEST_ID, expected_revision=0)
+    assert failed_service.preview_selection(REQUEST_ID).state == "reviewing"
 
 
 def test_br_g_21_commitment_states_are_named_and_always_resolve() -> None:
@@ -520,24 +542,24 @@ def test_br_g_21_commitment_states_are_named_and_always_resolve() -> None:
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             self.submissions.append((kind, request))
             if attach is not None:
-                attach("only-session", SimpleNamespace(close=lambda: None))
+                attach(_opaque_id(92_001), SimpleNamespace(close=lambda: None))
             entered.set()
             assert release.wait(2)
-            return "only-session"
+            return _opaque_id(92_001)
 
     dispatcher = BlockingDispatcher()
     service = _service(_PlanRuntime(_artifact(plan((noop,)))), dispatcher)
     returned: list[object] = []
     thread = Thread(
         target=lambda: returned.append(
-            service.start_execution("request", expected_revision=0)
+            service.start_execution(REQUEST_ID, expected_revision=0)
         )
     )
     thread.start()
     assert entered.wait(1)
 
-    duplicate = service.start_execution("request", expected_revision=0)
-    late_mutation = service.mutate_selection("request", 0)
+    duplicate = service.start_execution(REQUEST_ID, expected_revision=0)
+    late_mutation = service.mutate_selection(REQUEST_ID, 0)
     release.set()
     thread.join(2)
 
@@ -546,7 +568,7 @@ def test_br_g_21_commitment_states_are_named_and_always_resolve() -> None:
     assert late_mutation.disposition == "in-flight"
     assert len(dispatcher.submissions) == 1
     assert isinstance(returned[0], ExecutionSession)
-    frozen = service.mutate_selection("request", 0)
+    frozen = service.mutate_selection(REQUEST_ID, 0)
     assert frozen.disposition == "frozen"
 
 
@@ -556,16 +578,16 @@ def test_br_g_16_retry_receipts_apply_mutations_and_multirow_changes_once() -> N
     service = _service(runtime)
 
     first = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
-        command_id="selection-gesture",
+        command_id=_opaque_id(201),
     )
     replay = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
-        command_id="selection-gesture",
+        command_id=_opaque_id(201),
     )
 
     assert (first.disposition, replay.disposition) == ("applied", "noop")
@@ -596,13 +618,13 @@ def test_br_g_16_retry_receipts_apply_mutations_and_multirow_changes_once() -> N
 
     visibility_service = _service(VisibilityRuntime())
     applied = visibility_service.acknowledge_inventory(
-        "rows-gesture",
+        _opaque_id(202),
         7,
         ("row-b", "row-a", "row-a"),
         changed_at=NOW,
     )
     noops = visibility_service.acknowledge_inventory(
-        "rows-gesture",
+        _opaque_id(202),
         7,
         ("row-a", "row-b"),
         changed_at=NOW,
@@ -615,64 +637,48 @@ def test_br_g_16_retry_receipts_apply_mutations_and_multirow_changes_once() -> N
     session_service = _service(SimpleNamespace(), dispatcher)
     admitted = session_service.start_inventory(
         root_path="F:\\library",
-        command_id="refresh-gesture",
+        command_id=_opaque_id(203),
     )
     repeated = session_service.start_inventory(
         root_path="F:\\library",
-        command_id="refresh-gesture",
+        command_id=_opaque_id(203),
     )
     assert admitted == repeated
     assert len(dispatcher.submissions) == 1
     session_service.close_session(admitted.session_id)
-    assert "refresh-gesture" not in session_service._session_receipts
+    assert session_service._lifecycle.replay_start(
+        _opaque_id(203),
+        "inventory",
+        ("F:\\library", None, (), None, None),
+    ) is None
 
 
 def test_br_g_16_receipt_identity_mismatches_use_the_exact_typed_boundary() -> None:
     copied = operation(OperationKind.COPY, source=file_stat())
     selection_service = _service(_PlanRuntime(_artifact(plan((copied,)))))
     selection_service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
-        command_id="selection-conflict",
+        command_id=_opaque_id(204),
     )
     with pytest.raises(CommandIdConflictError, match="selection mutation"):
         selection_service.mutate_selection(
-            "request",
+            REQUEST_ID,
             0,
             reselect=(str(copied.op_id),),
-            command_id="selection-conflict",
+            command_id=_opaque_id(204),
         )
 
     session_service = _service(SimpleNamespace())
-    session_service._remember_session_receipt(
-        "session-conflict",
-        "plan",
-        ("source-a", "target-a", None),
-        "1" * 32,
-        "session-1",
+    session_service.start_inventory(
+        root_path="F:\\source-a",
+        command_id=_opaque_id(205),
     )
     with pytest.raises(CommandIdConflictError, match="different command"):
-        session_service._session_receipt(
-            "session-conflict",
-            "plan",
-            ("source-b", "target-a", None),
-        )
-
-    session_service._remember_session_receipt(
-        "publication-race",
-        "plan",
-        ("source-a", "target-a", None),
-        "2" * 32,
-        "session-2",
-    )
-    with pytest.raises(CommandIdConflictError, match="raced"):
-        session_service._remember_session_receipt(
-            "publication-race",
-            "plan",
-            ("source-b", "target-b", None),
-            "3" * 32,
-            "session-3",
+        session_service.start_inventory(
+            root_path="F:\\source-b",
+            command_id=_opaque_id(205),
         )
 
     rows = (_inventory_row("row-a", "a.bin"), _inventory_row("row-b", "b.bin"))
@@ -719,7 +725,7 @@ def test_br_g_16_concurrent_session_retry_admits_exactly_one_session() -> None:
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             with submission_lock:
                 self.submissions.append((kind, request))
-                session_id = f"session-{len(self.submissions)}"
+                session_id = _opaque_id(93_000 + len(self.submissions))
                 if len(self.submissions) == 1:
                     entered.set()
                 else:
@@ -739,7 +745,7 @@ def test_br_g_16_concurrent_session_retry_admits_exactly_one_session() -> None:
             returned.append(
                 service.start_inventory(
                     root_path="F:\\library",
-                    command_id="double-click",
+                    command_id=_opaque_id(206),
                 )
             )
         except Exception as error:
@@ -773,7 +779,7 @@ def test_br_g_16_execution_command_id_is_single_flight_across_plans() -> None:
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             with submission_lock:
                 self.submissions.append((kind, request))
-                session_id = f"session-{len(self.submissions)}"
+                session_id = _opaque_id(94_000 + len(self.submissions))
                 if len(self.submissions) == 1:
                     entered.set()
                 else:
@@ -788,6 +794,18 @@ def test_br_g_16_execution_command_id_is_single_flight_across_plans() -> None:
     )
     dispatcher = BlockingDispatcher()
     service = _service(runtime, dispatcher)
+    first_request_id = _opaque_id(301)
+    second_request_id = _opaque_id(302)
+    _install_plan_effect(
+        service._lifecycle,
+        first_request_id,
+        _opaque_id(94_101),
+    )
+    _install_plan_effect(
+        service._lifecycle,
+        second_request_id,
+        _opaque_id(94_102),
+    )
     returned: list[object] = []
     errors: list[Exception] = []
 
@@ -796,14 +814,14 @@ def test_br_g_16_execution_command_id_is_single_flight_across_plans() -> None:
             returned.append(
                 service.start_execution(
                     request_id,
-                    command_id="execution-double-click",
+                    command_id=_opaque_id(207),
                 )
             )
         except Exception as error:
             errors.append(error)
 
-    first = Thread(target=submit, args=("request-a",))
-    second = Thread(target=submit, args=("request-b",))
+    first = Thread(target=submit, args=(first_request_id,))
+    second = Thread(target=submit, args=(second_request_id,))
     first.start()
     assert entered.wait(1)
     second.start()
@@ -833,13 +851,13 @@ def test_br_g_16_id_retry_replays_before_mutable_inventory_resolution() -> None:
     first = service.start_inventory(
         location_id=7,
         selected_ids=("row-a",),
-        command_id="selected-refresh",
+        command_id=_opaque_id(208),
     )
     rows.clear()
     replay = service.start_inventory(
         location_id=7,
         selected_ids=("row-a",),
-        command_id="selected-refresh",
+        command_id=_opaque_id(208),
     )
 
     assert replay == first
@@ -875,21 +893,21 @@ def test_br_g_16_plan_retry_replays_before_paths_are_revalidated(
     first = service.start_plan(
         str(source),
         str(target),
-        command_id="plan-retry",
+        command_id=_opaque_id(209),
     )
     source.rmdir()
 
     replay = service.start_plan(
         str(source),
         str(target),
-        command_id="plan-retry",
+        command_id=_opaque_id(209),
     )
 
     assert replay == first
     assert len(dispatcher.submissions) == 1
 
 
-def test_plan_receipt_replay_ignores_sink_and_does_not_reattach(
+def test_task_plan_receipt_replay_does_not_recreate_delivery_or_observation(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
@@ -920,8 +938,8 @@ def test_plan_receipt_replay_ignores_sink_and_does_not_reattach(
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             self.submissions.append((kind, request, attach))
             if attach is not None:
-                attach("observed-session", object())
-            return "observed-session"
+                attach(_opaque_id(95_001), object())
+            return _opaque_id(95_001)
 
     class Observer:
         def __init__(self) -> None:
@@ -939,369 +957,37 @@ def test_plan_receipt_replay_ignores_sink_and_does_not_reattach(
     service = _service(Runtime(), dispatcher)
     service._observer = observer
     first_sink = lambda _update: None
-    replay_sink = lambda _update: None
-    attachment_calls: list[tuple[str, str]] = []
+    factory_calls: list[tuple[str, str]] = []
 
-    def first_attachment(session_id: str):
-        attachment_calls.append(("attach", session_id))
-        return lambda: attachment_calls.append(("rollback", session_id))
+    def first_factory(task_id: str):
+        factory_calls.append(("first", task_id))
+        return first_sink
 
-    def replay_attachment(session_id: str):
-        attachment_calls.append(("replay", session_id))
-        return lambda: None
+    def replay_factory(task_id: str):
+        factory_calls.append(("replay", task_id))
+        return lambda _update: None
 
-    first = service.start_plan(
+    first = service.start_task_plan(
         str(source),
         str(target),
-        command_id="observed-plan",
-        observation_sink=first_sink,
-        session_attachment=first_attachment,
+        deletion_policy=None,
+        command_id=_opaque_id(210),
+        delivery_factory=first_factory,
     )
-    replay = service.start_plan(
+    replay = service.start_task_plan(
         str(source),
         str(target),
-        command_id="observed-plan",
-        observation_sink=replay_sink,
-        session_attachment=replay_attachment,
+        deletion_policy=None,
+        command_id=_opaque_id(210),
+        delivery_factory=replay_factory,
     )
 
     assert replay == first
     assert len(dispatcher.submissions) == 1
     assert len(observer.adoptions) == 1
-    assert observer.adoptions[0][0] == "observed-session"
+    assert observer.adoptions[0][0] == _opaque_id(95_001)
     assert observer.adoptions[0][1] is first_sink
-    assert attachment_calls == [("attach", "observed-session")]
-
-
-def test_observed_plan_attach_failure_leaves_no_receipt_or_submission_artifact(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "source"
-    target = tmp_path / "target"
-    source.mkdir()
-    target.mkdir()
-
-    class Runtime:
-        def create_plan_request(
-            self,
-            request_id: str,
-            source_path: str,
-            target_path: str,
-            *,
-            deletion_policy: str | None,
-        ):
-            return SimpleNamespace(
-                request_id=request_id,
-                source_path=source_path,
-                target_path=target_path,
-                deletion_policy=deletion_policy,
-            )
-
-    class Dispatcher:
-        def __init__(self) -> None:
-            self.accepted = []
-
-        def submit(self, kind: str, request: object, *, attach=None) -> str:
-            assert attach is not None
-            captured_attach, rollback = attach.capture()
-            try:
-                captured_attach("failed-session", object())
-            except BaseException:
-                rollback()
-                raise
-            self.accepted.append((kind, request))
-            return "failed-session"
-
-    class Observer:
-        def adopt(self, session_id, sink, stream):
-            del session_id, sink, stream
-            raise RuntimeError("attach failed")
-
-        def unsubscribe(self, session_id):
-            del session_id
-
-    dispatcher = Dispatcher()
-    service = _service(Runtime(), dispatcher)
-    service._observer = Observer()
-    attachment_calls: list[tuple[str, str]] = []
-
-    def attachment(session_id: str):
-        attachment_calls.append(("attach", session_id))
-        return lambda: attachment_calls.append(("rollback", session_id))
-
-    with pytest.raises(RuntimeError, match="attach failed"):
-        service.start_plan(
-            str(source),
-            str(target),
-            command_id="failed-observed-plan",
-            observation_sink=lambda _update: None,
-            session_attachment=attachment,
-        )
-
-    assert dispatcher.accepted == []
-    assert service._session_receipts == {}
-    assert service._receipt_ids_by_session == {}
-    assert attachment_calls == [
-        ("attach", "failed-session"),
-        ("rollback", "failed-session"),
-    ]
-
-
-def test_observed_plan_publication_rollback_releases_observer_before_owner(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "source"
-    target = tmp_path / "target"
-    source.mkdir()
-    target.mkdir()
-    lifecycle: list[str] = []
-
-    class Runtime:
-        def create_plan_request(
-            self,
-            request_id: str,
-            source_path: str,
-            target_path: str,
-            *,
-            deletion_policy: str | None,
-        ):
-            return SimpleNamespace(
-                request_id=request_id,
-                source_path=source_path,
-                target_path=target_path,
-                deletion_policy=deletion_policy,
-            )
-
-    class Dispatcher:
-        def submit(self, kind: str, request: object, *, attach=None) -> str:
-            del kind, request
-            assert attach is not None
-            rollback = attach("rolled-back-session", object())
-            assert callable(rollback)
-            rollback()
-            raise RuntimeError("publication failed")
-
-    class Observer:
-        def __init__(self) -> None:
-            self.observations: dict[str, object] = {}
-
-        def adopt(self, session_id, sink, stream):
-            del sink, stream
-            lifecycle.append(f"observe:{session_id}")
-            observation = object()
-            self.observations[session_id] = observation
-
-            def rollback() -> None:
-                lifecycle.append(f"unobserve:{session_id}")
-                if self.observations.get(session_id) is observation:
-                    self.observations.pop(session_id)
-
-            return rollback
-
-        def retains_observation(self, session_id, sink):
-            del sink
-            return session_id in self.observations
-
-    def attachment(session_id: str):
-        lifecycle.append(f"attach:{session_id}")
-        return lambda: lifecycle.append(f"detach:{session_id}")
-
-    service = _service(Runtime(), Dispatcher())
-    service._observer = Observer()
-
-    with pytest.raises(RuntimeError, match="publication failed"):
-        service.start_plan(
-            str(source),
-            str(target),
-            command_id="rolled-back-plan",
-            observation_sink=lambda _update: None,
-            session_attachment=attachment,
-        )
-
-    assert lifecycle == [
-        "attach:rolled-back-session",
-        "observe:rolled-back-session",
-        "unobserve:rolled-back-session",
-        "detach:rolled-back-session",
-    ]
-    assert service._session_receipts == {}
-    assert service._receipt_ids_by_session == {}
-
-
-def test_publication_rollback_drains_detail_and_owner_after_observer_failure() -> None:
-    lifecycle: list[str] = []
-    publication_failure = RuntimeError("publication failed")
-
-    class Dispatcher:
-        def submit(self, kind: str, request: object, *, attach=None) -> str:
-            del kind, request
-            assert attach is not None
-            rollback = attach("failed-detail-session", object())
-            rollback()
-            raise publication_failure
-
-    class Observer:
-        def __init__(self) -> None:
-            self.retained = False
-
-        def adopt(self, session_id, sink, stream):
-            del sink, stream
-            lifecycle.append(f"observe:{session_id}")
-            self.retained = True
-
-            def rollback() -> None:
-                lifecycle.append(f"unobserve:{session_id}")
-                self.retained = False
-                raise OSError("observer cleanup failed")
-
-            return rollback
-
-        def retains_observation(self, session_id, sink):
-            del session_id, sink
-            return self.retained
-
-    def attachment(session_id: str):
-        lifecycle.append(f"attach:{session_id}")
-        return lambda: lifecycle.append(f"detach:{session_id}")
-
-    service = _service(SimpleNamespace(), Dispatcher())
-    service._observer = Observer()
-
-    with pytest.raises(RuntimeError, match="publication failed") as raised:
-        service.start_inventory(
-            root_path="F:\\library",
-            observation_sink=lambda _update: None,
-            session_attachment=attachment,
-        )
-
-    assert raised.value is publication_failure
-    assert lifecycle == [
-        "attach:failed-detail-session",
-        "observe:failed-detail-session",
-        "unobserve:failed-detail-session",
-        "detach:failed-detail-session",
-    ]
-    assert service._detail_owners_by_session == {}
-    assert service._session_receipts == {}
-
-
-def test_publication_rollback_retries_owner_after_exact_observer_retires() -> None:
-    lifecycle: list[str] = []
-    publication_failure = RuntimeError("publication failed")
-
-    class Dispatcher:
-        rollback = None
-        cleanup_failures: list[BaseException] = []
-
-        def submit(self, kind: str, request: object, *, attach=None) -> str:
-            del kind, request
-            assert attach is not None
-            self.rollback = attach("retained-detail-session", object())
-            try:
-                self.rollback()
-            except BaseException as error:
-                self.cleanup_failures.append(error)
-            raise publication_failure
-
-    class Observer:
-        def __init__(self) -> None:
-            self.allow_retirement = False
-            self.observations: dict[str, tuple[object, object]] = {}
-
-        def adopt(self, session_id, sink, stream):
-            del stream
-            observation = object()
-            self.observations[session_id] = (sink, observation)
-            lifecycle.append(f"observe:{session_id}")
-
-            def rollback() -> None:
-                current = self.observations.get(session_id)
-                if current is None or current[1] is not observation:
-                    return
-                lifecycle.append(f"unobserve:{session_id}")
-                if not self.allow_retirement:
-                    raise TimeoutError("observer did not stop")
-                self.observations.pop(session_id)
-
-            return rollback
-
-        def retains_observation(self, session_id, sink):
-            current = self.observations.get(session_id)
-            return current is not None and current[0] is sink
-
-    def attachment(session_id: str):
-        lifecycle.append(f"attach:{session_id}")
-        return lambda: lifecycle.append(f"detach:{session_id}")
-
-    dispatcher = Dispatcher()
-    observer = Observer()
-    service = _service(SimpleNamespace(), dispatcher)
-    service._observer = observer
-
-    with pytest.raises(RuntimeError, match="publication failed") as raised:
-        service.start_inventory(
-            root_path="F:\\library",
-            observation_sink=lambda _update: None,
-            session_attachment=attachment,
-        )
-
-    assert raised.value is publication_failure
-    assert len(dispatcher.cleanup_failures) == 1
-    assert type(dispatcher.cleanup_failures[0]) is RuntimeError
-    assert lifecycle == [
-        "attach:retained-detail-session",
-        "observe:retained-detail-session",
-        "unobserve:retained-detail-session",
-    ]
-    assert service._detail_owners_by_session == {}
-
-    observer.allow_retirement = True
-    assert dispatcher.rollback is not None
-    dispatcher.rollback()
-    dispatcher.rollback()
-
-    assert lifecycle == [
-        "attach:retained-detail-session",
-        "observe:retained-detail-session",
-        "unobserve:retained-detail-session",
-        "unobserve:retained-detail-session",
-        "detach:retained-detail-session",
-    ]
-
-
-def test_desktop_attachment_requirement_covers_location_session_admission() -> None:
-    dispatcher = _Dispatcher()
-    service = _service(SimpleNamespace(), dispatcher)
-    service._require_session_attachment = True
-
-    with pytest.raises(RuntimeError, match="attachment is required"):
-        service.start_inventory(root_path="F:\\library")
-
-    assert dispatcher.submissions == []
-    lifecycle: list[str] = []
-
-    class Observer:
-        def adopt(self, session_id, sink, stream):
-            del sink, stream
-            lifecycle.append(f"observe:{session_id}")
-            return lambda: lifecycle.append(f"unobserve:{session_id}")
-
-    def attachment(session_id: str):
-        lifecycle.append(f"attach:{session_id}")
-        return lambda: lifecycle.append(f"detach:{session_id}")
-
-    service._observer = Observer()
-    started = service.start_inventory(
-        root_path="F:\\library",
-        observation_sink=lambda _update: None,
-        session_attachment=attachment,
-    )
-
-    assert started.session_id == "session-1"
-    assert lifecycle == ["attach:session-1", "observe:session-1"]
-    assert service._detail_owners_by_session == {
-        "session-1": ("inventory", started.request_id)
-    }
+    assert factory_calls == [("first", first.task_id)]
 
 
 def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
@@ -1312,10 +998,10 @@ def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             self.submissions.append((kind, request))
             if attach is not None:
-                attach("late-session", SimpleNamespace(close=lambda: None))
+                attach(_opaque_id(96_001), SimpleNamespace(close=lambda: None))
             entered.set()
             assert release.wait(2)
-            return "late-session"
+            return _opaque_id(96_001)
 
         def shutdown(self, timeout: float):
             return SimpleNamespace(
@@ -1327,7 +1013,10 @@ def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     runtime = SimpleNamespace(close=lambda: None)
     dispatcher = Dispatcher()
     service = _service(runtime, dispatcher)
-    service._observer = SimpleNamespace(close=lambda: None)
+    service._observer = SimpleNamespace(
+        close=lambda: None,
+        unsubscribe=lambda _session_id: None,
+    )
     errors: list[Exception] = []
 
     def submit() -> None:
@@ -1347,82 +1036,12 @@ def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     worker.join(2)
 
     assert not worker.is_alive()
-    assert errors == []
-    assert service._session_receipts == {}
-    assert service._receipt_ids_by_session == {}
-    assert service._detail_owners_by_session == {}
-
-
-def test_br_g_16_shutdown_waits_for_an_inflight_receipt_replay() -> None:
-    get_entered = Event()
-    get_release = Event()
-
-    class RetainingDispatcher(_Dispatcher):
-        def __init__(self) -> None:
-            super().__init__()
-            self.sessions: set[str] = set()
-            self.block_get = False
-
-        def submit(self, kind: str, request: object, *, attach=None) -> str:
-            session_id = super().submit(kind, request, attach=attach)
-            self.sessions.add(session_id)
-            return session_id
-
-        def get(self, session_id: str):
-            if session_id not in self.sessions:
-                raise SessionNotFound(session_id)
-            if self.block_get:
-                get_entered.set()
-                assert get_release.wait(2)
-            return SimpleNamespace(session_id=session_id)
-
-        def shutdown(self, timeout: float):
-            return SimpleNamespace(
-                complete=True,
-                unfinished=(),
-                custody_released=True,
-            )
-
-    runtime = SimpleNamespace(close=lambda: None)
-    dispatcher = RetainingDispatcher()
-    service = _service(runtime, dispatcher)
-    service._observer = SimpleNamespace(close=lambda: None)
-    first = service.start_inventory(
-        root_path="F:\\library",
-        command_id="retained-refresh",
-    )
-    dispatcher.block_get = True
-    get_entered.clear()
-
-    replayed: list[object] = []
-    retry = Thread(
-        target=lambda: replayed.append(
-            service.start_inventory(
-                root_path="F:\\library",
-                command_id="retained-refresh",
-            )
-        )
-    )
-    retry.start()
-    assert get_entered.wait(1)
-
-    closed: list[object] = []
-    closer = Thread(target=lambda: closed.append(service.close()))
-    closer.start()
-    closer.join(0.05)
-
-    assert closer.is_alive()
-    assert service._closed is False
-    get_release.set()
-    retry.join(2)
-    closer.join(2)
-
-    assert not retry.is_alive()
-    assert not closer.is_alive()
-    assert replayed == [first]
-    assert len(closed) == 1
-    assert closed[0].complete is True
-    assert service._session_receipts == {}
+    assert len(errors) == 1
+    assert type(errors[0]) is LifecycleAssociationError
+    assert str(errors[0]) == "admission token is retired"
+    assert service._lifecycle._start_receipts == {}
+    assert service._lifecycle._admissions == {}
+    assert service._lifecycle._sessions == {}
 
 
 def test_br_g_16_close_and_retry_do_not_replay_a_closed_session() -> None:
@@ -1491,67 +1110,7 @@ def test_br_g_16_close_and_retry_do_not_replay_a_closed_session() -> None:
     assert len(dispatcher.submissions) == 2
 
 
-def test_br_g_16_close_before_receipt_publication_drops_late_receipt() -> None:
-    remember_entered = Event()
-    remember_release = Event()
-
-    class RetainingDispatcher(_Dispatcher):
-        def __init__(self) -> None:
-            super().__init__()
-            self.sessions: set[str] = set()
-
-        def submit(self, kind: str, request: object, *, attach=None) -> str:
-            session_id = super().submit(kind, request, attach=attach)
-            self.sessions.add(session_id)
-            return session_id
-
-        def get(self, session_id: str):
-            if session_id not in self.sessions:
-                raise SessionNotFound(session_id)
-            return SimpleNamespace(session_id=session_id)
-
-        def close(self, session_id: str) -> None:
-            if session_id not in self.sessions:
-                raise SessionNotFound(session_id)
-            self.sessions.remove(session_id)
-            super().close(session_id)
-
-    dispatcher = RetainingDispatcher()
-    service = _service(SimpleNamespace(), dispatcher)
-    remember = service._remember_session_receipt
-
-    def delayed_remember(*args) -> None:
-        remember_entered.set()
-        assert remember_release.wait(2)
-        remember(*args)
-
-    service._remember_session_receipt = delayed_remember
-    admitted: list[object] = []
-    worker = Thread(
-        target=lambda: admitted.append(
-            service.start_inventory(
-                root_path="F:\\library",
-                command_id="late-receipt",
-            )
-        )
-    )
-
-    worker.start()
-    assert remember_entered.wait(1)
-    service.close_session("session-1")
-    remember_release.set()
-    worker.join(2)
-
-    assert not worker.is_alive()
-    assert admitted[0].session_id == "session-1"
-    replay = service.start_inventory(
-        root_path="F:\\library",
-        command_id="late-receipt",
-    )
-    assert replay.session_id == "session-2"
-
-
-def test_session_receipt_publication_does_not_reread_dispatcher_after_attach(
+def test_task_receipt_publication_does_not_reread_dispatcher_after_attach(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
@@ -1580,24 +1139,31 @@ def test_session_receipt_publication_does_not_reread_dispatcher_after_attach(
             del session_id
             raise RuntimeError("post-publication lookup is forbidden")
 
-    attached: list[str] = []
+    delivery_tasks: list[str] = []
     service = _service(Runtime(), Dispatcher())
     service._observer = SimpleNamespace(
         adopt=lambda session_id, _sink, _stream: lambda: None,
     )
 
-    started = service.start_plan(
+    def delivery_factory(task_id: str):
+        delivery_tasks.append(task_id)
+        return lambda _update: None
+
+    started = service.start_task_plan(
         str(source),
         str(target),
-        command_id="post-publication-lookup",
-        observation_sink=lambda _update: None,
-        session_attachment=lambda session_id: (
-            attached.append(session_id) or (lambda: None)
-        ),
+        deletion_policy=None,
+        command_id=_opaque_id(212),
+        delivery_factory=delivery_factory,
     )
 
-    assert started.session_id == "session-1"
-    assert attached == ["session-1"]
+    assert started.session_id == _opaque_id(91_001)
+    assert delivery_tasks == [started.task_id]
+    association = service._lifecycle.require_session(
+        started.session_id,
+        task_id=started.task_id,
+    )
+    assert association.session_id == started.session_id
 
 
 def test_br_g_17_omitted_revision_is_limited_to_pristine_cli_selection() -> None:
@@ -1606,16 +1172,16 @@ def test_br_g_17_omitted_revision_is_limited_to_pristine_cli_selection() -> None
         reason=OperationReason.METADATA_MATCH,
     )
     pristine = _service(_PlanRuntime(_artifact(plan((noop,)))))
-    assert isinstance(pristine.start_execution("request"), ExecutionSession)
+    assert isinstance(pristine.start_execution(REQUEST_ID), ExecutionSession)
 
     copied = operation(OperationKind.COPY, source=file_stat())
     edited = _service(_PlanRuntime(_artifact(plan((copied,)))))
     edited.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(copied.op_id),),
     )
-    refused = edited.start_execution("request")
+    refused = edited.start_execution(REQUEST_ID)
     assert isinstance(refused, ExecutionAdmissionView)
     assert refused.disposition == "conflict"
 
@@ -1684,16 +1250,16 @@ def test_br_g_20_risk_uses_effective_updates_and_excludes_move_update() -> None:
     admission_service = _service(_PlanRuntime(_artifact(plan_value)))
     with pytest.raises(TypeError, match="must be a bool"):
         admission_service.start_execution(
-            "request",
+            REQUEST_ID,
             expected_revision=0,
             destructive_acknowledged="false",
         )
     required = admission_service.start_execution(
-        "request",
+        REQUEST_ID,
         expected_revision=0,
     )
     admitted = admission_service.start_execution(
-        "request",
+        REQUEST_ID,
         expected_revision=0,
         destructive_acknowledged=True,
     )
@@ -1704,9 +1270,9 @@ def test_br_g_20_risk_uses_effective_updates_and_excludes_move_update() -> None:
 
     service = _service(_PlanRuntime(_artifact(plan_value)))
 
-    before = service.preview_selection("request")
+    before = service.preview_selection(REQUEST_ID)
     after = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(str(update.op_id),),
     ).preview
@@ -1738,11 +1304,11 @@ def test_br_g_24_folder_mutation_uses_full_subtree_not_collapsed_rows() -> None:
     )
     plan_value = plan((folder, first, second))
     service = _service(_PlanRuntime(_artifact(plan_value)))
-    tree = service._plan_tree("request", plan_value)
+    tree = service._plan_tree(REQUEST_ID, plan_value)
     folder_id = tree.node_id_for_path_key("FOLDER")
 
     changed = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(folder_id,),
     ).preview
@@ -1780,10 +1346,10 @@ def test_br_g_24_folder_mutation_skips_safety_disabled_descendants() -> None:
     )
     plan_value = plan((folder, selectable, blocked))
     service = _service(_PlanRuntime(_artifact(plan_value)))
-    tree = service._plan_tree("request", plan_value)
+    tree = service._plan_tree(REQUEST_ID, plan_value)
 
     changed = service.mutate_selection(
-        "request",
+        REQUEST_ID,
         0,
         deselect=(tree.node_id_for_path_key("FOLDER"),),
     ).preview

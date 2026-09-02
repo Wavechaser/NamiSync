@@ -14,6 +14,7 @@ from namisync.interfaces.service import (
     SemanticSettingsPatchView,
     SemanticSettingsView,
 )
+from namisync.interfaces.task_lifecycle import TaskLifecycle
 from namisync.workflows.runtime import LocalWorkflowRuntime
 
 
@@ -252,6 +253,7 @@ def test_malformed_settings_refuse_planning_before_dispatcher_submit(
     service = object.__new__(NamiSyncService)
     service._runtime = runtime
     service._dispatcher = Dispatcher()
+    service._lifecycle = TaskLifecycle()
     try:
         with pytest.raises(ValueError, match="missing or unknown"):
             service.start_plan(str(source), str(target))

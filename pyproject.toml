@@ -150,3 +150,13 @@ layers = [
     "namisync.interfaces.cli | namisync.interfaces.web",
     "namisync.interfaces.service",
 ]
+
+[[tool.importlinter.contracts]]
+name = "Web task drain cannot reach domain lifecycle owners"
+type = "forbidden"
+source_modules = ["namisync.interfaces.web.drain"]
+forbidden_modules = [
+    "namisync.dispatcher",
+    "namisync.interfaces.service",
+    "namisync.interfaces.task_lifecycle",
+]

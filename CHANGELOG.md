@@ -23,7 +23,7 @@ history, and workflow product while building its secured headed WebView2 shell.
 Redundant in-process transports and certification layers were removed while
 preserving public behavior, real boundary checks, and persisted contracts.
 
-#### Remove internal workflow transport and duplicate event certification (2026-09-01)
+#### Remove duplicate internal transport, certification, and lifecycle authority (2026-09-01 – 2026-09-03)
 
 - In `workflows/` and `dispatcher/`, removed process-local plan, execution,
   inventory, and integrity JSON codecs, payload versions, byte charges, and
@@ -43,10 +43,27 @@ preserving public behavior, real boundary checks, and persisted contracts.
   browser tests retain the supported guarantees without standing corpus or
   hash-maintenance infrastructure.
 - A disposable domain-field probe crossed the domain model, public view, and
-  dispatcher resume path in six files against a target of eight. Across the
-  pass and its boundary follow-ups, production fell by 4,308 net lines and
-  tests by 2,551; the final ordinary run passed 4,879 tests with four capability
-  skips and all 11 import contracts kept.
+  dispatcher resume path in six files against a target of eight. Across that
+  transport/certification slice and its boundary follow-ups, production fell
+  by 4,308 net lines and tests by 2,551; its ordinary run passed 4,879 tests
+  with four capability skips and all 11 then-current import contracts kept.
+- Added one application `TaskLifecycle` and narrow adapter-facing
+  `TaskLifecyclePort`; application state now solely owns domain-effect
+  receipts, task/session association, admission rollback, detail liability,
+  and logical settlement. Dispatcher custody and observer lifetime remain
+  separate, and every admitted direct or task-bound session is associated.
+- Removed web-drain attachment, compensation, raw unsubscribe/session-close,
+  plan-drop, and cleanup authority while retaining its bounded start-response
+  replay, close tombstones, provisional delivery, 64-update queue,
+  backpressure, drain/generation state, terminal-delivery facts, and shutdown
+  wakeup. A strong indirect import law prevents drain-side reach into the
+  lifecycle, service, or dispatcher owners.
+- The frozen bridge/CLI/event/persistence/filesystem oracle remained exact;
+  all 131 behavioral and eight helper ledger rows are closed. Lifecycle,
+  bridge/service, web, and bundled-Node transport focused gates passed;
+  departments passed 2,339 tests with 2,645 deselected, ordinary passed 4,952
+  with four capability skips and 28 deselected, and all 12 import contracts
+  remained intact.
 
 ### M1 Hardening
 

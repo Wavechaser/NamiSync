@@ -16,12 +16,15 @@ from types import SimpleNamespace
 import pytest
 
 import namisync.interfaces.web.bridge as bridge_module
-import namisync.interfaces.web.drain as drain_module
 from namisync.core.events import ItemOutcome, PhaseChanged, Progress
 from namisync.core.planning import OperationKind
 from namisync.core.session import OperationResult, RunContext, SessionId, SessionState
 from namisync.dispatcher.event_bus import EventHub
 from namisync.interfaces.service import NamiSyncService
+from namisync.interfaces.task_lifecycle import (
+    TASK_EFFECT_CAPACITY,
+    TaskLifecycle,
+)
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
     AdmissionRefused,
@@ -1574,20 +1577,26 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         def __init__(self) -> None:
             self.submissions: list[object] = []
 
-        def submit(self, kind: str, request: object) -> str:
+        def submit(
+            self,
+            kind: str,
+            request: object,
+            *,
+            attach=None,
+        ) -> str:
             del kind
             self.submissions.append(request)
-            return "5" * 32
+            session_id = "5" * 32
+            if attach is not None:
+                attach(session_id, SimpleNamespace(close=lambda: None))
+            return session_id
 
     runtime = Runtime()
     service = object.__new__(NamiSyncService)
     service._runtime = runtime
     service._dispatcher = Dispatcher()
     service._lock = Lock()
-    service._session_receipts = {}
-    service._receipt_ids_by_session = {}
-    service._session_receipt_locks = tuple(Lock() for _ in range(64))
-    service._session_receipt_lifecycle = Lock()
+    service._lifecycle = TaskLifecycle()
     service._closed = False
 
     class Registry:
@@ -1775,7 +1784,7 @@ def test_br_g_32_admitted_call_finishes_while_close_refuses_new_body() -> None:
 def test_bridge_admission_ceiling_is_sized_for_shared_task_headroom() -> None:
     assert (
         bridge_module._MAX_ADMITTED_HANDLERS
-        == drain_module._TASK_CAPACITY + 16
+        == TASK_EFFECT_CAPACITY + 16
     )
 
 

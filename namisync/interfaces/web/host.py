@@ -386,7 +386,6 @@ class _DesktopCloseHooks:
     reject_dispatch: Callable[[], None]
     wake_waiters: Callable[[], None]
     wait_for_handlers: Callable[[], None]
-    unsubscribe_observations: Callable[[], None]
 
 
 class _DesktopQuiescenceError(RuntimeError):
@@ -408,7 +407,6 @@ def _quiesce_desktop(
         ("dispatch_rejection", hooks.reject_dispatch),
         ("registry_wake", hooks.wake_waiters),
         ("handler_wait", hooks.wait_for_handlers),
-        ("observation_cleanup", hooks.unsubscribe_observations),
     ):
         try:
             callback()
@@ -1123,7 +1121,6 @@ def _create_service(paths: AppPaths):
         paths.ledger,
         paths.history,
         settings_path=paths.settings,
-        require_session_attachment=True,
     )
 
 
@@ -1263,7 +1260,6 @@ def _desktop_close_hooks(
         reject_dispatch=dispatcher.begin_close,
         wake_waiters=registry.begin_close,
         wait_for_handlers=dispatcher.wait_for_handlers,
-        unsubscribe_observations=registry.unsubscribe_all,
     )
 
 
@@ -1400,9 +1396,6 @@ def _finalize_primary(
                     "dispatch_rejection": "startup.dispatch_rejection_failed",
                     "registry_wake": "startup.registry_wake_failed",
                     "handler_wait": "startup.handler_wait_failed",
-                    "observation_cleanup": (
-                        "startup.observation_cleanup_failed"
-                    ),
                 }
                 cause = error.__cause__
                 if not isinstance(cause, Exception):
@@ -1412,19 +1405,13 @@ def _finalize_primary(
                     failure = cause
                 quiesced = False
         elif registry is not None:
-            for event, callback in (
-                ("startup.registry_wake_failed", registry.begin_close),
-                (
-                    "startup.observation_cleanup_failed",
-                    registry.unsubscribe_all,
-                ),
-            ):
-                try:
-                    callback()
-                except Exception as error:
-                    _log_cleanup_failure(event, error)
-                    if failure is None:
-                        failure = error
+            try:
+                registry.begin_close()
+            except Exception as error:
+                _log_cleanup_failure("startup.registry_wake_failed", error)
+                if failure is None:
+                    failure = error
+                quiesced = False
         if quiesced:
             try:
                 shutdown = service.close()

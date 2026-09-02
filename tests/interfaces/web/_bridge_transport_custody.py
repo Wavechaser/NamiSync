@@ -1227,6 +1227,8 @@ def _run_fixture(
     from namisync.dispatcher import Dispatcher, PreparedSession, WorkflowRegistration
     from namisync.interfaces import service as service_module
     from namisync.interfaces.service import NamiSyncService
+    import namisync.interfaces.web.bridge as bridge_module
+    import namisync.interfaces.web.drain as drain_module
     from namisync.interfaces.web.drain import TaskRegistry
     from namisync.workflows import PLAN_KIND
 
@@ -1256,10 +1258,14 @@ def _run_fixture(
         service_module, "_dispatcher", lambda _runtime: dispatcher
     ):
         service = NamiSyncService(root / "ledger.db", root / "history.db")
-    tokens = iter(f"{index:032x}" for index in range(1, 20_000))
     registry = TaskRegistry(
         service,
-        token=lambda: next(tokens),
+        response_codec=drain_module._TaskDrainResponseCodec(
+            bridge_module.BridgeResponseTooLargeError,
+            bridge_module._admit_task_drain_response_prefix,
+            bridge_module._peek_task_drain_response,
+            bridge_module._consume_task_drain_response,
+        ),
         drain_wait=0.1,
         progress_linger=0.001,
     )
@@ -1318,7 +1324,6 @@ def _run_fixture(
             state.maximum_tail_release.set()
             state.maximum_finish.set()
         registry.begin_close()
-        registry.unsubscribe_all()
         service.close(timeout=5)
 
 

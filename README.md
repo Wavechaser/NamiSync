@@ -268,8 +268,11 @@ history, and workflow product while building its secured headed WebView2 shell.
 
 ### M1 Consolidation
 
-Redundant in-process transports and certification layers were removed while
-preserving public behavior, real boundary checks, and persisted contracts.
+Redundant in-process transports, certification layers, and task-lifecycle
+authorities were removed while preserving public behavior, real boundary
+checks, and persisted contracts. Application state owns domain effects and
+settlement; dispatcher custody, observer lifetime, and adapter delivery remain
+separate.
 
 ### M1 Hardening
 

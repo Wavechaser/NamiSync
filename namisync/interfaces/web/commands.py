@@ -7,7 +7,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Protocol
+from typing import Protocol, runtime_checkable
 
 from namisync.interfaces.ui_state import (
     APPEARANCE_VALUE_VERSION,
@@ -18,7 +18,7 @@ from namisync.interfaces.ui_state import (
     CosmeticSectionSnapshot,
     ThemeMode,
 )
-from namisync.interfaces.web.drain import (
+from namisync.interfaces.task_port import (
     TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
@@ -230,6 +230,13 @@ class TaskAuthority(Protocol):
     def close_task(self, task_id: str, session_id: str) -> TaskCloseView: ...
 
 
+@runtime_checkable
+class _TaskResponseCodecBinder(Protocol):
+    """Optional concrete-registry composition hook."""
+
+    def bind_response_codec(self, response_codec: object) -> None: ...
+
+
 class CosmeticStateAuthority(Protocol):
     """Exact interface-owned state surface exposed through the bridge."""
 
@@ -386,6 +393,23 @@ def production_command_specs(
         appearance_acknowledged
     ):
         raise TypeError("appearance acknowledgment callback must be callable")
+    if isinstance(registry, _TaskResponseCodecBinder):
+        from .bridge import (
+            BridgeResponseTooLargeError,
+            _admit_task_drain_response_prefix,
+            _consume_task_drain_response,
+            _peek_task_drain_response,
+        )
+        from .drain import _TaskDrainResponseCodec
+
+        registry.bind_response_codec(
+            _TaskDrainResponseCodec(
+                BridgeResponseTooLargeError,
+                _admit_task_drain_response_prefix,
+                _peek_task_drain_response,
+                _consume_task_drain_response,
+            )
+        )
 
     def acknowledge_shell(invocation: object) -> object:
         if (

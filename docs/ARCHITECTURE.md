@@ -713,6 +713,10 @@ custody, cross-process mutation exclusion, lifecycle control, event sequencing,
 bounded replay, and orderly teardown. Workflow kinds and pause capability are
 registry data; the dispatcher never interprets domain checkpoints.
 
+Dispatcher authority begins at session admission and ends at session custody,
+control, concurrency, and close. It owns no desktop task, drain, response replay,
+domain-effect receipt, detail owner, compensation, or plan-retirement state.
+
 Every workflow registration must transfer a checkpoint detached from producer-
 owned mutable state, treat retained custody as read-only, and materialize fresh
 invocation state on open. This is a workflow-construction obligation, not a
@@ -756,8 +760,65 @@ shared presentation active; remaining product surfaces unrealized
 
 The service facade exposes primitive typed views over workflows and dispatcher
 state. CLI and desktop adapters are siblings and own no sync, selection,
-inventory, or history policy. Interface-owned task identity may outlive an
-individual session but does not replace plan or session authority.
+inventory, history, session-custody, or domain-effect policy.
+
+`TaskLifecycle` is the sole application owner of domain-effect receipts,
+task/session association, admission compensation, detail-owner liability, plan
+mutation retirement exclusion, and logical settlement. Every admitted session,
+including a direct CLI session with no desktop task, receives an exact
+application association. The aggregate retains identifiers, immutable intent,
+and completed-step progress only; it never retains an event stream, sink,
+callback, observer thread, transport queue, drain claim, connection, delivery
+generation, or bridge response.
+
+Receipt retirement follows the effect owner, not dispatcher custody. A direct
+session-start receipt retires after successful direct session close. A
+task-bound start receipt survives terminal-session release and retires at task
+close. Selection-mutation receipts survive artifact replacement and retire with
+the exact plan on plan drop or service shutdown; remaining application receipts
+retire with their owning session, plan, task, or service shutdown.
+
+The current `SessionObserver` remains implemented in `interfaces/service.py`.
+It alone owns stream, callback, worker-thread, and subscription lifetime; the
+application aggregate records only whether observer release remains a physical
+settlement liability. Dispatcher alone owns admitted session custody and close.
+Adapters own only presentation and transport state: bounded response replay,
+queueing, drain claims, connection state, delivery generations, terminal-
+delivery facts, and response delivery.
+
+Application admission is bounded to 48 active desktop task effects before any
+delivery factory or lower work begins. Adapter start-response state is also
+bounded to 48 entries; successful entries retire with their task and failed
+entries after their participants leave. Close-response tombstones are a separate
+48-entry least-recently-used cache. These are count bounds only;
+architecture claims no aggregate retained bytes or whole-runtime memory ceiling
+from them.
+
+Adapter-bound terminal teardown is ordered as delivery fact → application
+settlement → confirmed observer release → dispatcher close → exact runtime
+detail retirement → optional plan/task retirement. One logical settlement may
+retry its first unfinished physical step, but an acknowledged step is never
+performed again. A task delivery factory may construct provisional adapter
+queue state before admission; its call frame discards that state locally on
+failure. Neither the service nor `TaskLifecycle` retains or invokes an adapter
+rollback.
+
+The adapter-facing `TaskLifecyclePort` exposes only task-bound plan start with a
+delivery factory, exact task/session reobservation, terminal-session release,
+and task close. It exposes no raw unsubscribe, dispatcher/session close, plan
+drop, compensation, stream, or rollback primitive. The import contract named
+`Web task drain cannot reach domain lifecycle owners` forbids every direct or
+indirect path from `interfaces/web/drain.py` to the dispatcher, service, or
+private lifecycle aggregate.
+
+Interface lifecycle source ownership is:
+
+| Contract family | Canonical source |
+| --- | --- |
+| Adapter-facing task views and narrow lifecycle port | `namisync/interfaces/task_port.py` |
+| Application effect receipts, association, compensation, and settlement | `namisync/interfaces/task_lifecycle.py` |
+| Current session observation lifetime and service composition | `namisync/interfaces/service.py` |
+| Desktop response replay, queue, drain, generation, and delivery state | `namisync/interfaces/web/drain.py` |
 
 The desktop bridge exposes one versioned, allowlisted command surface and
 bounds the complete serialized request to 65,536 UTF-8 bytes before
@@ -953,10 +1014,8 @@ owning module document rather than copying it here. Add architecture detail
 only when multiple layers must coordinate around the decision or when changing
 it would reinterpret durable state or public contracts.
 
-The accepted Stage 6 second-half target is intentionally not restated here.
-`M1_BRIDGE.md` maps its event, database, task-authority, publication, and
-retention decisions to the existing DR-BR records; `DEFENSE.md` §1.3 owns the
-normative scalar and containment walls. Accepted but unrealized contracts do
-not describe running code; the active current-version contracts above do. A
-coordinated replacement must update this document and the contract-to-source
-locator in the same implementation commit that activates it.
+`M1_BRIDGE.md` owns exact bridge commands and wire behavior; `DEFENSE.md` §1.3
+owns normative scalar and containment walls. The active interface lifecycle
+ownership and source locator are stated in §4.10 above. A coordinated
+replacement must update this document and that locator in the same
+implementation commit that activates it.

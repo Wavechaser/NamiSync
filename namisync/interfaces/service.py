@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from datetime import datetime, timezone
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from hashlib import sha256
+from json import dumps
 from pathlib import Path
 from threading import Event, Lock, Thread, current_thread
 from time import monotonic
@@ -66,12 +67,31 @@ from namisync.workflows.views import (
     inventory_row_view,
     session_event_view,
     session_record_view,
+    terminal_result_event_data,
+)
+
+from namisync.interfaces.task_lifecycle import (
+    AssociationToken,
+    LifecycleAssociationError,
+    LifecycleReceiptConflictError,
+    LifecycleTaskCapacityError,
+    PlanToken,
+    TaskLifecycle,
+)
+from namisync.interfaces.task_port import (
+    TaskCloseView,
+    TaskDeliveryFactory,
+    TaskDeliverySink,
+    TaskIntentConflictError,
+    TaskSessionReleaseView,
+    TaskStartView,
+    TaskTerminalDelivery,
+    TaskUnavailableError,
 )
 
 
 SessionUpdate = SessionEventView | SessionRecordView
 SessionSink = Callable[[SessionUpdate], None]
-SessionAttachment = Callable[[str], Callable[[], None]]
 FINALIZATION_TIMEOUT_MARGIN_SECONDS = 1.0
 # Keep ordinary history retry inside the audit cutoff, and shutdown long enough
 # for a late pump claim to consume both bounds in sequence.
@@ -95,11 +115,6 @@ _SERVICE_OBSERVER_CLEANUP_FAILURE = "service observer cleanup failed"
 _SERVICE_OBSERVER_CLEANUP_INTERRUPTED = (
     "service observer cleanup was interrupted"
 )
-_SESSION_ATTACHMENT_CLEANUP_PENDING = (
-    "session attachment cleanup remains pending"
-)
-
-
 _OBSERVER_FAILURE_ORDINARY = "ordinary"
 _OBSERVER_FAILURE_TIMEOUT = "timeout"
 _OBSERVER_FAILURE_INTERRUPTED = "interrupted"
@@ -293,21 +308,11 @@ class _Observation:
 @dataclass(slots=True)
 class _PlanSelectionState:
     artifact: object
+    plan_token: PlanToken
     revision: int = 0
     user_deselected: frozenset[str] = frozenset()
     phase: str = "reviewing"
-    mutation_receipts: dict[str, tuple[object, ...]] = field(
-        default_factory=dict
-    )
     execution_session: ExecutionSession | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class _SessionReceipt:
-    kind: str
-    signature: tuple[object, ...]
-    request_id: str
-    session_id: str
 
 
 class SessionObserver:
@@ -654,10 +659,7 @@ class NamiSyncService:
         history_path: str | Path,
         *,
         settings_path: str | Path | None = None,
-        require_session_attachment: bool = False,
     ) -> None:
-        if type(require_session_attachment) is not bool:
-            raise TypeError("require_session_attachment must be a bool")
         self._runtime = LocalWorkflowRuntime(
             ledger_path,
             history_path,
@@ -667,15 +669,9 @@ class NamiSyncService:
         self._observer = SessionObserver(self._dispatcher)
         self._lock = Lock()
         self._close_lock = Lock()
+        self._lifecycle = TaskLifecycle()
         self._plan_selections: dict[str, _PlanSelectionState] = {}
-        self._session_receipts: dict[str, _SessionReceipt] = {}
-        self._receipt_ids_by_session: dict[str, set[str]] = {}
-        self._detail_owners_by_session: dict[str, tuple[str, str]] = {}
-        self._runtime_detail_retirement_started = False
-        self._session_receipt_locks = tuple(Lock() for _ in range(64))
-        self._session_receipt_lifecycle = Lock()
         self._visibility_receipts: dict[str, tuple[object, ...]] = {}
-        self._require_session_attachment = require_session_attachment
         self._closed = False
         self._shutdown: ShutdownView | None = None
         self._runtime_closed = False
@@ -697,23 +693,6 @@ class NamiSyncService:
             self._runtime.initialize_database_contracts()
         )
 
-    def _validate_session_attachment_contract(
-        self,
-        observation_sink: SessionSink | None,
-        session_attachment: SessionAttachment | None,
-    ) -> None:
-        if observation_sink is not None and not callable(observation_sink):
-            raise TypeError("observation sink must be callable")
-        if session_attachment is not None and not callable(session_attachment):
-            raise TypeError("session attachment must be callable")
-        if session_attachment is not None and observation_sink is None:
-            raise ValueError("session attachment requires an observation sink")
-        if (
-            getattr(self, "_require_session_attachment", False)
-            and session_attachment is None
-        ):
-            raise RuntimeError("desktop session attachment is required")
-
     def start_plan(
         self,
         source: str,
@@ -721,20 +700,14 @@ class NamiSyncService:
         *,
         deletion_policy: str | None = None,
         command_id: str | None = None,
-        observation_sink: SessionSink | None = None,
-        session_attachment: SessionAttachment | None = None,
     ) -> PlanSession:
-        self._validate_session_attachment_contract(
-            observation_sink,
-            session_attachment,
-        )
         signature = (
             source,
             target,
             deletion_policy,
         )
-        with self._session_command_guard(command_id):
-            replay = self._session_receipt(
+        with self._lifecycle.command_guard(command_id):
+            replay = self._replay_start(
                 command_id,
                 "plan",
                 signature,
@@ -758,21 +731,95 @@ class NamiSyncService:
                 str(target_path),
                 deletion_policy=deletion_policy,
             )
-            session_id = self._submit_session(
+            session_id, association = self._submit_session(
                 PLAN_KIND,
                 request,
-                observation_sink=observation_sink,
-                session_attachment=session_attachment,
+                effect_kind="plan",
+                command_id=command_id,
+                signature=signature,
             )
             result = PlanSession(request.request_id, str(session_id))
-            self._remember_session_receipt(
-                command_id,
-                "plan",
-                signature,
-                result.request_id,
-                result.session_id,
-            )
+            self._complete_start(association, result.request_id)
             return result
+
+    def start_task_plan(
+        self,
+        source: str,
+        target: str,
+        *,
+        deletion_policy: str | None,
+        command_id: str,
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView:
+        """Start one task-bound plan while application state owns its effect."""
+
+        if not callable(delivery_factory):
+            raise TypeError("task delivery factory must be callable")
+        signature = (source, target, deletion_policy)
+        try:
+            source_path, target_path = validate_sync_paths(source, target)
+        except (OSError, ValueError) as error:
+            try:
+                path_failure_message = str(error)
+            finally:
+                retire_exception_graph(error)
+        else:
+            path_failure_message = None
+        if path_failure_message is not None:
+            raise SyncPathInputError(path_failure_message) from None
+        guard = self._lifecycle.command_guard(command_id)
+        with guard:
+            try:
+                claim = self._lifecycle.begin_task_start(command_id, signature)
+            except LifecycleReceiptConflictError:
+                raise TaskIntentConflictError(
+                    "task command intent conflicts"
+                ) from None
+            except LifecycleTaskCapacityError as error:
+                raise TaskUnavailableError(str(error)) from None
+            if claim.replay is not None:
+                replay = claim.replay
+                return TaskStartView(
+                    claim.task_id,
+                    replay.request_id,
+                    replay.session_id,
+                )
+
+            try:
+                sink = delivery_factory(claim.task_id)
+                if not callable(sink):
+                    raise TypeError("task delivery factory must return a sink")
+                request = self._runtime.create_plan_request(
+                    uuid4().hex,
+                    str(source_path),
+                    str(target_path),
+                    deletion_policy=deletion_policy,
+                )
+                session_id, association = self._submit_session(
+                    PLAN_KIND,
+                    request,
+                    effect_kind="task-plan",
+                    command_id=command_id,
+                    signature=signature,
+                    observation_sink=sink,
+                    task_id=claim.task_id,
+                )
+                receipt = self._complete_start(
+                    association,
+                    request.request_id,
+                )
+                if receipt.task_id != claim.task_id:
+                    raise RuntimeError(
+                        "task start receipt changed application task identity"
+                    )
+                return TaskStartView(
+                    claim.task_id,
+                    receipt.request_id,
+                    str(session_id),
+                )
+            except BaseException:
+                self._lifecycle.abort_task_start(claim.task_id)
+                raise
 
     def read_semantic_settings(self) -> SemanticSettingsView:
         self._require_open()
@@ -821,11 +868,104 @@ class NamiSyncService:
             tuple(deselect),
             tuple(reselect),
         )
-        with self._lock:
-            current = self._plan_selections.get(request_id)
-            if current is not state:
-                if current is None:
-                    raise KeyError(request_id)
+        try:
+            claim = self._lifecycle.begin_plan_mutation(
+                state.plan_token,
+                command_id,
+                signature,
+            )
+        except LifecycleReceiptConflictError as error:
+            raise CommandIdConflictError(str(error)) from None
+        completed = False
+        effect_applied = False
+        try:
+            with self._lock:
+                current = self._plan_selections.get(request_id)
+                if current is not state:
+                    if current is None:
+                        raise KeyError(request_id)
+                    return SelectionMutationView(
+                        "conflict",
+                        current.revision,
+                        current.phase,
+                        self._selection_preview_locked(
+                            request_id,
+                            current,
+                            current.artifact,
+                        ),
+                    )
+                if claim.replay:
+                    response = SelectionMutationView(
+                        "noop",
+                        state.revision,
+                        state.phase,
+                        self._selection_preview_locked(
+                            request_id,
+                            state,
+                            artifact,
+                        ),
+                    )
+                elif state.phase != "reviewing":
+                    response = SelectionMutationView(
+                        "in-flight"
+                        if state.phase == "committing"
+                        else "frozen",
+                        state.revision,
+                        state.phase,
+                        self._selection_preview_locked(
+                            request_id,
+                            state,
+                            artifact,
+                        ),
+                    )
+                elif expected_revision != state.revision:
+                    response = SelectionMutationView(
+                        "conflict",
+                        state.revision,
+                        state.phase,
+                        self._selection_preview_locked(
+                            request_id,
+                            state,
+                            artifact,
+                        ),
+                    )
+                else:
+                    plan = artifact.plan
+                    resolved_deselect = self._resolve_plan_selection_ids(
+                        request_id,
+                        plan,
+                        deselect,
+                    )
+                    resolved_reselect = self._resolve_plan_selection_ids(
+                        request_id,
+                        plan,
+                        reselect,
+                    )
+                    state.user_deselected = apply_selection_mutation(
+                        plan,
+                        state.user_deselected,
+                        deselect=frozenset(resolved_deselect),
+                        reselect=frozenset(resolved_reselect),
+                    )
+                    state.revision += 1
+                    effect_applied = True
+                    response = SelectionMutationView(
+                        "applied",
+                        state.revision,
+                        state.phase,
+                        self._selection_preview_locked(
+                            request_id,
+                            state,
+                            artifact,
+                        ),
+                    )
+            if self._runtime.get_plan(request_id) is artifact:
+                if effect_applied:
+                    self._lifecycle.complete_plan_mutation(claim)
+                    completed = True
+                return response
+            current, current_artifact = self._selection_state(request_id)
+            with self._lock:
                 return SelectionMutationView(
                     "conflict",
                     current.revision,
@@ -833,96 +973,12 @@ class NamiSyncService:
                     self._selection_preview_locked(
                         request_id,
                         current,
-                        current.artifact,
+                        current_artifact,
                     ),
                 )
-            prior_signature = (
-                None
-                if command_id is None
-                else state.mutation_receipts.get(command_id)
-            )
-            if prior_signature is not None:
-                if prior_signature != signature:
-                    raise CommandIdConflictError(
-                        "command_id was reused for a different selection mutation"
-                    )
-                response = SelectionMutationView(
-                    "noop",
-                    state.revision,
-                    state.phase,
-                    self._selection_preview_locked(
-                        request_id,
-                        state,
-                        artifact,
-                    ),
-                )
-            elif state.phase != "reviewing":
-                response = SelectionMutationView(
-                    "in-flight" if state.phase == "committing" else "frozen",
-                    state.revision,
-                    state.phase,
-                    self._selection_preview_locked(
-                        request_id,
-                        state,
-                        artifact,
-                    ),
-                )
-            elif expected_revision != state.revision:
-                response = SelectionMutationView(
-                    "conflict",
-                    state.revision,
-                    state.phase,
-                    self._selection_preview_locked(
-                        request_id,
-                        state,
-                        artifact,
-                    ),
-                )
-            else:
-                plan = artifact.plan
-                resolved_deselect = self._resolve_plan_selection_ids(
-                    request_id,
-                    plan,
-                    deselect,
-                )
-                resolved_reselect = self._resolve_plan_selection_ids(
-                    request_id,
-                    plan,
-                    reselect,
-                )
-                state.user_deselected = apply_selection_mutation(
-                    plan,
-                    state.user_deselected,
-                    deselect=frozenset(resolved_deselect),
-                    reselect=frozenset(resolved_reselect),
-                )
-                state.revision += 1
-                if command_id is not None:
-                    state.mutation_receipts[command_id] = signature
-                response = SelectionMutationView(
-                    "applied",
-                    state.revision,
-                    state.phase,
-                    self._selection_preview_locked(
-                        request_id,
-                        state,
-                        artifact,
-                    ),
-                )
-        if self._runtime.get_plan(request_id) is artifact:
-            return response
-        current, current_artifact = self._selection_state(request_id)
-        with self._lock:
-            return SelectionMutationView(
-                "conflict",
-                current.revision,
-                current.phase,
-                self._selection_preview_locked(
-                    request_id,
-                    current,
-                    current_artifact,
-                ),
-            )
+        finally:
+            if not completed:
+                self._lifecycle.abandon_plan_mutation(claim)
 
     def start_execution(
         self,
@@ -932,28 +988,20 @@ class NamiSyncService:
         expected_revision: int | None = None,
         destructive_acknowledged: bool = False,
         command_id: str | None = None,
-        observation_sink: SessionSink | None = None,
-        session_attachment: SessionAttachment | None = None,
     ) -> ExecutionSession | ExecutionAdmissionView:
-        self._validate_session_attachment_contract(
-            observation_sink,
-            session_attachment,
-        )
         if type(verify_after_execute) is not bool:
             raise TypeError("verify_after_execute must be a bool")
         if expected_revision is not None and type(expected_revision) is not int:
             raise TypeError("expected_revision must be an int or None")
         if type(destructive_acknowledged) is not bool:
             raise TypeError("destructive_acknowledged must be a bool")
-        with self._session_command_guard(command_id):
+        with self._lifecycle.command_guard(command_id):
             return self._start_execution_once(
                 request_id,
                 verify_after_execute=verify_after_execute,
                 expected_revision=expected_revision,
                 destructive_acknowledged=destructive_acknowledged,
                 command_id=command_id,
-                observation_sink=observation_sink,
-                session_attachment=session_attachment,
             )
 
     def _start_execution_once(
@@ -964,8 +1012,6 @@ class NamiSyncService:
         expected_revision: int | None,
         destructive_acknowledged: bool,
         command_id: str | None,
-        observation_sink: SessionSink | None,
-        session_attachment: SessionAttachment | None,
     ) -> ExecutionSession | ExecutionAdmissionView:
         signature = (
             request_id,
@@ -973,7 +1019,7 @@ class NamiSyncService:
             expected_revision,
             destructive_acknowledged,
         )
-        replay = self._session_receipt(
+        replay = self._replay_start(
             command_id,
             "execution",
             signature,
@@ -1042,27 +1088,22 @@ class NamiSyncService:
                 user_deselected=user_deselected,
                 expected_artifact=artifact,
             )
-            session_id = self._submit_session(
+            session_id, association = self._submit_session(
                 EXECUTION_KIND,
                 request,
+                effect_kind="execution",
+                command_id=command_id,
+                signature=signature,
                 detail_owner=(
                     "execution",
                     str(request.execution_set.run_id),
                 ),
-                observation_sink=observation_sink,
-                session_attachment=session_attachment,
             )
             result = ExecutionSession(
                 str(request.execution_set.run_id),
                 str(session_id),
             )
-            self._remember_session_receipt(
-                command_id,
-                "execution",
-                signature,
-                result.run_id,
-                result.session_id,
-            )
+            self._complete_start(association, result.run_id)
             succeeded = True
             return result
         finally:
@@ -1081,13 +1122,7 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
-        observation_sink: SessionSink | None = None,
-        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
-        self._validate_session_attachment_contract(
-            observation_sink,
-            session_attachment,
-        )
         signature = (
             root_path,
             location_id,
@@ -1095,8 +1130,8 @@ class NamiSyncService:
             selected_mount,
             _canonical_id_gesture(selected_ids),
         )
-        with self._session_command_guard(command_id):
-            replay = self._session_receipt(
+        with self._lifecycle.command_guard(command_id):
+            replay = self._replay_start(
                 command_id,
                 INVENTORY_KIND,
                 signature,
@@ -1123,15 +1158,8 @@ class NamiSyncService:
                 INVENTORY_KIND,
                 request_id,
                 request,
-                observation_sink=observation_sink,
-                session_attachment=session_attachment,
-            )
-            self._remember_session_receipt(
-                command_id,
-                INVENTORY_KIND,
-                signature,
-                result.request_id,
-                result.session_id,
+                command_id=command_id,
+                signature=signature,
             )
             return result
 
@@ -1144,13 +1172,7 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
-        observation_sink: SessionSink | None = None,
-        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
-        self._validate_session_attachment_contract(
-            observation_sink,
-            session_attachment,
-        )
         return self._start_integrity(
             BASELINE_KIND,
             root_path=root_path,
@@ -1159,8 +1181,6 @@ class NamiSyncService:
             selected_mount=selected_mount,
             selected_ids=selected_ids,
             command_id=command_id,
-            observation_sink=observation_sink,
-            session_attachment=session_attachment,
         )
 
     def start_verify(
@@ -1172,13 +1192,7 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
-        observation_sink: SessionSink | None = None,
-        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
-        self._validate_session_attachment_contract(
-            observation_sink,
-            session_attachment,
-        )
         return self._start_integrity(
             VERIFY_KIND,
             root_path=root_path,
@@ -1187,8 +1201,6 @@ class NamiSyncService:
             selected_mount=selected_mount,
             selected_ids=selected_ids,
             command_id=command_id,
-            observation_sink=observation_sink,
-            session_attachment=session_attachment,
         )
 
     def start_rebaseline(
@@ -1200,13 +1212,7 @@ class NamiSyncService:
         selected_mount: str | None = None,
         selected_ids: tuple[str, ...] | None = None,
         command_id: str | None = None,
-        observation_sink: SessionSink | None = None,
-        session_attachment: SessionAttachment | None = None,
     ) -> LocationSession:
-        self._validate_session_attachment_contract(
-            observation_sink,
-            session_attachment,
-        )
         self._require_open()
         if selected_ids is None and not selected_paths:
             raise ValueError("rebaseline requires an explicit selected scope")
@@ -1218,23 +1224,25 @@ class NamiSyncService:
             selected_mount=selected_mount,
             selected_ids=selected_ids,
             command_id=command_id,
-            observation_sink=observation_sink,
-            session_attachment=session_attachment,
         )
 
     def save_plan(self, artifact: object) -> None:
         self._require_open()
         self._runtime.save_plan(artifact)
         request_id = artifact.request.request_id
+        plan_token = self._lifecycle.require_plan(request_id)
         with self._lock:
             prior = self._plan_selections.get(request_id)
             if prior is None:
-                self._plan_selections[request_id] = _PlanSelectionState(artifact)
+                self._plan_selections[request_id] = _PlanSelectionState(
+                    artifact,
+                    plan_token,
+                )
             elif prior.artifact is not artifact:
                 self._plan_selections[request_id] = _PlanSelectionState(
                     artifact,
+                    prior.plan_token,
                     revision=prior.revision + 1,
-                    mutation_receipts=dict(prior.mutation_receipts),
                 )
 
     def get_plan(self, request_id: str) -> object:
@@ -1243,9 +1251,29 @@ class NamiSyncService:
 
     def drop_plan(self, request_id: str) -> None:
         self._require_open()
-        self._runtime.drop_plan(request_id)
+        try:
+            plan_token = self._lifecycle.require_plan(request_id)
+        except LifecycleAssociationError:
+            plan_token = None
+        retirement = (
+            None
+            if plan_token is None
+            else self._lifecycle.begin_plan_retirement(plan_token)
+        )
+        try:
+            self._runtime.drop_plan(request_id)
+        except BaseException:
+            if retirement is not None:
+                self._lifecycle.abandon_plan_retirement(retirement)
+            raise
         with self._lock:
             self._plan_selections.pop(request_id, None)
+        if retirement is not None:
+            try:
+                self._lifecycle.complete_plan_retirement(retirement)
+            except BaseException:
+                self._lifecycle.complete_plan_retirement(retirement)
+                raise
 
     def get_session(self, session_id: str) -> SessionRecordView:
         return session_record_view(self._dispatcher.get(session_id))
@@ -1255,7 +1283,11 @@ class NamiSyncService:
 
     def observe(self, session_id: str, sink: SessionSink) -> SessionRecordView:
         self._require_open()
-        return self._observer.observe(session_id, sink)
+        claim = self._lifecycle.begin_observation(session_id)
+        return self._complete_observation_call(
+            claim,
+            lambda: self._observer.observe(session_id, sink),
+        )
 
     def reobserve(
         self,
@@ -1264,36 +1296,110 @@ class NamiSyncService:
         from_sequence: int,
     ) -> SessionRecordView:
         self._require_open()
-        return self._observer.reobserve(session_id, sink, from_sequence)
+        return self._reobserve_session(session_id, sink, from_sequence)
+
+    def reobserve_task(
+        self,
+        task_id: str,
+        session_id: str,
+        sink: TaskDeliverySink,
+        from_sequence: int,
+    ) -> SessionRecordView:
+        try:
+            return self._reobserve_session(
+                session_id,
+                sink,
+                from_sequence,
+                task_id=task_id,
+            )
+        except LifecycleAssociationError:
+            raise TaskUnavailableError("task is unavailable") from None
 
     def unsubscribe(self, session_id: str) -> None:
-        self._observer.unsubscribe(session_id)
+        try:
+            claim = self._lifecycle.begin_observation(session_id)
+        except LifecycleAssociationError:
+            return
+        try:
+            self._observer.unsubscribe(session_id)
+        except BaseException:
+            self._lifecycle.abandon_observation(claim)
+            raise
+        try:
+            self._lifecycle.complete_observation(claim, active=False)
+        except BaseException:
+            try:
+                self._lifecycle.complete_observation(claim, active=False)
+            except BaseException:
+                self._lifecycle.abandon_observation(claim)
+                raise
+            raise
 
     def wait(self, session_id: str) -> SessionRecordView:
         return self._observer.wait(session_id)
 
     def cancel(self, session_id: str) -> ControlView:
+        if not self._has_live_association(session_id):
+            return self._missing_control_view(session_id)
         return _control_view(self._dispatcher.cancel(session_id))
 
     def pause(self, session_id: str) -> ControlView:
+        if not self._has_live_association(session_id):
+            return self._missing_control_view(session_id)
         return _control_view(self._dispatcher.pause(session_id))
 
     def resume(self, session_id: str) -> ControlView:
+        if not self._has_live_association(session_id):
+            return self._missing_control_view(session_id)
         return _control_view(self._dispatcher.resume(session_id))
 
     def close_session(self, session_id: str) -> None:
-        self._observer.unsubscribe(session_id)
-        owner: tuple[str, str] | None = None
-        with self._session_receipt_lifecycle_guard():
-            self._dispatcher.close(session_id)
-            with self._lock:
-                for command_id in self._receipt_ids_by_session.pop(
-                    session_id,
-                    (),
-                ):
-                    self._session_receipts.pop(command_id, None)
-                owner = self._detail_owners_by_session.pop(session_id, None)
-        self._drop_runtime_details(owner)
+        try:
+            self._settle_session(
+                session_id,
+                task_id=None,
+                retire_plan=False,
+            )
+        except LifecycleAssociationError:
+            raise SessionNotFound(session_id) from None
+
+    def release_task_session(
+        self,
+        task_id: str,
+        session_id: str,
+        delivery: TaskTerminalDelivery,
+    ) -> TaskSessionReleaseView:
+        if type(delivery) is not TaskTerminalDelivery:
+            raise TypeError("task terminal delivery is invalid")
+        try:
+            self._settle_session(
+                session_id,
+                task_id=task_id,
+                retire_plan=False,
+                delivery=delivery,
+            )
+        except LifecycleAssociationError:
+            raise TaskUnavailableError("task is unavailable") from None
+        return TaskSessionReleaseView(task_id, session_id)
+
+    def close_task(
+        self,
+        task_id: str,
+        session_id: str,
+        delivery: TaskTerminalDelivery,
+    ) -> TaskCloseView:
+        if type(delivery) is not TaskTerminalDelivery:
+            raise TypeError("task terminal delivery is invalid")
+        try:
+            self._settle_session(
+                session_id,
+                task_id=task_id,
+                retire_plan=True,
+                delivery=delivery,
+            )
+        except LifecycleAssociationError:
+            raise TaskUnavailableError("task is unavailable") from None
+        return TaskCloseView(task_id, session_id)
 
     def get_execution_details(self, run_id: str):
         self._require_open()
@@ -1458,22 +1564,23 @@ class NamiSyncService:
             return self._close_once(timeout)
 
     def _close_once(self, timeout: float) -> ShutdownView:
-        with self._session_receipt_lifecycle_guard():
-            with self._lock:
-                if self._closed:
-                    if (
-                        self._shutdown is not None
-                        and self._shutdown.complete
-                        and getattr(self, "_runtime_closed", False)
-                        and getattr(self, "_observer_closed", False)
-                    ):
-                        return self._shutdown
-                else:
-                    self._closed = True
-                    self._plan_selections.clear()
-                    self._session_receipts.clear()
-                    self._receipt_ids_by_session.clear()
-                    self._visibility_receipts.clear()
+        close_lifecycle = False
+        with self._lock:
+            if self._closed:
+                if (
+                    self._shutdown is not None
+                    and self._shutdown.complete
+                    and getattr(self, "_runtime_closed", False)
+                    and getattr(self, "_observer_closed", False)
+                ):
+                    return self._shutdown
+            else:
+                self._closed = True
+                self._plan_selections.clear()
+                self._visibility_receipts.clear()
+                close_lifecycle = True
+        if close_lifecycle:
+            self._lifecycle.close()
         observer_failure_interrupted: bool | None = None
         if not getattr(self, "_observer_closed", False):
             try:
@@ -1484,6 +1591,7 @@ class NamiSyncService:
             else:
                 with self._lock:
                     self._observer_closed = True
+                self._lifecycle.mark_observer_shutdown_complete()
         with self._lock:
             view = self._shutdown
         if view is None or not view.complete:
@@ -1497,15 +1605,10 @@ class NamiSyncService:
                 self._shutdown = view
         if view.complete:
             if not getattr(self, "_runtime_closed", False):
-                with self._session_receipt_lifecycle_guard():
-                    with self._lock:
-                        self._runtime_detail_retirement_started = True
                 self._runtime.close()
                 with self._lock:
                     self._runtime_closed = True
-                    owners = getattr(self, "_detail_owners_by_session", None)
-                    if owners is not None:
-                        owners.clear()
+                self._lifecycle.retire_all()
         if observer_failure_interrupted is not None:
             _raise_service_observer_failure(
                 interrupted=observer_failure_interrupted,
@@ -1528,8 +1631,6 @@ class NamiSyncService:
         selected_mount: str | None,
         selected_ids: tuple[str, ...] | None,
         command_id: str | None,
-        observation_sink: SessionSink | None,
-        session_attachment: SessionAttachment | None,
     ) -> LocationSession:
         signature = (
             root_path,
@@ -1538,8 +1639,8 @@ class NamiSyncService:
             selected_mount,
             _canonical_id_gesture(selected_ids),
         )
-        with self._session_command_guard(command_id):
-            replay = self._session_receipt(command_id, kind, signature)
+        with self._lifecycle.command_guard(command_id):
+            replay = self._replay_start(command_id, kind, signature)
             if replay is not None:
                 return LocationSession(replay.request_id, replay.session_id)
             if selected_ids is not None:
@@ -1561,15 +1662,8 @@ class NamiSyncService:
                 kind,
                 request_id,
                 request,
-                observation_sink=observation_sink,
-                session_attachment=session_attachment,
-            )
-            self._remember_session_receipt(
-                command_id,
-                kind,
-                signature,
-                result.request_id,
-                result.session_id,
+                command_id=command_id,
+                signature=signature,
             )
             return result
 
@@ -1579,177 +1673,113 @@ class NamiSyncService:
         request_id: str,
         request: object,
         *,
-        observation_sink: SessionSink | None = None,
-        session_attachment: SessionAttachment | None = None,
+        command_id: str | None,
+        signature: tuple[object, ...],
     ) -> LocationSession:
         try:
-            session_id = self._submit_session(
+            session_id, association = self._submit_session(
                 kind,
                 request,
+                effect_kind=kind,
+                command_id=command_id,
+                signature=signature,
                 detail_owner=("inventory", request_id),
-                observation_sink=observation_sink,
-                session_attachment=session_attachment,
             )
         except VolumeResolutionRequired as error:
             raise LocationResolutionError(
                 _location_resolution_view(error.resolution)
             ) from error
-        return LocationSession(request_id, str(session_id))
+        result = LocationSession(request_id, str(session_id))
+        self._complete_start(association, result.request_id)
+        return result
 
     def _submit_session(
         self,
         kind: str,
         request: object,
         *,
+        effect_kind: str,
+        command_id: str | None,
+        signature: tuple[object, ...],
         detail_owner: tuple[str, str] | None = None,
         observation_sink: SessionSink | None = None,
-        session_attachment: SessionAttachment | None = None,
-    ) -> SessionId:
+        task_id: str | None = None,
+    ) -> tuple[SessionId, AssociationToken]:
         self._require_open()
-        if (
-            detail_owner is None
-            and observation_sink is None
-            and session_attachment is None
-        ):
-            return self._dispatcher.submit(kind, request)
-
-        owner_rollback: Callable[[], None] | None = None
-        detail_rollback: Callable[[], None] | None = None
-        observation_rollback: Callable[[], None] | None = None
-        retained_observation_sink = observation_sink
-        session_token: str | None = None
+        admission = self._lifecycle.begin_admission(
+            effect_kind,
+            command_id,
+            signature,
+            task_id=task_id,
+            detail_owner=detail_owner,
+            expects_observation=observation_sink is not None,
+        )
 
         def rollback() -> None:
-            nonlocal owner_rollback
-            nonlocal detail_rollback
-            nonlocal observation_rollback
-            nonlocal retained_observation_sink
-
-            if session_token is None:
-                return
-            observation_retained = False
-            if observation_rollback is not None:
+            while True:
+                claim = self._lifecycle.admission_rollback_step(admission)
+                step = claim.step
+                if step.name == "complete":
+                    self._lifecycle.finish_admission_rollback(admission)
+                    return
                 try:
-                    observation_rollback()
-                except BaseException as error:
-                    retire_exception_graph(error)
-                try:
-                    observation_retained = (
-                        self._observer.retains_observation(
-                            session_token,
-                            retained_observation_sink,
+                    if step.name == "observer_release":
+                        assert step.session_id is not None
+                        self._observer.unsubscribe(step.session_id)
+                    elif step.name == "detail_retire":
+                        self._drop_runtime_details(step.detail_owner)
+                    else:
+                        raise RuntimeError(
+                            "application admission rollback step is invalid"
                         )
-                    )
-                except BaseException as error:
-                    observation_retained = True
-                    retire_exception_graph(error)
-                if not observation_retained:
-                    observation_rollback = None
-                    retained_observation_sink = None
-
-            if detail_rollback is not None:
+                except BaseException:
+                    self._lifecycle.abandon_admission_rollback_step(claim)
+                    raise
                 try:
-                    detail_rollback()
-                except BaseException as error:
-                    retire_exception_graph(error)
-                else:
-                    detail_rollback = None
-
-            if (
-                not observation_retained
-                and detail_rollback is None
-                and owner_rollback is not None
-            ):
-                try:
-                    owner_rollback()
-                except BaseException as error:
-                    retire_exception_graph(error)
-                else:
-                    owner_rollback = None
-
-            if (
-                observation_rollback is not None
-                or detail_rollback is not None
-                or owner_rollback is not None
-            ):
-                raise RuntimeError(
-                    _SESSION_ATTACHMENT_CLEANUP_PENDING
-                ) from None
+                    self._lifecycle.complete_admission_rollback_step(claim)
+                except BaseException:
+                    # The aggregate records effect return before advancing its
+                    # cursor. Retrying this exact claim repairs an interrupted
+                    # marker without repeating the physical effect.
+                    self._lifecycle.complete_admission_rollback_step(claim)
+                    raise
 
         def attach(
             session_id: SessionId,
             stream: EventStream,
         ) -> Callable[[], None]:
-            nonlocal owner_rollback
-            nonlocal detail_rollback
-            nonlocal observation_rollback
-            nonlocal retained_observation_sink
-            nonlocal session_token
-            session_token = str(session_id)
             stream_needs_close = True
-
-            def rollback_detail_owner() -> None:
-                assert detail_owner is not None
-                with self._session_receipt_lifecycle_guard():
-                    lock = getattr(self, "_lock", None)
-                    with (nullcontext() if lock is None else lock):
-                        owners = getattr(
-                            self,
-                            "_detail_owners_by_session",
-                            None,
-                        )
-                        if (
-                            owners is not None
-                            and owners.get(session_token) is detail_owner
-                        ):
-                            owners.pop(session_token)
-
             try:
-                if session_attachment is not None:
-                    owner_rollback = session_attachment(session_token)
-                    if not callable(owner_rollback):
-                        raise TypeError(
-                            "session attachment must return a rollback callback"
-                        )
+                association = self._lifecycle.attach_session(
+                    admission,
+                    str(session_id),
+                )
                 if detail_owner is not None:
-                    with self._session_receipt_lifecycle_guard():
-                        lock = getattr(self, "_lock", None)
-                        with (nullcontext() if lock is None else lock):
-                            if getattr(self, "_closed", False) or getattr(
-                                self,
-                                "_runtime_detail_retirement_started",
-                                False,
-                            ):
-                                raise RuntimeError("service is closed")
-                            owners = getattr(
-                                self,
-                                "_detail_owners_by_session",
-                                None,
-                            )
-                            if owners is None:
-                                owners = {}
-                                self._detail_owners_by_session = owners
-                            if session_token in owners:
-                                raise RuntimeError(
-                                    "dispatcher reused a detail session id"
-                                )
-                            owners[session_token] = detail_owner
-                    detail_rollback = rollback_detail_owner
-                if retained_observation_sink is None:
+                    self._lifecycle.install_detail_owner(association)
+                if observation_sink is None:
                     stream.close()
                     stream_needs_close = False
+                    self._lifecycle.complete_admission_observation(
+                        association,
+                        active=False,
+                    )
                 else:
                     # SessionObserver.adopt closes a rejected stream itself.
                     stream_needs_close = False
                     observation_rollback = self._observer.adopt(
-                        session_token,
-                        retained_observation_sink,
+                        str(session_id),
+                        observation_sink,
                         stream,
                     )
                     if not callable(observation_rollback):
                         raise TypeError(
                             "session observer must return a rollback callback"
                         )
+                    del observation_rollback
+                    self._lifecycle.complete_admission_observation(
+                        association,
+                        active=True,
+                    )
             except BaseException:
                 if stream_needs_close:
                     try:
@@ -1760,11 +1790,238 @@ class NamiSyncService:
 
             return rollback
 
-        return self._dispatcher.submit(
-            kind,
-            request,
-            attach=AdmissionAttachment(attach, rollback),
+        try:
+            session_id = self._dispatcher.submit(
+                kind,
+                request,
+                attach=AdmissionAttachment(attach, rollback),
+            )
+        except BaseException:
+            try:
+                rollback()
+            except BaseException as cleanup_error:
+                retire_exception_graph(cleanup_error)
+                try:
+                    rollback()
+                except BaseException as retry_error:
+                    retire_exception_graph(retry_error)
+            raise
+        try:
+            token = self._lifecycle.mark_published(
+                admission,
+                str(session_id),
+            )
+        except BaseException:
+            # Dispatcher publication is already physical. Confirm the exact
+            # aggregate marker and continue so a retry cannot resubmit it.
+            token = self._lifecycle.mark_published(
+                admission,
+                str(session_id),
+            )
+        return session_id, token
+
+    def _reobserve_session(
+        self,
+        session_id: str,
+        sink: SessionSink,
+        from_sequence: int,
+        *,
+        task_id: str | None | object = ...,
+    ) -> SessionRecordView:
+        if task_id is ...:
+            claim = self._lifecycle.begin_observation(session_id)
+        else:
+            claim = self._lifecycle.begin_observation(
+                session_id,
+                task_id=task_id,
+            )
+        return self._complete_observation_call(
+            claim,
+            lambda: self._observer.reobserve(
+                session_id,
+                sink,
+                from_sequence,
+            ),
         )
+
+    def _complete_observation_call(
+        self,
+        claim,
+        operation: Callable[[], SessionRecordView],
+    ) -> SessionRecordView:
+        try:
+            current = operation()
+        except BaseException:
+            self._lifecycle.abandon_observation(claim)
+            raise
+        try:
+            self._lifecycle.complete_observation(
+                claim,
+                active=current.result is None,
+            )
+        except BaseException:
+            try:
+                self._lifecycle.complete_observation(
+                    claim,
+                    active=current.result is None,
+                )
+            except BaseException:
+                self._lifecycle.abandon_observation(claim)
+                raise
+            raise
+        return current
+
+    def _has_live_association(self, session_id: str) -> bool:
+        try:
+            self._lifecycle.require_session(session_id)
+        except LifecycleAssociationError:
+            return False
+        return True
+
+    @staticmethod
+    def _missing_control_view(session_id: str) -> ControlView:
+        return ControlView(
+            code="not-found",
+            session_id=session_id,
+            before=None,
+            after=None,
+            detail="session does not exist",
+            accepted=False,
+        )
+
+    def _settle_session(
+        self,
+        session_id: str,
+        *,
+        task_id: str | None,
+        retire_plan: bool,
+        delivery: TaskTerminalDelivery | None = None,
+    ) -> None:
+        reservation = self._lifecycle.reserve_settlement(
+            session_id,
+            task_id=task_id,
+            close_task=retire_plan,
+        )
+        try:
+            terminal_digest: bytes | None = None
+            dispatcher_truth_observed = False
+            if delivery is not None:
+                (
+                    terminal_digest,
+                    dispatcher_truth_observed,
+                ) = self._reconcile_terminal_delivery(session_id, delivery)
+            claim = self._lifecycle.activate_settlement(
+                reservation,
+                terminal_digest=terminal_digest,
+                dispatcher_truth_observed=dispatcher_truth_observed,
+            )
+        except BaseException:
+            self._lifecycle.abandon_settlement_reservation(reservation)
+            raise
+
+        try:
+            while True:
+                step = self._lifecycle.settlement_step(claim)
+                if step.name == "complete":
+                    try:
+                        self._lifecycle.finish_settlement(claim)
+                    except BaseException:
+                        self._lifecycle.finish_settlement(claim)
+                    return
+                if step.name == "observer_release":
+                    self._observer.unsubscribe(session_id)
+                elif step.name == "dispatcher_close":
+                    self._dispatcher.close(session_id)
+                elif step.name == "detail_retire":
+                    self._drop_runtime_details(step.detail_owner)
+                elif step.name == "plan_retire":
+                    if step.request_id is None:
+                        raise RuntimeError(
+                            "task settlement lacks its plan request"
+                        )
+                    retirement = step.plan_retirement
+                    if retirement is not None:
+                        try:
+                            self._runtime.drop_plan(step.request_id)
+                        except BaseException:
+                            self._lifecycle.abandon_plan_retirement(
+                                retirement
+                            )
+                            raise
+                    with self._lock:
+                        self._plan_selections.pop(
+                            step.request_id,
+                            None,
+                        )
+                    if retirement is not None:
+                        try:
+                            self._lifecycle.complete_plan_retirement(
+                                retirement
+                            )
+                        except BaseException:
+                            self._lifecycle.complete_plan_retirement(
+                                retirement
+                            )
+                            raise
+                else:
+                    raise RuntimeError(
+                        "application settlement step is invalid"
+                    )
+                try:
+                    self._lifecycle.complete_settlement_step(
+                        claim,
+                        step.name,
+                    )
+                except BaseException:
+                    self._lifecycle.complete_settlement_step(
+                        claim,
+                        step.name,
+                    )
+                    raise
+        except BaseException:
+            self._lifecycle.abandon_settlement(claim)
+            raise
+
+    def _reconcile_terminal_delivery(
+        self,
+        session_id: str,
+        delivery: TaskTerminalDelivery,
+    ) -> tuple[bytes, bool]:
+        delivered = delivery.record
+        if delivered.session_id != session_id or delivered.result is None:
+            raise RuntimeError(
+                "delivered terminal truth disagrees with dispatcher truth"
+            )
+        terminal_digest = sha256(
+            b"NamiSync/task-terminal/v1\0"
+            + dumps(
+                asdict(delivery),
+                sort_keys=True,
+                separators=(",", ":"),
+                ensure_ascii=False,
+                allow_nan=False,
+            ).encode("utf-8")
+        ).digest()
+        try:
+            record = self._dispatcher.get(session_id)
+        except SessionNotFound:
+            return terminal_digest, False
+        expected = session_record_view(record)
+        if delivered != expected or record.result is None:
+            raise RuntimeError(
+                "delivered terminal truth disagrees with dispatcher truth"
+            )
+        terminal = delivery.terminal_event
+        if terminal is not None and (
+            terminal.session_id != session_id
+            or terminal.body_type != "Terminal"
+            or terminal.body.get("result")
+            != terminal_result_event_data(record.result)
+        ):
+            raise RuntimeError(
+                "delivered terminal truth disagrees with dispatcher truth"
+            )
+        return terminal_digest, True
 
     def _drop_runtime_details(self, owner: tuple[str, str] | None) -> None:
         if owner is None:
@@ -1784,10 +2041,20 @@ class NamiSyncService:
     ) -> tuple[_PlanSelectionState, object]:
         self._require_open()
         artifact = self._runtime.get_plan(request_id)
+        try:
+            plan_token = self._lifecycle.require_plan(request_id)
+        except LifecycleAssociationError:
+            # Preserve the runtime's public retirement result when a drop lands
+            # between the first successful read and lifecycle token lookup.
+            self._runtime.get_plan(request_id)
+            raise
         with self._lock:
             state = self._plan_selections.get(request_id)
             if state is None:
-                state = _PlanSelectionState(artifact)
+                state = _PlanSelectionState(
+                    artifact,
+                    plan_token,
+                )
                 self._plan_selections[request_id] = state
             else:
                 artifact = state.artifact
@@ -1796,30 +2063,47 @@ class NamiSyncService:
             try:
                 live_artifact = self._runtime.get_plan(request_id)
             except KeyError:
+                removed = False
                 with self._lock:
                     if self._plan_selections.get(request_id) is state:
                         self._plan_selections.pop(request_id)
+                        removed = True
+                if removed:
+                    self._lifecycle.retire_missing_plan(state.plan_token)
                 raise
             with self._lock:
                 current = self._plan_selections.get(request_id)
                 if current is not state:
                     if current is None:
-                        state = _PlanSelectionState(live_artifact)
-                        self._plan_selections[request_id] = state
-                        artifact = live_artifact
+                        # A concurrent retirement or replacement owns the next
+                        # token lookup; restart without nesting lifecycle state
+                        # under the service cache lock.
+                        pass
                     else:
                         state = current
                         artifact = current.artifact
+                        continue
+                else:
+                    if live_artifact is artifact:
+                        return state, artifact
+                    state = _PlanSelectionState(
+                        live_artifact,
+                        state.plan_token,
+                        revision=state.revision + 1,
+                    )
+                    self._plan_selections[request_id] = state
+                    artifact = live_artifact
                     continue
-                if live_artifact is artifact:
-                    return state, artifact
-                state = _PlanSelectionState(
-                    live_artifact,
-                    revision=state.revision + 1,
-                    mutation_receipts=dict(state.mutation_receipts),
-                )
-                self._plan_selections[request_id] = state
-                artifact = live_artifact
+            artifact = self._runtime.get_plan(request_id)
+            plan_token = self._lifecycle.require_plan(request_id)
+            with self._lock:
+                current = self._plan_selections.get(request_id)
+                if current is None:
+                    state = _PlanSelectionState(artifact, plan_token)
+                    self._plan_selections[request_id] = state
+                else:
+                    state = current
+                    artifact = current.artifact
 
     def _selection_preview_locked(
         self,
@@ -1924,19 +2208,35 @@ class NamiSyncService:
             resolved.update(members)
         return tuple(sorted(resolved))
 
-    def _session_command_guard(self, command_id: str | None):
-        self._require_open()
-        if command_id is None:
-            return nullcontext()
-        if not command_id:
-            raise ValueError("command_id must be nonempty")
-        digest = sha256(
-            command_id.encode("utf-8", errors="surrogatepass")
-        ).digest()
-        return self._session_receipt_locks[
-            int.from_bytes(digest[:2], "big")
-            % len(self._session_receipt_locks)
-        ]
+    def _replay_start(
+        self,
+        command_id: str | None,
+        kind: str,
+        signature: tuple[object, ...],
+    ):
+        try:
+            return self._lifecycle.replay_start(
+                command_id,
+                kind,
+                signature,
+            )
+        except LifecycleReceiptConflictError as error:
+            raise CommandIdConflictError(str(error)) from None
+
+    def _complete_start(
+        self,
+        token: AssociationToken,
+        request_id: str,
+    ):
+        try:
+            return self._lifecycle.complete_start(token, request_id)
+        except LifecycleReceiptConflictError as error:
+            raise CommandIdConflictError(str(error)) from None
+        except BaseException:
+            try:
+                return self._lifecycle.complete_start(token, request_id)
+            except LifecycleReceiptConflictError as error:
+                raise CommandIdConflictError(str(error)) from None
 
     def _require_open(self) -> None:
         lock = getattr(self, "_lock", None)
@@ -1945,10 +2245,6 @@ class NamiSyncService:
         with lock:
             if getattr(self, "_closed", False):
                 raise RuntimeError("service is closed")
-
-    def _session_receipt_lifecycle_guard(self):
-        lock = getattr(self, "_session_receipt_lifecycle", None)
-        return nullcontext() if lock is None else lock
 
     def _resolve_location_ids(
         self,
@@ -2001,79 +2297,6 @@ class NamiSyncService:
                 )
             exact_paths.update(rows_by_id[row_id].rel_path for row_id in member_ids)
         return tuple(sorted(exact_paths)), tuple(sorted(subtree_roots))
-
-    def _session_receipt(
-        self,
-        command_id: str | None,
-        kind: str,
-        signature: tuple[object, ...],
-    ) -> _SessionReceipt | None:
-        if command_id is None:
-            return None
-        if not command_id:
-            raise ValueError("command_id must be nonempty")
-        with self._session_receipt_lifecycle_guard():
-            with self._lock:
-                if self._closed:
-                    raise RuntimeError("service is closed")
-                receipt = self._session_receipts.get(command_id)
-            if receipt is None:
-                return None
-            if receipt.kind != kind or receipt.signature != signature:
-                raise CommandIdConflictError(
-                    "command_id was reused for a different command"
-                )
-            get_session = getattr(self._dispatcher, "get", None)
-            if get_session is not None:
-                try:
-                    get_session(receipt.session_id)
-                except SessionNotFound:
-                    with self._lock:
-                        if self._session_receipts.get(command_id) is receipt:
-                            self._session_receipts.pop(command_id, None)
-                            receipt_ids = self._receipt_ids_by_session.get(
-                                receipt.session_id
-                            )
-                            if receipt_ids is not None:
-                                receipt_ids.discard(command_id)
-                                if not receipt_ids:
-                                    self._receipt_ids_by_session.pop(
-                                        receipt.session_id,
-                                        None,
-                                    )
-                    return None
-            return receipt
-
-    def _remember_session_receipt(
-        self,
-        command_id: str | None,
-        kind: str,
-        signature: tuple[object, ...],
-        request_id: str,
-        session_id: str,
-    ) -> None:
-        if command_id is None:
-            return
-        receipt = _SessionReceipt(
-            kind,
-            signature,
-            request_id,
-            session_id,
-        )
-        with self._session_receipt_lifecycle_guard():
-            with self._lock:
-                if self._closed:
-                    return
-                existing = self._session_receipts.get(command_id)
-                if existing is not None and existing != receipt:
-                    raise CommandIdConflictError(
-                        "command_id raced with a different admitted session"
-                    )
-                self._session_receipts[command_id] = receipt
-                self._receipt_ids_by_session.setdefault(
-                    session_id,
-                    set(),
-                ).add(command_id)
 
     def _change_inventory_visibility(
         self,
@@ -2302,7 +2525,6 @@ __all__ = [
     "SemanticSettingsPatchView",
     "SemanticSettingsView",
     "SessionEventView",
-    "SessionAttachment",
     "SessionObserver",
     "SessionRecordView",
     "SessionSink",

@@ -11,27 +11,39 @@ from math import isfinite
 from threading import Condition, Lock, get_ident
 from time import monotonic
 from types import MappingProxyType
-from typing import Never, Protocol
-from uuid import uuid4
+from typing import Never
 
-from namisync.dispatcher import retire_exception_graph
-from namisync.interfaces.service import PlanSession, SessionUpdate
-from namisync.workflows.views import (
-    SessionEventView, SessionRecordView, validate_session_record_view,
+from namisync.interfaces.task_port import (
+    _validate_task_observation,
+    TaskCloseView,
+    TaskDeliveryUpdate,
+    TaskDrainView,
+    TaskEventUpdateView,
+    TaskIntentConflictError,
+    TaskLifecyclePort,
+    TaskRecordUpdateView,
+    TaskSessionReleaseView,
+    TaskStartView,
+    TaskTerminalDelivery,
+    TaskUnavailableError,
+    TaskUpdateView,
 )
+from namisync.workflows.views import (
+    SessionEventView,
+    SessionRecordView,
+    validate_session_record_view,
+)
+
+from ._exception_graph import retire_exception_graph as _retire_exception_graph
 
 
 _CAPACITY = 64
-_TASK_CAPACITY = 48
+_START_RESPONSE_CAPACITY = 48
 _CLOSE_RECEIPT_CAPACITY = 48
 _DRAIN_WAIT_SECONDS = 25.0
 _PROGRESS_LINGER_SECONDS = 0.150
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
-
-
-class TaskUnavailableError(LookupError):
-    """A task is absent, closed, or does not own the supplied session."""
 
 
 class DrainBusyError(RuntimeError):
@@ -40,10 +52,6 @@ class DrainBusyError(RuntimeError):
 
 class ObservationConflictError(RuntimeError):
     """A task observation is already changing generation."""
-
-
-class TaskIntentConflictError(RuntimeError):
-    """A task command id was reused for a different resolved intent."""
 
 
 _START_FAILURE_OBSERVATION_CONFLICT = "observation_conflict"
@@ -130,163 +138,7 @@ def _raise_recovery_failure(failure_code: str) -> Never:
     raise failure_type(message) from None
 
 
-class _TaskService(Protocol):
-    def start_plan(
-        self,
-        source: str,
-        target: str,
-        *,
-        deletion_policy: str | None = None,
-        command_id: str | None = None,
-        observation_sink: Callable[[SessionUpdate], None] | None = None,
-        session_attachment: (
-            Callable[[str], Callable[[], None]] | None
-        ) = None,
-    ) -> PlanSession: ...
-
-    def reobserve(
-        self,
-        session_id: str,
-        sink: Callable[[SessionUpdate], None],
-        from_sequence: int,
-    ) -> SessionRecordView: ...
-
-    def unsubscribe(self, session_id: str) -> None: ...
-
-    def close_session(self, session_id: str) -> None: ...
-
-    def drop_plan(self, request_id: str) -> None: ...
-
-
-@dataclass(frozen=True, slots=True)
-class TaskStartView:
-    task_id: str
-    request_id: str
-    session_id: str
-
-    def __post_init__(self) -> None:
-        if type(self.task_id) is not str or _TASK_ID.fullmatch(self.task_id) is None:
-            raise ValueError("task id is invalid")
-        _require_opaque_id(self.request_id, "task request id")
-        _require_opaque_id(self.session_id, "task session id")
-
-
-@dataclass(frozen=True, slots=True)
-class TaskCloseView:
-    task_id: str
-    session_id: str
-
-    def __post_init__(self) -> None:
-        if type(self.task_id) is not str or _TASK_ID.fullmatch(self.task_id) is None:
-            raise ValueError("task id is invalid")
-        _require_opaque_id(self.session_id, "task session id")
-
-
-@dataclass(frozen=True, slots=True)
-class TaskSessionReleaseView:
-    task_id: str
-    session_id: str
-
-    def __post_init__(self) -> None:
-        if type(self.task_id) is not str or _TASK_ID.fullmatch(self.task_id) is None:
-            raise ValueError("task id is invalid")
-        _require_opaque_id(self.session_id, "task session id")
-
-
-@dataclass(frozen=True, slots=True)
-class TaskEventUpdateView:
-    update_type: str
-    event: SessionEventView
-
-    def __post_init__(self) -> None:
-        if self.update_type != "event" or type(self.event) is not SessionEventView:
-            raise ValueError("task event update is invalid")
-
-
-@dataclass(frozen=True, slots=True)
-class TaskRecordUpdateView:
-    update_type: str
-    record: SessionRecordView
-
-    def __post_init__(self) -> None:
-        if self.update_type != "record" or type(self.record) is not SessionRecordView:
-            raise ValueError("task record update is invalid")
-
-
-TaskUpdateView = TaskEventUpdateView | TaskRecordUpdateView
-
-
-@dataclass(frozen=True, slots=True)
-class TaskDrainView:
-    task_id: str
-    session_id: str
-    drain_id: str
-    updates: tuple[TaskUpdateView, ...]
-
-    def __post_init__(self) -> None:
-        if type(self.task_id) is not str or _TASK_ID.fullmatch(self.task_id) is None:
-            raise ValueError("task id is invalid")
-        _require_opaque_id(self.session_id, "task session id")
-        _require_opaque_id(self.drain_id, "task drain id")
-        if type(self.updates) is not tuple or len(self.updates) > _CAPACITY:
-            raise ValueError("task drain updates are invalid")
-
-
-def _validate_task_observation(
-    update: object, *, expected_session_id: str | None = None,
-) -> None:
-    if type(update) is SessionEventView:
-        if (
-            expected_session_id is not None
-            and update.session_id != expected_session_id
-        ):
-            raise ValueError("session event belongs to another session")
-        if type(update.sequence) is not int:
-            raise TypeError("task event sequence must be an exact integer")
-        if update.sequence < 1:
-            raise ValueError("task event sequence must be positive")
-    elif type(update) is SessionRecordView:
-        validate_session_record_view(update, expected_session_id=expected_session_id)
-        if update.kind != "sync-plan" or update.supports_pause or update.result is None:
-            raise ValueError("task record requires a terminal sync-plan result")
-    else:
-        raise TypeError("task updates must be exact service view types")
-
-
-def validate_task_update_view(
-    value: object, *, expected_session_id: str | None = None,
-) -> None:
-    if (
-        type(value) is TaskEventUpdateView
-        and type(value.update_type) is str
-        and value.update_type == "event"
-    ):
-        update = value.event
-        if type(update) is not SessionEventView:
-            raise TypeError("task event update has an invalid view")
-    elif (
-        type(value) is TaskRecordUpdateView
-        and type(value.update_type) is str
-        and value.update_type == "record"
-    ):
-        update = value.record
-        if type(update) is not SessionRecordView:
-            raise TypeError("task record update has an invalid view")
-    else:
-        raise TypeError("task update tag or view is invalid")
-    _validate_task_observation(update, expected_session_id=expected_session_id)
-
-
-def validate_task_drain_view(value: object) -> None:
-    if type(value) is not TaskDrainView:
-        raise TypeError("task drain must be an exact view")
-    # Recheck the outer contract as well as mutable nested collaborator data.
-    value.__post_init__()
-    for update in value.updates:
-        validate_task_update_view(update, expected_session_id=value.session_id)
-
-
-def _is_progress_update(update: SessionUpdate) -> bool:
+def _is_progress_update(update: TaskDeliveryUpdate) -> bool:
     return type(update) is SessionEventView and update.body_type == "Progress"
 
 
@@ -297,78 +149,27 @@ class _DrainClaim:
 
 
 @dataclass(slots=True)
-class _Compensation:
-    session_id: str
-    request_id: str | None = None
-    unsubscribe_done: bool = False
-    close_done: bool = False
-    drop_done: bool = False
-
-    @property
-    def complete(self) -> bool:
-        return (
-            self.unsubscribe_done
-            and self.close_done
-            and (self.request_id is None or self.drop_done)
-        )
-
-
-@dataclass(slots=True)
-class _TaskCleanup:
-    session_id: str
-    request_id: str
-    unsubscribe_done: bool = False
-    close_done: bool = False
-    drop_done: bool = False
-
-    @property
-    def session_complete(self) -> bool:
-        return self.unsubscribe_done and self.close_done
-
-    @property
-    def complete(self) -> bool:
-        return self.session_complete and self.drop_done
-
-
-@dataclass(slots=True)
-class _TaskReservation:
-    task_id: str
-    attached_session_id: str | None = None
-    retire_when_detached: bool = False
-
-
-@dataclass(slots=True)
 class _TaskState:
     task_id: str
     command_id: str
-    intent: tuple[str, str, str | None]
-    reservation: _TaskReservation
     clock: Callable[[], float]
     condition: Condition = field(default_factory=Condition)
     session_id: str | None = None
-    request_id: str | None = None
     generation: int = 0
-    queue: deque[SessionUpdate] = field(default_factory=deque)
+    queue: deque[TaskDeliveryUpdate] = field(default_factory=deque)
     progress_available_at: float | None = None
     terminal_record: SessionRecordView | None = None
     terminal_pending: bool = False
+    delivered_terminal_event: SessionEventView | None = None
+    delivered_terminal_record: SessionRecordView | None = None
     active_drain: _DrainClaim | None = None
     transition: bool = False
     closing: bool = False
-    observation_unsubscribed: bool = False
-    cleanup_pending: bool = False
-    compensation: _Compensation | None = None
-    compensation_in_progress: bool = False
-    cleanup: _TaskCleanup | None = None
-    cleanup_in_progress: bool = False
-    closed: bool = False
-    terminal_delivered: bool = False
-    session_release_started: bool = False
     recovery_caller: int | None = None
     response_capture_caller: int | None = None
 
-    def sink(self, generation: int) -> Callable[[SessionUpdate], None]:
-        def accept(update: SessionUpdate) -> None:
+    def sink(self, generation: int) -> Callable[[TaskDeliveryUpdate], None]:
+        def accept(update: TaskDeliveryUpdate) -> None:
             self._offer(generation, update)
 
         return accept
@@ -379,7 +180,7 @@ class _TaskState:
                 "task operation reentered response capture"
             )
 
-    def _offer(self, generation: int, update: SessionUpdate) -> None:
+    def _offer(self, generation: int, update: TaskDeliveryUpdate) -> None:
         if type(update) not in {SessionEventView, SessionRecordView}:
             raise TypeError("task updates must be exact service view types")
         update_session = update.session_id
@@ -387,9 +188,7 @@ class _TaskState:
             if self.closing or generation != self.generation:
                 return
             self.require_no_response_capture_reentry()
-            expected_session_id = (
-                self.session_id or self.reservation.attached_session_id
-            )
+            expected_session_id = self.session_id
             if (
                 expected_session_id is not None
                 and update_session != expected_session_id
@@ -449,34 +248,60 @@ class _TaskState:
 
 
 @dataclass(slots=True)
-class _StartEntry:
+class _StartResponse:
     command_id: str
-    intent: tuple[str, str, str | None]
     wire_intent: tuple[str, str, str | None] | None
-    task: _TaskState
     participants: int = 0
     complete: bool = False
+    delivery_retiring: bool = False
     result: TaskStartView | None = None
     failure_code: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class _TaskDrainResponseCodec:
+    """Narrow bridge-response capability supplied by the web composition root."""
+
+    response_too_large_error: type[Exception]
+    admit: Callable[
+        [str, str, str, Iterable[TaskUpdateView]],
+        object,
+    ]
+    peek: Callable[[object], TaskDrainView]
+    consume: Callable[[object], TaskDrainView]
+
+    def __post_init__(self) -> None:
+        error_type = self.response_too_large_error
+        if (
+            not isinstance(error_type, type)
+            or not issubclass(error_type, Exception)
+        ):
+            raise TypeError("task drain response error must be an exception type")
+        if not all(
+            callable(value)
+            for value in (self.admit, self.peek, self.consume)
+        ):
+            raise TypeError("task drain response codec members must be callable")
+
+
 class TaskRegistry:
-    """Own adapter task identity, observation generations, and bounded drains."""
+    """Own adapter delivery generations, response replay, and bounded drains."""
 
     def __init__(
         self,
-        service: _TaskService,
+        lifecycle: TaskLifecyclePort,
         *,
-        token: Callable[[], str] | None = None,
+        response_codec: _TaskDrainResponseCodec | None = None,
         clock: Callable[[], float] = monotonic,
         drain_wait: float = _DRAIN_WAIT_SECONDS,
         progress_linger: float = _PROGRESS_LINGER_SECONDS,
-        task_capacity: int = _TASK_CAPACITY,
     ) -> None:
-        if not callable(token) and token is not None:
-            raise TypeError("task token factory must be callable")
         if not callable(clock):
             raise TypeError("task clock must be callable")
+        if response_codec is not None:
+            if type(response_codec) is not _TaskDrainResponseCodec:
+                raise TypeError("task drain response codec must be exact")
+            response_codec.__post_init__()
         if drain_wait <= 0:
             raise ValueError("task drain wait must be positive")
         if isinstance(progress_linger, bool) or not isinstance(
@@ -492,24 +317,49 @@ class TaskRegistry:
             or normalized_progress_linger <= 0
         ):
             raise ValueError("task progress linger must be positive and finite")
-        if isinstance(task_capacity, bool) or not isinstance(task_capacity, int):
-            raise TypeError("task capacity must be an integer")
-        if task_capacity <= 0 or task_capacity > _TASK_CAPACITY:
-            raise ValueError(f"task capacity must be between 1 and {_TASK_CAPACITY}")
-        self._service = service
-        self._token = token if token is not None else _new_token
+        self._lifecycle = lifecycle
+        self._response_codec = response_codec
         self._clock = clock
         self._drain_wait = drain_wait
         self._progress_linger = normalized_progress_linger
-        self._task_capacity = task_capacity
         self._condition = Condition(Lock())
         self._tasks: dict[str, _TaskState] = {}
-        self._reservations: dict[str, _TaskReservation] = {}
-        self._commands: dict[str, _StartEntry] = {}
+        self._provisional: dict[str, _TaskState] = {}
+        self._start_responses: OrderedDict[str, _StartResponse] = OrderedDict()
         self._close_receipts: OrderedDict[
             tuple[str, str], TaskCloseView
         ] = OrderedDict()
         self._closing = False
+
+    def bind_response_codec(
+        self,
+        response_codec: _TaskDrainResponseCodec,
+    ) -> None:
+        """Install the one adapter response policy before bridge dispatch."""
+
+        if type(response_codec) is not _TaskDrainResponseCodec:
+            raise TypeError("task drain response codec must be exact")
+        response_codec.__post_init__()
+        with self._condition:
+            current = self._response_codec
+            if current is None:
+                self._response_codec = response_codec
+                return
+            if not (
+                current.response_too_large_error
+                is response_codec.response_too_large_error
+                and current.admit is response_codec.admit
+                and current.peek is response_codec.peek
+                and current.consume is response_codec.consume
+            ):
+                raise RuntimeError("task drain response codec is already bound")
+
+    def _require_response_codec(self) -> _TaskDrainResponseCodec:
+        with self._condition:
+            response_codec = self._response_codec
+        if response_codec is None:
+            raise RuntimeError("task drain response codec is not bound")
+        return response_codec
 
     def start_plan(
         self,
@@ -520,42 +370,108 @@ class TaskRegistry:
         command_id: str,
         wire_intent: tuple[str, str, str | None] | None = None,
     ) -> TaskStartView:
-        """Single-flight one resolved plan gesture and attach before scheduling."""
+        """Bind application-owned admission to adapter-local delivery state."""
 
         _require_opaque_id(command_id, "task command id")
-        intent = (source, target, deletion_policy)
-        owner = False
+        retained: _StartResponse | None
         with self._condition:
             if self._closing:
                 raise TaskUnavailableError("task registry is closing")
-            entry = self._commands.get(command_id)
-            if entry is None:
-                if len(self._reservations) >= self._task_capacity:
-                    raise TaskUnavailableError("task capacity is exhausted")
-                task_id = self._mint_task_id()
-                reservation = _TaskReservation(task_id)
-                task = _TaskState(
-                    task_id,
-                    command_id,
-                    intent,
-                    reservation,
-                    self._clock,
-                )
-                entry = _StartEntry(command_id, intent, wire_intent, task)
-                self._reservations[task_id] = reservation
-                self._commands[command_id] = entry
-                self._tasks[task_id] = task
-                owner = True
-            elif entry.intent != intent:
+            retained = self._start_responses.get(command_id)
+            if retained is not None and retained.wire_intent == wire_intent:
+                retained.participants += 1
+            elif retained is not None and _wire_policy_conflicts(
+                retained.wire_intent,
+                wire_intent,
+            ):
                 raise TaskIntentConflictError("task command intent conflicts")
-            entry.participants += 1
 
+        if retained is not None and retained.wire_intent == wire_intent:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+
+        response: _StartResponse | None = None
+        provisional: _TaskState | None = None
+
+        def delivery_factory(task_id: str) -> Callable[[TaskDeliveryUpdate], None]:
+            nonlocal provisional, response
+            if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+                raise RuntimeError("application task id is invalid")
+            with self._condition:
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                if task_id in self._tasks or task_id in self._provisional:
+                    raise RuntimeError("application reused an adapter task id")
+                if command_id in self._start_responses:
+                    raise RuntimeError("application repeated a task delivery factory")
+                while (
+                    len(self._start_responses) >= _START_RESPONSE_CAPACITY
+                    and not self._closing
+                ):
+                    if not any(
+                        entry.delivery_retiring
+                        for entry in self._start_responses.values()
+                    ):
+                        raise RuntimeError(
+                            "application exceeded adapter response capacity"
+                        )
+                    self._condition.wait()
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                response = _StartResponse(
+                    command_id,
+                    wire_intent,
+                    participants=1,
+                )
+                provisional = _TaskState(task_id, command_id, self._clock)
+                self._start_responses[command_id] = response
+                self._provisional[task_id] = provisional
+                self._condition.notify_all()
+                return provisional.sink(provisional.generation)
+
+        failure_code: str | None = None
+        result: TaskStartView | None = None
+        candidate: object | None = None
         try:
-            if owner:
-                self._start_owner(entry, source, target, deletion_policy)
-            return self._await_start_entry(entry)
+            candidate = self._lifecycle.start_task_plan(
+                source,
+                target,
+                deletion_policy=deletion_policy,
+                command_id=command_id,
+                delivery_factory=delivery_factory,
+            )
+            result = self._validate_and_publish_start(
+                command_id,
+                candidate,
+                provisional,
+            )
+        except BaseException as error:
+            if response is None:
+                raise
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            candidate = None
+            if provisional is not None:
+                self._discard_provisional(provisional)
+
+        if response is None:
+            assert result is not None
+            return result
+
+        with self._condition:
+            response.result = result
+            response.failure_code = failure_code
+            response.complete = True
+            self._condition.notify_all()
+        try:
+            if result is not None:
+                return result
+            assert failure_code is not None
+            _raise_start_failure(failure_code)
         finally:
-            self._leave_start_entry(entry)
+            self._leave_start_response(response)
 
     def replay_start(
         self,
@@ -568,29 +484,21 @@ class TaskRegistry:
         with self._condition:
             if self._closing:
                 raise TaskUnavailableError("task registry is closing")
-            entry = self._commands.get(command_id)
+            entry = self._start_responses.get(command_id)
             if entry is None:
                 return None
             if entry.wire_intent != wire_intent:
-                if entry.intent[2] != wire_intent[2]:
+                if _wire_policy_conflicts(entry.wire_intent, wire_intent):
                     raise TaskIntentConflictError("task command intent conflicts")
                 return None
             entry.participants += 1
+            self._start_responses.move_to_end(command_id)
         try:
-            if entry.complete and entry.result is None and entry.task.cleanup_pending:
-                retry_failure_code: str | None = None
-                try:
-                    self._retry_compensation(entry.task)
-                except BaseException as error:
-                    retry_failure_code = _classify_start_failure(error)
-                    retire_exception_graph(error)
-                if retry_failure_code is not None:
-                    _raise_start_failure(retry_failure_code)
-            return self._await_start_entry(entry)
+            return self._await_start_response(entry)
         finally:
-            self._leave_start_entry(entry)
+            self._leave_start_response(entry)
 
-    def _await_start_entry(self, entry: _StartEntry) -> TaskStartView:
+    def _await_start_response(self, entry: _StartResponse) -> TaskStartView:
         with self._condition:
             while not entry.complete:
                 self._condition.wait()
@@ -599,157 +507,97 @@ class TaskRegistry:
             assert entry.failure_code is not None
             _raise_start_failure(entry.failure_code)
 
-    def _leave_start_entry(self, entry: _StartEntry) -> None:
+    def _leave_start_response(self, entry: _StartResponse) -> None:
         with self._condition:
             entry.participants -= 1
             if (
                 entry.complete
-                and entry.result is None
                 and entry.participants == 0
-                and not entry.task.cleanup_pending
+                and (entry.result is None or self._closing)
             ):
-                if self._commands.get(entry.command_id) is entry:
-                    self._commands.pop(entry.command_id, None)
-                if self._tasks.get(entry.task.task_id) is entry.task:
-                    self._tasks.pop(entry.task.task_id, None)
-                self._retire_reservation_locked(entry.task.reservation)
+                if self._start_responses.get(entry.command_id) is entry:
+                    self._start_responses.pop(entry.command_id, None)
             self._condition.notify_all()
 
-    def _start_owner(
+    def _validate_and_publish_start(
         self,
-        entry: _StartEntry,
-        source: str,
-        target: str,
-        deletion_policy: str | None,
-    ) -> None:
-        task = entry.task
-        plan: PlanSession | None = None
-        attached_session_id: str | None = None
-        service_returned = False
-        failure_code: str | None = None
-        try:
-            candidate = self._service.start_plan(
-                source,
-                target,
-                deletion_policy=deletion_policy,
-                command_id=entry.command_id,
-                observation_sink=task.sink(task.generation),
-                session_attachment=self._session_attachment(
-                    task,
-                    task.generation,
-                ),
-            )
-            service_returned = True
-            attached_session_id = self._attached_session_id_or_none(task)
-            if type(candidate) is not PlanSession:
-                raise RuntimeError("planning service returned invalid task data")
-            request_id = candidate.request_id
-            session_id = candidate.session_id
-            _require_opaque_id(request_id, "plan request id")
-            _require_opaque_id(session_id, "plan session id")
-            if attached_session_id is None:
-                raise ObservationConflictError(
-                    "planning service did not attach its admitted session"
-                )
-            if session_id != attached_session_id:
-                raise ObservationConflictError(
-                    "planning service returned a different attached session"
-                )
-            plan = PlanSession(request_id, attached_session_id)
-            with task.condition:
-                if task.closing:
-                    raise TaskUnavailableError("task registry closed during start")
-                for update in task.queue:
-                    if update.session_id != plan.session_id:
-                        raise ObservationConflictError(
-                            "task observation does not match admitted session"
-                        )
-                task.request_id = plan.request_id
-                task.session_id = plan.session_id
-                task.condition.notify_all()
-            result = TaskStartView(task.task_id, plan.request_id, plan.session_id)
-        except BaseException as error:
-            failure_code = _classify_start_failure(error)
-            retire_exception_graph(error)
-            result = None
-        if (
-            result is None
-            and service_returned
-            and attached_session_id is not None
-        ):
-            task.compensation = _Compensation(
-                attached_session_id,
-                None if plan is None else plan.request_id,
-            )
-            try:
-                self._attempt_compensation(task)
-            except BaseException as cleanup_error:
-                failure_code = _classify_start_failure(cleanup_error)
-                retire_exception_graph(cleanup_error)
-
-        with self._condition:
-            entry.result = result
-            entry.failure_code = failure_code
-            entry.complete = True
-            self._condition.notify_all()
-
-    def _session_attachment(
-        self,
-        task: _TaskState,
-        generation: int,
-    ) -> Callable[[str], Callable[[], None]]:
-        reservation = task.reservation
-        task_id = task.task_id
-
-        def attach(session_id: str) -> Callable[[], None]:
-            _require_opaque_id(session_id, "attached session id")
-            with task.condition:
-                if task.closing or task.generation != generation:
-                    raise TaskUnavailableError(
-                        "task became unavailable before session attachment"
-                    )
+        command_id: str,
+        candidate: object,
+        provisional: _TaskState | None,
+    ) -> TaskStartView:
+        if type(candidate) is not TaskStartView:
+            raise RuntimeError("planning lifecycle returned invalid task data")
+        candidate.__post_init__()
+        if provisional is None:
+            pending: _StartResponse | None = None
             with self._condition:
-                if (
-                    self._closing
-                    or self._reservations.get(task_id) is not reservation
-                    or reservation.retire_when_detached
-                ):
-                    raise TaskUnavailableError(
-                        "task became unavailable before session attachment"
-                    )
-                if reservation.attached_session_id is not None:
-                    raise ObservationConflictError(
-                        "task already owns an attached session"
-                    )
-                reservation.attached_session_id = session_id
-
-            active = True
-
-            def rollback() -> None:
-                nonlocal active
-                if not active:
-                    return
+                task = self._tasks.get(candidate.task_id)
+                if task is None:
+                    pending = self._start_responses.get(command_id)
+                    if pending is not None:
+                        pending.participants += 1
+            if pending is not None:
+                try:
+                    replay = self._await_start_response(pending)
+                finally:
+                    self._leave_start_response(pending)
+                if replay != candidate:
+                    raise RuntimeError("task lifecycle replay changed its result")
                 with self._condition:
-                    if reservation.attached_session_id == session_id:
-                        reservation.attached_session_id = None
-                        if (
-                            reservation.retire_when_detached
-                            and self._reservations.get(task_id) is reservation
-                        ):
-                            self._reservations.pop(task_id, None)
-                    active = False
-                    self._condition.notify_all()
+                    task = self._tasks.get(candidate.task_id)
+            if (
+                task is None
+                or task.command_id != command_id
+                or task.session_id != candidate.session_id
+            ):
+                raise RuntimeError("task lifecycle replay has no delivery state")
+            return candidate
 
-            return rollback
-
-        return attach
-
-    def _attached_session_id_or_none(self, task: _TaskState) -> str | None:
+        if provisional.task_id != candidate.task_id:
+            raise ObservationConflictError(
+                "planning lifecycle returned a different task"
+            )
+        with provisional.condition:
+            if provisional.closing:
+                raise TaskUnavailableError("task registry closed during start")
+            for update in provisional.queue:
+                if update.session_id != candidate.session_id:
+                    raise ObservationConflictError(
+                        "task observation does not match admitted session"
+                    )
+            if (
+                provisional.terminal_record is not None
+                and provisional.terminal_record.session_id
+                != candidate.session_id
+            ):
+                raise ObservationConflictError(
+                    "task terminal record does not match admitted session"
+                )
+            provisional.session_id = candidate.session_id
+            provisional.condition.notify_all()
         with self._condition:
-            reservation = task.reservation
-            if self._reservations.get(task.task_id) is not reservation:
-                raise TaskUnavailableError("task reservation is unavailable")
-            return reservation.attached_session_id
+            if self._closing:
+                raise TaskUnavailableError("task registry closed during start")
+            if self._provisional.get(provisional.task_id) is not provisional:
+                raise RuntimeError("provisional task delivery is unavailable")
+            if provisional.task_id in self._tasks:
+                raise RuntimeError("task delivery publication was repeated")
+            self._provisional.pop(provisional.task_id, None)
+            self._tasks[provisional.task_id] = provisional
+            self._condition.notify_all()
+        return candidate
+
+    def _discard_provisional(self, task: _TaskState) -> None:
+        with task.condition:
+            task.closing = True
+            task.generation += 1
+            if task.active_drain is not None:
+                task.active_drain.superseded = True
+            task.condition.notify_all()
+        with self._condition:
+            if self._provisional.get(task.task_id) is task:
+                self._provisional.pop(task.task_id, None)
+            self._condition.notify_all()
 
     def drain(
         self,
@@ -759,14 +607,14 @@ class TaskRegistry:
         *,
         replay_from: int | None,
     ) -> TaskDrainView:
-        from .bridge import _consume_task_drain_response
-
-        return _consume_task_drain_response(
+        response_codec = self._require_response_codec()
+        return response_codec.consume(
             self._drain_admitted(
                 task_id,
                 session_id,
                 drain_id,
                 replay_from=replay_from,
+                response_codec=response_codec,
             )
         )
 
@@ -780,11 +628,13 @@ class TaskRegistry:
     ) -> object:
         """Transfer one byte-admitted drain to the bridge without recopying it."""
 
+        response_codec = self._require_response_codec()
         return self._drain_admitted(
             task_id,
             session_id,
             drain_id,
             replay_from=replay_from,
+            response_codec=response_codec,
         )
 
     def _drain_admitted(
@@ -794,10 +644,8 @@ class TaskRegistry:
         drain_id: str,
         *,
         replay_from: int | None,
+        response_codec: _TaskDrainResponseCodec,
     ) -> object:
-        from .bridge import BridgeResponseTooLargeError
-        from .bridge import _peek_task_drain_response
-
         _require_opaque_id(drain_id, "task drain id")
         task = self._require_task(task_id, session_id)
         deadline = self._clock() + self._drain_wait
@@ -864,21 +712,21 @@ class TaskRegistry:
                     source = chain(source, (terminal,))
                 task.response_capture_caller = get_ident()
                 try:
-                    admitted = _admit_drain_result(
+                    admitted = response_codec.admit(
                         task_id,
                         session_id,
                         drain_id,
                         (_tag_update(update) for update in source),
                     )
-                except BridgeResponseTooLargeError as error:
-                    retire_exception_graph(error)
+                except response_codec.response_too_large_error as error:
+                    _retire_exception_graph(error)
                     raise RuntimeError(
                         "one task update exceeds the bridge response ceiling"
                     ) from None
                 finally:
                     if task.response_capture_caller == get_ident():
                         task.response_capture_caller = None
-                result = _peek_task_drain_response(admitted)
+                result = response_codec.peek(admitted)
                 count = min(len(result.updates), len(queued))
                 include_terminal = (
                     not claim.superseded
@@ -894,10 +742,14 @@ class TaskRegistry:
                         _is_progress_update(update) for update in task.queue
                     ):
                         task.progress_available_at = None
-                    if any(
-                        update.update_type == "record" for update in result.updates
-                    ):
-                        task.terminal_delivered = True
+                    for update in result.updates:
+                        if (
+                            type(update) is TaskEventUpdateView
+                            and update.event.body_type == "Terminal"
+                        ):
+                            task.delivered_terminal_event = update.event
+                        elif type(update) is TaskRecordUpdateView:
+                            task.delivered_terminal_record = update.record
                     task.condition.notify_all()
         finally:
             with task.condition:
@@ -933,7 +785,8 @@ class TaskRegistry:
         failure_code: str | None = None
         current: object | None = None
         try:
-            current = self._service.reobserve(
+            current = self._lifecycle.reobserve_task(
+                task.task_id,
                 session_id,
                 task.sink(generation),
                 replay_from,
@@ -950,7 +803,7 @@ class TaskRegistry:
                 terminal = current
         except BaseException as error:
             failure_code = _classify_recovery_failure(error)
-            retire_exception_graph(error)
+            _retire_exception_graph(error)
         finally:
             current = None
 
@@ -978,25 +831,10 @@ class TaskRegistry:
                 task.transition = False
             task.condition.notify_all()
         if stale:
-            try:
-                if failure_code is None:
-                    try:
-                        self._service.unsubscribe(session_id)
-                    except BaseException as error:
-                        failure_code = _classify_recovery_failure(error)
-                        retire_exception_graph(error)
-                    else:
-                        with task.condition:
-                            task.observation_unsubscribed = True
-            finally:
-                with task.condition:
-                    if (
-                        task.generation == generation
-                        or task.closing
-                        or task.session_release_started
-                    ):
-                        task.transition = False
-                    task.condition.notify_all()
+            with task.condition:
+                if task.generation == generation or task.closing:
+                    task.transition = False
+                task.condition.notify_all()
             if failure_code is None:
                 failure_code = _RECOVERY_FAILURE_TASK_UNAVAILABLE
         if failure_code is not None:
@@ -1004,11 +842,18 @@ class TaskRegistry:
             _raise_recovery_failure(failure_code)
 
     def begin_close(self) -> None:
-        """Reject tasks and wake drains/producers without detaching observations."""
+        """Reject tasks and withdraw adapter-local delivery state."""
 
         with self._condition:
             self._closing = True
-            tasks = tuple(self._tasks.values())
+            tasks = tuple(self._tasks.values()) + tuple(self._provisional.values())
+            for command_id, response in tuple(self._start_responses.items()):
+                if (
+                    response.complete
+                    and response.participants == 0
+                    and not response.delivery_retiring
+                ):
+                    self._start_responses.pop(command_id, None)
             self._condition.notify_all()
         for task in tasks:
             with task.condition:
@@ -1017,40 +862,6 @@ class TaskRegistry:
                 if task.active_drain is not None:
                     task.active_drain.superseded = True
                 task.condition.notify_all()
-
-    def unsubscribe_all(self) -> None:
-        """Detach task observations after admitted bridge handlers have left."""
-
-        with self._condition:
-            tasks = tuple(self._tasks.values())
-        for task in tasks:
-            if task.compensation is not None:
-                try:
-                    self._attempt_compensation(task)
-                except BaseException as error:
-                    retire_exception_graph(error)
-                    raise
-                if not task.cleanup_pending:
-                    self._discard_failed_task(task)
-                continue
-            with task.condition:
-                session_id = task.session_id
-                cleanup = task.cleanup
-                already = task.observation_unsubscribed or (
-                    cleanup is not None and cleanup.unsubscribe_done
-                )
-            if session_id is None or already:
-                continue
-            try:
-                self._service.unsubscribe(session_id)
-            except BaseException as error:
-                retire_exception_graph(error)
-                raise
-            with task.condition:
-                if task.session_id == session_id:
-                    task.observation_unsubscribed = True
-                    if task.cleanup is not None:
-                        task.cleanup.unsubscribe_done = True
 
     def release_terminal_session(
         self,
@@ -1067,59 +878,62 @@ class TaskRegistry:
                 self._close_receipts.move_to_end(receipt_key)
                 return TaskSessionReleaseView(task_id, session_id)
             task = self._tasks.get(task_id)
-        if task is None or task.compensation is not None:
+        if task is None:
             raise TaskUnavailableError("task is unavailable")
 
         with task.condition:
             task.require_no_response_capture_reentry()
             if task.session_id != session_id:
                 raise TaskUnavailableError("task is unavailable")
-            if not task.terminal_delivered:
-                raise TaskUnavailableError("task terminal record was not drained")
-            while task.cleanup_in_progress:
-                task.condition.wait()
-            cleanup = task.cleanup
-            if task.closed or (
-                cleanup is not None and cleanup.session_complete
-            ):
-                return TaskSessionReleaseView(task_id, session_id)
-            task.cleanup_in_progress = True
-            task.session_release_started = True
+            delivery = self._terminal_delivery_locked(task)
+            task.closing = True
             task.generation += 1
             if task.active_drain is not None:
                 task.active_drain.superseded = True
             task.condition.notify_all()
             while task.transition:
                 task.condition.wait()
-            request_id = task.request_id
-            if request_id is None:
-                task.cleanup_in_progress = False
-                task.condition.notify_all()
-                raise TaskUnavailableError("task has not completed admission")
-            cleanup = task.cleanup
-            if cleanup is None:
-                cleanup = _TaskCleanup(
+
+        while True:
+            try:
+                result = self._lifecycle.release_task_session(
+                    task_id,
                     session_id,
-                    request_id,
-                    unsubscribe_done=task.observation_unsubscribed,
+                    delivery,
                 )
-                task.cleanup = cleanup
-
-        try:
-            self._attempt_session_release(task, cleanup)
-            if not cleanup.session_complete:
-                raise TaskUnavailableError("task session release remains pending")
-        except BaseException as error:
-            with task.condition:
-                task.cleanup_in_progress = False
-                task.condition.notify_all()
-            retire_exception_graph(error)
-            raise
-
-        with task.condition:
-            task.cleanup_in_progress = False
-            task.condition.notify_all()
-        return TaskSessionReleaseView(task_id, session_id)
+            except TaskUnavailableError as error:
+                _retire_exception_graph(error)
+                waited_for_close = False
+                with self._condition:
+                    while True:
+                        close_receipt = self._close_receipts.get(receipt_key)
+                        if close_receipt is not None:
+                            self._close_receipts.move_to_end(receipt_key)
+                            return TaskSessionReleaseView(task_id, session_id)
+                        response = self._start_responses.get(task.command_id)
+                        if (
+                            self._closing
+                            or response is None
+                            or not response.delivery_retiring
+                        ):
+                            break
+                        waited_for_close = True
+                        self._condition.wait()
+                if waited_for_close and not self._closing:
+                    continue
+                raise
+            except BaseException as error:
+                _retire_exception_graph(error)
+                raise
+            break
+        if (
+            type(result) is not TaskSessionReleaseView
+            or result.task_id != task_id
+            or result.session_id != session_id
+        ):
+            raise RuntimeError("task lifecycle returned invalid release data")
+        result.__post_init__()
+        return result
 
     def close_task(self, task_id: str, session_id: str) -> TaskCloseView:
         """Explicitly release one terminal task and its retained plan."""
@@ -1134,27 +948,11 @@ class TaskRegistry:
             task = self._tasks.get(task_id)
         if task is None:
             raise TaskUnavailableError("task is unavailable")
-        if task.compensation is not None:
-            try:
-                self._attempt_compensation(task)
-            except BaseException as error:
-                retire_exception_graph(error)
-                raise
-            if task.cleanup_pending:
-                raise TaskUnavailableError("task cleanup remains pending")
-            self._discard_failed_task(task)
-            raise TaskUnavailableError("task is unavailable")
         with task.condition:
             task.require_no_response_capture_reentry()
             if task.session_id != session_id:
                 raise TaskUnavailableError("task is unavailable")
-            if not task.terminal_delivered:
-                raise TaskUnavailableError("task terminal record was not drained")
-            while task.cleanup_in_progress:
-                task.condition.wait()
-            if task.closed:
-                return TaskCloseView(task_id, session_id)
-            task.cleanup_in_progress = True
+            delivery = self._terminal_delivery_locked(task)
             task.closing = True
             task.generation += 1
             if task.active_drain is not None:
@@ -1162,49 +960,71 @@ class TaskRegistry:
             task.condition.notify_all()
             while task.transition:
                 task.condition.wait()
-            session_id = task.session_id
-            request_id = task.request_id
-        if session_id is None or request_id is None:
-            with task.condition:
-                task.cleanup_in_progress = False
-                task.condition.notify_all()
-            raise TaskUnavailableError("task has not completed admission")
-        with task.condition:
-            cleanup = task.cleanup
-            if cleanup is None:
-                cleanup = _TaskCleanup(
-                    session_id,
-                    request_id,
-                    unsubscribe_done=task.observation_unsubscribed,
-                )
-                task.cleanup = cleanup
-        try:
-            self._attempt_task_cleanup(task, cleanup)
-            if not cleanup.complete:
-                raise TaskUnavailableError("task cleanup remains pending")
-        except BaseException as error:
-            with task.condition:
-                task.cleanup_in_progress = False
-                task.condition.notify_all()
-            retire_exception_graph(error)
-            raise
-        result = TaskCloseView(task_id, session_id)
+
+        response: _StartResponse | None = None
         with self._condition:
-            if self._tasks.get(task_id) is task:
-                self._tasks.pop(task_id, None)
-            if self._commands.get(task.command_id, None) is not None:
-                self._commands.pop(task.command_id, None)
-            self._retire_reservation_locked(task.reservation)
+            while True:
+                receipt = self._close_receipts.get(receipt_key)
+                if receipt is not None:
+                    self._close_receipts.move_to_end(receipt_key)
+                    return receipt
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                response = self._start_responses.get(task.command_id)
+                if response is None:
+                    raise RuntimeError("task start response is unavailable")
+                if not response.delivery_retiring:
+                    response.delivery_retiring = True
+                    self._condition.notify_all()
+                    break
+                self._condition.wait()
+
+        try:
+            result = self._lifecycle.close_task(
+                task_id,
+                session_id,
+                delivery,
+            )
+            if (
+                type(result) is not TaskCloseView
+                or result.task_id != task_id
+                or result.session_id != session_id
+            ):
+                raise RuntimeError("task lifecycle returned invalid close data")
+            result.__post_init__()
+        except BaseException as error:
+            _retire_exception_graph(error)
+            with self._condition:
+                response.delivery_retiring = False
+                if (
+                    self._closing
+                    and self._start_responses.get(task.command_id) is response
+                ):
+                    self._start_responses.pop(task.command_id, None)
+                self._condition.notify_all()
+            raise
+        with self._condition:
             self._close_receipts[receipt_key] = result
             self._close_receipts.move_to_end(receipt_key)
             while len(self._close_receipts) > _CLOSE_RECEIPT_CAPACITY:
                 self._close_receipts.popitem(last=False)
+            if self._tasks.get(task_id) is task:
+                self._tasks.pop(task_id, None)
+            response.delivery_retiring = False
+            if self._start_responses.get(task.command_id) is response:
+                self._start_responses.pop(task.command_id, None)
             self._condition.notify_all()
-        with task.condition:
-            task.closed = True
-            task.cleanup_in_progress = False
-            task.condition.notify_all()
         return result
+
+    @staticmethod
+    def _terminal_delivery_locked(task: _TaskState) -> TaskTerminalDelivery:
+        record = task.delivered_terminal_record
+        if record is None:
+            raise TaskUnavailableError("task terminal record was not drained")
+        return TaskTerminalDelivery(
+            record,
+            task.delivered_terminal_event,
+        )
 
     def _require_task(self, task_id: str, session_id: str) -> _TaskState:
         self._require_task_identity(task_id, session_id)
@@ -1218,11 +1038,7 @@ class TaskRegistry:
 
     @staticmethod
     def _require_live_locked(task: _TaskState, session_id: str) -> None:
-        if (
-            task.closing
-            or task.session_release_started
-            or task.session_id != session_id
-        ):
+        if task.closing or task.session_id != session_id:
             raise TaskUnavailableError("task is unavailable")
 
     @staticmethod
@@ -1232,118 +1048,8 @@ class TaskRegistry:
         if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
             raise TaskUnavailableError("task is unavailable")
 
-    def _mint_task_id(self) -> str:
-        while True:
-            token = self._token()
-            if type(token) is not str or _OPAQUE_ID.fullmatch(token) is None:
-                raise ValueError("task token must be 32 lowercase hex digits")
-            task_id = f"task-{token}"
-            if task_id not in self._reservations:
-                return task_id
 
-    def _detach_session(self, task: _TaskState, session_id: str) -> None:
-        with self._condition:
-            reservation = task.reservation
-            if self._reservations.get(task.task_id) is not reservation:
-                raise TaskUnavailableError("task reservation is unavailable")
-            attached_session_id = reservation.attached_session_id
-            if attached_session_id is None:
-                return
-            if attached_session_id != session_id:
-                raise ObservationConflictError(
-                    "task cleanup does not match its attached session"
-                )
-            reservation.attached_session_id = None
-            if reservation.retire_when_detached:
-                self._reservations.pop(task.task_id, None)
-            self._condition.notify_all()
-
-    def _retire_reservation_locked(
-        self,
-        reservation: _TaskReservation,
-    ) -> None:
-        reservation.retire_when_detached = True
-        if (
-            reservation.attached_session_id is None
-            and self._reservations.get(reservation.task_id) is reservation
-        ):
-            self._reservations.pop(reservation.task_id, None)
-
-    def _attempt_compensation(self, task: _TaskState) -> None:
-        compensation = task.compensation
-        assert compensation is not None
-        try:
-            if not compensation.unsubscribe_done:
-                self._service.unsubscribe(compensation.session_id)
-                compensation.unsubscribe_done = True
-            if not compensation.close_done:
-                self._service.close_session(compensation.session_id)
-                compensation.close_done = True
-            if compensation.close_done:
-                self._detach_session(task, compensation.session_id)
-            if compensation.request_id is not None and not compensation.drop_done:
-                self._service.drop_plan(compensation.request_id)
-                compensation.drop_done = True
-        except BaseException as error:
-            task.cleanup_pending = True
-            retire_exception_graph(error)
-            if isinstance(error, Exception):
-                return
-            raise
-        task.cleanup_pending = not compensation.complete
-
-    def _retry_compensation(self, task: _TaskState) -> None:
-        with task.condition:
-            while task.compensation_in_progress:
-                task.condition.wait()
-            if not task.cleanup_pending:
-                return
-            task.compensation_in_progress = True
-        try:
-            self._attempt_compensation(task)
-        finally:
-            with task.condition:
-                task.compensation_in_progress = False
-                task.condition.notify_all()
-
-    def _attempt_session_release(
-        self,
-        task: _TaskState,
-        cleanup: _TaskCleanup,
-    ) -> None:
-        if not cleanup.unsubscribe_done:
-            self._service.unsubscribe(cleanup.session_id)
-            cleanup.unsubscribe_done = True
-            with task.condition:
-                task.observation_unsubscribed = True
-        if not cleanup.close_done:
-            self._service.close_session(cleanup.session_id)
-            cleanup.close_done = True
-        if cleanup.close_done:
-            self._detach_session(task, cleanup.session_id)
-
-    def _attempt_task_cleanup(
-        self,
-        task: _TaskState,
-        cleanup: _TaskCleanup,
-    ) -> None:
-        self._attempt_session_release(task, cleanup)
-        if not cleanup.drop_done:
-            self._service.drop_plan(cleanup.request_id)
-            cleanup.drop_done = True
-
-    def _discard_failed_task(self, task: _TaskState) -> None:
-        with self._condition:
-            entry = self._commands.get(task.command_id)
-            if entry is not None and entry.task is task and entry.participants == 0:
-                self._commands.pop(task.command_id, None)
-            if self._tasks.get(task.task_id) is task:
-                self._tasks.pop(task.task_id, None)
-            self._retire_reservation_locked(task.reservation)
-            self._condition.notify_all()
-
-
-def _tag_update(update: SessionUpdate) -> TaskUpdateView:
+def _tag_update(update: TaskDeliveryUpdate) -> TaskUpdateView:
     if type(update) is SessionEventView:
         return TaskEventUpdateView("event", update)
     if type(update) is SessionRecordView:
@@ -1351,20 +1057,11 @@ def _tag_update(update: SessionUpdate) -> TaskUpdateView:
     raise TypeError("task updates must be exact service view types")
 
 
-def _admit_drain_result(
-    task_id: str,
-    session_id: str,
-    drain_id: str,
-    updates: Iterable[TaskUpdateView],
-) -> object:
-    from .bridge import _admit_task_drain_response_prefix
-
-    return _admit_task_drain_response_prefix(
-        task_id,
-        session_id,
-        drain_id,
-        updates,
-    )
+def _wire_policy_conflicts(
+    first: tuple[str, str, str | None] | None,
+    second: tuple[str, str, str | None] | None,
+) -> bool:
+    return first is not None and second is not None and first[2] != second[2]
 
 
 def _require_opaque_id(value: object, label: str) -> None:
@@ -1372,20 +1069,8 @@ def _require_opaque_id(value: object, label: str) -> None:
         raise RuntimeError(f"{label} is invalid")
 
 
-def _new_token() -> str:
-    return uuid4().hex
-
-
 __all__ = [
     "DrainBusyError",
     "ObservationConflictError",
-    "TaskDrainView",
-    "TaskCloseView",
-    "TaskEventUpdateView",
-    "TaskIntentConflictError",
-    "TaskRecordUpdateView",
     "TaskRegistry",
-    "TaskSessionReleaseView",
-    "TaskStartView",
-    "TaskUnavailableError",
 ]

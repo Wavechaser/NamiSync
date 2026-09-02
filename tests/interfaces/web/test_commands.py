@@ -37,7 +37,14 @@ from namisync.interfaces.service import (
     SessionRecordView,
     SyncPathInputError,
 )
-from namisync.interfaces.web.bridge import BridgeProtocolError, to_primitive_view
+from namisync.interfaces.web.bridge import (
+    BridgeProtocolError,
+    BridgeResponseTooLargeError,
+    _admit_task_drain_response_prefix,
+    _consume_task_drain_response,
+    _peek_task_drain_response,
+    to_primitive_view,
+)
 from namisync.interfaces.web.commands import (
     ADAPTER_PUBLIC_VIEW_DATACLASSES,
     CommandAccess,
@@ -62,6 +69,7 @@ from namisync.interfaces.web.drain import (
     TaskRegistry,
     TaskSessionReleaseView,
     TaskStartView,
+    _TaskDrainResponseCodec,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
@@ -264,6 +272,34 @@ def _commands(*, picker=lambda: None):
         slots,
         service,
     )
+
+
+def test_production_command_composition_binds_transport_response_codec_when_supported() -> None:
+    class Registry(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.bindings: list[object] = []
+
+        def bind_response_codec(self, response_codec: object) -> None:
+            self.bindings.append(response_codec)
+
+    registry = Registry()
+    production_command_specs(
+        picker=lambda: None,
+        slots=_Slots(),
+        registry=registry,
+        cosmetics=_Cosmetics(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    assert len(registry.bindings) == 1
+    codec = registry.bindings[0]
+    assert type(codec) is _TaskDrainResponseCodec
+    assert codec.response_too_large_error is BridgeResponseTooLargeError
+    assert codec.admit is _admit_task_drain_response_prefix
+    assert codec.peek is _peek_task_drain_response
+    assert codec.consume is _consume_task_drain_response
 
 
 def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete() -> None:
@@ -1166,21 +1202,20 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
         def __init__(self) -> None:
             self.calls = []
 
-        def start_plan(self, source, target, **kwargs):
-            self.calls.append((source, target, kwargs["command_id"]))
-            attachment = kwargs["session_attachment"]
-            assert callable(attachment)
-            assert callable(attachment("9" * 32))
-            return PlanSession("8" * 32, "9" * 32)
-
-        def unsubscribe(self, session_id):
-            del session_id
-
-        def close_session(self, session_id):
-            del session_id
-
-        def drop_plan(self, request_id):
-            del request_id
+        def start_task_plan(
+            self,
+            source,
+            target,
+            *,
+            deletion_policy,
+            command_id,
+            delivery_factory,
+        ):
+            del deletion_policy
+            self.calls.append((source, target, command_id))
+            task_id = "task-" + "a" * 32
+            assert callable(delivery_factory(task_id))
+            return TaskStartView(task_id, "8" * 32, "9" * 32)
 
     clock = Clock()
     slot_tokens = iter(f"{value:032x}" for value in range(1, 100))
@@ -1188,7 +1223,15 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
     source_id, _ = slots.store(r"C:\source", purpose="source")
     target_id, _ = slots.store(r"D:\target", purpose="target")
     service = Service()
-    registry = TaskRegistry(service, token=lambda: "a" * 32)
+    registry = TaskRegistry(
+        service,
+        response_codec=_TaskDrainResponseCodec(
+            BridgeResponseTooLargeError,
+            _admit_task_drain_response_prefix,
+            _peek_task_drain_response,
+            _consume_task_drain_response,
+        ),
+    )
     commands = production_command_specs(
         picker=lambda: None,
         slots=slots,

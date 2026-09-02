@@ -23,9 +23,9 @@ from namisync.workflows.views import (
     validate_session_record_view,
 )
 
-from .drain import (
+from namisync.interfaces.task_port import (
     TaskDrainView, TaskEventUpdateView, TaskRecordUpdateView,
-    validate_task_drain_view, validate_task_update_view,
+    TaskUnavailableError, validate_task_drain_view, validate_task_update_view,
 )
 
 from .pywebview_runtime import (
@@ -787,7 +787,6 @@ class BridgeDispatcher:
             from .drain import (
                 DrainBusyError,
                 ObservationConflictError,
-                TaskUnavailableError,
             )
             from .slots import SlotUnavailableError
 
