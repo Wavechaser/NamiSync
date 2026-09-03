@@ -761,6 +761,25 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MINOR - OPEN (2026-09-03). Headed accessibility target expiry. The required
+  off-origin headed node twice reached its external accessibility check but
+  could not read the refusal because Windows UI Automation raised
+  `ElementNotAvailableException`; the other 34 transport-module nodes passed.
+  Cause: the acceptance probe traverses a post-navigation UI Automation
+  provider whose target can become unavailable before the separate probe reads
+  it. This establishes an evidence-availability defect, not a bridge-security
+  or product regression. Keep the node required and investigate it separately;
+  deselection is not green headed evidence.
+- MINOR - FIXED (2026-09-03). Adapter-surface interception drift. After
+  `66e202f`, the installed-wheel headed fixture still patched the live legacy
+  service methods while the bridge called the new task-port methods; both
+  families existed, so `patch.object` succeeded but the interception was inert
+  and its recorder stayed empty. Cause: the fixture tracked attribute existence
+  rather than the bridge's authoritative service surface, and the headed gate
+  was not run during LC-1. Fixed by intercepting the four task-port methods and
+  bridge drain, preserving delivery-factory/task identity, unwrapping native
+  response custody, and excluding only exact native acknowledgements from
+  command-body evidence.
 - MODERATE - FIXED (2026-08-29). Orphan analytical admission. Desktop startup
   refused every runtime outside one exact CPython patch, GIL, and allocator
   profile even though no object model, validator, or acceptance evidence could

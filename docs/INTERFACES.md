@@ -207,6 +207,10 @@ start_plan(source, target, *, deletion_policy=None, command_id=None)
     -> PlanSession
 start_task_plan(source, target, *, deletion_policy, command_id,
                 delivery_factory) -> TaskStartView
+reobserve(session_id, sink, from_sequence) -> SessionRecordView
+unsubscribe(session_id) -> None
+close_session(session_id) -> None
+drop_plan(request_id) -> None
 preview_selection(request_id) -> SelectionPreviewView
 mutate_selection(request_id, expected_revision, *,
                  deselect=(), reselect=(), command_id=None)
@@ -247,6 +251,18 @@ get_history_items(run_token, *, after_order=0, through_order=None, limit=256)
 get_history_events(run_token, *, after_seq=0, through_seq=None, limit=256)
     -> HistoryEventPageView
 ```
+
+The plan/session lifecycle deliberately has two live service surfaces. The
+session-oriented family is `start_plan`, `reobserve`, `unsubscribe`,
+`close_session`, and `drop_plan`; the CLI currently calls `start_plan`,
+`unsubscribe`, and `close_session`, while the other two remain supported direct
+service operations. The task-bound family is `start_task_plan`,
+`reobserve_task`, `release_task_session`, and `close_task`; the desktop bridge
+reaches only those four through `TaskLifecyclePort`. Neither family is dead
+code. Both delegate to the same application authority: starts use the
+`TaskLifecycle` command/admission path, both reobservation forms share
+`_reobserve_session`, session/task settlement shares `_settle_session`, and
+direct plan drop uses the same exact plan-retirement owner as task settlement.
 
 ### Task lifecycle ownership
 
@@ -395,15 +411,18 @@ A task-bound release consumes a truthful adapter terminal-delivery fact, advance
 application settlement, confirms service-observer release, closes Dispatcher
 custody, retires the exact runtime detail, and only then optionally retires the
 plan/task. The fixed cleanup owners are independently idempotent or monotone.
+The durable owner-call contract is: settlement may repeat exact-owner calls,
+but each exact physical transition and observable effect occurs at most once.
 After failure or interruption, the whole cleanup call sequence may repeat from
-current owner truth; each completed observable effect remains unique. The
+current owner truth. The
 observer and runtime detail/plan owners accept repeated exact-subject absence;
 Dispatcher close remains strict, and only a sealed exact application settlement
 interprets `SessionNotFound` as custody already absent. Plan retirement uses one
 tolerant exact-token claim: a retired token produces no new work, while active
-mutation and retirement remain mutually exclusive. Fresh service-minted plan
-request ids are not intentionally reused by supported callers; a live or
-retiring collision fails instead of treating the id as a reusable key. The
+mutation and retirement remain mutually exclusive. `TaskLifecycle.publish_start`
+deliberately does not wait for plan retirement. Fresh service-minted plan
+request ids are not intentionally reused by supported callers, so a live or
+retiring collision fails fast instead of treating the id as a reusable key. The
 application retains the exact association, terminal digest, settlement target,
 and one coarse single-flight claim, never physical-step acknowledgements or
 cursors, a sink, stream, callback, observer thread, queue, drain, connection,

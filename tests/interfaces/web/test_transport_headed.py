@@ -1198,7 +1198,6 @@ def test_br_g_33_real_next_events_is_concurrent_and_shutdown_wakes_it(
         "message": "task is closing",
     }
     assert result["drain_exited"] is True
-    assert ["unsubscribe", "b" * 32] in result["controlled_service_cleanup"]
 
 
 @pytest.mark.headed
@@ -1300,6 +1299,10 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     assert server["malformed_attempts"] == 7
     assert len(server["registry_release_calls"]) == 2
     assert len(server["registry_close_calls"]) == 2
+    assert {
+        cleanup[0]
+        for cleanup in result["controlled_service_cleanup"]
+    } == {"release_task_session", "close_task"}
 
     response_kinds = [
         (item["role"], item["kind"])
