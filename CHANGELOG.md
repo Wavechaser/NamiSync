@@ -107,6 +107,12 @@ preserving public behavior, real boundary checks, and persisted contracts.
   reanchoring, the aggregate added read/replacement machinery and exposed a
   scheduler-local checkpoint-retention hazard without proving its mutable
   nested owners lock-safe. Production therefore retains the parallel maps.
+- LC-5 added and fully reversed a terminal-result field across exactly the
+  predeclared twelve production/test owners. Default-null bytes remained
+  absent, a non-null value reached stored and live records, dispatcher truth,
+  public views, the CLI push callback, web drain, and real JavaScript
+  validation, and the 941-test declared domain plus strengthened 52-test
+  witness slice passed. No lifecycle-specific field handling remained.
 
 ### M1 Hardening
 

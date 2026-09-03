@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-03): active closed register; LC-1a through LC-4 plus the
-separate pre-LC-2 stabilization are complete, and LC-5 is next.** This
+**Standing (2026-09-03): active closed register; LC-1a through LC-5 plus the
+separate pre-LC-2 stabilization are complete, and LC-6 is next.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -357,7 +357,7 @@ duplicate authorities rather than rename them.
 | `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1b` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Complete |
 | `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0b` only; independent of `LC-2` | Core/dispatcher, exact contained stored identity, T1 persisted bytes. | Complete |
 | `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Complete |
-| `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1b`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Pending |
+| `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1b`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Complete |
 | `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1b`, `LC-2`, `LC-3`, `LC-4`, `LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Pending |
 
 ### LC-0a guard-governance amendment
@@ -864,11 +864,13 @@ test-consolidation checkpoint and is not authorized here.
 | LC-3 verification | Core/dispatcher focus: 391 passed; the complete core session/event file after the final validation witness: 237 passed; core/dispatcher departments with bundled Node: 1,368 passed, one skipped, and 3,605 deselected. Frozen T1, including persisted bytes and public records, matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,943 passed, four skipped, and 28 deselected in 212.16 seconds. Two bounded reviews found no blocker, missed consumer, lock/scheduler edit, or persistence identity drift. |
 | LC-4 entry feasibility | The current denominator is seven entry-local session containers, not the historical nine. A disposable frozen/slotted/behaviorless `_SessionEntry` consolidated those seven while leaving pending order, reservations, leases, workers, current/retiring generations, fairness, and failed-admission cleanup global. Four declared mutators covered every `_sessions` identity write. A finite AST gate rejected other writes, entry-field mutation, and ordinary aliases; a test-only mapping observed the actual write caller and `Condition._is_owned()` and rejected a deliberate unlocked write. This proves the exercised mapping writes were condition-owned, not that the shallow aggregate graph or future call sites are lock-safe. |
 | LC-4 result and reversal | The prototype was mechanically feasible but failed the value test. It rewrote 78 reads and 27 mutation statements, grew dispatcher production by 101 net lines (`+202/-101`), required a 321-line scratch gate plus temporary reanchoring of 15 private-map tests, and initially retained a closed checkpoint through a scheduler-frame aggregate local. Clearing that local restored the retention witness, but demonstrated relocated risk. Scratch probes were 2 passed, the named concurrency slice 7 passed, and the fully reanchored dispatcher department 157 passed/4,820 deselected. Independent review found no reason to claim stronger lock safety. All four scratch paths were reversed, `git diff --exit-code` and final `_SessionEntry` searches were empty, and the disposable branch was deleted. Production retains the parallel maps. |
+| LC-5 terminal-field probe | The scratch `OperationResult.simplification_probe` crossed equality, snapshotting, terminal summary/event encode and decode, exact stored/live identity, dispatcher/store terminal truth, public result/record/task-drain views, the unchanged CLI push callback, Python bridge serialization, and real JavaScript validation. Default-null event and bridge fields remained absent. The raw `git diff --name-only` set was exactly the six production plus six test/witness paths declared above; the scratch was `+438/-27`. No lifecycle, observer, dispatcher, drain, database, schema/version, compatibility, or generic-helper path changed. This passes the derived twelve-file scope gate; twelve is evidence of the required path, not a separate threshold. |
+| LC-5 verification and reversal | The complete declared executable test set passed 941 tests with bundled Node; the strengthened CLI, real-browser record, and complete bridge public-view witness slice passed 52 tests. Frozen T1 matched, `git diff --check` had no patch error, and two independent reviews found no blocker. Every scratch change was restored to `67ffe3c`; final `rg simplification_probe`, staged/unstaged diffs, and status were empty, and `codex/task-terminal-field-probe` was deleted. |
 
-- **Current checkpoint:** LC-4 complete; LC-5 has not begun.
-- **Next action:** run the disposable LC-5 terminal-result field probe within
-  the exact twelve-file domain, record its raw path/evidence set, and reverse
-  every probe change.
+- **Current checkpoint:** LC-5 complete; LC-6 has not begun.
+- **Next action:** run the final frozen T1 comparison, reconcile the enduring
+  guard/test ledger, then retire only the three temporary T1 artifacts and
+  their single `tools` department entry before the full closeout gate.
 - **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
   `codex/wip-20260902-2029-task-lifecycle-lc1a`; those recovery snapshots
   remain isolated and are not review units.
