@@ -34,6 +34,6 @@ ledger are archived under `docs/obsolete/`; durable behavior is documented in
 
 No active lifecycle register remains. Review the documentation-retirement
 commit, then continue only with separately scoped feature or defect work.
-Recovery/WIP refs `59affc4`, `dc94aef`, and
-`codex/wip-20260902-2029-task-lifecycle-lc1a` remain non-review units and must
-not be merged or cherry-picked.
+All superseded recovery and rebuild branches were verified and pruned. The
+local branch set is `main`, `milestone0`, `milestone1`, and active
+`milestone1-anthony`, with no auxiliary worktree.

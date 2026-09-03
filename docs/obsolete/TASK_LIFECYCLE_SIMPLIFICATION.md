@@ -832,7 +832,7 @@ Wholesale retained-test teardown remains outside this register.
 
 | Evidence | Result |
 | --- | --- |
-| Base | LC-0 began from clean `milestone1-anthony` at `5631066`; the fresh LC-1a rebuild begins from corrected selection-race commit `c456cf4`. Prior recovery commits remain isolated and are not review units. |
+| Base | LC-0 began from clean `milestone1-anthony` at `5631066`; the fresh LC-1a rebuild begins from corrected selection-race commit `c456cf4`. Recovery commits stayed isolated and were never review units. |
 | Register refinement | User-adjudicated refinements incorporated 2026-09-02. LC-0a closes four nonblocking guard findings; LC-0b corrects LS-1. This repository document is now the sole maintained plan, and the `.codex` snapshot is intentionally left unchanged. |
 | T1 stability (retired) | Three fresh processes and the frozen baseline were byte-identical: SHA-256 `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`. The oracle rejected bridge, CLI, event-sequence, fixed drain-identity, persistence, and filesystem corruptions. LC-6 matched this hash once more before retirement. |
 | `DISC-B1` | With the CLI push callback blocked after `PhaseChanged`, cancellation is accepted and dispatcher truth reaches canceled before callback release; release then yields one Terminal, one terminal record, canceled exit mapping, exact stdout, and exact stderr. |
@@ -869,9 +869,9 @@ Wholesale retained-test teardown remains outside this register.
 - **Current checkpoint:** LC-6 complete; this register is closed.
 - **Next action:** review the atomic closeout. Any further lifecycle or
   retained-test consolidation requires separately adjudicated scope.
-- **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
-  `codex/wip-20260902-2029-task-lifecycle-lc1a`; those recovery snapshots
-  remain isolated and are not review units.
+- **Recovery closure:** `59affc4`, `dc94aef`, and the later LC-1a recovery
+  snapshot were never merged or cherry-picked. Their superseded branches were
+  pruned after the rebuilt delivery closed.
 - **Closed evidence limitation:** the off-origin native headed node could not
   obtain its accessibility text from this Windows session because UI Automation
   reported a vanished element. The other 34 transport-module nodes pass;
