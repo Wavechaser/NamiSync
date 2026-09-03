@@ -412,12 +412,14 @@ Every terminal record requires null, and dispatcher clears the current live
 reference in the same transition before publishing the terminal state. The
 later result-bearing replacement remains checkpoint-free.
 
-`StoredSessionRecord` is a separate frozen, slotted metadata/result contract,
-not a live record with a relaxed checkpoint invariant. It has no checkpoint field or
-live-record backreference and preserves the same metadata and result/lifecycle
-checks. `SessionStore` accepts and returns only its exact concrete shape.
-Dispatcher explicitly projects every write, retaining the full result by
-identity, including a null result during terminal audit finalization. Live
+`StoredSessionRecord` is the canonical frozen, slotted metadata/result value.
+It has no checkpoint field or live-record backreference and solely validates
+metadata plus result/lifecycle agreement. Live `SessionRecord` composes that
+exact value with its opaque checkpoint and adds only the nonterminal/terminal
+checkpoint invariant; its named metadata/result access remains read-only.
+`SessionStore` accepts and returns only the exact contained stored value, and
+dispatcher passes it without a field projection while retaining the full result
+by identity, including a null result during terminal audit finalization. Live
 continuations never cross this metadata-store boundary; the mechanism,
 retention scope, and separate M2 recovery requirement live in
 [DISPATCHER.md](DISPATCHER.md#session-store).

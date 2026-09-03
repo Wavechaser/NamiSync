@@ -137,6 +137,7 @@ def assert_stored_record_matches(
     stored: StoredSessionRecord, live: SessionRecord
 ) -> None:
     assert type(stored) is StoredSessionRecord
+    assert stored is live.stored
     assert not hasattr(stored, "checkpoint")
     assert stored.session_id == live.session_id
     assert stored.kind == live.kind

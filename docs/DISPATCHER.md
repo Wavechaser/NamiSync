@@ -413,11 +413,14 @@ join allowance.
 `SessionStore` accepts exact `StoredSessionRecord` values: a separate frozen,
 slotted core metadata/result contract with neither a checkpoint field nor a
 live-record backreference. Its exact shape lives in `core/session.py`.
-Dispatcher explicitly projects that value before admission's `put()` and every
-later `put()`, including pause snapshots and the terminal record before audit
-finalization supplies its result. This does not weaken `SessionRecord`:
-nonterminal live records still require an opaque checkpoint, and terminal live records
-require null. The projection retains the full `OperationResult` by identity,
+Live `SessionRecord` composes that exact stored value with its opaque checkpoint.
+Dispatcher constructs both once at admission, replaces the contained stored
+value for metadata/result transitions, reuses it for checkpoint-only changes,
+and passes `record.stored` itself to every `put()`, including pause snapshots
+and the terminal record before audit finalization supplies its result. This does
+not weaken `SessionRecord`: nonterminal live records still require an opaque
+checkpoint, and terminal live records require null. Composition retains the
+full `OperationResult` by identity,
 including independent filesystem/recording/audit/cancellation axes, item and
 phase detail, errors, recording issues, omission counts, and review-limit
 witnesses; it does not substitute a terminal summary. `result=None` remains
@@ -466,11 +469,13 @@ follows, separately from transport-memory measurement authority:
   each session id to its latest accepted stored wrapper; replacement retires
   that mapping's previous value, and successful close drops it. No new
   retained-session-count or byte ceiling is claimed.
-- `resources` shares the live record's immutable sorted resource tuple.
+- `resources` is the live record's immutable sorted resource tuple because the
+  live record contains the exact stored value.
   `result` is null or shares the existing full result graph by identity, without
   a second detail graph. Its result contract is unchanged.
 - Workflow checkpoints and a live-record backreference are structurally absent.
-  The separate `Dispatcher._records` map remains the live checkpoint owner.
+  The separate `Dispatcher._records` map remains the owner of live wrappers and
+  their checkpoints.
 
 The stored wrappers and store table are outside the frozen SH-G-8 transport roots
 (replay, subscribers, and adapter queues); their validators, corpus, and byte

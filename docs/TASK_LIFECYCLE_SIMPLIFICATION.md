@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-03): active closed register; LC-1a, LC-1b, and LC-2 plus
-the separate pre-LC-2 stabilization are complete, and LC-3 is next.** This
+**Standing (2026-09-03): active closed register; LC-1a through LC-3 plus the
+separate pre-LC-2 stabilization are complete, and LC-4 is next.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -355,7 +355,7 @@ duplicate authorities rather than rename them.
 | `LC-1a` | Application becomes sole domain-effect owner; duplicate association/compensation/cleanup authority disappears; bounded adapter response replay and delivery shutdown remain. | `LC-0b` | T1 unchanged; disappearance/test symmetry; structural no-drain-cleanup proof; introduced LS-3 and LS-4b plus enduring T2; affected neighborhood. | Complete |
 | `LC-1b` | Replace application cleanup step cursors and marker repair with whole-operation replay over exact, monotone owner operations while retaining LC-1a authority, receipts, association, terminal truth, and plan-retirement exclusion. | `LC-1a` | Finite disappearance list; reanchored LS-4a/LS-4b fault matrices and concurrency detectors; T1/enduring T2; focused, ordinary, and import gates; net-subtractive production diff. | Complete |
 | `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1b` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Complete |
-| `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0b` only; independent of `LC-2` | Core/dispatcher, exact stored projection, T1 persisted bytes. | Pending |
+| `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0b` only; independent of `LC-2` | Core/dispatcher, exact contained stored identity, T1 persisted bytes. | Complete |
 | `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Pending |
 | `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1b`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Pending |
 | `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1b`, `LC-2`, `LC-3`, `LC-4`, `LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Pending |
@@ -860,10 +860,13 @@ test-consolidation checkpoint and is not authorized here.
 | Pre-LC-2 stabilization | Without adding a register row, one separate mergeable amendment replaces the brittle exact lifecycle-state snapshot with two negative structural guards, consolidates plan retirement to one tolerant exact-token acquisition, aligns exact plan-selection retirement, states whole-operation owner idempotency, disambiguates the rollback concurrency test name, restores this document's detailed LC-2 contract from the historical `.codex` snapshot, and reanchors every active ledger proof. Focused lifecycle/service/bridge: 179 passed; frozen T1 matches; import law: 12 kept, 0 broken; ordinary with bundled Node: 4,944 passed, four skipped, 28 deselected in 214.64 seconds. |
 | LC-2 observation ownership | `SessionObserver` and private `SessionSubscription` moved to `interfaces/session_observer.py`; `adopt` returns no rollback capability, `release` is the one physical teardown operation, and service/application state retains only session association. Callback self-release keeps its exact physical subscription observer-owned until unwind, so a concurrent external release can join it; the baseline terminal event-plus-record callback pair remains unchanged. The strong indirect drain prohibition now includes the observer module. The production move is net 56 lines because this self-release custody is explicit; no cursor, application progress, adapter cleanup capability, or second delivery queue was added. |
 | LC-2 verification | Focused observer/CLI/lifecycle/host: 298 passed; interfaces/dispatcher departments with bundled Node: 1,583 passed and 3,390 deselected; bridge/drain: 136 passed; observer fault slice: 54 passed. Frozen T1 matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,941 passed, four skipped, and 28 deselected in 213.01 seconds. Five obsolete returned-rollback parameter cases were removed and two owner-level tests added; every changed test has a closed ledger disposition. Two independent reviews found the self-release external-join gap in the draft, verified its owner-local fix, and reported no remaining blocker. |
+| LC-3 record composition | `StoredSessionRecord` is now the one metadata/result value and validator; live `SessionRecord` contains that exact value plus its checkpoint and preserves the old public constructor and named read-only access. Dispatcher constructs one pair at admission, replaces only the stored value for metadata/result transitions, reuses it for checkpoint-only changes, and passes the contained object directly to the store. The finite 13-file consumer audit found no live-record use of generic dataclass projection/replacement, pattern matching, copy, or pickle. The registered introspection changes are accepted. This removes the ten-field dispatcher projection and duplicate validation; explicit compatibility properties make the two production files net 48 lines larger, without a new framework or retained graph. |
+| LC-3 verification | Core/dispatcher focus: 391 passed; the complete core session/event file after the final validation witness: 237 passed; core/dispatcher departments with bundled Node: 1,368 passed, one skipped, and 3,605 deselected. Frozen T1, including persisted bytes and public records, matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,943 passed, four skipped, and 28 deselected in 212.16 seconds. Two bounded reviews found no blocker, missed consumer, lock/scheduler edit, or persistence identity drift. |
 
-- **Current checkpoint:** LC-2 complete; LC-3 has not begun.
-- **Next action:** implement the independently authorized LC-3 live/stored
-  record composition without touching lifecycle scheduling or locks.
+- **Current checkpoint:** LC-3 complete; LC-4 has not begun.
+- **Next action:** run the disposable LC-4 dispatcher-entry feasibility probe,
+  record either the positive or pre-authorized negative lock-observation result,
+  and reverse every scratch source/test change.
 - **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
   `codex/wip-20260902-2029-task-lifecycle-lc1a`; those recovery snapshots
   remain isolated and are not review units.

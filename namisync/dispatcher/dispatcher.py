@@ -111,21 +111,6 @@ class AdmissionAttachment:
         return attached_rollback
 
 
-def _stored_record(record: SessionRecord) -> StoredSessionRecord:
-    return StoredSessionRecord(
-        session_id=record.session_id,
-        kind=record.kind,
-        state=record.state,
-        resources=record.resources,
-        supports_pause=record.supports_pause,
-        admission_order=record.admission_order,
-        created_at=record.created_at,
-        started_at=record.started_at,
-        ended_at=record.ended_at,
-        result=record.result,
-    )
-
-
 def _project_worker_exception(
     error: Exception,
     disposition: Disposition,
@@ -421,16 +406,16 @@ class Dispatcher:
                 raise AdmissionClosed("dispatcher stopped during admission")
             admission_order = self._admission_order
             self._admission_order += 1
-        record = SessionRecord(
+        stored = StoredSessionRecord(
             session_id=session_id,
             kind=kind,
             state=SessionState.PENDING,
             resources=resources,
-            checkpoint=checkpoint,
             supports_pause=registration.supports_pause,
             admission_order=admission_order,
             created_at=created_at,
         )
+        record = SessionRecord._from_stored(stored, checkpoint)
         try:
             observer = self._audit_factory(record)
         except BaseException as error:
@@ -455,7 +440,7 @@ class Dispatcher:
         publication_lock = Lock()
         try:
             store_touched = True
-            self._store.put(_stored_record(record))
+            self._store.put(stored)
             if attach is not None:
                 stream = hub.subscribe()
                 attachment_started = True
@@ -1565,7 +1550,8 @@ class Dispatcher:
     def _publish_result(self, key: _WorkerKey, result: OperationResult) -> None:
         with self._condition:
             record = self._require_current_worker_locked(key)
-            updated = replace(record, result=result)
+            stored = replace(record.stored, result=result)
+            updated = SessionRecord._from_stored(stored, record.checkpoint)
             self._records[key.session_id] = updated
             self._persist_locked(updated)
             self._condition.notify_all()
@@ -1573,7 +1559,7 @@ class Dispatcher:
     def _replace_checkpoint(self, key: _WorkerKey, checkpoint: object) -> None:
         with self._condition:
             record = self._require_current_worker_locked(key)
-            updated = replace(record, checkpoint=checkpoint)
+            updated = SessionRecord._from_stored(record.stored, checkpoint)
             self._records[key.session_id] = updated
             self._persist_locked(updated)
 
@@ -1590,13 +1576,16 @@ class Dispatcher:
         if state is SessionState.RUNNING and started_at is None:
             started_at = now
         ended_at = now if is_terminal(state) else None
-        updated = replace(
-            record,
+        stored = replace(
+            record.stored,
             state=state,
-            checkpoint=None if is_terminal(state) else record.checkpoint,
             started_at=started_at,
             ended_at=ended_at,
             result=result,
+        )
+        updated = SessionRecord._from_stored(
+            stored,
+            None if is_terminal(state) else record.checkpoint,
         )
         self._records[session_id] = updated
         self._persist_locked(updated)
@@ -1605,7 +1594,7 @@ class Dispatcher:
 
     def _persist_locked(self, record: SessionRecord) -> None:
         try:
-            self._store.put(_stored_record(record))
+            self._store.put(record.stored)
         except BaseException as error:
             self._store_failed = True
             retire_exception_graph(error)

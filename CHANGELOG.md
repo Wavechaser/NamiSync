@@ -92,6 +92,15 @@ preserving public behavior, real boundary checks, and persisted contracts.
   tests passed 298 cases, interface/dispatcher departments passed 1,583,
   ordinary passed 4,941 with four capability skips and 28 deselected, the
   frozen boundary corpus matched, and all 12 import contracts remained intact.
+- LC-3 made `StoredSessionRecord` the single metadata/result value and
+  validator. Live `SessionRecord` now composes that exact value with its opaque
+  checkpoint while preserving its constructor and named read-only access;
+  dispatcher persists the contained value directly instead of rebuilding ten
+  fields on every write.
+- Core/dispatcher focus passed 391 tests, their departments passed 1,368 with
+  one capability skip, ordinary passed 4,943 with four capability skips and 28
+  deselected, the frozen boundary corpus matched, and all 12 import contracts
+  remained intact.
 
 ### M1 Hardening
 

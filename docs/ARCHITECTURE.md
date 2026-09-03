@@ -344,8 +344,9 @@ the already-settled filesystem/recording truth.
 Phase is explicit; it is never inferred from past events. The workflow alone
 translates executor-owned publication evidence into verifier-owned candidates,
 so executor and verifier remain independent modules. Process-local resume is
-active. Live session records hold opaque typed checkpoints; the separate stored
-metadata/result contract has no checkpoint or live-record reference. Durable
+active. Each live session record composes the exact stored metadata/result value
+with its opaque typed checkpoint; the stored value has no checkpoint or
+live-record reference. Durable
 restart recovery requires a separate protected continuation/recovery contract
 and fresh authority/custody reconciliation in a later milestone.
 
@@ -525,10 +526,10 @@ The core declares narrow protocols for infrastructure and replaceable policy:
 - `CopyBackend` owns byte transfer, not publication, retry, or recording.
 - `DestinationPolicy` assigns target paths for a batch before diffing.
 - `SessionStore` retains exact `StoredSessionRecord` metadata and full results,
-  without checkpoints or a live-record backreference. `SessionRecord`
-  retains the separate live lifecycle/checkpoint invariant. Durable metadata and
-  protected continuation recovery are unrealized M2 contracts, not one
-  interchangeable store implementation.
+  without checkpoints or a live-record backreference. `SessionRecord` composes
+  that exact stored value with a process-live checkpoint and adds the separate
+  checkpoint invariant. Durable metadata and protected continuation recovery
+  are unrealized M2 contracts, not one interchangeable store implementation.
 
 Incremental `ChangeSource` and ingest `MetadataExtractor` seams are accepted
 but unrealized directions, not standardized core protocols. Their exact shapes

@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import FrozenInstanceError, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
 import gc
+from inspect import signature
 import subprocess
 import sys
 from weakref import ref
@@ -567,6 +568,102 @@ def test_session_record_checkpoint_exists_only_while_nonterminal() -> None:
             True,
             2,
             created_at,
+        )
+
+
+def test_session_record_composes_exact_stored_value_with_compatible_constructor() -> None:
+    created_at = datetime(2026, 8, 26, tzinfo=timezone.utc)
+    resources = (ResourceId("volume", "a"), ResourceId("volume", "b"))
+    result = OperationResult(SessionState.COMPLETED)
+    record = SessionRecord(
+        SessionId("composed-session"),
+        "opaque-workflow",
+        SessionState.COMPLETED,
+        resources,
+        None,
+        True,
+        3,
+        created_at,
+        started_at=created_at,
+        ended_at=created_at,
+        result=result,
+    )
+    equivalent = SessionRecord(
+        session_id=record.session_id,
+        kind=record.kind,
+        state=record.state,
+        resources=resources,
+        checkpoint=None,
+        supports_pause=True,
+        admission_order=3,
+        created_at=created_at,
+        started_at=created_at,
+        ended_at=created_at,
+        result=result,
+    )
+
+    assert str(signature(SessionRecord)) == (
+        "(session_id: 'SessionId', kind: 'str', state: 'SessionState', "
+        "resources: 'tuple[ResourceId, ...]', checkpoint: 'object | None', "
+        "supports_pause: 'bool', admission_order: 'int', "
+        "created_at: 'datetime', started_at: 'datetime | None' = None, "
+        "ended_at: 'datetime | None' = None, "
+        "result: 'OperationResult | None' = None) -> None"
+    )
+    assert tuple(field.name for field in fields(record)) == (
+        "stored",
+        "checkpoint",
+    )
+    assert type(record.stored) is StoredSessionRecord
+    assert record.stored.resources is resources
+    assert record.stored.result is result
+    assert tuple(
+        getattr(record, name)
+        for name in (
+            "session_id",
+            "kind",
+            "state",
+            "resources",
+            "supports_pause",
+            "admission_order",
+            "created_at",
+            "started_at",
+            "ended_at",
+            "result",
+        )
+    ) == tuple(
+        getattr(record.stored, name)
+        for name in (
+            "session_id",
+            "kind",
+            "state",
+            "resources",
+            "supports_pause",
+            "admission_order",
+            "created_at",
+            "started_at",
+            "ended_at",
+            "result",
+        )
+    )
+    assert record == equivalent
+    assert hash(record) == hash(equivalent)
+    assert not hasattr(record, "__dict__")
+    with pytest.raises(FrozenInstanceError):
+        record.checkpoint = b"changed"  # type: ignore[misc]
+
+
+def test_session_record_constructor_uses_canonical_stored_validation() -> None:
+    with pytest.raises(ValueError, match="session id and kind must be non-empty"):
+        SessionRecord(
+            SessionId("invalid-live-metadata"),
+            "",
+            SessionState.PENDING,
+            (),
+            b"continuation",
+            False,
+            0,
+            datetime(2026, 8, 26, tzinfo=timezone.utc),
         )
 
 

@@ -541,46 +541,6 @@ def _require_utc(value: datetime | None, field_name: str) -> None:
 
 
 @dataclass(frozen=True, slots=True)
-class SessionRecord:
-    session_id: SessionId
-    kind: str
-    state: SessionState
-    resources: tuple[ResourceId, ...]
-    checkpoint: object | None
-    supports_pause: bool
-    admission_order: int
-    created_at: datetime
-    started_at: datetime | None = None
-    ended_at: datetime | None = None
-    result: OperationResult | None = None
-
-    def __post_init__(self) -> None:
-        if not self.session_id or not self.kind:
-            raise ValueError("session id and kind must be non-empty")
-        if tuple(sorted(set(self.resources))) != self.resources:
-            raise ValueError("resources must be unique and deterministically sorted")
-        if is_terminal(self.state):
-            if self.checkpoint is not None:
-                raise ValueError("terminal session checkpoint must be cleared")
-        elif self.checkpoint is None:
-            raise TypeError("nonterminal workflow checkpoint must be present")
-        if self.admission_order < 0:
-            raise ValueError("admission order cannot be negative")
-        _require_utc(self.created_at, "created_at")
-        _require_utc(self.started_at, "started_at")
-        _require_utc(self.ended_at, "ended_at")
-        if is_terminal(self.state) != (self.ended_at is not None):
-            raise ValueError("terminal state and ended_at must agree")
-        if (
-            self.result is not None
-            and result_terminal_state(self.result) is not self.state
-        ):
-            raise ValueError(
-                "record result terminal projection must agree with session state"
-            )
-
-
-@dataclass(frozen=True, slots=True)
 class StoredSessionRecord:
     """Session metadata/result without a continuation or live-record reference."""
 
@@ -614,6 +574,105 @@ class StoredSessionRecord:
             raise ValueError(
                 "record result terminal projection must agree with session state"
             )
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class SessionRecord:
+    """Live session state composed from exact stored metadata and checkpoint."""
+
+    stored: StoredSessionRecord
+    checkpoint: object | None
+
+    def __init__(
+        self,
+        session_id: SessionId,
+        kind: str,
+        state: SessionState,
+        resources: tuple[ResourceId, ...],
+        checkpoint: object | None,
+        supports_pause: bool,
+        admission_order: int,
+        created_at: datetime,
+        started_at: datetime | None = None,
+        ended_at: datetime | None = None,
+        result: OperationResult | None = None,
+    ) -> None:
+        stored = StoredSessionRecord(
+            session_id=session_id,
+            kind=kind,
+            state=state,
+            resources=resources,
+            supports_pause=supports_pause,
+            admission_order=admission_order,
+            created_at=created_at,
+            started_at=started_at,
+            ended_at=ended_at,
+            result=result,
+        )
+        object.__setattr__(self, "stored", stored)
+        object.__setattr__(self, "checkpoint", checkpoint)
+        self.__post_init__()
+
+    __init__.__annotations__["return"] = None
+
+    @classmethod
+    def _from_stored(
+        cls,
+        stored: StoredSessionRecord,
+        checkpoint: object | None,
+    ) -> SessionRecord:
+        value = object.__new__(cls)
+        object.__setattr__(value, "stored", stored)
+        object.__setattr__(value, "checkpoint", checkpoint)
+        value.__post_init__()
+        return value
+
+    def __post_init__(self) -> None:
+        if is_terminal(self.state):
+            if self.checkpoint is not None:
+                raise ValueError("terminal session checkpoint must be cleared")
+        elif self.checkpoint is None:
+            raise TypeError("nonterminal workflow checkpoint must be present")
+
+    @property
+    def session_id(self) -> SessionId:
+        return self.stored.session_id
+
+    @property
+    def kind(self) -> str:
+        return self.stored.kind
+
+    @property
+    def state(self) -> SessionState:
+        return self.stored.state
+
+    @property
+    def resources(self) -> tuple[ResourceId, ...]:
+        return self.stored.resources
+
+    @property
+    def supports_pause(self) -> bool:
+        return self.stored.supports_pause
+
+    @property
+    def admission_order(self) -> int:
+        return self.stored.admission_order
+
+    @property
+    def created_at(self) -> datetime:
+        return self.stored.created_at
+
+    @property
+    def started_at(self) -> datetime | None:
+        return self.stored.started_at
+
+    @property
+    def ended_at(self) -> datetime | None:
+        return self.stored.ended_at
+
+    @property
+    def result(self) -> OperationResult | None:
+        return self.stored.result
 
 
 class SessionStore(Protocol):
