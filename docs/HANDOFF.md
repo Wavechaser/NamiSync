@@ -1,52 +1,46 @@
 # Session Handoff
 
-Status (2026-09-03): LC-3 is complete on `milestone1-anthony`; its atomic
-record-composition commit is the current `HEAD` once this handoff is committed.
-LC-4 is the next pending register row.
+Status (2026-09-03): LC-4 is complete on `milestone1-anthony`. Production still
+uses the dispatcher parallel maps; only the probe observation is pending this
+commit. LC-5 is the next register row.
 
-## LC-3 outcome
+## LC-4 outcome
 
-- `StoredSessionRecord` is the canonical frozen/slotted metadata and result
-  value. It owns the only metadata/result validation.
-- Live `SessionRecord` contains that exact stored value plus its opaque
-  checkpoint. Its old positional/keyword constructor, frozen/slotted behavior,
-  named read-only fields, equality, resource identity, and result identity are
-  preserved.
-- The registered generic dataclass introspection changes are accepted: live
-  fields are now `stored` and `checkpoint`; repr, replace, asdict/astuple,
-  pattern matching, annotations, hash nesting, and pickle/copy state may differ.
-  A finite 13-file audit found no repository consumer of those old shapes.
-- Dispatcher constructs one stored/live pair at admission, replaces the stored
-  value for metadata/result transitions, reuses it for checkpoint-only changes,
-  and passes `record.stored` itself to the store. The old ten-field projection
-  is gone.
-- No condition, lock, scheduler, map, worker, reservation, lease, queue, event,
-  lifecycle, observer, or persistence-schema behavior changed. The explicit
-  compatibility properties make the two production files net 48 lines larger;
-  no generic record framework or additional retained graph was introduced.
+- The current finite denominator is seven entry-local session containers, not
+  the historical nine. Scheduler/custody/current-worker/admission-cleanup state
+  remains a separate global concern.
+- On disposable branch `codex/session-entry-feasibility`, a frozen, slotted,
+  behaviorless `_SessionEntry` consolidated those seven containers. The exact
+  four declared mutators owned every aggregate-map write.
+- A finite AST gate covered ordinary assignment/deletion/mapping mutation,
+  aliases, and entry-field writes. A test-only mapping checked
+  `Condition._is_owned()` at each actual write and rejected a deliberate
+  unlocked mutation. This is exercised-path evidence, not universal lock proof.
+- The aggregate is shallow: `_Control`, `EventHub`, `Lock`, and the item list
+  retain their own mutation/synchronization. The prototype rewrote 78 reads and
+  27 mutations, added 101 net dispatcher lines, and initially retained a closed
+  checkpoint in a scheduler-frame aggregate local. The corrected scratch path
+  passed, but the incident demonstrates complexity and retention-risk movement.
+- Accepted result: keep the parallel maps. All four scratch paths were restored,
+  final diff/search evidence was empty, and the disposable branch was deleted.
 
 ## Verification
 
-- Core/dispatcher focus: `391 passed`.
-- Complete core session/event file after the final validation witness:
-  `237 passed`.
-- Core/dispatcher departments with bundled Node:
-  `1368 passed, 1 skipped, 3605 deselected`.
-- Ordinary suite with bundled Node:
-  `4943 passed, 4 skipped, 28 deselected`.
-- Frozen task-lifecycle T1 corpus: exact baseline match, including persisted
-  bytes and public records.
-- Import law: `12 kept, 0 broken`.
-- Two bounded adversarial/consumer reviews: no blocker or missed consumer.
+- Structural/write-time scratch probes: `2 passed`, including unlocked fault.
+- Named concurrency/custody slice: `7 passed`.
+- Dispatcher department after temporary private-test reanchoring:
+  `157 passed, 4820 deselected`.
+- Independent adversarial review: no basis for a stronger lock-safety claim.
+- Final production/test scratch search and diff: empty.
 
 ## Next action
 
-Run LC-4 only as the disposable dispatcher-entry feasibility probe described
-in `docs/TASK_LIFECYCLE_SIMPLIFICATION.md`. Production keeps the parallel maps
-regardless of probe outcome. Attempt the instrumented-condition ownership check,
-record a negative result if it would require a production helper, wider scope,
-or control-flow change, then reverse all scratch code before committing only
-the observation.
+Run LC-5 on a new disposable branch from this observation commit. The exact
+twelve-file domain in `docs/TASK_LIFECYCLE_SIMPLIFICATION.md` is the complete
+scope gate. Exercise a non-null `OperationResult.simplification_probe` through
+snapshot, terminal events, stored/live records, public views, CLI, Python
+bridge serialization, and real JavaScript validation; prove default-null bytes
+remain unchanged; record the raw path list; then reverse all probe code.
 
 The historical `.codex` plan remains untouched. Old recovery/WIP refs remain
 isolated and are not review units.

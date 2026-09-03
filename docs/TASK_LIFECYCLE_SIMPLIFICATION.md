@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-03): active closed register; LC-1a through LC-3 plus the
-separate pre-LC-2 stabilization are complete, and LC-4 is next.** This
+**Standing (2026-09-03): active closed register; LC-1a through LC-4 plus the
+separate pre-LC-2 stabilization are complete, and LC-5 is next.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -356,7 +356,7 @@ duplicate authorities rather than rename them.
 | `LC-1b` | Replace application cleanup step cursors and marker repair with whole-operation replay over exact, monotone owner operations while retaining LC-1a authority, receipts, association, terminal truth, and plan-retirement exclusion. | `LC-1a` | Finite disappearance list; reanchored LS-4a/LS-4b fault matrices and concurrency detectors; T1/enduring T2; focused, ordinary, and import gates; net-subtractive production diff. | Complete |
 | `LC-2` | Observer/`SessionSubscription` solely owns physical observation lifetime without CLI/web timing change. | `LC-1b` | Barrier timing, observer fault matrix, T1/T2, interfaces. | Complete |
 | `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0b` only; independent of `LC-2` | Core/dispatcher, exact contained stored identity, T1 persisted bytes. | Complete |
-| `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Pending |
+| `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Complete |
 | `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1b`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Pending |
 | `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1b`, `LC-2`, `LC-3`, `LC-4`, `LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Pending |
 
@@ -862,11 +862,13 @@ test-consolidation checkpoint and is not authorized here.
 | LC-2 verification | Focused observer/CLI/lifecycle/host: 298 passed; interfaces/dispatcher departments with bundled Node: 1,583 passed and 3,390 deselected; bridge/drain: 136 passed; observer fault slice: 54 passed. Frozen T1 matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,941 passed, four skipped, and 28 deselected in 213.01 seconds. Five obsolete returned-rollback parameter cases were removed and two owner-level tests added; every changed test has a closed ledger disposition. Two independent reviews found the self-release external-join gap in the draft, verified its owner-local fix, and reported no remaining blocker. |
 | LC-3 record composition | `StoredSessionRecord` is now the one metadata/result value and validator; live `SessionRecord` contains that exact value plus its checkpoint and preserves the old public constructor and named read-only access. Dispatcher constructs one pair at admission, replaces only the stored value for metadata/result transitions, reuses it for checkpoint-only changes, and passes the contained object directly to the store. The finite 13-file consumer audit found no live-record use of generic dataclass projection/replacement, pattern matching, copy, or pickle. The registered introspection changes are accepted. This removes the ten-field dispatcher projection and duplicate validation; explicit compatibility properties make the two production files net 48 lines larger, without a new framework or retained graph. |
 | LC-3 verification | Core/dispatcher focus: 391 passed; the complete core session/event file after the final validation witness: 237 passed; core/dispatcher departments with bundled Node: 1,368 passed, one skipped, and 3,605 deselected. Frozen T1, including persisted bytes and public records, matches without refreezing; import law is 12 kept/0 broken; ordinary is 4,943 passed, four skipped, and 28 deselected in 212.16 seconds. Two bounded reviews found no blocker, missed consumer, lock/scheduler edit, or persistence identity drift. |
+| LC-4 entry feasibility | The current denominator is seven entry-local session containers, not the historical nine. A disposable frozen/slotted/behaviorless `_SessionEntry` consolidated those seven while leaving pending order, reservations, leases, workers, current/retiring generations, fairness, and failed-admission cleanup global. Four declared mutators covered every `_sessions` identity write. A finite AST gate rejected other writes, entry-field mutation, and ordinary aliases; a test-only mapping observed the actual write caller and `Condition._is_owned()` and rejected a deliberate unlocked write. This proves the exercised mapping writes were condition-owned, not that the shallow aggregate graph or future call sites are lock-safe. |
+| LC-4 result and reversal | The prototype was mechanically feasible but failed the value test. It rewrote 78 reads and 27 mutation statements, grew dispatcher production by 101 net lines (`+202/-101`), required a 321-line scratch gate plus temporary reanchoring of 15 private-map tests, and initially retained a closed checkpoint through a scheduler-frame aggregate local. Clearing that local restored the retention witness, but demonstrated relocated risk. Scratch probes were 2 passed, the named concurrency slice 7 passed, and the fully reanchored dispatcher department 157 passed/4,820 deselected. Independent review found no reason to claim stronger lock safety. All four scratch paths were reversed, `git diff --exit-code` and final `_SessionEntry` searches were empty, and the disposable branch was deleted. Production retains the parallel maps. |
 
-- **Current checkpoint:** LC-3 complete; LC-4 has not begun.
-- **Next action:** run the disposable LC-4 dispatcher-entry feasibility probe,
-  record either the positive or pre-authorized negative lock-observation result,
-  and reverse every scratch source/test change.
+- **Current checkpoint:** LC-4 complete; LC-5 has not begun.
+- **Next action:** run the disposable LC-5 terminal-result field probe within
+  the exact twelve-file domain, record its raw path/evidence set, and reverse
+  every probe change.
 - **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
   `codex/wip-20260902-2029-task-lifecycle-lc1a`; those recovery snapshots
   remain isolated and are not review units.

@@ -101,6 +101,12 @@ preserving public behavior, real boundary checks, and persisted contracts.
   one capability skip, ordinary passed 4,943 with four capability skips and 28
   deselected, the frozen boundary corpus matched, and all 12 import contracts
   remained intact.
+- LC-4 prototyped and fully reversed a frozen dispatcher session-entry
+  aggregate. Although all four mapping mutators were observed under the
+  condition and 157 dispatcher-department tests passed after scratch-only test
+  reanchoring, the aggregate added read/replacement machinery and exposed a
+  scheduler-local checkpoint-retention hazard without proving its mutable
+  nested owners lock-safe. Production therefore retains the parallel maps.
 
 ### M1 Hardening
 
