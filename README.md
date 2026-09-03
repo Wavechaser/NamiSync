@@ -238,8 +238,6 @@ never hides the other result axes in rendered output.
   [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
   and diagnostic commands.
-- [Task lifecycle simplification](docs/TASK_LIFECYCLE_SIMPLIFICATION.md) —
-  completed ownership-consolidation register and closeout evidence.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
@@ -251,8 +249,12 @@ never hides the other result axes in rendered output.
 - [M1 Shell](docs/M1_SHELL.md) — Stage 6 slice order, host/package placement, packaging, and SH-G map.
 - [M1 Stage 6 second-half checklist](docs/M1_SHELL_H2.md) — current detailed acceptance, review, and verification plan.
 
-Historical criteria are collected in the [retrospective M0 plan](docs/obsolete/M0_PLAN.md).
-The [imported PoC documents](docs/obsolete/PoC_import/) are archived alongside it.
+The completed [initial simplification record](docs/SIMPLIFICATION.md) remains
+alongside active documentation for now. Historical criteria are collected in
+the [retrospective M0 plan](docs/obsolete/M0_PLAN.md) and the archived
+[task-lifecycle register](docs/obsolete/TASK_LIFECYCLE_SIMPLIFICATION.md) with
+its [test disposition ledger](docs/obsolete/TASK_LIFECYCLE_TEST_LEDGER.md).
+The [imported PoC documents](docs/obsolete/PoC_import/) are archived alongside them.
 These are historical sources, not current acceptance authority; active component
 contracts and the M1 plans govern current work.
 

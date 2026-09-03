@@ -50,8 +50,9 @@ model, constant, fixture, validator, or BR-G-45 evidence. Checkpoint 4 under its
 former complete owner-graph and retained-byte rules is retired; it did not
 start. Checkpoints 5–12 remain pending and require a fresh finite register
 before implementation. Later checkpoint-4/BR-G-45 references in this older
-shell plan preserve the superseded design record; `M1_SHELL_H2.md` and
-`../SIMPLIFICATION.md` own current status. NamiSync remains
+shell plan preserve the superseded design record; `M1_SHELL_H2.md` owns the
+remaining feature sequence, while `SIMPLIFICATION.md` records the completed
+prerequisite removal. NamiSync remains
 version `0.1.0` until M1 is complete. Finishing M1 makes the product beta-ready;
 any later version change is a separate release decision.
 

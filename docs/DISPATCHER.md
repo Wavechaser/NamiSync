@@ -164,6 +164,14 @@ checkpoints, stores, or databases. This keeps the public lifecycle unchanged whi
 preventing a retiring pause/cancel attempt from settling twice or releasing a
 resumed successor's custody.
 
+Per-session custody remains in explicit parallel dictionaries whose mutations
+occur under the dispatcher condition; scheduler-wide order, reservation, lease,
+worker, and generation state stays separate. A disposable session-entry
+aggregate added translation and retention surface without proving stronger lock
+safety, so production deliberately retains the parallel maps. Any later
+aggregation must prove condition ownership at the mutators and prevent mutable
+entry references from escaping.
+
 Pause is accepted only when the registered kind declares a continuation:
 execution in M0 and verify/baseline item-list sessions in M1. Scan and plan
 refuse pause without changing state and remain cancelable. An

@@ -13,8 +13,8 @@ its former complete owner-graph and retained-byte rules is retired by the
 ratified initial simplification run; it did not start and activated no task
 surface, command, control, or containment guarantee. Checkpoints 5–12 remain
 pending and do not become active merely because the former prerequisite was
-removed. `../SIMPLIFICATION.md` owns the two replacement removal checkpoints;
-feature delivery resumes only under a later finite register.
+removed. `SIMPLIFICATION.md` records the two completed replacement removal
+checkpoints; feature delivery resumes only under a later finite register.
 
 The 2026-08-27 sorting and rebaseline additions below are accepted requirements
 for checkpoints 7/9 and 10 respectively, not implemented behavior. New views

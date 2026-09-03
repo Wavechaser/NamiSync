@@ -419,7 +419,11 @@ exact value with its opaque checkpoint and adds only the nonterminal/terminal
 checkpoint invariant; its named metadata/result access remains read-only.
 `SessionStore` accepts and returns only the exact contained stored value, and
 dispatcher passes it without a field projection while retaining the full result
-by identity, including a null result during terminal audit finalization. Live
+by identity, including a null result during terminal audit finalization. That
+composition intentionally changes generic dataclass `fields`, `replace`,
+generated `repr`, and structural pattern matching; only constructor
+compatibility, named read-only access, result identity, and persisted/public
+behavior are stable contracts. Live
 continuations never cross this metadata-store boundary; the mechanism,
 retention scope, and separate M2 recovery requirement live in
 [DISPATCHER.md](DISPATCHER.md#session-store).

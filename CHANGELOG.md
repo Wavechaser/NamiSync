@@ -25,107 +25,36 @@ preserving public behavior, real boundary checks, and persisted contracts.
 
 #### Remove duplicate internal transport, certification, and lifecycle authority (2026-09-01 – 2026-09-03)
 
-- In `workflows/` and `dispatcher/`, removed process-local plan, execution,
-  inventory, and integrity JSON codecs, payload versions, byte charges, and
-  byte custody. Dispatcher now holds opaque detached domain checkpoints, and
-  each workflow materializes fresh mutable invocation state when reopening.
-- In `core/events`, `db/history`, and `interfaces/web`, made the canonical v5
-  projector the single live body representation, retained the EventHub byte
-  wall, validated the same projection at history admission and readback, and
-  reduced the browser to transport/session/sequence/reducer checks. Persisted
-  bytes, receipts, hashes, schemas, and data epoch did not change.
-- Kept validation at the real filesystem and interface-adapter boundaries.
-  CLI and bridge ingress remain bounded; workflow registration now states its
-  checkpoint-detachment obligation, and no replacement authority, adoption
-  API, generic freezer, compatibility schema, or semantic validator appeared.
-- Retired the temporary simplification runner and baseline after repeated
-  compatibility matches. Focused public workflow, history, event-byte, and
-  browser tests retain the supported guarantees without standing corpus or
-  hash-maintenance infrastructure.
-- A disposable domain-field probe crossed the domain model, public view, and
-  dispatcher resume path in six files against a target of eight. Across that
-  transport/certification slice and its boundary follow-ups, production fell
-  by 4,308 net lines and tests by 2,551; its ordinary run passed 4,879 tests
-  with four capability skips and all 11 then-current import contracts kept.
-- Added one application `TaskLifecycle` and narrow adapter-facing
-  `TaskLifecyclePort`; application state now solely owns domain-effect
-  receipts, task/session association, admission rollback, detail liability,
-  and logical settlement. Dispatcher custody and observer lifetime remain
-  separate, and every admitted direct or task-bound session is associated.
-- Removed web-drain attachment, compensation, raw unsubscribe/session-close,
-  plan-drop, and cleanup authority while retaining its bounded start-response
-  replay, close tombstones, provisional delivery, 64-update queue,
-  backpressure, drain/generation state, terminal-delivery facts, and shutdown
-  wakeup. A strong indirect import law prevents drain-side reach into the
-  lifecycle, service, or dispatcher owners.
-- The frozen bridge/CLI/event/persistence/filesystem oracle remained exact;
-  all 131 behavioral and eight helper ledger rows are closed. Lifecycle,
-  bridge/service, web, and bundled-Node transport focused gates passed;
-  departments passed 2,339 tests with 2,645 deselected, ordinary passed 4,952
-  with four capability skips and 28 deselected, and all 12 import contracts
-  remained intact.
-- Follow-up LC-1b removed the application cleanup step enum, resumption
-  cursors, per-step acknowledgements, marker-repair calls, and service
-  interpreter. Admission rollback and settlement now replay one fixed
-  exact-subject sequence over independently idempotent or monotone owners;
-  cleanup calls may repeat, but completed observable effects remain unique.
-- The LC-1b production pair is net 440 lines smaller and its affected tests are
-  net 74 lines smaller. Its frozen boundary corpus remained exact; focused
-  tests passed 176 cases, the three-department neighborhood passed 2,328, the
-  ordinary suite passed 4,941 with four capability skips and 28 deselected,
-  and all 12 import contracts remained intact.
-- A separate pre-LC-2 stabilization consolidated plan retirement to one
-  tolerant exact-token acquisition, aligned exact selection retirement,
-  replaced a brittle private-state snapshot with negative structural guards,
-  and made whole-operation owner idempotency explicit. Focused tests passed
-  179 cases, the frozen boundary corpus remained exact, ordinary passed 4,944
-  with four capability skips and 28 deselected, and all 12 import contracts
-  remained intact.
-- LC-2 moved the complete stream, sink, callback, worker, recovery, and
-  subscription lifetime into `interfaces/session_observer.py`. Observer
-  adoption returns no rollback capability; application cleanup requests one
-  idempotent release, and the web drain is structurally forbidden from
-  reaching the observer as well as the lifecycle/service/Dispatcher owners.
-- Callback self-release retains only its exact retiring physical subscription
-  until unwind, allowing a concurrent external release to join without
-  changing the established terminal event-plus-record callback pair. Focused
-  tests passed 298 cases, interface/dispatcher departments passed 1,583,
-  ordinary passed 4,941 with four capability skips and 28 deselected, the
-  frozen boundary corpus matched, and all 12 import contracts remained intact.
-- LC-3 made `StoredSessionRecord` the single metadata/result value and
-  validator. Live `SessionRecord` now composes that exact value with its opaque
-  checkpoint while preserving its constructor and named read-only access;
-  dispatcher persists the contained value directly instead of rebuilding ten
-  fields on every write.
-- Core/dispatcher focus passed 391 tests, their departments passed 1,368 with
-  one capability skip, ordinary passed 4,943 with four capability skips and 28
-  deselected, the frozen boundary corpus matched, and all 12 import contracts
-  remained intact.
-- LC-4 prototyped and fully reversed a frozen dispatcher session-entry
-  aggregate. Although all four mapping mutators were observed under the
-  condition and 157 dispatcher-department tests passed after scratch-only test
-  reanchoring, the aggregate added read/replacement machinery and exposed a
-  scheduler-local checkpoint-retention hazard without proving its mutable
-  nested owners lock-safe. Production therefore retains the parallel maps.
-- LC-5 added and fully reversed a terminal-result field across exactly the
-  predeclared twelve production/test owners. Default-null bytes remained
-  absent, a non-null value reached stored and live records, dispatcher truth,
-  public views, the CLI push callback, web drain, and real JavaScript
-  validation, and the 941-test declared domain plus strengthened 52-test
-  witness slice passed. No lifecycle-specific field handling remained.
-- LC-6 matched the frozen lifecycle corpus one final time at SHA-256
-  `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`,
-  then retired its 1,667 temporary lines and only the matching `tools`
-  department entry. The 2,012-line enduring lifecycle guard, T2/barrier,
-  positive-owner, and public tests remain; six deleted-test plus one helper
-  disposition closed with zero orphans.
-- The final public/T2 set passed 32 tests, four departments passed 3,542 with
-  one skip, ordinary passed 4,932 with four capability skips, and all 12
-  import contracts held. The other 34 transport-module tests passed; the
-  independent off-origin UI Automation probe remained
-  unavailable in this Windows session. Across the predeclared production
-  slice, the lifecycle series is net 1,311 lines larger: it consolidates
-  authority rather than claiming source-line reduction.
+- Removed process-local workflow JSON codecs, payload versions, and byte
+  custody. Dispatcher now retains opaque detached checkpoints, and workflows
+  materialize fresh invocation state when opening them.
+- Made the canonical v5 event projector the shared live, history, and browser
+  body representation while preserving validation at filesystem, bridge, CLI,
+  persistence, and event-delivery boundaries.
+- Centralized domain-effect receipts, task/session association, admission
+  rollback, exact plan retirement, and logical settlement in `TaskLifecycle`
+  behind the narrow `TaskLifecyclePort`. Dispatcher still owns custody,
+  `SessionObserver` owns subscription lifetime, and adapters own bounded
+  response replay and delivery state; an import rule prevents web drain from
+  reaching the domain lifecycle owners.
+- Simplified cleanup retry to replay one fixed exact-owner sequence over
+  idempotent or monotone operations. No per-step cursor or acknowledgement is
+  retained, and a completed physical transition or observable effect remains
+  unique even when an owner call repeats.
+- Made `StoredSessionRecord` the canonical metadata/result value and composed
+  live `SessionRecord` around it. Named access and persisted/public behavior
+  remain stable; generic live-dataclass introspection intentionally changed.
+- Retained Dispatcher’s condition-guarded parallel session maps after a
+  disposable aggregate added translation machinery without proving stronger
+  lock safety. A separate terminal-field probe required no lifecycle-specific
+  handling, so no further result machinery was added.
+- Closed the plan-selection/drop retirement race and reanchored the installed-
+  wheel headed fixture to the task-port surface. The remaining Windows UI
+  Automation evidence issue is tracked in `docs/BUGS.md`.
+- Retired both temporary boundary corpora and their self-tests after final
+  exact comparisons. Enduring boundary, owner, and import-law tests remain.
+  The lifecycle work consolidated authority but did not reduce production
+  source size; further reduction requires separate scope.
 
 ### M1 Hardening
 

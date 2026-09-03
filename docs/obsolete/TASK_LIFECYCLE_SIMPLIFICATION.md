@@ -1,11 +1,9 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-03): completed closed register; LC-0 through LC-6 plus the
-separate pre-LC-2 stabilization are complete.** This
-document owns the repository delivery denominator, stop rules, guard evidence,
-and resumption state for the task-lifecycle simplification. Findings are output,
-not implicit implementation scope. Only explicit user adjudication may alter
-this register after implementation begins.
+**Standing (2026-09-03): archived completed delivery record.** This document
+records the closed denominator, stop rules, guard evidence, and implementation
+history for the task-lifecycle simplification. It is not active authority for
+new work.
 
 This repository document is the sole maintained plan for the task. The older
 `.codex` plan is a historical snapshot and is neither updated nor used as a
@@ -158,7 +156,7 @@ push callback.
 - No mutable `_SessionSlot`; no service-owned queue, drain claim, delivery
   generation, or connection state.
 - No opportunistic test compression, unrelated cleanup, or extension of the
-  closed root `SIMPLIFICATION.md` register.
+  closed `../SIMPLIFICATION.md` register.
 
 An event-shape or volume change invalidates the 128/64/64 evidence and stops
 this register for separately measured work.
@@ -320,7 +318,7 @@ regression rather than schema migration.
 
 ### Test disposition
 
-`docs/TASK_LIFECYCLE_TEST_LEDGER.md` is the finite pre-implementation census.
+`TASK_LIFECYCLE_TEST_LEDGER.md` is the finite pre-implementation census.
 Its AST/name/string procedure closes over exactly seven files and records the
 129 baseline behavioral tests, the two authorized selection-race witnesses,
 and eight shared helpers. Each changed test is exactly

@@ -436,6 +436,13 @@ release, dispatcher/session close, detail retirement, plan drop, or
 compensation. The strong import contract `Web task drain cannot reach domain
 lifecycle owners` forbids both direct and indirect drain paths to those owners,
 including `SessionObserver`.
+
+`interfaces/web/_exception_graph.py` intentionally keeps the small
+exception-retirement operation adapter-local because the interface import law
+bars core and the drain-specific contract bars lifecycle owners. Do not relax
+either boundary merely to deduplicate it; reconsider a neutral owner only if
+another interface consumer needs the operation.
+
 The application admits at most 48 active desktop task effects before invoking a
 delivery factory or lower application work. Independently, the adapter keeps at
 most 48 successful/in-flight start-response entries, retiring successful entries

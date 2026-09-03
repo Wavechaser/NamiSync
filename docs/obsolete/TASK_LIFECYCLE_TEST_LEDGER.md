@@ -150,6 +150,9 @@ initial_status: pending
 
 # Task Lifecycle Test Disposition Ledger
 
+Archived after the lifecycle register closed on 2026-09-03. This ledger is
+historical evidence, not active test or implementation authority.
+
 This is the finite LC-0 census for lifecycle-removal test work. A pending
 disposition is deliberately unassigned: no row may receive one of the three
 allowed dispositions until the implementation makes that decision factual.
