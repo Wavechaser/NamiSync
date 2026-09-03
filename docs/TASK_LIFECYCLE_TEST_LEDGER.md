@@ -362,3 +362,33 @@ LC-1b closes 22 of 22 prior names: 15 are `reanchored-owner`, seven are
 `mechanism-removed`, and no changed boundary test required disposition. The
 companion denominator has zero pending rows, zero orphaned helpers, fixtures,
 or imports, and zero knowingly uncovered supported behavior.
+
+## LC-6 temporary-oracle retirement
+
+These append-only rows dispose the six test definitions and one helper group
+deleted with the temporary T1 oracle. They do not rewrite the original census
+or the separately counted LC-1b companion.
+
+| ID | Exact deleted test | Disposition | Enduring owner or terminal observation | Status |
+| --- | --- | --- | --- | --- |
+| TL-AUD-001 | tests/test_task_lifecycle_audit.py::test_real_boundary_capture_is_complete_and_plan_only | reanchored-owner | The finite public set is `test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids`, `test_br_g_33_next_events_crosses_production_dispatch_as_exact_tagged_views`, `test_terminal_session_release_crosses_dispatch_as_exact_echo`, `test_task_close_crosses_production_dispatch_as_exact_echo`, `test_terminal_session_release_lost_response_replay_is_idempotent`, `test_close_task_lost_response_retry_is_exact_and_idempotent`, `test_ls_1_delivery_has_no_silent_loss_or_duplicate`, `test_br_g_33_gap_retained_tail_and_terminal_record_remain_ordered`, and `test_declined_plan_mutates_neither_files_nor_databases`; the complete public/T2 replacement run passed 32 tests. | closed |
+| TL-AUD-002 | tests/test_task_lifecycle_audit.py::test_committed_boundary_baseline_matches_current_capture | mechanism-removed | The frozen temporary comparator retired only after the final normalized output matched SHA-256 `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`. | closed |
+| TL-AUD-003 | tests/test_task_lifecycle_audit.py::test_corpus_format_version_is_frozen_for_active_register | mechanism-removed | The corpus and its format version have no consumer after the completed register. | closed |
+| TL-AUD-004 | tests/test_task_lifecycle_audit.py::test_normalization_preserves_generated_identity_relationships_and_fixed_ids | mechanism-removed | Normalization retired with the temporary oracle after the final match; exact command-ID replay relationships remain in the public bridge and lifecycle owner tests. | closed |
+| TL-AUD-005 | tests/test_task_lifecycle_audit.py::test_boundary_corruption_never_validates | mechanism-removed | The parametrized corruption-sensitivity definition retired with its comparator and baseline; no product boundary test was deleted. | closed |
+| TL-AUD-006 | tests/test_task_lifecycle_audit.py::test_capture_io_and_verify_cli_contract | mechanism-removed | The audit tool's capture/verify CLI retired with the tool. This was infrastructure behavior, not the NamiSync CLI boundary. | closed |
+
+| ID | Exact deleted helper group | Disposition | Terminal observation | Status |
+| --- | --- | --- | --- | --- |
+| TL-AUD-HLP-001 | `BASELINE`, `boundary_capture`, `_mutate_bridge_response`, `_mutate_cli_line`, `_mutate_event_sequence`, `_mutate_fixed_drain_identity`, `_mutate_persisted_hash`, `_mutate_filesystem_manifest` | mechanism-removed | Exact repository search found zero external dependents after deleting the runner, baseline, and self-test. | closed |
+
+LC-6 adds six deleted-test dispositions and one helper-group disposition. All
+seven are closed, giving the main ledger 137 behavioral and nine helper rows;
+the LC-1b appendix remains separately counted. There are zero orphaned imports,
+fixtures, or helpers and zero knowingly uncovered supported behaviors.
+
+The temporary corpus's byte-for-byte full declined-plan stdout snapshot was
+intentionally retired by the register. The enduring CLI boundary test preserves
+exit 0, exact empty stderr, required user-facing prose, and zero database or
+filesystem mutation; it does not elevate the entire stdout byte stream into a
+permanent compatibility contract.

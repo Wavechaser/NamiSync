@@ -1,7 +1,7 @@
 # Task Lifecycle Machinery Simplification
 
-**Standing (2026-09-03): active closed register; LC-1a through LC-5 plus the
-separate pre-LC-2 stabilization are complete, and LC-6 is next.** This
+**Standing (2026-09-03): completed closed register; LC-0 through LC-6 plus the
+separate pre-LC-2 stabilization are complete.** This
 document owns the repository delivery denominator, stop rules, guard evidence,
 and resumption state for the task-lifecycle simplification. Findings are output,
 not implicit implementation scope. Only explicit user adjudication may alter
@@ -257,12 +257,12 @@ This is not cached refusal replay.
 
 ## 4. LC-0 guard contract
 
-### T1 temporary corpus
+### T1 temporary corpus (retired at LC-6)
 
 `tools/task_lifecycle_audit.py`, `tools/task_lifecycle_baseline.json`, and
-`tests/test_task_lifecycle_audit.py` use production bridge dispatch, real
+`tests/test_task_lifecycle_audit.py` used production bridge dispatch, real
 service/dispatcher/observer/task-drain composition, and a real plan-only
-filesystem fixture. They capture:
+filesystem fixture. They captured:
 
 - canonical envelopes for all four commands and identical replay of start,
   terminal release, and task close;
@@ -272,7 +272,7 @@ filesystem fixture. They capture:
 - before/after source/target manifests with file size, SHA-256, and mtime;
 - existence and SHA-256 for ledger/history main files and sidecars.
 
-The committed corpus uses one fixed canonical fixture root and injects a fixed
+The committed corpus used one fixed canonical fixture root and injected a fixed
 1 TiB free-space result into the declined-plan CLI fixture. Those are declared
 fixture inputs, not normalization. Normalize only temporary roots, the three
 explicit IDs returned by the production start as generated opaque identities,
@@ -280,8 +280,9 @@ and timestamps by stable occurrence identity. Fixture-owned request/drain IDs
 and unrelated 32-hex text stay exact. Never normalize event bodies/order,
 errors, dispositions, CLI
 prose/exits, contents, persisted hashes, or repeated-id relationships.
-Self-tests corrupt each boundary family. Three fresh-process captures must
-normalize identically. Freeze once; delete only in LC-6.
+Self-tests corrupted each boundary family. Three fresh-process captures
+normalized identically. The corpus was frozen once and deleted only after its
+final LC-6 match.
 
 ### Corpus format and re-freeze authority
 
@@ -358,7 +359,7 @@ duplicate authorities rather than rename them.
 | `LC-3` | Compose live/stored session records without lock, concurrency, persistence, or public behavior change. | `LC-0b` only; independent of `LC-2` | Core/dispatcher, exact contained stored identity, T1 persisted bytes. | Complete |
 | `LC-4` | Retain parallel maps and close disposable entry feasibility probe with truthful lock-ownership result. | `LC-3` | Scratch entry, finite mutators, AST plus instrumented condition, concurrency, full reversal. | Complete |
 | `LC-5` | Run/reverse terminal-field probe inside exact derived twelve-file domain. | `LC-1b`, `LC-2`, `LC-3` | Exact diff, field-flow tests, no residual. | Complete |
-| `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1b`, `LC-2`, `LC-3`, `LC-4`, `LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Pending |
+| `LC-6` | Integrate/adversarially close and retire only temporary T1. | `LC-1b`, `LC-2`, `LC-3`, `LC-4`, `LC-5` | Final T1 match; enduring tests; ordinary/headed/import/docs/cleanliness. | Complete |
 
 ### LC-0a guard-governance amendment
 
@@ -823,15 +824,11 @@ unchanged; all scratch changes reverse and `rg simplification_probe` ends empty.
 LC-6 removes only the three temporary T1 artifacts and the single matching
 `tools` department entry named in LC-0a. The enduring stop detectors,
 observation barriers, positive-owner tests, `tests/test_task_lifecycle.py`, and
-its `interfaces` department entry remain. The exact retiring and retained line
-cost is recorded when LC-0a closes. The pre-amendment measurements were 1,653
-temporary lines (905 runner + 601 baseline + 147 self-test) and 1,290 retained
-guard lines. LC-0a measures 1,667 temporary lines (905 + 601 + 161) and the
-same 1,290 retained lines. LC-0b makes the deterministic detector and its
-fault self-test 1,389 retained lines. Remeasure again at LC-6: ordinary
-`mechanism-removed`/`reanchored-owner` dispositions may shrink the retained
-module, but wholesale teardown belongs to a separately reviewed post-register
-test-consolidation checkpoint and is not authorized here.
+its `interfaces` department entry remain. LC-6 retired exactly 1,667 temporary
+lines: 905 runner, 601 baseline, and 161 self-test lines.
+`tests/test_task_lifecycle.py` remains as 2,012 lines of enduring owner and
+stop-class coverage. Only the deleted audit test's `tools` entry retired.
+Wholesale retained-test teardown remains outside this register.
 
 ## 6. Evidence and resumption
 
@@ -839,11 +836,11 @@ test-consolidation checkpoint and is not authorized here.
 | --- | --- |
 | Base | LC-0 began from clean `milestone1-anthony` at `5631066`; the fresh LC-1a rebuild begins from corrected selection-race commit `c456cf4`. Prior recovery commits remain isolated and are not review units. |
 | Register refinement | User-adjudicated refinements incorporated 2026-09-02. LC-0a closes four nonblocking guard findings; LC-0b corrects LS-1. This repository document is now the sole maintained plan, and the `.codex` snapshot is intentionally left unchanged. |
-| T1 stability | Three fresh processes and the frozen baseline are byte-identical: SHA-256 `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`. The oracle rejects bridge, CLI, event-sequence, fixed drain-identity, persistence, and filesystem corruptions. |
+| T1 stability (retired) | Three fresh processes and the frozen baseline were byte-identical: SHA-256 `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`. The oracle rejected bridge, CLI, event-sequence, fixed drain-identity, persistence, and filesystem corruptions. LC-6 matched this hash once more before retirement. |
 | `DISC-B1` | With the CLI push callback blocked after `PhaseChanged`, cancellation is accepted and dispatcher truth reaches canceled before callback release; release then yields one Terminal, one terminal record, canceled exit mapping, exact stdout, and exact stderr. |
-| `DISC-B2` | `begin_close` marks delivery closing, increments its generation, and wakes the blocked bounded offer before current `unsubscribe_all`; the baseline then releases the observer once and orders offer withdrawal, adapter unsubscribe, session close, and service close. This records current behavior, not target ownership. |
+| `DISC-B2` | `begin_close` marked delivery closing, incremented its generation, and woke the blocked bounded offer before the then-current `unsubscribe_all`; the baseline then released the observer once and ordered offer withdrawal, adapter unsubscribe, session close, and service close. This recorded baseline behavior, not target ownership. |
 | T2 baseline | LS-1, LS-2, LS-4a, and LS-5 pass untouched production. The old LS-1 assertion intermittently rejected `[1, 2, 3, Gap@68(first_missed=4), Gap@4(first_missed=4), 141, ...]`; the finite normative audit established that this is permitted recovery rewind, not evidence of LS-1 loss or duplication. The corrected module is `19 passed`; its final barrier-forced LS-1 path is 30/30 across fresh processes, and deliberate duplicate/unannounced-loss corruptions fail. LS-3/LS-4b remain introduced LC-1a guarantees. |
-| Test census | `docs/TASK_LIFECYCLE_TEST_LEDGER.md` contains the original 129 LC-0 behavioral rows plus the authorized plan-selection retirement regression and its distinct successor-identity witness, for 131 behavioral rows, and eight unique helper rows over the exact seven-file corpus. Every row is closed, zero pending fields remain, every current-owner proof resolves, removed-mechanism tests/helpers are absent, and retained helpers have live dependents. Historical test names remain only in the previous-test columns and the finite LC-1b crosswalk. |
+| Test census | The ledger began with 131 behavioral and eight helper rows over the exact seven-file corpus. LC-6 adds six deleted-oracle test dispositions and one helper-group disposition, for 137 behavioral and nine helper rows; the finite LC-1b crosswalk remains separately counted. Every row is closed, zero pending fields remain, every current-owner proof resolves, removed-mechanism tests/helpers are absent, and retained helpers have live dependents. |
 | Broad baseline | LC-0b ordinary suite with required bundled Node: `4909 passed, 4 skipped, 28 deselected`; import law: 11 kept, 0 broken. An initial run without required Node had only the five expected runtime-availability failures and was rerun with the bundled executable. |
 | Adversarial review | A separate read-only review found five guard defects; all were corrected and independently re-reviewed closed. No production file or lifecycle behavior changed. |
 | LC-0a amendment | Ordered `[A, B, A, B]` normalization and fixed-ID preservation are explicit; runner/baseline format remain literal 1; frozen SHA-256 remains `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`; oracle plus department checks are `27 passed`; the diff contains only this register and the oracle self-test. |
@@ -866,17 +863,21 @@ test-consolidation checkpoint and is not authorized here.
 | LC-4 result and reversal | The prototype was mechanically feasible but failed the value test. It rewrote 78 reads and 27 mutation statements, grew dispatcher production by 101 net lines (`+202/-101`), required a 321-line scratch gate plus temporary reanchoring of 15 private-map tests, and initially retained a closed checkpoint through a scheduler-frame aggregate local. Clearing that local restored the retention witness, but demonstrated relocated risk. Scratch probes were 2 passed, the named concurrency slice 7 passed, and the fully reanchored dispatcher department 157 passed/4,820 deselected. Independent review found no reason to claim stronger lock safety. All four scratch paths were reversed, `git diff --exit-code` and final `_SessionEntry` searches were empty, and the disposable branch was deleted. Production retains the parallel maps. |
 | LC-5 terminal-field probe | The scratch `OperationResult.simplification_probe` crossed equality, snapshotting, terminal summary/event encode and decode, exact stored/live identity, dispatcher/store terminal truth, public result/record/task-drain views, the unchanged CLI push callback, Python bridge serialization, and real JavaScript validation. Default-null event and bridge fields remained absent. The raw `git diff --name-only` set was exactly the six production plus six test/witness paths declared above; the scratch was `+438/-27`. No lifecycle, observer, dispatcher, drain, database, schema/version, compatibility, or generic-helper path changed. This passes the derived twelve-file scope gate; twelve is evidence of the required path, not a separate threshold. |
 | LC-5 verification and reversal | The complete declared executable test set passed 941 tests with bundled Node; the strengthened CLI, real-browser record, and complete bridge public-view witness slice passed 52 tests. Frozen T1 matched, `git diff --check` had no patch error, and two independent reviews found no blocker. Every scratch change was restored to `67ffe3c`; final `rg simplification_probe`, staged/unstaged diffs, and status were empty, and `codex/task-terminal-field-probe` was deleted. |
+| LC-6 final T1 and retirement | The last capture matched frozen SHA-256 `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`. LC-6 then deleted only the 905-line runner, 601-line baseline, 161-line self-test, and the self-test's `tools` department entry. The department-manifest check passed 16 tests. |
+| LC-6 test disposition | Six deleted audit test definitions and one helper group are closed in `TASK_LIFECYCLE_TEST_LEDGER.md`: the boundary capture is reanchored to the enduring public set; five tests and the helper group retired with the temporary mechanism. Exact searches found zero orphan imports, fixtures, helpers, or external dependents. The 2,012-line enduring lifecycle module and its `interfaces` entry remain. |
+| LC-6 integration verification | The enduring public/T2 replacement set passed 32 tests; core/workflows/dispatcher/interfaces departments passed 3,542 with one skip and 1,421 deselected; ordinary passed 4,932 with four capability skips and 28 headed deselections; all 12 import contracts held. The reanchored transport module excluding the independent off-origin accessibility node passed 34 tests; that node remained unverified because its Windows UI Automation probe twice raised `ElementNotAvailableException`. No product, bridge-security, or lifecycle code was changed to mask that host-capability failure. |
+| LC-6 ownership and complexity audit | In the predeclared ten-path production slice compared from `c456cf4` through the lifecycle series, production is net `+1,311` lines (`+2,959/-1,648`). The result is authority consolidation, not source-line reduction: `TaskLifecycle` is the one census-scoped domain-effect receipt/association/settlement owner, `SessionObserver` is the one subscription owner, Dispatcher alone owns custody, and drain has only the four high-level port calls with no raw cleanup path. No relocated receipt, association, observer, compensation, or drain-cleanup authority was found. |
 
-- **Current checkpoint:** LC-5 complete; LC-6 has not begun.
-- **Next action:** run the final frozen T1 comparison, reconcile the enduring
-  guard/test ledger, then retire only the three temporary T1 artifacts and
-  their single `tools` department entry before the full closeout gate.
+- **Current checkpoint:** LC-6 complete; this register is closed.
+- **Next action:** review the atomic closeout. Any further lifecycle or
+  retained-test consolidation requires separately adjudicated scope.
 - **Recovery rule:** do not merge or cherry-pick `59affc4`, `dc94aef`, or
   `codex/wip-20260902-2029-task-lifecycle-lc1a`; those recovery snapshots
   remain isolated and are not review units.
-- **Stop:** any supported baseline defect, real-boundary drift, baseline LS
-  consequence, nondeterministic T1, repeated-defect threshold, inability to
-  preserve work, or required event/capacity change.
+- **Closed evidence limitation:** the off-origin native headed node could not
+  obtain its accessibility text from this Windows session because UI Automation
+  reported a vanished element. The other 34 transport-module nodes pass;
+  this register neither repairs nor suppresses the independent probe.
 - **Resolved guard stop (2026-09-02):** the observed recovery rewind violated
   only an unsupported detector assertion. It did not establish the stated
   LS-1 consequence, so no product defect or production fix is authorized. The

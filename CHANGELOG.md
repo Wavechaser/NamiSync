@@ -113,6 +113,19 @@ preserving public behavior, real boundary checks, and persisted contracts.
   public views, the CLI push callback, web drain, and real JavaScript
   validation, and the 941-test declared domain plus strengthened 52-test
   witness slice passed. No lifecycle-specific field handling remained.
+- LC-6 matched the frozen lifecycle corpus one final time at SHA-256
+  `AC08426E682BC362CC9E0CAB9A7ABE4FA998518DC5E9CCFD3FB0DF86F68CB53B`,
+  then retired its 1,667 temporary lines and only the matching `tools`
+  department entry. The 2,012-line enduring lifecycle guard, T2/barrier,
+  positive-owner, and public tests remain; six deleted-test plus one helper
+  disposition closed with zero orphans.
+- The final public/T2 set passed 32 tests, four departments passed 3,542 with
+  one skip, ordinary passed 4,932 with four capability skips, and all 12
+  import contracts held. The other 34 transport-module tests passed; the
+  independent off-origin UI Automation probe remained
+  unavailable in this Windows session. Across the predeclared production
+  slice, the lifecycle series is net 1,311 lines larger: it consolidates
+  authority rather than claiming source-line reduction.
 
 ### M1 Hardening
 

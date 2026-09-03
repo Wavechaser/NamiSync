@@ -239,7 +239,7 @@ never hides the other result axes in rendered output.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
   and diagnostic commands.
 - [Task lifecycle simplification](docs/TASK_LIFECYCLE_SIMPLIFICATION.md) —
-  active ownership-consolidation register, boundary guards, and evidence.
+  completed ownership-consolidation register and closeout evidence.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
