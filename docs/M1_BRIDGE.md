@@ -3018,11 +3018,14 @@ The pinned host creates one thread per exposed-function call before NamiSync
 admission. The bridge admits at most 64 handlers past that gate and returns the
 fixed `bridge_busy` refusal at saturation. An admitted native call keeps its
 position until that exact worker exits and the browser acknowledges its exact
-detached response token. The JavaScript clone precedes acknowledgment; a lost
-first acknowledgment may retry once, and absence is accepted only after that
-transport-uncertain first delivery. Reload advances the document generation
-under the same condition and retires only earlier browser custody, including a
-native entry paused before handler reservation. Direct Python calls retain
+detached response token. A matching token can acknowledge only existing
+browser custody and remains usable after document trust is lost; it grants no
+command authority, returns no response content, and cannot release the worker
+side before that exact worker exits. The JavaScript clone precedes
+acknowledgment; a lost first acknowledgment may retry once, and absence is
+accepted only after that transport-uncertain first delivery. Reload advances
+the document generation under the same condition and retires only earlier
+browser custody, including a native entry paused before handler reservation. Direct Python calls retain
 their ordinary call-return lifetime. A generated-token collision returns no
 receipt, so it cannot acknowledge the earlier exact custody. This bounds
 admitted domain work, return

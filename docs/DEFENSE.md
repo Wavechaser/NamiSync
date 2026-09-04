@@ -481,6 +481,12 @@ The current containment obligations are still strict:
 - renderer failure, malformed requests, expired slots, saturation, and teardown
   may degrade only through bounded T1 outcomes.
 
+An exact opaque native-response acknowledgment is cleanup, not dispatch
+authority. It may release matching existing browser custody after document
+trust is lost, but it invokes no handler, exposes no response content, and
+cannot reap custody before that exact native worker exits. Command dispatch
+still rechecks committed-origin trust after reserving its handler position.
+
 Desktop transport does not become backend lifecycle authority. The application
 lifecycle is the sole owner of domain-effect receipts, task/session association,
 admission compensation, and logical settlement. Dispatcher independently owns

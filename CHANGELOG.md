@@ -23,7 +23,7 @@ history, and workflow product while building its secured headed WebView2 shell.
 Redundant in-process transports and certification layers were removed while
 preserving public behavior, real boundary checks, and persisted contracts.
 
-#### Remove duplicate internal transport, certification, and lifecycle authority (2026-09-01 – 2026-09-03)
+#### Remove duplicate internal transport, certification, and lifecycle authority (2026-09-01 – 2026-09-05)
 
 - Removed process-local workflow JSON codecs, payload versions, and byte
   custody. Dispatcher now retains opaque detached checkpoints, and workflows
@@ -51,6 +51,10 @@ preserving public behavior, real boundary checks, and persisted contracts.
 - Closed the plan-selection/drop retirement race and reanchored the installed-
   wheel headed fixture to the task-port surface. The remaining Windows UI
   Automation evidence issue is tracked in `docs/BUGS.md`.
+- Preserved recognizable structured refusal after origin loss by making exact
+  native response-token acknowledgment cleanup-only and independent of document
+  trust. Command dispatch retains its post-reservation origin check, and exact
+  worker-exit custody remains unchanged.
 - Retired both temporary boundary corpora and their self-tests after final
   exact comparisons. Enduring boundary, owner, and import-law tests remain.
   The lifecycle work consolidated authority but did not reduce production

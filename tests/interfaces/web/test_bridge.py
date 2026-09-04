@@ -1342,6 +1342,45 @@ def test_br_g_32_native_return_requires_worker_exit_and_exact_browser_receipt() 
     assert bridge.dispatch(command)["ok"] is True
 
 
+def test_br_g_32_exact_native_receipt_remains_available_after_trust_loss() -> None:
+    document = _trusted_document()
+    calls: list[object] = []
+    bridge = _dispatcher(document, {"echo": lambda payload: calls.append(payload)})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {},
+    })
+    responses: list[dict[str, object]] = []
+    document._record("https://off-origin.invalid/")
+
+    owner = Thread(target=lambda: responses.append(bridge._dispatch_native(command)))
+    owner.start()
+    owner.join(1.0)
+
+    assert not owner.is_alive()
+    assert calls == []
+    assert len(responses) == 1
+    response = responses[0]
+    assert response["response"] == {
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": None,
+        "ok": False,
+        "error": {
+            "code": "bridge_unavailable",
+            "message": (
+                "NamiSync is closing or this desktop page is no longer trusted."
+            ),
+        },
+    }
+    response_token = response["response_token"]
+    assert isinstance(response_token, str)
+    assert bridge._dispatch_native(f"ack:{response_token}") is True
+    assert bridge._dispatch_native(f"ack:{response_token}") is False
+    bridge.wait_for_handlers(1.0)
+
+
 def test_br_g_32_duplicate_native_token_cannot_receipt_an_earlier_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

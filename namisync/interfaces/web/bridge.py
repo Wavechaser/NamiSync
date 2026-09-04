@@ -957,11 +957,8 @@ class BridgeDispatcher:
         self._admitted -= len(finished)
 
     def _acknowledge_native_response(self, response_token: str) -> bool:
-        try:
-            self._document.require_trusted()
-        except BaseException as error:
-            retire_exception_graph(error)
-            return False
+        """Release exact response custody without granting document authority."""
+
         with self._handler_condition:
             custody = self._native_responses.get(response_token)
             if custody is None:

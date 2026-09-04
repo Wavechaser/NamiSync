@@ -653,8 +653,12 @@ hostile-name round trip. Before `create_window`, host preparation pins
 
 Native exposed calls retain their admitted handler position through both the
 actual pywebview worker's exit and an exact browser receipt sent after detached
-JSON cloning. The host selects that lifetime explicitly; ordinary direct
-`dispatch` calls still release their position when the call returns. A reload
+JSON cloning. Exact-token acknowledgment is cleanup rather than document or
+command authority: after trust loss it can only mark matching existing browser
+custody released, and worker exit is still required before reaping. This lets a
+cloned structured refusal remain definitive without weakening the command's
+post-reservation origin check. The host selects that lifetime explicitly;
+ordinary direct `dispatch` calls still release their position when the call returns. A reload
 advances one bridge generation and retires earlier browser custody atomically,
 including entries paused before reservation. Shutdown joins exact worker
 objects outside the bridge lock; an expired close deadline retains the position

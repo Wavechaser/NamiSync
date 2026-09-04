@@ -761,13 +761,21 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MINOR - FIXED (2026-09-05). Receipt-cleanup trust conflation. An off-origin
+  native call returned the exact structured refusal with a response token, but
+  the same origin check rejected its cleanup acknowledgment; JavaScript then
+  replaced the cloned refusal with generic transport uncertainty. Fixed by
+  making an exact existing-token acknowledgment independent of document trust.
+  It grants no dispatch authority, and worker exit remains mandatory before
+  capacity is reaped. Native and browser regressions preserve recognizable
+  refusal, zero handler calls, exact-token ownership, and duplicate-receipt
+  refusal.
 - MINOR - OPEN (2026-09-03). Headed accessibility target expiry. The required
-  off-origin headed test twice reached its refusal but could not read it because
-  Windows UI Automation raised `ElementNotAvailableException`. The probe reads
-  a post-navigation provider whose target can expire before the separate
-  accessibility lookup. This blocks evidence collection; it does not establish
-  a bridge-security or product regression. The test remains required, and an
-  excluded result is not green headed evidence.
+  off-origin headed observer can lose a post-navigation UI Automation target
+  before descendant lookup. A separate product refusal-classification defect
+  was found and fixed without weakening the observer's exact-text requirement.
+  The bounded observer retry remains undelivered; an excluded result is not
+  green headed evidence.
 - MINOR - FIXED (2026-09-03). Adapter-surface interception drift. After the
   bridge moved to task-port methods, the installed-wheel fixture still patched
   the valid session-oriented methods, so interception was inert and its recorder
