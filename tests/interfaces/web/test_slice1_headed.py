@@ -362,12 +362,15 @@ with sqlite3.connect(root / "history.db") as connection:
             deadline=deadline,
         )
         assert "database pair refused (history-contract)" in message
-        assert "Close every NamiSync process" in message
-        assert (
-            "manually delete or otherwise reset both database files together"
-            in message
-        )
-        assert "restart NamiSync" in message
+        guidance = message.casefold()
+        for fragment in (
+            "close every namisync process",
+            "archive or delete both database main files",
+            "sidecars together",
+            "restart",
+        ):
+            assert fragment in guidance
+        assert all(suffix in message for suffix in ("-wal", "-shm", "-journal"))
         dismiss_ok_dialog(dialog)
         completed = wait_for_process(process, deadline=deadline)
     finally:
