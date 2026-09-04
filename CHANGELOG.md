@@ -49,12 +49,18 @@ preserving public behavior, real boundary checks, and persisted contracts.
   lock safety. A separate terminal-field probe required no lifecycle-specific
   handling, so no further result machinery was added.
 - Closed the plan-selection/drop retirement race and reanchored the installed-
-  wheel headed fixture to the task-port surface. The remaining Windows UI
-  Automation evidence issue is tracked in `docs/BUGS.md`.
+  wheel headed fixture to the task-port surface.
 - Preserved recognizable structured refusal after origin loss by making exact
   native response-token acknowledgment cleanup-only and independent of document
   trust. Command dispatch retains its post-reservation origin check, and exact
   worker-exit custody remains unchanged.
+- Repaired the TS-0 headed measuring system by removing an unrelated materials
+  transport sentinel, checking database reset guidance semantically, recording
+  the off-origin command refusal once, reacquiring transient UI Automation
+  trees under exact window ownership, and correlating the delayed native return
+  by its result token. All 28 headed cases now pass without deleting a
+  behavioral scenario; the active simplification register requires causally
+  identified interception hits rather than merely nonempty recorders.
 - Retired both temporary boundary corpora and their self-tests after final
   exact comparisons. Enduring boundary, owner, and import-law tests remain.
   The lifecycle work consolidated authority but did not reduce production

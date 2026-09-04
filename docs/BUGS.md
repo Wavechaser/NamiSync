@@ -787,6 +787,13 @@ defect, and move implementation-level test choreography out of the log.
   The old symbols still existed, so patch installation succeeded even though
   they were no longer on the call path; lint, types, and `raising=False` audits
   could not detect the lost observation.
+- MINOR - FIXED (2026-09-05). Delayed-return observer aliasing. The BR-G-30
+  fixture labeled any concurrent `evaluate_js` script containing the callback
+  table after handler completion as the delayed result, so unrelated renderer
+  traffic could create duplicate events. Fixed by correlating the interception
+  with the serialized `returned-delayed_return` value and retaining one
+  terminal observation. Reinjection, callback loss, and the working
+  post-navigation bridge remain the asserted behavior.
 - MODERATE - FIXED (2026-08-29). Orphan analytical admission. Desktop startup
   refused every runtime outside one exact CPython patch, GIL, and allocator
   profile even though no object model, validator, or acceptance evidence could
