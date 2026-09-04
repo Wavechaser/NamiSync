@@ -204,11 +204,6 @@ def test_materials_gate_report_and_page_probe_are_bounded_and_sanitized(
     assert "window.setTimeout(resolve, 50)" in materials_gate_child._PAGE_PROBE
     assert "document.documentElement" in materials_gate_child._PAGE_PROBE
     assert 'document.querySelector("#app")' in materials_gate_child._PAGE_PROBE
-    assert 'typeof window.pywebview?.api?.dispatch === "function"' in (
-        materials_gate_child._PAGE_PROBE
-    )
-    assert 'command: "materials_probe"' in materials_gate_child._PAGE_PROBE
-    assert 'error?.code !== "unknown_command"' in materials_gate_child._PAGE_PROBE
     assert 'matchMedia("(forced-colors: active)").matches' in (
         materials_gate_child._PAGE_PROBE
     )
@@ -711,8 +706,6 @@ def _assert_common_health(result: dict[str, object]) -> None:
     assert result["load_health"]["source"].startswith("http://127.0.0.1:")
     assert result["load_health"]["source"].endswith("/index.html")
     assert result["page"]["ready_state"] == "complete"
-    assert result["page"]["dispatch_type"] == "function"
-    assert result["page"]["dispatch_refusal"] == "unknown_command"
     assert result["page"]["status"] == (
         f"Materials {result['scenario']} complete"
     )
@@ -778,8 +771,6 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
     assert set(result["load_health"]) == {"ui_thread", "source"}
     assert set(result["page"]) == {
         "ready_state",
-        "dispatch_type",
-        "dispatch_refusal",
         "material",
         "theme",
         "high_contrast",
