@@ -24,6 +24,7 @@ _GW_OWNER = 4
 _DIALOG_WINDOW_CLASS = "#32770"
 _DEFAULT_SCENARIO_SECONDS = 45.0
 _CLEANUP_SECONDS = 3.0
+_UIA_REPORT_SECONDS = 1.0
 _LOCAL_DRIVE_TYPES = frozenset({2, 3, 5, 6})
 _ERROR_MORE_DATA = 234
 _STILL_ACTIVE = 259
@@ -364,16 +365,23 @@ def wait_for_accessible_text(
 ) -> tuple[str, ...]:
     """Run potentially blocking UI Automation behind its own hard job boundary."""
 
+    if deadline.remaining() <= _UIA_REPORT_SECONDS:
+        raise AssertionError("UI Automation probe has no observation/reporting budget")
+    process_id = _window_process_id(handle)
+    if process_id <= 0:
+        raise AssertionError("UI Automation target window no longer exists")
     command = (
         python,
         _HOST_CHILD,
         "--uia-probe",
         "--handle",
         str(handle),
+        "--process-id",
+        str(process_id),
         "--expected",
         expected,
-        "--timeout",
-        str(deadline.remaining()),
+        "--deadline",
+        str(deadline.expires_at - _UIA_REPORT_SECONDS),
     )
     process = start_headed_process(
         command,
@@ -393,7 +401,7 @@ def wait_for_accessible_text(
     if completed.returncode != 0 or expected not in names:
         raise AssertionError(
             f"UI Automation did not expose {expected!r}; observed names: {names!r}; "
-            f"error: {result.get('error')!r}"
+            f"result: {result!r}"
         )
     return names
 

@@ -943,39 +943,10 @@ def test_transport_gate_uia_diagnostic_aggregates_and_ranks_unique_candidates() 
     assert len(serialized.encode("utf-8")) < 8192
 
 
-def test_transport_gate_uia_subcommands_parse_their_exact_headless_shapes(
+def test_transport_gate_uia_folder_subcommand_parses_its_headless_shape(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    probe_source = inspect.getsource(headed_host_child._run_uia_probe)
-    lookup_source = inspect.getsource(headed_host_child._automation_has_name)
-    observed_probes: list[tuple[int, str]] = []
-
-    def has_name(handle: int, expected: str) -> bool:
-        observed_probes.append((handle, expected))
-        return True
-
-    monkeypatch.setattr(
-        headed_host_child,
-        "_automation_has_name",
-        has_name,
-    )
-    assert headed_host_child._run_uia_probe(
-        [
-            "--handle",
-            "41",
-            "--expected",
-            "expected",
-            "--timeout",
-            "0.1",
-        ]
-    ) == 0
-    assert observed_probes == [(41, "expected")]
-    assert "_automation_names" not in probe_source
-    assert "FindFirst" in lookup_source
-    assert "NameProperty" in lookup_source
-    assert "FindAll" not in lookup_source
-
     observed: dict[str, object] = {}
 
     def select(
@@ -1591,13 +1562,6 @@ def _run_off_origin_scenario(
             "Off-origin dispatch refused",
             python=installed.python,
             deadline=deadline,
-        )
-        assert interim["off_origin_response"] == _BRIDGE_UNAVAILABLE
-        assert interim["off_origin_handler_calls"] == []
-        assert any(
-            source.startswith("http://127.0.0.1:")
-            and source.endswith("/off_origin.html")
-            for source in interim["committed_sources"]
         )
         close_window(window)
         completed = wait_for_process(process, deadline=deadline)

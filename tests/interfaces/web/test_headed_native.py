@@ -4,16 +4,267 @@ from __future__ import annotations
 
 import ast
 import ctypes
+import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
+import _headed_host_child as host_child
 import _headed_native as native
 from _headed_native import require_absolute_local_test_root
 
 
 PROJECT_ROOT = Path(__file__).parents[3]
+
+
+class _ExpiredElement(Exception):
+    HResult = -2147220991
+
+
+@pytest.mark.parametrize("expired_at", ("root", "lookup"))
+def test_uia_observation_loads_once_and_reacquires_the_owned_tree(
+    monkeypatch: pytest.MonkeyPatch,
+    expired_at: str,
+) -> None:
+    loads: list[str] = []
+    roots: list[int] = []
+    searches: list[tuple[object, object]] = []
+    attempts = iter((expired_at, "found"))
+
+    def from_handle(handle: int) -> object:
+        roots.append(handle)
+        outcome = next(attempts)
+        if outcome == "root":
+            raise _ExpiredElement("provider expired")
+
+        def find_first(scope: object, condition: object) -> object:
+            searches.append((scope, condition))
+            if outcome == "lookup":
+                raise _ExpiredElement("provider expired")
+            return object()
+
+        return SimpleNamespace(FindFirst=find_first)
+
+    monkeypatch.setitem(
+        sys.modules,
+        "clr",
+        SimpleNamespace(AddReference=loads.append),
+    )
+    monkeypatch.setitem(sys.modules, "System", SimpleNamespace(IntPtr=int))
+    monkeypatch.setitem(
+        sys.modules,
+        "System.Windows.Automation",
+        SimpleNamespace(
+            AutomationElement=SimpleNamespace(
+                FromHandle=from_handle,
+                NameProperty="name",
+            ),
+            PropertyCondition=lambda prop, value: (prop, value),
+            TreeScope=SimpleNamespace(Descendants="descendants"),
+            ElementNotAvailableException=_ExpiredElement,
+        ),
+    )
+    monkeypatch.setattr(host_child, "_user32", lambda: object())
+    monkeypatch.setattr(
+        host_child,
+        "_window_identity",
+        lambda *_args, **_kwargs: (7, 301),
+    )
+
+    observe, expired = host_child._prepare_uia_observation(41, "expected", 301)
+    with pytest.raises(expired):
+        observe()
+    assert observe() is True
+    assert roots == [41, 41]
+    assert searches[-1] == ("descendants", ("name", "expected"))
+    assert len(loads) == 1
+
+    monkeypatch.setattr(
+        host_child,
+        "_window_identity",
+        lambda *_args, **_kwargs: (7, 999),
+    )
+    with pytest.raises(RuntimeError, match="ownership changed"):
+        observe()
+    assert roots == [41, 41]
+
+
+@pytest.mark.parametrize(
+    ("attempts", "prepare_error", "code", "transients", "successful"),
+    (
+        ([_ExpiredElement("expired"), True], None, 0, 1, 1),
+        ([_ExpiredElement("expired")] * 3, None, 1, 3, 0),
+        ([_ExpiredElement("expired"), False, False], None, 1, 1, 2),
+        ([RuntimeError("provider broken")], None, 2, 0, 0),
+        ([], ImportError("runtime unavailable"), 2, 0, 0),
+    ),
+)
+def test_uia_probe_reports_retry_success_timeout_and_infrastructure_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    attempts: list[object],
+    prepare_error: Exception | None,
+    code: int,
+    transients: int,
+    successful: int,
+) -> None:
+    now = 0.0
+    pending = list(attempts)
+
+    def prepare(*_args: object) -> tuple[object, type[Exception]]:
+        if prepare_error is not None:
+            raise prepare_error
+
+        def observe() -> bool:
+            value = pending.pop(0)
+            if isinstance(value, Exception):
+                raise value
+            return bool(value)
+
+        return observe, _ExpiredElement
+
+    def sleep(seconds: float) -> None:
+        nonlocal now
+        now += seconds
+
+    monkeypatch.setattr(host_child, "_prepare_uia_observation", prepare)
+    monkeypatch.setattr(
+        host_child,
+        "time",
+        SimpleNamespace(monotonic=lambda: now, sleep=sleep),
+    )
+    actual = host_child._run_uia_probe(
+        [
+            "--handle",
+            "41",
+            "--process-id",
+            "301",
+            "--expected",
+            "expected",
+            "--deadline",
+            "0.21",
+        ]
+    )
+    result = json.loads(capsys.readouterr().out)
+
+    assert actual == code
+    assert result["names"] == (["expected"] if code == 0 else [])
+    assert result["transient_count"] == transients
+    assert result["successful_observations"] == successful
+    if transients:
+        assert result["last_transient"] == {
+            "type": "_ExpiredElement",
+            "message": "expired",
+            "hresult": -2147220991,
+        }
+    if code == 2:
+        assert result["error"]["type"] == type(
+            prepare_error or attempts[0]
+        ).__name__
+        assert now == 0
+
+
+def test_uia_parent_preserves_owner_deadline_diagnostics_and_exact_acceptance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+    process = object()
+    completed = SimpleNamespace(
+        returncode=0,
+        stderr="",
+        stdout=json.dumps(
+            {
+                "names": ["expected"],
+                "transient_count": 2,
+                "successful_observations": 3,
+                "last_transient": {
+                    "type": "Expired",
+                    "message": "gone",
+                    "hresult": 17,
+                },
+            }
+        ),
+    )
+
+    def start(command: tuple[object, ...], **kwargs: object) -> object:
+        captured["command"] = command
+        captured["start_deadline"] = kwargs["deadline"]
+        return process
+
+    def wait(child: object, **kwargs: object) -> object:
+        assert child is process
+        captured["wait_deadline"] = kwargs["deadline"]
+        return completed
+
+    monkeypatch.setattr(
+        native,
+        "time",
+        SimpleNamespace(monotonic=lambda: 100.0),
+    )
+    monkeypatch.setattr(native, "_window_process_id", lambda _handle: 301)
+    monkeypatch.setattr(native, "start_headed_process", start)
+    monkeypatch.setattr(native, "wait_for_process", wait)
+    deadline = native.ScenarioDeadline(110.0)
+
+    assert native.wait_for_accessible_text(
+        41,
+        "expected",
+        python=Path(sys.executable),
+        deadline=deadline,
+    ) == ("expected",)
+    command = captured["command"]
+    assert command[command.index("--process-id") + 1] == "301"
+    assert float(command[command.index("--deadline") + 1]) == 109.0
+    assert captured["start_deadline"] is captured["wait_deadline"] is deadline
+
+    for returncode, names in ((1, ["expected"]), (0, ["other"])):
+        completed.returncode = returncode
+        completed.stdout = json.dumps(
+            {
+                "names": names,
+                "transient_count": 2,
+                "successful_observations": 3,
+                "last_transient": {
+                    "type": "Expired",
+                    "message": "gone",
+                    "hresult": 17,
+                },
+            }
+        )
+        with pytest.raises(
+            AssertionError,
+            match="UI Automation did not expose",
+        ) as failure:
+            native.wait_for_accessible_text(
+                41,
+                "expected",
+                python=Path(sys.executable),
+                deadline=deadline,
+            )
+        assert "'transient_count': 2" in str(failure.value)
+        assert "'successful_observations': 3" in str(failure.value)
+        assert "'hresult': 17" in str(failure.value)
+
+    starts = captured["command"]
+    monkeypatch.setattr(native, "_window_process_id", lambda _handle: 0)
+    with pytest.raises(AssertionError, match="window no longer exists"):
+        native.wait_for_accessible_text(
+            41,
+            "expected",
+            python=Path(sys.executable),
+            deadline=deadline,
+        )
+    monkeypatch.setattr(native, "_window_process_id", lambda _handle: 301)
+    with pytest.raises(AssertionError, match="no observation/reporting budget"):
+        native.wait_for_accessible_text(
+            41,
+            "expected",
+            python=Path(sys.executable),
+            deadline=native.ScenarioDeadline(100.5),
+        )
+    assert captured["command"] is starts
 
 
 @pytest.mark.parametrize(

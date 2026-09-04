@@ -770,18 +770,23 @@ defect, and move implementation-level test choreography out of the log.
   capacity is reaped. Native and browser regressions preserve recognizable
   refusal, zero handler calls, exact-token ownership, and duplicate-receipt
   refusal.
-- MINOR - OPEN (2026-09-03). Headed accessibility target expiry. The required
-  off-origin headed observer can lose a post-navigation UI Automation target
-  before descendant lookup. A separate product refusal-classification defect
-  was found and fixed without weakening the observer's exact-text requirement.
-  The bounded observer retry remains undelivered; an excluded result is not
-  green headed evidence.
+- MINOR - FIXED (2026-09-03 - 2026-09-05). Headed accessibility target expiry.
+  The off-origin UI Automation provider could expire between root acquisition
+  and descendant lookup, and the probe treated that transient as an
+  infrastructure failure. Fixed by loading UIA once, reacquiring the exact
+  process-owned window tree on every attempt, and retrying only
+  `ElementNotAvailableException`. Timeout evidence retains transient and
+  successful-read counts plus value-only error details; the parent hard
+  deadline and exact-text acceptance remain unchanged.
 - MINOR - FIXED (2026-09-03). Adapter-surface interception drift. After the
   bridge moved to task-port methods, the installed-wheel fixture still patched
   the valid session-oriented methods, so interception was inert and its recorder
   stayed empty. Fixed by intercepting the four task-port methods and bridge
   drain, preserving delivery-factory/task identity, unwrapping native response
   custody, and excluding only exact native acknowledgements.
+  The old symbols still existed, so patch installation succeeded even though
+  they were no longer on the call path; lint, types, and `raising=False` audits
+  could not detect the lost observation.
 - MODERATE - FIXED (2026-08-29). Orphan analytical admission. Desktop startup
   refused every runtime outside one exact CPython patch, GIL, and allocator
   profile even though no object model, validator, or acceptance evidence could

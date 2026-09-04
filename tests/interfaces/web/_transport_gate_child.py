@@ -824,7 +824,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         if type(command_json) is str and not is_native_ack:
             recorder.append("raw_dispatch_bodies", command_json)
             if '"phase":"off_origin_attempt"' in command_json:
-                recorder.set("off_origin_response", response)
+                recorder.set("off_origin_response", command_response)
                 recorder.publish_ready()
         if request is not None and request.get("command") == "next_events":
             role = None if browser_gate is None else browser_gate.role_for_task(task_id)
