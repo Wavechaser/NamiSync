@@ -1,8 +1,8 @@
 # Session Handoff
 
-Status (2026-09-05): the four headed-baseline error families are repaired on
-`milestone1-anthony`. The complete headed gate passes 28/28. TS-0 remains the
-only active test-simplification checkpoint; TS-1 through TS-11 are shelved.
+Status (2026-09-05): the four headed-baseline error families remain repaired on
+`milestone1-anthony`, the revised TS-R0 population is closed, and TS-R1 is
+active. The complete headed gate passes 28/28.
 
 ## Outcome
 
@@ -24,6 +24,14 @@ only active test-simplification checkpoint; TS-1 through TS-11 are shelved.
   Interception fixtures touched by the cleanup must prove a causally identified
   hit before dependent assertions; a valid patch target or unrelated nonempty
   recorder does not establish observation.
+- The frozen population remains 4,964 original rows. Repairs contribute ten
+  current-only mandatory rows from nine test functions and supersede one
+  original UIA mechanism row, producing the current 4,973-row collection.
+- Support classification is corrected to 28 files / 18,738 lines, including
+  `_native_gate_child.py`; all 24 test-owned JavaScript/HTML files are routed
+  by behavior and all 20 named builders have TS-R2 or TS-R5 ownership.
+- The two WIP recovery refs were verified as superseded and deleted. No
+  working-tree files or ignored diagnostic evidence were removed.
 
 ## Verification
 
@@ -39,16 +47,17 @@ only active test-simplification checkpoint; TS-1 through TS-11 are shelved.
 - Final headed interface gate: 28 passed, 4,945 deselected in 116.48 seconds.
 - Import Linter: all 12 contracts kept.
 - Settlement oracle: 30 scenarios x 3 runs passed.
+- TS-R0 collection: 4,973 current rows; 4,964 original rows assigned exactly
+  once; ten mandatory current-only witnesses; one superseded original row.
+- TS-R0 protected reference review: all eight oracle/SH-G-8 files retain their
+  original blob identities; 21 headed-repair files are frozen from `ca7ef88`.
 
 ## Remaining focused work
 
-- TS-0 still needs the frozen support-consumer and test-owned JavaScript
-  semantic routing review before it can close. Separate ordinary/headed green
-  runs do not claim the later integrated complete-suite closeout gate.
-- Do not begin TS-1 without explicit resumption.
-- Keep `codex/wip-20260904-2142-test-simplification` and
-  `codex/wip-20260904-2300-uia-observer` until every remaining inventory,
-  diagnostic, and documentation path is confirmed merged, superseded, or
-  deliberately discarded. Recovery commits are not merge units.
+- TS-R1 is the event-v5 pilot. Select owner and consumer detectors first,
+  preserve persisted-format enforcement, then record old/new controls and
+  bounded route/version defect witnesses before each reduction.
+- TS-R2 through TS-R9 remain pending. Separate ordinary/headed green runs do not
+  claim the later integrated complete-suite closeout gate.
 - Ignored run evidence remains under
   `build/test-simplification/536915fb28068c141f59b2243119530205538b4d/`.
