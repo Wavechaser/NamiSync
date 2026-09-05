@@ -2755,8 +2755,10 @@ class UnrenderableRecordingError(RuntimeError):
         raise ValueError("recording filename unavailable")
 
 
-@pytest.mark.parametrize("diagnostic", ["str", "logical"])
-@pytest.mark.parametrize("boundary", ["item", "prerequisite", "final-flush"])
+@pytest.mark.parametrize(
+    ("boundary", "diagnostic"),
+    [("item", "str"), ("prerequisite", "str"), ("final-flush", "str"), ("item", "logical")],
+)
 def test_recording_diagnostic_failure_preserves_executor_truth(
     tmp_path: Path, boundary: str, diagnostic: str
 ) -> None:

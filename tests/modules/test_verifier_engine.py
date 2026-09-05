@@ -2370,8 +2370,11 @@ def test_failed_reliable_outcome_emit_does_not_advance_items_done(
     assert final.current_path is None
 
 
-@pytest.mark.parametrize("post_copy", (False, True), ids=("standalone", "post-copy"))
-@pytest.mark.parametrize("secondary_failure", (False, True), ids=("progress-ok", "progress-fails"))
+@pytest.mark.parametrize(
+    ("post_copy", "secondary_failure"),
+    [(False, False), (False, True), (True, True)],
+    ids=("standalone-progress-ok", "standalone-progress-fails", "post-copy-progress-fails"),
+)
 def test_canceled_outcome_sink_failure_uses_inactive_failure_boundary(
     tmp_path: Path,
     post_copy: bool,

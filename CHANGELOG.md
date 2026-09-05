@@ -73,6 +73,10 @@ preserving public behavior, real boundary checks, and persisted contracts.
   listener mechanics, and allowed unconsumed runtime diagnostics in headed
   reports. TS-R4 retains all 28 installed headed witnesses and strict required
   evidence; independent adversarial and finite fault reviews pass.
+- Added the approved bounded-pipeline queue/poll seams and consolidated
+  verifier, recording, compound-exclusion, and forwarding test products while
+  preserving native operation families and the original settlement oracle.
+  TS-R5 closes with independent old/new failure proofs and stops before TS-R6.
 - Retired both temporary boundary corpora and their self-tests after final
   exact comparisons. Enduring boundary, owner, and import-law tests remain.
   The lifecycle work consolidated authority but did not reduce production

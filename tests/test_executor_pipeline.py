@@ -60,10 +60,12 @@ def _backend(
     factory: Callable[[], object] = xxh3_128,
     *,
     collect_metrics: bool = False,
+    **pipeline_options: int | float,
 ) -> NativeCopyBackend:
     return NativeCopyBackend(
         hasher_factory=factory,  # type: ignore[arg-type]
         collect_metrics=collect_metrics,
+        **pipeline_options,
     )
 
 
@@ -259,7 +261,7 @@ def test_pipeline_metrics_are_dormant_by_default(
     assert metrics is not None
     assert metrics.reader_blocked_seconds >= 0
     assert metrics.writer_starved_seconds > 0
-    assert 0 < metrics.payload_high_water <= executor_module._PIPELINE_BYTE_BUDGET
+    assert 0 < metrics.payload_high_water <= (32 * 1024 * 1024)
     assert metrics.reserved_bytes == 0
 
 
@@ -480,7 +482,6 @@ def test_b2_blocked_writer_caps_lookahead_at_32_mib_budget() -> None:
     assert target.written == 20 * chunk_size
     metrics = backend.last_metrics
     assert metrics is not None
-    assert metrics.payload_high_water == executor_module._PIPELINE_BYTE_BUDGET
     assert metrics.payload_high_water == 32 * 1024 * 1024
     assert metrics.reader_blocked_seconds > 0
     assert metrics.reserved_bytes == 0
@@ -639,8 +640,8 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
         assert accepted_plateau is not None
         plateau = accepted_plateau
         assert len(queues) == 2
-        assert queues[0].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
-        assert queues[1].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
+        assert queues[0].qsize() == 32
+        assert queues[1].qsize() == 32
         assert len(plateau) == 3
         assert len(set(plateau)) == 1
         assert source.reads == plateau[-1]
@@ -659,7 +660,7 @@ def test_b2_hash_fifo_independently_plateaus_at_32_items(
     assert target.written == chunk_count * chunk_size
     metrics = backend.last_metrics
     assert metrics is not None
-    assert metrics.payload_high_water < executor_module._PIPELINE_BYTE_BUDGET
+    assert metrics.payload_high_water < (32 * 1024 * 1024)
     assert metrics.reserved_bytes == 0
     _assert_workers_joined(workers)
 
@@ -696,7 +697,7 @@ def test_b3_shallow_grown_source_hits_item_cap_then_hands_off_eof(
         assert source.eof_read.wait(_WAIT_SECONDS)
         assert len(queues) == 2
         assert _wait_until(queues[1].full)
-        assert queues[1].qsize() == executor_module._PIPELINE_QUEUE_ITEMS
+        assert queues[1].qsize() == 32
         assert not call.done.is_set()
     finally:
         release_writer.set()
@@ -710,7 +711,7 @@ def test_b3_shallow_grown_source_hits_item_cap_then_hands_off_eof(
     assert progress == [chunk_size] * chunk_count
     metrics = backend.last_metrics
     assert metrics is not None
-    assert metrics.payload_high_water < executor_module._PIPELINE_BYTE_BUDGET
+    assert metrics.payload_high_water < (32 * 1024 * 1024)
     assert metrics.reserved_bytes == 0
     _assert_workers_joined(workers)
 
@@ -960,13 +961,12 @@ class _BlockedFailingTarget:
 def test_writer_failure_wakes_blocked_coordinator_and_preserves_original_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(executor_module, "_PIPELINE_QUEUE_ITEMS", 1)
     workers = _capture_worker_threads(monkeypatch)
     failure = InjectedPipelineFailure("writer failed while caller was blocked")
     fail_now = threading.Event()
     coordinator_blocked = threading.Event()
     target = _BlockedFailingTarget(failure, fail_now)
-    backend = _backend()
+    backend = _backend(queue_items=1)
 
     def checkpoint() -> None:
         frame = inspect.currentframe()
@@ -1027,13 +1027,12 @@ class _BlockedFailingHasher:
 def test_hasher_failure_wakes_blocked_coordinator_and_preserves_original_cause(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(executor_module, "_PIPELINE_QUEUE_ITEMS", 1)
     workers = _capture_worker_threads(monkeypatch)
     failure = InjectedPipelineFailure("hasher failed while caller was blocked")
     fail_now = threading.Event()
     coordinator_blocked = threading.Event()
     hasher = _BlockedFailingHasher(failure, fail_now)
-    backend = _backend(lambda: hasher)
+    backend = _backend(lambda: hasher, queue_items=1)
 
     def checkpoint() -> None:
         frame = inspect.currentframe()
@@ -1659,7 +1658,6 @@ class _ObservedGetQueue(ThreadQueue[bytes | object]):
 def test_immediate_shutdown_releases_workers_waiting_on_both_empty_handoffs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(executor_module, "_PIPELINE_POLL_SECONDS", 1.0)
     hash_waiting = threading.Event()
     write_waiting = threading.Event()
     waiting = [hash_waiting, write_waiting]
@@ -1678,7 +1676,7 @@ def test_immediate_shutdown_releases_workers_waiting_on_both_empty_handoffs(
 
     started = time.perf_counter()
     with pytest.raises(Canceled) as caught:
-        _backend().copy(
+        _backend(poll_seconds=1.0).copy(
             io.BytesIO(b"must-not-be-read"),
             io.BytesIO(),
             chunk_size=4,
@@ -1707,8 +1705,6 @@ class _ThirdUpdateSignalingHasher(_ObservedHasher):
 def test_immediate_shutdown_releases_hasher_blocked_on_full_write_handoff(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(executor_module, "_PIPELINE_QUEUE_ITEMS", 1)
-    monkeypatch.setattr(executor_module, "_PIPELINE_POLL_SECONDS", 1.0)
     queues: list[ThreadQueue[bytes | object]] = []
 
     def tracked_queue(maxsize: int = 0) -> ThreadQueue[bytes | object]:
@@ -1764,7 +1760,9 @@ def test_immediate_shutdown_releases_hasher_blocked_on_full_write_handoff(
     try:
         with pytest.raises(Canceled) as caught:
             _backend(
-                lambda: _ThirdUpdateSignalingHasher(third_update)
+                lambda: _ThirdUpdateSignalingHasher(third_update),
+                queue_items=1,
+                poll_seconds=1.0,
             ).copy(
                 _SequenceSource(
                     [bytes([index]) for index in range(1, 20)]
@@ -1992,7 +1990,7 @@ def test_b8_repeated_short_final_chunks_release_the_entire_budget(
         metrics = backend.last_metrics
         assert metrics is not None
         assert metrics.reserved_bytes == 0
-        assert metrics.payload_high_water <= executor_module._PIPELINE_BYTE_BUDGET
+        assert metrics.payload_high_water <= (32 * 1024 * 1024)
 
     _assert_workers_joined(workers, copies=5)
 
@@ -2031,3 +2029,69 @@ def test_preallocation_policy_uses_the_measured_private_crossover() -> None:
     assert _allocation_size(0) is None
     assert _allocation_size(_PREALLOCATION_THRESHOLD - 1) is None
     assert _allocation_size(_PREALLOCATION_THRESHOLD) == _PREALLOCATION_THRESHOLD
+
+
+@pytest.mark.parametrize("queue_items", [True, False, 1.0, "1", None])
+def test_pipeline_refuses_noninteger_queue_capacity(queue_items: object) -> None:
+    with pytest.raises(TypeError, match="queue_items"):
+        NativeCopyBackend(hasher_factory=xxh3_128, queue_items=queue_items)
+
+
+@pytest.mark.parametrize("queue_items", [0, -1, 33])
+def test_pipeline_refuses_out_of_range_queue_capacity(queue_items: int) -> None:
+    with pytest.raises(ValueError, match="queue_items"):
+        NativeCopyBackend(hasher_factory=xxh3_128, queue_items=queue_items)
+
+
+@pytest.mark.parametrize("poll_seconds", [True, False, None, "0.01"])
+def test_pipeline_refuses_nonnumeric_poll_interval(poll_seconds: object) -> None:
+    with pytest.raises(TypeError, match="poll_seconds"):
+        NativeCopyBackend(hasher_factory=xxh3_128, poll_seconds=poll_seconds)
+
+
+@pytest.mark.parametrize("poll_seconds", [0, -1, float("nan"), float("inf"), -float("inf")])
+def test_pipeline_refuses_nonpositive_or_nonfinite_poll_interval(poll_seconds: float) -> None:
+    with pytest.raises(ValueError, match="poll_seconds"):
+        NativeCopyBackend(hasher_factory=xxh3_128, poll_seconds=poll_seconds)
+
+
+@pytest.mark.parametrize(
+    ("options", "capacity", "timeout"),
+    [
+        ({}, 32, 0.01),
+        ({"queue_items": 1, "poll_seconds": 0.002}, 1, 0.002),
+        ({"poll_seconds": 10 ** 1000}, 32, threading.TIMEOUT_MAX),
+        ({"poll_seconds": 1e308}, 32, threading.TIMEOUT_MAX),
+    ],
+    ids=("defaults", "small-handoffs", "huge-integer", "huge-float"),
+)
+def test_pipeline_options_reach_both_handoffs_without_changing_copy(
+    monkeypatch: pytest.MonkeyPatch, options: dict[str, int | float],
+    capacity: int, timeout: float,
+) -> None:
+    queues = []
+
+    class ObservedQueue(ThreadQueue):
+        def __init__(self, maxsize=0):
+            super().__init__(maxsize=maxsize)
+            self.timeouts = []
+            queues.append(self)
+
+        def get(self, block=True, timeout=None):
+            self.timeouts.append(timeout)
+            return super().get(block=block, timeout=timeout)
+
+    monkeypatch.setattr(executor_module, "Queue", ObservedQueue)
+    target = io.BytesIO()
+    chunks = []
+    result = NativeCopyBackend(hasher_factory=xxh3_128, **options).copy(
+        io.BytesIO(b"actual copied bytes"), target, chunk_size=4,
+        checkpoint=lambda: None, on_chunk=chunks.append,
+    )
+    assert result == CopyDigest(xxh3_128(b"actual copied bytes").digest(), 19)
+    assert target.getvalue() == b"actual copied bytes"
+    assert sum(chunks) == 19
+    assert len(queues) == 2
+    for queue in queues:
+        assert queue.maxsize == capacity
+        assert queue.timeouts and all(value == timeout for value in queue.timeouts)

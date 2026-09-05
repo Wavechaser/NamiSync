@@ -164,7 +164,7 @@ mechanisms.
 | TS-R2 | Simplify review, selection, inventory, scanner, planner, and preflight tests | TS-R1 | Admission, completeness, bounds, selection, persistence | complete |
 | TS-R3 | Simplify lifecycle, custody, service, observer, and drain tests | TS-R1 | Owner, concurrency, rollback, release, delivery | complete |
 | TS-R4 | Simplify desktop, browser, native, appearance, and cosmetic tests | TS-R1, TS-R3 | Required Node and installed headed witnesses | complete |
-| TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | active |
+| TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | complete |
 | TS-R6 | Build and evaluate a smaller shadow settlement oracle | TS-R5 | Frozen trace equality and rejection corpus | pending |
 | TS-R7 | Adopt replacement or retain original with evidence | TS-R6 | Authority cutover or clean candidate removal | pending |
 | TS-R8 | Remove orphaned support and residual top-file scaffolding | TS-R2 through TS-R7 | Consumer isolation and harness faults | pending |
@@ -365,6 +365,44 @@ scaffolds within their causal owners. Run executor, verifier, workflows, core,
 recorder integrations, tools, ordinary, imports, and the original oracle. Commit
 `test: consolidate execution and integrity failure families`.
 
+TS-R5 pre-edit dispositions are fixed under `probes/TS-R5/`: four bounded
+reductions (verifier sink, executor diagnostics, compound exclusion diagnostics,
+and adaptive-size forwarding), approved queue/poll seams, and retained distinct
+builders/native operation families. All before/after-effect, recording boundary,
+identity, exclusion delivery, and verification-admission distinctions remain.
+
+TS-R5 completed from `fe88f31`. The approved queue/poll constructor seams
+replace five private constant patches in four pipeline tests, preserving literal
+32-item/32 MiB/default 0.01-second evidence. Native waits saturate safely for
+large finite intervals. Twenty-one new cases cover invalid classes and actual
+copy behavior with defaults, small handoffs, and huge integer/float intervals.
+
+Seventeen redundant rows are removed: verifier sink 4 -> 3, executor diagnostic
+6 -> 4, compound exclusion 24 -> 13, and adaptive forwarding 5 -> 2. The exact owner
+bands remain; forwarding expectations are independently stated literals. Both
+verifier routes, all three recording boundaries, all compound exit/exclusion/
+verification combinations, dispatcher exception retirement, and every material
+native operation family remain. The six surviving builders keep their distinct
+causal owners; a generic builder would add policy switches.
+
+Focused controls passed 625 before editing and 629 after correction. The first replacement run
+passed 628 and rejected one stale public-signature expectation; it was aligned
+with the explicitly approved constructor parameters. The required executor/
+verifier/workflows/core/database/tools neighborhood passed 2,827 with
+4 established capability skips. Ordinary passed 4,642 with the same
+four established skips and 28 headed deselections; collection is 4,674.
+All 12 import contracts and the original 30-scenario three-run oracle passed.
+All eight protected identities and all ten repair witnesses are preserved.
+
+Fifteen isolated old/new groups (60 runs, 30 green controls) prove retained
+secondary-error handling and both verifier routes, shared diagnostic handling,
+three recording attributions, first-error precedence, exclusion non-replay,
+verification admission, fallback-message preservation, chunk/allocation
+forwarding, and prompt shutdown. The replacement alone accepts the harmless
+private queue/poll rename. No JUnit error or skip occurs in that corpus.
+Independent adversarial review is clear; no latent product defect was found.
+TS-R6 has not started. This is the requested recap boundary.
+
 ### TS-R6 - Shadow settlement oracle
 
 Build one candidate beside the untouched original, retaining all 30 scenarios
@@ -464,9 +502,10 @@ git status --short
 
 ## Resumption
 
-- **Current:** TS-R0 through TS-R4 are complete; TS-R5 is active. TS-R6 through
-  TS-R9 remain pending. Current collection is 4,670 rows.
-- **Next:** approved pipeline queue/poll seams and bounded execution/integrity
-  reductions. Stop after TS-R5 for the requested recap, before TS-R6.
-- **Protected:** original oracle/SH-G-8 identities and all ten headed-repair
-  witnesses. TS-R4 has reconfirmed the 28/28 installed headed baseline.
+- **Current:** TS-R0 through TS-R5 are complete. TS-R6 through TS-R9 remain
+  pending. Current collection is 4,674 rows.
+- **Stopped:** requested TS-R5 recap boundary. Do not begin TS-R6 automatically.
+  A future continuation starts from the untouched original settlement oracle.
+- **Protected:** all eight oracle/SH-G-8 identities and ten repair witnesses
+  verified. TS-R4 reconfirmed all 28 installed headed cases; TS-R5 reconfirmed
+  ordinary, imports, and the original three-run oracle.

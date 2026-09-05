@@ -4358,10 +4358,15 @@ def test_noncompound_execute_exception_uses_execution_checkpoint_counters() -> N
     ]
 
 
-@pytest.mark.parametrize("hostile_sink", [False, True])
-@pytest.mark.parametrize("execution_exit", ["failed", "completed", "canceled"])
-@pytest.mark.parametrize("accepted_exclusions", [0, 1])
-@pytest.mark.parametrize("verify_after_execute", [False, True])
+@pytest.mark.parametrize(
+    ("execution_exit", "accepted_exclusions", "verify_after_execute", "hostile_sink"),
+    [
+        (execution_exit, accepted_exclusions, verify_after_execute, False)
+        for execution_exit in ("failed", "completed", "canceled")
+        for accepted_exclusions in (0, 1)
+        for verify_after_execute in (False, True)
+    ] + [("completed", 1, True, True)],
+)
 def test_compound_exclusion_close_failure_retains_terminal_truth(
     execution_exit: str, accepted_exclusions: int, verify_after_execute: bool,
     hostile_sink: bool,

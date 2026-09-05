@@ -240,6 +240,13 @@ removes exact-grammar regular files whose embedded run id differs from the
 current run; current-run temps remain under per-operation retry/cancel cleanup.
 Recovery never recurses, enters `.synctrash`, or deletes a substring lookalike.
 
+`NativeCopyBackend` accepts keyword-only `queue_items=32` and
+`poll_seconds=0.01` for focused pipeline scheduling tests. Queue capacity is a
+strict non-Boolean integer from 1 through 32. Poll intervals are non-Boolean,
+finite positive integers or floats; native waits saturate at `TIMEOUT_MAX` so
+large finite inputs remain usable. The defaults and 32 MiB byte budget remain
+unchanged. These constructor seams are not application settings.
+
 ## Update And Trash-On-Update
 
 An update completely prepares the replacement temp before backup/publication,

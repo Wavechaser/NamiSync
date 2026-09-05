@@ -60,8 +60,6 @@ from namisync.modules.executor import (
 )
 from namisync.modules.executor.pipeline import (
     _PREALLOCATION_THRESHOLD,
-    _allocation_size,
-    _copy_chunk_size,
 )
 from namisync.modules.scanner import scan
 
@@ -516,17 +514,11 @@ class AllocationRecordingFileSystem(NativeFileSystem):
 
 
 @pytest.mark.parametrize(
-    "size",
-    [
-        0,
-        8 * 1024 * 1024 - 1,
-        8 * 1024 * 1024,
-        32 * 1024 * 1024 - 1,
-        32 * 1024 * 1024,
-    ],
+    ("size", "expected_chunk", "expected_allocation"),
+    [(0, 256 * 1024, None), (32 * 1024 * 1024, 4 * 1024 * 1024, 32 * 1024 * 1024)],
 )
 def test_prepare_copy_passes_actual_adaptive_chunk_and_allocation_request(
-    tmp_path: Path, size: int
+    tmp_path: Path, size: int, expected_chunk: int, expected_allocation: int | None
 ) -> None:
     case = tmp_path / f"size-{size}"
     case.mkdir()
@@ -558,10 +550,8 @@ def test_prepare_copy_passes_actual_adaptive_chunk_and_allocation_request(
     )
 
     assert result.status is SessionState.COMPLETED
-    assert backend.chunk_sizes == [
-        _copy_chunk_size(size, 4 * 1024 * 1024)
-    ]
-    assert fs.allocation_sizes == [_allocation_size(size)]
+    assert backend.chunk_sizes == [expected_chunk]
+    assert fs.allocation_sizes == [expected_allocation]
 
 
 class ConcurrencyProbeBackend:
@@ -5014,7 +5004,7 @@ def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None
         "NativeFileSystem": "()",
         "NativeCopyBackend": (
             "(*, hasher_factory: 'HasherFactory', collect_metrics: 'bool' = "
-            "False) -> 'None'"
+            "False, queue_items: 'int' = 32, poll_seconds: 'float' = 0.01) -> 'None'"
         ),
         "CopyPipelineMetrics": (
             "(reader_blocked_seconds: 'float' = 0.0, writer_starved_seconds: "
