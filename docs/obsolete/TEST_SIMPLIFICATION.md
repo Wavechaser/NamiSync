@@ -1,5 +1,9 @@
 # M1 Test Simplification
 
+**Standing (2026-09-05): archived completed delivery record.** This register
+records the accepted denominator, conditional oracle retention, and verification.
+It is historical evidence, not authority for new implementation.
+
 Accepted subtractive delivery register, revised 2026-09-05. This is temporary
 delivery control rather than permanent test-policy authority. `AGENTS.md`,
 `DEFENSE.md`, and `TESTS.md` retain their existing authority.
@@ -168,7 +172,7 @@ mechanisms.
 | TS-R6 | Build and evaluate a smaller shadow settlement oracle | TS-R5 | Frozen trace equality and rejection corpus | rejected candidate; closed |
 | TS-R7 | Adopt replacement or retain original with evidence | TS-R6 | Authority cutover or clean candidate removal | retained original |
 | TS-R8 | Remove orphaned support and residual top-file scaffolding | TS-R2 through TS-R7 | Consumer isolation and harness faults | complete |
-| TS-R9 | Integrated verification and temporary-machinery retirement | all prior | Complete suite, headed, imports, active oracle, witnesses | pending |
+| TS-R9 | Integrated verification and temporary-machinery retirement | all prior | Complete suite, headed, imports, active oracle, witnesses | complete |
 
 Native-resource gates run serially. TS-R2, TS-R3, and TS-R5 have no dependency
 on one another beyond TS-R1.
@@ -498,7 +502,7 @@ proved exact arguments and deadlines, required failures, and preserved stdout/
 stderr. Wrong-probe and wrong-timeout mutations were rejected. Independent
 adversarial AST comparison found the two bodies exactly equivalent after fixed
 filename substitution, with every other module AST unchanged. No rows or
-support files were deleted; the shared scaffold removes 28 net test lines.
+support files were deleted; the shared scaffold removes 20 net test lines.
 All 28 baseline Python support files retain consumers (18,747 current lines);
 the 21-line service fixture makes 29/18,768, and the added JS event target has
 33 lines. The largest remaining modules retain distinct settlement, workflow,
@@ -513,6 +517,49 @@ Compare complete test/support/checker machinery including additions as a
 diagnostic. Update the M1 consolidation changelog task, replace `HANDOFF.md`,
 archive this register, and retire temporary inventory/mutation drivers. Commit
 `docs: close the test simplification delivery` only after the final sweep.
+
+
+TS-R9 is complete. Final ordinary verification passed 4,642 tests with the same
+four capability skips and 28 headed deselections. The installed interfaces
+headed run passed all 28; the complete suite passed 4,670 with the same four
+skips. All 12 import contracts and the retained original 30-scenario three-run
+oracle pass. All ten repair-era witnesses pass and all eight protected Git blob
+identities match the frozen references. The first headed attempt had five
+folder-dialog automation RuntimeErrors and 23 passes. A diagnostic-only isolated
+picker run passed without exposing the error cause; it is not acceptance
+evidence. The subsequent unmodified headed rerun and complete suite passed.
+The initial failure remains preserved and unclassified; no environment cause or
+product defect is asserted and no synchronization/acceptance rule was changed.
+
+The finite control/defect/allowed-variation corpus was replayed against the
+integrated tree, including the post-R5 service/Node corrections and R8 launches.
+Reconciliation detected saved R2/R3 drivers narrowed to calibration tails; fresh
+completion runs covered the omitted registered groups. All six R2 and six R3
+groups are included, alongside ten R1, six R4 and fifteen R5 groups, listener,
+required-capability and 108 schema observations. Expected injected failures are
+classified by their original causal checks; no fixture error or skip is credited.
+Independent fresh Codex/GPT adversarial reviews found no lost final detector,
+unapproved seam/behavior/schema change, or protected-authority drift. No Claude
+opinion was requested in this continuation.
+
+Complete tracked machinery accounting includes every `tests/` file and both
+active settlement checker/reference files, including additions, using Git blobs
+at each ref. Population baseline: 166 files / 7,702,026 bytes / 228,876 lines.
+Repaired execution baseline: 166 / 7,711,328 / 229,184. Final: 168 / 7,709,188 /
+229,113. The total is 71 lines smaller than execution but 237 lines larger than
+population; source volume is essentially unchanged. Collection falls from
+4,973 execution rows to 4,674 (299 fewer), or 290 fewer than the 4,964-row
+population; the ten repairs and one superseded historical row explain the dual
+baseline. These counts are diagnostics, not evidence of detection strength.
+
+Delivery inventory/mutation drivers are retired into a hash-verified
+source-only `retired-drivers.zip`, with exact membership/hash manifest. Loose
+active drivers and candidate-only bytecode were removed. Append-only JSON,
+JUnit, logs and isolated run fixtures remain ignored local evidence. The
+protected oracle/baseline and SH-G-8 authority are not retired. Final evidence is
+`probes/TS-R9/` under the declared root; failed earlier calibration evidence is
+preserved separately. This register is archived and the active README index and
+latest-session handoff are updated.
 
 ## Post-checkpoint Claude review
 
@@ -618,12 +665,9 @@ git diff --check
 git status --short
 ```
 
-## Resumption
+## Closed disposition
 
-- **Current:** TS-R0 through TS-R8 are closed, with conditional oracle retention.
-  TS-R9 remains pending. Current collection is 4,674 rows.
-- **Resumed:** the user authorized TS-R6 through closeout, with independent
-  Codex/GPT adversarial reviews. Consult Claude only on a new explicit request.
-- **Protected:** all eight oracle/SH-G-8 identities and ten repair witnesses
-  verified. TS-R4 reconfirmed all 28 installed headed cases; TS-R5 reconfirmed
-  ordinary, imports, and the original three-run oracle.
+TS-R0 through TS-R9 are closed, including the conditional rejection/retention
+path at R6/R7 and the bounded post-R5 correction. No checkpoint remains pending.
+The original settlement checker remains active. New work requires its own scope;
+this archived register does not authorize further implementation or Claude use.

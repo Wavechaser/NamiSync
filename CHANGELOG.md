@@ -76,11 +76,21 @@ preserving public behavior, real boundary checks, and persisted contracts.
 - Added the approved bounded-pipeline queue/poll seams and consolidated
   verifier, recording, compound-exclusion, and forwarding test products while
   preserving native operation families and the original settlement oracle.
-  TS-R5 closes with independent old/new failure proofs and stops before TS-R6.
+  TS-R5 preserves those obligations with independent old/new failure proofs.
 - Closed the TS-R2 through TS-R5 external-review gaps: migrated the final three
   normal service fixtures, aligned required Node launch diagnostics, and
   clarified support accounting and probe guidance. Independent Claude review
   reconciliation and targeted mutation checks preserve the accepted scope.
+- Closed test simplification through TS-R9. Rejected the shadow oracle at trace
+  and independent-decision prerequisites and retained its original protected
+  authority. Shared only the remaining identical required Node launch scaffold;
+  no cleanup-created support orphan was found.
+- Final ordinary/installed headed/complete verification, all import contracts,
+  original three-run oracle and the full calibrated defect/variation replay pass.
+  Collection is 4,674, down 299 from the repaired baseline, with all ten repair
+  witnesses preserved. Complete test/support/checker volume is nearly unchanged.
+  Archived the register and retired delivery drivers; independent Codex/GPT
+  adversarial reviews found no actionable issue.
 - Retired both temporary boundary corpora and their self-tests after final
   exact comparisons. Enduring boundary, owner, and import-law tests remain.
   The lifecycle work consolidated authority but did not reduce production

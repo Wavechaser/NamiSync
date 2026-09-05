@@ -1,49 +1,47 @@
 # Session Handoff
 
-Status (2026-09-05): TS-R2 through TS-R5 external review and its separate
-TS-R5-CR correction are complete. TS-R6 has not started.
+Status (2026-09-05): TS-R6 through TS-R9 are closed. No checkpoint remains pending.
 
-## Review and corrections
+## Delivered
 
-- User authorized a read-only Claude Code review and a separate correction
-  commit for valid issues. Model: `claude-opus-5`; effort: `xhigh`.
-- Two exchanges reused session `fbc3fbb8-05e9-4b92-a629-81cc88af1c17`.
-  About 26 minutes for the initial review and four for reconciliation;
-  CLI-reported list-price cost: $20.565848.
-- Claude judged the four checkpoints sound. Three remaining normal service
-  constructor bypasses now use `make_service`; both promoted Node gates have
-  explicit path/launch/timeout guidance. Required-probe and fixture documents
-  are aligned; baseline support counts remain frozen while additions are
-  explicit TS-R8/TS-R9 inputs. No production source changed.
-- The protocol-rename drift claim was withdrawn because those exact names
-  were explicitly approved. The missing-close-lock detection claim was also
-  withdrawn: the existing concurrent-close test catches that mutation.
-  The Node error/failure classification was corrected; the surviving issue was
-  diagnostic quality. No unresolved substantive review finding remains.
+- `e37b50d`: retained the original settlement oracle after rejecting a standalone
+  extraction candidate. All 30 scenarios/70 rows ran; 69 matched exactly. Resume
+  metadata normalization and independently established decision prerequisites
+  prevented qualification. No replacement or complete-size benefit is claimed.
+- `ce7b08d`: shared the identical required Node launch scaffold for two probes;
+  exact fixed probe identities and failure policies remain. All 28 original
+  support files and both additions retain consumers; no cleanup-created orphan
+  justified deletion. Three pre-existing unused helpers remain outside scope.
+- Archived delivery control in `docs/obsolete/TEST_SIMPLIFICATION.md`, updated
+  the existing changelog task and README index, and retired temporary drivers.
+- This continuation used only independent Codex/GPT adversarial reviewers.
+  Consult Claude only when the user explicitly requests it again.
 
-## Verification
+## Final verification
 
-- Focused controls: 164 before and 164 after. Transport alone: 124 passed.
-- Interfaces/dispatcher: 1,605 passed. Ordinary: 4,642 passed, four
-  established capability skips, 28 headed deselected. All 12 imports pass.
-- Isolated constructor and Node witnesses verify the intended improvements.
-  The settings closed-flag variant is irrelevant to early malformed-settings
-  refusal; a lost runtime is the settings initialization detector. Earlier
-  classifier stops are preserved, not represented as passing evidence.
-- Original oracle (30 scenarios x3) and headed (28 cases) results remain the
-  prior TS-R5/TS-R4 evidence. Production is unchanged in this correction.
+- Ordinary: 4,642 passed; four established capability skips; 28 headed deselected.
+- Installed interfaces headed: 28 passed. Complete: 4,670 passed, same four skips.
+- All 12 import contracts and original 30-scenario oracle x3 pass.
+- First headed attempt: five folder-dialog automation RuntimeErrors, 23 passes.
+  A diagnostic picker run passed without exposing the cause. The unmodified
+  headed rerun and complete run passed; initial failures remain preserved and
+  unclassified. No test rule or product behavior was changed to recover green.
+- Complete registered defect/allowed-variation replay passes, including restored
+  R2/R3 groups omitted by saved calibration tails and the post-R5 corrections.
+- All ten repair witnesses pass and all eight protected identities are unchanged.
+- Collection: 4,674 versus repaired baseline 4,973 (299 fewer). Full tracked
+  test/support/checker closure: 229,113 lines, 71 below the repaired baseline but
+  237 above the original population baseline. Counts remain diagnostics.
 
-## Review boundary and resumption
+## Evidence and next work
 
-- The first Claude session created and deleted `ns_files_tmp.txt` despite the
-  read-only request. Its separate Write attempt was blocked. Exact pre/post
-  Git status was unchanged. The follow-up removed shell/write tools and used
-  only Read/Grep/Glob; exact pre-existing status was again preserved.
-- Full review, reconciliation, metadata, mutation evidence and status snapshots
-  are under ignored `build/claude-review/ts-r2-r5-20260905-191946/`.
-- Earlier checkpoint evidence remains under
-  `build/test-simplification/536915fb28068c141f59b2243119530205538b4d/`.
-  The original delivery register is `docs/TEST_SIMPLIFICATION.md`.
-- Stop here for the user. Do not start TS-R6 automatically. Reviewed execution
-  through the working native PowerShell host remains the reliable tool path;
-  use explicit UTF-8 for all Python text I/O.
+Ignored evidence root:
+`build/test-simplification/536915fb28068c141f59b2243119530205538b4d/`.
+Final gate logs/JUnit, reconciliation, replay manifests, machinery accounting and
+hash-verified retired driver archive are in `probes/TS-R9/`. R6 failed-candidate
+observations and independent review remain in `probes/TS-R6/`. Raw failures and
+isolated run fixtures remain append-only. Original oracle/SH-G-8 source,
+baselines and authority stay active and untouched.
+
+There is no automatic next checkpoint. Further oracle redesign would need
+independent decisions and full qualification under a new bounded scope.

@@ -239,8 +239,6 @@ never hides the other result axes in rendered output.
   [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
   and diagnostic commands.
-- [Test simplification](docs/TEST_SIMPLIFICATION.md) — active bounded cleanup
-  register, failure-detection evidence, and conditional oracle replacement.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
@@ -256,7 +254,8 @@ The completed [initial simplification record](docs/SIMPLIFICATION.md) remains
 alongside active documentation for now. Historical criteria are collected in
 the [retrospective M0 plan](docs/obsolete/M0_PLAN.md) and the archived
 [task-lifecycle register](docs/obsolete/TASK_LIFECYCLE_SIMPLIFICATION.md) with
-its [test disposition ledger](docs/obsolete/TASK_LIFECYCLE_TEST_LEDGER.md).
+its [test disposition ledger](docs/obsolete/TASK_LIFECYCLE_TEST_LEDGER.md), and
+the completed [test-simplification register](docs/obsolete/TEST_SIMPLIFICATION.md).
 The [imported PoC documents](docs/obsolete/PoC_import/) are archived alongside them.
 These are historical sources, not current acceptance authority; active component
 contracts and the M1 plans govern current work.
