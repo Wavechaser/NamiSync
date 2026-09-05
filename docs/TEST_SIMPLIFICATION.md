@@ -162,8 +162,8 @@ mechanisms.
 | TS-R0 | Close corrected population and dual-baseline record | - | Inventory review, baseline artifacts, protected identities | complete |
 | TS-R1 | Prove reduction method on event-v5 contracts | TS-R0 | Owner matrix and route-bypass witnesses | complete |
 | TS-R2 | Simplify review, selection, inventory, scanner, planner, and preflight tests | TS-R1 | Admission, completeness, bounds, selection, persistence | complete |
-| TS-R3 | Simplify lifecycle, custody, service, observer, and drain tests | TS-R1 | Owner, concurrency, rollback, release, delivery | active |
-| TS-R4 | Simplify desktop, browser, native, appearance, and cosmetic tests | TS-R1, TS-R3 | Required Node and installed headed witnesses | pending |
+| TS-R3 | Simplify lifecycle, custody, service, observer, and drain tests | TS-R1 | Owner, concurrency, rollback, release, delivery | complete |
+| TS-R4 | Simplify desktop, browser, native, appearance, and cosmetic tests | TS-R1, TS-R3 | Required Node and installed headed witnesses | active |
 | TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | pending |
 | TS-R6 | Build and evaluate a smaller shadow settlement oracle | TS-R5 | Frozen trace equality and rejection corpus | pending |
 | TS-R7 | Adopt replacement or retain original with evidence | TS-R6 | Authority cutover or clean candidate removal | pending |
@@ -288,6 +288,29 @@ and necessary partial order. Use barriers/events and prove negative interception
 observability. Run dispatcher, interfaces, workflows, history consumers,
 ordinary, and imports. Commit
 `test: consolidate lifecycle and custody detection`.
+
+TS-R3 completed from `c058e88`. All 31 normal-path manual service setups in
+`test_service.py` and `test_bridge_service.py` now invoke the real constructor
+with the three existing composition points replaced by explicit collaborators.
+The shared helper restores its patches before returning. Custom lifecycle/fault
+state remains explicit; partial-runtime teardown tests remain unchanged.
+One observer timeout retry duplicate yields to the stronger ordinary/fatal
+failure-retirement matrix. Response capacity is observed through exact replay,
+retirement, replacement admission, and renewed first-excess refusal instead of
+two private map lengths. Distinct custody, rollback, generation, concurrency,
+release, and cleanup-order witnesses remain retained.
+
+Focused old/new controls passed 253/252. The dispatcher/interfaces/workflows/
+database neighborhood passed 2,696. Ordinary passed 4,624 with the four established
+capability skips and 28 headed deselections; collection is 4,656. All 12 import
+contracts pass. Six isolated witness groups cover service/response private
+renames, skipped observer initialization, lost observer retry, response excess,
+and failed retirement. The old constructor bypass misses the initialization
+fault while the replacement detects it; both detect the retry/capacity defects.
+Renames fail only the retired structural assumptions. `witness-01` contains the
+first five completed groups and `witness-02` completes retirement after the
+classifier recognized its exact expected capacity refusal. Independent review
+is clear. No product source changed or product defect was found.
 
 ### TS-R4 - Desktop, browser, native, appearance, and cosmetics
 
@@ -415,10 +438,11 @@ git status --short
 
 ## Resumption
 
-- **Current:** TS-R0 through TS-R2 are complete; TS-R3 is active. TS-R4 through
-  TS-R9 remain pending. Current collection is 4,657 rows.
-- **Next:** normal service construction and lifecycle/custody detectors under
-  TS-R3. Continue through TS-R5, then stop for the requested recap before TS-R6.
+- **Current:** TS-R0 through TS-R3 are complete; TS-R4 is active. TS-R5 through
+  TS-R9 remain pending. Current collection is 4,656 rows.
+- **Next:** approved UI delay/protocol seams, required browser probes, shared
+  listener mechanics, and bounded diagnostic-schema cleanup. Stop after TS-R5
+  for the requested recap, before TS-R6.
 - **Protected:** original oracle/SH-G-8 identities, persisted/public behavior,
-  and all ten headed-repair witnesses. TS-R2 did not change production or
-  headed behavior; the 28/28 headed run remains execution-baseline evidence.
+  and all ten headed-repair witnesses. The 28/28 headed baseline remains intact;
+  TS-R4 will run installed headed verification again.

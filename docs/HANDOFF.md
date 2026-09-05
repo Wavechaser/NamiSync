@@ -1,29 +1,30 @@
 # Session Handoff
 
-Status (2026-09-05): TS-R0 through TS-R2 are complete; TS-R3 is active.
-The user authorized continuation through TS-R5 followed by a recap before TS-R6.
+Status (2026-09-05): TS-R0 through TS-R3 complete; TS-R4 active.
+User scope is TS-R2 through TS-R5, then recap before TS-R6.
 
-## Outcome and verification
+## Delivered this session
 
-- TS-R2 reduces 18 redundant rows; no production changes. Distinct scanner,
-  planner, preflight, selection, inventory, and persistence boundaries remain.
-- Focused old/new: 417/399 passed. Neighborhood: 2,222 passed, one established
-  skip. Ordinary: 4,625 passed, four established skips, 28 headed deselected.
-- All 12 import contracts pass. Independent adversarial review is clear after
-  explicitly observing the retained history validator route.
-- Six isolated witness groups are recorded under `probes/TS-R2/`; controls and
-  allowed builder variation pass, and old/new detectors reject named defects.
-- Current collection: 4,657. Original population remains 4,964; TS-R0/R1
-  provenance, ten mandatory repair rows, oracle and SH-G-8 remain unchanged.
+- TS-R2 committed as `c058e88`: 18 rows removed; exact DB/bridge file builder
+  reused; all distinct admission/authority/selection/persistence witnesses kept.
+- TS-R3: 31 manual service constructions removed, one duplicate observer retry
+  retired, private adapter capacity counts replaced with replay/refusal behavior.
+  No production changes so far. Independent adversarial reviews are clear.
+- TS-R3 old/new focused controls: 253/252 passed. Neighborhood: 2,696 passed.
+  Ordinary: 4,624 passed, four established capability skips, 28 headed deselected.
+  All 12 import contracts pass. Current collection: 4,656.
+- TS-R2 and TS-R3 each have six isolated old/new defect/variation groups.
+  The replacement service constructor additionally catches an initialization
+  fault hidden by old bypass fixtures.
 
-## Immediate context
+## Next and operational context
 
-- Next: TS-R3 normal service construction, cleanup retry and adapter replay.
-  Independent no-history reviewers have inspected TS-R3, TS-R4, and TS-R5.
-- Ignored evidence and prepared edit tooling live under
+- Begin TS-R4 using its approved delay/protocol seams and required Node probes.
+  `scripts/r4-edit.py` is prepared but not applied. TS-R5 follows; keep the
+  original settlement oracle and do not start TS-R6 before the user's recap.
+- Evidence is under ignored
   `build/test-simplification/536915fb28068c141f59b2243119530205538b4d/`.
-  The prepared `scripts/r3-edit.py` has not yet been applied.
-- Sandboxed PowerShell and apply_patch fail before accessing files with
-  `helper_unknown_error: setup refresh had errors`. Explicit PowerShell 7,
-  login disabled and reviewed unsandboxed execution works. Do not switch shells.
-- Keep the original settlement oracle; do not start TS-R6 in this session.
+- Sandbox execution and apply_patch fail during setup. Explicit PowerShell 7
+  with login disabled and reviewed unsandboxed execution works.
+- Preserve original population identities, ten required repair rows, and
+  oracle/SH-G-8 closure. TS-R4 must rerun installed headed verification.

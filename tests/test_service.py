@@ -90,6 +90,7 @@ from namisync.workflows.views import (
     session_record_view,
 )
 
+from _service_fixtures import make_service
 from _db_fixtures import FakeClock, NOW, operation, plan
 
 
@@ -353,8 +354,9 @@ def test_history_facade_exposes_only_bounded_summary_and_page_reads() -> None:
             calls.append(("events", run_token, options))
             return event_page
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = Runtime()
+    service = make_service(
+        runtime=Runtime(),
+    )
 
     assert service.list_history(7) is summaries
     assert service.get_history_summary("run") is summary
@@ -1960,17 +1962,11 @@ def test_service_shutdown_orders_observer_dispatcher_and_runtime() -> None:
         def close(self) -> None:
             log.append("runtime")
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
-    service._lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
+    service = make_service(
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+        runtime=Runtime(),
+    )
 
     first = service.close()
     second = service.close()
@@ -2058,19 +2054,11 @@ def test_service_default_close_uses_ordered_shutdown_timeout() -> None:
         def close(self) -> None:
             pass
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
-    service._lock = Lock()
-    service._close_lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
-    service._observer_closed = False
+    service = make_service(
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+        runtime=Runtime(),
+    )
 
     assert service.close().complete
     assert observed == [service_module.SERVICE_CLOSE_TIMEOUT_SECONDS]
@@ -2108,17 +2096,11 @@ def test_incomplete_service_shutdown_keeps_runtime_open_and_can_retry() -> None:
             log.append("runtime")
             self.inventory.clear()
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
-    service._lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
+    service = make_service(
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+        runtime=Runtime(),
+    )
 
     incomplete = service.close(timeout=0)
     assert not incomplete.complete
@@ -2137,58 +2119,6 @@ def test_incomplete_service_shutdown_keeps_runtime_open_and_can_retry() -> None:
     assert cached is complete
     assert log == ["observer", "dispatcher", "dispatcher", "runtime"]
     assert service._runtime.inventory == {}
-
-
-def test_service_close_retries_an_observer_join_failure() -> None:
-    log: list[str] = []
-    observer_attempts = 0
-
-    class Observer:
-        def close(self) -> None:
-            nonlocal observer_attempts
-            observer_attempts += 1
-            log.append("observer")
-            if observer_attempts == 1:
-                raise TimeoutError("observer still running")
-
-    class Dispatcher:
-        def shutdown(self, timeout: float):
-            log.append("dispatcher")
-            return SimpleNamespace(
-                complete=True,
-                unfinished=(),
-                custody_released=True,
-            )
-
-    class Runtime:
-        def close(self) -> None:
-            log.append("runtime")
-
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
-    service._lock = Lock()
-    service._close_lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
-    service._observer_closed = False
-
-    with pytest.raises(RuntimeError) as raised:
-        service.close()
-    assert str(raised.value) == "service observer cleanup failed"
-    assert raised.value.__cause__ is None
-    assert raised.value.__context__ is None
-    completed = service.close()
-    cached = service.close()
-
-    assert completed.complete
-    assert cached is completed
-    assert log == ["observer", "dispatcher", "runtime", "observer"]
 
 
 @pytest.mark.parametrize(
@@ -2248,19 +2178,11 @@ def test_service_close_retires_private_observer_failure_before_dependency_close(
         def close(self) -> None:
             log.append("runtime")
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
-    service._lock = Lock()
-    service._close_lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
-    service._observer_closed = False
+    service = make_service(
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+        runtime=Runtime(),
+    )
 
     with pytest.raises(expected_type) as raised:
         service.close()
@@ -2304,17 +2226,11 @@ def test_runtime_close_failure_can_be_retried_without_repeating_shutdown() -> No
             if close_attempts == 1:
                 raise RuntimeError("history close failed")
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
-    service._lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
+    service = make_service(
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+        runtime=Runtime(),
+    )
 
     with pytest.raises(RuntimeError, match="history close failed"):
         service.close()
@@ -2357,18 +2273,11 @@ def test_concurrent_service_close_serializes_dependency_retry() -> None:
                 assert release_first_close.wait(2)
                 raise RuntimeError("first close failed")
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
-    service._lock = Lock()
-    service._close_lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
+    service = make_service(
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+        runtime=Runtime(),
+    )
     first_errors: list[Exception] = []
     second_results: list[object] = []
 
@@ -2659,12 +2568,11 @@ def test_lifecycle_cleanup_sequences_are_fixed_and_owner_idempotent() -> None:
                 transitions.append(("detail", request_id))
                 raise RuntimeError("detail owner interrupted after effect")
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = Runtime()
-    service._dispatcher = dispatcher
-    service._observer = Observer()
-    service._lock = Lock()
-    service._lifecycle = TaskLifecycle()
+    service = make_service(
+        runtime=Runtime(),
+        dispatcher=dispatcher,
+        observer=Observer(),
+    )
     _publish_session(
         service._lifecycle,
         owned_session,
@@ -2731,12 +2639,11 @@ def test_cleanup_retry_uses_current_owner_truth_not_application_progress() -> No
         def drop_execution_details(self, run_id: str) -> None:
             self.execution.pop(run_id, None)
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = Runtime()
-    service._dispatcher = Dispatcher()
-    service._observer = Observer()
-    service._lock = Lock()
-    service._lifecycle = TaskLifecycle()
+    service = make_service(
+        runtime=Runtime(),
+        dispatcher=Dispatcher(),
+        observer=Observer(),
+    )
     _publish_session(
         service._lifecycle,
         session_id,
@@ -2785,12 +2692,11 @@ def test_blocked_session_retirement_keeps_details_until_close_returns() -> None:
         def drop_inventory_details(self, request_id: str) -> None:
             self.inventory.pop(request_id, None)
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = Runtime()
-    service._dispatcher = Dispatcher()
-    service._observer = Observer()
-    service._lock = Lock()
-    service._lifecycle = TaskLifecycle()
+    service = make_service(
+        runtime=Runtime(),
+        dispatcher=Dispatcher(),
+        observer=Observer(),
+    )
     _publish_session(
         service._lifecycle,
         session_id,
@@ -2842,19 +2748,11 @@ def test_service_shutdown_preserves_detail_owners_until_runtime_close_succeeds()
                 raise RuntimeError("runtime detail owner still closing")
             self.inventory.clear()
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = Runtime()
-    service._dispatcher = Dispatcher()
-    service._observer = Observer()
-    service._lock = Lock()
-    service._close_lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
-    service._observer_closed = False
+    service = make_service(
+        runtime=Runtime(),
+        dispatcher=Dispatcher(),
+        observer=Observer(),
+    )
 
     with pytest.raises(RuntimeError, match="detail owner still closing"):
         service.close()
@@ -2865,22 +2763,14 @@ def test_service_shutdown_preserves_detail_owners_until_runtime_close_succeeds()
 
 
 def _detail_lifecycle_service(runtime, dispatcher) -> NamiSyncService:
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(
-        close=lambda: None,
-        release=lambda _session_id: None,
+    service = make_service(
+        runtime=runtime,
+        dispatcher=dispatcher,
+        observer=SimpleNamespace(
+            close=lambda: None,
+            release=lambda _session_id: None,
+        ),
     )
-    service._lock = Lock()
-    service._close_lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
-    service._observer_closed = False
     return service
 
 
@@ -3322,14 +3212,11 @@ def test_service_execution_opt_in_reaches_runtime_without_changing_default() -> 
             attach(session_id, _SequenceStream())
             return session_id
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = Runtime()
-    service._dispatcher = Dispatcher()
-    service._observer = SimpleNamespace(release=lambda _session_id: None)
-    service._lock = Lock()
-    service._plan_selections = {}
-    service._lifecycle = TaskLifecycle()
-    service._closed = False
+    service = make_service(
+        runtime=Runtime(),
+        dispatcher=Dispatcher(),
+        observer=SimpleNamespace(release=lambda _session_id: None),
+    )
     _publish_session(
         service._lifecycle,
         f"{10_201:032x}",
@@ -3383,12 +3270,10 @@ def test_location_commands_submit_exact_typed_workflow_requests() -> None:
             attach(session_id, _SequenceStream())
             return session_id
 
-    service = object.__new__(NamiSyncService)
-    service._dispatcher = Dispatcher()
-    service._observer = SimpleNamespace(release=lambda _session_id: None)
-    service._lifecycle = TaskLifecycle()
-    service._lock = Lock()
-    service._closed = False
+    service = make_service(
+        dispatcher=Dispatcher(),
+        observer=SimpleNamespace(release=lambda _session_id: None),
+    )
 
     inventory = service.start_inventory(
         root_path=r"F:\library",
@@ -3433,8 +3318,9 @@ def test_rebaseline_refuses_an_unselected_scope_before_submission() -> None:
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             raise AssertionError("unselected rebaseline must not be submitted")
 
-    service = object.__new__(NamiSyncService)
-    service._dispatcher = Dispatcher()
+    service = make_service(
+        dispatcher=Dispatcher(),
+    )
 
     with pytest.raises(ValueError, match="explicit selected scope"):
         service.start_rebaseline(location_id=7)
@@ -3491,15 +3377,13 @@ def test_location_resolution_is_primitive_and_precedes_admission(
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             raise VolumeResolutionRequired(resolution)
 
-    service = object.__new__(NamiSyncService)
-    service._dispatcher = Dispatcher()
-    service._runtime = SimpleNamespace(
-        drop_inventory_details=lambda _request_id: None,
+    service = make_service(
+        dispatcher=Dispatcher(),
+        runtime=SimpleNamespace(
+            drop_inventory_details=lambda _request_id: None,
+        ),
+        observer=SimpleNamespace(release=lambda _session_id: None),
     )
-    service._observer = SimpleNamespace(release=lambda _session_id: None)
-    service._lifecycle = TaskLifecycle()
-    service._lock = Lock()
-    service._closed = False
 
     with pytest.raises(LocationResolutionError) as raised:
         service.start_verify(location_id=7)
@@ -3538,15 +3422,13 @@ def test_ambiguous_resolution_preserves_only_a_real_explicit_choice() -> None:
         def submit(self, kind: str, request: object, *, attach=None) -> str:
             raise VolumeResolutionRequired(resolution)
 
-    service = object.__new__(NamiSyncService)
-    service._dispatcher = Dispatcher()
-    service._runtime = SimpleNamespace(
-        drop_inventory_details=lambda _request_id: None,
+    service = make_service(
+        dispatcher=Dispatcher(),
+        runtime=SimpleNamespace(
+            drop_inventory_details=lambda _request_id: None,
+        ),
+        observer=SimpleNamespace(release=lambda _session_id: None),
     )
-    service._observer = SimpleNamespace(release=lambda _session_id: None)
-    service._lifecycle = TaskLifecycle()
-    service._lock = Lock()
-    service._closed = False
 
     with pytest.raises(LocationResolutionError) as raised:
         service.start_verify(location_id=7)
@@ -3604,13 +3486,12 @@ def _task_capacity_service(
             assert callable(rollback)
             return session_id
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = Runtime()
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
+    service = make_service(
+        runtime=Runtime(),
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+    )
     service._lifecycle = lifecycle or TaskLifecycle()
-    service._lock = Lock()
-    service._closed = False
     return service, counts
 
 
@@ -3827,13 +3708,11 @@ def test_direct_start_replay_waits_for_close_and_admits_successor() -> None:
 
     runtime = Runtime()
     dispatcher = Dispatcher()
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(release=lambda _session_id: None)
-    service._lifecycle = TaskLifecycle()
-    service._lock = Lock()
-    service._closed = False
+    service = make_service(
+        runtime=runtime,
+        dispatcher=dispatcher,
+        observer=SimpleNamespace(release=lambda _session_id: None),
+    )
     command_id = "direct-close-replay"
     first = service.start_inventory(
         root_path=r"F:\library",
@@ -3977,14 +3856,11 @@ def test_direct_starts_associate_and_retire_exact_session_receipts(
 
     runtime = Runtime()
     dispatcher = Dispatcher()
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(release=lambda _session_id: None)
-    service._lifecycle = TaskLifecycle()
-    service._lock = Lock()
-    service._plan_selections = {}
-    service._closed = False
+    service = make_service(
+        runtime=runtime,
+        dispatcher=dispatcher,
+        observer=SimpleNamespace(release=lambda _session_id: None),
+    )
     if start_kind == "execution":
         _publish_session(
             service._lifecycle,
@@ -4110,13 +3986,12 @@ def test_ls_3_terminal_reconciliation_matches_dispatcher_truth() -> None:
 
     dispatcher = Dispatcher()
     runtime = Runtime()
-    service = object.__new__(NamiSyncService)
-    service._dispatcher = dispatcher
-    service._observer = SimpleNamespace(release=lambda _session_id: None)
-    service._runtime = runtime
+    service = make_service(
+        dispatcher=dispatcher,
+        observer=SimpleNamespace(release=lambda _session_id: None),
+        runtime=runtime,
+    )
     service._lifecycle = lifecycle
-    service._lock = Lock()
-    service._plan_selections = {}
 
     wrong_record = replace(
         delivered_record,
@@ -4248,13 +4123,12 @@ def test_task_association_gates_reobserve_release_and_close_effects() -> None:
     observer = Observer()
     dispatcher = Dispatcher()
     runtime = Runtime()
-    service = object.__new__(NamiSyncService)
-    service._observer = observer
-    service._dispatcher = dispatcher
-    service._runtime = runtime
+    service = make_service(
+        observer=observer,
+        dispatcher=dispatcher,
+        runtime=runtime,
+    )
     service._lifecycle = lifecycle
-    service._lock = Lock()
-    service._plan_selections = {}
 
     for candidate_task, candidate_session in (
         (wrong_task_id, session_id),
@@ -4395,13 +4269,12 @@ def test_ls_4b_whole_operation_cleanup_replay_converges(
             assert candidate == request_id
             effect("plan", candidate)
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
+    service = make_service(
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+        runtime=Runtime(),
+    )
     service._lifecycle = lifecycle
-    service._lock = Lock()
-    service._plan_selections = {}
 
     with pytest.raises(RuntimeError, match=f"{fault_step} fault"):
         service.close_task(task_id, session_id, delivery)
@@ -4478,13 +4351,12 @@ def test_ls_4b_whole_operation_cleanup_singleflights_concurrent_callers(
         def drop_inventory_details(self, candidate: str) -> None:
             transitions.append(("detail", candidate))
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = dispatcher
-    service._runtime = Runtime()
+    service = make_service(
+        observer=Observer(),
+        dispatcher=dispatcher,
+        runtime=Runtime(),
+    )
     service._lifecycle = lifecycle
-    service._lock = Lock()
-    service._plan_selections = {}
     condition_type = type(lifecycle._condition)
     original_wait = condition_type.wait
 
@@ -4569,13 +4441,12 @@ def test_cleanup_post_effect_interrupt_replays_calls_not_effects() -> None:
             calls.append(("detail", candidate))
             transitions.append(("detail", candidate))
 
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = Dispatcher()
-    service._runtime = Runtime()
+    service = make_service(
+        observer=Observer(),
+        dispatcher=Dispatcher(),
+        runtime=Runtime(),
+    )
     service._lifecycle = lifecycle
-    service._lock = Lock()
-    service._plan_selections = {}
 
     with pytest.raises(TimeoutError, match="before join acknowledgement"):
         service.close_session(session_id)
@@ -4690,12 +4561,12 @@ def test_s6_cleanup_replay_repeats_owner_calls_not_effects() -> None:
     unrelated_detail = runtime.details[unrelated_detail_id]
     selection = service_module._PlanSelectionState(object(), plan_token)
     unrelated_selection = object()
-    service = object.__new__(NamiSyncService)
-    service._observer = observer
-    service._dispatcher = dispatcher
-    service._runtime = runtime
+    service = make_service(
+        observer=observer,
+        dispatcher=dispatcher,
+        runtime=runtime,
+    )
     service._lifecycle = lifecycle
-    service._lock = Lock()
     service._plan_selections = {
         request_id: selection,
         unrelated_id: unrelated_selection,
@@ -4800,13 +4671,12 @@ def test_disjoint_session_settlements_overlap_at_lower_owner_barrier() -> None:
 
     dispatcher = Dispatcher()
     runtime = Runtime()
-    service = object.__new__(NamiSyncService)
-    service._observer = Observer()
-    service._dispatcher = dispatcher
-    service._runtime = runtime
+    service = make_service(
+        observer=Observer(),
+        dispatcher=dispatcher,
+        runtime=runtime,
+    )
     service._lifecycle = lifecycle
-    service._lock = Lock()
-    service._plan_selections = {}
     failures: list[BaseException] = []
 
     def close(candidate: str) -> None:
@@ -4876,12 +4746,9 @@ def test_selection_mutation_drop_race_does_not_retain_or_replay(
         "apply_selection_mutation",
         record_effect,
     )
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._lock = Lock()
-    service._plan_selections = {}
-    service._lifecycle = TaskLifecycle()
-    service._closed = False
+    service = make_service(
+        runtime=runtime,
+    )
     _publish_session(
         service._lifecycle,
         f"{31_003:032x}",
@@ -4995,12 +4862,9 @@ def test_selection_liveness_retry_preserves_concurrent_successor() -> None:
                 self.current = candidate
 
     runtime = Runtime()
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._lock = Lock()
-    service._plan_selections = {}
-    service._lifecycle = TaskLifecycle()
-    service._closed = False
+    service = make_service(
+        runtime=runtime,
+    )
     _publish_session(
         service._lifecycle,
         f"{31_102:032x}",

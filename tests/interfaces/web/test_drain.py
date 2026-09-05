@@ -3314,7 +3314,6 @@ def test_start_response_cache_is_bounded_and_reuses_retired_slot() -> None:
             )
         )
 
-    assert len(registry._start_responses) == drain_module._START_RESPONSE_CAPACITY
     assert registry.replay_start(
         f"{1:032x}", ("source-slot-0", "target-slot-0", None),
     ) == starts[0]
@@ -3333,7 +3332,17 @@ def test_start_response_cache_is_bounded_and_reuses_retired_slot() -> None:
         wire_intent=("replacement-source-slot", "replacement-target-slot", None),
     )
     assert admitted.task_id == "task-" + f"{50:032x}"
-    assert len(registry._start_responses) == drain_module._START_RESPONSE_CAPACITY
+
+    assert registry.replay_start(
+        f"{50:032x}", ("replacement-source-slot", "replacement-target-slot", None),
+    ) == admitted
+    with pytest.raises(RuntimeError, match="adapter response capacity"):
+        registry.start_plan(
+            "next-source", "next-target", deletion_policy=None,
+            command_id=f"{51:032x}",
+            wire_intent=("next-source-slot", "next-target-slot", None),
+        )
+
 
 
 def test_begin_close_during_factory_discards_provisional_before_publish() -> None:

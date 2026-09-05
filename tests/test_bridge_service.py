@@ -38,6 +38,7 @@ from namisync.workflows.node_tree import (
     build_node_tree,
 )
 
+from _service_fixtures import make_service
 from _db_fixtures import NOW, file_stat, operation, plan
 
 
@@ -128,28 +129,20 @@ def _service(runtime, dispatcher=None) -> NamiSyncService:
         runtime.drop_inventory_details = lambda _request_id: None
     if not hasattr(runtime, "close"):
         runtime.close = lambda: None
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._dispatcher = dispatcher or _Dispatcher()
-    service._observer = SimpleNamespace(
-        release=lambda _session_id: None,
-        close=lambda: None,
+    service = make_service(
+        runtime=runtime,
+        dispatcher=dispatcher or _Dispatcher(),
+        observer=SimpleNamespace(
+            release=lambda _session_id: None,
+            close=lambda: None,
+        ),
     )
-    service._lock = Lock()
-    service._close_lock = Lock()
-    service._lifecycle = TaskLifecycle()
     if isinstance(runtime, _PlanRuntime):
         _install_plan_effect(
             service._lifecycle,
             REQUEST_ID,
             PLAN_SESSION_ID,
         )
-    service._plan_selections = {}
-    service._visibility_receipts = {}
-    service._closed = False
-    service._shutdown = None
-    service._runtime_closed = False
-    service._observer_closed = False
     return service
 
 

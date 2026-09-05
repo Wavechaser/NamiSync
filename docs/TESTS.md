@@ -209,6 +209,11 @@ When adding, moving, or deleting a collected test module, update
 non-collected underscore-prefixed module rather than another collected test
 module. No Python source under `tests/` may import a collected test module.
 
+Service tests use `tests/_service_fixtures.py` to construct the real service
+around explicit runtime, dispatcher, and observer collaborators at the existing
+composition points. Constructor-owned state is not copied into test helpers;
+scenario-specific lifecycle and malformed-boundary state remains explicit.
+
 ## Markers and skips
 
 - `headed` requires the real interactive desktop host. It is excluded by the
