@@ -161,8 +161,8 @@ mechanisms.
 | --- | --- | --- | --- | --- |
 | TS-R0 | Close corrected population and dual-baseline record | - | Inventory review, baseline artifacts, protected identities | complete |
 | TS-R1 | Prove reduction method on event-v5 contracts | TS-R0 | Owner matrix and route-bypass witnesses | complete |
-| TS-R2 | Simplify review, selection, inventory, scanner, planner, and preflight tests | TS-R1 | Admission, completeness, bounds, selection, persistence | active |
-| TS-R3 | Simplify lifecycle, custody, service, observer, and drain tests | TS-R1 | Owner, concurrency, rollback, release, delivery | pending |
+| TS-R2 | Simplify review, selection, inventory, scanner, planner, and preflight tests | TS-R1 | Admission, completeness, bounds, selection, persistence | complete |
+| TS-R3 | Simplify lifecycle, custody, service, observer, and drain tests | TS-R1 | Owner, concurrency, rollback, release, delivery | active |
 | TS-R4 | Simplify desktop, browser, native, appearance, and cosmetic tests | TS-R1, TS-R3 | Required Node and installed headed witnesses | pending |
 | TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | pending |
 | TS-R6 | Build and evaluate a smaller shadow settlement oracle | TS-R5 | Frozen trace equality and rejection corpus | pending |
@@ -252,6 +252,30 @@ After dispositions, consolidate this family's `_file`, `_scan`, and `_operation`
 assembly without hiding malformed values or expected policy. Run core, scanner,
 planner, preflight, workflows, database consumers, ordinary, and imports. Commit
 `test: consolidate review and inventory failure families`.
+
+TS-R2 completed from `dec317f` with independent adversarial review. Pre-edit
+node IDs and dispositions remain under `probes/TS-R2/`. Scanner initial root
+admission retains three root categories and all scope routes (9 -> 5); plan
+signal provenance retains all ten retirement paths and foreign-run token
+rejection at the shared catch (20 -> 11); snapshot cleanup retains six owner
+precedence rows and an explicitly observed history validator route (12 -> 7).
+Bridge scan-scope tests now reuse the exactly equivalent database file builder.
+The other thirteen named builders retain their distinct defaults; all remaining
+TS-R2 populations, selection/dependency, authority, and persistence cases remain.
+
+Focused old/new controls passed 417/399 cases. The final neighborhood passed
+2,222 with one established capability skip; ordinary passed 4,625 with four
+established capability skips and 28 headed deselections. Collection is 4,657.
+All 12 import contracts and diff checks pass. No production source changed.
+Independent review identified an unobserved history-validator route; adding
+an exact invocation assertion resolved it before acceptance. Six isolated
+old/new witness groups cover root-admission bypass, foreign-token admission,
+cleanup precedence, history-validator bypass, equivalent keyword construction,
+and identity corruption. Controls and the allowed variation pass; every named
+defect is detected. `witness-02` supplies the first three groups and
+`witness-03` the remaining three. Earlier driver stops are retained: cleanup
+mutants intentionally change the raised exception class, and the classifier
+was corrected to recognize those exact outcomes. No product defect was found.
 
 ### TS-R3 - Lifecycle and custody
 
@@ -391,14 +415,10 @@ git status --short
 
 ## Resumption
 
-- **Current:** TS-R0 and TS-R1 are complete; TS-R2 is active and TS-R3 through
-  TS-R9 are pending. Current collection is 4,675 rows.
-- **Next:** group review, selection, inventory, scanner, planner, and preflight
-  cases by causal failure; select survivors before consolidating the 14 builders
-  assigned to TS-R2.
-- **Protected:** user changes, original oracle until gated disposition, SH-G-8,
-  persisted/public behavior, and all ten headed-repair verification witnesses.
-- **TS-R1 evidence:** original/replacement controls, ten finite old/new defect
-  witnesses, required Node consumers, neighborhood, ordinary, and all import
-  contracts are green. Headed behavior was unchanged and remains baseline
-  evidence rather than a TS-R1 gate.
+- **Current:** TS-R0 through TS-R2 are complete; TS-R3 is active. TS-R4 through
+  TS-R9 remain pending. Current collection is 4,657 rows.
+- **Next:** normal service construction and lifecycle/custody detectors under
+  TS-R3. Continue through TS-R5, then stop for the requested recap before TS-R6.
+- **Protected:** original oracle/SH-G-8 identities, persisted/public behavior,
+  and all ten headed-repair witnesses. TS-R2 did not change production or
+  headed behavior; the 28/28 headed run remains execution-baseline evidence.

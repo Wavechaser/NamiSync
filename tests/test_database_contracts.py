@@ -892,9 +892,15 @@ def test_snapshot_failure_closes_handles_cleans_private_files_and_preserves_caus
     assert _snapshot(candidate) == before
 
 
-@pytest.mark.parametrize("history_role", [False, True], ids=["ledger", "history"])
-@pytest.mark.parametrize("primary_kind", ["none", "ordinary", "interrupt"])
-@pytest.mark.parametrize("cleanup_kind", ["ordinary", "interrupt"])
+@pytest.mark.parametrize(
+    ("history_role", "primary_kind", "cleanup_kind"),
+    [
+        *((False, primary, cleanup)
+          for primary in ("none", "ordinary", "interrupt")
+          for cleanup in ("ordinary", "interrupt")),
+        pytest.param(True, "ordinary", "interrupt", id="history-validator-route"),
+    ],
+)
 def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, primary_kind: str, cleanup_kind: str,
     history_role: bool,
@@ -910,6 +916,7 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
     validator_name = "validate_history_reader_contract" if history_role else "validate_ledger_reader_contract"
     validate = getattr(file_contracts, validator_name)
     owned = []
+    validated_connections = []
 
     def fail_cleanup():
         raise cleanup_error
@@ -921,6 +928,7 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
         return temporary
 
     def validate_or_fail(connection):
+        validated_connections.append(connection)
         if primary is not None:
             raise primary
         validate(connection)
@@ -935,6 +943,7 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
             file_contracts.require_database_file_contract(candidate, history=history_role)
         assert (raised.value.__cause__ if isinstance(expected, Exception) else raised.value) is expected
         assert len(owned) == 1
+        assert len(validated_connections) == 1
         directory, _cleanup = owned[0]
         assert directory.is_dir()
         if primary is not None and expected is primary:

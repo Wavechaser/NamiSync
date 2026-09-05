@@ -1967,21 +1967,16 @@ def test_ordinary_review_limit_lookalike_keeps_failure_identity(
     assert saved == []
 
 
-@pytest.mark.parametrize("provenance", ("untagged", "different-run"))
 @pytest.mark.parametrize(
-    "source",
-    (
-        "phase-delivery",
-        "scanner",
-        "correspondence",
-        "planner",
-        "observer",
-        "preflight",
-        "destination-policy",
-        "nested-scanner",
-        "nested-observer-clock",
-        "nested-world-mapping",
-    ),
+    ("provenance", "source"),
+    [
+        *(("untagged", source) for source in (
+            "phase-delivery", "scanner", "correspondence", "planner",
+            "observer", "preflight", "destination-policy", "nested-scanner",
+            "nested-observer-clock", "nested-world-mapping",
+        )),
+        ("different-run", "scanner"),
+    ],
 )
 def test_unadmitted_exact_plan_signal_cannot_become_refusal(
     monkeypatch: pytest.MonkeyPatch,

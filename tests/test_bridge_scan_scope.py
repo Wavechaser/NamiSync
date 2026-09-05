@@ -54,7 +54,7 @@ from namisync.workflows.inventory import (
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
 
-from _db_fixtures import NOW, file_stat, plan, setup_recorder
+from _db_fixtures import NOW, _file, file_stat, plan, setup_recorder
 from _inventory_fixtures import (
     _Resolver as _InventoryResolver,
     _Scanner as _InventoryScanner,
@@ -141,19 +141,6 @@ class _FakeBackend:
     def scandir(self, path: str):
         self.scandir_calls.append(path)
         yield iter(self.entries.get(path, ()))
-
-
-def _file(path: str, index: int) -> FileRecord:
-    observed = file_stat(identity_index=index)
-    return FileRecord(
-        path,
-        normalize_relative_path(path),
-        observed.size,
-        observed.mtime_ns,
-        observed.file_identity,
-        observed.nlink,
-        observed.metadata,
-    )
 
 
 def _unsupported(path: str) -> UnsupportedRecord:

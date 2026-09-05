@@ -2,7 +2,7 @@
 
 This file is the detailed task history. Entries are newest-first and use three
 levels: `##` for a milestone or released version, `###` for a phase, and
-`#### task (YYYY-MM-DD)` or `#### task (YYYY-MM-DD – YYYY-MM-DD)` for a
+`#### task (YYYY-MM-DD)` or `#### task (YYYY-MM-DD â€“ YYYY-MM-DD)` for a
 task-level delivery. The date or date range covers the summarized delivery;
 related sessions and commits stay under one task. Before adding a new task,
 first decide whether the session advances an existing one; extend that entry
@@ -23,7 +23,7 @@ history, and workflow product while building its secured headed WebView2 shell.
 Redundant in-process transports and certification layers were removed while
 preserving public behavior, real boundary checks, and persisted contracts.
 
-#### Remove duplicate internal transport, certification, and lifecycle authority (2026-09-01 – 2026-09-05)
+#### Remove duplicate internal transport, certification, and lifecycle authority (2026-09-01 â€“ 2026-09-05)
 
 - Removed process-local workflow JSON codecs, payload versions, and byte
   custody. Dispatcher now retains opaque detached checkpoints, and workflows
@@ -44,7 +44,7 @@ preserving public behavior, real boundary checks, and persisted contracts.
 - Made `StoredSessionRecord` the canonical metadata/result value and composed
   live `SessionRecord` around it. Named access and persisted/public behavior
   remain stable; generic live-dataclass introspection intentionally changed.
-- Retained Dispatcher’s condition-guarded parallel session maps after a
+- Retained Dispatcherâ€™s condition-guarded parallel session maps after a
   disposable aggregate added translation machinery without proving stronger
   lock safety. A separate terminal-field probe required no lifecycle-specific
   handling, so no further result machinery was added.
@@ -61,6 +61,10 @@ preserving public behavior, real boundary checks, and persisted contracts.
   by its result token. All 28 headed cases now pass without deleting a
   behavioral scenario; the active simplification register requires causally
   identified interception hits rather than merely nonempty recorders.
+- Reduced review/inventory test duplication at shared admission and cleanup
+  owners, retaining all distinct population, selection, authority, and save
+  boundaries. TS-R2 removes 18 rows with independent adversarial review and
+  old/new defect witnesses; bridge tests reuse the equivalent DB file builder.
 - Retired both temporary boundary corpora and their self-tests after final
   exact comparisons. Enduring boundary, owner, and import-law tests remain.
   The lifecycle work consolidated authority but did not reduce production
@@ -71,7 +75,7 @@ preserving public behavior, real boundary checks, and persisted contracts.
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Bound task inputs, custody, and retained settlement (2026-08-27 – 2026-08-30)
+#### Bound task inputs, custody, and retained settlement (2026-08-27 â€“ 2026-08-30)
 
 - In scanner, planner, inventory, integrity, and repository paths, admitted raw
   populations before normalization or retention, detached collaborator results,
@@ -92,7 +96,7 @@ claims explicit, independently reviewable, and regression-backed.
   around recording finalization, and replaced repeated candidate reconciliation
   with one immutable selection-owned identity index.
 - In root resolution, verifier I/O, and runtime shutdown, detached and rechecked
-  mounted-volume facts before effects, bounded verifier chunks to 1 byte–4 MiB,
+  mounted-volume facts before effects, bounded verifier chunks to 1 byteâ€“4 MiB,
   and released or coherently retained all workflow custody maps according to
   dependency-close success.
 - In core contracts and policy docs, separated cumulative review budgets from
@@ -100,7 +104,7 @@ claims explicit, independently reviewable, and regression-backed.
   retained immutable values, removed a dormant Python patch-version gate, and
   kept Python 3.13+ without an upper-version restriction.
 
-#### Close cross-layer contract review findings (2026-08-26 – 2026-08-27)
+#### Close cross-layer contract review findings (2026-08-26 â€“ 2026-08-27)
 
 - Restored execution settlement and continuation authority, then aligned event
   v5, scalar/native identity, timestamp, reliable-byte, and browser transport
@@ -116,7 +120,7 @@ claims explicit, independently reviewable, and regression-backed.
   future server-owned sorting and null-evidence rebaseline behavior as accepted
   but unimplemented product work.
 
-#### Ratify measurement and documentation authority (2026-08-14 – 2026-08-18)
+#### Ratify measurement and documentation authority (2026-08-14 â€“ 2026-08-18)
 
 - Separated reasoned targets, live drift guards, named-reference acceptance,
   and protected release authority; moved their governing policy from universal
@@ -148,7 +152,7 @@ claims explicit, independently reviewable, and regression-backed.
   without duplicating its policy tables, and archived the stale pre-M0 design
   review under `docs/obsolete/`.
 
-#### Close the M1 safety and post-refactor audit (2026-08-08 – 2026-08-11)
+#### Close the M1 safety and post-refactor audit (2026-08-08 â€“ 2026-08-11)
 
 - Bound scanning, preflight, execution, and verification to freshly re-probed
   roots and volumes; guarded mounted roots, junction/remount redirection,
@@ -160,7 +164,7 @@ claims explicit, independently reviewable, and regression-backed.
   selection, and malformed workflow/persisted inputs, with native race,
   remount, deep-path, and substitution regressions.
 
-#### Harden integrated lifecycle and durable truth (2026-07-30 – 2026-08-05)
+#### Harden integrated lifecycle and durable truth (2026-07-30 â€“ 2026-08-05)
 
 - Shared ordered publication settlement across COPY, UPDATE, and MOVE_UPDATE;
   retries preserve owned state and disclose only validated backup, publication,
@@ -205,7 +209,7 @@ ownership explicit without changing public or persisted contracts.
 - Left protected custody and settlement evidence, the live 33k-row database
   scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
 
-#### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
+#### Complete the maintenance refactor (2026-08-10 â€“ 2026-08-11)
 
 - Centralized fresh root-authority evidence in core while preserving the
   distinct admission policies and probe timing of scanner, preflight,
@@ -245,9 +249,9 @@ later workflow surfaces and beta packaging remain future phases.
   remains an explicit live-only fallback. The now-unreachable private v3/v4
   decoder source was removed separately after the protocol cutover.
 
-#### Ratify the Stage 6 second-half reslice (2026-08-24 – 2026-08-25)
+#### Ratify the Stage 6 second-half reslice (2026-08-24 â€“ 2026-08-25)
 
-- Accepted the ordered prerequisites for Slices 5–6 and early Slice 7 while
+- Accepted the ordered prerequisites for Slices 5â€“6 and early Slice 7 while
   keeping every target contract inactive until implementation; split the
   foundation documentation into five serviceable commits.
 - Centralized exact protocol, command, result, task-authority, and retry shapes
@@ -276,7 +280,7 @@ later workflow surfaces and beta packaging remain future phases.
   order production table and JavaScript mirror, while keeping BR-G-46's
   command-map status scoped to the later task-rail and Setup revisions.
 
-#### Extract truthful per-item progress (2026-08-21 – 2026-08-23)
+#### Extract truthful per-item progress (2026-08-21 â€“ 2026-08-23)
 
 - Established core Progress v4 as the central phase/item/attempt protocol:
   selected and reliably settled item counts, monotonic attempted-byte
@@ -295,7 +299,7 @@ later workflow surfaces and beta packaging remain future phases.
   schemas unchanged; supported reliable v3 history remains readable while v3
   live Progress is refused. Strict live versus compatibility decoding remains
   tracked debt with executable separation guards. The dormant row gallery now
-  consumes only an explicitly projected 0–100 value to render 4 px Copying and
+  consumes only an explicitly projected 0â€“100 value to render 4 px Copying and
   Verifying bars inside the standard 8 px cell padding; production row matching
   and live binding remain Slice 5 work.
 - Rebaselined the protected settlement oracle only after semantics stabilized;
@@ -304,7 +308,7 @@ later workflow surfaces and beta packaging remain future phases.
   latency diagnostic and clean repeat were both retained without promoting a
   new acceptance claim. Slice 5 row projection and rendering remain open.
 
-#### Ratify desktop color semantics (2026-08-21 – 2026-08-23)
+#### Ratify desktop color semantics (2026-08-21 â€“ 2026-08-23)
 
 - Ratified one 15-token authored palette and separated operation intent,
   task-lifecycle, and integrity channels. Hue identifies class while labels,
@@ -326,7 +330,7 @@ later workflow surfaces and beta packaging remain future phases.
   light/dark, forced-color, and reduced-motion states, including projected sync
   and integrity lifecycle rows. Production file-list surfaces remain dormant.
 
-#### Establish the dormant file-list row renderer (2026-08-20 – 2026-08-21)
+#### Establish the dormant file-list row renderer (2026-08-20 â€“ 2026-08-21)
 
 - Added a shared packaged `file_row.js` skeleton with presentation-only plan
   and integrity specializations. It consumes explicit defended display values,
@@ -342,7 +346,7 @@ later workflow surfaces and beta packaging remain future phases.
   and all four appearance profiles. No provisional wire payload, workflow, or
   session contract was added.
 
-#### Tune solid desktop control states (2026-08-20 – 2026-08-21)
+#### Tune solid desktop control states (2026-08-20 â€“ 2026-08-21)
 
 - Consolidated controls around two button tiers, borderless filters/badges/
   progress, contrast-safe operation states, accent progress and selection, an
@@ -386,7 +390,7 @@ later workflow surfaces and beta packaging remain future phases.
   deliberation without weakening ids, limits, or gate criteria.
 - Kept the fixed scale and transport-custody contract with BR-G-42, retained
   current delivery ordering while compressing lane narrative, and redirected
-  shell references from the retired §9.4 location.
+  shell references from the retired Â§9.4 location.
 
 #### Add an editable GUI development launcher (2026-08-18)
 
@@ -408,7 +412,7 @@ later workflow surfaces and beta packaging remain future phases.
   lifecycle, retained-output, log-tail, and partial-cleanup receipts remain
   explicit on the normal console streams.
 
-#### Complete and harden the accessible desktop foundation (2026-08-12 – 2026-08-18)
+#### Complete and harden the accessible desktop foundation (2026-08-12 â€“ 2026-08-18)
 
 - Secured the installed-wheel host lifecycle with bounded admission, drains,
   recovery, and shutdown; pinned app/database identity, activation, native
@@ -443,7 +447,7 @@ later workflow surfaces and beta packaging remain future phases.
 - Added exact `Highlight`/`HighlightText` pairing for enabled selected/current
   cards to the native/high-contrast forced-color composition evidence while
   retaining the selected-card boundary and disabled-state distinctions.
-- Kept Slice 5–7 product surfaces, GUI Break 2, current-source BR-G-42 event
+- Kept Slice 5â€“7 product surfaces, GUI Break 2, current-source BR-G-42 event
   timing and product-view rows, BR-G-45 terminal retention, Slice 8 release
   closure, and SH-G-15 whole-runtime containment open.
 - Recorded that a green headed checkpoint is not compositor-health evidence:
@@ -451,7 +455,7 @@ later workflow surfaces and beta packaging remain future phases.
   capable of detecting it. The event correlation does not establish NamiSync
   causality; shared headed-session compositor monitoring remains open.
 
-#### Close transport custody and realign the bridge boundary (2026-08-13 – 2026-08-14)
+#### Close transport custody and realign the bridge boundary (2026-08-13 â€“ 2026-08-14)
 
 - Realigned bridge ownership around one function-only dispatch entry, the exact
   packaged origin, task/session separation, command-specific plan identity,
@@ -465,7 +469,7 @@ later workflow surfaces and beta packaging remain future phases.
   it; installed WebView2 witnesses are authoritative and Node is supplemental
   for that historical custody claim.
 
-#### Establish the secured WebView2 bridge foundation (2026-07-31 – 2026-08-03)
+#### Establish the secured WebView2 bridge foundation (2026-07-31 â€“ 2026-08-03)
 
 - Pinned and validated the Edge WebView2 host path, refusing an MSHTML fallback
   before window creation.
@@ -474,10 +478,10 @@ later workflow surfaces and beta packaging remain future phases.
 
 ### M1 Features
 
-Stages 1–5.5 delivered the headless reviewed-sync, inventory/integrity, history,
+Stages 1â€“5.5 delivered the headless reviewed-sync, inventory/integrity, history,
 CLI, and reusable workflow product plus its development measurement tooling.
 
-#### Harden development measurement tooling (2026-08-06 – 2026-08-18)
+#### Harden development measurement tooling (2026-08-06 â€“ 2026-08-18)
 
 - Added a reusable empty-target executor profile that resets the target before
   each sample, scans/plans once per batch, preflights the first fresh execution
@@ -496,7 +500,7 @@ CLI, and reusable workflow product plus its development measurement tooling.
   authority, removed implicit append/cleanup behavior, and added adversarial
   corpus, verifier, sidecar, artifact-race, cleanup, and CLI regressions.
 
-#### Add bounded durable history readback (2026-08-05 – 2026-08-06)
+#### Add bounded durable history readback (2026-08-05 â€“ 2026-08-06)
 
 - Added windowed durable reliable-event history, bounded keyset detail pages,
   and incomplete-prefix recovery.
@@ -517,7 +521,7 @@ CLI, and reusable workflow product plus its development measurement tooling.
 - Completed the reusable service facade and typed CLI commands/results for
   sync, history, and integrity work.
 
-#### Establish M1 contracts and persistence boundaries (2026-07-24 – 2026-07-27)
+#### Establish M1 contracts and persistence boundaries (2026-07-24 â€“ 2026-07-27)
 
 - Made reviewed plans immutable at execution, separated semantic settings from
   cosmetic UI state, and added the XXH3 hashing seam.
@@ -537,7 +541,7 @@ plan safety model.
 Filesystem and reporting edge cases were hardened without weakening explicit
 review or guarded execution.
 
-#### Make filename-form differences safe and reviewable (2026-07-20 – 2026-07-21)
+#### Make filename-form differences safe and reviewable (2026-07-20 â€“ 2026-07-21)
 
 - Made invalid raw names incomplete-scan evidence without aborting safe sibling
   work; case-only and unique NFC/NFD differences remain visible to reviewers.
