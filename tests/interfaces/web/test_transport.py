@@ -575,7 +575,7 @@ def test_br_g_32_surrogate_payload_keys_are_refused_before_handler(
     assert handled == []
 
 
-def test_required_node_start_plan_identity_and_timeout_contract() -> None:
+def _run_required_bridge_probe(probe_name: str) -> None:
     node = _node_executable()
     if node is None:
         pytest.fail("This bridge gate requires Node.js; install node on PATH or set NAMISYNC_TEST_NODE.")
@@ -584,7 +584,7 @@ def test_required_node_start_plan_identity_and_timeout_contract() -> None:
             "NAMISYNC_TEST_NODE or the node PATH entry does not identify a "
             f"file: {node}"
         )
-    probe = Path(__file__).parents[2] / "assets" / "bridge_timeout_probe.mjs"
+    probe = Path(__file__).parents[2] / "assets" / probe_name
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
     try:
@@ -602,6 +602,11 @@ def test_required_node_start_plan_identity_and_timeout_contract() -> None:
         )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+
+def test_required_node_start_plan_identity_and_timeout_contract() -> None:
+    _run_required_bridge_probe("bridge_timeout_probe.mjs")
 
 
 @pytest.mark.parametrize(
@@ -841,32 +846,7 @@ def test_br_g_36_node_drain_validates_transport_before_batch_delivery(
 
 
 def test_required_node_interactive_wrapper_is_bounded_single_attempt() -> None:
-    node = _node_executable()
-    if node is None:
-        pytest.fail("This bridge gate requires Node.js; install node on PATH or set NAMISYNC_TEST_NODE.")
-    if not node.is_file():
-        pytest.fail(
-            "NAMISYNC_TEST_NODE or the node PATH entry does not identify a "
-            f"file: {node}"
-        )
-    probe = Path(__file__).parents[2] / "assets" / "bridge_interactive_probe.mjs"
-    bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
-
-    try:
-        completed = subprocess.run(
-            [str(node), str(probe), str(bridge)],
-            capture_output=True,
-            check=False,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        pytest.fail(
-            f"This bridge gate could not run Node.js at {node}: {exc}. "
-            "Set NAMISYNC_TEST_NODE to a working executable."
-        )
-
-    assert completed.returncode == 0, completed.stdout + completed.stderr
+    _run_required_bridge_probe("bridge_interactive_probe.mjs")
 
 
 def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:

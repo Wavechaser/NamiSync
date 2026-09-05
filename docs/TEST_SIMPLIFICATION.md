@@ -167,7 +167,7 @@ mechanisms.
 | TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | complete |
 | TS-R6 | Build and evaluate a smaller shadow settlement oracle | TS-R5 | Frozen trace equality and rejection corpus | rejected candidate; closed |
 | TS-R7 | Adopt replacement or retain original with evidence | TS-R6 | Authority cutover or clean candidate removal | retained original |
-| TS-R8 | Remove orphaned support and residual top-file scaffolding | TS-R2 through TS-R7 | Consumer isolation and harness faults | pending |
+| TS-R8 | Remove orphaned support and residual top-file scaffolding | TS-R2 through TS-R7 | Consumer isolation and harness faults | complete |
 | TS-R9 | Integrated verification and temporary-machinery retirement | all prior | Complete suite, headed, imports, active oracle, witnesses | pending |
 
 Native-resource gates run serially. TS-R2, TS-R3, and TS-R5 have no dependency
@@ -478,6 +478,32 @@ and inert negative interception. Preserve SH-G-8 closure. Verify every consumer
 alone, under department selection, and installed where required. Commit
 `test: remove orphaned support and residual scaffold duplication`.
 
+TS-R8's census retains all 28 original support files plus the service fixture
+and event-target additions. All retain named consumers. Three unused helper
+definitions predate the population baseline and remain outside cleanup scope.
+The only remaining proven same-owner extraction is the identical required Node
+launch scaffold in the timeout and interactive probes in `test_transport.py`.
+A local helper retains their fixed probe identities, required capability policy,
+10-second deadline, subprocess cleanup, complete output and failure diagnostics.
+BR-G-36 and supplemental probes keep their distinct fixture/diagnostic policies.
+No benchmark, custody, headed-evidence or native launcher authority is merged.
+Before/after consumer controls and exact argument, absent/invalid executable,
+launch exception, timeout, nonzero return, and output-preservation witnesses
+verify this extraction; interfaces selection and the installed headed closeout
+verify its surrounding consumers. No new shared support module is introduced.
+
+TS-R8 is complete: both consumers passed independently, all 124 transport tests
+passed, and interfaces passed 1,450. Thirty-two old/new launch observations
+proved exact arguments and deadlines, required failures, and preserved stdout/
+stderr. Wrong-probe and wrong-timeout mutations were rejected. Independent
+adversarial AST comparison found the two bodies exactly equivalent after fixed
+filename substitution, with every other module AST unchanged. No rows or
+support files were deleted; the shared scaffold removes 28 net test lines.
+All 28 baseline Python support files retain consumers (18,747 current lines);
+the 21-line service fixture makes 29/18,768, and the added JS event target has
+33 lines. The largest remaining modules retain distinct settlement, workflow,
+observer, custody and concurrency obligations. No further reduction was proved.
+
 ### TS-R9 - Integrated closeout
 
 Replay the complete retained defect and allowed-variation corpora, verify no
@@ -594,8 +620,8 @@ git status --short
 
 ## Resumption
 
-- **Current:** TS-R0 through TS-R7 are closed, with conditional oracle retention.
-  TS-R8 and TS-R9 remain pending. Current collection is 4,674 rows.
+- **Current:** TS-R0 through TS-R8 are closed, with conditional oracle retention.
+  TS-R9 remains pending. Current collection is 4,674 rows.
 - **Resumed:** the user authorized TS-R6 through closeout, with independent
   Codex/GPT adversarial reviews. Consult Claude only on a new explicit request.
 - **Protected:** all eight oracle/SH-G-8 identities and ten repair witnesses
