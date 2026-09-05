@@ -95,11 +95,9 @@ def test_br_g_46_missing_ui_state_is_clean_default_and_creates_no_file(
 
 def test_br_g_46_ui_state_round_trips_the_exact_v1_typed_document(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     path = tmp_path / "ui-state.json"
-    owner = UiStateOwner(path)
+    owner = UiStateOwner(path, write_delay_seconds=0.01)
 
     try:
         result = _replace(owner, expected_revision=0, theme="light")
@@ -113,7 +111,7 @@ def test_br_g_46_ui_state_round_trips_the_exact_v1_typed_document(
     assert json.loads(path.read_text(encoding="utf-8")) == _document("light")
     assert not tuple(tmp_path.glob(".ui-state.json.*.tmp"))
 
-    reopened = UiStateOwner(path)
+    reopened = UiStateOwner(path, write_delay_seconds=0.01)
     try:
         assert _read(reopened) == CosmeticSectionSnapshot(
             section="appearance",
@@ -133,10 +131,9 @@ def test_br_g_46_canonical_write_bound_prevents_atomic_replacement(
 ) -> None:
     path = tmp_path / "ui-state.json"
     original = _write_document(path, _document())
-    owner = UiStateOwner(path)
+    owner = UiStateOwner(path, write_delay_seconds=60.0)
     atomic_writes: list[bytes] = []
     monkeypatch.setattr(ui_state_module, "UI_STATE_MAX_BYTES", 1)
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 60.0)
     monkeypatch.setattr(
         ui_state_module,
         "_atomic_write",
@@ -163,10 +160,9 @@ def test_br_g_46_failed_atomic_replace_preserves_old_file_and_cleans_temp(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     path = tmp_path / "ui-state.json"
     original = _write_document(path, _document())
-    owner = UiStateOwner(path)
+    owner = UiStateOwner(path, write_delay_seconds=0.01)
     attempted = threading.Event()
     calls = 0
     secret = str(path)
@@ -390,7 +386,6 @@ def test_br_g_46_read_oserror_preserves_artifact_and_blocks_every_write(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 60.0)
     path = tmp_path / "ui-state.json"
     original = _write_document(path, _document("dark"))
     secret = str(path)
@@ -407,7 +402,7 @@ def test_br_g_46_read_oserror_preserves_artifact_and_blocks_every_write(
     )
 
     with caplog.at_level(logging.WARNING, logger="namisync.interfaces.ui_state"):
-        owner = UiStateOwner(path)
+        owner = UiStateOwner(path, write_delay_seconds=60.0)
         snapshot = _read(owner)
         assert snapshot.dirty is True
         assert snapshot.value == AppearanceValue(ThemeMode.SYSTEM)
@@ -428,9 +423,7 @@ def test_br_g_46_read_oserror_preserves_artifact_and_blocks_every_write(
 
 def test_br_g_46_exact_legacy_prototype_is_dirty_and_repaired_only_on_schedule(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     path = tmp_path / "ui-state.json"
     legacy = {
         "recent_sources": [],
@@ -440,7 +433,7 @@ def test_br_g_46_exact_legacy_prototype_is_dirty_and_repaired_only_on_schedule(
         "sort": {},
     }
     original = _write_document(path, legacy)
-    owner = UiStateOwner(path)
+    owner = UiStateOwner(path, write_delay_seconds=0.01)
 
     try:
         snapshot = _read(owner)
@@ -486,7 +479,6 @@ def test_br_g_46_forward_state_stays_session_only_and_is_never_overwritten(
     monkeypatch: pytest.MonkeyPatch,
     forward_document: object,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     writes: list[bytes] = []
     monkeypatch.setattr(
         ui_state_module,
@@ -495,7 +487,7 @@ def test_br_g_46_forward_state_stays_session_only_and_is_never_overwritten(
     )
     path = tmp_path / "ui-state.json"
     original = _write_document(path, forward_document)
-    owner = UiStateOwner(path)
+    owner = UiStateOwner(path, write_delay_seconds=0.01)
 
     try:
         assert _read(owner).dirty is True
@@ -517,14 +509,13 @@ def test_br_g_46_replacement_revision_and_dirty_decision_table(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 60.0)
     writes: list[bytes] = []
     monkeypatch.setattr(
         ui_state_module,
         "_atomic_write",
         lambda _path, payload: writes.append(payload),
     )
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=60.0)
 
     assert _replace(
         owner, expected_revision=0, theme="system"
@@ -553,8 +544,7 @@ def test_br_g_46_replacement_revision_and_dirty_decision_table(
     owner.close()
     assert len(writes) == 1
 
-    clean = UiStateOwner(tmp_path / "clean-ui-state.json")
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
+    clean = UiStateOwner(tmp_path / "clean-ui-state.json", write_delay_seconds=0.01)
     first = _replace(clean, expected_revision=0, theme="dark")
     _wait_until(lambda: not _read(clean).dirty)
     before = len(writes)
@@ -567,10 +557,8 @@ def test_br_g_46_replacement_revision_and_dirty_decision_table(
 
 def test_br_g_46_concurrent_expected_revision_replacements_are_serialized(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 60.0)
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=60.0)
     barrier = threading.Barrier(3)
     results = []
 
@@ -633,7 +621,6 @@ def test_br_g_46_old_in_flight_generation_cannot_mark_newer_state_clean(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     first_started = threading.Event()
     release_first = threading.Event()
     second_started = threading.Event()
@@ -650,7 +637,7 @@ def test_br_g_46_old_in_flight_generation_cannot_mark_newer_state_clean(
             assert release_second.wait(2)
 
     monkeypatch.setattr(ui_state_module, "_atomic_write", controlled_write)
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=0.01)
 
     try:
         _replace(owner, expected_revision=0, theme="light")
@@ -682,7 +669,6 @@ def test_br_g_46_failed_schedule_gets_one_attempt_and_close_does_not_retry(
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     attempted = threading.Event()
     calls = 0
     secret = str(tmp_path / "do-not-log.json")
@@ -694,7 +680,7 @@ def test_br_g_46_failed_schedule_gets_one_attempt_and_close_does_not_retry(
         raise OSError(f"secret payload at {secret}")
 
     monkeypatch.setattr(ui_state_module, "_atomic_write", fail)
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=0.01)
 
     with caplog.at_level(logging.WARNING, logger="namisync.interfaces.ui_state"):
         _replace(owner, expected_revision=0, theme="light")
@@ -716,7 +702,6 @@ def test_br_g_46_current_revision_same_value_explicitly_retries_failed_save(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     first_attempted = threading.Event()
     calls = 0
 
@@ -728,7 +713,7 @@ def test_br_g_46_current_revision_same_value_explicitly_retries_failed_save(
             raise OSError("first attempt fails")
 
     monkeypatch.setattr(ui_state_module, "_atomic_write", fail_once)
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=0.01)
 
     try:
         applied = _replace(owner, expected_revision=0, theme="dark")
@@ -755,7 +740,6 @@ def test_br_g_46_stale_same_value_after_failed_save_does_not_reschedule(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     first_attempted = threading.Event()
     calls = 0
 
@@ -766,7 +750,7 @@ def test_br_g_46_stale_same_value_after_failed_save_does_not_reschedule(
         raise OSError("save fails")
 
     monkeypatch.setattr(ui_state_module, "_atomic_write", fail)
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=0.01)
 
     try:
         applied = _replace(owner, expected_revision=0, theme="light")
@@ -797,11 +781,9 @@ def test_br_g_46_stale_same_value_after_failed_save_does_not_reschedule(
 
 def test_br_g_46_subscribers_receive_snapshot_and_sequentially_isolate_failures(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 60.0)
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=60.0)
     first_seen: list[tuple[int, str]] = []
     second_seen: list[tuple[int, str]] = []
 
@@ -849,14 +831,13 @@ def test_br_g_46_close_flushes_only_current_never_attempted_generation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 60.0)
     writes: list[bytes] = []
     monkeypatch.setattr(
         ui_state_module,
         "_atomic_write",
         lambda _path, payload: writes.append(payload),
     )
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=60.0)
     _replace(owner, expected_revision=0, theme="light")
     _replace(owner, expected_revision=1, theme="dark")
 
@@ -895,7 +876,6 @@ def test_br_g_46_close_waits_for_in_flight_writer(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     write_started = threading.Event()
     release_write = threading.Event()
     close_done = threading.Event()
@@ -905,7 +885,7 @@ def test_br_g_46_close_waits_for_in_flight_writer(
         assert release_write.wait(2)
 
     monkeypatch.setattr(ui_state_module, "_atomic_write", block)
-    owner = UiStateOwner(tmp_path / "ui-state.json")
+    owner = UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=0.01)
     _replace(owner, expected_revision=0, theme="dark")
     assert write_started.wait(1)
     writer = owner._writer_thread
@@ -933,7 +913,6 @@ def test_br_g_46_close_waits_for_old_write_then_flushes_latest_generation(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 0.01)
     path = tmp_path / "ui-state.json"
     original_atomic_write = ui_state_module._atomic_write
     first_started = threading.Event()
@@ -949,7 +928,7 @@ def test_br_g_46_close_waits_for_old_write_then_flushes_latest_generation(
         original_atomic_write(target, payload)
 
     monkeypatch.setattr(ui_state_module, "_atomic_write", controlled_write)
-    owner = UiStateOwner(path)
+    owner = UiStateOwner(path, write_delay_seconds=0.01)
     _replace(owner, expected_revision=0, theme="light")
     assert first_started.wait(1)
     _replace(owner, expected_revision=1, theme="dark")
@@ -975,3 +954,64 @@ def test_br_g_46_close_waits_for_old_write_then_flushes_latest_generation(
         _document("dark"),
     ]
     assert json.loads(path.read_text(encoding="utf-8")) == _document("dark")
+
+
+@pytest.mark.parametrize("delay", [True, False, None, "0.01", object()])
+def test_write_delay_rejects_nonnumeric_values(tmp_path: Path, delay: object) -> None:
+    with pytest.raises(TypeError, match="write delay"):
+        UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=delay)
+
+
+@pytest.mark.parametrize("delay", [-1, float("nan"), float("inf"), -float("inf")])
+def test_write_delay_rejects_negative_or_nonfinite_values(tmp_path: Path, delay: float) -> None:
+    with pytest.raises(ValueError, match="write delay"):
+        UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=delay)
+
+
+@pytest.mark.parametrize("delay", [0, 1, 0.01])
+def test_write_delay_accepts_finite_nonnegative_values(tmp_path: Path, delay: float) -> None:
+    with UiStateOwner(tmp_path / "ui-state.json", write_delay_seconds=delay) as owner:
+        assert _read(owner).dirty is False
+
+
+def test_write_delay_is_owned_independently(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    writes: list[Path] = []
+    monkeypatch.setattr(ui_state_module, "_atomic_write", lambda path, _payload: writes.append(path))
+    with UiStateOwner(tmp_path / "slow.json", write_delay_seconds=60) as slow:
+        with UiStateOwner(tmp_path / "fast.json", write_delay_seconds=0) as fast:
+            _replace(slow, expected_revision=0, theme="dark")
+            _replace(fast, expected_revision=0, theme="dark")
+            _wait_until(lambda: not _read(fast).dirty)
+            assert writes == [fast.path]
+            assert _read(slow).dirty is True
+    assert writes == [fast.path, slow.path]
+
+
+@pytest.mark.parametrize(
+    "delay", [1e20, 1e308, 10**1000],
+    ids=["native-wait-overflow", "large-float", "unbounded-integer"],
+)
+def test_large_finite_write_delay_waits_safely_and_flushes_on_close(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, delay: float,
+) -> None:
+    waiting = threading.Event()
+    waits: list[float] = []
+    writes: list[bytes] = []
+    original_wait = threading.Condition.wait
+
+    def observe_wait(condition, timeout=None):
+        if threading.current_thread().name == "namisync-ui-state-writer" and timeout is not None:
+            assert 0 < timeout <= threading.TIMEOUT_MAX
+            waits.append(timeout)
+            waiting.set()
+        return original_wait(condition, timeout)
+
+    monkeypatch.setattr(threading.Condition, "wait", observe_wait)
+    monkeypatch.setattr(ui_state_module, "_atomic_write", lambda _path, payload: writes.append(payload))
+    with UiStateOwner(tmp_path / "large.json", write_delay_seconds=delay) as owner:
+        _replace(owner, expected_revision=0, theme="dark")
+        assert waiting.wait(1)
+        assert waits and writes == []
+        assert _read(owner).dirty is True
+    assert len(writes) == 1
+    assert json.loads(writes[0]) == _document("dark")

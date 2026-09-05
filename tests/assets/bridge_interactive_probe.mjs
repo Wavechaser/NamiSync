@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { TestEventTarget } from "./_event_target.mjs";
 
 
-class TestWindow {
+class TestWindow extends TestEventTarget {
   constructor() {
-    this.listeners = new Map();
+    super();
     this.requests = [];
     this.acknowledgments = [];
     this.acknowledgedTokens = new Set();
@@ -16,20 +17,6 @@ class TestWindow {
         dispatch: (requestJson) => this.dispatch(requestJson),
       },
     };
-  }
-
-  addEventListener(name, handler, options = {}) {
-    const listeners = this.listeners.get(name) ?? [];
-    listeners.push({ handler, once: options.once === true });
-    this.listeners.set(name, listeners);
-  }
-
-  removeEventListener(name, handler) {
-    const listeners = this.listeners.get(name) ?? [];
-    this.listeners.set(
-      name,
-      listeners.filter((listener) => listener.handler !== handler),
-    );
   }
 
   dispatch(requestJson) {

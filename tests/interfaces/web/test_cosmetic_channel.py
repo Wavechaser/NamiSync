@@ -9,7 +9,6 @@ from pathlib import Path
 
 import pytest
 
-import namisync.interfaces.ui_state as ui_state_module
 import namisync.interfaces.web.bridge as bridge_module
 from namisync.interfaces.ui_state import (
     AppearanceValue,
@@ -84,11 +83,9 @@ def _dispatcher(
 
 def test_br_g_46_native_bridge_round_trips_only_typed_cosmetic_state(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(ui_state_module, "_WRITE_DELAY_SECONDS", 60.0)
     path = tmp_path / "ui-state.json"
-    owner = UiStateOwner(path)
+    owner = UiStateOwner(path, write_delay_seconds=60.0)
     dispatcher = _dispatcher(owner)
     try:
         read = dispatcher.dispatch(

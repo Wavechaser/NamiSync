@@ -629,8 +629,12 @@ document or section value is additionally persistence-blocked so an older
 binary cannot destroy it. An existing artifact that cannot be read is also
 persistence-blocked so close cannot overwrite uninspected content. Explicit
 guarded replacements update memory and
-subscribers immediately, then schedule a 250 ms process-local coalescing
-writer. Each scheduled document generation gets at most one serialized atomic
+subscribers immediately, then schedule a process-local coalescing writer with
+its unchanged 250 ms default. `UiStateOwner(..., write_delay_seconds=0.250)`
+allows a finite nonnegative integer or float delay, rejects Boolean and invalid
+numeric values before loading, and keeps timing local to each owner. Integer
+nanosecond deadlines and bounded native waits preserve large finite delays;
+close still flushes the current unattempted generation. Each scheduled document generation gets at most one serialized atomic
 attempt; failures remain dirty and emit only a stable diagnostic plus exception
 type. Close waits an in-flight write and flushes only a current dirty document
 generation that has never been attempted, never a failed or unsupported one.

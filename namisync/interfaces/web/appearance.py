@@ -157,7 +157,7 @@ class _OpaqueEvidence:
         )
 
 
-class _AppearanceNative(Protocol):
+class AppearanceNative(Protocol):
     def read(self) -> SystemAppearance: ...
 
     def opaque_background(self, system: SystemAppearance) -> str: ...
@@ -523,7 +523,7 @@ class WindowAppearanceController:
     def __init__(
         self,
         window: object,
-        native: _AppearanceNative,
+        native: AppearanceNative,
         *,
         initial_cosmetic: CosmeticSectionSnapshot | None = None,
     ) -> None:
@@ -1311,7 +1311,7 @@ def _effective_system_appearance(
 
 def opaque_window_background(
     *,
-    native: _AppearanceNative | None = None,
+    native: AppearanceNative | None = None,
     theme_mode: ThemeMode = ThemeMode.SYSTEM,
 ) -> str:
     """Return the opaque public-window background used before enhancement."""
@@ -1335,7 +1335,7 @@ def opaque_window_background(
 def configure_window_appearance(
     window: object,
     *,
-    native: _AppearanceNative | None = None,
+    native: AppearanceNative | None = None,
     cosmetics: _CosmeticAuthority | None = None,
     initial_cosmetic: CosmeticSectionSnapshot | None = None,
 ) -> WindowAppearanceController:

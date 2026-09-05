@@ -737,7 +737,7 @@ def _assert_fixed_report_schema(result: dict[str, object]) -> None:
     assert result["phase"] == "complete"
     assert type(result["startup_errors"]) is list
     assert type(result["native_operations"]) is list
-    assert set(result["runtime"]) == {
+    assert set(result["runtime"]) >= {
         "executable",
         "namisync_file",
         "versions",

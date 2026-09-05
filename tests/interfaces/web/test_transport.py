@@ -575,11 +575,10 @@ def test_br_g_32_surrogate_payload_keys_are_refused_before_handler(
     assert handled == []
 
 
-@pytest.mark.supplemental_node
-def test_supplemental_node_start_plan_identity_and_timeout_contract() -> None:
+def test_required_node_start_plan_identity_and_timeout_contract() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the supplemental bridge probe")
+        pytest.fail("This bridge gate requires Node.js; install node on PATH or set NAMISYNC_TEST_NODE.")
     probe = Path(__file__).parents[2] / "assets" / "bridge_timeout_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
@@ -830,11 +829,10 @@ def test_br_g_36_node_drain_validates_transport_before_batch_delivery(
     )
 
 
-@pytest.mark.supplemental_node
-def test_supplemental_node_interactive_wrapper_is_bounded_single_attempt() -> None:
+def test_required_node_interactive_wrapper_is_bounded_single_attempt() -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the supplemental bridge probe")
+        pytest.fail("This bridge gate requires Node.js; install node on PATH or set NAMISYNC_TEST_NODE.")
     probe = Path(__file__).parents[2] / "assets" / "bridge_interactive_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 

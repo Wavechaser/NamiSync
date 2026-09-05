@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 import tempfile
 import threading
@@ -20,7 +21,6 @@ UI_STATE_MAX_BYTES: Final = 1024 * 1024
 MAX_JAVASCRIPT_SAFE_INTEGER: Final = 9_007_199_254_740_991
 
 _APPEARANCE_SECTION: Final = "appearance"
-_WRITE_DELAY_SECONDS = 0.250
 _LEGACY_KEYS: Final = frozenset(
     {"recent_sources", "recent_targets", "window", "columns", "sort"}
 )
@@ -126,13 +126,25 @@ class _LoadedState:
 class _PendingWrite:
     generation: int
     value: UiState
-    deadline: float
+    deadline_ns: int
 
 
 class UiStateOwner:
     """Process-local authority for the strict cosmetic state document."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(
+        self, path: str | Path, *, write_delay_seconds: float = 0.250,
+    ) -> None:
+        if isinstance(write_delay_seconds, bool) or not isinstance(write_delay_seconds, (int, float)):
+            raise TypeError("write delay must be a finite nonnegative number")
+        if write_delay_seconds < 0 or (
+            isinstance(write_delay_seconds, float) and not math.isfinite(write_delay_seconds)
+        ):
+            raise ValueError("write delay must be a finite nonnegative number")
+        self._write_delay_ns = (
+            int(write_delay_seconds) * 1_000_000_000
+            + int((write_delay_seconds % 1) * 1_000_000_000)
+        )
         self.path = Path(path).resolve()
         loaded = _load_state(self.path)
 
@@ -314,7 +326,7 @@ class UiStateOwner:
         self._pending_write = _PendingWrite(
             generation=generation,
             value=self._value,
-            deadline=time.monotonic() + max(0.0, _WRITE_DELAY_SECONDS),
+            deadline_ns=time.monotonic_ns() + self._write_delay_ns,
         )
         if self._writer_thread is None:
             writer = threading.Thread(
@@ -341,9 +353,12 @@ class UiStateOwner:
                     return
                 pending = self._pending_write
                 assert pending is not None
-                remaining = pending.deadline - time.monotonic()
-                if remaining > 0:
-                    self._condition.wait(remaining)
+                remaining_ns = pending.deadline_ns - time.monotonic_ns()
+                if remaining_ns > 0:
+                    self._condition.wait(
+                        min(remaining_ns, int(threading.TIMEOUT_MAX * 1_000_000_000))
+                        / 1_000_000_000
+                    )
                     continue
                 if pending is not self._pending_write:
                     continue

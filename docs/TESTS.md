@@ -65,7 +65,8 @@ department manifest, broad shared contracts, uncertain blast radius, and before
 considering a non-headed phase complete.
 
 Required ordinary JavaScript tests are unmarked and non-skippable. They execute
-the packaged public event consumers and the production drain-manager live-event
+the packaged public event consumers, start-plan deadline/replay and interactive
+bridge wrappers, and the production drain-manager live-event
 transport/replay and Progress reducer. Node.js must be available through
 `NAMISYNC_TEST_NODE` or `PATH`; the explicit environment setting takes
 precedence. A missing or unusable executable fails these gates rather than

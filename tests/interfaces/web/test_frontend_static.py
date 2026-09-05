@@ -1036,23 +1036,6 @@ def test_task_recovery_and_release_budgets_are_explicit() -> None:
     assert "beginTaskRelease(task);" in source
 
 
-def test_br_g_32_pick_folder_uses_neutral_interactive_transport() -> None:
-    source = (
-        PROJECT_ROOT
-        / "namisync"
-        / "interfaces"
-        / "web"
-        / "assets"
-        / "bridge.js"
-    ).read_text(encoding="utf-8")
-    picker = source.split("export async function pickFolder(", 1)[1].split(
-        "export function dispatchInteractive(", 1
-    )[0]
-
-    assert "return dispatchInteractive(" in picker
-    assert "dispatchAttempt(" not in picker
-
-
 def test_br_g_32_response_id_accepts_null_only_for_structured_failures() -> None:
     source = (
         PROJECT_ROOT
@@ -1073,32 +1056,6 @@ def test_br_g_32_response_id_accepts_null_only_for_structured_failures() -> None
     assert "response.request_id !== requestId" in success
     assert "response.request_id !== requestId && response.request_id !== null" in failure
     assert "response.request_id === null" not in success
-
-
-def test_br_g_32_start_plan_deadline_includes_bridge_readiness() -> None:
-    source = (
-        PROJECT_ROOT
-        / "namisync"
-        / "interfaces"
-        / "web"
-        / "assets"
-        / "bridge.js"
-    ).read_text(encoding="utf-8")
-    attempt = source.split(
-        "function createDispatchAttempt(", 1
-    )[1].split("async function dispatchReadyAttempt(", 1)[0]
-    ready_attempt = source.split(
-        "async function dispatchReadyAttempt(", 1
-    )[1].split("async function withDeadline(", 1)[0]
-
-    assert "promise: withDeadline(" in attempt
-    assert "dispatchReadyAttempt(" in attempt
-    assert "waitUntilReady," in attempt
-    assert "() => cancelAttempt(attempt)" in attempt
-    assert "await whenBridgeReady();" not in attempt
-    assert ready_attempt.index("await waitUntilReady();") < ready_attempt.index(
-        "const generation = bridgeGeneration;"
-    )
 
 
 

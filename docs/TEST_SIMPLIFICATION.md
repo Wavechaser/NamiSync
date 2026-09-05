@@ -163,8 +163,8 @@ mechanisms.
 | TS-R1 | Prove reduction method on event-v5 contracts | TS-R0 | Owner matrix and route-bypass witnesses | complete |
 | TS-R2 | Simplify review, selection, inventory, scanner, planner, and preflight tests | TS-R1 | Admission, completeness, bounds, selection, persistence | complete |
 | TS-R3 | Simplify lifecycle, custody, service, observer, and drain tests | TS-R1 | Owner, concurrency, rollback, release, delivery | complete |
-| TS-R4 | Simplify desktop, browser, native, appearance, and cosmetic tests | TS-R1, TS-R3 | Required Node and installed headed witnesses | active |
-| TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | pending |
+| TS-R4 | Simplify desktop, browser, native, appearance, and cosmetic tests | TS-R1, TS-R3 | Required Node and installed headed witnesses | complete |
+| TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | active |
 | TS-R6 | Build and evaluate a smaller shadow settlement oracle | TS-R5 | Frozen trace equality and rejection corpus | pending |
 | TS-R7 | Adopt replacement or retain original with evidence | TS-R6 | Authority cutover or clean candidate removal | pending |
 | TS-R8 | Remove orphaned support and residual top-file scaffolding | TS-R2 through TS-R7 | Consumer isolation and harness faults | pending |
@@ -326,6 +326,32 @@ while irrelevant diagnostics may grow. Remove obsolete observations end to end.
 Run interfaces, required Node probes, ordinary, and affected headed gates.
 Commit `test(web): simplify desktop and browser evidence`.
 
+TS-R4 pre-edit dispositions are fixed under `probes/TS-R4/`: approved delay
+and protocol seams, two promoted required Node probes replacing two source
+spelling guards, shared listener mechanics across the four named probes, and
+extra runtime diagnostics in two headed reports. All consumed/native/security
+fields, six material scenarios, and mandatory repair witnesses remain.
+
+TS-R4 completed from `a8290b2`. Eighteen private delay patches now use the
+approved per-owner constructor seam; all three protocols retain their original
+module boundaries. Sixteen seam cases cover invalid, independent, zero, and
+large finite delays. Integer nanosecond deadlines and bounded native waits
+preserve the complete finite domain. Two required Node probes replace two source
+spelling guards; the other static/native/security guards remain. Four probes
+share listener mechanics while retaining local policy and timers. Only extra
+runtime diagnostics are permitted in the two headed schemas.
+
+Old focused control passed 325; the corrected replacement passed 336 before
+three large-delay cases were added, and the final timing/cosmetic run passed
+68. Interfaces passed 1,450; ordinary passed 4,638 with four established skips
+and 28 headed deselections. Collection is 4,670. All 28 installed headed cases
+and all 12 import contracts passed. Six old/new witness groups, ten listener
+observations, explicit failure of both gates without Node, and 108 schema
+observations from seven real installed reports all meet their expected results.
+Independent adversarial review is clear. Initial UTF-8 edit damage was repaired
+from Git provenance, including task-owned changelog damage from earlier scripts;
+failed evidence is retained. No latent product defect was found.
+
 ### TS-R5 - Executor, verifier, and compound workflows
 
 Proceed with the existing oracle. Add approved queue/poll seams and preserve
@@ -438,11 +464,9 @@ git status --short
 
 ## Resumption
 
-- **Current:** TS-R0 through TS-R3 are complete; TS-R4 is active. TS-R5 through
-  TS-R9 remain pending. Current collection is 4,656 rows.
-- **Next:** approved UI delay/protocol seams, required browser probes, shared
-  listener mechanics, and bounded diagnostic-schema cleanup. Stop after TS-R5
-  for the requested recap, before TS-R6.
-- **Protected:** original oracle/SH-G-8 identities, persisted/public behavior,
-  and all ten headed-repair witnesses. The 28/28 headed baseline remains intact;
-  TS-R4 will run installed headed verification again.
+- **Current:** TS-R0 through TS-R4 are complete; TS-R5 is active. TS-R6 through
+  TS-R9 remain pending. Current collection is 4,670 rows.
+- **Next:** approved pipeline queue/poll seams and bounded execution/integrity
+  reductions. Stop after TS-R5 for the requested recap, before TS-R6.
+- **Protected:** original oracle/SH-G-8 identities and all ten headed-repair
+  witnesses. TS-R4 has reconfirmed the 28/28 installed headed baseline.

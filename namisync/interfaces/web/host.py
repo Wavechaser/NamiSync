@@ -91,7 +91,7 @@ def production_instance_identity() -> DesktopInstanceIdentity:
     )
 
 
-class _InstanceNative(Protocol):
+class InstanceNative(Protocol):
     def create_mutex(self, name: str) -> tuple[object, bool]: ...
 
     def close_handle(self, handle: object) -> None: ...
@@ -207,7 +207,7 @@ class WindowsInstanceNative:
 class DesktopInstanceLease:
     """The primary instance's lifetime-held native mutex handle."""
 
-    def __init__(self, handle: object, native: _InstanceNative) -> None:
+    def __init__(self, handle: object, native: InstanceNative) -> None:
         self._handle = handle
         self._native = native
         self._lock = Lock()
@@ -237,7 +237,7 @@ class DesktopInstanceAdmission:
 def acquire_desktop_instance(
     identity: DesktopInstanceIdentity,
     *,
-    native: _InstanceNative | None = None,
+    native: InstanceNative | None = None,
 ) -> DesktopInstanceAdmission:
     """Acquire the fixed mutex or activate the window with the injected title."""
 
@@ -698,7 +698,7 @@ def run_desktop(
     identity: DesktopInstanceIdentity,
     *,
     startup_error: Callable[[str], None],
-    instance_native: _InstanceNative | None = None,
+    instance_native: InstanceNative | None = None,
     index_path: str | Path | None = None,
     startup_deadline_scheduler: Callable[
         [float, Callable[[], None]], Callable[[], None]
