@@ -165,8 +165,8 @@ mechanisms.
 | TS-R3 | Simplify lifecycle, custody, service, observer, and drain tests | TS-R1 | Owner, concurrency, rollback, release, delivery | complete |
 | TS-R4 | Simplify desktop, browser, native, appearance, and cosmetic tests | TS-R1, TS-R3 | Required Node and installed headed witnesses | complete |
 | TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | complete |
-| TS-R6 | Build and evaluate a smaller shadow settlement oracle | TS-R5 | Frozen trace equality and rejection corpus | pending |
-| TS-R7 | Adopt replacement or retain original with evidence | TS-R6 | Authority cutover or clean candidate removal | pending |
+| TS-R6 | Build and evaluate a smaller shadow settlement oracle | TS-R5 | Frozen trace equality and rejection corpus | rejected candidate; closed |
+| TS-R7 | Adopt replacement or retain original with evidence | TS-R6 | Authority cutover or clean candidate removal | retained original |
 | TS-R8 | Remove orphaned support and residual top-file scaffolding | TS-R2 through TS-R7 | Consumer isolation and harness faults | pending |
 | TS-R9 | Integrated verification and temporary-machinery retirement | all prior | Complete suite, headed, imports, active oracle, witnesses | pending |
 
@@ -415,6 +415,41 @@ references, and inconsistent continuation/progress. Count all candidate code,
 data, adapters, tests, and support. Commit a shadow only if fully qualified:
 `test(executor): add an independent table-driven settlement oracle`.
 
+
+TS-R6 evaluated one standalone transitive factual-runner extraction beside the
+untouched original. It ran all 30 scenarios and 70 rows, retaining seven typed
+recording side channels. Exactly 69 rows matched the frozen normalized reports.
+The resume row lost source metadata-reference/equality values because its
+imperative binding installer reads the old expected declarations. This is a
+candidate observation defect, not a production or original-oracle regression.
+
+A fresh Codex/GPT reviewer independently read the factual injections, core
+contracts and supported executor rules without reading the baseline, old
+expected declarations/generators, or production reducer. It could not establish
+exact decisions for committed MOVE retry, the four prepublication UPDATE backup
+states on failure/cancellation, and disappeared-after-create MKDIR. In
+particular, byte-stage resume rules do not decide committed non-byte retry;
+backup diagnostics plus prepared/unpublished cancellation do not alone select
+all outcome/recording cells. Copying old decisions would fail the independent
+authoring criterion. These are candidate evidence gaps, not verified product
+defects or changes to existing authority.
+
+Reject this candidate at the trace and independent-decision prerequisites under
+the explicit conditional path. No qualified shadow is committed. Independent
+recording validation, exact fault-consumption proof, the full candidate rejection
+corpus, and complete implementation-size qualification were not completed.
+The extracted 3,887 lines versus 8,602 original lines omit unfinished decision,
+invariant, reference and test machinery; this is neither a simplicity claim nor
+a size-failure claim. The projection mismatch is repairable and a redesigned
+replacement remains possible. A second fresh adversarial reviewer verified the
+mismatch and accepted this bounded early-rejection disposition.
+
+Evidence: `probes/TS-R6/{extraction-result,row-admission,candidate-observations}.json`
+and `independent-review.txt` under the declared ignored evidence root. The
+original 95 checker tests pass; official `check --repeat 3` passes all 30
+scenarios. Retain existing normative authority rather than inventing missing
+candidate decisions.
+
 ### TS-R7 - Oracle disposition
 
 For adoption, update `AGENTS.md`, `DEFENSE.md`, and executor/tool authority before
@@ -423,6 +458,12 @@ implementation import. For retention, remove candidate-only machinery with no
 adopted detector and record the failed criterion. Adopt with
 `test(executor): replace the procedural settlement oracle`; document retention
 without claiming replacement.
+
+TS-R7 retains the original checker, all 30 scenarios/70 rows, committed baseline,
+95 checker tests, semantic pin and authority unchanged. Candidate-only source
+and extraction/execution drivers were removed after recording their hash and
+observations; no active import or detector depends on them. No oracle
+replacement or authority cutover is claimed.
 
 ### TS-R8 - Residual support and scaffold cleanup
 
@@ -553,10 +594,10 @@ git status --short
 
 ## Resumption
 
-- **Current:** TS-R0 through TS-R5 are complete. TS-R6 through TS-R9 remain
-  pending. Current collection is 4,674 rows.
-- **Stopped:** requested TS-R5 recap boundary. Do not begin TS-R6 automatically.
-  A future continuation starts from the untouched original settlement oracle.
+- **Current:** TS-R0 through TS-R7 are closed, with conditional oracle retention.
+  TS-R8 and TS-R9 remain pending. Current collection is 4,674 rows.
+- **Resumed:** the user authorized TS-R6 through closeout, with independent
+  Codex/GPT adversarial reviews. Consult Claude only on a new explicit request.
 - **Protected:** all eight oracle/SH-G-8 identities and ten repair witnesses
   verified. TS-R4 reconfirmed all 28 installed headed cases; TS-R5 reconfirmed
   ordinary, imports, and the original three-run oracle.
