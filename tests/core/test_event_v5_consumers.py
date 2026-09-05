@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 
 from _event_v5_fixtures import (
-    OPERATION_RECORDING_CASES,
     SESSION_ID,
     UTC_TIMESTAMP_CASES,
     UNICODE_TEXT_CASES,
@@ -22,7 +21,6 @@ from _event_v5_fixtures import (
     review_limit_terminal_summary,
     terminal_summary,
 )
-from namisync.core import events as events_module
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.event_v5 import (
     EVENT_V5_SCHEMA_VERSION,
@@ -42,6 +40,7 @@ from namisync.core.execution import (
     ExecutionReason,
     ItemRecordingReason,
     TaskRecordingIssueReason,
+    validate_item_recording_outcome,
 )
 from namisync.core.integrity import IntegrityReason
 from namisync.core.planning import BlockedReason
@@ -53,6 +52,7 @@ from namisync.core.session import (
     PhaseStatus,
     SessionId,
     SessionState,
+    validate_result_cancellation,
 )
 
 PROJECT_ROOT = Path(__file__).parents[2]
@@ -110,7 +110,7 @@ def test_dormant_v5_envelope_rejects_wrong_epoch_and_scalar_shapes(
         validate_event_v5_envelope(value)
 
 
-def test_dormant_v5_envelope_requires_an_exact_plain_shape() -> None:
+def test_v5_envelope_and_decoder_require_an_exact_plain_shape() -> None:
     missing = envelope()
     del missing["at"]
     extra = envelope()
@@ -119,53 +119,29 @@ def test_dormant_v5_envelope_requires_an_exact_plain_shape() -> None:
         with pytest.raises((TypeError, ValueError)):
             validate_event_v5_envelope(value)
 
-
-@pytest.mark.parametrize(
-    "invalid",
-    (
-        0,
-        True,
-        -1,
-        "-1",
-        "+1",
-        "01",
-        "1.0",
-        "1e3",
-        "9223372036854775808",
-    ),
-)
-def test_dormant_v5_progress_rejects_noncanonical_scalar64(
-    invalid: object,
-) -> None:
-    value = envelope("Progress")
-    value["body"]["bytes_done"] = invalid  # type: ignore[index]
-    with pytest.raises((TypeError, ValueError)):
-        validate_event_v5_envelope(value)
+    with pytest.raises(ValueError, match="event envelope"):
+        envelope_from_dict(extra)
 
 
-@pytest.mark.parametrize("route", ("envelope-validator", "envelope-decoder"))
 @pytest.mark.parametrize(
     ("invalid", "error_type"),
     (
         (0, TypeError),
         (True, TypeError),
         ("01", ValueError),
-        ("-1", ValueError),
         ("9223372036854775808", ScalarDomainError),
         pytest.param("9" * 5_000, ScalarDomainError, id="long-scalar64"),
     ),
 )
-def test_public_event_scalar64_boundary_preserves_exact_error_family(
-    route: str, invalid: object, error_type: type[Exception]
+def test_event_scalar64_routes_preserve_owner_error_family(
+    invalid: object, error_type: type[Exception]
 ) -> None:
     value = envelope("Progress")
     value["body"]["bytes_done"] = invalid  # type: ignore[index]
-    with pytest.raises(error_type) as raised:
-        if route == "envelope-validator":
-            validate_event_v5_envelope(value)
-        else:
-            envelope_from_dict(value)
-    assert type(raised.value) is error_type
+    for route in (validate_event_v5_envelope, envelope_from_dict):
+        with pytest.raises(error_type) as raised:
+            route(deepcopy(value))
+        assert type(raised.value) is error_type
 
 
 @pytest.mark.parametrize(
@@ -201,7 +177,11 @@ def test_dormant_v5_operation_item_accepts_every_recording_reason(
     item = operation_item_body()
     item["result"] = outcome
     item["recording_reason"] = reason.value
-    validate_event_v5_envelope(envelope("ItemOutcome", body=item))
+    decoded = envelope_from_dict(envelope("ItemOutcome", body=item))
+
+    assert isinstance(decoded.body, ItemOutcome)
+    assert decoded.body.outcome is Outcome(outcome)
+    assert decoded.body.recording_reason is reason
 
 
 @pytest.mark.parametrize(
@@ -461,14 +441,12 @@ def test_dormant_v5_review_limit_requires_exact_refused_unrun_truth(
         )
 
 
-def test_final_protocol_stop_keeps_only_exact_v5_python_routes() -> None:
+def test_python_event_protocol_uses_current_v5_contract() -> None:
     assert EVENT_V5_SCHEMA_VERSION == 5
     assert CORE_EVENT_SCHEMA_VERSION == 5
-    for name in (
-        "_LEGACY_CORE_EVENT_SCHEMA_VERSIONS", "_LegacyEnvelope",
-        "_legacy_envelope_from_dict", "_PROGRESS_BODY_FIELDS", "_require_exact_keys",
-    ):
-        assert not hasattr(events_module, name)
+    assert {outcome.value for outcome in Outcome} == {
+        "succeeded", "skipped", "failed", "canceled", "deferred", "blocked",
+    }
     expected = Envelope(
         SessionId(SESSION_ID),
         3,
@@ -480,11 +458,10 @@ def test_final_protocol_stop_keeps_only_exact_v5_python_routes() -> None:
 
 
 @pytest.mark.parametrize("version", (3, 4, 6, True))
-@pytest.mark.parametrize("body_type", tuple(bodies()))
-def test_live_python_route_refuses_every_non_v5_epoch(
-    version: object, body_type: str,
+def test_live_python_route_refuses_each_non_v5_version_class(
+    version: object,
 ) -> None:
-    value = envelope(body_type)
+    value = envelope("PhaseChanged")
     value["schema_version"] = version
     with pytest.raises((TypeError, ValueError), match="schema version|exactly 5"):
         envelope_from_dict(value)
@@ -509,91 +486,181 @@ def test_dormant_reliable_ceiling_accepts_the_exact_bound_and_refuses_one_more()
         validate_event_v5_envelope(oversized)
 
 
-def test_operation_recording_corpus_has_exact_closed_coverage() -> None:
-    assert len(OPERATION_RECORDING_CASES) == 48
-    assert sum(accepted for *_axes, accepted in OPERATION_RECORDING_CASES) == 10
-
-
-@pytest.mark.parametrize("route", ("item", "envelope", "decoder"))
-@pytest.mark.parametrize(("outcome", "recording", "reason", "accepted"), OPERATION_RECORDING_CASES)
-def test_v5_operation_recording_matrix(
-    route: str, outcome: str, recording: str, reason: str | None, accepted: bool
+@pytest.mark.parametrize(
+    ("reason", "accepted_outcomes"),
+    (
+        (ItemRecordingReason.RECORD_WRITE_FAILED,
+         frozenset({Outcome.SUCCEEDED, Outcome.SKIPPED})),
+        (ItemRecordingReason.UNRECORDED_MUTATION, frozenset({Outcome.FAILED})),
+        (ItemRecordingReason.RECORDING_PREREQUISITE_FAILED,
+         frozenset({Outcome.FAILED})),
+    ),
+    ids=("record-write-failed", "unrecorded-mutation", "prerequisite-failed"),
+)
+def test_item_recording_reason_allows_exact_outcomes(
+    reason: ItemRecordingReason,
+    accepted_outcomes: frozenset[Outcome],
 ) -> None:
-    item = operation_item_body()
-    item.update(result=outcome, recording=recording, recording_reason=reason, recording_detail=None)
+    for outcome in (*Outcome, None):
+        with (
+            nullcontext()
+            if outcome in accepted_outcomes
+            else pytest.raises(ValueError, match="contradicts")
+        ):
+            validate_item_recording_outcome(outcome, reason)
+
+
+@pytest.mark.parametrize(
+    ("recording", "reason", "detail", "accepted"),
+    (
+        (RecordingStatus.OK, None, None, True),
+        (RecordingStatus.OK, ItemRecordingReason.RECORD_WRITE_FAILED, None, False),
+        (RecordingStatus.OK, None, "detail", False),
+        (RecordingStatus.DEGRADED, None, None, False),
+        (RecordingStatus.DEGRADED,
+         ItemRecordingReason.RECORD_WRITE_FAILED, None, True),
+        (RecordingStatus.DEGRADED,
+         ItemRecordingReason.RECORD_WRITE_FAILED, "detail", True),
+        (RecordingStatus.DEGRADED,
+         ItemRecordingReason.UNRECORDED_MUTATION, None, False),
+    ),
+    ids=(
+        "ok", "ok-with-reason", "ok-with-detail", "degraded-without-reason",
+        "degraded", "degraded-with-detail", "degraded-outcome-mismatch",
+    ),
+)
+def test_item_outcome_enforces_recording_shape_and_policy(
+    recording: RecordingStatus,
+    reason: ItemRecordingReason | None,
+    detail: str | None,
+    accepted: bool,
+) -> None:
     with nullcontext() if accepted else pytest.raises(ValueError):
-        if route == "item":
-            ItemOutcome(
-                item_id=item["item_id"],
-                kind="copy",
-                path=item["path"],
-                outcome=Outcome(outcome),
-                recording=RecordingStatus(recording),
-                recording_reason=None if reason is None else ItemRecordingReason(reason),
-            )
-        elif route == "envelope":
-            validate_event_v5_envelope(envelope("ItemOutcome", body=item))
-        else:
-            envelope_from_dict(envelope("ItemOutcome", body=item))
+        ItemOutcome(
+            item_id="1" * 32,
+            kind="copy",
+            path="file.bin",
+            outcome=Outcome.SUCCEEDED,
+            recording=recording,
+            recording_reason=reason,
+            recording_detail=detail,
+        )
 
 
-@pytest.mark.parametrize("route", ("result", "summary", "envelope", "decoder"))
+def test_event_item_applies_recording_outcome_policy() -> None:
+    item = operation_item_body()
+    item["recording_reason"] = ItemRecordingReason.UNRECORDED_MUTATION.value
+
+    with pytest.raises(ValueError, match="contradicts"):
+        validate_event_v5_envelope(envelope("ItemOutcome", body=item))
+
+
+def _cancellation_phases(summary: dict[str, object]) -> tuple[PhaseResult, ...]:
+    return tuple(
+        PhaseResult(phase["phase"], PhaseStatus(phase["status"]), 0, 0, 0, 0)
+        for phase in summary["phases"]
+    )
+
+
 @pytest.mark.parametrize(
     ("name", "accepted", "summary"),
     cancellation_terminal_cases(),
     ids=[case[0] for case in cancellation_terminal_cases()],
 )
-def test_v5_terminal_cancellation_truth(
-    route: str, name: str, accepted: bool, summary: dict[str, object]
+def test_result_cancellation_policy_owns_every_declared_case(
+    name: str,
+    accepted: bool,
+    summary: dict[str, object],
 ) -> None:
-    phases = tuple(
-        PhaseResult(phase["phase"], PhaseStatus(phase["status"]), 0, 0, 0, 0)
-        for phase in summary["phases"]
-    )
+    phases = _cancellation_phases(summary)
     with nullcontext() if accepted else pytest.raises(ValueError):
-        if route in {"result", "summary"}:
-            fields = {
-                "status": SessionState(summary["status"]),
-                "recording": RecordingStatus.OK,
-                "audit": RecordingStatus.OK,
-                "disposition": Disposition(summary["disposition"]),
-                "canceled": summary["canceled"],
-                "phases": phases,
-                "bytes_done": 0,
-                "bytes_total": 0,
-                "error": None,
-                "recording_issues": (),
-                "omitted_detail_count": 0,
-                "review_fact_limit": None,
-            }
+        validate_result_cancellation(
+            SessionState(summary["status"]),
+            Disposition(summary["disposition"]),
+            summary["canceled"],
+            next((p.status for p in phases if p.phase == "execute"), None),
+            next((p.status for p in phases if p.phase == "verify"), None),
+        )
+
+
+_CANCELLATION_CONSUMER_CASES = (
+    "plain-completed", "plain-refused", "unrun-cancel", "compound-failed",
+    "compound-reversed", "compound-third-phase", "canceled-without-flag",
+    "refused-canceled", "refused-ran", "canceled-completed-execute",
+    "unrun-completed-cancel", "compound-wrong-execute",
+    "failed-wrong-execute", "compound-missing-verify",
+)
+
+
+@pytest.mark.parametrize("route", ("result", "summary", "envelope", "decoder"))
+def test_cancellation_consumers_preserve_policy_axes(route: str) -> None:
+    cases = {
+        name: (accepted, summary)
+        for name, accepted, summary in cancellation_terminal_cases()
+    }
+    for name in _CANCELLATION_CONSUMER_CASES:
+        accepted, summary = cases[name]
+        phases = _cancellation_phases(summary)
+        fields = {
+            "status": SessionState(summary["status"]),
+            "recording": RecordingStatus.OK,
+            "audit": RecordingStatus.OK,
+            "disposition": Disposition(summary["disposition"]),
+            "canceled": summary["canceled"],
+            "phases": phases,
+            "bytes_done": 0,
+            "bytes_total": 0,
+            "error": None,
+            "recording_issues": (),
+            "omitted_detail_count": 0,
+            "review_fact_limit": None,
+        }
+        serialized = envelope("Terminal", body={"result": summary})
+        with nullcontext() if accepted else pytest.raises(ValueError):
             if route == "result":
                 OperationResult(**fields)
-            else:
+            elif route == "summary":
                 TerminalSummary(recording_degraded_items=0, **fields)
-        elif route == "envelope":
-            validate_event_v5_envelope(envelope("Terminal", body={"result": summary}))
-        else:
-            envelope_from_dict(envelope("Terminal", body={"result": summary}))
+            elif route == "envelope":
+                validate_event_v5_envelope(serialized)
+            else:
+                decoded = envelope_from_dict(serialized)
+                expected = json.dumps(
+                    serialized,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                assert canonical_event_bytes(decoded) == expected, name
 
-@pytest.mark.parametrize("route", ("envelope", "decoder"))
+
 @pytest.mark.parametrize(
     ("name", "timestamp", "accepted"),
     UTC_TIMESTAMP_CASES,
     ids=[case[0] for case in UTC_TIMESTAMP_CASES],
 )
 def test_v5_timestamp_grammar_and_calendar_are_exact(
-    route: str, name: str, timestamp: object, accepted: bool
+    name: str, timestamp: object, accepted: bool
 ) -> None:
     value = envelope("PhaseChanged")
     value["at"] = timestamp
     with nullcontext() if accepted else pytest.raises((TypeError, ValueError)):
-        if route == "envelope":
-            validate_event_v5_envelope(value)
-        else:
-            envelope_from_dict(value)
+        validate_event_v5_envelope(value)
 
 
-@pytest.mark.parametrize("field", ("path", "detail-message", "recording_detail"))
+def test_v5_decoder_translates_every_accepted_timestamp() -> None:
+    for name, timestamp, accepted in UTC_TIMESTAMP_CASES:
+        if not accepted:
+            continue
+        value = envelope("PhaseChanged")
+        value["at"] = timestamp
+
+        decoded = envelope_from_dict(value)
+
+        assert decoded.at == datetime.fromisoformat(timestamp), name
+
+
+@pytest.mark.parametrize("field", ("path", "detail-message"))
 @pytest.mark.parametrize(
     ("name", "value", "accepted"),
     UNICODE_TEXT_CASES,
@@ -609,3 +676,26 @@ def test_reliable_v5_canonical_bytes_require_real_unicode(
         event["body"][field] = value
     with nullcontext() if accepted else pytest.raises(ValueError, match="valid Unicode"):
         validate_event_v5_envelope(event)
+
+
+@pytest.mark.parametrize(
+    ("name", "value", "accepted"),
+    tuple(
+        case
+        for case in UNICODE_TEXT_CASES
+        if case[0] in {"non-bmp", "lone-high"}
+    ),
+    ids=("non-bmp", "lone-high"),
+)
+def test_recording_detail_consumer_invokes_unicode_policy(
+    name: str,
+    value: str,
+    accepted: bool,
+) -> None:
+    item = operation_item_body()
+    item["recording_detail"] = value
+    serialized = envelope("ItemOutcome", body=item)
+    with nullcontext() if accepted else pytest.raises(ValueError, match="valid Unicode"):
+        decoded = envelope_from_dict(serialized)
+        assert isinstance(decoded.body, ItemOutcome)
+        assert decoded.body.recording_detail == value, name

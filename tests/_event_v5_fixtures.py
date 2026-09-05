@@ -202,33 +202,6 @@ def maximum_reliable_envelope() -> dict[str, object]:
         raise AssertionError("maximum reliable fixture is not exact")
     return value
 
-# Literal contract authority, independent of production enum iteration.
-_VALID_OPERATION_RECORDING = frozenset(
-    {
-        ("succeeded", "ok", None),
-        ("skipped", "ok", None),
-        ("failed", "ok", None),
-        ("canceled", "ok", None),
-        ("deferred", "ok", None),
-        ("blocked", "ok", None),
-        ("succeeded", "degraded", "record-write-failed"),
-        ("skipped", "degraded", "record-write-failed"),
-        ("failed", "degraded", "unrecorded-mutation"),
-        ("failed", "degraded", "recording-prerequisite-failed"),
-    }
-)
-OPERATION_RECORDING_CASES = tuple(
-    (outcome, recording, reason, (outcome, recording, reason) in _VALID_OPERATION_RECORDING)
-    for outcome in ("succeeded", "skipped", "failed", "canceled", "deferred", "blocked")
-    for recording in ("ok", "degraded")
-    for reason in (
-        None,
-        "record-write-failed",
-        "unrecorded-mutation",
-        "recording-prerequisite-failed",
-    )
-)
-
 
 def cancellation_terminal_cases() -> tuple[tuple[str, bool, dict[str, object]], ...]:
     rows = (

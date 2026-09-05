@@ -177,11 +177,12 @@ respectively.
 population-retention, and product-surface shapes in this register remain
 accepted targets until their named checkpoints.
 
-Production core events use exact v5 with no legacy constant, private decoder,
-or positive v3/v4 compatibility fixture. The bridge envelope remains v1 and every live `SessionEventView`
-requires nested `schema_version=5`. Process-local workflow custody uses detached
-typed checkpoints with no wire version or JSON representation. Dispatcher and
-session storage treat those checkpoints as opaque and never persist them.
+Production core events use exact v5 and expose no legacy version or positive
+v3/v4 compatibility route. The bridge envelope remains v1 and every live
+`SessionEventView` requires nested `schema_version=5`. Process-local workflow
+custody uses detached typed checkpoints with no wire version or JSON
+representation. Dispatcher and session storage treat those checkpoints as
+opaque and never persist them.
 Transient copy
 attestations may exist only while the same live/paused compound session needs
 linked verification or resume. They never enter either database, retained

@@ -2558,9 +2558,9 @@ def test_v5_terminal_codec_preserves_signed_64_values_above_safe_int() -> None:
     assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
 
 
-@pytest.mark.parametrize("version", (3, 4, 6))
-def test_non_v5_epoch_is_explicitly_refused_by_envelope_and_decoder(
-    version: int,
+@pytest.mark.parametrize("version", (4, 6, True))
+def test_envelope_constructor_requires_current_event_epoch(
+    version: object,
 ) -> None:
     with pytest.raises(ValueError, match="exactly 5"):
         Envelope(
@@ -2570,11 +2570,6 @@ def test_non_v5_epoch_is_explicitly_refused_by_envelope_and_decoder(
             schema_version=version,
             body=_progress(),
         )
-
-    serialized = envelope_to_dict(_progress_envelope())
-    serialized["schema_version"] = version
-    with pytest.raises(ValueError, match="exactly 5"):
-        envelope_from_dict(serialized)
 
 
 @pytest.mark.parametrize(
@@ -2794,20 +2789,6 @@ def test_integrity_event_codec_preserves_absent_post_copy_ledger_identity() -> N
     assert isinstance(decoded.body, IntegrityOutcome)
     assert decoded.body.row_id is None
     assert decoded.body.location_id is None
-
-
-def test_event_deserialization_rejects_unknown_schema() -> None:
-    envelope = Envelope(
-        session_id=SessionId("a" * 32),
-        seq=1,
-        at=datetime(2026, 7, 18, tzinfo=timezone.utc),
-        schema_version=CORE_EVENT_SCHEMA_VERSION,
-        body=PhaseChanged("phase"),
-    )
-    serialized = envelope_to_dict(envelope)
-    serialized["schema_version"] = 999
-    with pytest.raises(ValueError, match="exactly 5"):
-        envelope_from_dict(serialized)
 
 
 def test_event_sequence_scalars_share_the_browser_safe_integer_domain() -> None:

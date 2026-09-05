@@ -149,18 +149,19 @@ its declared family.
 | Execution/integrity | Operation/fault products and large local scaffolds | Pre/post-effect truth, publication, metadata, backup, recording, retries, control, cleanup, native identity |
 | Oracle/support | Procedural expected machinery and child-process boilerplate | Independent acceptance/rejection, consumed faults, installed isolation, immutable evidence, fail-closed harnesses |
 
-The event non-v5 version/body product is the first proven independence candidate:
-version rejection precedes body dispatch. The 48-row recording policy remains a
-candidate for owner/consumer separation, not automatic deletion. The six SH-G-12
-material scenarios remain distinct native/fallback mechanisms.
+TS-R1 proved the event non-v5 version/body independence: version rejection
+precedes body dispatch. Recording and cancellation policy now have explicit
+owner matrices plus bounded consumer witnesses rather than repeated route
+products. The six SH-G-12 material scenarios remain distinct native/fallback
+mechanisms.
 
 ## Checkpoint register
 
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
 | TS-R0 | Close corrected population and dual-baseline record | - | Inventory review, baseline artifacts, protected identities | complete |
-| TS-R1 | Prove reduction method on event-v5 contracts | TS-R0 | Owner matrix and route-bypass witnesses | active |
-| TS-R2 | Simplify review, selection, inventory, scanner, planner, and preflight tests | TS-R1 | Admission, completeness, bounds, selection, persistence | pending |
+| TS-R1 | Prove reduction method on event-v5 contracts | TS-R0 | Owner matrix and route-bypass witnesses | complete |
+| TS-R2 | Simplify review, selection, inventory, scanner, planner, and preflight tests | TS-R1 | Admission, completeness, bounds, selection, persistence | active |
 | TS-R3 | Simplify lifecycle, custody, service, observer, and drain tests | TS-R1 | Owner, concurrency, rollback, release, delivery | pending |
 | TS-R4 | Simplify desktop, browser, native, appearance, and cosmetic tests | TS-R1, TS-R3 | Required Node and installed headed witnesses | pending |
 | TS-R5 | Simplify executor, verifier, recording, and compound workflows | TS-R1 | Existing oracle plus owner/native/integration faults | pending |
@@ -196,6 +197,49 @@ of legacy decoding authority remain proven. Run focused old/new and defect
 witnesses, core/database/interface neighborhoods, required JS event probes,
 ordinary, and import-linter. Commit
 `test(core): consolidate event contract coverage at its owners`.
+
+The accepted TS-R1 dispositions are:
+
+| Causal group | Original obligations | Surviving obligations | Disposition |
+| --- | ---: | ---: | --- |
+| Event epoch and legacy mechanism | 33 | 8 | Keep each rejected version class and constructor type/value boundary; remove body multiplication, duplicate far-future integer, and private-name blacklist |
+| Item recording policy | 145 | 11 | Keep full reason/outcome policy at its owner and focused typed/persisted shape and bypass checks; remove three-route product and count meta-test |
+| Cancellation truth | 92 | 27 | Keep all 23 owner rules and four consumer-axis witnesses; remove full policy repetition at each consumer |
+| UTC timestamp grammar | 100 | 51 | Keep all 50 persisted-validator rows and one accepted decoder-translation witness |
+| Scalar64 event routing | 21 | 5 | Keep distinct route/error-family boundaries; rely on the scalar owner for the rest of its grammar |
+| Unicode field routing | 33 | 24 | Keep complete UTF-16 path and UTF-8 detail corpora plus two recording-detail route witnesses |
+
+This removes 298 collected rows: the focused unchanged-product control was 925
+passes and its replacement is 627 passes; repository collection moved from
+4,973 to 4,675. The test files add 44 net source lines because previously
+implicit recording and cancellation ownership is now explicit; this is a mass
+cost, not a claimed reduction. The generated 48-row recording fixture and its
+count authority are gone.
+
+The finite witness driver ran each selected old and replacement detector against
+an isolated unchanged control and isolated mutation. Every control was green;
+mutants produced only assertion failures in the intended tests, with no errors,
+skips, or timeouts:
+
+| Witness | Old mutant failures | Replacement mutant failures | Result |
+| --- | ---: | ---: | --- |
+| Harmless private legacy-spelled symbol | 1 | 0 | Old incidental lock removed; public replacement allows it |
+| Decoder bypasses exact validator | 28 | 5 | Both behavioral detector sets reject |
+| Typed constructor admits future version 6 | 1 | 1 | Both constructor detector sets reject |
+| Recording owner widens failed-only reasons | 6 | 2 | Both reject |
+| Typed and persisted recording consumers bypass owner | 42 | 2 | Both reject |
+| Cancellation owner omits compound verify rule | 12 | 3 | Both reject |
+| Cancellation consumers bypass owner | 48 | 4 | Both reject |
+| Timestamp validator admits `Z` spelling | 2 | 1 | Both reject |
+| Event Scalar64 coerces raw values | 8 | 4 | Both reject |
+| Recording detail bypasses Unicode validation | 7 | 1 | Both reject |
+
+Focused verification passed 627 tests. The core/database/interfaces
+neighborhood passed 2,718 tests with one established capability skip, including
+the required Node event probes. The ordinary repository gate passed 4,643 tests
+with four established capability skips and 28 headed tests deselected. All 12
+import contracts remain kept. No product source changed and no latent product
+defect was found.
 
 ### TS-R2 - Review, selection, and inventory
 
@@ -347,10 +391,14 @@ git status --short
 
 ## Resumption
 
-- **Current:** TS-R0 complete on execution baseline `ca7ef88`; TS-R1 is active
-  and TS-R2 through TS-R9 are pending.
-- **Next:** select the event-v5 owner and consumer detectors, record causal
-  groups, and run the original controls before deleting or rewriting rows.
+- **Current:** TS-R0 and TS-R1 are complete; TS-R2 is active and TS-R3 through
+  TS-R9 are pending. Current collection is 4,675 rows.
+- **Next:** group review, selection, inventory, scanner, planner, and preflight
+  cases by causal failure; select survivors before consolidating the 14 builders
+  assigned to TS-R2.
 - **Protected:** user changes, original oracle until gated disposition, SH-G-8,
-  and persisted/public behavior. The superseded recovery refs are pruned.
-- **Not yet run for this revision:** no TS-R1 reduction or defect witness.
+  persisted/public behavior, and all ten headed-repair verification witnesses.
+- **TS-R1 evidence:** original/replacement controls, ten finite old/new defect
+  witnesses, required Node consumers, neighborhood, ordinary, and all import
+  contracts are green. Headed behavior was unchanged and remains baseline
+  evidence rather than a TS-R1 gate.

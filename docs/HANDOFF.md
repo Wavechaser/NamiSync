@@ -1,8 +1,8 @@
 # Session Handoff
 
-Status (2026-09-05): the four headed-baseline error families remain repaired on
-`milestone1-anthony`, the revised TS-R0 population is closed, and TS-R1 is
-active. The complete headed gate passes 28/28.
+Status (2026-09-05): TS-R0 and the event-v5 pilot TS-R1 are complete on
+`milestone1-anthony`; TS-R2 is active. The headed execution baseline remains
+28/28 green and was not changed by TS-R1.
 
 ## Outcome
 
@@ -32,6 +32,13 @@ active. The complete headed gate passes 28/28.
   by behavior and all 20 named builders have TS-R2 or TS-R5 ownership.
 - The two WIP recovery refs were verified as superseded and deleted. No
   working-tree files or ignored diagnostic evidence were removed.
+- Event-v5 policy is now tested comprehensively at its owner and witnessed at
+  consumers for invocation, translation, and exact persistence. The cleanup
+  removed 298 collected rows without changing production.
+- The private legacy-helper blacklist and the generated 48-row/10-accepted
+  recording count authority are gone. Public v5-only behavior, exact persisted
+  shape, every recording/cancellation rule, JavaScript parity, and history
+  validation remain protected.
 
 ## Verification
 
@@ -51,13 +58,22 @@ active. The complete headed gate passes 28/28.
   once; ten mandatory current-only witnesses; one superseded original row.
 - TS-R0 protected reference review: all eight oracle/SH-G-8 files retain their
   original blob identities; 21 headed-repair files are frozen from `ca7ef88`.
+- TS-R1 original focused control: 925 passed. Replacement focused control: 627
+  passed. Current collection: 4,675 rows.
+- TS-R1 isolated finite witnesses: ten old/new mutation groups passed their
+  expected controls and detections; the harmless private-symbol variation fails
+  only the retired structural blacklist.
+- TS-R1 core/database/interfaces neighborhood: 2,718 passed, one established
+  capability skip; required Node event probes ran.
+- TS-R1 ordinary suite: 4,643 passed, four established capability skips, 28
+  headed deselected in 252.22 seconds. Import Linter: all 12 contracts kept.
 
 ## Remaining focused work
 
-- TS-R1 is the event-v5 pilot. Select owner and consumer detectors first,
-  preserve persisted-format enforcement, then record old/new controls and
-  bounded route/version defect witnesses before each reduction.
-- TS-R2 through TS-R9 remain pending. Separate ordinary/headed green runs do not
+- TS-R2 owns review, selection, inventory, scanner, planner, preflight, and its
+  14 named domain builders. Select surviving causal detectors before sharing
+  construction or deleting cases.
+- TS-R3 through TS-R9 remain pending. Separate ordinary/headed green runs do not
   claim the later integrated complete-suite closeout gate.
 - Ignored run evidence remains under
   `build/test-simplification/536915fb28068c141f59b2243119530205538b4d/`.

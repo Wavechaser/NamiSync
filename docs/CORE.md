@@ -14,8 +14,9 @@ The remaining accepted-but-unrealized bridge contract is mapped in
 `M1_BRIDGE.md`; its scalar and retention hard walls are owned by
 `DEFENSE.md` §1.3. Scoped recording continuation and terminal checkpoint cleanup
 are active below. Every live producer and consumer uses event v5 and data epoch
-6 with the corrected ledger/plan identity hash contract. Private v3/v4 decoders
-and their positive fixtures are absent; only the exact v5 source path remains.
+6 with the corrected ledger/plan identity hash contract. Prior event epochs
+have no supported decode or compatibility route; public paths reject them and
+no positive compatibility fixture remains.
 Component docs point to those authorities rather than copying task authority or
 unrealized retention shapes.
 
@@ -577,10 +578,10 @@ contain an older event epoch. Live and durable wrappers consume the same
 admitted immutable core snapshot without treating either representation as the
 other's decoder.
 
-No private v3/v4 decoder, legacy-only helper, or positive compatibility fixture
-remains. Source-removal guards, persistence-decoder negatives, and browser
-transport-marker negatives pin the v5 boundary. Protected historical
-measurement and settlement artifacts
+No supported v3/v4 decoder or positive compatibility fixture remains. Public
+validator and persistence-decoder negatives, together with browser
+transport-marker negatives, pin the v5 boundary; private helper names are not
+test authority. Protected historical measurement and settlement artifacts
 remain historical evidence, not compatibility routes.
 
 Core event versioning is independent of bridge-envelope, workflow-checkpoint,

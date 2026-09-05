@@ -97,8 +97,9 @@ producer projections, then atomically reject invalid transport version,
 session, sequence, tag, body-object, lifecycle, or reducer input without
 advancing the cursor; clean replay remains exact. History-v6 pages cannot carry
 a prior event version. The consolidation closeout search found no downstream
-event-body certifier; the retained core guard continues to pin private v3/v4
-decoder absence.
+event-body certifier; retained core guards pin prior, future, and coercive
+version rejection through the public validator/decoder and require the exact
+persisted shape. Private helper names are not test authority.
 
 ```powershell
 $env:NAMISYNC_TEST_NODE = 'C:\path\to\node.exe'
