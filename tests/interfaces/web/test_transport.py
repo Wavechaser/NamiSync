@@ -20,10 +20,8 @@ from namisync.core.events import ItemOutcome, PhaseChanged, Progress
 from namisync.core.planning import OperationKind
 from namisync.core.session import OperationResult, RunContext, SessionId, SessionState
 from namisync.dispatcher.event_bus import EventHub
-from namisync.interfaces.service import NamiSyncService
 from namisync.interfaces.task_lifecycle import (
     TASK_EFFECT_CAPACITY,
-    TaskLifecycle,
 )
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
@@ -69,6 +67,8 @@ from namisync.workflows.views import (
     session_event_view,
     operation_result_view,
 )
+
+from _service_fixtures import make_service
 from tests._executor_fixtures import (
     FakeRecorder,
     FixedClock,
@@ -579,16 +579,27 @@ def test_required_node_start_plan_identity_and_timeout_contract() -> None:
     node = _node_executable()
     if node is None:
         pytest.fail("This bridge gate requires Node.js; install node on PATH or set NAMISYNC_TEST_NODE.")
+    if not node.is_file():
+        pytest.fail(
+            "NAMISYNC_TEST_NODE or the node PATH entry does not identify a "
+            f"file: {node}"
+        )
     probe = Path(__file__).parents[2] / "assets" / "bridge_timeout_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
-    completed = subprocess.run(
-        [str(node), str(probe), str(bridge)],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=10,
-    )
+    try:
+        completed = subprocess.run(
+            [str(node), str(probe), str(bridge)],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        pytest.fail(
+            f"This bridge gate could not run Node.js at {node}: {exc}. "
+            "Set NAMISYNC_TEST_NODE to a working executable."
+        )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
@@ -833,16 +844,27 @@ def test_required_node_interactive_wrapper_is_bounded_single_attempt() -> None:
     node = _node_executable()
     if node is None:
         pytest.fail("This bridge gate requires Node.js; install node on PATH or set NAMISYNC_TEST_NODE.")
+    if not node.is_file():
+        pytest.fail(
+            "NAMISYNC_TEST_NODE or the node PATH entry does not identify a "
+            f"file: {node}"
+        )
     probe = Path(__file__).parents[2] / "assets" / "bridge_interactive_probe.mjs"
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
-    completed = subprocess.run(
-        [str(node), str(probe), str(bridge)],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=10,
-    )
+    try:
+        completed = subprocess.run(
+            [str(node), str(probe), str(bridge)],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        pytest.fail(
+            f"This bridge gate could not run Node.js at {node}: {exc}. "
+            "Set NAMISYNC_TEST_NODE to a working executable."
+        )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
 
@@ -1590,12 +1612,7 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
             return session_id
 
     runtime = Runtime()
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._dispatcher = Dispatcher()
-    service._lock = Lock()
-    service._lifecycle = TaskLifecycle()
-    service._closed = False
+    service = make_service(runtime=runtime, dispatcher=Dispatcher())
 
     class Registry:
         def replay_start(self, *args: object, **kwargs: object) -> None:

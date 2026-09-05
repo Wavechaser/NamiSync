@@ -802,10 +802,12 @@ their remaining containment boundary. The exact pythonnet 3.1.0 pin is equally
 part of that boundary because native delegate subscription, WinForms thread
 affinity, and `CoreWebView2` access pass through it. Required ordinary Node
 probes are unmarked and non-skippable; probes marked `supplemental_node` may
-skip. Both resolve Node.js from `NAMISYNC_TEST_NODE` before `PATH`. The required
-drain-manager Progress validator/replay gate proves atomic rejection before
-cursor or reliable-sibling delivery, while installed real-WebView2 witnesses
-own the remaining named browser-behavior gates.
+skip. Both resolve Node.js from `NAMISYNC_TEST_NODE` before `PATH`. Required
+bridge probes cover start-plan deadline/replay and bounded single-attempt
+interactive wrappers. The required drain-manager Progress validator/replay gate
+proves atomic rejection before cursor or reliable-sibling delivery. Installed
+real-WebView2 witnesses cover native custody and renderer behavior;
+[TESTS.md](TESTS.md) owns the ordinary gate requirements.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not

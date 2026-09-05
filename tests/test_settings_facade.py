@@ -14,8 +14,9 @@ from namisync.interfaces.service import (
     SemanticSettingsPatchView,
     SemanticSettingsView,
 )
-from namisync.interfaces.task_lifecycle import TaskLifecycle
 from namisync.workflows.runtime import LocalWorkflowRuntime
+
+from _service_fixtures import make_service
 
 
 def _wait_for_terminal(service: NamiSyncService, session_id: str):
@@ -250,10 +251,7 @@ def test_malformed_settings_refuse_planning_before_dispatcher_submit(
         def submit(self, kind: str, request: object):
             raise AssertionError("malformed settings must fail before submission")
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._dispatcher = Dispatcher()
-    service._lifecycle = TaskLifecycle()
+    service = make_service(runtime=runtime, dispatcher=Dispatcher())
     try:
         with pytest.raises(ValueError, match="missing or unknown"):
             service.start_plan(str(source), str(target))

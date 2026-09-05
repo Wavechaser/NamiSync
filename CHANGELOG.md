@@ -77,6 +77,10 @@ preserving public behavior, real boundary checks, and persisted contracts.
   verifier, recording, compound-exclusion, and forwarding test products while
   preserving native operation families and the original settlement oracle.
   TS-R5 closes with independent old/new failure proofs and stops before TS-R6.
+- Closed the TS-R2 through TS-R5 external-review gaps: migrated the final three
+  normal service fixtures, aligned required Node launch diagnostics, and
+  clarified support accounting and probe guidance. Independent Claude review
+  reconciliation and targeted mutation checks preserve the accepted scope.
 - Retired both temporary boundary corpora and their self-tests after final
   exact comparisons. Enduring boundary, owner, and import-law tests remain.
   The lifecycle work consolidated authority but did not reduce production

@@ -54,6 +54,8 @@ from namisync.workflows.views import (
     session_event_view,
 )
 
+from _service_fixtures import make_service
+
 
 _SESSION = "2" * 32
 
@@ -623,9 +625,7 @@ def test_ls_2_session_control_reaches_only_corresponding_dispatcher_record() -> 
             )
         }
     )
-    service = object.__new__(NamiSyncService)
-    service._dispatcher = dispatcher
-    service._lifecycle = TaskLifecycle()
+    service = make_service(dispatcher=dispatcher)
     first = str(dispatcher.submit("control", "first"))
     second = str(dispatcher.submit("control", "second"))
     _publish_lifecycle_session(service._lifecycle, first)

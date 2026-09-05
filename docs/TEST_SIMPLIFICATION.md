@@ -426,7 +426,9 @@ without claiming replacement.
 
 ### TS-R8 - Residual support and scaffold cleanup
 
-Reinventory all 28 support files and repair-era support. Delete prior-checkpoint
+Reinventory the 28 baseline support files, repair-era support, and support added
+by later checkpoints, including `_service_fixtures.py` and `_event_target.mjs`.
+Delete prior-checkpoint
 orphans, then review remaining large files by obligation. Share child launch,
 evidence reading, teardown, or fault mechanics only when ownership and failure
 semantics match. Fault shared support before readiness and for missing or
@@ -444,6 +446,52 @@ Compare complete test/support/checker machinery including additions as a
 diagnostic. Update the M1 consolidation changelog task, replace `HANDOFF.md`,
 archive this register, and retire temporary inventory/mutation drivers. Commit
 `docs: close the test simplification delivery` only after the final sweep.
+
+## Post-checkpoint Claude review
+
+The user requested a read-only `claude-opus-5`/`xhigh` review of TS-R2 through
+TS-R5 and authorized a separate correction commit for valid findings. This
+bounded follow-up does not start TS-R6 or change the original population.
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| TS-R5-CR | Complete the three missed normal-service fixture migrations; align both promoted Node gates' launch diagnostics; clarify checkpoint-added support and required-probe documentation | Existing lifecycle/settings/transport controls; missing-initialization and unusable/timeout Node witnesses; interface/dispatcher neighborhood; ordinary suite; imports; same-session Claude reconciliation; exact Git status comparison | complete |
+
+Keep the explicitly authorized protocol renames. An isolated deletion of
+`_close_lock` initialization already fails the existing concurrent-close test;
+pre-existing production fallbacks remain outside this test correction. Historical
+28-support/24-JS counts remain baseline provenance, with additions tracked below.
+No production policy change, new test framework, or TS-R6 work is included.
+
+TS-R5-CR is complete. All three remaining constructor bypasses use the shared
+real-construction helper. Both promoted Node gates now identify invalid paths
+and report launch/timeout failures with executable guidance. README and the
+owning interface/desktop/test documents describe their actual required scope;
+TS-R8 explicitly includes checkpoint-added support without changing frozen
+baseline counts. Production source is unchanged.
+
+Focused old/new controls passed 164/164; standalone transport passed 124;
+interfaces/dispatcher passed 1,605; ordinary passed 4,642 with the same
+four capability skips and 28 headed deselections. All 12 import contracts pass.
+Existing original-oracle/headed evidence remains TS-R5/TS-R4 provenance; these
+unchanged production gates were not rerun for the test/document correction.
+
+Independent review used `claude-opus-5` at `xhigh` for two exchanges in the same
+persisted session. Claude withdrew the protocol-rename and missing-lock claims
+after checking authorization and the existing concurrent-close mutation witness;
+it narrowed the Node claim to diagnostic quality and accepted the scoped fixes.
+Initialization faults missed by the bypasses are detected by the replacements;
+both Node gates' missing/invalid/launch/timeout witnesses remain non-skippable.
+The settings closed-flag variant leaves early malformed-settings validation
+unchanged; its constructor witness instead drops the runtime collaborator.
+Failed or incomplete driver runs remain append-only evidence.
+
+Review artifacts, exact Git status comparisons, and claim dispositions are in
+`build/claude-review/ts-r2-r5-20260905-191946/`. CLI-reported list-price cost was
+$20.565848. The first session violated read-only scope by creating then deleting
+one temporary file; its attempted plan write was disabled. Git status before
+and after was identical. The follow-up allowed only Read/Grep/Glob, with shell
+and write tools disabled, and preserved its pre-existing dirty status.
 
 ## Artifact conventions and baseline evidence
 
@@ -471,7 +519,10 @@ TS-R0 routes 824 original rows to TS-R1, 919 to TS-R2, 641 to TS-R3,
 remaining 155 database/settings rows are explicitly retained outside the
 bounded reduction families and assigned to TS-R9 verification. The 20 builders
 route 14 to TS-R2 and 6 to TS-R5. Every support file has a named code or
-documented diagnostic consumer.
+documented diagnostic consumer. TS-R3 adds `tests/_service_fixtures.py` and TS-R4
+adds `tests/assets/_event_target.mjs`: the current delivery has 29 Python support
+files and 25 JS/HTML files. These additions belong to TS-R8 consumer/fault review
+and TS-R9 complete-machinery accounting; the baseline counts above stay frozen.
 
 The superseded row is
 `test_transport_gate_uia_subcommands_parse_their_exact_headless_shapes`; its

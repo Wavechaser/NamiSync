@@ -1,44 +1,49 @@
 # Session Handoff
 
-Status (2026-09-05): TS-R0 through TS-R5 complete. Stopped at the user's
-requested recap boundary. TS-R6 has not started.
+Status (2026-09-05): TS-R2 through TS-R5 external review and its separate
+TS-R5-CR correction are complete. TS-R6 has not started.
 
-## Delivered this session
+## Review and corrections
 
-- TS-R2 `c058e88`: shared review/inventory failure owners, 18 redundant rows
-  removed, equivalent DB/bridge builder reused.
-- TS-R3 `a8290b2`: 31 normal service constructor bypasses removed, one duplicate
-  retry retired, response capacity observed through replay/refusal/reuse.
-- TS-R4 `fe88f31`: approved UI delay/protocol seams, two required Node
-  replacements, shared listener mechanics, bounded runtime diagnostic schemas.
-- TS-R5: approved pipeline queue/poll seams, 17 redundant product rows removed,
-  independent forwarding expectations; all distinct native operations retained.
-  Added 21 focused seam cases. No production policy, wire, or persisted change.
-- All checkpoints received independent adversarial review. TS-R2/3 each have
-  six isolated old/new groups; TS-R4 adds listener and real headed schema
-  proofs; TS-R5 has 15 groups/60 runs. No unresolved finding or latent product
-  defect was found. Failed intermediate evidence remains preserved.
+- User authorized a read-only Claude Code review and a separate correction
+  commit for valid issues. Model: `claude-opus-5`; effort: `xhigh`.
+- Two exchanges reused session `fbc3fbb8-05e9-4b92-a629-81cc88af1c17`.
+  About 26 minutes for the initial review and four for reconciliation;
+  CLI-reported list-price cost: $20.565848.
+- Claude judged the four checkpoints sound. Three remaining normal service
+  constructor bypasses now use `make_service`; both promoted Node gates have
+  explicit path/launch/timeout guidance. Required-probe and fixture documents
+  are aligned; baseline support counts remain frozen while additions are
+  explicit TS-R8/TS-R9 inputs. No production source changed.
+- The protocol-rename drift claim was withdrawn because those exact names
+  were explicitly approved. The missing-close-lock detection claim was also
+  withdrawn: the existing concurrent-close test catches that mutation.
+  The Node error/failure classification was corrected; the surviving issue was
+  diagnostic quality. No unresolved substantive review finding remains.
 
 ## Verification
 
-- TS-R5 focused: 625 old/629 corrected replacement passes.
-- Executor/verifier/workflows/core/database/tools: 2,827 passed,
-  4 established capability skips.
-- Ordinary: 4,642 passed, four established capability skips, 28 headed
-  deselected. Current collection: 4,674.
-- TS-R4 installed headed: 28 passed; interfaces: 1,450 passed.
-- All 12 import contracts and original 30-scenario oracle x3 passed.
-- All eight protected oracle/SH-G-8 file identities and all ten mandatory
-  headed-repair verification rows are confirmed.
+- Focused controls: 164 before and 164 after. Transport alone: 124 passed.
+- Interfaces/dispatcher: 1,605 passed. Ordinary: 4,642 passed, four
+  established capability skips, 28 headed deselected. All 12 imports pass.
+- Isolated constructor and Node witnesses verify the intended improvements.
+  The settings closed-flag variant is irrelevant to early malformed-settings
+  refusal; a lost runtime is the settings initialization detector. Earlier
+  classifier stops are preserved, not represented as passing evidence.
+- Original oracle (30 scenarios x3) and headed (28 cases) results remain the
+  prior TS-R5/TS-R4 evidence. Production is unchanged in this correction.
 
-## Resumption
+## Review boundary and resumption
 
-- Wait for the user's direction before TS-R6. The approved remaining register
-  is in TEST_SIMPLIFICATION.md; no shadow oracle candidate exists.
-- Ignored append-only evidence and mutation drivers remain under
+- The first Claude session created and deleted `ns_files_tmp.txt` despite the
+  read-only request. Its separate Write attempt was blocked. Exact pre/post
+  Git status was unchanged. The follow-up removed shell/write tools and used
+  only Read/Grep/Glob; exact pre-existing status was again preserved.
+- Full review, reconciliation, metadata, mutation evidence and status snapshots
+  are under ignored `build/claude-review/ts-r2-r5-20260905-191946/`.
+- Earlier checkpoint evidence remains under
   `build/test-simplification/536915fb28068c141f59b2243119530205538b4d/`.
-  TS-R9 owns their retirement. Do not replay edit scripts over committed work.
-- Sandbox execution and apply_patch fail during setup. Reviewed execution in
-  the working PowerShell host succeeds. Invoke saved scripts directly in that
-  host; a nested hard-coded pwsh path was unavailable. Python text I/O must
-  specify UTF-8. Task-owned earlier encoding damage is repaired from Git.
+  The original delivery register is `docs/TEST_SIMPLIFICATION.md`.
+- Stop here for the user. Do not start TS-R6 automatically. Reviewed execution
+  through the working native PowerShell host remains the reliable tool path;
+  use explicit UTF-8 for all Python text I/O.

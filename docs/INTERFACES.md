@@ -882,10 +882,11 @@ The explicit-`Gap`-only recovery and command-specific `start_plan` revision
 decisions are ratified and their named regressions have landed. Numeric holes
 alone are not recovery signals. Required ordinary Node probes are unmarked and
 non-skippable; probes marked `supplemental_node` may skip without Node. Both use
-`NAMISYNC_TEST_NODE` before `PATH`. The required drain gate owns atomic batch
-rejection plus clean replay, while the remaining named browser-behavior
-witnesses run through the installed production bridge and renderer in real
-WebView2.
+`NAMISYNC_TEST_NODE` before `PATH`. Required bridge probes also cover start-plan
+deadline/replay and bounded single-attempt interactive wrappers. The required
+drain gate owns atomic batch rejection plus clean replay. Installed real-WebView2
+witnesses cover native custody and renderer behavior; [TESTS.md](TESTS.md) owns
+the ordinary gate requirements.
 The frozen v1 SH-G-8/BR-G-42 event-and-transport-custody claim is closed by the
 historical evidence below. Independently, the current ordinary deterministic
 fixture proves four observations precede tick zero, the exact 60-logical-second
