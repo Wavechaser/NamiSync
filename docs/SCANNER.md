@@ -38,11 +38,10 @@ A first excess raises the owning typed signal and no partial `ScanResult` is
 published. Scanner does not authenticate the owning signal or receive the
 plan's cumulative retained-budget capability.
 
-This admission closes the planning-source owner boundary. It is not the
-unrealized complete-object reservation model. Scanner admission neither
-prices construction/sort/index storage nor sums a whole scan's logical bytes;
-text/codec/native copies, container capacity, complete graph validation, and
-task/result retention remain outside active admission.
+This admission closes the planning-source owner boundary. Scanner admission
+enforces its own bounded source population and does not reinterpret the
+count/request walls owned by `DEFENSE.md`; construction and presentation
+retention remain separate concerns.
 
 ## Implemented M0 Surface
 
@@ -235,7 +234,7 @@ coarse timestamps control planner comparison tolerance.
 
 Scanner projects unsupported numeric and native identity observations through
 the active exact typed outcomes in
-[M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; it defines no
+[BRIDGE.md](BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; it defines no
 local numeric domain or fallback. Stable NTFS/ReFS identity comes from the
 shared complete-file-id adapter, and a path-local
 `scalar_unrepresentable` warning marks an otherwise observable entry whose

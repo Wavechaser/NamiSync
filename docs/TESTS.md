@@ -177,9 +177,7 @@ collected test without a department filter.
 ## Accepted-target verification
 
 Accepted but unrealized M1 Stage 6 contracts are neither current behavior nor
-acceptance evidence. `M1_SHELL_H2.md` is the current delivery plan where it
-overlaps `M1_SHELL.md`; its acceptance/test clauses and the referenced
-`M1_BRIDGE.md` gates own the target cases. Do not reproduce delivery, command,
+acceptance evidence. `M1_PLAN.md` owns remaining delivery; `BRIDGE.md`, `PRESENTATION.md`, and `INTERFACES.md` own subject criteria. Do not reproduce delivery, command,
 module, or case catalogs here.
 
 While implementing an accepted target, run focused tests, every affected

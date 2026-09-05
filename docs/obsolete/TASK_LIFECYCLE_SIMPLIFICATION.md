@@ -156,7 +156,7 @@ push callback.
 - No mutable `_SessionSlot`; no service-owned queue, drain claim, delivery
   generation, or connection state.
 - No opportunistic test compression, unrelated cleanup, or extension of the
-  closed `../SIMPLIFICATION.md` register.
+  closed `M1_SIMPLIFICATION.md` register.
 
 An event-shape or volume change invalidates the 128/64/64 evidence and stops
 this register for separately measured work.

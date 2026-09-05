@@ -1,3 +1,8 @@
+> Archived on 2026-09-06 during documentation ablation. This is historical
+> planning/evidence context, not current implementation authority. Current
+> subject contracts and the remaining M1 plan live one directory above.
+> Original source SHA-256 (before banner and link relocation): 269C655C195E976469C12929DE7478B765883AB87545A32A4AD235A8DA277A48
+
 # M1 Desktop Shell Delivery Plan
 
 Status (2026-08-27 checkpoint-review closeout and target additions; 2026-08-24 second-half
@@ -33,8 +38,8 @@ and Tier-1 current-source custody drift runs passed without recalibrating or
 extending that acceptance; `M1_BRIDGE.md` owns their exact disposition.
 Other BR-G-42 rows remain on their owning slices. The initial simplification
 run retires the former BR-G-45 terminal-artifact model without activating a task
-surface or replacement guarantee; shell-owned SH-G-15 keeps version-bound
-whole-runtime containment open. GUI
+surface or replacement guarantee; shell-owned SH-G-15 keeps scoped cold-start resource and
+leak/growth acceptance open. GUI
 Break 1's token,
 component, icon, motion, and native-material
 foundation and Slice 4's presentation core/shell frame completed their audited
@@ -805,8 +810,8 @@ before any command is exposed; an elevated launch refuses actionably unless the
 defense model is first revised. Treat exact dependency pins as behavioral
 authority and separately document the supported security-update posture.
 Reconcile active documentation and the `ui_mockup/` reference against the
-as-built product. Close BR-G-43, BR-G-44, and the version-bound SH-G-15
-whole-runtime containment gate.
+as-built product. Close BR-G-43, BR-G-44, and the scoped SH-G-15
+cold-start resource and leak/growth gate.
 
 ## 3. Test Commands
 
@@ -997,9 +1002,9 @@ carry the `headed` marker; all are collected by the release command.
 
   This closes the frozen v1 SH-G-8 and BR-G-42 event
   correctness/transport-custody claim only.
-  Current-source latency acceptance remains open on its BR-G-42 row; terminal
-  result retention belongs to BR-G-45, and complete headed-runtime containment
-  belongs to SH-G-15. The earlier 67,375,104-byte whole-Job result is diagnostic
+  Current-source latency acceptance remains open on its BR-G-42 row; the former
+  BR-G-45 terminal-retention model is retired, and scoped runtime resource
+  acceptance belongs to SH-G-15. The earlier 67,375,104-byte whole-Job result is diagnostic
   only. *Not satisfied by* attaching after start, sliding the progress deadline,
   delaying reliable values, hiding loss behind terminal recovery, measuring
   payload or whole-process bytes as transport custody, charging terminal
@@ -1157,46 +1162,44 @@ carry the `headed` marker; all are collected by the release command.
   only status cue. Later slices may extend the registry only through reviewed
   source, asset/provenance, packaging, and test changes.
 
-- **SH-G-15 — OPEN: the complete headed runtime is version-bound and
-  contained.** This is distinct from SH-G-8's Python transport-custody graph
-  and BR-G-45's subject-scaled terminal artifacts. A parent instrument outside
-  the headed Job begins sampling when the root is assigned, before window
-  startup, and records absolute cold peak plus a fixed post-fixture settled
-  plateau without subtracting an idle baseline. In the same loaded process,
-  repeated ordinary fixtures and a separately declared long fixture use equal
-  fixed pre/post quiescent windows to record warm marginal peak and plateau
-  growth. Private bytes, process count, thread count, and handle count retain
-  independent absolute and growth predicates rather than collapsing into one
-  friendly total.
+- **SH-G-15 — OPEN: scoped cold-start resource and leak/growth acceptance.**
+  The installed desktop must meet independently predeclared cold-start resource
+  budgets and repeated/long-workload growth limits on named supported profiles.
+  This is release acceptance under DEFENSE section 7, not a guarantee that all
+  Python, CLR, native, and WebView allocations are universally contained.
+  Runtime-enforced application request and population bounds remain mandatory
+  and independently verified; this gate adds no complete owner-graph reservation
+  prerequisite and does not revive BR-G-45.
 
-  Every sample records Job membership and, for each member, PID plus creation
-  time, executable/role, private bytes, threads, and handles. Member birth,
-  exit, or role change remains visible; an unreadable live member, missing root,
-  PID-reuse ambiguity, or asymmetric pre/post topology refuses the affected
-  evidence. Raw telemetry is streamed or held in fixed bounded buffers outside
-  the Job. The child performs no whole-evidence serialization during a measured
-  window, and final artifact assembly begins only after the last post-fixture
-  plateau closes. Test-only in-Job state is declared and bounded rather than
-  subtracted after measurement.
+  Before acceptance runs, name the installed build and runtime/hardware profile,
+  observed process scope, finite ordinary/repeated/long workloads, repetition
+  counts and durations, warm-up/quiescence rules, fresh-process count, statistics,
+  and pass/fail budgets. Include absolute cold-start peak and settled use plus
+  post-workload retained growth and repeated/long-run trend checks. Private
+  bytes, processes, threads, and handles retain separate observations and
+  acceptance predicates; a favorable aggregate must not hide one resource leak.
+  A finite pass establishes compliance for those workloads and profiles, not
+  the absence of every possible leak.
 
-  Calibration fixes the fixture counts/durations, plateau statistic, ceilings,
-  and a predeclared headroom rule in one commit. A later commit runs independent
-  holdouts without retuning them. Each accepted artifact binds the exact source
-  and wheel, Windows build, CPU/RAM profile, CPython, SQLite, pywebview,
-  pythonnet/CLR, Bottle, and WebView2 identities. A changed runtime tuple has no
-  inherited pass: its limits and evidence are explicitly reaffirmed or
-  recalibrated through the same calibration/freeze/holdout sequence. **No
-  calibration limits or holdout exist yet.** The 2026-08-13 67,375,104-byte
-  whole-Job delta is diagnostic input only because that run lacks cold absolute
-  and settled plateaus, symmetric repeated/long warm windows, decontaminated
-  telemetry, and frozen independent limits. *Not satisfied by* one baseline
-  delta, aggregate-only PID sampling, serializing growing evidence in the
-  measured child, choosing a limit from its own holdout, treating calibration
-  as validation, dropping thread/handle/topology growth, or silently carrying a
-  pass across a version change.
-  Under the measurement authority in `DEFENSE.md` §7 this is a version-bound
-  empirical Tier 3 gate. Tier 0 reasoned targets or diagnostic whole-Job runs
-  may guide design, but cannot close it.
+  Observe the host and its relevant runtime/renderer children with stable
+  process identity. Missing live-process observations or incomplete workloads
+  cannot pass. Keep collection and report assembly from materially contaminating
+  the measured product, retain raw observations and dispersion, and apply a
+  separate validator to predeclared criteria. The harness may choose a simpler
+  measurement mechanism if it preserves these obligations; no specific lease,
+  representation, per-field census, or universal topology model is prescribed.
+
+  Independently predeclared budgets use the scoped Tier-2 route in DEFENSE
+  section 7. Calibration-derived ceilings or failed/invalidated acceptance
+  authority use its Tier-3 rules. Relevant source/dependency/runtime changes
+  require affected profile checks to be rerun against unchanged budgets unless
+  the budget itself is explicitly revised; they do not automatically demand a
+  new calibration campaign. Preserve the exact measured identities and do not
+  carry a pass to an untested profile.
+
+  **No scoped budgets or acceptance artifacts exist yet; the gate remains open.**
+  The historical 67,375,104-byte whole-Job delta is diagnostic only. SH-G-8's
+  transport-custody ceiling and artifacts remain separate and unchanged.
 
 SH-G-11 through SH-G-13 are cross-slice: their foundation — tokens in three
 themes with contrast, Mica apply/degrade, and reduced-motion with the motion
@@ -1277,7 +1280,7 @@ clause lands:
 | Slice 4 | SH-G-7 |
 | Slices 5-6 | SH-G-11, SH-G-12, SH-G-13 (production surfaces) |
 | Deferred history surface | SH-G-9 remains open and is not part of this reslice |
-| Slice 8 | SH-G-15 remains open pending version-bound calibration, frozen limits, and independent holdouts |
+| Slice 8 | SH-G-15 remains open pending declared profiles, budgets, and cold-start/repeated/long-workload acceptance |
 
 ## 6. Slice-to-gate map
 
@@ -1324,8 +1327,8 @@ rerun and Tier-1 current-source custody drift characterization, as dispositioned
 `M1_BRIDGE.md`. Other BR-G-42 rows remain on their owning slices. The valid
 2026-08-13 run passed its duration/rate/event/latency/shutdown predicates, but
 its whole-Job delta is neither corrected transport-custody evidence nor a
-version-bound SH-G-15 containment result. BR-G-45 and SH-G-15 remain separately
-open; no gate inherits a limit or pass from that run.
+scoped SH-G-15 acceptance result. BR-G-45 is retired and SH-G-15 remains
+open; neither inherits a limit or pass from that run.
 
 ## 7. Contract pointers and change control
 

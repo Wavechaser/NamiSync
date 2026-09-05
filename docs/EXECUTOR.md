@@ -11,7 +11,7 @@ below rather than presented as closed.
 
 ## Recording Settlement (Event v5 Active)
 
-The exact result/event shapes are owned by [M1_BRIDGE.md](M1_BRIDGE.md).
+Exact internal result/event shapes are source-owned through the [core locator](ARCHITECTURE.md#31-contract-authority-and-source-locator).
 Executor attributes recording degradation
 internally by scope. `_record()` returns a typed observation; settled operations
 retain only their own `ItemRecordingReason`, while final-flush and
@@ -63,7 +63,7 @@ The settlement oracle remains the change gate. Typed projection must preserve
 its protected scenario/row manifest, normalized filesystem and recorder
 traces, baseline, and semantic hash. Structural settlement work stays blocked
 until three identical runs and independent review pass. The oracle owns its
-scenario manifest, [M1_SHELL_H2.md](M1_SHELL_H2.md) owns the delivery
+scenario manifest, [archived recording acceptance](obsolete/M1_SHELL_H2.md) owns the delivery
 acceptance record, and [TESTS.md](TESTS.md) owns test-scope policy; none is
 duplicated here.
 
@@ -111,7 +111,7 @@ execute(xset, ctx, recorder, policies, fs) -> OperationResult
 ```
 
 The caller holds deterministic physical-volume custody and validates the exact
-core `Commitment` defined by [M1_BRIDGE.md](M1_BRIDGE.md). Execution admission
+core `Commitment` defined in [execution.py](../namisync/core/execution.py). Execution admission
 cannot resupply or reinterpret frozen setup choices. Workflow alone performs a
 fresh observe → preflight → execute sequence
 on every start/resume; executor imports no preflight sibling. A refusal permits
@@ -124,7 +124,7 @@ The core generic session runner emits the single terminal event. Executor emits
 phase, progress, and item outcomes only, returns one complete
 `OperationResult`, and never emits the terminal projection. Event-v5 detail,
 scalar, omission, and envelope rules are centralized in
-[M1_BRIDGE.md](M1_BRIDGE.md). `Canceled`/`PauseRequested` unwind to the runner
+[BRIDGE.md](BRIDGE.md). `Canceled`/`PauseRequested` unwind to the runner
 after executor's own safe operation-boundary cleanup.
 
 ## Universal Operation Rules

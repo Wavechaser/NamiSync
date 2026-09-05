@@ -1,3 +1,8 @@
+> Archived on 2026-09-06 during documentation ablation. This is historical
+> planning/evidence context, not current implementation authority. Current
+> subject contracts and the remaining M1 plan live one directory above.
+> Original source SHA-256 (before banner and link relocation): FC466595DABED68DA492BC385E0306A46A28DBC3EFA40698EDD802C04E144825
+
 # Stage 6 Slices 5–6 and Early Slice 7 Implementation Plan
 
 > Active execution checklist ratified on 2026-08-24. `docs/M1_BRIDGE.md` owns
@@ -333,7 +338,7 @@ The temporary 3R hold was lifted before checkpoint 3.3 began.
 | 3R.15b | Rename the live v5 validator family and its exact source gates. | `1c2ca16` |
 | 3R.14a | Enforce Unicode-scalar JSON boundaries while preserving valid bytes and optional-warning containment. | `bba64ec` |
 
-[BUGS.md](BUGS.md) owns the causal findings, fixes, and residual boundaries;
+[BUGS.md](../BUGS.md) owns the causal findings, fixes, and residual boundaries;
 component documents own the resulting contracts. The full former checkpoint
 clauses remain in `74abbc6:docs/M1_SHELL_H2.md`; original reviewer reports
 remain in `d7673b7:docs/HANDOFF.md`. Do not recreate those reports here.
@@ -342,14 +347,14 @@ The closing ordinary run passed 4,498 tests with four Windows privilege skips
 and 28 headed deselections; required Node ran, all 11 import rules held, and
 the settlement oracle passed 30 scenarios three times with identical traces.
 That receipt closed 3R, not later product/headed/resource gates or the private
-legacy source seam subsequently removed in checkpoint 3.3. [HANDOFF.md](HANDOFF.md) carries the
+legacy source seam subsequently removed in checkpoint 3.3. [HANDOFF.md](../HANDOFF.md) carries the
 restart boundary and separately deferred context.
 
 Protected settlement traces/baseline/semantic hash, frozen epoch-5 witnesses,
 and frozen transport evidence remain unchanged; the repaired gate authority
 remains protected. S5 and identity design holds are
 resolved; current persistence/reset and M2 recovery constraints live in
-[DATABASE.md](DATABASE.md) and [DISPATCHER.md](DISPATCHER.md).
+[DATABASE.md](../DATABASE.md) and [DISPATCHER.md](../DISPATCHER.md).
 
 ### 4P. Close checkpoint-4 prerequisites
 
@@ -691,7 +696,7 @@ Commit: `feat(web): add integrity and post-copy verification`
 
 #### 10.A Rebaseline missing evidence without comparison semantics
 
-- **Accepted protocol:** Implement the [three-operation policy table](VERIFIER.md#accepted-standalone-operation-policy).
+- **Accepted protocol:** Implement the [three-operation policy table](../VERIFIER.md#accepted-standalone-operation-policy).
   A fresh rebaseline admits eligible selected files both with and without prior
   evidence. Hash current content and conditionally create/replace evidence;
   unchanged content is still `baselined`, never a verified match. Baseline's

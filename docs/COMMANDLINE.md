@@ -63,7 +63,7 @@ summary/detail output renders a persisted review-fact limit as typed durable
 history truth, gives the same narrow-roots or resolve-scan/preflight guidance
 as the desktop, and never reconstructs the refusal from diagnostic text or
 shows a presentation-only omission as history. `DATABASE.md` and `HISTORY.md`
-own the persisted consequence; `M1_BRIDGE.md` owns the shared protocol shape
+own the persisted consequence; `BRIDGE.md` owns the shared protocol shape
 and `DEFENSE.md` §1.3 owns the scalar wall.
 
 At the current M1 pre-migrator boundary, ledger v4 and receipt-aware history v6

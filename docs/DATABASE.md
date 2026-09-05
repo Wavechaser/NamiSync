@@ -77,7 +77,7 @@ persistence.
 
 History v6 admits only its coordinated core-event version and adds a nullable,
 all-or-complete review-limit terminal group. `HISTORY.md` owns its durable
-observer/finalization consequences; `M1_BRIDGE.md` owns the exact shared shape.
+observer/finalization consequences; `namisync/core/events.py` owns the exact shared internal shape.
 Presentation-only omission state is never stored.
 
 ### Exact topology authority
@@ -212,10 +212,7 @@ publish a torn or partial population, and SQLite's numeric affinity cannot make
 a noncanonical saved spelling satisfy exact missing-row validation. The direct
 exact-path reader may retain one normalized lookahead key so SQL mode
 eligibility, rather than raw request cardinality, decides that boundary; the
-workflow request itself admits at most 120,000 raw selected paths. The accepted
-but unrealized [task-artifact graph](M1_BRIDGE.md#task-and-authority-ordering)
-must charge that one repository-only transient; [DEFENSE.md](DEFENSE.md) §1.3
-owns the retained-graph byte axis. Neither is a database estimate.
+workflow request itself admits at most 120,000 raw selected paths. The request bound above is the database-facing admission contract. Retained graph and aggregate-byte estimates are outside this repository policy; database reads remain count-bounded and refuse before publishing a partial population.
 Repository input and output gates use core's stateless population measure and
 excess comparison only. Inventory and integrity still own separate local row
 constants and exact error/fact outcomes; raw occurrences are checked before
@@ -247,7 +244,7 @@ measure physical disk allocation, cleanup latency, or a maximum database size.
 
 ### Atomic execution-evidence read
 
-Status: accepted but unrealized. [M1_BRIDGE.md](M1_BRIDGE.md) owns the exact
+Status: accepted but unrealized. This section owns database evidence use; [PRESENTATION.md](PRESENTATION.md) owns the
 cross-layer execution-review contract.
 
 The execution-evidence repository resolves one retained execution identity and
@@ -464,7 +461,7 @@ The initial schema reserves the expensive identity/evidence bones:
 
 At the active epoch-6 persistence boundary, file-index columns and repository
 binds use canonical `FileIndex128` text rather than SQLite numeric affinity.
-The exact identity domain and native-source rule remain owned by `M1_BRIDGE.md`
+The exact identity domain and native-source rule remain owned by `BRIDGE.md`
 and `DEFENSE.md` §1.3.
 
 Successful byte-producing operation transactions return the persisted target

@@ -46,56 +46,24 @@ a secured WebView2 host, bounded command/event transport, native folder picking,
 the Fluent/accessibility foundation, and dormant gallery-proven sync/integrity
 file-list row renderers. User-facing workflow views and controls, final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
+Desktop release also requires scoped cold-start resource budgets and repeated/
+long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
+These remain open and do not promise universal whole-runtime memory containment.
 
-The Stage 6 second-half reslice covers Setup, bounded plan and execution review,
-inventory/integrity, process-live multi-session tasks, and early lifecycle/
-retention closure. Its exact core-event-v5, recording, signed-64 scalar, full-
-width Windows file-identity, and coordinated persistence epoch are active;
-the plan session now refuses independent raw-population excess and final
-retained shallow-reference excess before publishing a partial plan. External
-inputs are validated and bounded at ingress, populations remain independently
-bounded at every applicable rung, reentrant collaborators receive only
-immutable values after reliable local state is committed, and exact immutable
-first-party module results are validated once at their named workflow adoption
-transfer and then shared by identity with read-only consumers. Only the private
-exact plan-limit signal carrying the active same-run admission token and an
-exact PLAN fact becomes typed `REFUSED+UNRUN`; inventory uses a distinct private
-signal and token. Ordinary lookalikes plus tokenless, different-run, or wrong-
-scope exact signals retain failure truth without saving a plan. Reflective token
-extraction or mutation remains outside the supported fault model.
-Python bridge responses now stop at an exact 8 MiB canonical-JSON occurrence
-wall before native construction; drains commit only the longest admitted update
-prefix, and native positions remain charged through worker exit and exact
-browser receipt. Construction, sorting, indexes, previews, representation-
-specific native/browser bytes, and complete task graphs remain accepted but
-unrealized M1 model work alongside the product surfaces and task lifecycle.
-The repeated 120,000-item population walls serve one M1 performance-and-safety
-support target in each applicable population. Existing independently owned
-first-excess behavior remains active through M1; NamiSync makes no support
-promise above that scale, but does not claim that item 120,001 is a failure
-threshold.
+Remaining desktop work covers Setup, bounded plan/execution review,
+inventory/integrity, and process-live tasks. Accepted sorting and rebaseline
+behavior lives in the [feature catalog](docs/FEATURES.md); the
+[M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
+External requests and applicable populations are bounded at their owners;
+the [defense model](docs/DEFENSE.md) states the active limits and support scope.
 
-Accepted but unrealized M1 behavior also includes server-owned filename/size/
-mtime sibling sorting for plan and inventory views, with path-key order for new
-views and reset; sorting changes neither selection nor execution authority.
-Rebaseline will also create evidence for selected files that lack it, while
-remaining explicit hash-and-replace rather than compare-and-accept. See the
-[H2 plan](docs/M1_SHELL_H2.md) and
-[integrity policy table](docs/VERIFIER.md#accepted-standalone-operation-policy).
-
-M1 state remains process-local: queued sessions and unexecuted plans do not
-survive an application restart, and committed nonterminal history returns only
-as `incomplete`. Continuations stay in live session records; the session store
-receives a separate metadata/result projection without a continuation field.
-A durable metadata store alone cannot provide restart/resume. The active
-database boundary is ledger v4 plus history v6 at
-shared data epoch 6. This includes a reset from epoch 5 despite unchanged schema
-numbers. Older, one-present, markerless, transitional, mismatched,
-incomplete/poisoned, or orphan-sidecar pairs are refused. Admission checks
-WAL-visible markers and schema without changing source artifacts; any journal
-entry refuses. Both local database mains and their SQLite sidecars must be
-archived or deleted together before creating a fresh pair. Startup never does
-this automatically; resetting loses app evidence and history, not managed files.
+M1 state is process-local: queued sessions and unexecuted plans do not survive
+restart, and committed nonterminal history returns as `incomplete`. The active
+local database pair is ledger v4/history v6 at data epoch 6. Incompatible or
+incomplete pairs are refused; startup never resets them automatically. To reset,
+archive or delete both database mains and their SQLite sidecars together before
+creating a fresh pair. Reset loses app evidence/history, not managed files. See
+[database admission](docs/DATABASE.md) for the exact pair rules.
 
 ## Compatibility
 
@@ -244,21 +212,22 @@ never hides the other result axes in rendered output.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
   executor/verifier harness, deterministic corpora, and the settlement oracle.
 
+- [Bridge](docs/BRIDGE.md) — external protocol, transport, retry/recovery and evidence.
+- [Presentation](docs/PRESENTATION.md) — tree/view, search/sort and scale contracts.
+- [Interfaces](docs/INTERFACES.md) — adapters, host/package and lifecycle contracts.
+- [M1 plan](docs/M1_PLAN.md) — remaining outcomes, order and verification.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
-- [M1 plan](docs/M1_PLAN.md) — M1 decisions, integration gates, and Stage 6 scope.
-- [M1 Bridge](docs/M1_BRIDGE.md) — sole Stage 6 bridge protocol and BR-G acceptance authority.
-- [M1 Shell](docs/M1_SHELL.md) — Stage 6 slice order, host/package placement, packaging, and SH-G map.
-- [M1 Stage 6 second-half checklist](docs/M1_SHELL_H2.md) — current detailed acceptance, review, and verification plan.
 
-The completed [initial simplification record](docs/SIMPLIFICATION.md) remains
-alongside active documentation for now. Historical criteria are collected in
-the [retrospective M0 plan](docs/obsolete/M0_PLAN.md) and the archived
-[task-lifecycle register](docs/obsolete/TASK_LIFECYCLE_SIMPLIFICATION.md) with
-its [test disposition ledger](docs/obsolete/TASK_LIFECYCLE_TEST_LEDGER.md), and
-the completed [test-simplification register](docs/obsolete/TEST_SIMPLIFICATION.md).
-The [imported PoC documents](docs/obsolete/PoC_import/) are archived alongside them.
-These are historical sources, not current acceptance authority; active component
-contracts and the M1 plans govern current work.
+Historical plans and delivery records are under `docs/obsolete/`:
+[M1 plan](docs/obsolete/M1_PLAN.md), [bridge](docs/obsolete/M1_BRIDGE.md),
+[shell](docs/obsolete/M1_SHELL.md), [second-half checklist](docs/obsolete/M1_SHELL_H2.md),
+[initial simplification](docs/obsolete/M1_SIMPLIFICATION.md),
+[task lifecycle](docs/obsolete/TASK_LIFECYCLE_SIMPLIFICATION.md),
+[test simplification](docs/obsolete/TEST_SIMPLIFICATION.md), and
+[documentation ablation](docs/obsolete/DOC_ABLATION.md).
+They preserve provenance rather than current implementation instructions.
+The [M0 plan](docs/obsolete/M0_PLAN.md) and
+[imported PoC documents](docs/obsolete/PoC_import/) remain historical references.
 
 ## Changelog
 

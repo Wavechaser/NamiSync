@@ -18,7 +18,7 @@ envelope once, validates that exact projection against the retained v5
 persistence contract, and only then performs the observer's persisted-byte
 serialization, hashing, flushing, or queue mutation. A malformed projection
 therefore breaks the audit prefix before any event row, receipt, chain, or
-watermark mutation. `M1_BRIDGE.md` owns the exact event/result shapes, bounds,
+watermark mutation. `BRIDGE.md` owns the exact event/result shapes, bounds,
 and codec rules.
 
 Reliable item rows retain their accepted recording and omission facts as part
@@ -442,9 +442,18 @@ Current coverage proves exact event-v5-only persistence, canonical-envelope/
 typed-projection agreement, immutable item recording facts, once-only full-
 result finalization, the all-null-or-complete review-limit group, and bounded
 rejection recovery. Shared event-shape and scalar boundary cases remain with
-the owning [core](CORE.md) and [bridge](M1_BRIDGE.md) authorities rather than
+the owning [core](CORE.md) and [bridge](BRIDGE.md) authorities rather than
 being cataloged here.
 
 The structural sequence-admission test must continue to prove that adding an
 event cannot iterate all prior hashes. Wall-clock timing is not an acceptable
 CI assertion for that O(1) property.
+
+## Focused history scale acceptance
+
+Under the [shared reference profile](BRIDGE.md#focused-measurement-profile), the
+remaining history criteria are a 50-run summary over 1,000,000 retained items,
+including a 100,000-item run, in at most 3 seconds; and a 256-row detail window in
+500 ms p95 / 1 second maximum. These scoped Tier-2 targets remain separate from
+query-boundedness proofs and do not activate the deferred history page. Preserve
+raw samples and rerun after query, index, decode or pagination changes.

@@ -1,3 +1,8 @@
+> Archived on 2026-09-06 during documentation ablation. This is historical
+> planning/evidence context, not current implementation authority. Current
+> subject contracts and the remaining M1 plan live one directory above.
+> Original source SHA-256 (before banner and link relocation): 7B3CA99936FBF185FE2C892348D0A76E13B135830C3D6463CC24CECC6A7EF7E1
+
 # M1 Bridge and Presentation Contract
 
 **Standing.** This document is the normative authority for the M1 bridge seam:
@@ -17,7 +22,7 @@ only deferred, rejected, and resolved dispositions. Section 10 retains the
 BR-G contract and evidence register and the remaining M1 delivery order. BR-G
 prose is not independently blocking unless an active checkpoint names its
 executable check, finite artifact, or required headed witness. Dated build
-status and evidence are recorded under [M1 GUI in the changelog](../CHANGELOG.md#m1-gui).
+status and evidence are recorded under [M1 GUI in the changelog](../../CHANGELOG.md#m1-gui).
 
 ---
 
@@ -1750,7 +1755,7 @@ retention sweep to purge them, and execution can be paused or canceled.
 
 The single exception is `UPDATE` while `trash_on_update` is disabled, where
 the prior target content is overwritten with no recoverable copy
-([`runtime._update`](../namisync/modules/executor/runtime.py) guards the trash
+([`runtime._update`](../../namisync/modules/executor/runtime.py) guards the trash
 step on that flag). **`MOVE_UPDATE` does not count**: `_move_update` publishes to the
 new path and trashes the old one unconditionally, with no `trash_on_update`
 guard, so its prior content is always recoverable.
@@ -1867,7 +1872,7 @@ scan, recorder, and payload-module behavior.
   their comparison/replacement policies differ, not that admission rule.
   Baseline and verify require no confirmation; rebaseline requires explicit
   current-evidence acceptance even for an all-null-evidence selection. The
-  [verifier policy table](VERIFIER.md#accepted-standalone-operation-policy)
+  [verifier policy table](../VERIFIER.md#accepted-standalone-operation-policy)
   owns the distinction. Every admitted operation reports its actual count.
 - Folder refresh uses `ScanScopeKind.SUBTREES` so new descendants are
   discoverable. A mixed refresh carries both `selected_paths` and
@@ -1944,7 +1949,7 @@ or process-local checkpoint version remains.
 > eligibility nor demonstrated bounded work.
 
 Landed behavior is recorded under
-[Add scoped review trees and revisioned selection](../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30).
+[Add scoped review trees and revisioned selection](../../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30).
 
 ### DR-BR-07 — Scanner ignore contract narrowed
 
@@ -2619,7 +2624,7 @@ helper's search input may not exceed that bound.
 > authority in JavaScript.
 
 The landed presentation-core realignment and its browser evidence are recorded
-under [Complete and harden the accessible desktop foundation](../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18).
+under [Complete and harden the accessible desktop foundation](../../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18).
 
 ### DR-BR-16 — Paging bounds payload, and must also bound work
 
@@ -3033,7 +3038,7 @@ admitted domain work, return
 custody, and teardown ownership, not raw WebMessage thread creation or renderer
 allocation. The same admission condition closes the race between admitted
 handler entry and teardown; no bridge-global lock spans a command handler.
-[INTERFACES.md](INTERFACES.md) owns the pinned-runtime lifetime and unused
+[INTERFACES.md](../INTERFACES.md) owns the pinned-runtime lifetime and unused
 synchronous callback-registry compatibility mechanisms.
 
 **Exact target binding:** [task and authority
@@ -3150,8 +3155,8 @@ and backpressured. **Never hold a task lock across a facade call, JSON encoding,
 or other I/O.** DR-BR-11's deterministic ids avoid a node-table lock site.
 The existing queue-count and transport-custody guards remain independently
 owned. No current gate certifies the complete task and terminal subgraphs;
-shell-owned SH-G-15 remains separate whole-process and renderer/runtime
-measurement context.
+shell-owned SH-G-15 owns separate scoped cold-start resource and repeated/long-
+workload leak/growth acceptance.
 
 ---
 
@@ -3888,11 +3893,11 @@ artifact documents.
 
 | Disposition | Landed record |
 | --- | --- |
-| User selection, subtree scope, partial subject-local integrity, and page size use the contracts in DR-BR-01–06 and DR-BR-15. | [Add scoped review trees and revisioned selection](../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30) |
-| Recorder mutations use reproducible row receipts; session-creating commands use service-held lifecycle receipts. | [Close the M1 safety and post-refactor audit](../CHANGELOG.md#close-the-m1-safety-and-post-refactor-audit-2026-08-08--2026-08-11) |
-| Drain recovery triggers only on explicit `Gap` or uncertain drain failure; legal progress sequence holes do not trigger it. | [Close transport custody and realign the bridge boundary](../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14) |
-| The 100,000-subject performance fixture and transport-custody authority are governed by BR-G-42; the former separate BR-G-45 terminal-artifact model is retired. | [Ratify measurement and documentation authority](../CHANGELOG.md#ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18) |
-| Move-ghost filtering removes synthetic-only ancestors with the ghost. | [Complete and harden the accessible desktop foundation](../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18) |
+| User selection, subtree scope, partial subject-local integrity, and page size use the contracts in DR-BR-01–06 and DR-BR-15. | [Add scoped review trees and revisioned selection](../../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30) |
+| Recorder mutations use reproducible row receipts; session-creating commands use service-held lifecycle receipts. | [Close the M1 safety and post-refactor audit](../../CHANGELOG.md#close-the-m1-safety-and-post-refactor-audit-2026-08-08--2026-08-11) |
+| Drain recovery triggers only on explicit `Gap` or uncertain drain failure; legal progress sequence holes do not trigger it. | [Close transport custody and realign the bridge boundary](../../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14) |
+| The 100,000-subject performance fixture and transport-custody authority are governed by BR-G-42; the former separate BR-G-45 terminal-artifact model is retired. | [Ratify measurement and documentation authority](../../CHANGELOG.md#ratify-measurement-and-documentation-authority-2026-08-14--2026-08-18) |
+| Move-ghost filtering removes synthetic-only ancestors with the ghost. | [Complete and harden the accessible desktop foundation](../../CHANGELOG.md#complete-and-harden-the-accessible-desktop-foundation-2026-08-12--2026-08-18) |
 
 ---
 
@@ -3916,7 +3921,7 @@ does not import or initialize `pywebview`; GUI code remains under
 
 Stage 5.5 used three disjoint implementation lanes converging on the facade.
 The table remains as ownership context for its gates; delivery status is in
-[Add scoped review trees and revisioned selection](../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30).
+[Add scoped review trees and revisioned selection](../../CHANGELOG.md#add-scoped-review-trees-and-revisioned-selection-2026-07-30).
 
 | Lane | Owns | Delivery | Depends on |
 | --- | --- | --- | --- |
@@ -4839,10 +4844,10 @@ headings are organizational, not lane ownership.
   **Status.** The historical v1 representation's event correctness and
   transport custody are closed by the frozen calibration/ceiling and
   independent holdout recorded in
-  [Close transport custody and realign the bridge boundary](../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14).
+  [Close transport custody and realign the bridge boundary](../../CHANGELOG.md#close-transport-custody-and-realign-the-bridge-boundary-2026-08-13--2026-08-14).
   Current-source event timing and the Slice 5–7 product-view rows remain open on
   their owning slices. The former BR-G-45 terminal-retention model is retired;
-  shell-owned SH-G-15 whole-runtime containment remains separate. *Not satisfied by* changing
+  shell-owned SH-G-15 scoped resource acceptance remains separate. *Not satisfied by* changing
   fixtures after measurement, reporting averages in place of the declared
   statistic, using empty history runs or shared short strings, omitting a
   custody root/high-water mark, including terminal artifacts in custody, or

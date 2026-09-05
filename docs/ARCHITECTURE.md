@@ -882,7 +882,7 @@ consumes only an exact generic admission verdict and forwards a granted opaque
 context without interpreting readiness. `interfaces/web/document_channel.py`
 is the sole production WebView2 host-to-page message sink and rechecks document
 currency inside its queued UI callback. Exact limits, evidence, and delivery
-status belong to `M1_BRIDGE.md`, `M1_SHELL.md`, `INTERFACES.md`, and
+status belong to `BRIDGE.md`, `INTERFACES.md`, and
 `DESKTOP_UI.md`, not this document.
 
 See also `COMMANDLINE.md`.
@@ -951,7 +951,7 @@ predeclared bound.
 The tier definitions and required evidence are normative policy in
 `DEFENSE.md` §7. Architecture adds one constraint: incompatible scaling axes
 are never merged because one tool can measure them. Transport custody, retained
-terminal results, projection caches, and whole-runtime containment have
+terminal results, projection caches, and scoped runtime resource acceptance have
 distinct owners and acceptance claims. Exact datasets, byte counts, run
 results, validator identities, and open/closed gate status belong to the owning
 module or delivery document.
@@ -961,8 +961,8 @@ Current claim and evidence ownership is:
 | Claim | Owner |
 | --- | --- |
 | Executor settlement semantics | `TOOLS.md` |
-| Desktop bridge behavior and transport custody | `M1_BRIDGE.md` |
-| Desktop host/runtime containment | `M1_SHELL.md` |
+| Desktop bridge behavior and transport custody | `BRIDGE.md` |
+| Desktop cold-start resource and leak/growth acceptance | `INTERFACES.md` |
 | Component-specific performance | Owning module document |
 
 ---
@@ -988,8 +988,8 @@ Adds canonical content evidence, role-free inventory, standalone and linked
 integrity workflows, bounded durable history readback, shared service/selection
 facades, and the secured WebView2 desktop. The remaining work is product-facing
 desktop completion and beta hardening, not a new domain architecture. Exact
-delivery slices, gates, and current status live in `M1_PLAN.md`,
-`M1_BRIDGE.md`, and `M1_SHELL.md`.
+remaining delivery lives in `M1_PLAN.md`; subject criteria live in
+`BRIDGE.md`, and `INTERFACES.md`.
 
 ### M2 — durable sessions and queue ownership
 
@@ -1026,8 +1026,7 @@ existing identity, evidence, custody, and settlement contracts.
 - Module documents own implemented component policy, algorithms, local tests,
   current state, and limits that do not redefine a cross-cutting defense or
   bridge contract.
-- `M1_PLAN.md`, `M1_BRIDGE.md`, and `M1_SHELL.md` own active delivery plans and
-  gates.
+- `M1_PLAN.md` owns remaining delivery. `BRIDGE.md` owns protocol/transport, `PRESENTATION.md` owns views and focused scale, and `INTERFACES.md` owns host/lifecycle and release criteria.
 - `CHANGELOG.md` owns dated task outcomes.
 - `HANDOFF.md` owns only immediate operational context.
 
@@ -1036,7 +1035,7 @@ owning module document rather than copying it here. Add architecture detail
 only when multiple layers must coordinate around the decision or when changing
 it would reinterpret durable state or public contracts.
 
-`M1_BRIDGE.md` owns exact bridge commands and wire behavior; `DEFENSE.md` §1.3
+`BRIDGE.md` owns exact bridge commands and wire behavior; `DEFENSE.md` §1.3
 owns normative scalar and containment walls. The active interface lifecycle
 ownership and source locator are stated in §4.10 above. A coordinated
 replacement must update this document and that locator in the same

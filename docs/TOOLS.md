@@ -136,14 +136,13 @@ guard from clean committed source. Record the live drift and its ceiling margin;
 passing that guard is regression evidence, not a new calibration or acceptance
 artifact.
 
-The former BR-G-45 complete-graph model is retired. Any future task surface must
-define and enforce a finite production aggregate-retention policy in its own
-closed register and derive analytical containment from the admitted domain.
-Only a separately identified native or renderer residual that production cannot
-bound analytically may become an empirical claim.
-SH-G-15's whole headed runtime is
-the anticipated empirical Tier 3 consumer because WebView2, CLR, allocator,
-topology, and version effects are irreducibly runtime-dependent. Shared `tools`
+The former BR-G-45 complete-graph model is retired and is retained only as
+historical provenance. Active tools preserve the runtime request/population
+bounds and the evidence authorities named by `DEFENSE.md`; no aggregate graph
+reservation or owner census is required for a future task surface.
+SH-G-15 owns scoped cold-start resource and repeated/long-workload leak/growth
+acceptance under DEFENSE section 7; runtime dependence alone does not require
+a universal containment model or a new calibration for every version. Shared `tools`
 support may be extracted for an actual empirical consumer, but only for
 canonical artifact/schema/digest checks, process isolation, source/runtime
 receipts, verdict exclusion, and frozen-contract validation. Corpus generation,
@@ -239,7 +238,7 @@ post-refactor stabilization rows. `check` requires both the policy oracle and
 the committed trace to match; either can fail while the other passes.
 
 The in-code oracle also carries a typed recording projection for the exact
-seven protected rows recorded by [M1_SHELL_H2.md](M1_SHELL_H2.md); that catalog
+seven protected rows recorded by [archived recording acceptance](obsolete/M1_SHELL_H2.md); that catalog
 is part of the fail-closed manifest. Before normalization, an oracle-only side channel
 snapshots authoritative production `ExecutionSet.status`,
 `recording_reasons`, `recording_issues`, and aggregate recording alongside the
@@ -610,7 +609,7 @@ code 2 with an actionable error and publishes no report.
 ## Measurement integration boundary
 
 No logger or product-CLI integration is appropriate for the measurement
-package. `M1_SHELL.md` defines logging as a GUI-host facility under
+package. `INTERFACES.md` defines logging as a GUI-host facility under
 `interfaces/web`, consuming GUI paths and capturing pywebview. Importing it into
 the Python harness would invert the measurement boundary and could perturb
 results through rotation or concurrent log writers. The standalone `gui.ps1`

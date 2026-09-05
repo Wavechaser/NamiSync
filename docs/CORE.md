@@ -7,13 +7,12 @@ evidence, compound phase results, standalone and linked integrity continuation,
 the exact core-event v5 codec, signed-64 scalar boundaries, typed review-limit
 facts, full-width Windows file identity, shared relative-path hierarchy helpers,
 and recursive inventory scope. Finite plan-source admission and single exact
-typed scan adoption are active; the complete task-artifact reservation model is
-accepted but unrealized.
+typed scan adoption are active. Population and retention walls are limited to
+the active count and request bounds described in `DEFENSE.md`.
 
-The remaining accepted-but-unrealized bridge contract is mapped in
-`M1_BRIDGE.md`; its scalar and retention hard walls are owned by
-`DEFENSE.md` §1.3. Scoped recording continuation and terminal checkpoint cleanup
-are active below. Every live producer and consumer uses event v5 and data epoch
+The external bridge contract is owned by `BRIDGE.md`; scalar and containment
+walls are owned by `DEFENSE.md` §1.3. Scoped recording continuation and terminal
+checkpoint cleanup are active below. Every live producer and consumer uses event v5 and data epoch
 6 with the corrected ledger/plan identity hash contract. Prior event epochs
 have no supported decode or compatibility route; public paths reject them and
 no positive compatibility fixture remains.
@@ -93,10 +92,9 @@ private exact plan signal carrying the active token, reconstructs an exact PLAN
 fact, retires the raw signal graph, and retains neither the signal nor admission
 in its result. Tokenless and different-run same-domain signals are loud rung-3
 failures rather than refusal authority. It
-deliberately does not walk or size a complete Python object graph:
-a complete task reservation must separately freeze and validate construction
-and container capacity, sorting/index storage, selection and preview values,
-strings/codecs, native/browser copies, callbacks, and multi-session retention.
+deliberately charges only the declared shallow slots. It does not establish
+aggregate process-memory containment. Focused presentation costs are measured
+at their owner; no complete-task reservation model is a prerequisite.
 
 The M0 scan/plan/preflight portion is implemented in `core/pathing.py`,
 `core/root_authority.py`, `core/models.py`, `core/planning.py`, and
@@ -108,22 +106,7 @@ remain in operation modules; core's stateless probes carry no module policy and
 remain standard-library-only. `core/pathing.py` stays purely lexical and does
 not re-export native anchor or volume probes from `core/root_authority.py`.
 
-The fourteen exact scan/model dataclasses are frozen and slotted. Their
-instances carry only their declared fields, so undeclared instance state is
-structurally excluded without changing equality, ordering, validation, or
-serialization. Scanner-result adoption and retained recorder checks require the
-exact public types and declared container shapes without reconstructing the
-graph. Once adopted, first-party consumers trust those immutable base values;
-reflective mutation of their declared fields remains the unsupported
-reflective/forged (rung 4) case.
-
-The eleven exact planning dataclasses are likewise frozen and slotted. Their
-declared fields, plan identity, fingerprints, payload shape, validation, and
-selection semantics are unchanged. Exact-type and declared-field validation
-remain the named internal (rung 3) adoption authority; downstream first-party
-readers trust the immutable adopted values. External (rung 1) ingress and
-reentrant (rung 2) callbacks retain their separate validation and ordering
-obligations.
+The scan/model, planning, preflight, and integrity contracts are frozen and slotted where required by their source definitions. Their declared fields, identity, validation, and serialization semantics are canonical in the corresponding modules under `namisync/core/`; this document records their meaning and adoption boundaries without duplicating field inventories.
 
 Planner-result admission validates the exact compound `Plan` contract and
 returns the producer's immutable plan by identity instead of rebuilding its
@@ -588,7 +571,7 @@ Core event versioning is independent of bridge-envelope, workflow-checkpoint,
 database, UI-state, shell, and page versions. The bridge envelope remains
 versioned separately and carries the originating core event version explicitly;
 workflow checkpoints are unversioned process-local typed custody. Exact
-boundary versions and shapes are mapped in `M1_BRIDGE.md`. An
+boundary versions and shapes are mapped in `BRIDGE.md`. An
 unversioned browser-facing event is not supported.
 
 Every reliable result item carries an explicit `item_type` and `phase`;

@@ -7,7 +7,7 @@ Maintenance recording remains unrealized.
 
 ## Recording Truth (Event v5 Active)
 
-The exact result vocabulary is owned by [M1_BRIDGE.md](M1_BRIDGE.md). Each
+The exact result vocabulary is owned by [core contracts](CORE.md). Each
 recorder call produces one typed,
 operation-local truth result. A committed receipt is final and idempotent; an
 identical byte-producing replay returns the same complete

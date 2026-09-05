@@ -11,14 +11,13 @@ commands. Stage 5.5's workflow-owned selection semantics are now implemented:
 direct user deselection remains distinct from safety exclusion, execution
 re-derives the authoritative set, and the workflow-owned typed checkpoints
 preserve that provenance and executor continuation truth.
-Stage 5.5 facade integration is complete; the planning-source ownership wall is
-active while the complete task-artifact reservation model remains unrealized;
-Stage 6 desktop behavior is finalized in `M1_BRIDGE.md`; queue durability,
+Stage 5.5 facade integration is complete and the planning-source ownership wall is
+active. Stage 6 desktop behavior is finalized in `BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
 ## Stage 6 Second-Half Workflow Contract
 
-Exact event/result and task protocols live in [M1_BRIDGE.md](M1_BRIDGE.md), and
+Exact internal event/results are source-owned under `namisync/core/`; [BRIDGE.md](BRIDGE.md) owns their external encoding, and
 numeric/retention walls in [DEFENSE.md](DEFENSE.md) §1.3. Workflows consume
 those contracts without receiving an interface-owned task claim.
 
@@ -78,7 +77,7 @@ boundaries. Existing frozen body mappings remain supported, and generic
 result-free session snapshots remain legal without implying terminal delivery.
 
 Workflow accumulation follows the active exact checked-arithmetic contract in
-[M1_BRIDGE.md](M1_BRIDGE.md) and
+[BRIDGE.md](BRIDGE.md) and
 [DEFENSE.md](DEFENSE.md) §1.3 without a workflow-local numeric variant.
 
 ## Purpose
@@ -125,9 +124,8 @@ The builder checks source occurrence `N+1` against its local wall before
 accessing that member. Within the wall it reconstructs and validates each exact
 member before duplicate classification, and it never retains the first excess
 source member. It keeps one minimum display spelling for each canonical path key.
-Synthetic ancestor/index construction and the complete projection-byte charge
-remain unclosed; this row boundary does not price indexes, sort storage, or
-disposable construction maps.
+This source-row bound does not measure synthetic ancestor/index construction
+or sorting cost; PRESENTATION owns focused scale verification for those behaviors.
 
 Plan projection preserves that single path authority when several immutable
 operations share one target. It retains one path/group row and emits every
@@ -138,8 +136,8 @@ filesystem-folder action semantics.
 Informational warning/notice leaves are interleaved only after the domain tree
 is built. They have typed stable identities and deterministic attachment, but
 never enter the canonical path index, subtree membership, selection, rollups,
-or actionable scope. Exact node codecs, ordering, projection frames, diagnostic
-omission, and population walls are owned by [M1_BRIDGE.md](M1_BRIDGE.md).
+or actionable scope. Implemented node codecs remain source-owned. Ordering, projection behavior, diagnostic
+omission, and population walls are owned by [PRESENTATION.md](PRESENTATION.md) and DEFENSE.
 Presentation filters, move grouping, overlays, and caches remain Stage 6
 service/interface concerns rather than tree-builder policy.
 
@@ -224,11 +222,10 @@ replacement cannot become capacity refusal. Scanner, planner, and selection
 behavior is unchanged; observer and preflight receive the immutable review
 projection instead of mutable continuation.
 
-These planning-source row and shallow-reference counters are not a reservation
-formula, heap estimate, or complete task-artifact validator. Construction/
-container capacity, sorting/index storage, selection, complete projections,
-serialization, native/browser copies, and multi-session owners still need
-separate closure or charge before a complete model can be frozen.
+These planning-source row and shallow-reference counters are admission facts,
+not heap estimates or complete-runtime memory claims. Construction, presentation,
+serialization, native/browser copies, and multi-session ownership remain outside
+this workflow admission.
 
 `run_plan` now isolates its phase frame and retires traceback/cause/context
 before any ordinary or process-fatal error escapes. Root/path adapters project
@@ -278,7 +275,7 @@ construction or the other unmodeled construction/callback costs.
 
 1. Re-derive the authoritative execution selection from the immutable plan,
    safety exclusions, and canonical `user_deselected` set. Validate the exact
-   core `Commitment` defined by [M1_BRIDGE.md](M1_BRIDGE.md); execution cannot
+   core `Commitment` defined in [execution.py](../namisync/core/execution.py); execution cannot
    resupply a frozen Setup choice. Refuse a malformed or mismatched commitment
    before preflight. An all-skipped result refuses because there is nothing to
    execute; a selected `NOOP` remains executable work.
@@ -703,7 +700,7 @@ changing resume selection. Rebaseline hashes and conditionally replaces or
 creates evidence even when content matches; it clears verification freshness
 rather than reporting a verified match. This admission change is not yet
 implemented. See the [three-operation policy](VERIFIER.md#accepted-standalone-operation-policy)
-for behavior and the [active M1 plan](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification)
+for behavior and the [active M1 plan](M1_PLAN.md#remaining-checkpoints)
 for delivery and regression requirements.
 
 ## Other Workflows

@@ -94,8 +94,8 @@ may complete independently; task detachment occurs only after observer and
 detail owners are both absent. The initiating submit exception remains the
 public failure throughout.
 
-The desktop task owner-claim, binding, lease, epoch, and release protocol is an
-interface obligation specified by [M1_BRIDGE.md](M1_BRIDGE.md); it uses the
+The implemented desktop task association and release protocol is an
+interface obligation specified by [INTERFACES.md](INTERFACES.md); it uses the
 existing transactional `attach` seam and does not expand dispatcher policy.
 Dispatcher retains the full opaque `OperationResult` until explicit session
 close, but neither builds the bridge summary nor serializes result items to
@@ -298,7 +298,7 @@ that gap, so the leading `Gap` occupies a slot inside the bound: a new stream
 never starts with more buffered envelopes than its capacity.
 
 Core event v5 is active under the coordinated cutover defined by
-[M1_BRIDGE.md](M1_BRIDGE.md). Dispatcher accepts only that exact event version;
+[BRIDGE.md](BRIDGE.md). Dispatcher accepts only that exact event version;
 it does not version-dispatch a mixed live stream. The hub wraps one supported
 emitter-owned domain value in an envelope, then `canonical_event_bytes`
 projects it and enforces the reliable byte wall before sequence, replay,
@@ -464,7 +464,7 @@ and fresh workflow authority/custody reconciliation before pending re-admission
 or `RUNNING`→`INTERRUPTED` recovery. The current process-local semantic
 checkpoint and its transient attestations are not a durable recovery format.
 Exact active event/database versions remain owned by
-[M1_BRIDGE.md](M1_BRIDGE.md); none changes for this metadata boundary.
+[BRIDGE.md](BRIDGE.md); none changes for this metadata boundary.
 
 ### Stored-record retention classification
 
@@ -491,8 +491,8 @@ ceiling are unchanged. Field-shape and fault tests establish the store handoff
 contract, not a total-memory reduction or a new measured acceptance ceiling.
 The shared full result remains a subject-scaled terminal artifact, separately
 observed through live dispatcher result roots. The former BR-G-45 aggregate
-terminal-artifact model is retired and supplies no active bound. SH-G-15 whole-
-runtime containment remains open; this change claims neither a replacement
+terminal-artifact model is retired and supplies no active bound. SH-G-15 scoped resource
+and leak/growth acceptance remains open; this change claims neither a replacement
 aggregate bound nor whole-runtime containment.
 Contained store-write and custody-release failures retain only separate sticky
 Boolean failure markers. The dispatcher does not retain the exception, its
@@ -523,7 +523,7 @@ caller or thread hook; they are not retained task artifacts and this boundary
 does not convert them into synthetic lifecycle truth.
 
 Queued execution carries the exact core `Commitment` defined by
-[M1_BRIDGE.md](M1_BRIDGE.md). Workflow admission validates it and freshly
+[BRIDGE.md](BRIDGE.md). Workflow admission validates it and freshly
 preflights; dispatcher neither reconstructs nor reinterprets the commitment.
 Replanning after wakeup produces a material-difference review; it is not a
 silent replacement.

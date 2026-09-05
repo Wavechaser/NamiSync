@@ -1,3 +1,8 @@
+> Archived on 2026-09-06 during documentation ablation. This is historical
+> planning/evidence context, not current implementation authority. Current
+> subject contracts and the remaining M1 plan live one directory above.
+> Original source SHA-256 (before banner and link relocation): CA0625902EBB26A6662D558B68C422D8E795F703D93CF28C93979F5BF880A2CB
+
 # NamiSync Initial Simplification Run
 
 **Standing (2026-09-01): completed delivery record.** This document owns the

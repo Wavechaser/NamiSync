@@ -78,7 +78,7 @@ graph and task-artifact byte targets were never production-enforced, had no
 finite derivation domain, and are retired by the initial simplification run;
 they confer no production guarantee. The active task and response-retention
 rules below are exact count bounds only; they introduce no aggregate byte or
-whole-runtime memory guarantee. `M1_BRIDGE.md` owns the mapped decision records,
+whole-runtime memory guarantee. `BRIDGE.md` owns current external protocol contracts,
 exact wire shapes, and active refusal schemas; other active documents point
 here instead of reproducing these limits.
 
@@ -199,9 +199,7 @@ The retired complete-graph figures, task-artifact byte model, 4,096-receipt
 design, projection-generation count, and phase-ahead graph reservation are not
 active walls. They may remain historical design context, but they are not
 acceptance evidence and may not be revived by reference. The active 48-count
-rules above do not revive any byte claim. A future production containment wall
-must have a finite search domain, a named runtime enforcer, and independent
-evidence under §7 before its owning delivery row can close.
+rules above do not revive any byte claim. Future resource acceptance remains scoped to the SH-G-15 policy and evidence requirements below.
 
 ---
 
@@ -568,10 +566,9 @@ classes reopens this review.
 
 The 64-handler admission ceiling bounds work after NamiSync admission; pinned
 pywebview creates an exposed-call thread before that gate. It therefore does
-not prove a bound on raw WebMessage thread creation. Outbound bridge values also
-require an aggregate byte/depth policy before a valid-scale terminal result can
-claim complete runtime containment. These are availability/scale boundaries,
-not authority claims, and remain governed by the owning bridge gates.
+not prove a bound on raw WebMessage thread creation. These remain availability
+and scale boundaries, not authority claims; active request and population walls
+apply independently of any future whole-runtime resource measurement.
 
 The loopback asset origin is not a claim that no listener exists. It is a local
 asset and dependency parser surface with no externally authorized NamiSync
@@ -762,10 +759,24 @@ may close a gate.
   count for a noisy one; committed raw evidence; and a separate validator.
   **Tier 3** is protected authority with the empirical and deterministic forms
   below.
+- SH-G-15 is scoped release acceptance for cold-start resource budgets and
+  repeated/long-workload leak and growth checks on declared supported profiles.
+  It is not a hard whole-runtime memory guarantee. Existing runtime-enforced
+  request and population walls remain independent obligations; new application-
+  owned populations and requests need finite admission bounds at their owners,
+  not a complete Python/CLR/WebView object-graph certificate. Passing sampled
+  resource checks neither proves universal containment nor waives those bounds.
+  Independently predeclared profile budgets use Tier 2; covering a complete
+  desktop workflow does not alone escalate this scoped SLO to Tier 3. Tier 3
+  still applies if calibration derives the ceiling or acceptance authority
+  fails/is invalidated. Record source/runtime provenance and rerun affected
+  profile checks after relevant changes; unchanged budgets need not be
+  recalibrated merely because a runtime version changed. Evidence applies only
+  to its recorded profile and does not silently certify an untested version.
 - Empirical Tier 3 is required, after the consequence and enforceability
   decisions above, when calibration derives a release ceiling, release-gating
-  acceptance authority failed or was invalidated, an empirical number without
-  an analytical bound closes a cross-slice user-operation gate, or an
+  acceptance authority failed or was invalidated, an empirical number outside the scoped SH-G-15 exception above, without
+  an analytical bound, closes a cross-slice user-operation gate, or an
   unversioned runtime-dependent result would otherwise become a release limit.
   Use the lowest sufficient tier for every other number; compatible Tier 2
   measurements may share one vertical-slice harness.
@@ -802,7 +813,7 @@ may close a gate.
 - `BUGS.md` owns concrete defect incidents, fixes, severity, and only the
   residual detail necessary to identify the technical boundary.
 - Module documents own operation-specific mechanisms, limits, and extension
-  policy. `M1_BRIDGE.md` owns exact desktop envelopes, commands, limits, and
+  policy. `BRIDGE.md` owns exact desktop envelopes, commands, limits, and
   acceptance gates beneath the trusted-base decision in §4.
 - `CHANGELOG.md` records dated adoption or revision of this policy;
   `HANDOFF.md` carries only immediate operational context.

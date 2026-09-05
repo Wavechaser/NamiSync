@@ -51,9 +51,7 @@ deduplication, sorting, or SQL construction. Absent or ineligible values within
 that wall can still produce an empty result; duplicates and malformed row ids
 retain their existing selection semantics, but none bypasses raw request
 admission. Chunked reads retain their one-snapshot ordering and do not
-accumulate raw `sqlite3.Row` shells beside the typed result. A complete retained-
-graph charge must cover the now-finite normalized sets, ordered copies, sort
-scratch, query slices, and final tuples.
+accumulate raw `sqlite3.Row` shells beside the typed result. These count bounds do not establish an aggregate memory guarantee; focused scale checks belong to PRESENTATION.
 
 The inventory workflow re-resolves stable volume identity before each
 invocation, registers first locations in the exact order host -> volume
@@ -110,8 +108,8 @@ identity before enforcing the count, so an overlap is charged once. An excess
 after successful refresh is `FAILED+RAN`, publishes no partial selection, and
 starts no verifier work; a recorder finalization failure retains error
 precedence. Accepted rows share one root `Path` owner rather than copying it per
-candidate. The independent retained-byte axis remains inactive until its
-complete graph charge is frozen.
+candidate. Request and population bounds remain independently enforced by
+scanner and workflow admission.
 
 The workflow checks the exact candidate-row tuple and its first-excess count,
 then constructs `IntegritySelection` directly; no injectable builder or second
@@ -208,9 +206,7 @@ refuses before hashing.
 
 ## Stage 6 Desktop Contracts (Protocol Subset Active)
 
-Exact Setup admission, recents, bridge wire shapes, paging, hard walls, scalar
-domains, and retention accounting are centralized in
-[M1_BRIDGE.md](M1_BRIDGE.md), with safety classification in
+Setup admission and recents are owned by INTERFACES; paging by PRESENTATION; external wire encoding by [BRIDGE.md](BRIDGE.md), with safety classification and active bounds in
 [DEFENSE.md](DEFENSE.md). Inventory consumes the shared workflow-owned location
 candidate pipeline and always re-admits a real start; a slot or
 `RootAuthority` is evidence, never cached authorization.
@@ -229,7 +225,7 @@ view identity unchanged.
 
 The accepted but unrealized view contract adds the shared server-owned sibling
 sorter from
-[Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9).
+[Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow).
 New views and reset use canonical path-key order; filename, size, and mtime
 are explicit opt-in column/direction choices. Sort the complete projection
 before windowing, using raw own-object values, deterministic ties, and

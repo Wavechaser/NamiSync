@@ -478,16 +478,6 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - OPEN (2026-08-27). Task-adjacent owner-count gap. The desktop
-  registry caps live cards, but the complete runtime/service/dispatcher graphs
-  and close-time owners do not yet share one task-wide byte reservation.
-  Unpublished desktop session attachment is now structural: every desktop start
-  binds its exact reservation before scheduling, observer timeout keeps that
-  capacity charged under Dispatcher retry, and exact-session release detaches
-  only after observer/detail retirement. Malformed return cleanup cannot drop
-  an unauthenticated plan. The remaining cause is the absent task-wide graph
-  charge and multi-session lifecycle; closure must bind those owners, and no
-  formula may treat a timeout as retirement.
 - MODERATE - FIXED (2026-08-27). Pre-run exception closure retention. Lock
   acquisition, continuation open, and canceled-session settlement passed a raw
   collaborator exception through a nested runner callback, keeping its
@@ -1095,17 +1085,17 @@ defect, and move implementation-level test choreography out of the log.
   holdout passed at 1,351,794 ordinary and 1,513,014 exact-maximum bytes against
   the frozen 1,966,080-byte ceiling, with exact source/runtime/dependency
   authority plus no-`Gap`, ordering, 128/64/64, cleanup, and terminal truth.
-  This closes SH-G-8 and BR-G-42 event/transport custody only. BR-G-45
-  terminal-artifact retention and SH-G-15 whole-runtime containment remain
-  open and untested by this evidence.
+  This closes SH-G-8 and BR-G-42 event/transport custody only. BR-G-45 is now
+  retired; scoped SH-G-15 resource and leak/growth acceptance remains open
+  and untested by this evidence.
 - MINOR - FIXED (2026-08-13). Split protocol authority. Active
-  documents delegated exact errors and retry rules to `M1_SHELL.md` while also
+  documents delegated exact errors and retry rules to `obsolete/M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers
   could follow incompatible contracts and SH-G-8 appeared closed without its
   normal-envelope evidence. Cause: the Stage 6 delivery plan was promoted into
-  a second protocol authority after `M1_BRIDGE.md` had already settled the
-  seam. Fixed by making `M1_BRIDGE.md` the sole bridge/BR-G authority, reducing
-  `M1_SHELL.md` to delivery/package/SH-G ownership, and correcting active links
+  a second protocol authority after `obsolete/M1_BRIDGE.md` had already settled the
+  seam. Current protocol authority is `BRIDGE.md`. The original fix made M1_BRIDGE the sole bridge/BR-G authority, reducing
+  `obsolete/M1_SHELL.md` to delivery/package/SH-G ownership, and correcting active links
   and status. Numeric-hole, `start_plan`, and installed real-WebView2 browser
   witnesses have landed. Realigned SH-G-8 later closed under its separate
   transport-custody contract rather than the former whole-Job predicate.
@@ -1392,16 +1382,6 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- SEVERE - OPEN (2026-08-27). Inventory complete-graph admission gap. Raw scan
-  rows, returned repository rows, and tree input members now stop before first
-  excess; requested paths, row ids, and mapping identities independently stop
-  before their first raw excess and before normalization/deduplication/sorting,
-  closing the inherited path-key `limit + 1` error. Integrity checks the exact
-  candidate-row tuple before construction, and no valid excess publishes
-  partial work. Synthetic tree/index and candidate construction, their finite
-  preprocessing transients, old/new task generations, and the complete byte
-  authority remain outside active admission. `DEFENSE.md` §1.3 owns the walls;
-  `M1_BRIDGE.md` owns the accepted complete task/artifact graph.
 - SEVERE - FIXED (2026-08-28). Hostile resolution alias mutation. Inventory
   retained resolver-returned mount/evidence objects across the later root probe,
   so callback mutation could change the root or volume facts used for scan and
@@ -1830,7 +1810,7 @@ defect, and move implementation-level test choreography out of the log.
   Construction, sorting/index storage, previews, codecs, native/browser copies,
   complete graphs, exceptions, and multi-session owners remain outside active
   admission under [DEFENSE.md](DEFENSE.md) §1.3 and
-  [M1_BRIDGE.md](M1_BRIDGE.md).
+  [BRIDGE.md](BRIDGE.md).
 - SEVERE - FIXED (2026-08-28). Reliable result custody aliasing. The generic
   runner, execution workflow, and integrity workflow could give a callback the
   same item/result graph retained for terminal truth, or run a later validator

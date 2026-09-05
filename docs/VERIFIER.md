@@ -248,7 +248,7 @@ atomically with the evidence transaction. Pause/resume retains exact admitted
 ids/order and completed results without reapplying fresh-selection filters.
 Automatic linked and manual exact post-copy verification remain separate.
 Delivery and regression gates live in the
-[active M1 plan](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification).
+[active M1 plan](M1_PLAN.md#remaining-checkpoints).
 
 ## Selected And Post-Execution Verification
 
@@ -280,7 +280,7 @@ invocation context is not checkpoint state: resume re-derives it from the exact
 typed `VerifyContinuation` before constructing the reporter. Exact event
 versions, closed detail projection, scalar domains, omission witnesses,
 and envelope limits are owned by
-[M1_BRIDGE.md](M1_BRIDGE.md); verifier preserves only the local pause/resume
+[BRIDGE.md](BRIDGE.md); verifier preserves only the local pause/resume
 state needed to continue the same admitted work.
 
 Ordinary manual verification is location-scoped and independent of any current
@@ -294,7 +294,7 @@ reconstructs candidates from retained operation-time hashes. Those transient
 attestations exist only for immediate linked verification and same-session
 pause/resume and never become history, ledger, task, or JavaScript state. The
 exact atomic join and presentation classification are centralized in
-[M1_BRIDGE.md](M1_BRIDGE.md) and [DATABASE.md](DATABASE.md).
+[BRIDGE.md](BRIDGE.md) and [DATABASE.md](DATABASE.md).
 
 A handoff is ready only when every applicable selected byte-producing operation
 has a successful terminal outcome and current committed evidence. An unrelated
@@ -319,7 +319,7 @@ scope. Exact replacement retention and task attachment semantics remain bridge
 authority.
 
 Verifier totals follow the active checked-arithmetic contract in
-[M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
+[BRIDGE.md](BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
 verifier defines no local numeric or file-identity variant.
 
 Verify, baseline, and the implemented rebaseline entry point carry per-item

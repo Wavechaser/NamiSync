@@ -1,65 +1,15 @@
 # Desktop UI
 
-Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
-desktop's service, view, settings, session-observation, and bridge-security
-seams. The classified launchers, wheel-packaged bootstrap assets, secured
-product-host composition, and the production transport defined by
-`M1_BRIDGE.md` now exist. Ordinary and installed-wheel evidence covers host
-isolation, runtime refusal, popup/navigation guards, single-instance behavior,
-native picker path confinement, committed-origin refusal, hostile text, and
-logging privacy. The named browser-behavior witnesses now run through the
-installed production bridge and renderer in real WebView2. Slice 3 evidence
-covers transactional observation, bounded drain behavior, recovery, and
-repeated bridge readiness. The fixed, non-sliding 150 ms progress-only linger
-and its immediate reliable/lifecycle wake regressions have landed. An active
-long poll may hold the first detailed progress snapshot for the full interval;
-receipt and reliable running-state feedback bypass that linger. Benchmark
-accounting now streams bounded browser/producer evidence, performs final
-assembly after the child exits, and labels whole-runtime memory as a
-non-acceptance diagnostic; its event pass alone is not SH-G-8 custody closure
-authority. The accepted independent custody evidence below supplies closure.
-The frozen/disjoint realistic corpus and production-path runner have also
-landed, including exact real-deque 128/64/64 no-`Gap`, terminal path-cut,
-cleanup, and clean source/dependency/runtime/digest-authority witnesses. The
-committed calibration-a artifact records normative ordinary/exact-maximum
-transport measurements, the separate contract freezes the 1,966,080-byte
-ceiling, and three fresh holdout-b runs pass at 1,351,794 ordinary and 1,513,014
-exact-maximum bytes. This closes the frozen historical v1 SH-G-8 and BR-G-42
-event/transport-custody claim only. The v4 diagnostic event evidence and Tier-1
-custody drift evidence remain historical, not a new calibration or acceptance;
-`M1_BRIDGE.md` owns the exact disposition. A separate current-source one-child
-guard requires both live custody shapes to remain within that frozen ceiling on
-ordinary suite runs.
-The former BR-G-45 full terminal-artifact model is retired and supplies no
-active aggregate-retention guarantee, while shell-owned SH-G-15 version-bound
-whole-runtime containment remains open. The
-earlier whole-Job delta is diagnostic input only, not a result for any of those
-new predicates. GUI Break 1 and Slice 4 completed their audited realignment and
-were hardened and reverified on 2026-08-17 with ordinary, scale, and real
-clean-wheel headed evidence. User-facing plan, inventory, history,
-and control surfaces remain in the wider M1 design; the accepted reslice below
-defers the history page. `M1_SHELL.md` owns implementation order and
-beta-package closure.
+The secured host, theme/accessibility foundation, generic tree renderer and
+file-row gallery are implemented. Setup and production plan/execution/inventory/
+integrity task surfaces remain unrealized; history and global settings pages are
+deferred. Current v5 item progress is reduced by the bridge, while production
+row binding remains future work.
 
-The product-surface portion of the accepted Stage 6 second-half reslice remains
-target state. Its exact event-v5 and persistence-epoch cut is active; Setup and
-process-live task review for plan/execution, inventory, and integrity/manual
-post-copy work remain unrealized. History, global-settings mutation,
-drag-and-drop, and remaining cosmetic-state consumers are deferred.
-[M1_SHELL_H2.md](M1_SHELL_H2.md) is the newest implementation checklist and
-[M1_BRIDGE.md](M1_BRIDGE.md) owns all exact cutover contracts.
-
-Current executor/verifier item progress now crosses the production bridge
-under the expanded exact browser shape. The browser reduces that protocol into
-phase, latest-snapshot, and active-item presentation state, including Gap and
-reliable-outcome precedence. The test-only gallery can render an explicitly
-projected per-item percentage; stable production row projection, item matching,
-and live visual consumption remain Slice 5 work.
-
-`M1_BRIDGE.md` is the sole normative authority for bridge envelopes, commands,
-errors, retry/revision identity, sequence and terminal lifecycle, and BR-G
-acceptance gates. This document owns the user-facing and visual contract; it
-does not restate the wire protocol.
+This document owns visual/user interaction behavior. BRIDGE owns exact transport,
+PRESENTATION owns projection/window/search/sort behavior, INTERFACES owns the host,
+and M1_PLAN owns remaining delivery. Historical build and calibration recaps are
+archived with the original plans; current bridge evidence has one BRIDGE owner.
 
 ## Purpose
 
@@ -140,7 +90,7 @@ ready state continues; refused state runs the bounded finalizer and shows the
 coordinated reset action through the stable native startup dialog. It then
 resolves `index.html` from package resources, creates one pending native
 document and a dispatcher snapshotted from the production command mapping
-defined exclusively by `M1_BRIDGE.md`, and starts only Edge Chromium with
+defined exclusively by `BRIDGE.md`, and starts only Edge Chromium with
 the packaged page served on a random loopback origin. The initialized callback
 binds that exact origin once. Renderer/origin failure aborts before native
 window creation. An initial guard failure or pre-open loaded refusal rejects
@@ -684,7 +634,7 @@ commit_semantic_settings(patch) -> SemanticSettingsView
 and event/record views. Plan start's optional sink is currently attached
 transactionally before the session can run. The accepted target requires that
 same attach-before-schedulability path for every desktop-created execution,
-inventory, integrity, and manual-verification session. `M1_BRIDGE.md`
+inventory, integrity, and manual-verification session. `BRIDGE.md`
 exclusively defines the recovery cursor and command-receipt identity exposed
 across the wire. The desktop owns the bounded presentation queue fed by that
 sink; it does not expose raw dispatcher streams to JavaScript. It must
@@ -782,7 +732,7 @@ state must not become another semantic-settings, task, or session store.
 ## Bridge and renderer security
 
 The host exposes one function-table `dispatch` entry, and only packaged
-`bridge.js` references `window.pywebview`. `M1_BRIDGE.md` exclusively defines
+`bridge.js` references `window.pywebview`. `BRIDGE.md` exclusively defines
 the complete envelope bound, immutable command mapping, opaque identities,
 exact errors, deadlines and retry classes, revision rules, drain recovery,
 sequence/`Gap`/terminal semantics, and terminal-session release versus explicit
@@ -859,7 +809,7 @@ committed off-origin source replaces it and causes dispatch to fail closed.
 Origin authorization is an entry-time admission check; the bridge neither
 holds the document lock across a handler nor rolls back completed work if
 navigation or reinjection makes its response undeliverable. That state is
-uncertain delivery, not uncertain commit; `M1_BRIDGE.md` owns the corresponding
+uncertain delivery, not uncertain commit; `BRIDGE.md` owns the corresponding
 retry and recovery rules. The packaged static-asset server is not an API or
 event channel.
 
@@ -898,8 +848,8 @@ This remains visually inactive until the Setup surface is implemented. Setup exp
 trash/additive deletion, trash-on-update, filters, creation-time and ACL
 preservation, source-casing propagation, and linked verification. Mirror has no
 control. ADS is visibly unavailable and frozen off; the page never implies a
-disabled checked option will be honored. Exact Setup and filter shapes are
-owned by [M1_BRIDGE.md](M1_BRIDGE.md).
+disabled checked option will be honored. Accepted Setup behavior is defined here; future exact Setup/filter DTOs are reopened at implementation. Wire encoding is
+owned by [BRIDGE.md](BRIDGE.md).
 
 A path row remains editable until explicit native admission. Editing an
 accepted path immediately drops the page's slot reference and marks it
@@ -955,8 +905,8 @@ activating it; clicking the label activates as usual. It never filters a viewpor
 searches a path, owns selection, or talks to the bridge. Slices 5 and 6 remain the first owners
 of real plan/inventory rows and their command wiring. The exact Python
 structural/search/filter/window/anchor contract and installed shell/tree
-contract live in `M1_BRIDGE.md`; the installed shell/tree witness is SH-G-7 in
-`M1_SHELL.md`.
+contract live in `PRESENTATION.md`; the installed shell/tree witness is SH-G-7 in
+`INTERFACES.md`.
 
 The accepted but unrealized view contract adds server-owned sibling sorting for
 plan and inventory views.
@@ -976,7 +926,7 @@ latent, but production commands, validators, state, raw row facts, and window/
 anchor behavior must be complete when sorting activates. Later GUI
 layout work must not reopen those contracts. Status/progress sorting, global
 flat sorting, and durable preferences are excluded from M1. Exact rules and
-acceptance live in [Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9);
+acceptance live in [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow);
 the existing shell/tree witness does not close this new work. The active M1
 delivery plan owns sequencing.
 
@@ -1057,8 +1007,8 @@ truth, clears the faulting live row decoration, disables mutating actions, and
 shows: **NamiSync could not publish this review safely. Close the task and try
 again.** Event drain and exact release continue for custody, but queued events
 cannot repopulate the discarded generation. The issue remains visible after
-release until task close. Exact fault precedence, phase mapping, disposal, and
-allowed operations are defined in [M1_BRIDGE.md](M1_BRIDGE.md).
+release until task close. Fault precedence, phase mapping, disposal, and
+allowed operations follow this document and [INTERFACES.md](INTERFACES.md).
 
 The browser retains only one accepted byte-fitting tree window for the selected
 pane. It never keeps a hidden complete plan/inventory list and never receives
@@ -1106,8 +1056,8 @@ atomic ledger view classifies it as execution-owned; current-state evidence is
 labelled separately. Execution and manual post-copy overlays remain independent
 fields. A replacement attempt decorates from one complete new generation, never
 a mixture or old fallback, while settled membership remains stable until
-terminal publication. Exact view fields, grouping, evidence classes, overlays,
-and anchor behavior are defined in [M1_BRIDGE.md](M1_BRIDGE.md).
+terminal publication. View behavior, grouping, evidence classes, overlays,
+and anchor behavior are defined here and in [PRESENTATION.md](PRESENTATION.md); future exact DTOs remain open.
 
 Inventory remains distinct from plan review. The pane supports literal search,
 server facets, collapse, default acknowledged-row hiding, and shared Refresh,
@@ -1145,7 +1095,7 @@ a fallback for missing task artifacts.
 
 Progress is replaceable telemetry. The browser reports the active nested event
 version truthfully; exact current/target versions and atomic cutover are owned
-by [M1_BRIDGE.md](M1_BRIDGE.md).
+by [BRIDGE.md](BRIDGE.md).
 Every snapshot self-describes its phase and may carry optional nominal
 active-item identity plus an opaque attempt id and paired attempt-local byte
 counters alongside aggregate bytes, item counts, and the display path. Only
@@ -1233,6 +1183,6 @@ Contrast and no-color-only signaling remain requirements in every theme.
   grouping, independent evidence/result axes, confirmation-gated rebaseline,
   exact-handoff fallback labeling, and no browser-retained full result.
 - Exact target contracts and gates remain in
-  [M1_BRIDGE.md](M1_BRIDGE.md), delivery coverage in
-  [M1_SHELL_H2.md](M1_SHELL_H2.md), and test-scope policy in
+  [BRIDGE.md](BRIDGE.md), delivery coverage in
+  [M1_PLAN.md](M1_PLAN.md), and test-scope policy in
   [TESTS.md](TESTS.md).

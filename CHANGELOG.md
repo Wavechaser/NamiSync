@@ -23,6 +23,30 @@ history, and workflow product while building its secured headed WebView2 shell.
 Redundant in-process transports and certification layers were removed while
 preserving public behavior, real boundary checks, and persisted contracts.
 
+#### Ablate documentation and separate active contracts from delivery history (2026-09-05 – 2026-09-06)
+
+- Evaluated six documentation removal cohorts with retained-answer witnesses,
+  unique losses, and counterexamples; proposed one remaining-work plan and
+  direct subject ownership instead of the M1 plan ancestry chain.
+- Identified retired task-reservation prescriptions surviving in active prose.
+  Preserved accepted outcomes while reopening unrealized mechanisms by user
+  decision; production code and tests are unchanged.
+- Narrowed SH-G-15 to scoped cold-start resource budgets and repeated/long-
+  workload leak/growth acceptance, preserving independent runtime request and
+  population bounds. Reconciled active references and evidence-tier policy.
+- Traced milestone1's compact-plan prerequisite to its 128 MiB/15% reserve
+  model, distinguishing planned compaction from landed scaling improvements.
+  Numeric resource acceptance remains open; no runtime pass is claimed.
+- Split bridge protocol and presentation contracts into BRIDGE and PRESENTATION;
+  consolidated host/lifecycle criteria in INTERFACES and remaining outcomes in
+  M1_PLAN. Archived the original plans and M1_SIMPLIFICATION delivery record.
+- Removed retired aggregate prescriptions and duplicated recaps/shape inventories,
+  reconciled references, and archived the study and two obsolete acceptance-target
+  ledger entries without claiming runtime fixes.
+- Reviewed contracts and source-backed protocol witnesses with independent agents;
+  checked relative links/anchors and diff integrity. Production, tests, tools,
+  and protected evidence are unchanged.
+
 #### Remove duplicate internal transport, certification, and lifecycle authority (2026-09-01 – 2026-09-05)
 
 - Removed process-local workflow JSON codecs, payload versions, and byte

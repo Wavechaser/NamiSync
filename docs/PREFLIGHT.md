@@ -7,7 +7,7 @@ managed-data mutation, on resume, and on queued wakeup. Stage 6's pre-model
 plan-review source/refusal admission is active for workflow-supplied review.
 
 Preflight uses the active capacity-observation and refusal contract in
-[M1_BRIDGE.md](M1_BRIDGE.md) and
+[BRIDGE.md](BRIDGE.md) and
 [DEFENSE.md](DEFENSE.md) §1.3 without defining a local numeric variant.
 
 ## Purpose
