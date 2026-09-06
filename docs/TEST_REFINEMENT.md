@@ -42,7 +42,7 @@ edits until the final documentation closeout. User-owned
 | --- | --- | --- | --- | --- |
 | ST-H | Synchronize the native-live delayed-return receipt with observed WebView reinjection under the existing scenario deadline | — | Focused handshake fault gates, paired page/harness tests, installed native-live BR-G-30/31 | complete |
 | ST-0 | Freeze this population and establish a reproducible green baseline | ST-H | Source/runtime identity, complete suite, import contracts, capability accounting, independent review | complete |
-| ST-1 | Simplify fixtures and assertion presentation around the retained source-owner AST guards | ST-0 | Exact guard-output differential, declared inventory mutations, core department | pending |
+| ST-1 | Simplify fixtures and assertion presentation around the retained source-owner AST guards | ST-0 | Exact guard-output differential, declared inventory mutations, core department | complete |
 | ST-2 | Consolidate repository query/result machinery without changing database mechanisms | ST-0 | Declared SQLite behavior and fault probes, database department | pending |
 | ST-3 | Consolidate integrity-selection machinery without changing its representation contract | ST-0 | Both selection types, declared behavior/mechanism probes, core/verifier/workflows neighborhood | pending |
 | ST-4 | Consolidate visual assertions without changing their verification tier | ST-0 | Declared ordinary visual probes, interfaces department, relevant installed headed witnesses | pending |
@@ -103,6 +103,36 @@ qualified checkout matched the frozen authority except for the authorized
 comparison. Independent ST-0 review confirmed all 123 files, eight protected
 function source/AST identities and the exact owner inventory. This evidence does not
 mark that checkpoint complete.
+
+## ST-1 outcome (2026-09-07)
+
+ST-1 now presents the fixture corpus as five named full-result rows. The
+original nested.py and qualified.py sources, relative paths and scope counters
+remain separate and exact. Imports and aliases remain one fixture.py row;
+async/class/annotation coverage has independent extended.py scopes; the
+star-import case remains separate. This preserves observation partitions even
+when two analyzer mistakes would conserve an aggregate count.
+
+The frozen v3 manifest and exact disposable sources are under
+build/test-refinement/1026541/st-1/. All 18 old/v3 A-F1 through A-F7 and
+A-V1/A-V2 runs reached their declared source and matched their declared result.
+Raw failures attribute A-F1 through A-F4 to their expected Counter differences,
+A-F5 to the added rebindings member, A-F6 to the added star-import path, and
+A-F7 to the renamed exact owner. A reviewer regression independently misses
+one direct Detail call and duplicates one qualified FailureDetail visit: old
+and v3 reject it in distinct fixture assertions, while merged v2 passes because
+the two errors cancel in its shared outer bucket.
+
+The final focused selection passed six tests in 0.53 seconds. The one final
+core department run passed 911 tests with one unchanged WinError 1314
+capability skip and 3,766 deselections in 17.88 seconds; both runs have exit
+records and JUnit. Earlier v1/v2 evidence, driver failures, the failed basetemp
+run and unnecessary repeat remain append-only and are superseded rather than
+erased. The analyzer and exact-owner test retain byte-identical function
+source and identical normalized ASTs. The test diff is 98 insertions and 52
+deletions, a diagnostic net increase of 47 lines from explicit accepted
+coverage; the five policy invocations equal the original count. Line and case
+counts are not acceptance evidence. Independent review passed the v3 fixture partitions, all declared probes, and the compensating-fault regression; ST-1 is complete.
 
 ## Historical ST-0 recovery state (2026-09-07)
 

@@ -314,12 +314,17 @@ def _failure_detail_policy(
     )
 
 
-def test_failure_detail_call_guard_detects_import_and_assignment_aliases() -> None:
-    calls, _rebindings, _star_imports = _failure_detail_policy(
-        """
+@pytest.mark.parametrize(
+    ("source", "relative_path", "expected"),
+    [
+        pytest.param(
+            """
 from namisync.core.session import FailureDetail as Imported
 from namisync.core import session as session_module
+from .session import FailureDetail as Relative
 Alias = Imported
+Annotated: object = Relative
+Transitive = Annotated
 
 def imported():
     Imported("T", "message")
@@ -329,33 +334,28 @@ def assigned():
 
 def module_alias():
     session_module.FailureDetail("T", "message")
-""",
-        "fixture.py",
-    )
 
-    assert calls == Counter(
-        {
-            ("fixture.py", "imported"): 1,
-            ("fixture.py", "assigned"): 1,
-            ("fixture.py", "module_alias"): 1,
-        }
-    )
-    _calls, rebindings, _star_imports = _failure_detail_policy(
-        """
-from namisync.core.session import FailureDetail as Imported
-from namisync.core import session as session_module
-Alias = Imported
 Qualified = session_module.FailureDetail
 """,
-        "fixture.py",
-    )
-    assert rebindings == {
-        ("fixture.py", "Alias"),
-        ("fixture.py", "Qualified"),
-    }
-
-    nested, _rebindings, _star_imports = _failure_detail_policy(
-        """
+            "fixture.py",
+            (
+                Counter({
+                    ("fixture.py", "imported"): 1,
+                    ("fixture.py", "assigned"): 1,
+                    ("fixture.py", "module_alias"): 1,
+                }),
+                {
+                    ("fixture.py", "Alias"),
+                    ("fixture.py", "Annotated"),
+                    ("fixture.py", "Transitive"),
+                    ("fixture.py", "Qualified"),
+                },
+                set(),
+            ),
+            id="imports-and-aliases",
+        ),
+        pytest.param(
+            """
 from namisync.core.session import FailureDetail as Detail
 
 def outer():
@@ -363,17 +363,19 @@ def outer():
     def inner(value=Detail("Default", "message")):
         Detail("Body", "message")
 """,
-        "nested.py",
-    )
-    assert nested == Counter(
-        {
-            ("nested.py", "outer"): 2,
-            ("nested.py", "outer.inner"): 1,
-        }
-    )
-
-    qualified, _rebindings, _star_imports = _failure_detail_policy(
-        """
+            "nested.py",
+            (
+                Counter({
+                    ("nested.py", "outer"): 2,
+                    ("nested.py", "outer.inner"): 1,
+                }),
+                set(),
+                set(),
+            ),
+            id="nested-functions",
+        ),
+        pytest.param(
+            """
 import namisync.core.session
 
 def plain_import():
@@ -384,20 +386,65 @@ def outer():
         "Default", "message"
     ): namisync.core.session.FailureDetail("Body", "message")
 """,
-        "qualified.py",
-    )
-    assert qualified == Counter(
-        {
-            ("qualified.py", "plain_import"): 1,
-            ("qualified.py", "outer"): 1,
-            ("qualified.py", "outer.<lambda>"): 1,
-        }
-    )
-    _calls, _rebindings, star_imports = _failure_detail_policy(
-        "from namisync.core.session import *\n",
-        "star.py",
-    )
-    assert star_imports == {"star.py"}
+            "qualified.py",
+            (
+                Counter({
+                    ("qualified.py", "plain_import"): 1,
+                    ("qualified.py", "outer"): 1,
+                    ("qualified.py", "outer.<lambda>"): 1,
+                }),
+                set(),
+                set(),
+            ),
+            id="qualified-and-lambda",
+        ),
+        pytest.param(
+            """
+from namisync.core.session import FailureDetail as Detail
+
+def annotated(
+    value: Detail("Parameter", "message"),
+) -> Detail("Return", "message"):
+    Detail("Body", "message")
+
+async def async_owner(value=Detail("Default", "message")):
+    Detail("AsyncBody", "message")
+
+@Detail("ClassDecorator", "message")
+class Nested:
+    value = Detail("ClassBody", "message")
+""",
+            "extended.py",
+            (
+                Counter({
+                    ("extended.py", "<module>"): 4,
+                    ("extended.py", "annotated"): 1,
+                    ("extended.py", "async_owner"): 1,
+                    ("extended.py", "Nested"): 1,
+                }),
+                set(),
+                set(),
+            ),
+            id="async-class-and-annotations",
+        ),
+        pytest.param(
+            "from namisync.core.session import *\n",
+            "star.py",
+            (Counter(), set(), {"star.py"}),
+            id="star-import",
+        ),
+    ],
+)
+def test_failure_detail_call_guard_detects_import_and_assignment_aliases(
+    source: str,
+    relative_path: str,
+    expected: tuple[
+        Counter[tuple[str, str]],
+        set[tuple[str, str]],
+        set[str],
+    ],
+) -> None:
+    assert _failure_detail_policy(source, relative_path) == expected
 
 
 def test_direct_failure_detail_construction_has_exact_static_owners() -> None:
