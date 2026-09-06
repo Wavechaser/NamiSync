@@ -678,8 +678,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     "reinjection_ready",
                     threading.Event(),
                 )
-                if not reinjection_ready.wait(10.0):
-                    raise RuntimeError("native reinjection was not observed")
+                reinjection_ready.wait()
                 original_get_current_url = runtime["original_get_current_url"]
                 measured_managed_url = original_get_current_url()
                 recorder.set(
@@ -708,8 +707,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 delayed_evaluate = runtime.get("delayed_evaluate")
                 if not isinstance(delayed_evaluate, threading.Event):
                     raise RuntimeError("delayed return transport was not instrumented")
-                if not delayed_evaluate.wait(10.0):
-                    raise RuntimeError("delayed return transport was not attempted")
+                delayed_evaluate.wait()
 
             window = runtime["window"]
             managed_url = window.get_current_url()

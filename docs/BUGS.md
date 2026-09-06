@@ -71,6 +71,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - FIXED (2026-09-07). Fixed-wait headed synchronization. The native-host
+  evidence child could exhaust its 10-second reinjection waits before WebView
+  reported the next ready document, losing the off-thread URL measurement.
+  Cause: `_native_gate_child.py` imposed independent waits inside a 60-second
+  whole-scenario deadline. Fixed by making the reinjection and delayed-return
+  transport events use that parent-owned deadline. A 12.7-second delayed-ready
+  probe now distinguishes the old failure from the repaired pass; a suppressed
+  signal reaches the parent deadline, publishes no success, and reaps the
+  launched child plus all eight observed descendants. Evidence and hashes are
+  under `build/test-refinement/1026541/st-h/`; no product defect was found.
+
 - MINOR - FIXED (2026-08-29). Checkout line-ending conversion. Windows clones
   rewrote the pinned Fluent token transcripts and shipped icon-source assets to
   CRLF, so their working-tree SHA-256 values no longer matched the reviewed
