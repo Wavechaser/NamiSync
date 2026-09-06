@@ -41,7 +41,7 @@ edits until the final documentation closeout. User-owned
 | ID | Accepted outcome | Depends on | Named verification | Status |
 | --- | --- | --- | --- | --- |
 | ST-H | Synchronize the native-live delayed-return receipt with observed WebView reinjection under the existing scenario deadline | — | Focused handshake fault gates, paired page/harness tests, installed native-live BR-G-30/31 | complete |
-| ST-0 | Freeze this population and establish a reproducible green baseline | ST-H | Source/runtime identity, complete suite, import contracts, capability accounting, independent review | verification passed; independent review pending |
+| ST-0 | Freeze this population and establish a reproducible green baseline | ST-H | Source/runtime identity, complete suite, import contracts, capability accounting, independent review | complete |
 | ST-1 | Simplify fixtures and assertion presentation around the retained source-owner AST guards | ST-0 | Exact guard-output differential, declared inventory mutations, core department | pending |
 | ST-2 | Consolidate repository query/result machinery without changing database mechanisms | ST-0 | Declared SQLite behavior and fault probes, database department | pending |
 | ST-3 | Consolidate integrity-selection machinery without changing its representation contract | ST-0 | Both selection types, declared behavior/mechanism probes, core/verifier/workflows neighborhood | pending |
@@ -100,7 +100,8 @@ import-linter both exited zero, and all 12 import contracts were kept. The
 protected-input check verified all 123 declared files: raw bytes in the
 qualified checkout matched the frozen authority except for the authorized
 `_native_gate_child.py` LF hash, while live Git content remained the canonical
-comparison. ST-0 awaits its separate independent review; this evidence does not
+comparison. Independent ST-0 review confirmed all 123 files, eight protected
+function source/AST identities and the exact owner inventory. This evidence does not
 mark that checkpoint complete.
 
 ## Historical ST-0 recovery state (2026-09-07)
@@ -108,8 +109,11 @@ mark that checkpoint complete.
 This section records the exact state at the prior stop, when no test code had
 changed and no further implementation was authorized. The user has since
 authorized the bounded ST-H prerequisite and work through ST-2; read-only ST-3
-preparation remains for later. The recovery contents were reconstructed on `milestone1-anthony`; pruning the
-superseded WIP branch remains pending until reviewed ST-0 requalification.
+preparation remains for later. The useful recovery contents were reconstructed
+on `milestone1-anthony` in `6c2dc6e` and independently confirmed superseded.
+ST-0 requalification authorizes pruning the recovery branch
+`codex/wip-20260907-0015-test-refinement`; retain its commit id `c79aead` here
+for provenance, without merging or cherry-picking its recovery commit.
 
 At that stop, ST-0 was blocked and ST-1 through ST-6 were pending. No product
 or test code had changed. The original complete baseline passed 4,670 tests
