@@ -43,7 +43,7 @@ edits until the final documentation closeout. User-owned
 | ST-H | Synchronize the native-live delayed-return receipt with observed WebView reinjection under the existing scenario deadline | — | Focused handshake fault gates, paired page/harness tests, installed native-live BR-G-30/31 | complete |
 | ST-0 | Freeze this population and establish a reproducible green baseline | ST-H | Source/runtime identity, complete suite, import contracts, capability accounting, independent review | complete |
 | ST-1 | Simplify fixtures and assertion presentation around the retained source-owner AST guards | ST-0 | Exact guard-output differential, declared inventory mutations, core department | complete |
-| ST-2 | Consolidate repository query/result machinery without changing database mechanisms | ST-0 | Declared SQLite behavior and fault probes, database department | pending |
+| ST-2 | Consolidate repository query/result machinery without changing database mechanisms | ST-0 | Declared SQLite behavior and fault probes, database department | complete |
 | ST-3 | Consolidate integrity-selection machinery without changing its representation contract | ST-0 | Both selection types, declared behavior/mechanism probes, core/verifier/workflows neighborhood | pending |
 | ST-4 | Consolidate visual assertions without changing their verification tier | ST-0 | Declared ordinary visual probes, interfaces department, relevant installed headed witnesses | pending |
 | ST-5 | Remove redundant harness spelling assertions only where a same-level detector survives | ST-4 | Declared ordinary harness probes, all interface headed tests | pending |
@@ -128,11 +128,49 @@ core department run passed 911 tests with one unchanged WinError 1314
 capability skip and 3,766 deselections in 17.88 seconds; both runs have exit
 records and JUnit. Earlier v1/v2 evidence, driver failures, the failed basetemp
 run and unnecessary repeat remain append-only and are superseded rather than
-erased. The analyzer and exact-owner test retain byte-identical function
-source and identical normalized ASTs. The test diff is 98 insertions and 52
+erased. The analyzer and exact-owner test retain identical normalized function source
+and ASTs; their raw source differs only by CRLF-to-LF line endings in the
+editable containing module. The test diff is 99 insertions and 52
 deletions, a diagnostic net increase of 47 lines from explicit accepted
 coverage; the five policy invocations equal the original count. Line and case
 counts are not acceptance evidence. Independent review passed the v3 fixture partitions, all declared probes, and the compensating-fault regression; ST-1 is complete.
+
+## ST-2 outcome (2026-09-07)
+
+ST-2 now shares one exact synthetic mapping-row factory, one query-plan reader
+and three narrow SQL-role classifiers. Mapping-pair reads, requested-identity
+reads and top-level inventory selections remain independent observations. All
+seven Appendix B tests remain separate, and their scoped-result, ordering,
+400-subject, index, empty-scope and snapshot assertions remain. The unchanged
+alias and stale-target consumers also pass. The large-history fixture now
+contains the predeclared target-present/source-absent discriminator.
+
+The immutable v3 manifest, disposable sources, raw logs and JUnit are under
+build/test-refinement/1026541/st-2/. Its 15 independent cases detect source and
+target filter removal; per-subject and unbounded mapping, identity and inventory
+queries; loss of each required index role; empty-scope querying; and each split
+snapshot after the second-batch callback runs. Formatting-only B-V1 fails the
+old spelling assertion and passes the rewritten classifier.
+
+The first matrix is retained but rejected because rapid source swaps reused
+cached bytecode. The numbered rerun uses isolated per-run caches. Its initial
+F6 mutation is also retained as an ineffective probe; the v4 supplement
+bypasses the outer empty-key guard, reaches one empty-scope query and is
+detected by both populations. The raw F1 fixture reproduces its known masked
+pass; the corrected target-present/source-absent fixture detects the fault in
+both populations.
+
+The combined checkout passed nine focused tests in 1.19 seconds. The database
+department passed 365 tests with 4,313 deselections in 30.67 seconds. Exact
+commands and results are under st-2/final-verification/. Counts and runtimes are
+diagnostic. Independent adversarial review passed all retained assertions,
+role-specific probes and the final formatting-only revision. The final test
+diff is 73 insertions and 89 deletions, a diagnostic net reduction of 16 lines.
+All 123 fully protected files still match their frozen raw hashes. All eight
+protected functions retain exact normalized source and AST identity, and the
+owner inventory is unchanged; see st-2/final-protected-reconciliation.json
+for the two ST-1 newline-only differences. ST-2 is complete; pause here.
+Read-only ST-3 notes remain in st-3/preparation.md; implementation has not begun.
 
 ## Historical ST-0 recovery state (2026-09-07)
 
@@ -141,9 +179,9 @@ changed and no further implementation was authorized. The user has since
 authorized the bounded ST-H prerequisite and work through ST-2; read-only ST-3
 preparation remains for later. The useful recovery contents were reconstructed
 on `milestone1-anthony` in `6c2dc6e` and independently confirmed superseded.
-ST-0 requalification authorizes pruning the recovery branch
-`codex/wip-20260907-0015-test-refinement`; retain its commit id `c79aead` here
-for provenance, without merging or cherry-picking its recovery commit.
+After reviewed ST-0 commit `728f21f`, the superseded recovery branch
+`codex/wip-20260907-0015-test-refinement` was pruned. Its commit id `c79aead`
+remains here for provenance; the recovery commit was not merged or cherry-picked.
 
 At that stop, ST-0 was blocked and ST-1 through ST-6 were pending. No product
 or test code had changed. The original complete baseline passed 4,670 tests

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+import re
 import sqlite3
 
 import pytest
@@ -43,6 +44,60 @@ from _db_fixtures import (
 def _first_excess(*values: object) -> Iterator[object]:
     yield from values
     raise AssertionError("repository read beyond the first excess request")
+
+
+_MAPPING_PAIR_QUERY = re.compile(
+    r"\bFROM\s+mapping_correspondence\b", re.IGNORECASE
+)
+_IDENTITY_QUERY = re.compile(
+    r"\bWITH\s+requested\s*\(\s*volume_serial\s*,\s*file_index\s*\)",
+    re.IGNORECASE,
+)
+_INVENTORY_SELECTION_QUERY = re.compile(
+    r"^\s*SELECT\s+\*\s+FROM\s+inventory\b", re.IGNORECASE
+)
+
+
+def _matching_statements(
+    statements: list[str], pattern: re.Pattern[str]
+) -> list[str]:
+    return [statement for statement in statements if pattern.search(statement)]
+
+
+def _query_plan(path: Path, statement: str) -> tuple[str, ...]:
+    connection = connect_ledger_reader(path)
+    try:
+        return tuple(
+            str(row["detail"])
+            for row in connection.execute("EXPLAIN QUERY PLAN " + statement)
+        )
+    finally:
+        connection.close()
+
+
+def _mapping_rows(
+    count: int,
+    *,
+    descending_source_paths: bool = False,
+    null_target_index: int | None = None,
+) -> tuple[tuple[str, FileIdentity, str, FileIdentity | None, int, int], ...]:
+    return tuple(
+        (
+            (
+                f"source-{count - index if descending_source_paths else index:04d}.bin"
+            ),
+            FileIdentity("source-serial", index),
+            f"target-{index:04d}.bin",
+            (
+                None
+                if index == null_target_index
+                else FileIdentity("target-serial", 10_000 + index)
+            ),
+            1,
+            1,
+        )
+        for index in range(1, count + 1)
+    )
 
 
 def _insert_minimal_inventory_rows(
@@ -643,18 +698,8 @@ def test_current_mapping_read_ignores_large_irrelevant_history_and_keeps_pair_or
     tmp_path: Path,
 ) -> None:
     count = 1_201
-    rows = tuple(
-        (
-            f"source-{count - index:04d}.bin",
-            FileIdentity("source-serial", index),
-            f"target-{index:04d}.bin",
-            None
-            if index == 700
-            else FileIdentity("target-serial", 10_000 + index),
-            1,
-            1,
-        )
-        for index in range(1, count + 1)
+    rows = _mapping_rows(
+        count, descending_source_paths=True, null_target_index=700
     )
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
     statements: list[str] = []
@@ -666,7 +711,7 @@ def test_current_mapping_read_ignores_large_irrelevant_history_and_keeps_pair_or
         )
         target_identities = frozenset(
             identity
-            for index in selected[:-1]
+            for index in selected
             if (identity := rows[index - 1][3]) is not None
         ) | {FileIdentity("target-serial", 99_999)}
         target_paths = tuple(rows[index - 1][2] for index in reversed(selected))
@@ -694,11 +739,7 @@ def test_current_mapping_read_ignores_large_irrelevant_history_and_keeps_pair_or
             for index in selected[:-1]
         }
         assert any(pair.target_identity is None for pair in found.snapshot.pairs)
-        pair_selects = [
-            statement
-            for statement in statements
-            if "FROM mapping_correspondence AS pair" in statement
-        ]
+        pair_selects = _matching_statements(statements, _MAPPING_PAIR_QUERY)
         assert len(pair_selects) == 1
         assert "pair.target_inventory_id IN" in pair_selects[0]
         assert "current_target.location_id" in pair_selects[0]
@@ -811,10 +852,7 @@ def test_current_mapping_read_skips_pair_query_for_an_empty_target_scope(
 
         assert found is not None
         assert found.snapshot.pairs == ()
-        assert not any(
-            "FROM mapping_correspondence AS pair" in statement
-            for statement in statements
-        )
+        assert not _matching_statements(statements, _MAPPING_PAIR_QUERY)
     finally:
         setup.recorder.close()
 
@@ -846,40 +884,18 @@ def test_current_mapping_queries_use_target_and_identity_indexes(
             )
         assert found is not None
 
-        pair_statement = next(
-            statement
-            for statement in statements
-            if "FROM mapping_correspondence AS pair" in statement
-        )
-        identity_statement = next(
-            statement
-            for statement in statements
-            if "WITH requested(volume_serial, file_index)" in statement
-        )
-        connection = connect_ledger_reader(setup.recorder.path)
-        try:
-            pair_plan = tuple(
-                str(row["detail"])
-                for row in connection.execute(
-                    "EXPLAIN QUERY PLAN " + pair_statement
-                )
-            )
-            identity_plan = tuple(
-                str(row["detail"])
-                for row in connection.execute(
-                    "EXPLAIN QUERY PLAN " + identity_statement
-                )
-            )
-        finally:
-            connection.close()
+        pair_statement = _matching_statements(statements, _MAPPING_PAIR_QUERY)[0]
+        identity_statement = _matching_statements(statements, _IDENTITY_QUERY)[0]
+        pair_plan = _query_plan(setup.recorder.path, pair_statement)
+        identity_plan = _query_plan(setup.recorder.path, identity_statement)
 
         assert any(
-            "SEARCH pair USING INDEX" in detail
+            "USING INDEX" in detail
             and "mapping_id=? AND target_inventory_id=?" in detail
             for detail in pair_plan
         )
         assert any(
-            "SEARCH current_target USING COVERING INDEX" in detail
+            "USING COVERING INDEX" in detail
             and "location_id=? AND rel_path_key=?" in detail
             for detail in pair_plan
         )
@@ -891,17 +907,7 @@ def test_current_mapping_queries_use_target_and_identity_indexes(
 def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
     tmp_path: Path,
 ) -> None:
-    rows = tuple(
-        (
-            f"source-{index:04d}.bin",
-            FileIdentity("source-serial", index),
-            f"target-{index:04d}.bin",
-            FileIdentity("target-serial", 10_000 + index),
-            1,
-            1,
-        )
-        for index in range(1, 802)
-    )
+    rows = _mapping_rows(801)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
     statements: list[str] = []
     try:
@@ -921,16 +927,8 @@ def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
 
         assert found is not None
         assert len(found.snapshot.pairs) == len(rows)
-        pair_selects = [
-            statement
-            for statement in statements
-            if "FROM mapping_correspondence AS pair" in statement
-        ]
-        identity_selects = [
-            statement
-            for statement in statements
-            if "WITH requested(volume_serial, file_index)" in statement
-        ]
+        pair_selects = _matching_statements(statements, _MAPPING_PAIR_QUERY)
+        identity_selects = _matching_statements(statements, _IDENTITY_QUERY)
         assert len(pair_selects) == 3
         assert len(identity_selects) == 6
         assert all(statement.count("TARGET-") <= 400 for statement in pair_selects)
@@ -946,24 +944,14 @@ def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
 def test_current_mapping_read_uses_one_snapshot_across_query_batches(
     tmp_path: Path,
 ) -> None:
-    rows = tuple(
-        (
-            f"source-{index:04d}.bin",
-            FileIdentity("source-serial", index),
-            f"target-{index:04d}.bin",
-            FileIdentity("target-serial", 10_000 + index),
-            1,
-            1,
-        )
-        for index in range(1, 402)
-    )
+    rows = _mapping_rows(401)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
     writer = connect_ledger_writer(setup.recorder.path)
     pair_select_count = 0
 
     def update_between_batches(statement: str) -> None:
         nonlocal pair_select_count
-        if "FROM mapping_correspondence AS pair" not in statement:
+        if not _MAPPING_PAIR_QUERY.search(statement):
             return
         pair_select_count += 1
         if pair_select_count == 2:
@@ -1034,11 +1022,7 @@ def test_large_inventory_selection_uses_bounded_queries(tmp_path: Path) -> None:
                 (record.rel_path for record in reversed(records)),
             )
 
-        selects = [
-            statement
-            for statement in statements
-            if statement.lstrip().upper().startswith("SELECT * FROM INVENTORY")
-        ]
+        selects = _matching_statements(statements, _INVENTORY_SELECTION_QUERY)
         assert len(selected) == 1_001
         assert len(selects) == 3
         assert [row.rel_path_key for row in selected] == sorted(
@@ -1058,7 +1042,7 @@ def test_large_inventory_selection_is_one_read_snapshot(tmp_path: Path) -> None:
 
     def update_between_batches(statement: str) -> None:
         nonlocal select_count
-        if not statement.lstrip().upper().startswith("SELECT * FROM INVENTORY"):
+        if not _INVENTORY_SELECTION_QUERY.search(statement):
             return
         select_count += 1
         if select_count == 2:
