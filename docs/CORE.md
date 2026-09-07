@@ -420,6 +420,12 @@ reliable; progress is a replaceable snapshot. Event details must be typed or
 schema-versioned—consumers must not infer semantics by parsing user-facing
 strings.
 
+The exact operation-detail key families and operation-reason vocabulary are owned
+by `core/event_v5.py`. `core/events.py` imports those named immutable sets for
+construction while retaining its explicit detail projector and serializers;
+`event_v5.py` retains its independent explicit wire validators. Enum-derived
+sets remain local to the validator that owns each enum contract.
+
 Emitter-side `DetailProjection` is one canonical exact base value: an exact
 tuple of exact two-element tuples with unique declared ASCII string keys and
 the exact primitive variant for each key. Arrays are exact tuples with exact

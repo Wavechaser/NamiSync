@@ -12,6 +12,14 @@ from typing import ClassVar
 
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.event_v5 import (
+    _DETAIL_BOOLEAN_KEYS,
+    _DETAIL_ID_ARRAY_KEYS,
+    _DETAIL_KEYS,
+    _DETAIL_PATH_KEYS,
+    _DETAIL_SIDE_ARRAY_KEYS,
+    _DETAIL_TEXT_ARRAY_KEYS,
+    _DETAIL_TEXT_KEYS,
+    _OPERATION_REASONS,
     EVENT_V5_SCHEMA_VERSION,
     MAX_DETAIL_LEAVES,
     MAX_DETAIL_PATH_LEAVES,
@@ -19,7 +27,6 @@ from namisync.core.event_v5 import (
     validate_event_v5_envelope,
 )
 from namisync.core.execution import (
-    ExecutionReason,
     ItemRecordingReason,
     TaskRecordingIssue,
     TaskRecordingIssueReason,
@@ -32,7 +39,7 @@ from namisync.core.integrity import (
     ReadStrategy,
     RecordDisposition,
 )
-from namisync.core.planning import BlockedReason, OperationKind
+from namisync.core.planning import OperationKind
 from namisync.core.review import (
     ReviewFactLimitExceeded,
     ReviewLimitAxis,
@@ -64,67 +71,6 @@ from namisync.core.session import (
 CORE_EVENT_SCHEMA_VERSION = EVENT_V5_SCHEMA_VERSION
 
 _HEX_ID = re.compile(r"[0-9a-f]{32}\Z")
-_DETAIL_TEXT_KEYS = frozenset(
-    {
-        "backup",
-        "backup_metadata",
-        "backup_state",
-        "backup_state_error",
-        "blocked_reason",
-        "cleanup_error",
-        "destination_state",
-        "durable_state",
-        "error_type",
-        "message",
-        "mutation_durable_state",
-        "mutation_state",
-        "mutation_state_error",
-        "old_state_error",
-        "publish_state",
-        "retry_error",
-        "retry_error_type",
-        "source_state",
-        "state_error",
-        "state_error_type",
-        "target_state",
-        "target_state_error",
-        "temp_state",
-        "trash_state_error",
-    }
-)
-_DETAIL_PATH_KEYS = frozenset(
-    {
-        "backup_path",
-        "mutation_destination",
-        "prior_path",
-        "published_path",
-        "trash_path",
-    }
-)
-_DETAIL_BOOLEAN_KEYS = frozenset({"continued"})
-_DETAIL_TEXT_ARRAY_KEYS = frozenset({"durability_warnings"})
-_DETAIL_SIDE_ARRAY_KEYS = frozenset({"incomplete_sides"})
-_DETAIL_ID_ARRAY_KEYS = frozenset({"excluded_dependencies"})
-_DETAIL_KEYS = frozenset(
-    {
-        *_DETAIL_TEXT_KEYS,
-        *_DETAIL_PATH_KEYS,
-        *_DETAIL_BOOLEAN_KEYS,
-        *_DETAIL_TEXT_ARRAY_KEYS,
-        *_DETAIL_SIDE_ARRAY_KEYS,
-        *_DETAIL_ID_ARRAY_KEYS,
-    }
-)
-_OPERATION_REASONS = frozenset(
-    {
-        *(reason.value for reason in ExecutionReason),
-        *(reason.value for reason in BlockedReason),
-        "blocked-correspondence",
-        "blocked-dependency",
-        "incomplete-scan",
-        "user-deselected",
-    }
-)
 
 
 class DeliveryClass(StrEnum):

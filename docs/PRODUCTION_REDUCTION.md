@@ -110,7 +110,7 @@ mutation, or population-dependent per-item scanning is a regression.
 | PR-1 | One required existing-run finishing path. | PR-0 | Recording/control cases and call/effect traces | pending |
 | PR-2 | One pure verification terminal projection. | PR-1 | Exact terminal-field and phase equivalence | pending |
 | PR-3 | Reduced history schema and explicit reset requirement. | PR-0 | Fresh v7 behavior, retained protections, old/mixed refusal | pending |
-| PR-4 | One event detail/reason vocabulary. | PR-0 | Independent vocabulary and event-v5 consumer fixtures | pending |
+| PR-4 | One event detail/reason vocabulary. | PR-0 | Independent vocabulary and event-v5 consumer fixtures | complete |
 | PR-5 | One core Clock contract. | PR-0 | Five consumers and import contracts | complete |
 | PR-6 | Reuse exact admitted immutable detail. | PR-4 | Raw isolation/refusal and wire equivalence | pending |
 | PR-7 | One bounded SQL subject-batch policy. | PR-3 | Parameters, results/order, snapshot, atomic writes | pending |
@@ -195,6 +195,12 @@ boundary behavior through core, dispatcher, database, interfaces, and packaged
 JavaScript. A member-add/remove fault must fail an independent consumer fixture.
 Review circular imports and widening; update `CORE.md`. Commit as
 `refactor(core): share event detail vocabularies`.
+
+Closed after clean independent review: 498 core event tests and 323 dispatcher,
+history, interface, and packaged-browser consumer tests passed. Both vocabulary
+faults failed through existing public detail-admission tests. Tests and the
+event-v5 validator remain unchanged; evidence is in
+`build/production-reduction/40fd8a5/pr4/`.
 
 ### PR-5 — Centralize Clock
 
@@ -315,7 +321,7 @@ the isolated blocked task on its AGENTS recovery branch. A shared blocker also
 blocks any task whose guarantees or prerequisites it prevents; it does not
 stop unrelated work. This is the user-directed recovery order for this pass.
 
-Current state: PR-0 and PR-5 are complete after clean independent review. PR-1 and PR-4 are in progress; the remaining checkpoints are pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
+Current state: PR-0, PR-4, and PR-5 are complete after clean independent review. PR-1 and PR-3 are in progress; the remaining checkpoints are pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
 oracle and baseline, SH-G-8 authority, unintegrated presentation components,
 execution projections, and lifecycle claims. Deferred findings are oracle
 simplification, broad continuation-validation reduction, further protocol
