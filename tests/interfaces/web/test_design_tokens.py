@@ -455,6 +455,19 @@ def _resolve(name: str, values: dict[str, str], seen: frozenset[str] = frozenset
     return _resolve(match.group(1), values, seen | {name})
 
 
+def _theme_variables(
+    source: str,
+) -> tuple[dict[str, str], dict[str, str], dict[str, str]]:
+    light = _variables(_block(source, ":root "))
+    dark = light | _variables(_block(source, ':root[data-theme="dark"]'))
+    automatic_dark = light | _variables(
+        _block(
+            _block(source, "@media (prefers-color-scheme: dark)"),
+            ':root:not([data-theme="light"])',
+        )
+    )
+    return light, dark, automatic_dark
+
 def _luminance(value: str) -> float:
     assert re.fullmatch(r"#[0-9A-Fa-f]{6}", value), value
     channels = [int(value[index : index + 2], 16) / 255 for index in (1, 3, 5)]
@@ -665,14 +678,7 @@ def test_sh_g_11_channel_semantic_aliases_are_complete_and_disjoint() -> None:
 
 def test_sh_g_11_channel_mappings_use_theme_secondary_badges() -> None:
     source = TOKENS.read_text(encoding="utf-8")
-    light = _variables(_block(source, ":root "))
-    dark = light | _variables(_block(source, ':root[data-theme="dark"]'))
-    automatic_dark = light | _variables(
-        _block(
-            _block(source, "@media (prefers-color-scheme: dark)"),
-            ':root:not([data-theme="light"])',
-        )
-    )
+    light, dark, automatic_dark = _theme_variables(source)
 
     shared_aliases = {
         "--intent-additive-foreground": "var(--palette-blue-main)",
@@ -1412,14 +1418,7 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
 def test_sh_g_11_solid_controls_and_operation_filters_follow_tuned_states() -> None:
     tokens = TOKENS.read_text(encoding="utf-8")
     source = COMPONENTS.read_text(encoding="utf-8")
-    light = _variables(_block(tokens, ":root "))
-    dark = light | _variables(_block(tokens, ':root[data-theme="dark"]'))
-    automatic_dark = light | _variables(
-        _block(
-            _block(tokens, "@media (prefers-color-scheme: dark)"),
-            ':root:not([data-theme="light"])',
-        )
-    )
+    light, dark, automatic_dark = _theme_variables(tokens)
 
     filter_backgrounds = {
         "copy": "blue",
