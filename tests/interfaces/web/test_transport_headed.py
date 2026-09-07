@@ -423,7 +423,6 @@ def test_transport_gate_uses_shared_immutable_command_composition() -> None:
     assert "original_commands(" in helper
     assert "commands is not captured.get" in helper
     assert "startup_gate is not captured.get" in helper
-    assert "MappingProxyType" in helper
     assert "register" not in source.casefold()
     assert "extra_commands" not in source
 
@@ -457,13 +456,6 @@ def test_transport_gate_native_picker_automation_is_exact_and_fail_closed() -> N
     assert "NativeWindowHandle" in inspect.getsource(
         headed_host_child._post_exact_folder_confirmation
     )
-    assert "IsWindow(button_handle)" in target_source
-    assert "IsWindowVisible(button_handle)" in target_source
-    assert "IsWindowEnabled(button_handle)" in target_source
-    assert "_BUTTON_WINDOW_CLASS" in target_source
-    assert "GetDlgCtrlID(button_handle)" in target_source
-    assert "IsChild(dialog_handle, button_handle)" in target_source
-    assert "button_process_id != process_id" in target_source
     assert "PostMessageW" in post_source
     assert headed_host_child._BM_CLICK == 0x00F5
     picker_sources = "\n".join(

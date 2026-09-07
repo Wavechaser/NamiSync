@@ -46,7 +46,7 @@ edits until the final documentation closeout. User-owned
 | ST-2 | Consolidate repository query/result machinery without changing database mechanisms | ST-0 | Declared SQLite behavior and fault probes, database department | complete |
 | ST-3 | Consolidate integrity-selection machinery without changing its representation contract | ST-0 | Both selection types, declared behavior/mechanism probes, core/verifier/workflows neighborhood | complete |
 | ST-4 | Consolidate visual assertions without changing their verification tier | ST-0 | Declared ordinary visual probes, interfaces department, relevant installed headed witnesses | complete |
-| ST-5 | Remove redundant harness spelling assertions only where a same-level detector survives | ST-4 | Declared ordinary harness probes, all interface headed tests | pending |
+| ST-5 | Remove redundant harness spelling assertions only where a same-level detector survives | ST-4 | Declared ordinary harness probes, all interface headed tests | complete |
 | ST-6 | Reconcile the combined result, retire temporary machinery, and close documentation | ST-1–ST-5 | Combined fault replay, complete suite, imports, protected-file identity, independent adversarial review | pending |
 
 Checkpoint order is fixed and sequential: ST-1, ST-2, ST-3, ST-4, then ST-5.
@@ -383,6 +383,22 @@ an existing same-level owner before its spelling assertion is removed. `E-V1`
 changes only quotation/comments at the proposed removed assertion and preserves
 the Python AST. Fake-native coverage cannot justify removing global
 forbidden-API guards; the two privacy branches remain separate.
+ST-5 removed eight redundant source spellings: seven picker-target predicate
+strings and the `MappingProxyType` helper string. The frozen E-F1 through E-F10
+and E-V1 corpus ran each control and fault against both the old and rewritten
+populations in the qualified checkout. All controls passed; every semantic
+fault failed at its declared ordinary owner in both populations; and the
+AST-identical E-V1 spelling variation failed only the old source assertion.
+The retained native-click, delegation, collision, privacy, media, cleanup,
+milestone, identity, prohibited-input and production-stack checks remain.
+Final verification produced 29 focused ordinary passes, 1,450 interface
+ordinary passes, 4,650 repository ordinary passes with four unchanged
+capability skips, 12 kept import contracts, and 28 interface headed passes.
+The first manifest was incomplete, an initial runner preserved the wrong live
+working directory, and two later preflight manifests were rejected before
+mutation for surrogate fault or population-accounting defects; the accepted
+append-only `preflight-04` evidence preserves those corrections and the exact
+raw and JUnit receipts.
 
 ## Incident, deferral and escalation register
 
