@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 from collections.abc import Callable
 from dataclasses import fields, replace
 from datetime import datetime, timezone
@@ -57,24 +56,6 @@ _SUBJECT = FileStat(
     metadata=MetadataSnapshot(attributes=0, created_ns=50),
 )
 _OBSERVED_AT = datetime(2026, 8, 30, tzinfo=timezone.utc)
-
-
-def _known_item_index_reads(source: str) -> set[str]:
-    reads: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
-        if (
-            isinstance(node, ast.Attribute)
-            and isinstance(node.ctx, ast.Load)
-            and node.attr == "_known_item_ids"
-        ):
-            reads.add(ast.unparse(node))
-        elif (
-            isinstance(node, ast.Constant)
-            and type(node.value) is str
-            and node.value == "_known_item_ids"
-        ):
-            reads.add(repr(node.value))
-    return reads
 
 
 def _selection_subject(
@@ -137,143 +118,153 @@ def _selection_contract(
     )
 
 
-@pytest.mark.parametrize("size", (1, 4, 16))
+class _MembershipWorkWitness:
+    """Tests-only seam that records membership work after construction."""
+
+    def __init__(self, item_ids: object) -> None:
+        self._item_ids = frozenset(item_ids)  # type: ignore[arg-type]
+        self.iterated_item_ids = 0
+
+    def __contains__(self, item_id: object) -> bool:
+        return item_id in self._item_ids
+
+    def __iter__(self):
+        for item_id in self._item_ids:
+            self.iterated_item_ids += 1
+            yield item_id
+
+
+def _install_membership_work_witness(
+    selection: IntegritySelection | PostCopySelection,
+) -> _MembershipWorkWitness:
+    """Install an owner-specific test adapter after construction has completed."""
+
+    witness = _MembershipWorkWitness(selection.known_item_ids)
+    selection._known_item_ids = witness  # type: ignore[assignment]
+    return witness
+
+
+@pytest.mark.parametrize("size", (0, 1, 16, 256, 4096))
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
-def test_selection_completion_uses_one_index_lookup_without_tuple_scan(
-    monkeypatch: pytest.MonkeyPatch,
+def test_selection_completion_preserves_admitted_membership_and_refusal(
     size: int,
     kind: str,
 ) -> None:
     subjects = tuple(_selection_subject(kind, number) for number in range(size))
-    subject_type = type(subjects[0])
     selected_ids = tuple(subject.item_id for subject in subjects)
-    item_id_accesses: list[str] = []
-    known_id_lookups: list[str] = []
-    completed_id_lookups: list[str] = []
-    armed = False
+    selection, _, _ = _selection_contract(kind, subjects)
+
+    assert set(selection.known_item_ids) == set(selected_ids)
+    assert tuple(selection.pending) == subjects
+    for item_id in selected_ids:
+        selection.mark_completed(item_id, 0)
+    with pytest.raises(ValueError, match="unknown .* item"):
+        selection.mark_completed("unknown", 0)
+
+    assert selection.completed_count == size
+    assert tuple(selection.pending) == ()
+    if selected_ids:
+        with pytest.raises(ValueError, match="already completed"):
+            selection.mark_completed(selected_ids[0], 0)
+
+
+@pytest.mark.parametrize("size", (0, 1, 16, 256, 4096))
+@pytest.mark.parametrize("kind", ("post-copy", "integrity"))
+def test_selection_exposes_stable_construction_admitted_membership(
+    kind: str,
+    size: int,
+) -> None:
+    subjects = tuple(_selection_subject(kind, number) for number in range(size))
+    selection, _, _ = _selection_contract(kind, subjects)
+    admitted = set(selection.known_item_ids)
+
+    if subjects:
+        selection.mark_completed(subjects[-1].item_id, 0)
+
+    assert admitted == {subject.item_id for subject in subjects}
+    assert set(selection.known_item_ids) == admitted
+
+
+@pytest.mark.parametrize("kind", ("post-copy", "integrity"))
+def test_selection_completion_work_is_population_independent(
+    monkeypatch: pytest.MonkeyPatch,
+    kind: str,
+) -> None:
+    item_id_accesses_by_size: list[int] = []
+    membership_iterations_by_size: list[int] = []
+    unknown_item_id_accesses_by_size: list[int] = []
+    unknown_membership_iterations_by_size: list[int] = []
+    subject_type = (
+        IntegritySelectionItem if kind == "integrity" else PostCopyCandidate
+    )
     original_getattribute = subject_type.__getattribute__
+    armed = False
+    item_id_accesses: list[str] = []
 
     def observe_getattribute(value: object, name: str) -> object:
         if armed and name == "item_id":
             item_id_accesses.append(name)
         return original_getattribute(value, name)
 
-    class ObservedKnownIds(frozenset[str]):
-        def __contains__(self, value: object) -> bool:
-            known_id_lookups.append(str(value))
-            return super().__contains__(value)
-
-    class ObservedCompletedIds(dict[str, int]):
-        def __contains__(self, value: object) -> bool:
-            completed_id_lookups.append(str(value))
-            return super().__contains__(value)
-
     monkeypatch.setattr(subject_type, "__getattribute__", observe_getattribute)
-    selection, _, _ = _selection_contract(kind, subjects)
-    selection._known_item_ids = ObservedKnownIds(selection._known_item_ids)
-    selection._completed_bytes = ObservedCompletedIds(selection._completed_bytes)
-    armed = True
+    for size in (1, 16, 256, 4096):
+        subjects = tuple(_selection_subject(kind, number) for number in range(size))
+        selection, _, _ = _selection_contract(kind, subjects)
+        witness = _install_membership_work_witness(selection)
+        last_id = subjects[-1].item_id
+        item_id_accesses.clear()
+        armed = True
+        selection.mark_completed(last_id, 0)
+        armed = False
+        item_id_accesses_by_size.append(len(item_id_accesses))
+        membership_iterations_by_size.append(witness.iterated_item_ids)
 
-    for item_id in selected_ids:
-        selection.mark_completed(item_id, 0)
-    successful_window = (
-        list(item_id_accesses),
-        list(known_id_lookups),
-        list(completed_id_lookups),
-    )
+    for size in (0, 1, 16, 256, 4096):
+        subjects = tuple(_selection_subject(kind, number) for number in range(size))
+        selection, _, _ = _selection_contract(kind, subjects)
+        witness = _install_membership_work_witness(selection)
+        item_id_accesses.clear()
+        armed = True
+        with pytest.raises(ValueError, match="unknown .* item"):
+            selection.mark_completed("unknown", 0)
+        armed = False
+        unknown_item_id_accesses_by_size.append(len(item_id_accesses))
+        unknown_membership_iterations_by_size.append(witness.iterated_item_ids)
 
-    with pytest.raises(ValueError, match="already completed"):
-        selection.mark_completed(selected_ids[0], 0)
-    duplicate_window = (
-        list(item_id_accesses),
-        list(known_id_lookups),
-        list(completed_id_lookups),
-    )
-
-    with pytest.raises(ValueError, match="unknown .* item"):
-        selection.mark_completed("unknown", 0)
-    unknown_window = (
-        list(item_id_accesses),
-        list(known_id_lookups),
-        list(completed_id_lookups),
-    )
-
-    assert selection.completed_count == size
-    assert successful_window == ([], list(selected_ids), list(selected_ids))
-    assert duplicate_window == (
-        [],
-        list(selected_ids),
-        [*selected_ids, selected_ids[0]],
-    )
-    assert unknown_window == (
-        [],
-        [*selected_ids, "unknown"],
-        [*selected_ids, selected_ids[0], "unknown"],
-    )
+    assert len(set(item_id_accesses_by_size)) == 1
+    assert len(set(membership_iterations_by_size)) == 1
+    assert len(set(unknown_item_id_accesses_by_size)) == 1
+    assert len(set(unknown_membership_iterations_by_size)) == 1
 
 
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
-def test_selection_exposes_its_construction_admitted_item_ids(kind: str) -> None:
-    subject = _selection_subject(kind, 0)
-    selection, _, _ = _selection_contract(kind, (subject,))
-
-    assert type(selection.known_item_ids) is frozenset
-    assert selection.known_item_ids == frozenset({subject.item_id})
-    assert selection.known_item_ids is selection._known_item_ids
-
-
-def test_known_item_index_has_no_reader_outside_its_core_contract() -> None:
-    assert _known_item_index_reads("selection._known_item_ids")
-    assert _known_item_index_reads('getattr(selection, "_known_item_ids")')
-    assert not _known_item_index_reads("selection.known_item_ids")
-
-    package = Path(__file__).parents[2] / "namisync"
-    owner = package / "core" / "integrity.py"
-    offenders = {
-        path.relative_to(package).as_posix(): reads
-        for path in package.rglob("*.py")
-        if path != owner
-        if (reads := _known_item_index_reads(path.read_text(encoding="utf-8")))
-    }
-
-    assert offenders == {}
-
-
-@pytest.mark.parametrize("branch", ("wrong-type", "changed-content"))
-@pytest.mark.parametrize("kind", ("post-copy", "integrity"))
-def test_selection_revalidation_rejects_a_replaced_known_id_index(
+def test_selection_authority_preserves_detached_completion_snapshot(
     kind: str,
-    branch: str,
 ) -> None:
     subject = _selection_subject(kind, 0)
     selection, snapshot, revalidate = _selection_contract(kind, (subject,))
     authority = snapshot(selection)
-    index_field = next(
-        candidate
-        for candidate in fields(selection)
-        if candidate.name == "_known_item_ids"
-    )
-    metadata_observation = (
-        index_field.init,
-        index_field.repr,
-        index_field.compare,
-        "_known_item_ids" in repr(selection),
-        selection == replace(selection),
-    )
 
-    if branch == "wrong-type":
-        class DerivedKnownIds(frozenset[str]):
-            pass
+    if kind == "post-copy":
+        assert authority.candidates == (subject,)
+        assert authority.candidates is not selection.candidates
+        assert authority.candidates[0] is not subject
+        assert type(authority.candidates[0]) is PostCopyCandidate
+        assert authority.candidates[0].expected_stat is not subject.expected_stat
+        assert authority.candidates[0].copy_attestation is not subject.copy_attestation
+        assert type(authority.completed_bytes) is MappingProxyType
+        selection._completed_bytes[subject.item_id] = 1
+        assert dict(authority.completed_bytes) == {}
+        selection._completed_bytes.clear()
 
-        selection._known_item_ids = DerivedKnownIds(selection._known_item_ids)
-        with pytest.raises(TypeError, match="known-item index has the wrong type"):
-            revalidate(selection, authority, allow_progress=False)
-    else:
-        selection._known_item_ids = frozenset({"forged"})
-        with pytest.raises(ValueError, match="known-item index changed"):
-            revalidate(selection, authority, allow_progress=False)
+    selection.note_bytes_processed(3)
+    selection.mark_completed(subject.item_id, 3)
 
-    assert metadata_observation == (False, False, False, False, True)
+    assert dict(authority.completed_bytes) == {}
+    revalidate(selection, authority, allow_progress=True)
+    with pytest.raises(ValueError, match="selection changed during capture"):
+        revalidate(selection, authority, allow_progress=False)
+
 
 @pytest.mark.parametrize(
     ("kind", "expected_message"),
@@ -282,60 +273,40 @@ def test_selection_revalidation_rejects_a_replaced_known_id_index(
         ("integrity", "integrity selection item changed during collaboration"),
     ),
 )
-def test_selection_authority_reports_changed_item_before_derived_index(
+def test_selection_authority_reports_changed_item_before_completion_delta(
     kind: str,
     expected_message: str,
 ) -> None:
     subject = _selection_subject(kind, 0)
     selection, snapshot, revalidate = _selection_contract(kind, (subject,))
+    authority = snapshot(selection)
+    selection.note_bytes_processed(1)
+    selection.mark_completed(subject.item_id, 1)
     if kind == "integrity":
-        authority = snapshot(selection)
-        setattr(selection, "items", (replace(subject, item_id="integrity-1"),))
-
+        selection.items = (replace(subject, item_id="integrity-1"),)
     else:
-        authority = snapshot(selection)
-        assert authority.candidates == (subject,)
-        assert authority.candidates is not selection.candidates
-        assert authority.candidates[0] is not subject
-        assert type(authority.candidates[0]) is PostCopyCandidate
-        assert authority.candidates[0].expected_stat is not subject.expected_stat
-        assert (
-            authority.candidates[0].copy_attestation
-            is not subject.copy_attestation
-        )
-        assert type(authority.completed_bytes) is MappingProxyType
-        selection._completed_bytes[subject.item_id] = 1
-        assert dict(authority.completed_bytes) == {}
-        selection._completed_bytes.clear()
-        setattr(
-            selection,
-            "candidates",
-            (replace(subject, item_id="post-copy-1"),),
-        )
+        selection.candidates = (replace(subject, item_id="post-copy-1"),)
 
     with pytest.raises(ValueError, match=f"^{expected_message}$"):
         revalidate(selection, authority, allow_progress=False)
 
 
-@pytest.mark.parametrize("phase", ("revalidation", "snapshot"))
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
-def test_selection_authority_rejects_a_deleted_known_id_index(
+def test_selection_authority_rejects_public_population_replacement(
     kind: str,
-    phase: str,
 ) -> None:
     subject = _selection_subject(kind, 0)
     selection, snapshot, revalidate = _selection_contract(kind, (subject,))
-    if phase == "revalidation":
-        authority = snapshot(selection)
-        del selection._known_item_ids
-        with pytest.raises(TypeError, match="known-item index is missing"):
-            revalidate(selection, authority, allow_progress=False)
+    authority = snapshot(selection)
+    if kind == "integrity":
+        selection.items = ()
     else:
-        del selection._known_item_ids
-        with pytest.raises(TypeError, match="known-item index is missing"):
-            snapshot(selection)
-    assert not hasattr(selection, "_known_item_ids")
+        selection.candidates = ()
 
+    with pytest.raises((TypeError, ValueError)):
+        snapshot(selection)
+    with pytest.raises((TypeError, ValueError)):
+        revalidate(selection, authority, allow_progress=False)
 
 def test_integrity_candidate_limit_facts_are_exact_and_typed() -> None:
     rows = IntegrityCandidateLimitExceeded.rows()

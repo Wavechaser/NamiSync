@@ -32,7 +32,9 @@ from namisync.core.integrity import (
     IntegrityReason,
     IntegrityResult,
     IntegritySelection,
+    IntegritySelectionItem,
     InventoryState,
+    PostCopyCandidate,
     PostCopySelection,
     ReadStrategy,
     RecordDisposition,
@@ -2713,33 +2715,110 @@ def test_runner_retains_verifier_outcomes_across_pause_then_cancel(
     assert len({item.item_id for item in canceled.result.items}) == 3
 
 
+class _ProgressMembershipWorkWitness:
+    """Tests-only seam that records membership work after reporter construction."""
+
+    def __init__(self, item_ids: object) -> None:
+        self._item_ids = frozenset(item_ids)  # type: ignore[arg-type]
+        self.iterated_item_ids = 0
+
+    def __contains__(self, item_id: object) -> bool:
+        return item_id in self._item_ids
+
+    def __iter__(self):
+        for item_id in self._item_ids:
+            self.iterated_item_ids += 1
+            yield item_id
+
+    def __len__(self) -> int:
+        return len(self._item_ids)
+
+    def reset(self) -> None:
+        self.iterated_item_ids = 0
+
+
 @pytest.mark.parametrize("post_copy", (False, True), ids=("standalone", "post-copy"))
-def test_progress_reporter_reuses_the_selection_known_id_index(
+def test_progress_reporter_admits_selected_outcomes_with_population_independent_work(
+    monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     post_copy: bool,
 ) -> None:
-    subject = (
-        _post_copy_candidate(tmp_path)
-        if post_copy
-        else _item(tmp_path)
+    selection_type = PostCopySelection if post_copy else IntegritySelection
+    subject_type = PostCopyCandidate if post_copy else IntegritySelectionItem
+    active_witness: _ProgressMembershipWorkWitness | None = None
+    original_known_item_ids = selection_type.known_item_ids
+    monkeypatch.setattr(
+        selection_type,
+        "known_item_ids",
+        property(
+            lambda selected: (
+                original_known_item_ids.__get__(selected, selection_type)
+                if active_witness is None
+                else active_witness
+            )
+        ),
     )
-    selection = (
-        PostCopySelection((subject,))  # type: ignore[arg-type]
-        if post_copy
-        else IntegritySelection((subject,))  # type: ignore[arg-type]
-    )
+    original_getattribute = subject_type.__getattribute__
+    armed = False
+    item_id_accesses: list[str] = []
 
-    reporter = verifier_engine._ProgressReporter(
-        selection,
-        _context([]),
-        items_total=1,
-        pending_sizes=(subject.expected_stat.size,),
-        phase=IntegrityMode.VERIFY.value,
-        item_type="operation" if post_copy else "integrity",
-    )
+    def observe_getattribute(value: object, name: str) -> object:
+        if armed and name == "item_id":
+            item_id_accesses.append(name)
+        return original_getattribute(value, name)
 
-    assert reporter._selected_item_ids is selection.known_item_ids
+    monkeypatch.setattr(subject_type, "__getattribute__", observe_getattribute)
+    membership_iterations_by_size: list[int] = []
+    item_id_accesses_by_size: list[int] = []
+    unknown_membership_iterations_by_size: list[int] = []
+    unknown_item_id_accesses_by_size: list[int] = []
+    for size in (0, 1, 16, 256, 4096):
+        active_witness = None
+        subjects = tuple(
+            _post_copy_candidate(tmp_path, number=number)
+            if post_copy
+            else _item(tmp_path, number=number)
+            for number in range(size)
+        )
+        selection = selection_type(subjects)  # type: ignore[arg-type]
+        active_witness = _ProgressMembershipWorkWitness(selection.known_item_ids)
+        reporter = verifier_engine._ProgressReporter(
+            selection,
+            _context([]),
+            items_total=size,
+            pending_sizes=tuple(subject.expected_stat.size for subject in subjects),
+            phase=IntegrityMode.VERIFY.value,
+            item_type="operation" if post_copy else "integrity",
+        )
+        selected_ids = tuple(subject.item_id for subject in subjects)
+        for item_id in selected_ids[:-1]:
+            reporter.item_outcome_emitted(item_id)
+        if selected_ids:
+            active_witness.reset()
+            item_id_accesses.clear()
+            armed = True
+            reporter.item_outcome_emitted(selected_ids[-1])
+            armed = False
+            membership_iterations_by_size.append(active_witness.iterated_item_ids)
+            item_id_accesses_by_size.append(len(item_id_accesses))
+        active_witness.reset()
+        item_id_accesses.clear()
+        armed = True
+        with pytest.raises(RuntimeError, match="selected item"):
+            reporter.item_outcome_emitted("unknown")
+        armed = False
+        unknown_membership_iterations_by_size.append(
+            active_witness.iterated_item_ids
+        )
+        unknown_item_id_accesses_by_size.append(len(item_id_accesses))
+        if selected_ids:
+            with pytest.raises(RuntimeError, match="more than once"):
+                reporter.item_outcome_emitted(selected_ids[-1])
 
+    assert len(set(membership_iterations_by_size)) == 1
+    assert len(set(item_id_accesses_by_size)) == 1
+    assert len(set(unknown_membership_iterations_by_size)) == 1
+    assert len(set(unknown_item_id_accesses_by_size)) == 1
 
 @pytest.mark.parametrize("streamed", (False, True), ids=("nonstream", "stream"))
 def test_fast_items_have_constant_progress_boundaries(

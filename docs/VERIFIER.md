@@ -51,13 +51,16 @@ Selections contain immutable inventory row id, location/root, canonical path
 key, display path, expected current state/stat, retained `Attestation` (if any),
 scope token, and reappearance state. `IntegritySelection` adds the mutable
 completed-item state, processed-byte high-water, and nondecreasing admitted
-physical-read budget needed for pause/resume. Each selection retains one
-immutable `known_item_ids` snapshot derived from its fixed candidate tuple at
-construction. Completion and progress share the exact `frozenset` through its
-read-only public property without copying or rescanning, while the mutable
-completed map remains the first replay check. Workflow
-must inventory or scoped-refresh before constructing selections; verifier never
-silently inventories, changes mappings, or scans unselected paths.
+physical-read budget needed for pause/resume. Each selection derives retained
+construction-admitted membership from its fixed candidate tuple during setup.
+Completion checks mutable completion state first for replay refusal, and
+progress admits outcomes only for selected ids without enumerating the selected
+population per outcome. A progress implementation may share or detach that
+membership representation. The bound is analytical and source-derived; named
+operation counts are drift witnesses, while elapsed time remains diagnostic.
+Workflow must inventory or scoped-refresh before constructing selections;
+verifier never silently inventories, changes mappings, or scans unselected
+paths.
 
 Each file emits a reliable typed `IntegrityOutcome` carrying `IntegrityResult`:
 `verified`, `baselined`, `mismatched`, `modified`, `missing`, `unsupported`,

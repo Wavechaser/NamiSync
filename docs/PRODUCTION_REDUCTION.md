@@ -114,7 +114,7 @@ mutation, or population-dependent per-item scanning is a regression.
 | PR-5 | One core Clock contract. | PR-0 | Five consumers and import contracts | complete |
 | PR-6 | Reuse exact admitted immutable detail. | PR-4 | Raw isolation/refusal and wire equivalence | pending |
 | PR-7 | One bounded SQL subject-batch policy. | PR-3 | Parameters, results/order, snapshot, atomic writes | pending |
-| PR-8 | Representation-independent selection verification. | PR-0 | Selection/progress behavior and structural work bound | pending |
+| PR-8 | Representation-independent selection verification. | PR-0 | Selection/progress behavior and structural work bound | complete |
 | PR-9 | Integrated reduction closure. | PR-1–PR-8 | Complete/headed suite, oracle repeat 3, controls, adversarial review | pending |
 
 ## Detailed checkpoints
@@ -284,6 +284,12 @@ prescription and a results-only quadratic allowance. Run core/verifier/workflow
 consumers. Commit as
 `test(integrity): decouple selection guarantees from index representation`.
 
+Closed after clean independent review and recheck: 153 focused tests and 1,763
+core/verifier/workflow consumer tests passed, with one capability skip. A
+non-`frozenset` immutable set plus a detached reporter copy passed; four faults
+failed their retained assertions. Accepted source-bound evidence is
+`build/production-reduction/pr8/qualified-v2/acceptance-manifest.json`.
+Production selection code is unchanged. Earlier evidence is non-acceptance.
 ### PR-9 — Integrated closure
 
 Cross-check every changed assertion against the frozen inventory. Run complete
@@ -336,7 +342,7 @@ the isolated blocked task on its AGENTS recovery branch. A shared blocker also
 blocks any task whose guarantees or prerequisites it prevents; it does not
 stop unrelated work. This is the user-directed recovery order for this pass.
 
-Current state: PR-0, PR-1, PR-3, PR-4, and PR-5 are complete after clean independent review. PR-2 and PR-8 are in progress; PR-6, PR-7, and PR-9 are pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
+Current state: PR-0, PR-1, PR-3, PR-4, PR-5, and PR-8 are complete after clean independent review. PR-2, PR-6, and PR-7 are in progress; PR-9 is pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
 oracle and baseline, SH-G-8 authority, unintegrated presentation components,
 execution projections, and lifecycle claims. Deferred findings are oracle
 simplification, broad continuation-validation reduction, further protocol

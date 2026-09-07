@@ -235,16 +235,17 @@ target; partial, borrowed, or invented identity is unrepresentable.
 `PostCopySelection`. Candidates copy verifier-facing values from published
 evidence without embedding the execution type or requiring a ledger row.
 Completion ids and processed bytes are validated continuation state. Both
-linked and standalone selections derive one non-comparing immutable
-`known_item_ids` snapshot from their fixed tuple at construction. Later
-authority checks require the private retained index to remain equal to the
-tuple; completion checks the completed map first for replay, then performs one
-construction-admitted membership lookup without rescanning the tuple. The
-public read-only property returns that exact `frozenset`, so verifier progress
-aliases it without a copy. Broader authority revalidation still walks detached
-typed candidates and prior completion truth; the index removes the
-per-completion tuple scan but does not make those guards asymptotically
-constant. Equality and continuation behavior are unchanged.
+linked and standalone selections derive retained construction-admitted
+membership from their fixed tuple during linear setup. Completion refuses a
+replay through its completion state before admitting an id through that
+membership, without enumerating the admitted tuple per completion. The public
+read-only membership view lets verifier progress admit selected outcomes without
+rebuilding or traversing the selected population per outcome; it may share or
+detach its representation. Broader authority revalidation still walks detached
+typed candidates and prior completion truth, so those guards are not claimed to
+be constant work. The per-completion and progress bound is analytical and
+source-derived: named-size operation counts are drift witnesses only, and
+elapsed time is diagnostic. Equality and continuation behavior are unchanged.
 It also owns the closed `IntegrityCandidateLimitExceeded` fact and its error,
 axes, fixed limits, and user messages. This fact describes standalone-integrity
 candidate custody only; workflows project it as failed work after a durable
