@@ -111,7 +111,10 @@ evidence. Selected no-ops still run their live guards and call `record_noop`, so
 even an otherwise degraded safe-subset run refreshes valid correspondence for
 future complete-scan move detection.
 
-Inventory reconciliation batches observations and branches explicitly on
+Inventory reconciliation retains the fixed 400-row observation and unsupported
+`executemany` groups. Exact `PATHS` and `SUBTREES` absent-key updates use
+`connections.QUERY_SUBJECT_BATCH_SIZE` (400), with at most the batch size plus
+four statement parameters, then branch explicitly on
 `FULL`, exact `PATHS`, and recursive/mixed `SUBTREES` after completeness is
 known. Full and subtree branches use a temporary observed-key table; subtree
 missing inference is additionally bounded to exact keys plus each root equality

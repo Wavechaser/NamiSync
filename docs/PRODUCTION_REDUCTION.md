@@ -113,7 +113,7 @@ mutation, or population-dependent per-item scanning is a regression.
 | PR-4 | One event detail/reason vocabulary. | PR-0 | Independent vocabulary and event-v5 consumer fixtures | complete |
 | PR-5 | One core Clock contract. | PR-0 | Five consumers and import contracts | complete |
 | PR-6 | Reuse exact admitted immutable detail. | PR-4 | Raw isolation/refusal and wire equivalence | complete |
-| PR-7 | One bounded SQL subject-batch policy. | PR-3 | Parameters, results/order, snapshot, atomic writes | pending |
+| PR-7 | One bounded SQL subject-batch policy. | PR-3 | Parameters, results/order, snapshot, atomic writes | complete |
 | PR-8 | Representation-independent selection verification. | PR-0 | Selection/progress behavior and structural work bound | complete |
 | PR-9 | Integrated reduction closure. | PR-1–PR-8 | Complete/headed suite, oracle repeat 3, controls, adversarial review | pending |
 
@@ -285,6 +285,14 @@ batch/snapshot mechanism docs. Review all ten formulas and prevent use as a
 transaction/retention limit. Commit as
 `refactor(database): centralize bounded query batching`.
 
+Closed after clean independent review: 1,147 database/workflow consumer tests
+passed. The seven-node smaller-batch control passed; all four faults failed
+their retained completeness, scope, atomicity, or snapshot assertions. The
+accepted source-bound manifest is
+`build/production-reduction/pr7/controls/accepted-control-manifest-002.json`;
+`validation/database-workflows-neighborhood-002.receipt.json` records the
+terminal consumer run. All ten formulas were checked against source and actual
+parameter tuples; both `executemany` groups and transaction bodies remain intact.
 ### PR-8 — Relax selection representation prescriptions
 
 Change tests only. In the frozen six core families plus verifier alias test,
@@ -361,7 +369,7 @@ the isolated blocked task on its AGENTS recovery branch. A shared blocker also
 blocks any task whose guarantees or prerequisites it prevents; it does not
 stop unrelated work. This is the user-directed recovery order for this pass.
 
-Current state: PR-0 through PR-6 and PR-8 are complete after clean independent review. PR-7 is ready after clean review; PR-9 is pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
+Current state: PR-0 through PR-8 are complete after clean independent review. PR-9 integrated verification is in progress; the final source checkpoint is PR-7. Preserve user changes, `PRODUCTION_ABLATION.md`,
 oracle and baseline, SH-G-8 authority, unintegrated presentation components,
 execution projections, and lifecycle claims. Deferred findings are oracle
 simplification, broad continuation-validation reduction, further protocol

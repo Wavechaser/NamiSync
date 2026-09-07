@@ -45,6 +45,7 @@ from namisync.core.session import (
 from namisync.core.review import ReviewFactLimitExceeded
 from namisync.core.scalars import MAX_SAFE_INTEGER
 from namisync.db.connections import (
+    QUERY_SUBJECT_BATCH_SIZE,
     connect_history_reader,
     connect_history_writer,
 )
@@ -242,6 +243,102 @@ def test_history_window_policy_freezes_balanced_defaults_and_rejects_bad_bounds(
     ):
         with pytest.raises(ValueError):
             HistoryWindowPolicy(**values)
+
+
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    tuple(
+        (count, QUERY_SUBJECT_BATCH_SIZE)
+        for count in (0, 1, 399, 400, 401, 801)
+    )
+    + ((801, 37),),
+)
+def test_canonical_item_lookup_batches_only_relevant_history_subjects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
+) -> None:
+    monkeypatch.setattr(history_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    record = _record()
+    context = HistoryContext("run-batched-canonical", "host-1")
+    items = tuple(_item(index) for index in range(1, count + 1))
+
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, context)
+        if items:
+            for index, item in enumerate(items, 1):
+                observer.on_event(_envelope(record, index, item))
+        else:
+            observer.on_event(_envelope(record, 1, PhaseChanged("execute")))
+        observer.flush()
+
+        if items:
+            other_record = _record("22222222222222222222222222222222")
+            other = store.observer(
+                other_record,
+                HistoryContext("run-irrelevant-canonical", "host-2"),
+            )
+            other.on_event(
+                _envelope(other_record, 1, _item(1, Outcome.FAILED))
+            )
+            other.flush()
+
+        connection = connect_history_reader(store.path)
+        calls: list[tuple[str, tuple[object, ...]]] = []
+
+        class RecordingConnection:
+            def execute(
+                self, statement: str, parameters: tuple[object, ...] = ()
+            ) -> sqlite3.Cursor:
+                calls.append((statement, tuple(parameters)))
+                return connection.execute(statement, parameters)
+
+        try:
+            run_id = int(
+                connection.execute(
+                    "SELECT id FROM history_runs WHERE run_token = ?",
+                    (context.run_token,),
+                ).fetchone()[0]
+            )
+            pending = tuple(
+                history_module._PendingEvent(
+                    event_seq=count + index,
+                    event_at=NOW,
+                    schema_version=CORE_EVENT_SCHEMA_VERSION,
+                    body_type="ItemOutcome",
+                    envelope=None,
+                    envelope_json=None,
+                    encoded_size=0,
+                    payload_hash=bytes(32),
+                    item_identity_hash=history_module._item_identity_hash(item),
+                    item_payload_hash=history_module._hash(
+                        history_module.result_item_to_dict(item)
+                    ),
+                )
+                for index, item in enumerate(items, 1)
+            )
+            canonical = history_module._canonical_items_for_window(
+                RecordingConnection(), run_id, max(1, count), pending
+            )
+        finally:
+            connection.close()
+
+    lookup_calls = [
+        parameters
+        for statement, parameters in calls
+        if "INDEXED BY history_events_run_identity_hash_idx" in statement
+    ]
+    assert bool(lookup_calls) is bool(count)
+    assert all(len(parameters) <= batch_size + 2 for parameters in lookup_calls)
+    assert len(canonical.by_identity_hash) == count
+    assert canonical.by_identity == {
+        ("operation", item.item_id): (
+            index,
+            history_module._hash(history_module.result_item_to_dict(item)),
+        )
+        for index, item in enumerate(items, 1)
+    }
 
 
 def test_history_finalization_round_trips_summary_items_events_and_phases(

@@ -55,6 +55,7 @@ from namisync.core.scalars import require_safe_int
 
 from .connections import (
     DEFAULT_BUSY_TIMEOUT_MS,
+    QUERY_SUBJECT_BATCH_SIZE,
     connect_history_reader,
     connect_history_writer,
 )
@@ -2121,8 +2122,8 @@ def _canonical_items_for_window(
     )
     by_identity: dict[tuple[str, str], tuple[int, bytes]] = {}
     by_identity_hash: dict[bytes, tuple[int, bytes]] = {}
-    for offset in range(0, len(identity_hashes), 400):
-        chunk = identity_hashes[offset : offset + 400]
+    for offset in range(0, len(identity_hashes), QUERY_SUBJECT_BATCH_SIZE):
+        chunk = identity_hashes[offset : offset + QUERY_SUBJECT_BATCH_SIZE]
         requested = ",".join("?" for _ in chunk)
         for row in connection.execute(
             f"""SELECT event_seq AS first_seq,

@@ -72,7 +72,11 @@ from namisync.core.recording import (
 )
 from namisync.core.session import SessionState
 
-from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_writer
+from .connections import (
+    DEFAULT_BUSY_TIMEOUT_MS,
+    QUERY_SUBJECT_BATCH_SIZE,
+    connect_ledger_writer,
+)
 from .schema import initialize_ledger
 from .timestamps import encode_utc
 from .writer import (
@@ -929,8 +933,8 @@ class LedgerRecorder:
                 for path in command.scan.scope.selected_paths
                 if normalize_relative_path(path) not in observed
             ]
-            for start in range(0, len(absent), 400):
-                chunk = absent[start : start + 400]
+            for start in range(0, len(absent), QUERY_SUBJECT_BATCH_SIZE):
+                chunk = absent[start : start + QUERY_SUBJECT_BATCH_SIZE]
                 placeholders = ",".join("?" for _ in chunk)
                 cursor = connection.execute(
                     f"""UPDATE inventory
@@ -960,8 +964,8 @@ class LedgerRecorder:
                 for path in command.scan.scope.selected_paths
                 if normalize_relative_path(path) not in observed
             ]
-            for start in range(0, len(absent_exact), 400):
-                chunk = absent_exact[start : start + 400]
+            for start in range(0, len(absent_exact), QUERY_SUBJECT_BATCH_SIZE):
+                chunk = absent_exact[start : start + QUERY_SUBJECT_BATCH_SIZE]
                 placeholders = ",".join("?" for _ in chunk)
                 cursor = connection.execute(
                     f"""UPDATE inventory

@@ -23,7 +23,11 @@ from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, OperationReason
 from namisync.core.recording import InventoryCommand
 from namisync.core.scalars import MAX_FILE_INDEX_128
-from namisync.db.connections import connect_ledger_reader, connect_ledger_writer
+from namisync.db.connections import (
+    QUERY_SUBJECT_BATCH_SIZE,
+    connect_ledger_reader,
+    connect_ledger_writer,
+)
 from namisync.db.repositories import (
     InventoryPopulationLimitError,
     LedgerRepository,
@@ -39,6 +43,43 @@ from _db_fixtures import (
     plan,
     setup_recorder,
 )
+
+
+_SUBJECT_BATCH_CASES = tuple(
+    (count, QUERY_SUBJECT_BATCH_SIZE) for count in (0, 1, 399, 400, 401, 801)
+) + ((801, 37),)
+
+
+class _ParameterRecordingConnection:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        calls: list[tuple[str, tuple[object, ...]]],
+    ) -> None:
+        self._connection = connection
+        self._calls = calls
+
+    def execute(
+        self, statement: str, parameters: tuple[object, ...] = ()
+    ) -> sqlite3.Cursor:
+        self._calls.append((statement, tuple(parameters)))
+        return self._connection.execute(statement, parameters)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._connection, name)
+
+
+def _capture_repository_parameters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, tuple[object, ...]]]:
+    calls: list[tuple[str, tuple[object, ...]]] = []
+    connect = repository_module.connect_ledger_reader
+
+    def recording_connect(*args: object, **kwargs: object) -> object:
+        return _ParameterRecordingConnection(connect(*args, **kwargs), calls)
+
+    monkeypatch.setattr(repository_module, "connect_ledger_reader", recording_connect)
+    return calls
 
 
 def _first_excess(*values: object) -> Iterator[object]:
@@ -527,26 +568,41 @@ def test_stale_integrity_candidate_union_deduplicates_before_row_limit(
         setup.recorder.close()
 
 
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    _SUBJECT_BATCH_CASES,
+)
 def test_chunked_integrity_candidate_read_uses_one_snapshot_and_saved_order(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
 ) -> None:
+    monkeypatch.setattr(repository_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    parameter_calls = _capture_repository_parameters(monkeypatch)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
     records = tuple(
-        _file(f"folder\\file-{index:04d}.bin", index) for index in range(401)
+        _file(f"folder\\file-{index:04d}.bin", index + 1) for index in range(count)
     )
     writer = connect_ledger_writer(setup.recorder.path)
-    select_count = 0
+    path_select_count = 0
+    statements: list[str] = []
 
     def update_between_batches(statement: str) -> None:
-        nonlocal select_count
-        if "SELECT * FROM INVENTORY" not in statement.upper():
+        nonlocal path_select_count
+        statements.append(statement)
+        if (
+            "SELECT * FROM INVENTORY" not in statement.upper()
+            or "REL_PATH_KEY IN" not in statement.upper()
+        ):
             return
-        select_count += 1
-        if select_count == 2:
+        path_select_count += 1
+        if path_select_count == 2:
             writer.execute(
                 "UPDATE inventory SET scope_token = ? WHERE location_id = ?",
                 ("scope-new", setup.source_location_id),
             )
+            writer.commit()
 
     try:
         setup.recorder.record_inventory(
@@ -574,19 +630,44 @@ def test_chunked_integrity_candidate_read_uses_one_snapshot_and_saved_order(
                 IntegrityMode.BASELINE,
                 saved_row_ids=tuple(reversed(row_ids)),
             )
-            with pytest.raises(RuntimeError, match="missing inventory rows"):
-                repository.get_integrity_candidates(
-                    setup.source_location_id,
-                    IntegrityMode.BASELINE,
-                    saved_row_ids=(row_ids[0], "999999999"),
-                )
+            stale = repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.VERIFY,
+                stale_before=NOW,
+                completed_row_ids=tuple(reversed(row_ids)),
+            )
+            if row_ids:
+                with pytest.raises(RuntimeError, match="missing inventory rows"):
+                    repository.get_integrity_candidates(
+                        setup.source_location_id,
+                        IntegrityMode.BASELINE,
+                        saved_row_ids=(row_ids[0], "999999999"),
+                    )
 
-        assert select_count >= 2
-        assert {row.scope_token for row in selected} == {"scope-old"}
+        bounded_calls = [
+            parameters
+            for statement, parameters in parameter_calls
+            if (
+                "SELECT * FROM inventory" in statement
+                and ("rel_path_key IN" in statement or "id IN" in statement)
+                and "LIMIT ?" in statement
+            )
+        ]
+        assert all(len(parameters) <= batch_size + 2 for parameters in bounded_calls)
+        assert tuple(row.rel_path_key for row in selected) == tuple(
+            sorted(record.rel_path_key for record in records)
+        )
         assert tuple(row.row_id for row in saved) == tuple(reversed(row_ids))
-        with LedgerRepository(setup.recorder.path) as repository:
-            durable = repository.get_inventory(setup.source_location_id)
-        assert {row.scope_token for row in durable} == {"scope-new"}
+        assert tuple(row.rel_path_key for row in stale) == tuple(
+            sorted(record.rel_path_key for record in records)
+        )
+
+        if count > batch_size:
+            assert path_select_count >= 2
+            assert {row.scope_token for row in selected} == {"scope-old"}
+            with LedgerRepository(setup.recorder.path) as repository:
+                durable = repository.get_inventory(setup.source_location_id)
+            assert {row.scope_token for row in durable} == {"scope-new"}
     finally:
         writer.close()
         setup.recorder.close()
@@ -904,17 +985,23 @@ def test_current_mapping_queries_use_target_and_identity_indexes(
         setup.recorder.close()
 
 
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    _SUBJECT_BATCH_CASES,
+)
 def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
 ) -> None:
-    rows = _mapping_rows(801)
+    monkeypatch.setattr(repository_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    parameter_calls = _capture_repository_parameters(monkeypatch)
+    rows = _mapping_rows(count, descending_source_paths=True)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
-    statements: list[str] = []
     try:
         _insert_mapping_history(setup.recorder.path, setup, rows)
-        with LedgerRepository(
-            setup.recorder.path, trace_callback=statements.append
-        ) as repository:
+        with LedgerRepository(setup.recorder.path) as repository:
             found = repository.find_current_mapping(
                 VolumeId("source-serial", "NTFS"),
                 "source",
@@ -926,16 +1013,31 @@ def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
             )
 
         assert found is not None
-        assert len(found.snapshot.pairs) == len(rows)
-        pair_selects = _matching_statements(statements, _MAPPING_PAIR_QUERY)
-        identity_selects = _matching_statements(statements, _IDENTITY_QUERY)
-        assert len(pair_selects) == 3
-        assert len(identity_selects) == 6
-        assert all(statement.count("TARGET-") <= 400 for statement in pair_selects)
+        assert [pair.source_rel_path_key for pair in found.snapshot.pairs] == sorted(
+            normalize_relative_path(row[0]) for row in rows
+        )
+        assert {pair.target_rel_path_key for pair in found.snapshot.pairs} == {
+            normalize_relative_path(row[2]) for row in rows
+        }
+        assert found.snapshot.disqualified_source_identities == frozenset()
+        assert found.snapshot.disqualified_target_identities == frozenset()
+        pair_parameters = [
+            parameters
+            for statement, parameters in parameter_calls
+            if _MAPPING_PAIR_QUERY.search(statement)
+        ]
+        identity_parameters = [
+            parameters
+            for statement, parameters in parameter_calls
+            if _IDENTITY_QUERY.search(statement)
+        ]
+        assert bool(pair_parameters) is bool(count)
+        assert bool(identity_parameters) is bool(count)
+        assert all(len(parameters) <= batch_size + 2 for parameters in pair_parameters)
         assert all(
-            max(statement.count("source-serial"), statement.count("target-serial"))
-            <= 400
-            for statement in identity_selects
+            len(parameters) <= 2 * batch_size + 1
+            and (len(parameters) - 1) % 2 == 0
+            for parameters in identity_parameters
         )
     finally:
         setup.recorder.close()
@@ -978,7 +1080,7 @@ def test_current_mapping_read_uses_one_snapshot_across_query_batches(
                 target_identities=target_identities,
             )
         assert found is not None
-        assert pair_select_count == 2
+        assert pair_select_count >= 2
         assert found.snapshot.disqualified_source_identities == frozenset()
 
         with LedgerRepository(setup.recorder.path) as repository:
@@ -1000,10 +1102,22 @@ def test_current_mapping_read_uses_one_snapshot_across_query_batches(
         setup.recorder.close()
 
 
-def test_large_inventory_selection_uses_bounded_queries(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    _SUBJECT_BATCH_CASES,
+)
+def test_large_inventory_selection_uses_bounded_queries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
+) -> None:
+    monkeypatch.setattr(repository_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    parameter_calls = _capture_repository_parameters(monkeypatch)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
-    records = tuple(_file(f"folder\\file-{index:04d}.bin", index) for index in range(1_001))
-    statements: list[str] = []
+    records = tuple(
+        _file(f"folder\\file-{index:04d}.bin", index + 1) for index in range(count)
+    )
     try:
         setup.recorder.record_inventory(
             InventoryCommand(
@@ -1014,17 +1128,24 @@ def test_large_inventory_selection_uses_bounded_queries(tmp_path: Path) -> None:
                 NOW,
             )
         )
-        with LedgerRepository(
-            setup.recorder.path, trace_callback=statements.append
-        ) as repository:
+        with LedgerRepository(setup.recorder.path) as repository:
             selected = repository.get_inventory(
                 setup.source_location_id,
                 (record.rel_path for record in reversed(records)),
             )
 
-        selects = _matching_statements(statements, _INVENTORY_SELECTION_QUERY)
-        assert len(selected) == 1_001
-        assert len(selects) == 3
+        assert len(selected) == count
+        select_parameters = [
+            parameters
+            for statement, parameters in parameter_calls
+            if _INVENTORY_SELECTION_QUERY.search(statement)
+            and "rel_path_key IN" in statement
+        ]
+        assert bool(select_parameters) is bool(count)
+        assert all(
+            len(parameters) <= batch_size + 2
+            for parameters in select_parameters
+        )
         assert [row.rel_path_key for row in selected] == sorted(
             row.rel_path_key for row in selected
         )
@@ -1050,6 +1171,7 @@ def test_large_inventory_selection_is_one_read_snapshot(tmp_path: Path) -> None:
                 "UPDATE inventory SET scope_token = ? WHERE location_id = ?",
                 ("scope-new", setup.source_location_id),
             )
+            writer.commit()
 
     try:
         setup.recorder.record_inventory(
@@ -1069,7 +1191,7 @@ def test_large_inventory_selection_is_one_read_snapshot(tmp_path: Path) -> None:
                 (record.rel_path for record in records),
             )
 
-        assert select_count == 2
+        assert select_count >= 2
         assert {row.scope_token for row in selected} == {"scope-old"}
         with LedgerRepository(setup.recorder.path) as repository:
             durable = repository.get_inventory(setup.source_location_id)

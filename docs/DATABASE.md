@@ -314,9 +314,10 @@ manual-reset direction and no mutation.
 
 `repositories.py` returns immutable inventory, run, and `MappingSnapshot`
 values. Canonical path, file-identity, and canonical positive-decimal row-ID
-selections are queried in bounded 400-subject chunks inside one read
-transaction, so a concurrent commit cannot split one selection across different
-database snapshots. Row-ID lookups are location-scoped, deduplicate in
+selections are queried in chunks bounded by
+`connections.QUERY_SUBJECT_BATCH_SIZE` (400) inside one read transaction, so a
+concurrent commit cannot split one selection across different database
+snapshots. Row-ID lookups are location-scoped, deduplicate in
 first-requested order, and omit malformed or missing identifiers rather than
 broadening the query. Every supplied path, row-id, and mapping-identity
 occurrence also consumes its independent 120,000-entry request wall before
@@ -324,6 +325,11 @@ normalization, deduplication, sorting, or query construction. Thus duplicates,
 malformed ids, and absent keys within the wall preserve their established
 result semantics, while the first raw excess refuses without consuming another
 value or starting SQL work.
+
+Query subjects count against the shared batch bound before execution. Path,
+integrity, and mapping-pair statements use at most the batch size plus two
+parameters, row-ID statements use at most the batch size plus one, and
+two-column identity statements use at most twice the batch size plus one.
 
 History version 6 creates a provisional `history_runs` row at the first durable
 window and appends disposition-bound reliable receipts to `history_events`.
@@ -515,8 +521,9 @@ then retains only current source identities and a current target identity or the
 existing nullable target-identity evidence. Source and target disqualification
 queries cover only identities present in those scans while still counting every
 matching inventory alias and retained multi-link observation. Mapping lookup,
-all 400-key/identity batches, and disqualification share one SQLite snapshot;
-the bounded result is restored to canonical source-key/target-key order before
+all `QUERY_SUBJECT_BATCH_SIZE` key/identity batches, and disqualification share
+one SQLite snapshot; the bounded result is restored to canonical
+source-key/target-key order before
 planning. Irrelevant historical location rows are therefore never materialized
 by planning. The general mapping snapshot reader remains available for explicit
 mapping inspection.

@@ -272,8 +272,14 @@ lease. Durable custody and automatic interruption classification belong to M2.
   metadata/hash/reason with `envelope=None`.
 
 Read limits are explicit and bounded at 256; invalid limits are rejected rather
-than truncated. When a page omits `through_order` or `through_seq`, the
-repository starts a fresh traversal by capturing the corresponding durable
+than truncated.
+
+Canonical-item identity-hash lookups partition subjects by
+`connections.QUERY_SUBJECT_BATCH_SIZE` (400). Each statement retains its fixed
+run and sequence bounds, so the subject bound is distinct from the total
+parameter count and is at most the batch size plus two. When a page omits
+`through_order` or `through_seq`, the repository starts a fresh traversal by
+capturing the corresponding durable
 watermark in the same SQLite read transaction as the page. Callers reuse that
 watermark for later pages, so one traversal sees a stable committed prefix even
 while a writer commits newer windows. A caller-supplied event watermark is an
