@@ -211,6 +211,8 @@ never hides the other result axes in rendered output.
   rebased recommendations and subsequent refinement dispositions.
 - [Test refinement register](docs/TEST_REFINEMENT.md) — bounded implementation
   outcomes and verification of retained test guarantees.
+- [Production reduction register](docs/PRODUCTION_REDUCTION.md) — bounded
+  simplifications, retained guarantees, and verification.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
@@ -250,6 +252,11 @@ authorities were removed while preserving public behavior, real boundary
 checks, and persisted contracts. Application state owns domain effects and
 settlement; dispatcher custody, observer lifetime, and adapter delivery remain
 separate.
+
+Sync finishing, event admission, shared contracts, and bounded query policies
+also consolidate repeated implementation. History schema reductions follow the
+explicit coordinated-reset contract; behavioral test witnesses retain safety,
+snapshot consistency, and bounded work.
 
 ### M1 Hardening
 

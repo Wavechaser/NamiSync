@@ -23,6 +23,26 @@ history, and workflow product while building its secured headed WebView2 shell.
 Redundant in-process transports and certification layers were removed while
 preserving public behavior, real boundary checks, and persisted contracts.
 
+#### Reduce redundant production mechanisms (2026-09-07)
+
+- Consolidated required sync recording finishing and five verification terminal
+  projections, shared event vocabularies and Clock, and reused admitted exact
+  immutable event details while retaining normalization and boundary validators.
+- Removed only the subsumed history duplicate-link UPDATE trigger. History
+  schema and shared data epoch are now 7; ledger schema remains 4. Old or mixed
+  database pairs still require the documented coordinated manual reset.
+- Centralized the 400-subject policy across ten variable-IN query loops and
+  retained snapshot, parameter-bound, completeness, and atomicity witnesses.
+  Selection tests now protect results and bounded work without prescribing
+  frozenset or shared identity; production selection is unchanged.
+- Delivered separately reviewed atomic checkpoints under PRODUCTION_REDUCTION.md.
+  The complete suite passed 4,741 tests with four unchanged capability skips,
+  including all 28 headed tests; all 12 import contracts passed. The unchanged
+  oracle passed 30 scenarios across three identical runs. Final replay qualified
+  25 fault detections, four harmless controls, and one required-finisher refusal;
+  all 11 protected inputs match. Rejected findings and unintegrated feature
+  components remain untouched.
+
 #### Study test ablation and refine retained test machinery (2026-09-05 – 2026-09-07)
 
 - Evaluated six finite test cohorts through isolated selection ablation, harmless

@@ -115,7 +115,7 @@ mutation, or population-dependent per-item scanning is a regression.
 | PR-6 | Reuse exact admitted immutable detail. | PR-4 | Raw isolation/refusal and wire equivalence | complete |
 | PR-7 | One bounded SQL subject-batch policy. | PR-3 | Parameters, results/order, snapshot, atomic writes | complete |
 | PR-8 | Representation-independent selection verification. | PR-0 | Selection/progress behavior and structural work bound | complete |
-| PR-9 | Integrated reduction closure. | PR-1–PR-8 | Complete/headed suite, oracle repeat 3, controls, adversarial review | pending |
+| PR-9 | Integrated reduction closure. | PR-1–PR-8 | Complete/headed suite, oracle repeat 3, controls, adversarial review | complete |
 
 ## Detailed checkpoints
 
@@ -186,6 +186,7 @@ cancellation witness closes the exercised projection gap; all frozen assertions
 remain. Accepted receipts and the documentation-only review attestation are in
 `build/production-reduction/pr2/run-20260907-161700-final/`, indexed by
 `PR2_EVIDENCE_INDEX.md`. Earlier invalid attempts remain non-acceptance.
+
 ### PR-3 — Remove the subsumed history trigger
 
 Delete only duplicate-link UPDATE enforcement and apply v7/v7/7. Update current
@@ -267,6 +268,7 @@ normalization passed. `build/production-reduction/pr6/PR6_ACCEPTANCE_MANIFEST.js
 binds the accepted controls and root-supervised consumer receipt. Interrupted
 and child-startup harness attempts remain unqualified; no product fix was made
 for them. The user-approved additional identity assertion is recorded above.
+
 ### PR-7 — Centralize SQL subject batching
 
 Use `QUERY_SUBJECT_BATCH_SIZE = 400` for exactly the ten variable-`IN` loops.
@@ -293,6 +295,7 @@ accepted source-bound manifest is
 `validation/database-workflows-neighborhood-002.receipt.json` records the
 terminal consumer run. All ten formulas were checked against source and actual
 parameter tuples; both `executemany` groups and transaction bodies remain intact.
+
 ### PR-8 — Relax selection representation prescriptions
 
 Change tests only. In the frozen six core families plus verifier alias test,
@@ -317,6 +320,7 @@ non-`frozenset` immutable set plus a detached reporter copy passed; four faults
 failed their retained assertions. Accepted source-bound evidence is
 `build/production-reduction/pr8/qualified-v2/acceptance-manifest.json`.
 Production selection code is unchanged. Earlier evidence is non-acceptance.
+
 ### PR-9 — Integrated closure
 
 Cross-check every changed assertion against the frozen inventory. Run complete
@@ -334,6 +338,32 @@ it also checks hard walls, failure truth, atomicity, snapshots, bounded work,
 and unnecessary abstraction. Update statuses, changelog, handoff, and only a
 README milestone synopsis/index that changed. Commit closure as
 `docs: close the production reduction verification`.
+
+Final product source is `08572b73b0b7f817893bdd3032b53f1a3b9e6dc3` on
+`codex/production-reduction`. The qualified complete run collected 4,745 tests
+(4,717 ordinary and 28 headed): 4,741 passed and the same four baseline
+WinError 1314 capability cases skipped. All 28 headed tests passed. All 12
+import contracts passed; the unchanged oracle passed 30 scenarios across three
+identical normalized runs, with no skipped/unclassified scenario, baseline
+drift, or finding. Terminal receipts, actual import origins, raw logs, and hashes
+are bound by
+`build/production-reduction/pr9/complete-verification/FINAL_VERIFICATION_MANIFEST.json`.
+The first lint capture omitted the child output; its replacement captures the
+12-contract terminal result. That evidence-only correction required no pytest
+or oracle rerun. Final closure edits are documentation only.
+
+The integrated replay qualified all 30 cases: 25 injected faults failed their
+retained assertions, four harmless controls passed, and missing required
+finisher construction raised TypeError. Source-bound receipts and explicit
+non-acceptance attempts are recorded in
+`build/production-reduction/pr9/PR9_CONTROL_REPLAY_MANIFEST.json`.
+`build/production-reduction/pr9/PR9_PROTECTED_11_RECONCILIATION.json` confirms
+all 11 frozen oracle and SH-G-8 inputs match byte size and SHA-256. Independent
+review reconciled changed assertions with the frozen populations and the one
+user-approved PR-6 supplement. No product defect or recovery branch remains.
+Final clean review cleared the complete change. The finite local-link check
+covered 16 changed active documents and 90 local links/anchors with no errors;
+the final diff check passed. PR-9 is complete.
 
 ## Evidence, stop, and resumption
 
@@ -369,7 +399,9 @@ the isolated blocked task on its AGENTS recovery branch. A shared blocker also
 blocks any task whose guarantees or prerequisites it prevents; it does not
 stop unrelated work. This is the user-directed recovery order for this pass.
 
-Current state: PR-0 through PR-8 are complete after clean independent review. PR-9 integrated verification is in progress; the final source checkpoint is PR-7. Preserve user changes, `PRODUCTION_ABLATION.md`,
+Current state: PR-0 through PR-9 are complete after clean independent review.
+No implementation remains in this register. Further reductions require a new
+closed register and explicit scope authorization. Preserve user changes, `PRODUCTION_ABLATION.md`,
 oracle and baseline, SH-G-8 authority, unintegrated presentation components,
 execution projections, and lifecycle claims. Deferred findings are oracle
 simplification, broad continuation-validation reduction, further protocol

@@ -1692,7 +1692,7 @@ defect, and move implementation-level test choreography out of the log.
   decoder previously retained v3 history compatibility beside v4 while the live
   browser and canonical history projection accepted different populations.
   Cause: consumer-local compatibility lacked one event/data epoch and removal
-  point. Production is exact-v5-only at data epoch 6; the private v3/v4 decoders,
+  point. Production events are exact-v5-only; the private v3/v4 decoders,
   exclusive helpers, and positive compatibility fixtures are removed.
   Removal guards and all-family negative cases pin the source boundary;
   co-batched retired-version events preserve the drain cursor and replay.
