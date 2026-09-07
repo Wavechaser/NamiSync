@@ -4,6 +4,11 @@ This is the sole active M1 delivery register. It records remaining accepted outc
 
 [BRIDGE.md](BRIDGE.md) owns external command, transport, retry/recovery, and bridge-gate contracts. [PRESENTATION.md](PRESENTATION.md) owns trees, views, search, selection, sorting, and scale evidence. [INTERFACES.md](INTERFACES.md) owns implemented task lifecycle and desktop host/package rules. [FEATURES.md](FEATURES.md), [ARCHITECTURE.md](ARCHITECTURE.md), and [DEFENSE.md](DEFENSE.md) remain the owners of product behavior, cross-layer meaning, and safety/evidence policy.
 
+[PRODUCTION_REDUCTION.md](PRODUCTION_REDUCTION.md) is the closed maintenance
+subregister for the active production-ablation pass under M1-12. Its PR-0
+through PR-9 rows remove redundant implementation and test prescriptions; they
+do not add, defer, or reinterpret an M1 product outcome.
+
 ## Current boundary
 
 The secured desktop host and transport, presentation foundation, current service/CLI surface, and implemented ledger/history boundary are active. The frozen v1 event-and-transport custody claim remains closed at its bridge evidence owner. That closure does not establish whole-runtime containment.
