@@ -1908,7 +1908,7 @@ def test_detail_projection_accepts_only_its_exact_canonical_shape() -> None:
 
     admitted, omitted = project_detail(projection)
 
-    assert admitted is not projection
+    assert admitted is projection
     assert admitted.entries == projection.entries
     assert omitted == 0
     assert admitted.to_wire() == {
@@ -1973,19 +1973,13 @@ def test_detail_projection_bounds_invalid_text_before_encoding() -> None:
         DetailProjection((("published_path", overlong_invalid_path),))
 
 
-def test_detail_projection_revalidates_forged_exact_instances() -> None:
-    missing_entries = object.__new__(DetailProjection)
-    projection = object.__new__(DetailProjection)
-    object.__setattr__(
-        projection,
-        "entries",
-        (("message", "first"), ("message", "second")),
-    )
+def test_detail_projection_reuses_admitted_exact_instance() -> None:
+    projection = DetailProjection((("message", "copy complete"),))
 
-    with pytest.raises(TypeError, match="exact tuple"):
-        project_detail(missing_entries)
-    with pytest.raises(ValueError, match="duplicate"):
-        project_detail(projection)
+    admitted, omitted = project_detail(projection)
+
+    assert admitted is projection
+    assert omitted == 0
 
 
 def test_detail_projection_subclass_is_copied_to_exact_base_shape() -> None:
@@ -2004,7 +1998,7 @@ def test_detail_projection_subclass_is_copied_to_exact_base_shape() -> None:
     assert omitted == 0
 
 
-def test_item_detail_snapshot_does_not_retain_the_callers_projection() -> None:
+def test_item_detail_reuses_callers_exact_projection() -> None:
     source = DetailProjection((("message", "copy complete"),))
     item = ItemOutcome(
         item_id="1" * 32,
@@ -2014,27 +2008,25 @@ def test_item_detail_snapshot_does_not_retain_the_callers_projection() -> None:
         detail=source,
     )
 
-    object.__setattr__(source, "entries", (("message", object()),))
-
-    assert item.detail is not source
+    assert item.detail is source
     assert item.detail.entries == (("message", "copy complete"),)
 
 
-def test_result_item_serialization_revalidates_owned_detail() -> None:
+def test_result_item_serialization_projects_owned_detail_to_canonical_wire() -> None:
     item = ItemOutcome(
         item_id="1" * 32,
         kind="copy",
         path="file.bin",
         outcome=Outcome.SUCCEEDED,
-        detail={"message": "copy complete"},
+        detail={"durability_warnings": ["flush unavailable"]},
     )
     assert isinstance(item.detail, DetailProjection)
-    object.__setattr__(item.detail, "entries", (("message", object()),))
+    direct_wire = item.detail.to_wire()
+    result_wire = result_item_to_dict(item)
 
-    with pytest.raises(TypeError, match="message must be text"):
-        item.detail.to_wire()
-    with pytest.raises(TypeError, match="message must be text"):
-        result_item_to_dict(item)
+    assert direct_wire == {"durability_warnings": ["flush unavailable"]}
+    assert result_wire["detail"] == direct_wire
+    assert result_wire["detail"] is not direct_wire
 
 
 def test_detail_projection_rejects_duplicate_custom_mapping_items_before_omission() -> None:

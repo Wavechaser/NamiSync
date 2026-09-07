@@ -179,20 +179,9 @@ class DetailProjection(Mapping[str, DetailValue]):
         raise KeyError(key)
 
     def to_wire(self) -> dict[str, object]:
-        source_entries = getattr(self, "entries", None)
-        if type(source_entries) is not tuple:
-            raise TypeError(
-                "canonical operation detail entries must be an exact tuple"
-            )
-        entries, omitted = _project_detail_entries(
-            source_entries,
-            canonical=True,
-        )
-        if omitted:
-            raise ValueError("canonical operation detail cannot omit values")
         return {
             key: list(value) if isinstance(value, tuple) else value
-            for key, value in entries
+            for key, value in self.entries
         }
 
 
@@ -467,16 +456,7 @@ def project_detail(
     """Snapshot one declared detail map and omit only oversized diagnostics."""
 
     if type(value) is DetailProjection:
-        source_entries = getattr(value, "entries", None)
-        if type(source_entries) is not tuple:
-            raise TypeError(
-                "canonical operation detail entries must be an exact tuple"
-            )
-        entries, omitted = _project_detail_entries(
-            source_entries,
-            canonical=True,
-        )
-        return DetailProjection(entries), omitted
+        return value, 0
     if not isinstance(value, Mapping):
         raise TypeError("operation detail must be a mapping")
     entries, omitted = _project_detail_entries(value.items(), canonical=False)

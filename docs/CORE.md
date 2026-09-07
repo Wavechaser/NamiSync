@@ -430,16 +430,22 @@ sets remain local to the validator that owns each enum contract.
 Emitter-side `DetailProjection` is one canonical exact base value: an exact
 tuple of exact two-element tuples with unique declared ASCII string keys and
 the exact primitive variant for each key. Arrays are exact tuples with exact
-string members. Construction validates the full shape; every typed admission
-copies the validated entries into a fresh base projection, so caller aliases,
-subclasses, and raw mappings cannot rewrite retained state or carry hidden
-graphs. Serialization revalidates the owned projection. Diagnostic, path,
-array, total-leaf, and path-leaf bounds apply before retaining the snapshot;
-invalid key/path size refuses before encoding, and duplicate mapping items
-refuse before omission or wire projection. Oversized optional diagnostics from
-raw mappings are still omitted whole with their existing count, while a
-purportedly canonical projection must already fit and therefore refuses instead
-of manufacturing an unwitnessed omission.
+string members. Construction validates the full shape. At the typed ownership
+transfer, an exact `DetailProjection` is the admitted immutable owned value and
+is reused; raw mappings and subclasses are normalized into a new exact base
+projection, so caller aliases and hidden graphs cannot rewrite retained state.
+Serialization projects the admitted entries directly, making fresh lists for
+tuple values. Under [DEFENSE.md](DEFENSE.md)'s rung-3 contract, NamiSync-owned
+code trusts that admitted immutable base value. Reflective
+`object.__setattr__` mutation and `object.__new__` construction bypass its
+constructor and are unsupported rung-4 faults, so they do not trigger a fresh
+copy or serialization revalidation. Diagnostic, path, array, total-leaf, and
+path-leaf bounds apply before retaining a raw snapshot; invalid key/path size
+refuses before encoding, and duplicate mapping items refuse before omission or
+wire projection. Oversized optional diagnostics from raw mappings are still
+omitted whole with their existing count, while a purportedly canonical
+projection must already fit and therefore refuses instead of manufacturing an
+unwitnessed omission.
 
 History is attached at admission as the distinguished reliable audit
 subscriber. Its bounded queue may apply producer backpressure only at a safe

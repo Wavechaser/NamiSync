@@ -112,7 +112,7 @@ mutation, or population-dependent per-item scanning is a regression.
 | PR-3 | Reduced history schema and explicit reset requirement. | PR-0 | Fresh v7 behavior, retained protections, old/mixed refusal | complete |
 | PR-4 | One event detail/reason vocabulary. | PR-0 | Independent vocabulary and event-v5 consumer fixtures | complete |
 | PR-5 | One core Clock contract. | PR-0 | Five consumers and import contracts | complete |
-| PR-6 | Reuse exact admitted immutable detail. | PR-4 | Raw isolation/refusal and wire equivalence | pending |
+| PR-6 | Reuse exact admitted immutable detail. | PR-4 | Raw isolation/refusal and wire equivalence | complete |
 | PR-7 | One bounded SQL subject-batch policy. | PR-3 | Parameters, results/order, snapshot, atomic writes | pending |
 | PR-8 | Representation-independent selection verification. | PR-0 | Selection/progress behavior and structural work bound | complete |
 | PR-9 | Integrated reduction closure. | PR-1–PR-8 | Complete/headed suite, oracle repeat 3, controls, adversarial review | pending |
@@ -246,7 +246,12 @@ its validated entries directly. Raw mappings and subclasses still normalize to
 an exact base and retain duplicate, Unicode, path, leaf, value, and size checks;
 persistence/browser decoders remain independent.
 
-Replace only the three frozen fresh-identity/reflective-forgery tests. Verify
+Replace the three frozen fresh-identity/reflective-forgery tests. The user's
+2026-09-07 adjudication also permits changing only `admitted is not projection`
+to `admitted is projection` in
+`test_detail_projection_accepts_only_its_exact_canonical_shape`; retain all of
+that test's shape, value, omission, and wire assertions. This one-assertion
+correction supplements the frozen inventory; no other family is added. Verify
 exact reuse, raw mutable alias isolation, subclass/custom-mapping normalization,
 invalid values, omissions, and byte-identical fixtures. Faults retain a mutable
 array, bypass duplicates/subclass normalization, or change omissions. Exact
@@ -255,6 +260,13 @@ and revise `CORE.md` first to follow DEFENSE rung 3/4. Review proves admitted
 immutable variants and retained boundary validation. Commit as
 `refactor(core): reuse validated immutable detail projections`.
 
+Closed after clean independent review: 236 focused tests and 2,887 consumer
+tests passed, with one capability skip. Four fault controls failed their named
+retained normalization/omission witnesses; exact reuse and ordinary mapping
+normalization passed. `build/production-reduction/pr6/PR6_ACCEPTANCE_MANIFEST.json`
+binds the accepted controls and root-supervised consumer receipt. Interrupted
+and child-startup harness attempts remain unqualified; no product fix was made
+for them. The user-approved additional identity assertion is recorded above.
 ### PR-7 — Centralize SQL subject batching
 
 Use `QUERY_SUBJECT_BATCH_SIZE = 400` for exactly the ten variable-`IN` loops.
@@ -349,7 +361,7 @@ the isolated blocked task on its AGENTS recovery branch. A shared blocker also
 blocks any task whose guarantees or prerequisites it prevents; it does not
 stop unrelated work. This is the user-directed recovery order for this pass.
 
-Current state: PR-0 through PR-5 and PR-8 are complete after clean independent review. PR-6 and PR-7 are in progress; PR-9 is pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
+Current state: PR-0 through PR-6 and PR-8 are complete after clean independent review. PR-7 is ready after clean review; PR-9 is pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
 oracle and baseline, SH-G-8 authority, unintegrated presentation components,
 execution projections, and lifecycle claims. Deferred findings are oracle
 simplification, broad continuation-validation reduction, further protocol
