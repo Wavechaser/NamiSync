@@ -393,6 +393,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
 | Deeply read-only preflight subjects, observations, refusals, and verdicts | `namisync/core/preflight.py` |
 | Outcomes, recording status, provenance, content evidence, attestation, and hashing protocols | `namisync/core/evidence.py` |
+| Clock protocol for injected wall time | `namisync/core/clock.py` |
 | Commitments, mutable execution state/evidence, reduced execution authority, immutable execution-review and recording projections, scoped recording reasons/issues, failure decisions, copy/recorder/filesystem protocols | `namisync/core/execution.py` |
 | Integrity state, selections, outcomes, commands, and verifier/recorder protocols | `namisync/core/integrity.py` |
 | Ledger-bound host, volume, location, mapping, run, and inventory commands | `namisync/core/recording.py` |
@@ -519,7 +520,7 @@ The core declares narrow protocols for infrastructure and replaceable policy:
 - `execution.Recorder` and `integrity.IntegrityRecorder` are the core ledger
   mutation protocols; database-owned recording commands cover the remaining
   ledger boundaries.
-- Core clock protocols are the only source of current time.
+- The `Clock` protocol in `core/clock.py` is the only source of current time.
 - `FailurePolicy` returns retry/continue/stop decisions to the executor.
 - `StreamingHasher` and `HasherFactory` abstract the concrete content hasher
   without importing it into core.

@@ -10,6 +10,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Callable, Iterator, Mapping, Protocol
 
+from namisync.core.clock import Clock
 from namisync.core.exception_graph import (
     retire_exception_graph,
     retired_failure_detail,
@@ -219,11 +220,6 @@ class VolumeBindingBackend(Protocol):
     def resolve_root(self, path: str) -> str: ...
 
     def volume_snapshot(self, root: str) -> VolumeSnapshot: ...
-
-
-class Clock(Protocol):
-    def now(self) -> datetime: ...
-
 
 @dataclass(frozen=True, slots=True)
 class LocationBinding:

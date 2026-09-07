@@ -17,6 +17,7 @@ from time import monotonic
 from types import MappingProxyType
 from typing import Callable, ClassVar, Iterator, Mapping, Protocol, runtime_checkable
 
+from .clock import Clock
 from .evidence import (
     Attestation,
     HasherFactory,
@@ -1169,12 +1170,6 @@ class IntegrityRecorder(Protocol):
         self, command: VerificationInvalidationCommand
     ) -> RecordDisposition:
         """Conditionally retain a modified or mismatched verification result."""
-
-
-class Clock(Protocol):
-    def now(self) -> datetime:
-        """Return an aware UTC timestamp."""
-
 
 class VerificationStream(Protocol):
     strategy: ReadStrategy

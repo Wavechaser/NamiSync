@@ -8,8 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Protocol
 
+from namisync.core.clock import Clock
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance, RecordingStatus
 from namisync.core.execution import RecordedCopyIdentity
 from namisync.core.integrity import (
@@ -81,11 +81,6 @@ from .writer import (
     SerializedWriter,
     TokenConflictError,
 )
-
-
-class Clock(Protocol):
-    def now(self) -> datetime: ...
-
 
 class VolumeRebindRequired(RecordingError):
     """A known serial appeared with a different filesystem type."""

@@ -111,7 +111,7 @@ mutation, or population-dependent per-item scanning is a regression.
 | PR-2 | One pure verification terminal projection. | PR-1 | Exact terminal-field and phase equivalence | pending |
 | PR-3 | Reduced history schema and explicit reset requirement. | PR-0 | Fresh v7 behavior, retained protections, old/mixed refusal | pending |
 | PR-4 | One event detail/reason vocabulary. | PR-0 | Independent vocabulary and event-v5 consumer fixtures | pending |
-| PR-5 | One core Clock contract. | PR-0 | Five consumers and import contracts | pending |
+| PR-5 | One core Clock contract. | PR-0 | Five consumers and import contracts | complete |
 | PR-6 | Reuse exact admitted immutable detail. | PR-4 | Raw isolation/refusal and wire equivalence | pending |
 | PR-7 | One bounded SQL subject-batch policy. | PR-3 | Parameters, results/order, snapshot, atomic writes | pending |
 | PR-8 | Representation-independent selection verification. | PR-0 | Selection/progress behavior and structural work bound | pending |
@@ -204,6 +204,12 @@ and time semantics. Change no other protocol. Verify five signatures, injected
 timestamps, consumer departments, and import-linter; a wall-clock or signature
 fault must fail. Update the architecture locator. Review that core acquires no
 runtime dependency. Commit as `refactor(core): centralize the clock protocol`.
+
+Closed after clean independent review: isolated candidate verification passed
+2,530 consumer tests with one capability skip and all 12 import contracts.
+The drifting-clock control failed the retained attestation timestamp assertion.
+Receipts, raw logs, and matching source hashes are in
+`build/production-reduction/pr5/isolated-validation/`.
 
 ### PR-6 — Reuse exact immutable detail
 
@@ -301,9 +307,15 @@ unexplained retained-guarantee failure, scope growth beyond a named population,
 or changed protected authority. Apply all AGENTS hard-wall, causal-mechanism,
 and WIP recovery rules. In particular, supported-path data loss/corruption,
 out-of-root mutation, false terminal/durable success, duplicate mutation, or
-inability to preserve work stops the pass immediately.
+inability to preserve work stops the affected checkpoint immediately.
 
-Current state: PR-0 is complete after clean independent review; PR-1 through PR-9 are pending. PR-1 and PR-5 are the next nondependent work. Preserve user changes, `PRODUCTION_ABLATION.md`,
+For parallel execution, halt the blocked task and keep independent, nonblocked
+tasks moving to their reviewed commits. After those tasks finish, preserve only
+the isolated blocked task on its AGENTS recovery branch. A shared blocker also
+blocks any task whose guarantees or prerequisites it prevents; it does not
+stop unrelated work. This is the user-directed recovery order for this pass.
+
+Current state: PR-0 and PR-5 are complete after clean independent review. PR-1 and PR-4 are in progress; the remaining checkpoints are pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
 oracle and baseline, SH-G-8 authority, unintegrated presentation components,
 execution projections, and lifecycle claims. Deferred findings are oracle
 simplification, broad continuation-validation reduction, further protocol

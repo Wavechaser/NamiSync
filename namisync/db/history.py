@@ -11,8 +11,9 @@ from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import datetime
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Callable, Mapping, Protocol
+from typing import Callable, Mapping
 
+from namisync.core.clock import Clock
 from namisync.core.event_v5 import validate_event_v5_envelope
 from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import (
@@ -97,11 +98,6 @@ def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
             raise ValueError(f"history JSON contains duplicate key: {key}")
         result[key] = value
     return result
-
-
-class Clock(Protocol):
-    def now(self) -> datetime: ...
-
 
 class HistoryIntegrityError(RecordingError):
     """The reliable event prefix violates the history integrity contract."""
