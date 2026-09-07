@@ -96,7 +96,7 @@ exact reliable-envelope maximum and first excess before `EventHub` mutation;
 the exact maximum event drains alone. Browser tests admit all seven canonical
 producer projections, then atomically reject invalid transport version,
 session, sequence, tag, body-object, lifecycle, or reducer input without
-advancing the cursor; clean replay remains exact. History-v6 pages cannot carry
+advancing the cursor; clean replay remains exact. History-v7 pages cannot carry
 a prior event version. The consolidation closeout search found no downstream
 event-body certifier; retained core guards pin prior, future, and coercive
 version rejection through the public validator/decoder and require the exact

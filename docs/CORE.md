@@ -562,7 +562,7 @@ transition table, authority order, and Gap/replay rules live in
 Supported producers emit only event v5. Persisted readback requires an exact v5
 envelope, while live browser delivery requires the v5 transport marker and
 recognized tag; trusted internal projections are not decoded again. The
-coordinated ledger-v4 / history-v6 reset means no readable current database can
+coordinated ledger-v4 / history-v7 reset means no readable current database can
 contain an older event epoch. Live and durable wrappers consume the same
 admitted immutable core snapshot without treating either representation as the
 other's decoder.

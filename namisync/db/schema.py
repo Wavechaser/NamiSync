@@ -15,10 +15,10 @@ from .connections import (
 
 
 LEDGER_SCHEMA_VERSION = 4
-HISTORY_SCHEMA_VERSION = 6
-DATA_EPOCH = 6
+HISTORY_SCHEMA_VERSION = 7
+DATA_EPOCH = 7
 LEDGER_CONTRACT_ID = "m1-ledger-v4-event-v5-evidence-v2"
-HISTORY_CONTRACT_ID = "m1-history-v6-event-v5-recording-v1"
+HISTORY_CONTRACT_ID = "m1-history-v7-event-v5-recording-v1"
 MAX_HISTORY_PHASE_NAME_BYTES = 1_024
 MAX_HISTORY_ERROR_TYPE_BYTES = 1_024
 MAX_HISTORY_ERROR_MESSAGE_BYTES = 1_024
@@ -942,43 +942,6 @@ BEGIN
     SELECT RAISE(ABORT, 'duplicate receipt link mismatch');
 END;
 
-CREATE TRIGGER IF NOT EXISTS history_events_duplicate_link_update
-BEFORE UPDATE ON history_events
-WHEN (
-        NEW.event_disposition = 'duplicate'
-        OR (
-            NEW.event_disposition = 'rejected'
-            AND NEW.duplicate_of_seq IS NOT NULL
-        )
-    )
-    AND NOT EXISTS (
-    SELECT 1 FROM history_events AS canonical
-     WHERE canonical.run_id = NEW.run_id
-       AND canonical.event_seq = NEW.duplicate_of_seq
-       AND canonical.item_identity_hash = NEW.item_identity_hash
-       AND canonical.item_payload_hash = NEW.item_payload_hash
-       AND (
-           (
-               canonical.event_disposition = 'recorded'
-               AND canonical.item_order IS NOT NULL
-               AND (
-                   NEW.event_disposition = 'rejected'
-                   OR (
-                       canonical.item_type = NEW.item_type
-                       AND canonical.item_id = NEW.item_id
-                   )
-               )
-           )
-           OR (
-               canonical.event_disposition = 'rejected'
-               AND canonical.duplicate_of_seq IS NULL
-           )
-       )
-)
-BEGIN
-    SELECT RAISE(ABORT, 'duplicate receipt link mismatch');
-END;
-
 CREATE TRIGGER IF NOT EXISTS history_events_append_only_update
 BEFORE UPDATE ON history_events
 BEGIN
@@ -1144,7 +1107,7 @@ def _raise_reset_required(version: object, *, history: bool) -> None:
     database = "history" if history else "ledger"
     raise SchemaResetRequired(
         f"unsupported {database} schema version {version}; "
-        "NamiSync M1 requires ledger v4 and history v6 at data epoch 6. "
+        "NamiSync M1 requires ledger v4 and history v7 at data epoch 7. "
         "Close every NamiSync process, then archive or delete both database "
         "main files and all of their -wal, -shm, and -journal sidecars "
         "together before restarting."
@@ -1164,7 +1127,7 @@ def _require_contract_id(
         value = "missing" if actual is None else actual
         raise SchemaResetRequired(
             f"unsupported {database} schema contract {value}; "
-            "NamiSync M1 requires ledger v4 and history v6 at data epoch 6. "
+            "NamiSync M1 requires ledger v4 and history v7 at data epoch 7. "
             "Close every NamiSync process, then archive or delete both database "
             "main files and all of their -wal, -shm, and -journal sidecars "
             "together before restarting."
@@ -1178,7 +1141,7 @@ def _require_contract_id(
         value = "missing" if epoch is None else epoch
         raise SchemaResetRequired(
             f"unsupported {database} data epoch {value}; "
-            "NamiSync M1 requires ledger v4 and history v6 at data epoch 6. "
+            "NamiSync M1 requires ledger v4 and history v7 at data epoch 7. "
             "Close every NamiSync process, then archive or delete both database "
             "main files and all of their -wal, -shm, and -journal sidecars "
             "together before restarting."

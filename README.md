@@ -59,7 +59,7 @@ the [defense model](docs/DEFENSE.md) states the active limits and support scope.
 
 M1 state is process-local: queued sessions and unexecuted plans do not survive
 restart, and committed nonterminal history returns as `incomplete`. The active
-local database pair is ledger v4/history v6 at data epoch 6. Incompatible or
+local database pair is ledger v4/history v7 at data epoch 7. Incompatible or
 incomplete pairs are refused; startup never resets them automatically. To reset,
 archive or delete both database mains and their SQLite sidecars together before
 creating a fresh pair. Reset loses app evidence/history, not managed files. See
@@ -268,7 +268,7 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, dormant sync/integrity file-list row
 renderers, and a persisted native/page theme override over the refrozen
 cosmetic-state channel. The remaining second-half product/task contracts
-are accepted but unrealized, and the exact event-v5/data-epoch-6 protocol cut
+are accepted but unrealized, and the exact event-v5/data-epoch-7 protocol cut
 is active. Product surfaces and beta packaging remain open.
 
 ### M1 Features

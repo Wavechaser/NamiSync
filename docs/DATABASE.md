@@ -1,21 +1,21 @@
 # Database Module
 
 Status: schema bones, safe connection factories, ledger/repositories, inventory
-reconciliation, bounded receipt-journal history, the ledger-v4/history-v6
-data-epoch-6 reset boundary, and the semantic settings store are implemented.
+reconciliation, bounded receipt-journal history, the ledger-v4/history-v7
+data-epoch-7 reset boundary, and the semantic settings store are implemented.
 General migrations, retention, and backup/protection workflows remain
 unrealized.
 
-## Active V4/V6 Persistence Boundary
+## Active V4/V7 Persistence Boundary
 
-Status: ledger-v4/history-v6 shapes, shared data epoch 6, and the corrected
+Status: ledger-v4/history-v7 shapes, shared data epoch 7, and the corrected
 ledger contract id are active. This is a coordinated pre-release reset, not an
 in-place migration.
 
 | Database | Schema | `data_epoch` | `contract_id` |
 | --- | ---: | ---: | --- |
-| ledger | 4 | 6 | `m1-ledger-v4-event-v5-evidence-v2` |
-| history | 6 | 6 | `m1-history-v6-event-v5-recording-v1` |
+| ledger | 4 | 7 | `m1-ledger-v4-event-v5-evidence-v2` |
+| history | 7 | 7 | `m1-history-v7-event-v5-recording-v1` |
 
 Version, contract id, and epoch values are mandatory. Two absent main files
 with no sidecars remain the only fresh state. Any old or mixed pair,
@@ -24,45 +24,37 @@ WAL/SHM/journal sidecar is refused by read-only validation before mutating
 startup or CLI work. The refusal directs the user to close NamiSync and
 archive or delete both database mains and all sidecars together; startup does
 not migrate, repair, or delete them. A standalone read-only history command may
-open one exact history-v6 database without creating or requiring its ledger
+open one exact history-v7 database without creating or requiring its ledger
 peer; it still validates the history role, version, contract id, epoch, and
 complete topology through the shared nonmutating file preflight.
 
-Epoch 6 separates the corrected identity-bearing hash preimages from epoch 5's
-numeric file-index preimages. Recorder and plan hashes now project declared
-contract fields explicitly and quote canonical `FileIndex128` text; ordinary
-integers remain JSON numbers. SQLite column shapes and the history contract id
-do not change. This fixes canonical consistency and latent portability risk,
-not demonstrated Python integer-precision loss. Valid-Unicode identityless hash
-bytes remain unchanged. Accepted but unrealized boundary hardening requires
-Unicode scalar strings/keys and strict UTF-8 without another epoch or schema
-change. JSON had already distinguished surrogate escapes from literal
-backslashes; this is a
-malformed-input/round-trip fix, not a demonstrated hash collision. Optional scan
-warning detail is omitted at construction if malformed or larger than 1,024
-UTF-8 bytes; its old captured receipt consequently conflicts without mutation
-even when identityless. Valid observations are still recorded.
-[CORE.md](CORE.md) and [RECORDER.md](RECORDER.md)
-own that input policy and replay behavior; frozen old bytes remain immutable.
+Epoch 6 separated the corrected identity-bearing hash preimages from epoch 5's
+numeric file-index preimages under the former ledger-v4/history-v6 pair. Those
+hash-preimage facts and their frozen receipt fixtures remain historical
+evidence. The v7 reset does not reinterpret them or change core-event v5; it
+changes the history schema and contract id because the unconditional append-only
+UPDATE guard makes the duplicate-link UPDATE guard redundant.
 
-Both old epoch-5 databases, either mixed 5/6 direction, and epoch 6 carrying the
-old ledger contract id are refused, including when the old markers are committed
-only in WAL. Recreating the pair discards the active app inventory, baselines,
-attestations, mappings, receipts, and audit history; archived files may be kept
-for separate inspection but are not migrated into the new pair. It does not
-delete or modify source files, target files, semantic settings, or sync trash.
-A new scan can rebuild current observations, not the discarded historical
-baselines, attestations, receipts, or audit trail.
-No application startup or reader performs this destructive reset automatically.
+Old epoch-5 pair fixtures, including their historical 5/6 mixed directions,
+remain refusal evidence. Every prior epoch-6 pair and either mixed 6/7 direction
+is also refused, including when its old markers are committed only in WAL.
+Recreating the pair discards the active app inventory, baselines, attestations,
+mappings, receipts, and audit history; archived files may be kept for separate
+inspection but are not migrated into the new pair. It does not delete or modify
+source files, target files, semantic settings, or sync trash. A new scan can
+rebuild current observations, not the discarded historical baselines,
+attestations, receipts, or audit trail. No application startup or reader
+performs this destructive reset automatically.
 
-Captured epoch-5 markers in `tests/assets/identity_epoch5_vectors.json` seed
-synthetic old-pair fixtures against the unchanged ledger-v4/history-v6 shapes.
-Repeated probes, pair admission, initializers, and repositories refuse both
-old databases, each mixed 5/6 direction, and epoch 6 with the old ledger id.
-WAL-only old markers refuse with or without source SHM; source main/WAL/SHM/
-journal membership and bytes remain unchanged. Existing epoch-4 and journal
-presence negatives remain independent controls, and fresh epoch-6 pairs reopen
-with unchanged schema versions and history id. These tests never reset user data.
+Captured epoch-5 markers in the identity fixture seed synthetic historical
+ledger-v4/history-v6 refusal cases. Repeated probes, pair admission,
+initializers, and repositories refuse those old databases and historical 5/6
+mixed directions, every epoch-6 pair, and either mixed 6/7 direction. WAL-only
+old markers refuse with or without source SHM; source main/WAL/SHM/journal
+membership and bytes remain unchanged. Existing epoch-4 and journal-presence
+negatives remain independent controls. Fresh epoch-7 pairs reopen only with the
+exact ledger-v4/history-v7 markers and current history contract id. These tests
+never reset user data.
 
 Ledger v4 stores complete file identities as canonical `FileIndex128` text and
 strengthens pair, canonical-domain, and attestation checks. It does not add an
@@ -75,10 +67,14 @@ At the active cutover, ledger numeric and native-identity storage follows
 domain or codec variant. `HISTORY.md` owns canonical event-envelope
 persistence.
 
-History v6 admits only its coordinated core-event version and adds a nullable,
+History v7 admits only its coordinated core-event version and adds a nullable,
 all-or-complete review-limit terminal group. `HISTORY.md` owns its durable
 observer/finalization consequences; `namisync/core/events.py` owns the exact shared internal shape.
-Presentation-only omission state is never stored.
+Presentation-only omission state is never stored. The duplicate-link INSERT
+guard remains the writer admission for canonical receipt links. The
+unconditional append-only UPDATE guard rejects every history-event rewrite,
+including a duplicate-link rewrite, so schema v7 removes only the redundant
+duplicate-link UPDATE guard.
 
 ### Exact topology authority
 
@@ -383,8 +379,8 @@ resumable without future durable custody.
 
 The current schemas carry exact whole-contract metadata: ledger
 `contract_id=m1-ledger-v4-event-v5-evidence-v2`, history
-`contract_id=m1-history-v6-event-v5-recording-v1`, and shared `data_epoch=6`.
-Opening ledger v1-v3, history v1-v5, or a current database with a
+`contract_id=m1-history-v7-event-v5-recording-v1`, and shared `data_epoch=7`.
+Opening ledger v1-v3, history v1-v6, or a current database with a
 missing/mismatched marker raises the same actionable
 `SchemaResetRequired` family without altering the old tables or version stamp.
 During this pre-release window the user must close NamiSync and manually delete

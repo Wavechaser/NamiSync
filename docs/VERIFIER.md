@@ -4,7 +4,7 @@ Status: the verifier component package and M1 Stage 3 location-centric
 inventory/baseline/verify/rebaseline workflows are implemented. M1 Stage 4
 also feeds the same ledger-neutral classifier transient post-copy candidates
 for optional in-session readback. The production dispatcher registry carries
-all four headless kinds and receipt-aware history v6 commits standalone and
+all four headless kinds and receipt-aware history v7 commits standalone and
 compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop

@@ -1,16 +1,16 @@
 # History Module
 
-Status: history schema v6 records exact core-event-v5 reliable receipts in
+Status: history schema v7 records exact core-event-v5 reliable receipts in
 bounded, incrementally durable windows and exposes bounded summary, item-page,
 and event-page reads. Retention, export, durable task custody, and execution
 resume remain unrealized.
 
-## Active Schema-V6 Persistence Boundary
+## Active Schema-V7 Persistence Boundary
 
 Status: active beside ledger v4. `DATABASE.md` owns the pair metadata, refusal
 boundary, and reset instructions; there is no in-place migration.
 
-History v6 accepts only the coordinated exact core-event-v5 receipts, including
+History v7 accepts only the coordinated exact core-event-v5 receipts, including
 duplicate and bounded rejection receipts; it has no mixed-version page or
 compatibility decoder. The observer stores the canonical envelope and matching
 typed projection from the same admitted snapshot. At admission it projects an
@@ -66,13 +66,12 @@ uses execute as the top-level byte domain. History records what NamiSync
 attempted and reported; reliable item receipts and the independent filesystem
 ledger, not this aggregate byte pair, own settlement and publication truth.
 
-## Schema V6 And Reset Boundary
+## Schema V7 And Reset Boundary
 
 The current exact marker is
-`contract_id=m1-history-v6-event-v5-recording-v1` with
-`HISTORY_SCHEMA_VERSION = 6` and `data_epoch=6`. The coordinated identity-hash
-cut advances the shared epoch without changing this schema or contract id.
-NamiSync refuses history v1-v5 and a v6 database with a missing or mismatched
+`contract_id=m1-history-v7-event-v5-recording-v1` with
+`HISTORY_SCHEMA_VERSION = 7` and `data_epoch=7`. The trigger reduction advances the history schema and shared epoch together.
+NamiSync refuses history v1-v6 and a v7 database with a missing or mismatched
 marker through a read-only connection. Refusal
 must not alter the database or its WAL, SHM, or journal sidecars. This remains
 a pre-release reset-only boundary: close every NamiSync process and reset the
@@ -95,7 +94,11 @@ committed run rows cannot be deleted or replaced.
 `history_events` is the append-only reliable-event receipt journal. Its primary
 key is `(run_id, event_seq)`. Every row retains timestamp, schema/body type,
 the original payload hash, a disposition-bound receipt hash, and exactly one of
-three checked shapes:
+three checked shapes. Duplicate and rejected links are admitted only by the
+retained duplicate-link INSERT guard, which requires a canonical target. The
+append-only UPDATE trigger unconditionally rejects every UPDATE, including a
+duplicate-link rewrite; it therefore subsumes the removed duplicate-link UPDATE
+guard:
 
 - `recorded` retains the canonical envelope and, for a result item, its typed
   projection plus identity and semantic item hashes;
@@ -286,7 +289,7 @@ receipts instead expose `body=None`. The coordinated reset makes a mixed-version
 page unrepresentable: old, mixed, markerless, or incomplete database pairs
 refuse before mutating commands. The payload hash remains the identity of the
 retained envelope. Core source contains only the exact v5 decoder; no
-history-v6 row or repository route can select an older event decoder.
+history-v7 row or repository route can select an older event decoder.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including

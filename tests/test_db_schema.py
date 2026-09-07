@@ -38,7 +38,7 @@ def _pragma(connection: sqlite3.Connection, name: str):
     return connection.execute(f"PRAGMA {name}").fetchone()[0]
 
 
-def test_identity_hash_cut_requires_epoch_six_without_schema_or_history_id_changes() -> None:
+def test_history_trigger_cut_requires_epoch_seven_and_history_v7() -> None:
     assert (
         DATA_EPOCH,
         LEDGER_SCHEMA_VERSION,
@@ -46,11 +46,11 @@ def test_identity_hash_cut_requires_epoch_six_without_schema_or_history_id_chang
         LEDGER_CONTRACT_ID,
         HISTORY_CONTRACT_ID,
     ) == (
-        6,
+        7,
         4,
-        6,
+        7,
         "m1-ledger-v4-event-v5-evidence-v2",
-        "m1-history-v6-event-v5-recording-v1",
+        "m1-history-v7-event-v5-recording-v1",
     )
 
 
@@ -356,7 +356,7 @@ def _seed_schema_version(path: Path, version: int) -> None:
         connection.close()
 
 
-@pytest.mark.parametrize("version", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("version", [1, 2, 3, 4, 5, 6])
 def test_superseded_history_versions_are_refused_without_mutation(
     tmp_path: Path, version: int
 ) -> None:
@@ -365,7 +365,7 @@ def test_superseded_history_versions_are_refused_without_mutation(
 
     with pytest.raises(
         SchemaResetRequired,
-        match="history v6.*archive or delete both database main files",
+        match="history v7.*archive or delete both database main files",
     ):
         initialize_history(path)
 
@@ -406,7 +406,7 @@ def test_superseded_ledger_versions_are_refused_without_mutation(
 
     with pytest.raises(
         SchemaResetRequired,
-        match="ledger v4 and history v6 at data epoch 6.*archive or delete",
+        match="ledger v4 and history v7 at data epoch 7.*archive or delete",
     ):
         initialize_ledger(path)
 
@@ -499,8 +499,8 @@ def test_event_v5_coordinated_reset_recreates_exact_database_epoch(
         ledger_reader.close()
 
     assert ledger_version == LEDGER_SCHEMA_VERSION == 4
-    assert history_version == HISTORY_SCHEMA_VERSION == 6
-    assert ledger_epoch == history_epoch == "6"
+    assert history_version == HISTORY_SCHEMA_VERSION == 7
+    assert ledger_epoch == history_epoch == "7"
     assert (
         ledger_contract
         == LEDGER_CONTRACT_ID
@@ -509,7 +509,7 @@ def test_event_v5_coordinated_reset_recreates_exact_database_epoch(
     assert (
         history_contract
         == HISTORY_CONTRACT_ID
-        == "m1-history-v6-event-v5-recording-v1"
+        == "m1-history-v7-event-v5-recording-v1"
     )
     assert not ledger.with_name(ledger.name + "-journal").exists()
     assert not history.with_name(history.name + "-journal").exists()
@@ -700,7 +700,7 @@ def test_reopening_complete_contract_is_schema_noop(tmp_path: Path) -> None:
     assert after == before
 
 
-@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 @pytest.mark.parametrize("layout", ["fresh", "populated", "relocated"])
 def test_exact_schema_topology_accepts_complete_definitions_without_writes(
     history: bool, layout: str,
@@ -736,7 +736,7 @@ def test_exact_schema_topology_accepts_complete_definitions_without_writes(
             schema_module._validate_schema_topology(connection, history=history)
 
 
-@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 def test_exact_schema_topology_is_main_only_and_preserves_caller_transaction(history: bool) -> None:
     script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
     with closing(sqlite3.connect(":memory:")) as connection:
@@ -756,7 +756,7 @@ def test_exact_schema_topology_is_main_only_and_preserves_caller_transaction(his
         ).fetchone() is None
 
 
-@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 @pytest.mark.parametrize("shape", [
     "empty", "marker-only", "missing-table", "missing-index", "missing-trigger",
     "missing-autoindex", "poisoned-table", "extra-table", "extra-view",
@@ -807,7 +807,7 @@ def test_exact_schema_topology_refuses_incomplete_or_extra_objects(
             assert connection.serialize() == before
 
 
-@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 @pytest.mark.parametrize("change", [
     "type", "nullability", "unique", "default", "strict", "check", "foreign-key",
     "index-expression", "index-order", "index-predicate", "trigger-body", "literal-case",
@@ -865,7 +865,7 @@ def test_exact_schema_topology_refuses_loss_of_without_rowid() -> None:
             schema_module._validate_schema_topology(connection, history=True)
 
 
-@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 @pytest.mark.parametrize("statistics", ["analyze", "stat4"])
 def test_exact_schema_topology_allows_only_declared_statistics_tables(
     history: bool, statistics: str,
@@ -892,7 +892,7 @@ def test_exact_schema_topology_allows_only_declared_statistics_tables(
         assert connection.serialize() == before
 
 
-@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 @pytest.mark.parametrize("poison", [
     "type", "owner", "definition", "duplicate", "undeclared-table", "index", "trigger",
 ])
@@ -936,7 +936,7 @@ def test_exact_schema_topology_refuses_statistics_spoofing(history: bool, poison
         assert connection.serialize() == before
 
 
-@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v6"])
+@pytest.mark.parametrize("history", [False, True], ids=["ledger-v4", "history-v7"])
 def test_exact_schema_topology_does_not_replace_marker_value_validation(history: bool) -> None:
     script = schema_module._HISTORY_SCHEMA if history else schema_module._LEDGER_SCHEMA
     validate = (

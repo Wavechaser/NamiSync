@@ -1900,6 +1900,46 @@ def test_history_event_rows_are_append_only_and_item_projections_are_validated(
             repository.get_event_page("run-guarded")
 
 
+def test_history_event_duplicate_insert_requires_canonical_link(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "history.db"
+    record = _record()
+    item = _item(1)
+    with HistoryStore(
+        path, clock=FakeClock(), window_policy=HistoryWindowPolicy(max_events=1)
+    ) as store:
+        observer = store.observer(
+            record, HistoryContext("run-duplicate-guard", "host-1")
+        )
+        observer.on_event(_envelope(record, 1, item))
+        observer.on_event(_envelope(record, 2, item))
+
+    connection = connect_history_writer(path)
+    try:
+        with pytest.raises(
+            sqlite3.DatabaseError, match="duplicate receipt link mismatch"
+        ):
+            connection.execute(
+                """INSERT INTO history_events(
+                       run_id, event_seq, event_at, schema_version, body_type,
+                       event_disposition, envelope_json, payload_hash, receipt_hash,
+                       item_identity_hash, item_payload_hash, duplicate_of_seq,
+                       rejection_reason, item_order, item_type, phase, item_id, kind,
+                       path, result, reason, recording, recording_reason,
+                       recording_detail, detail_omitted_count
+                   ) SELECT run_id, event_seq + 1, event_at, schema_version, body_type,
+                            event_disposition, envelope_json, payload_hash, receipt_hash,
+                            item_identity_hash, item_payload_hash, 2,
+                            rejection_reason, item_order, item_type, phase, item_id, kind,
+                            path, result, reason, recording, recording_reason,
+                            recording_detail, detail_omitted_count
+                       FROM history_events WHERE run_id = 1 AND event_seq = 2"""
+            )
+    finally:
+        connection.close()
+
+
 def test_replace_cannot_overwrite_a_durable_history_event(
     tmp_path: Path,
 ) -> None:
@@ -2496,9 +2536,7 @@ def test_event_readback_validates_duplicate_link_against_canonical_item(
             item_payload_hash=bytes(row["item_payload_hash"]),
             duplicate_of_seq=2,
         )
-        with _without_history_triggers(
-            connection, "history_events_append_only_update", "history_events_duplicate_link_update",
-        ):
+        with _without_history_triggers(connection, "history_events_append_only_update"):
             connection.execute(
                 """UPDATE history_events
                   SET duplicate_of_seq = 2, receipt_hash = ?
