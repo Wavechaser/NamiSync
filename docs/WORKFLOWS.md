@@ -430,6 +430,12 @@ verify
   complete  -> settle one compound terminal result
 ```
 
+The five verification terminal branches share one workflow-owned pure projection
+of the continuation's settled execute status, phase, and byte pair. Each path
+supplies its already-decided verify phase, accepted items, recording,
+cancellation, and diagnostic; the projection performs no policy or collaborator
+work. Existing generic cancellation settlement remains separate.
+
 Running execute cancellation returns the same typed workflow result whether or
 not post-copy verification was requested. It finishes the one ledger run with
 the `ExecutionSet`'s current recording axis, so an executor-detected degraded

@@ -108,7 +108,7 @@ mutation, or population-dependent per-item scanning is a regression.
 | --- | --- | --- | --- | --- |
 | PR-0 | Freeze contract, qualified baseline, and dispositions. | — | Current-source complete run, provenance manifest, hashes, finite assertion inventory | complete |
 | PR-1 | One required existing-run finishing path. | PR-0 | Recording/control cases and call/effect traces | complete |
-| PR-2 | One pure verification terminal projection. | PR-1 | Exact terminal-field and phase equivalence | pending |
+| PR-2 | One pure verification terminal projection. | PR-1 | Exact terminal-field and phase equivalence | complete |
 | PR-3 | Reduced history schema and explicit reset requirement. | PR-0 | Fresh v7 behavior, retained protections, old/mixed refusal | complete |
 | PR-4 | One event detail/reason vocabulary. | PR-0 | Independent vocabulary and event-v5 consumer fixtures | complete |
 | PR-5 | One core Clock contract. | PR-0 | Five consumers and import contracts | complete |
@@ -179,6 +179,13 @@ consumers; update workflow projection ownership. Review rejects configurable
 outcome policy. Commit as
 `refactor(workflows): share verification terminal projection`.
 
+Closed after clean independent review: eight focused terminal witnesses and
+2,181 workflows/interfaces consumer tests passed. Four faults failed the named
+status, phase-order, cancellation, and accepted-item assertions. A fresh-verifier
+cancellation witness closes the exercised projection gap; all frozen assertions
+remain. Accepted receipts and the documentation-only review attestation are in
+`build/production-reduction/pr2/run-20260907-161700-final/`, indexed by
+`PR2_EVIDENCE_INDEX.md`. Earlier invalid attempts remain non-acceptance.
 ### PR-3 — Remove the subsumed history trigger
 
 Delete only duplicate-link UPDATE enforcement and apply v7/v7/7. Update current
@@ -342,7 +349,7 @@ the isolated blocked task on its AGENTS recovery branch. A shared blocker also
 blocks any task whose guarantees or prerequisites it prevents; it does not
 stop unrelated work. This is the user-directed recovery order for this pass.
 
-Current state: PR-0, PR-1, PR-3, PR-4, PR-5, and PR-8 are complete after clean independent review. PR-2, PR-6, and PR-7 are in progress; PR-9 is pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
+Current state: PR-0 through PR-5 and PR-8 are complete after clean independent review. PR-6 and PR-7 are in progress; PR-9 is pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
 oracle and baseline, SH-G-8 authority, unintegrated presentation components,
 execution projections, and lifecycle claims. Deferred findings are oracle
 simplification, broad continuation-validation reduction, further protocol

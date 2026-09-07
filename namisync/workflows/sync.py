@@ -1778,18 +1778,12 @@ def _run_execution(
                 incomplete=True,
                 error=f"{failure.type_name}: {failure.message}",
             )
-            terminal = OperationResult(
-                status=current.filesystem_status,
-                recording=current_recording,
-                disposition=Disposition.RAN,
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
                 items=take_result_items(),
-                phases=(current.execute_phase, verify_phase),
-                bytes_done=current.execute_phase.bytes_done,
-                bytes_total=(
-                    current.execute_phase.bytes_total
-                    if current.execute_phase.bytes_total is not None
-                    else current.execute_phase.bytes_done
-                ),
+                recording=current_recording,
+                canceled=False,
                 error=failure,
             )
             recording_status = finish_once(
@@ -1879,18 +1873,12 @@ def _run_execution(
                     verify_phase.error,
                 )
             )
-            terminal = OperationResult(
-                status=current.filesystem_status,
-                recording=current_recording,
-                disposition=Disposition.RAN,
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
                 items=take_result_items(),
-                phases=(current.execute_phase, verify_phase),
-                bytes_done=current.execute_phase.bytes_done,
-                bytes_total=(
-                    current.execute_phase.bytes_total
-                    if current.execute_phase.bytes_total is not None
-                    else current.execute_phase.bytes_done
-                ),
+                recording=current_recording,
+                canceled=False,
                 error=error,
             )
             recording_status = finish_once(
@@ -1929,19 +1917,13 @@ def _run_execution(
                 canceled=True,
                 error="verification canceled",
             )
-            terminal = OperationResult(
-                status=current.filesystem_status,
-                recording=current_recording,
-                disposition=Disposition.RAN,
-                canceled=True,
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
                 items=take_result_items(),
-                phases=(current.execute_phase, verify_phase),
-                bytes_done=current.execute_phase.bytes_done,
-                bytes_total=(
-                    current.execute_phase.bytes_total
-                    if current.execute_phase.bytes_total is not None
-                    else current.execute_phase.bytes_done
-                ),
+                recording=current_recording,
+                canceled=True,
+                error=None,
             )
             recording_status = finish_once(
                 current.filesystem_status,
@@ -2618,6 +2600,35 @@ def _verify_phase(
     )
 
 
+def _verification_terminal_result(
+    continuation: VerifyContinuation,
+    *,
+    verify_phase: PhaseResult,
+    items: tuple[ItemOutcome | IntegrityOutcome, ...],
+    recording: RecordingStatus,
+    canceled: bool,
+    error: FailureDetail | None,
+) -> OperationResult:
+    """Project already-settled verification truth with its execute continuation."""
+
+    execute_phase = continuation.execute_phase
+    return OperationResult(
+        status=continuation.filesystem_status,
+        recording=recording,
+        disposition=Disposition.RAN,
+        canceled=canceled,
+        items=items,
+        phases=(execute_phase, verify_phase),
+        bytes_done=execute_phase.bytes_done,
+        bytes_total=(
+            execute_phase.bytes_total
+            if execute_phase.bytes_total is not None
+            else execute_phase.bytes_done
+        ),
+        error=error,
+    )
+
+
 def _verify_progress_totals(
     continuation: VerifyContinuation,
 ) -> tuple[int, int]:
@@ -2829,17 +2840,12 @@ def _recording_open_failure_result(
             incomplete=True,
             error=f"{detail.type_name}: {detail.message}",
         )
-        terminal = OperationResult(
-            status=continuation.filesystem_status,
+        terminal = _verification_terminal_result(
+            continuation,
+            verify_phase=phase,
+            items=(),
             recording=RecordingStatus.DEGRADED,
-            disposition=Disposition.RAN,
-            phases=(continuation.execute_phase, phase),
-            bytes_done=continuation.execute_phase.bytes_done,
-            bytes_total=(
-                continuation.execute_phase.bytes_total
-                if continuation.execute_phase.bytes_total is not None
-                else continuation.execute_phase.bytes_done
-            ),
+            canceled=False,
             error=detail,
         )
         try:
@@ -3113,17 +3119,12 @@ def _settle_verify_incomplete(
         continuation.execution_set.recording,
         continuation.recording,
     )
-    terminal = OperationResult(
-        status=continuation.filesystem_status,
+    terminal = _verification_terminal_result(
+        continuation,
+        verify_phase=phase,
+        items=(),
         recording=recording_status,
-        disposition=Disposition.RAN,
-        phases=(continuation.execute_phase, phase),
-        bytes_done=continuation.execute_phase.bytes_done,
-        bytes_total=(
-            continuation.execute_phase.bytes_total
-            if continuation.execute_phase.bytes_total is not None
-            else continuation.execute_phase.bytes_done
-        ),
+        canceled=False,
         error=error,
     )
     execution_authority = snapshot_execution_set_authority(

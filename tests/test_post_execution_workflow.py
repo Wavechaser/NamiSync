@@ -4113,6 +4113,42 @@ def test_verify_setup_and_result_errors_finish_once_with_visible_phase(
     ]
 
 
+def test_verify_cancellation_preserves_execute_truth() -> None:
+    operation = _operation(611, 8)
+    xset = _execution_set(operation)
+    recordings: list[_Recording] = []
+
+    def executor(execution_set, context, recorder, policies, fs):
+        del recorder, policies, fs
+        item = _settle(
+            execution_set,
+            context,
+            operation,
+            evidence=_evidence(operation),
+        )
+        return OperationResult(
+            SessionState.COMPLETED,
+            items=(item,),
+            bytes_done=8,
+            bytes_total=8,
+        )
+
+    def verifier(*_args) -> None:
+        raise Canceled()
+
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=True),
+        RunContext(lambda body: None, lambda: None),
+        _deps(executor=executor, verifier=verifier, recordings=recordings),
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert result.canceled
+    assert result.phases[0].status is PhaseStatus.COMPLETED
+    assert result.phases[1].status is PhaseStatus.CANCELED
+    assert recordings[0].finishes == [(SessionState.COMPLETED, RecordingStatus.OK)]
+
+
 def test_executor_setup_failure_cannot_remove_prior_settlement() -> None:
     operation = _operation(4026, 8)
     xset = _execution_set(operation)
