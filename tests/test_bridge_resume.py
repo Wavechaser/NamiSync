@@ -128,6 +128,9 @@ def test_br_g_10_checkpoint_preserves_direct_and_fallout_outcomes() -> None:
             refusals=(),
         ),
         open_recording=lambda _spec: _Recording(finished),
+        finish_existing_recording=lambda _spec, status, _recording: finished.append(
+            status
+        ),
     )
 
     result = run_execution(
@@ -182,6 +185,9 @@ def test_br_g_10_tampered_execute_and_verify_resume_fail_before_preflight(
         save_execution_details=lambda _details: None,
         observer=lambda *_args: pytest.fail("preflight observation ran"),
         open_recording=lambda _spec: _Recording(finished),
+        finish_existing_recording=lambda _spec, status, _recording: finished.append(
+            status
+        ),
     )
 
     result = run_execution(

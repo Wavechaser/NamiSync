@@ -489,7 +489,7 @@ the issue retains `detail=None`; it cannot turn a recording failure into clean
 recording or replace an existing filesystem error. Required result messages and
 secondary exception notes use a fixed diagnostic-unavailable message while
 retaining the original error type. This containment also covers cancellation
-finalization, fallback finishing, and secondary emission/capture diagnostics on
+finalization, existing-run finishing, and secondary emission/capture diagnostics on
 an already-failing recording path. Successful details keep the existing
 first-observation, complete-bound, and omission-count rules.
 During linked verification, the phase summary counts
@@ -532,30 +532,32 @@ Each external edge still requires the same admitted selection container,
 candidate tuple, and immutable execution identities, so ordinary callback
 replacement cannot redirect later verifier work; frozen candidate-leaf
 reflection remains outside the supported fault model.
-Immediately before each recording-open or existing-run finish callback, the
-workflow projects the already-admitted execution set to one frozen
+Immediately before each recording-open callback, the workflow projects the
+already-admitted execution set to one frozen
 `RecordingSpec(plan, selection, run_id, commitment)`. The open callback receives
 that spec; the production `_LedgerRunRecording` retains the same object through
-`finish` and context exit. Recording callbacks and the local
-recorder runtime therefore receive no mutable execution status, evidence,
+`finish` and context exit. An existing-run finish callback captures its required
+finisher once, then constructs that same spec inside its execution-authority
+guard after snapshotting and before revalidation. Recording callbacks and the
+local recorder runtime therefore receive no mutable execution status, evidence,
 progress, or recording-attribution container. Workflow helpers keep the
 execution set only to attribute callback failures and derive aggregate
 recording truth. Shallow fixed-reference and prior-overlay guards remain around
-recording open/enter, finish, context exit, existing-run fallback, cancellation,
+recording open/enter, finish, context exit, existing-run finishing, cancellation,
 checkpoint/exclusion sinks, and verify-degradation publication. They retain
 the first safe pre-callback issue/counter baseline and preserve the accepted
-item prefix across ordinary failure, paused cancellation, fallback finishing,
+item prefix across ordinary failure, paused cancellation, existing-run finishing,
 and context exit. Settlement order, callback count, checkpoint state, and recorder
 outcomes are unchanged.
 
 Fresh preflight still runs on every resume. If an already-started execute
-continuation is refused or faults there, workflow reopens the same run only to
-finish it as `FAILED+RAN`, with settled execute counters preserved; it never
-claims a fresh `REFUSED+UNRUN`. If recording cannot be reopened while finalizing
-an already-failed execute or verify continuation, that open failure is attributed
-without replacing the existing failure result. Canceled open failure likewise
-passes the newly degraded axis to fallback finishing before taking its returned
-aggregate. A verify-resume preflight refusal preserves the
+continuation is refused or faults there, workflow finishes the existing run
+through the required finisher as `FAILED+RAN`, with settled execute counters
+preserved; it never claims a fresh `REFUSED+UNRUN`. If the recording boundary
+cannot open while finalizing an already-failed execute or verify continuation,
+that open failure is attributed without replacing the existing failure result.
+Canceled open failure likewise passes the newly degraded axis to existing-run
+finishing before taking its returned aggregate. A verify-resume preflight refusal preserves the
 settled execute filesystem status and adds a zero-work incomplete verify phase.
 Selection derivation, commitment diagnostics, commitment refusal, preflight
 exceptions, and preflight refusal all route through one pre-run settlement

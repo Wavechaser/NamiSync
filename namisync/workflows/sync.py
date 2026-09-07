@@ -306,9 +306,9 @@ class SyncDependencies:
     open_recording: Callable[[RecordingSpec], AbstractContextManager[RunRecording]]
     save_plan: Callable[[PlanArtifact], None]
     save_execution_details: Callable[[ExecutionDetails], None]
-    finish_existing_recording: (
-        Callable[[RecordingSpec, SessionState, RecordingStatus], None] | None
-    ) = None
+    finish_existing_recording: Callable[
+        [RecordingSpec, SessionState, RecordingStatus], None
+    ]
     ignores: IgnoreSet = IgnoreSet()
 
 
@@ -2057,7 +2057,7 @@ def _settle_canceled_execution_admitted(
         recording_status = xset.recording
         terminal_authority = snapshot_execution_set_authority(xset)
         try:
-            recording_status = _finish_recording_without_open(
+            recording_status = _finish_existing_recording(
                 deps,
                 xset,
                 filesystem_status,
@@ -2843,7 +2843,7 @@ def _recording_open_failure_result(
             error=detail,
         )
         try:
-            _finish_recording_without_open(
+            _finish_existing_recording(
                 deps,
                 xset,
                 continuation.filesystem_status,
@@ -2910,7 +2910,7 @@ def _recording_open_failure_result(
         error=detail,
     )
     try:
-        _finish_recording_without_open(
+        _finish_existing_recording(
             deps,
             xset,
             SessionState.FAILED,
@@ -3001,7 +3001,7 @@ def _recording_entry_canceled_result(
     )
     execution_authority = snapshot_execution_set_authority(xset)
     try:
-        recording_status = _finish_recording_without_open(
+        recording_status = _finish_existing_recording(
             deps,
             xset,
             filesystem_status,
@@ -3179,108 +3179,16 @@ def _finish_existing_recording(
     status: SessionState,
     recording_status: RecordingStatus,
 ) -> RecordingStatus:
-    finisher = getattr(deps, "finish_existing_recording", None)
-    if finisher is not None:
-        authority = snapshot_execution_set_authority(xset)
-        try:
-            finisher(_recording_spec(xset), status, recording_status)
-        except Exception as error:
-            try:
-                revalidate_execution_set_authority(
-                    xset,
-                    authority,
-                    allow_progress=False,
-                )
-            except Exception:
-                retire_exception_graph(error)
-                raise
-            _note_task_recording_issue(
-                xset,
-                TaskRecordingIssueReason.FINISH_FAILED,
-                error,
-            )
-        else:
-            revalidate_execution_set_authority(
-                xset,
-                authority,
-                allow_progress=False,
-            )
-        return _combined_recording(recording_status, xset.recording)
-    boundary = _RecordingBoundary(
-        deps.open_recording,
-        lambda: _strict_execution_revalidator(xset),
+    finisher = deps.finish_existing_recording
+    return _invoke_recording_finish(
+        xset,
+        recording_status,
+        lambda: finisher(
+            _recording_spec(xset),
+            status,
+            recording_status,
+        ),
     )
-    try:
-        with boundary.open(_recording_spec(xset)) as recording:
-            recording_status = _finish_recording(
-                recording,
-                xset,
-                status,
-                recording_status,
-            )
-    except Exception as error:
-        if boundary.integrity_failure is not None:
-            failure = boundary.integrity_failure
-            retire_exception_graph(error)
-            raise RuntimeError(
-                f"recording boundary changed continuation truth: "
-                f"{failure.type_name}: {failure.message}"
-            ) from None
-        failure = boundary.enter_failure or _close_recording_failure(error)
-        _note_closed_recording_issue(
-            xset,
-            TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
-            failure,
-        )
-    if boundary.integrity_failure is not None:
-        failure = boundary.integrity_failure
-        raise RuntimeError(
-            f"recording boundary changed continuation truth: "
-            f"{failure.type_name}: {failure.message}"
-        )
-    if boundary.exit_failure is not None:
-        _note_closed_recording_issue(
-            xset,
-            TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
-            boundary.exit_failure,
-        )
-    return _combined_recording(recording_status, xset.recording)
-
-
-def _finish_recording_without_open(
-    deps: SyncDependencies,
-    xset: ExecutionSet,
-    status: SessionState,
-    recording_status: RecordingStatus,
-) -> RecordingStatus:
-    finisher = getattr(deps, "finish_existing_recording", None)
-    if finisher is None:
-        return _combined_recording(recording_status, xset.recording)
-    authority = snapshot_execution_set_authority(xset)
-    try:
-        finisher(_recording_spec(xset), status, recording_status)
-    except Exception as error:
-        try:
-            revalidate_execution_set_authority(
-                xset,
-                authority,
-                allow_progress=False,
-            )
-        except Exception:
-            retire_exception_graph(error)
-            raise
-        _note_task_recording_issue(
-            xset,
-            TaskRecordingIssueReason.FINISH_FAILED,
-            error,
-        )
-    else:
-        revalidate_execution_set_authority(
-            xset,
-            authority,
-            allow_progress=False,
-        )
-    return _combined_recording(recording_status, xset.recording)
 
 
 def _finish_recording(
@@ -3289,9 +3197,23 @@ def _finish_recording(
     status: SessionState,
     recording_status: RecordingStatus,
 ) -> RecordingStatus:
+    return _invoke_recording_finish(
+        xset,
+        recording_status,
+        lambda: recording.finish(status, recording_status),
+    )
+
+
+def _invoke_recording_finish(
+    xset: ExecutionSet,
+    recording_status: RecordingStatus,
+    invoke: Callable[[], None],
+) -> RecordingStatus:
+    """Invoke one recording finish under its execution-set guard."""
+
     authority = snapshot_execution_set_authority(xset)
     try:
-        recording.finish(status, recording_status)
+        invoke()
     except Exception as error:
         try:
             revalidate_execution_set_authority(

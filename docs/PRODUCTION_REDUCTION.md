@@ -107,7 +107,7 @@ mutation, or population-dependent per-item scanning is a regression.
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
 | PR-0 | Freeze contract, qualified baseline, and dispositions. | — | Current-source complete run, provenance manifest, hashes, finite assertion inventory | complete |
-| PR-1 | One required existing-run finishing path. | PR-0 | Recording/control cases and call/effect traces | pending |
+| PR-1 | One required existing-run finishing path. | PR-0 | Recording/control cases and call/effect traces | complete |
 | PR-2 | One pure verification terminal projection. | PR-1 | Exact terminal-field and phase equivalence | pending |
 | PR-3 | Reduced history schema and explicit reset requirement. | PR-0 | Fresh v7 behavior, retained protections, old/mixed refusal | pending |
 | PR-4 | One event detail/reason vocabulary. | PR-0 | Independent vocabulary and event-v5 consumer fixtures | complete |
@@ -155,6 +155,14 @@ an effect witness must prove the one required finish occurs exactly once. Run fo
 workflows/database/dispatcher departments; update the workflow contract. Clean
 review must prove the helper owns mechanics only. Commit as
 `refactor(workflows): require and consolidate existing-run finishing`.
+
+Closed after independent source review and evidence recheck: 202 post-execution
+tests and the 1,250-test workflows/database/dispatcher union passed. Required
+finisher migration also covered five existing consumer cases in `test_workflows.py`
+and `test_bridge_resume.py`, preserving their assertions. All four controls
+failed the named successor assertions with current-source provenance; the
+accepted manifest is `build/production-reduction/pr1/PR1_CONTROL_MANIFEST.json`.
+Earlier invalid control attempts remain explicitly non-acceptance evidence.
 
 ### PR-2 — Share verification terminal projection
 
@@ -321,7 +329,7 @@ the isolated blocked task on its AGENTS recovery branch. A shared blocker also
 blocks any task whose guarantees or prerequisites it prevents; it does not
 stop unrelated work. This is the user-directed recovery order for this pass.
 
-Current state: PR-0, PR-4, and PR-5 are complete after clean independent review. PR-1 and PR-3 are in progress; the remaining checkpoints are pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
+Current state: PR-0, PR-1, PR-4, and PR-5 are complete after clean independent review. PR-3 and PR-8 are in progress; PR-2, PR-6, PR-7, and PR-9 are pending. Preserve user changes, `PRODUCTION_ABLATION.md`,
 oracle and baseline, SH-G-8 authority, unintegrated presentation components,
 execution projections, and lifecycle claims. Deferred findings are oracle
 simplification, broad continuation-validation reduction, further protocol

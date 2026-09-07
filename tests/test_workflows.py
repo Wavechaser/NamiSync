@@ -1431,6 +1431,9 @@ def test_resumed_execution_settles_selection_mismatch_without_preflight(
             save_execution_details=lambda details: None,
             observer=lambda *args: pytest.fail("preflight observation ran"),
             open_recording=lambda _spec: Recording(),
+            finish_existing_recording=lambda _spec, status, _recording: finished.append(
+                status
+            ),
         ),
         resumed=True,
     )

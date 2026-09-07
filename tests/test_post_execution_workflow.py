@@ -426,8 +426,18 @@ def _deps(
     verifier,
     recordings: list[_Recording],
     verdict: Verdict | None = None,
+    finished_existing: list[tuple[SessionState, RecordingStatus]] | None = None,
 ):
     world = _observed_world()
+
+    def finish_existing_recording(
+        _spec: RecordingSpec,
+        status: SessionState,
+        recording: RecordingStatus,
+    ) -> None:
+        if finished_existing is not None:
+            finished_existing.append((status, recording))
+
     return SimpleNamespace(
         save_execution_details=lambda value: None,
         observer=lambda *args: world,
@@ -449,7 +459,28 @@ def _deps(
             clock=SimpleNamespace(now=lambda: NOW),
             hasher_factory=lambda: None,
         ),
+        finish_existing_recording=finish_existing_recording,
     )
+
+
+def test_sync_dependencies_requires_existing_recording_finisher() -> None:
+    with pytest.raises(TypeError, match="finish_existing_recording"):
+        sync_workflow.SyncDependencies(
+            scanner=object(),
+            planner=object(),
+            correspondence=object(),
+            observation_fs=object(),
+            observer=object(),
+            preflight=object(),
+            executor=object(),
+            executor_policies=object(),
+            executor_fs=object(),
+            verifier=object(),
+            verifier_context=object(),
+            open_recording=object(),
+            save_plan=object(),
+            save_execution_details=object(),
+        )
 
 
 def _verify_all(selection, context, recorder) -> IntegrityRunResult:
@@ -4584,21 +4615,25 @@ def test_dispatcher_compound_exclusion_close_failure_survives_checkpoint_scrub(
     assert finishes == [(SessionState.FAILED, RecordingStatus.OK)]
 
 
-def test_recording_open_failure_preserves_already_failed_resume_projection() -> None:
+def test_recording_finish_failure_preserves_already_failed_resume_projection() -> None:
     xset = _execution_set(_operation(65))
-    open_calls = 0
+    finished: list[tuple[SessionState, RecordingStatus]] = []
 
     def fail_preflight(*args):
         raise OSError("preflight failure")
 
-    def fail_open(*args):
-        nonlocal open_calls
-        open_calls += 1
-        raise RuntimeError("recording open failure")
+    def fail_existing_recording(
+        _spec: RecordingSpec,
+        status: SessionState,
+        recording: RecordingStatus,
+    ) -> None:
+        finished.append((status, recording))
+        raise RuntimeError("existing recording finish failure")
 
     deps = _deps(executor=lambda *args: None, verifier=lambda *args: None, recordings=[])
     deps.observer = fail_preflight
-    deps.open_recording = fail_open
+    deps.open_recording = lambda *_args: pytest.fail("recording unexpectedly opened")
+    deps.finish_existing_recording = fail_existing_recording
     result = run_execution(
         ExecuteContinuation(xset, verify_after_execute=False),
         RunContext(lambda body: None, lambda: None),
@@ -4606,13 +4641,40 @@ def test_recording_open_failure_preserves_already_failed_resume_projection() -> 
         resumed=True,
     )
 
-    assert open_calls == 1
+    assert finished == [(SessionState.FAILED, RecordingStatus.OK)]
     assert result.status is SessionState.FAILED
-    assert result.error is not None
-    assert result.error.message == "preflight failure"
+    assert result.error == FailureDetail("OSError", "preflight failure")
     assert result.recording is RecordingStatus.DEGRADED
     assert tuple(issue.reason for issue in result.recording_issues) == (
-        TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
+        TaskRecordingIssueReason.FINISH_FAILED,
+    )
+
+
+def test_existing_recording_finish_contains_spec_failure_inside_guard(monkeypatch) -> None:
+    xset = _execution_set(_operation(65))
+    deps = _deps(executor=lambda *args: None, verifier=lambda *args: None, recordings=[])
+    deps.observer = lambda *args: (_ for _ in ()).throw(OSError("preflight failure"))
+    finished: list[RecordingSpec] = []
+    deps.finish_existing_recording = lambda spec, _status, _recording: finished.append(spec)
+
+    monkeypatch.setattr(
+        sync_workflow,
+        "_recording_spec",
+        lambda _xset: (_ for _ in ()).throw(ValueError("recording spec failure")),
+    )
+    result = run_execution(
+        ExecuteContinuation(xset, verify_after_execute=False),
+        RunContext(lambda body: None, lambda: None),
+        deps,
+        resumed=True,
+    )
+
+    assert finished == []
+    assert result.status is SessionState.FAILED
+    assert result.error == FailureDetail("OSError", "preflight failure")
+    assert result.recording is RecordingStatus.DEGRADED
+    assert tuple(issue.reason for issue in result.recording_issues) == (
+        TaskRecordingIssueReason.FINISH_FAILED,
     )
 
 
@@ -5112,7 +5174,10 @@ def test_recording_diagnostic_failure_preserves_canceled_settlement(boundary: st
     result = settle_canceled_execution(
         ExecuteContinuation(xset, verify_after_execute=False),
         Disposition.RAN,
-        SimpleNamespace(open_recording=lambda _spec: Recording()),
+        SimpleNamespace(
+            open_recording=lambda _spec: Recording(),
+            finish_existing_recording=lambda _spec, _status, _recording: None,
+        ),
     )
 
     reason = {
@@ -5136,7 +5201,7 @@ def test_recording_diagnostic_failure_preserves_canceled_settlement(boundary: st
         assert result.error.message == "recording diagnostic unavailable"
 
 
-@pytest.mark.parametrize("fallback", ["entry-cancel", "preflight", "preflight-reopen"])
+@pytest.mark.parametrize("fallback", ["entry-cancel", "preflight"])
 def test_recording_diagnostic_failure_contains_fallback_finish(fallback: str) -> None:
     xset = _execution_set(_operation(66, 8))
 
@@ -5149,14 +5214,6 @@ def test_recording_diagnostic_failure_contains_fallback_finish(fallback: str) ->
     def fail_preflight(*args):
         raise OSError("preflight unavailable")
 
-    class Recording(_Recording):
-        def finish(self, status, recording_status) -> None:
-            fail_finish()
-
-    def open_reopened_recording(value: object) -> Recording:
-        _assert_recording_spec(value, xset)
-        return Recording()
-
     deps = _deps(
         executor=lambda *args: pytest.fail("execution unexpectedly started"),
         verifier=lambda *args: pytest.fail("verification unexpectedly started"),
@@ -5164,13 +5221,9 @@ def test_recording_diagnostic_failure_contains_fallback_finish(fallback: str) ->
     )
     if fallback == "entry-cancel":
         deps.open_recording = cancel_open
-        deps.finish_existing_recording = fail_finish
     else:
         deps.observer = fail_preflight
-        if fallback == "preflight":
-            deps.finish_existing_recording = fail_finish
-        else:
-            deps.open_recording = open_reopened_recording
+    deps.finish_existing_recording = fail_finish
 
     result = run_execution(
         ExecuteContinuation(xset, verify_after_execute=False),
@@ -5190,7 +5243,6 @@ def test_recording_diagnostic_failure_contains_fallback_finish(fallback: str) ->
         assert result.error is not None
         assert result.error.type_name == "OSError"
         assert result.error.message == "preflight unavailable"
-
 
 def test_recording_open_primary_survives_secondary_emission_diagnostic_failure() -> None:
     selected, excluded = _operation(65), _operation(66)
@@ -5964,6 +6016,7 @@ def test_resumed_verify_preflight_refusal_finishes_as_incomplete() -> None:
         )
 
     resumed_recordings: list[_Recording] = []
+    finished_existing: list[tuple[SessionState, RecordingStatus]] = []
     refused = Verdict(
         False,
         (
@@ -5982,6 +6035,7 @@ def test_resumed_verify_preflight_refusal_finishes_as_incomplete() -> None:
             verifier=lambda *args: pytest.fail("verification should not start"),
             recordings=resumed_recordings,
             verdict=refused,
+            finished_existing=finished_existing,
         ),
     )
 
@@ -5991,9 +6045,8 @@ def test_resumed_verify_preflight_refusal_finishes_as_incomplete() -> None:
     assert result.phases[1].items_done == 0
     assert result.error is not None
     assert result.error.type_name == "VerificationPreflightRefused"
-    assert resumed_recordings[0].finishes == [
-        (SessionState.COMPLETED, RecordingStatus.OK)
-    ]
+    assert finished_existing == [(SessionState.COMPLETED, RecordingStatus.OK)]
+    assert resumed_recordings == []
 
 
 @pytest.mark.parametrize("verify_after_execute", [False, True])
@@ -6009,10 +6062,12 @@ def test_resumed_execute_preflight_failure_finishes_as_ran_failure(
     xset.published_evidence[first.op_id] = _evidence(first)
     xset.note_bytes_done(9)
     recordings: list[_Recording] = []
+    finished_existing: list[tuple[SessionState, RecordingStatus]] = []
     deps = _deps(
         executor=lambda *args: pytest.fail("execution unexpectedly resumed"),
         verifier=lambda *args: pytest.fail("verification unexpectedly started"),
         recordings=recordings,
+        finished_existing=finished_existing,
         verdict=Verdict(
             False,
             (
@@ -6057,9 +6112,8 @@ def test_resumed_execute_preflight_failure_finishes_as_ran_failure(
         if preflight_fault == "refused"
         else "RuntimeError"
     )
-    assert recordings[0].finishes == [
-        (SessionState.FAILED, RecordingStatus.OK)
-    ]
+    assert finished_existing == [(SessionState.FAILED, RecordingStatus.OK)]
+    assert recordings == []
 
 
 def test_paused_verify_cancel_preserves_execute_truth_and_finish_failure_axis() -> None:
@@ -6165,7 +6219,10 @@ def test_paused_execute_cancel_preserves_continuation_on_recording_fault(
     result = settle_canceled_execution(
         ExecuteContinuation(xset, verify_after_execute=False),
         Disposition.RAN,
-        SimpleNamespace(open_recording=lambda _spec: recording),
+        SimpleNamespace(
+            open_recording=lambda _spec: recording,
+            finish_existing_recording=lambda _spec, _status, _recording: None,
+        ),
     )
 
     assert result.status is SessionState.CANCELED
