@@ -23,6 +23,30 @@ history, and workflow product while building its secured headed WebView2 shell.
 Redundant in-process transports and certification layers were removed while
 preserving public behavior, real boundary checks, and persisted contracts.
 
+#### Study test ablation and refine retained test machinery (2026-09-05 – 2026-09-07)
+
+- Evaluated six finite test cohorts through isolated selection ablation, harmless
+  variations, fault probes and independent reviews; retained detection losses
+  and policy-retirement costs separately from source-size estimates.
+- The combined ordinary ablation passed 4,504 tests with four capability skips;
+  no live tests or product code were removed. Full evidence and limitations
+  remain in TEST_ABLATION.md.
+- Rebased the four non-oracle recommendation areas on the documentation
+  compaction. No new whole-test removal follows from retired future machinery;
+  corrected the source-owner recommendation to recognize CORE's explicit AST
+  guard requirement. SH-G-15 remains scoped future acceptance; oracle unchanged.
+- Followed the approved refinement register: retained source-owner guards while
+  sharing fixture, SQL, selection and theme setup; removed eight harness spelling
+  assertions with demonstrated ordinary behavioral owners. Preserved batching,
+  index, snapshot, visual, privacy and evidence-authority requirements.
+- Repaired the bounded test-child reinjection handshake in its own checkpoint,
+  requalified the baseline and pruned the reviewed, superseded recovery branch.
+- The test/harness diff is a diagnostic net increase of 27 lines; this delivery
+  reduces repeated machinery, not overall test bulk. Final combined replay passed
+  63 faults and five harmless variations; the qualified complete suite passed
+  4,678 tests with four capability skips. All 12 import contracts and protected
+  input identities remain intact; TEST_REFINEMENT.md records the reviewed evidence.
+
 #### Ablate documentation and separate active contracts from delivery history (2026-09-05 – 2026-09-06)
 
 - Evaluated six documentation removal cohorts with retained-answer witnesses,

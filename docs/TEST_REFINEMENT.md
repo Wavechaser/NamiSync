@@ -30,10 +30,11 @@ suite may not be moved solely to a headed test.
 
 The prior ablation study remains discovery evidence, not acceptance evidence.
 Its working artifacts live under `build/test-ablation/cab2259/`. At delivery
-start, `CHANGELOG.md`, `README.md`, and `docs/HANDOFF.md` contain pre-existing
-study changes and `docs/TEST_ABLATION.md` was pre-existing and untracked at
-entry; it is now staged and remains preserved. They are outside checkpoint
-edits until the final documentation closeout. User-owned
+start, CHANGELOG.md, README.md and HANDOFF.md contained pre-existing study
+changes, and TEST_ABLATION.md was untracked before becoming staged. These
+materials were preserved through the implementation commits and deliberately
+incorporated in ST-6; their original snapshots remain in st-0-inputs/.
+User-owned
 `PRODUCTION_ABLATION.md` is ignored and excluded without inspection.
 
 ## Checkpoint register
@@ -47,12 +48,11 @@ edits until the final documentation closeout. User-owned
 | ST-3 | Consolidate integrity-selection machinery without changing its representation contract | ST-0 | Both selection types, declared behavior/mechanism probes, core/verifier/workflows neighborhood | complete |
 | ST-4 | Consolidate visual assertions without changing their verification tier | ST-0 | Declared ordinary visual probes, interfaces department, relevant installed headed witnesses | complete |
 | ST-5 | Remove redundant harness spelling assertions only where a same-level detector survives | ST-4 | Declared ordinary harness probes, all interface headed tests | complete |
-| ST-6 | Reconcile the combined result, retire temporary machinery, and close documentation | ST-1–ST-5 | Combined fault replay, complete suite, imports, protected-file identity, independent adversarial review | pending |
+| ST-6 | Reconcile the combined result, retire temporary machinery, and close documentation | ST-1–ST-5 | Combined fault replay, complete suite, imports, protected-file identity, independent adversarial review | complete |
 
 Checkpoint order is fixed and sequential: ST-1, ST-2, ST-3, ST-4, then ST-5.
-The user resumed the remaining checkpoints after reviewing ST-2. Continue
-ST-3 through ST-6 in order. Do not begin ST-6 until every earlier row is
-complete or explicitly reported unresolved.
+The user resumed the remaining checkpoints after reviewing ST-2. ST-3 through
+ST-6 are now complete in that order; this register authorizes no additional work.
 
 ## ST-H — Native-live reinjection handshake
 
@@ -186,6 +186,54 @@ ST-4 replaces two identical light/dark/automatic-theme setup blocks with one nar
 The independently approved v9 source corpus and v10 metadata under `build/test-refinement/1026541/st-4/` bind D-F1 through D-F7 and D-V1 to exact CSS/HTML regions, ordinary pytest nodes and assertion expressions. All fourteen old/new fault selectors exited one with one attributed failure at the selected node; both CSS-whitespace D-V1 selectors exited zero. Earlier generator attempts remain preserved and noncredit. Every injected asset was restored to its frozen raw hash.
 
 Final verification is under `st-4/final-verification-01/`: the focused modules passed 15 tests, the interfaces department passed 1,450 tests with 3,232 deselections, and the three serialized installed witnesses passed for SH-G-11 component-gallery semantics, SH-G-13 reduced motion and SH-G-12 high-contrast material fallback using explicit Node v24.19.0. All runs have raw output, JUnit, commands and exits. All 123 protected inputs match the ST-0 raw hashes. The test diff is 15 insertions and 16 deletions, a diagnostic net reduction of one line; line count is not acceptance evidence. Independent review approved the manifest, attributed evidence, final diff and protected identities. ST-4 is complete.
+## ST-6 outcome (2026-09-07)
+
+All checkpoints are complete. Final-current replay passed all 68 cases: 63
+faults and five harmless variations, with the declared node/assertion attribution
+and byte-for-byte restoration after each mutation. The accepted corpus is
+A10/B15/C18/D8/E17; it is finite evidence, not an exhaustive coverage claim.
+Preflight rejected empty or nonunique patch anchors before execution. The shared
+patch procedure was corrected and independently reviewed across the full corpus.
+
+The qualified complete suite passed 4,678 tests with the same four WinError 1314
+reparse/symlink capability skips in 343.89 seconds. All 166 tracked final test
+blobs match 07f9276. That identity supports reuse of ST-5's ordinary suite
+(4,650 passed, four skips), 28 interface-headed passes and all 12 import
+contracts; those runs were not repeated merely for provenance.
+
+All 123 protected qualified files match the frozen raw hashes. All eight
+protected functions retain canonical source and AST identity, including the
+exact owner inventory; six raw function sources match, while the two ST-1
+segments differ only by the recorded CRLF-to-LF conversion. The 13 pre-existing
+live-versus-qualified newline differences retain identical path-aware Git blobs.
+Production, dependencies, tools, oracle/baseline and SH-G-8 remain unchanged.
+
+Two complete-suite attempts are rejected: their actual tool working directory
+was live while their receipt incorrectly recorded the intended qualified path.
+The first produced 66 failures/28 setup errors; the second produced two failures.
+They are invocation failures, not product regressions. The accepted third run
+used the explicit qualified tool working directory and an in-process collection
+receipt pinning pytest, test, product and tool origins. The correction and common
+execution/receipt mismatch are preserved; no test or product policy was changed
+to recover green.
+
+Evidence is under build/test-refinement/1026541/st-6/: manifest.json and
+summary.json own replay; complete-attempt-03.* and actual-collection-origins.json
+own the accepted complete run; protected-reconciliation.json and
+evidence-reuse.json own identity. archive-manifest-v2.json hashes the 24-file
+retained source/evidence directory archive, including rejected attempts and their
+provenance correction. Earlier checkpoint artifacts remain reproducible ignored
+evidence; no permanent mutation framework or unrelated cleanup was introduced.
+Independent final review accepted the combined implementation and evidence.
+
+The diagnostic net test/harness change is +27 lines: ST-H -2, ST-1 +47,
+ST-2 -16, ST-3 +7, ST-4 -1 and ST-5 -8. Source-owner analyzers, SQL-role
+classifiers, selection fixtures, visual parsers and headed support remain where
+they own retained guarantees. The result reduces repeated machinery and eight
+spelling assertions, not overall test bulk. The ablation disposition, existing
+changelog entry, documentation index and latest handoff are reconciled in the
+final documentation-only commit.
+
 ## Historical ST-0 recovery state (2026-09-07)
 
 This section records the exact state at the prior stop, when no test code had

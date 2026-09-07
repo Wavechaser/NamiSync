@@ -207,6 +207,10 @@ never hides the other result axes in rendered output.
   [Workflows](docs/WORKFLOWS.md) — retained location evidence and orchestration.
 - [Tests](docs/TESTS.md) — verification levels, department routing, markers,
   and diagnostic commands.
+- [Test ablation study](docs/TEST_ABLATION.md) — measured detection losses,
+  rebased recommendations and subsequent refinement dispositions.
+- [Test refinement register](docs/TEST_REFINEMENT.md) — bounded implementation
+  outcomes and verification of retained test guarantees.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
