@@ -44,15 +44,15 @@ edits until the final documentation closeout. User-owned
 | ST-0 | Freeze this population and establish a reproducible green baseline | ST-H | Source/runtime identity, complete suite, import contracts, capability accounting, independent review | complete |
 | ST-1 | Simplify fixtures and assertion presentation around the retained source-owner AST guards | ST-0 | Exact guard-output differential, declared inventory mutations, core department | complete |
 | ST-2 | Consolidate repository query/result machinery without changing database mechanisms | ST-0 | Declared SQLite behavior and fault probes, database department | complete |
-| ST-3 | Consolidate integrity-selection machinery without changing its representation contract | ST-0 | Both selection types, declared behavior/mechanism probes, core/verifier/workflows neighborhood | pending |
+| ST-3 | Consolidate integrity-selection machinery without changing its representation contract | ST-0 | Both selection types, declared behavior/mechanism probes, core/verifier/workflows neighborhood | complete |
 | ST-4 | Consolidate visual assertions without changing their verification tier | ST-0 | Declared ordinary visual probes, interfaces department, relevant installed headed witnesses | pending |
 | ST-5 | Remove redundant harness spelling assertions only where a same-level detector survives | ST-4 | Declared ordinary harness probes, all interface headed tests | pending |
 | ST-6 | Reconcile the combined result, retire temporary machinery, and close documentation | ST-1–ST-5 | Combined fault replay, complete suite, imports, protected-file identity, independent adversarial review | pending |
 
 Checkpoint order is fixed and sequential: ST-1, ST-2, ST-3, ST-4, then ST-5.
-The current authorized run pauses after ST-2; do not begin ST-3 implementation.
-Read-only ST-3 preparation already exists for later use. Do not begin ST-6 until
-every earlier row is complete or explicitly reported unresolved.
+The user resumed the remaining checkpoints after reviewing ST-2. Continue
+ST-3 through ST-6 in order. Do not begin ST-6 until every earlier row is
+complete or explicitly reported unresolved.
 
 ## ST-H — Native-live reinjection handshake
 
@@ -98,11 +98,10 @@ The broad ST-0 requalification under
 354.88 seconds with the same four WinError 1314 capability skips. Pytest and
 import-linter both exited zero, and all 12 import contracts were kept. The
 protected-input check verified all 123 declared files: raw bytes in the
-qualified checkout matched the frozen authority except for the authorized
-`_native_gate_child.py` LF hash, while live Git content remained the canonical
-comparison. Independent ST-0 review confirmed all 123 files, eight protected
-function source/AST identities and the exact owner inventory. This evidence does not
-mark that checkpoint complete.
+qualified checkout matched the frozen authority. The authorized child repair
+was recorded separately; live Git content remained the canonical comparison. Independent ST-0 review confirmed all 123 files, eight protected
+function source/AST identities and the exact owner inventory. This completed
+ST-0; baseline success alone does not prove later rewritten-test detection.
 
 ## ST-1 outcome (2026-09-07)
 
@@ -169,9 +168,17 @@ diff is 73 insertions and 89 deletions, a diagnostic net reduction of 16 lines.
 All 123 fully protected files still match their frozen raw hashes. All eight
 protected functions retain exact normalized source and AST identity, and the
 owner inventory is unchanged; see st-2/final-protected-reconciliation.json
-for the two ST-1 newline-only differences. ST-2 is complete; pause here.
-Read-only ST-3 notes remain in st-3/preparation.md; implementation has not begun.
+for the two ST-1 newline-only differences. ST-2 is complete. The user reviewed
+this pause and then resumed ST-3 through ST-6. Earlier read-only ST-3 notes
+remain in st-3/preparation.md.
 
+## ST-3 outcome (2026-09-07)
+
+ST-3 now uses one narrow constructor/authority helper for both public selection types. It preserves the exact shared `frozenset`, detached authority snapshots, immutable completion snapshots, sizes 1/4/16, replay order, unknown and duplicate rejection, replaced/deleted-index refusal, authority-error precedence, and the unchanged private-reader AST fence. Successful, duplicate and unknown lookup observations remain separate copied windows; behavioral operations execute before their mechanism assertions. Replaced-index type/content and deleted-index revalidation/snapshot are independent cases.
+
+The independently reviewed v4 corpus under `build/test-refinement/1026541/st-3/` scopes all 18 mutations to an AST class/function owner, requires one exact owner-fragment match, confines every diff to that owner, and uses exact pytest parameter nodes. All 18 old and 18 rewritten selectors exited one with one failure at the selected node. Old C-F1/C-F2 detect their faults at the earlier mechanism counters, so they are not credited as behavioral-branch reach; rewritten C-F1/C-F2 reach the duplicate/unknown operations and fail their `raises` assertions. The attribution supplement records that distinction. Earlier manifests and runs remain preserved and noncredit after exposing unscoped-replacement and whole-module-attribution weaknesses.
+
+The final focused run passed 42 tests in 1.58 seconds. The single core/verifier/workflows neighborhood passed 1,754 tests with one unchanged skip and 2,927 deselections in 52.79 seconds. Raw output, JUnit, commands, exits, interpreter identity and hashes are in `final-verification-01/`. The qualified product returned to frozen SHA-256 `cf1a58668b40f81fa754b82bbd7f482b61165e6e88856fb165ffb69e57512de6`; the protected reader and AST fence retain identical normalized function source. ST-6 can replay the scoped mutations against its final current test population through the archived v4 runner. Independent review approved the corrected corpus and execution; ST-3 is complete.
 ## Historical ST-0 recovery state (2026-09-07)
 
 This section records the exact state at the prior stop, when no test code had

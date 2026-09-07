@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from dataclasses import fields, replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -114,6 +115,28 @@ def _selection_subject(
     )
 
 
+
+def _selection_contract(
+    kind: str,
+    subjects: tuple[IntegritySelectionItem | PostCopyCandidate, ...],
+) -> tuple[
+    IntegritySelection | PostCopySelection,
+    Callable[[object], object],
+    Callable[..., None],
+]:
+    if kind == "integrity":
+        return (
+            IntegritySelection(subjects),  # type: ignore[arg-type]
+            snapshot_integrity_selection_authority,
+            revalidate_integrity_selection_authority,
+        )
+    return (
+        PostCopySelection(subjects),  # type: ignore[arg-type]
+        snapshot_post_copy_selection_authority,
+        revalidate_post_copy_selection_authority,
+    )
+
+
 @pytest.mark.parametrize("size", (1, 4, 16))
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
 def test_selection_completion_uses_one_index_lookup_without_tuple_scan(
@@ -146,44 +169,53 @@ def test_selection_completion_uses_one_index_lookup_without_tuple_scan(
             return super().__contains__(value)
 
     monkeypatch.setattr(subject_type, "__getattribute__", observe_getattribute)
-    selection = (
-        IntegritySelection(subjects)  # type: ignore[arg-type]
-        if kind == "integrity"
-        else PostCopySelection(subjects)  # type: ignore[arg-type]
-    )
+    selection, _, _ = _selection_contract(kind, subjects)
     selection._known_item_ids = ObservedKnownIds(selection._known_item_ids)
     selection._completed_bytes = ObservedCompletedIds(selection._completed_bytes)
     armed = True
 
     for item_id in selected_ids:
         selection.mark_completed(item_id, 0)
-
-    assert item_id_accesses == []
-    assert known_id_lookups == list(selected_ids)
-    assert completed_id_lookups == list(selected_ids)
+    successful_window = (
+        list(item_id_accesses),
+        list(known_id_lookups),
+        list(completed_id_lookups),
+    )
 
     with pytest.raises(ValueError, match="already completed"):
         selection.mark_completed(selected_ids[0], 0)
-    assert item_id_accesses == []
-    assert known_id_lookups == list(selected_ids)
-    assert completed_id_lookups == [*selected_ids, selected_ids[0]]
+    duplicate_window = (
+        list(item_id_accesses),
+        list(known_id_lookups),
+        list(completed_id_lookups),
+    )
 
     with pytest.raises(ValueError, match="unknown .* item"):
         selection.mark_completed("unknown", 0)
-    assert item_id_accesses == []
-    assert known_id_lookups == [*selected_ids, "unknown"]
-    assert completed_id_lookups == [*selected_ids, selected_ids[0], "unknown"]
+    unknown_window = (
+        list(item_id_accesses),
+        list(known_id_lookups),
+        list(completed_id_lookups),
+    )
+
     assert selection.completed_count == size
+    assert successful_window == ([], list(selected_ids), list(selected_ids))
+    assert duplicate_window == (
+        [],
+        list(selected_ids),
+        [*selected_ids, selected_ids[0]],
+    )
+    assert unknown_window == (
+        [],
+        [*selected_ids, "unknown"],
+        [*selected_ids, selected_ids[0], "unknown"],
+    )
 
 
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
 def test_selection_exposes_its_construction_admitted_item_ids(kind: str) -> None:
     subject = _selection_subject(kind, 0)
-    selection = (
-        IntegritySelection((subject,))  # type: ignore[arg-type]
-        if kind == "integrity"
-        else PostCopySelection((subject,))  # type: ignore[arg-type]
-    )
+    selection, _, _ = _selection_contract(kind, (subject,))
 
     assert type(selection.known_item_ids) is frozenset
     assert selection.known_item_ids == frozenset({subject.item_id})
@@ -207,48 +239,41 @@ def test_known_item_index_has_no_reader_outside_its_core_contract() -> None:
     assert offenders == {}
 
 
+@pytest.mark.parametrize("branch", ("wrong-type", "changed-content"))
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
 def test_selection_revalidation_rejects_a_replaced_known_id_index(
     kind: str,
+    branch: str,
 ) -> None:
     subject = _selection_subject(kind, 0)
-    selection = (
-        IntegritySelection((subject,))  # type: ignore[arg-type]
-        if kind == "integrity"
-        else PostCopySelection((subject,))  # type: ignore[arg-type]
-    )
-    if kind == "integrity":
-        snapshot = snapshot_integrity_selection_authority
-        revalidate = revalidate_integrity_selection_authority
-    else:
-        snapshot = snapshot_post_copy_selection_authority
-        revalidate = revalidate_post_copy_selection_authority
+    selection, snapshot, revalidate = _selection_contract(kind, (subject,))
     authority = snapshot(selection)
     index_field = next(
         candidate
         for candidate in fields(selection)
         if candidate.name == "_known_item_ids"
     )
-
-    assert (index_field.init, index_field.repr, index_field.compare) == (
-        False,
-        False,
-        False,
+    metadata_observation = (
+        index_field.init,
+        index_field.repr,
+        index_field.compare,
+        "_known_item_ids" in repr(selection),
+        selection == replace(selection),
     )
-    assert "_known_item_ids" not in repr(selection)
-    assert selection == replace(selection)
 
-    class DerivedKnownIds(frozenset[str]):
-        pass
+    if branch == "wrong-type":
+        class DerivedKnownIds(frozenset[str]):
+            pass
 
-    selection._known_item_ids = DerivedKnownIds(selection._known_item_ids)
-    with pytest.raises(TypeError, match="known-item index has the wrong type"):
-        revalidate(selection, authority, allow_progress=False)
+        selection._known_item_ids = DerivedKnownIds(selection._known_item_ids)
+        with pytest.raises(TypeError, match="known-item index has the wrong type"):
+            revalidate(selection, authority, allow_progress=False)
+    else:
+        selection._known_item_ids = frozenset({"forged"})
+        with pytest.raises(ValueError, match="known-item index changed"):
+            revalidate(selection, authority, allow_progress=False)
 
-    selection._known_item_ids = frozenset({"forged"})
-    with pytest.raises(ValueError, match="known-item index changed"):
-        revalidate(selection, authority, allow_progress=False)
-
+    assert metadata_observation == (False, False, False, False, True)
 
 @pytest.mark.parametrize(
     ("kind", "expected_message"),
@@ -262,17 +287,13 @@ def test_selection_authority_reports_changed_item_before_derived_index(
     expected_message: str,
 ) -> None:
     subject = _selection_subject(kind, 0)
-    selection = (
-        IntegritySelection((subject,))  # type: ignore[arg-type]
-        if kind == "integrity"
-        else PostCopySelection((subject,))  # type: ignore[arg-type]
-    )
+    selection, snapshot, revalidate = _selection_contract(kind, (subject,))
     if kind == "integrity":
-        authority = snapshot_integrity_selection_authority(selection)
+        authority = snapshot(selection)
         setattr(selection, "items", (replace(subject, item_id="integrity-1"),))
-        revalidate = revalidate_integrity_selection_authority
+
     else:
-        authority = snapshot_post_copy_selection_authority(selection)
+        authority = snapshot(selection)
         assert authority.candidates == (subject,)
         assert authority.candidates is not selection.candidates
         assert authority.candidates[0] is not subject
@@ -291,43 +312,29 @@ def test_selection_authority_reports_changed_item_before_derived_index(
             "candidates",
             (replace(subject, item_id="post-copy-1"),),
         )
-        revalidate = revalidate_post_copy_selection_authority
 
     with pytest.raises(ValueError, match=f"^{expected_message}$"):
         revalidate(selection, authority, allow_progress=False)
 
 
+@pytest.mark.parametrize("phase", ("revalidation", "snapshot"))
 @pytest.mark.parametrize("kind", ("post-copy", "integrity"))
-def test_selection_authority_rejects_a_deleted_known_id_index(kind: str) -> None:
+def test_selection_authority_rejects_a_deleted_known_id_index(
+    kind: str,
+    phase: str,
+) -> None:
     subject = _selection_subject(kind, 0)
-    selection = (
-        IntegritySelection((subject,))  # type: ignore[arg-type]
-        if kind == "integrity"
-        else PostCopySelection((subject,))  # type: ignore[arg-type]
-    )
-    if kind == "integrity":
-        snapshot = snapshot_integrity_selection_authority
-        revalidate = revalidate_integrity_selection_authority
+    selection, snapshot, revalidate = _selection_contract(kind, (subject,))
+    if phase == "revalidation":
+        authority = snapshot(selection)
+        del selection._known_item_ids
+        with pytest.raises(TypeError, match="known-item index is missing"):
+            revalidate(selection, authority, allow_progress=False)
     else:
-        snapshot = snapshot_post_copy_selection_authority
-        revalidate = revalidate_post_copy_selection_authority
-    authority = snapshot(selection)
-
-    del selection._known_item_ids
-
-    with pytest.raises(TypeError, match="known-item index is missing"):
-        revalidate(selection, authority, allow_progress=False)
+        del selection._known_item_ids
+        with pytest.raises(TypeError, match="known-item index is missing"):
+            snapshot(selection)
     assert not hasattr(selection, "_known_item_ids")
-
-    second = (
-        IntegritySelection((subject,))  # type: ignore[arg-type]
-        if kind == "integrity"
-        else PostCopySelection((subject,))  # type: ignore[arg-type]
-    )
-    del second._known_item_ids
-    with pytest.raises(TypeError, match="known-item index is missing"):
-        snapshot(second)
-    assert not hasattr(second, "_known_item_ids")
 
 
 def test_integrity_candidate_limit_facts_are_exact_and_typed() -> None:
