@@ -23,7 +23,19 @@ history, and workflow product while building its secured headed WebView2 shell.
 Redundant in-process transports and certification layers were removed while
 preserving public behavior, real boundary checks, and persisted contracts.
 
-#### Reduce redundant production mechanisms (2026-09-07)
+#### Reduce redundant production mechanisms (2026-09-07 – 2026-09-08)
+
+- Accepted a pending immutable-value and narrow scan-validation follow-up.
+  Investigated event encoding and executor condensation without changing product
+  code: recommended local history byte/projection reuse and explicit rename/
+  publication-observer sharing; retained boundary validation and settlement
+  ordering. RF-E/RF-X dispositions and 25 passing focused checks are retained in
+  REDUCTION_FOLLOWUP, migrated from M1_PLAN.
+- Planned finite stat/progress, scan, history, and executor reductions with
+  explicit test retirements, retained guarantees, added-witness criteria and
+  integrated gates. Recording tails, pause/cancel and mutation-verdict compression
+  remain shelved. Qualified the follow-up baseline and assertion dispositions
+  with a fresh adversarial review; product checkpoints remain pending.
 
 - Consolidated required sync recording finishing and five verification terminal
   projections, shared event vocabularies and Clock, and reused admitted exact

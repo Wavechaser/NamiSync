@@ -11,6 +11,11 @@ do not add, defer, or reinterpret an M1 product outcome.
 
 ## Current boundary
 
+[REDUCTION_FOLLOWUP.md](REDUCTION_FOLLOWUP.md) owns the accepted narrow
+immutable-value, scan-validation, history encoding/projection, and executor
+simplification follow-up under M1-12. Its NR-0–NR-9 register and migrated RF-E/RF-X
+dispositions preserve existing product outcomes; implementation is pending.
+
 The secured desktop host and transport, presentation foundation, current service/CLI surface, and implemented ledger/history boundary are active. The frozen v1 event-and-transport custody claim remains closed at its bridge evidence owner. That closure does not establish whole-runtime containment.
 
 The following accepted user outcomes remain unrealized: process-live desktop task surfaces; shared location admission and frozen Setup; reviewed plan execution; execution and inventory projections; integrity controls and manual post-copy verification; and release closure. The history page, global-settings mutation page, drag-and-drop, file-scoped planning, durable task survival across a process restart, durable sort preferences, status/progress or global-flat sorting, and compare-and-accept rebaseline semantics are deferred.

@@ -1,70 +1,68 @@
 # Latest session handoff
 
-## Completion
+## Current work
 
-The production reduction pass is delivered on `codex/production-reduction`
-under [PRODUCTION_REDUCTION.md](PRODUCTION_REDUCTION.md). PR-0 through PR-8
-have independent clean reviews; PR-9 records integrated verification and the
-final documentation closure. Final product source is `08572b7`; the closure
-commit changes documentation only. The user's one-assertion PR-6 scope
-supplement is recorded in the register without rewriting the frozen inventory.
+Created docs/REDUCTION_FOLLOWUP.md using the user-invoked plan-work skill.
+The user has now authorized implementation with GPT-5.6 builders, fresh
+adversarial reviewers, and independent atomic commits. The user accepted narrow immutable/scan/history
+reductions and restricted executor work to MOVE/RECASE rename sharing, common
+new-file/update publication observation, and unused arguments/no-op wrappers.
+Recording tails, pause/cancel block merging, mutation-verdict compression and
+legacy recording-key pops are shelved. NR-0 evidence passed fresh review;
+product edits have not begun.
 
-## Delivered this session
+RF-E/RF-X discovery dispositions moved from M1_PLAN.md into the new plan.
+M1_PLAN now carries only its maintenance-subregister link. README's active index
+and the existing CHANGELOG task were updated. NR-0 baseline and finite assertion
+qualification precede all product edits. See the plan's resumption block.
 
-Each accepted outcome has its own reviewed commit:
+## Plan decisions
 
-- `1088d6b`: freeze the reduction register and qualified baseline.
-- `b292a7e`: centralize the five Clock declarations.
-- `54b2d9f`: share event detail and reason vocabularies.
-- `a2a7fcd`: require and consolidate existing-run recording finishing.
-- `1dafb16`: remove the subsumed history UPDATE trigger.
-- `20bb1c6`: relax selection representation prescriptions in bounded test families.
-- `752bd89`: share the five verification terminal projections.
-- `6735f18`: reuse exact admitted immutable event details.
-- `08572b7`: centralize the ten bounded variable-IN query loops.
+- Immutable scope is the demonstrated FileStat graph and duplicate runner
+  Progress snapshot. Initial validation, exact adoption, progress acceptance,
+  mutable continuations and other value families remain protected.
+- Scan scope removes repeated graph certification, preserving constructor
+  validation, raw limits, root/scope checks, scalar command checks and DB truth.
+- History scope reuses checked bytes and local projections without cross-owner
+  caches, hash/schema/wire changes or validation removal.
+- Executor scope preserves operation distinctions, diagnostic/recording order,
+  filesystem probe order, settlement policy and protected oracle authority.
+- The plan classifies test assertion retirements separately from regressions,
+  requires independent expectations and finite fault/harmless controls, and
+  identifies extra publication-observation characterization plus conditional
+  gap-filling tests. It sets no test-deletion/LOC target or performance SLO.
 
-The executor oracle, deeper continuation guards, lifecycle claims, and valid
-unintegrated presentation components remain intact. Selection production code
-is unchanged. Deferred reductions require a new closed register and user scope
-adjudication; this pass does not reopen M1's remaining product outcomes.
+## Verification and repository state
 
-## Verification
+NR-0 evidence lives under build/reduction-followup/50bc05e/NR-0/.
+The 20260908-144229 run records two complete passes of 4,741 tests with four
+documented WinError 1314 capability skips, all 28 headed tests passing,
+12 import contracts kept, and 30 oracle scenarios passing three identical runs.
+All 11 protected paths and committed identity/event-v5 fixtures match HEAD
+filtered content; raw hashes and actual interpreter/module origins are recorded.
+The dispositions-20260908-145100 directory holds the finite assertion map and
+30 independent literal publication expectations fixed before implementation.
 
-- Complete suite: 4,745 collected, 4,741 passed, four unchanged WinError 1314
-  capability skips; all 28 headed tests passed. Runtime was 357.65 seconds.
-- All 12 import contracts kept; unchanged settlement oracle passed 30 scenarios
-  across three identical normalized runs, with no drift or unclassified cases.
-- Integrated replay: 25 intended fault detections, four harmless passes, and one
-  required-finisher constructor refusal. All 11 protected inputs match.
-- Final clean adversarial review covers source, assertion dispositions, retained
-  guarantees, evidence provenance, and current documentation.
+Plan structure, local links and documentation diff are checked at completion.
+No product/test code, protected oracle or schema changed. Work is uncommitted.
+The user-owned root reports were already absent when execution began; do not
+restore them. Preserve prior ignored worktrees and evidence.
 
-Terminal evidence is retained under `build/production-reduction/pr9/`:
-`complete-verification/FINAL_VERIFICATION_MANIFEST.json`,
-`PR9_CONTROL_REPLAY_MANIFEST.json`, and
-`PR9_PROTECTED_11_RECONCILIATION.json`. Per-checkpoint evidence is indexed by
-the register. Invalid or interrupted harness attempts remain explicitly
-non-acceptance evidence; no unresolved product defect or WIP recovery branch
-resulted. The lint-only capture correction did not rerun the complete suite or
-oracle. Root-owned final documentation edits follow the frozen product gates.
+## Continuing context
 
-## Operational context
+HEAD at planning: 50bc05ebab57da724faa11ccf4f8882cdcb6a291,
+branch milestone1-anthony. PR-0 through PR-9 remains closed;
+08572b7 is that pass's final product commit. Prior integrated evidence remains
+under build/production-reduction/pr9/. Schema versions are history 7,
+shared data epoch 7, ledger 4, with the existing manual reset contract.
 
-History schema is 7, shared data epoch is 7, and ledger schema remains 4.
-Old or mixed database pairs refuse without mutation; follow the coordinated
-manual reset guidance in [DATABASE.md](DATABASE.md). No automatic migration,
-reset, or database deletion was introduced.
-
-Use the qualified Python 3.13.14 executable at
-`F:\GitHubRepositories\NamiSync\build\test-refinement\1026541\baseline\checkout\.venv\Scripts\python.exe`
-with this integration checkout (`F:\GitHubRepositories\NamiSync`) as the actual
-working directory. Its adjacent `lint-imports.exe` supplies import checking.
-Use `NAMISYNC_TEST_NODE` with the explicit executable at
-`C:\Users\Spectrum\.cache\codex-runtimes\codex-primary-runtime\dependencies\node\bin\node.exe`.
-The ignored main virtual environment's stale base pointer was repaired during
-baseline qualification; no dependency change was committed. Verification
-receipts check actual product/test imports, not only intended working paths.
-
-Ignored candidate worktrees and run evidence remain under
-`build/production-reduction/`. Preserve them and any user-owned root
-`PRODUCTION_ABLATION.md`. No further implementation is pending in this register.
+Qualified prior Python and Node paths and exact verification commands are in
+REDUCTION_FOLLOWUP.md. Recheck actual interpreter/import origins and dirty state
+in every isolated checkout; do not let the shared interpreter's editable install
+redirect tests to another checkout. The new run
+layout is build/reduction-followup/<base>/<checkpoint>/<run>/, governed by the
+plan's evidence and cleanup conventions. NR-0 is qualified; launch independent
+NR-1, NR-2, and NR-6 builders from its committed evidence index.
+Root owns integration and register updates. Account for and remove task-created
+worktrees/refs at NR-9. Block only affected/dependent work, finish independent
+lanes, then preserve blocked changes under AGENTS recovery rules.

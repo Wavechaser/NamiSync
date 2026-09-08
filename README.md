@@ -213,6 +213,8 @@ never hides the other result axes in rendered output.
   outcomes and verification of retained test guarantees.
 - [Production reduction register](docs/PRODUCTION_REDUCTION.md) — bounded
   simplifications, retained guarantees, and verification.
+- [Narrow reduction follow-up](docs/REDUCTION_FOLLOWUP.md) — closed simplification
+  scope, assertion dispositions, and pending implementation checkpoints.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
