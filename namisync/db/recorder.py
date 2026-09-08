@@ -41,7 +41,6 @@ from namisync.core.models import (
     root_projection,
     volume_evidence_projection,
     volume_id_projection,
-    validate_scan_result,
     validate_scan_scope,
     validate_scan_warning,
 )
@@ -202,7 +201,16 @@ def _scan_scope_projection(value: ScanScope) -> dict[str, object]:
 
 
 def _scan_projection(value: ScanResult) -> dict[str, object]:
-    validate_scan_result(value)
+    if type(value) is not ScanResult:
+        raise TypeError("scan projection requires an exact ScanResult")
+    for field_name, population in (
+        ("files", value.files),
+        ("directories", value.directories),
+        ("unsupported", value.unsupported),
+        ("warnings", value.warnings),
+    ):
+        if type(population) is not tuple:
+            raise TypeError(f"scan projection {field_name} must be an exact tuple")
     return {
         "root": root_projection(value.root),
         "volume_id": volume_id_projection(value.volume_id),

@@ -534,6 +534,90 @@ def test_scan_model_contracts_are_exactly_slotted() -> None:
         _assert_declared_slots(value)
 
 
+def _valid_scan_result() -> model_contracts.ScanResult:
+    metadata = model_contracts.MetadataSnapshot(0, None)
+    identity = model_contracts.FileIdentity("serial", 1)
+    return model_contracts.ScanResult(
+        model_contracts.Root(r"C:\source", "source"),
+        model_contracts.VolumeId("serial", "NTFS"),
+        model_contracts.VolumeEvidence("source", None, False),
+        model_contracts.CapabilityProfile(
+            "NTFS", 1, True, None, 32_767, True, True
+        ),
+        (
+            model_contracts.FileRecord(
+                "file.bin", "FILE.BIN", 1, 1, identity, 1, metadata
+            ),
+        ),
+        (model_contracts.DirRecord("folder", "FOLDER", 1, metadata, identity),),
+        (
+            model_contracts.UnsupportedRecord(
+                "link.bin", "LINK.BIN", model_contracts.UnsupportedReason.REPARSE_POINT
+            ),
+        ),
+        (
+            model_contracts.ScanWarning(
+                model_contracts.ScanWarningCode.DISAPPEARED, "gone.bin"
+            ),
+        ),
+        model_contracts.ScanScope.full(),
+        True,
+    )
+
+
+@pytest.mark.parametrize("population", ("files", "directories", "unsupported", "warnings"))
+def test_scan_result_constructor_rejects_invalid_population_member(
+    population: str,
+) -> None:
+    value = _valid_scan_result()
+    values = [getattr(value, field.name) for field in fields(value)]
+    index = {field.name: position for position, field in enumerate(fields(value))}
+    values[index[population]] = (object(),)
+
+    with pytest.raises(TypeError):
+        model_contracts.ScanResult(*values)
+
+
+@pytest.mark.parametrize(
+    ("field_name", "replacement"),
+    (
+        ("root", object()),
+        ("volume_id", object()),
+        ("volume_evidence", object()),
+        ("profile", object()),
+        ("files", []),
+        ("directories", []),
+        ("unsupported", []),
+        ("warnings", []),
+        ("scope", object()),
+        ("complete", 1),
+    ),
+    ids=(
+        "root",
+        "volume-id",
+        "volume-evidence",
+        "profile",
+        "files-tuple",
+        "directories-tuple",
+        "unsupported-tuple",
+        "warnings-tuple",
+        "scope",
+        "complete",
+    ),
+)
+def test_scan_result_constructor_rejects_invalid_top_level_shape(
+    field_name: str,
+    replacement: object,
+) -> None:
+    value = _valid_scan_result()
+    values = [getattr(value, field.name) for field in fields(value)]
+    index = {field.name: position for position, field in enumerate(fields(value))}
+    values[index[field_name]] = replacement
+
+    with pytest.raises(TypeError):
+        model_contracts.ScanResult(*values)
+
+
 def test_planning_contracts_are_exactly_slotted() -> None:
     plans, _ = hash_fixtures(True)
     reviewed = plans["all_fields"]

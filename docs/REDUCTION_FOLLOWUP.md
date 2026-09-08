@@ -196,7 +196,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | NR-0 | Qualify baseline and freeze assertion/evidence dispositions for this register. | — | Current-source complete baseline, imports, protected identities, oracle repeat 3, finite witness map | complete |
 | NR-1 | Reuse exact immutable file-stat graphs without redundant construction. | NR-0 | Initial refusals, independent fact tuples, stat consumer tests, construction witness | complete |
 | NR-2 | Use one normalized Progress snapshot at runner emission. | NR-0 | Accepted-emission fallback and control/field equivalence | complete |
-| NR-3 | Remove repeated scan element certification after full initial validation. | NR-0 | Constructor/transfer/limit/recorder witnesses and unchanged scan payloads | pending |
+| NR-3 | Remove repeated scan element certification after full initial validation. | NR-0 | Constructor/transfer/limit/recorder witnesses and unchanged scan payloads | complete |
 | NR-4 | Persist history's already-validated canonical envelope bytes. | NR-0 | Byte equivalence, invalid-before-mutation, canonical byte limits | complete |
 | NR-5 | Reuse local history item projections for hashes and readback columns. | NR-4 | Replay/corrupt-read/column/hash equality; no retained cache | pending |
 | NR-6 | Remove the three unused executor arguments and no-op exception wrapper. | NR-0 | Caller inspection, runtime/settlement/control tests and oracle repeat 3 | complete |
@@ -492,6 +492,24 @@ result, not only a malformed frozen-object forge. Verify recorder entry still
 has validated scalar command facts and retains atomic missing inference.
 
 **Commit gate.** Shared gate complete; `refactor(core): remove repeated admitted scan validation`.
+
+**Execution evidence (2026-09-08).** Constructor/public validation remains full;
+adoption, InventoryCommand and recorder projection retain exact transfer checks,
+independent limits/tokens, requested root/scope semantics and per-record hashing.
+Only their repeated scan certification is removed. The neighborhood passed 2,344
+with one baseline capability skip; all 12 import contracts passed. Three fault
+controls detected their intended violations and a real helper relocation passed.
+Evidence: `build/reduction-followup/6e06a12/NR-3/20260908-163100/manifest.json`,
+with explicit links to unchanged-source evidence from the 161700 run.
+
+Fresh GPT-5.6 Sol review caught an attribute-read witness that could not detect
+local tuple walks. Corrected module-local leaf type counters cover adoption and
+InventoryCommand independently at 0/1/1024; 19 focused cases pass. Restoring each
+removed sweep produces the intended four/4096 certifications and failures at
+nonzero sizes. The zero-row cases pass. Review verified current test hashes,
+inherited source hashes and artifact links; no blocker remains. Earlier partial
+or superseded evidence is retained and excluded. Protected authorities and pure
+fixtures remain exact; no test assertion was retired.
 
 ### NR-4 — Reuse validated history encoding
 

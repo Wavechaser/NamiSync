@@ -84,9 +84,11 @@ primitives and for the plan constructors, limits, counter order, and adoption
 rules. The comparison primitive validates only the measured count or byte
 charge; each trusted owner still declares its local wall, count placement,
 precedence, fact/error type, and user outcome. Source gates test each independent
-raw population before its first excess. Workflow validates and adopts each exact
-scanner result once, retains that immutable object, and passes the same identity
-to first-party read-only consumers. Producer gates remain non-accumulating; the
+raw population before its first excess. `ScanResult` construction owns complete
+graph validation. Workflow adoption retains exact result/tuple transfer checks
+and independent raw domain and informational population admission, then retains
+that immutable object and passes the same identity to first-party read-only
+consumers. Producer gates remain non-accumulating; the
 retained ledger charges only final shallow slots. Workflow catches only the
 private exact plan signal carrying the active token, reconstructs an exact PLAN
 fact, retires the raw signal graph, and retains neither the signal nor admission

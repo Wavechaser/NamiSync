@@ -17,8 +17,6 @@ from .models import (
     UnsupportedRecord,
     VolumeEvidence,
     VolumeId,
-    validate_scan_scope,
-    validate_scan_warning,
 )
 from .scalars import (
     MAX_SIGNED_64,
@@ -393,7 +391,8 @@ def adopt_scan_result(
         raise TypeError("scan volume evidence has the wrong type")
     if type(result.profile) is not CapabilityProfile:
         raise TypeError("scan capability profile has the wrong type")
-    validate_scan_scope(result.scope)
+    if type(result.scope) is not ScanScope:
+        raise TypeError("scan scope has the wrong type")
     if type(result.complete) is not bool:
         raise TypeError("scan completeness must be an exact bool")
 
@@ -404,12 +403,6 @@ def adopt_scan_result(
         limit=row_limit,
         field_name="scan domain rows",
     ):
-        _validate_scan_domain_prefix(
-            files,
-            directories,
-            unsupported,
-            row_limit + 1,
-        )
         admission.require_source_rows(row_limit + 1)
         raise RuntimeError("scan admission accepted an excess domain population")
     admission.require_source_rows(domain_count)
@@ -419,74 +412,12 @@ def adopt_scan_result(
         limit=row_limit,
         field_name="scan informational rows",
     ):
-        _validate_scan_domain_prefix(
-            files,
-            directories,
-            unsupported,
-            domain_count,
-        )
-        _validate_scan_warning_prefix(warnings, row_limit + 1)
         admission.require_informational_source_rows(row_limit + 1)
         raise RuntimeError(
             "scan admission accepted an excess informational population"
         )
     admission.require_informational_source_rows(informational_count)
-
-    _validate_scan_domain_prefix(
-        files,
-        directories,
-        unsupported,
-        domain_count,
-    )
-    _validate_scan_warning_prefix(warnings, informational_count)
     return result
-
-
-def _validate_scan_domain_prefix(
-    files: tuple[FileRecord, ...],
-    directories: tuple[DirRecord, ...],
-    unsupported: tuple[UnsupportedRecord, ...],
-    count: int,
-) -> None:
-    remaining = count
-    if remaining == 0:
-        return
-    for record in files:
-        if type(record) is not FileRecord:
-            raise TypeError("scan files must contain exact FileRecord values")
-        remaining -= 1
-        if remaining == 0:
-            return
-    for record in directories:
-        if type(record) is not DirRecord:
-            raise TypeError(
-                "scan directories must contain exact DirRecord values"
-            )
-        remaining -= 1
-        if remaining == 0:
-            return
-    for record in unsupported:
-        if type(record) is not UnsupportedRecord:
-            raise TypeError(
-                "scan unsupported must contain exact UnsupportedRecord values"
-            )
-        remaining -= 1
-        if remaining == 0:
-            return
-    raise RuntimeError("scan domain prefix is shorter than its declared count")
-
-
-def _validate_scan_warning_prefix(
-    warnings: tuple[ScanWarning, ...],
-    count: int,
-) -> None:
-    if count == 0:
-        return
-    for index, warning in enumerate(warnings, start=1):
-        validate_scan_warning(warning)
-        if index == count:
-            return
-    raise RuntimeError("scan warning prefix is shorter than its declared count")
 
 
 def admit_retained_plan_scan(

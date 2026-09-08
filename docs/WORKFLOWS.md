@@ -180,9 +180,10 @@ failure. Correspondence keeps its ordinary two-argument protocol; its concrete
 database query is structurally bounded by admitted scan keys and identities,
 then workflow
 captures the fallible result under the same counter-free producer gate. Each
-raw population has an independent first-excess gate. Each scanner result is
-exact-adopted once and
-then shared by identity with first-party read-only consumers. Workflow still
+raw population has an independent first-excess gate. `ScanResult` construction
+owns complete graph validation; workflow adoption retains exact result/tuple
+transfer and requested root/scope checks before sharing the same result by
+identity with first-party read-only consumers. Workflow still
 copies the fallible mapping result, but it exact-adopts the planner's immutable
 `Plan` once after compound validation and shares that same plan identity with
 review, artifact, and later first-party consumers. Observer and preflight

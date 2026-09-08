@@ -120,9 +120,10 @@ partial behavior are supported.
 
 Inventory scanning likewise receives a mandatory workflow-owned population
 admission. The production scanner checks the next combined domain or warning
-row before append, while workflow validates the exact complete `ScanResult` and
-rechecks both populations before any host, location, or inventory ledger row is
-written. A valid initial inventory excess is `REFUSED+UNRUN` with no saved
+row before append. `ScanResult` construction owns complete graph validation;
+workflow then exact-adopts its tuple transfer, rechecks both raw populations,
+and compares the requested root and scope before any host, location, or
+inventory ledger row is written. A valid initial inventory excess is `REFUSED+UNRUN` with no saved
 details or partial inventory; malformed first-party scanner output remains a
 loud internal (rung 3) contract failure and keeps structural-error precedence.
 Integrity refresh has already started the request and therefore settles the

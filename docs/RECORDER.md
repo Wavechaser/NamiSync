@@ -61,10 +61,11 @@ schema.
 Volume, location, and inventory entry points reconstruct the exact typed
 command before any transaction. Volume identity/evidence use the core text and
 path ceilings, location paths are freshly validated and canonicalized, and an
-inventory command freshly re-admits its complete exact scan graph. Recorder's
-canonical hash projections repeat scan warning/scope/result admission so a
-forged frozen field cannot reach SQLite through either the command or hashing
-boundary.
+inventory command retains exact `ScanResult` and child-tuple transfer checks
+alongside its scalar validation. Complete scan-graph validation belongs to
+initial `ScanResult` construction. Recorder hash projection keeps the exact
+outer transfer and per-record, warning, and scope projectors, so its necessary
+serialization checks remain independent of command reconstruction.
 
 M0 uses eager operation-scoped transactions behind the final batching
 interface. Every successful call is already durable, and `flush()` is therefore

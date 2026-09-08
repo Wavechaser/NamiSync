@@ -14,6 +14,7 @@ from weakref import ref
 
 import pytest
 
+import namisync.core.models as model_module
 import namisync.core.review as review_module
 import namisync.modules.planner as planner_module
 import namisync.workflows.inventory as inventory_workflow_module
@@ -456,6 +457,67 @@ def test_scan_adoption_refuses_information_after_valid_domain(
     assert raised.value.fact == (
         ReviewFactLimitExceeded.plan_informational_rows()
     )
+
+
+@pytest.mark.parametrize("population", ("files", "directories", "unsupported", "warnings"))
+def test_scan_adoption_real_population_boundary(population: str) -> None:
+    record = {
+        "files": _file("file.bin"),
+        "directories": _directory("folder"),
+        "unsupported": _unsupported("link.bin"),
+        "warnings": ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin"),
+    }[population]
+    values = {"files": (), "directories": (), "unsupported": (), "warnings": ()}
+    values[population] = (record,) * MAX_PLAN_REVIEW_ROWS
+    admitted = _scan(SOURCE_ROOT, **values)
+
+    assert adopt_plan_scan_result(
+        admitted,
+        PlanReviewProducerAdmission(),
+    ) is admitted
+
+    values[population] = (record,) * (MAX_PLAN_REVIEW_ROWS + 1)
+    excessive = _scan(SOURCE_ROOT, **values)
+    expected = (
+        ReviewFactLimitExceeded.plan_informational_rows()
+        if population == "warnings"
+        else ReviewFactLimitExceeded.plan_domain_rows()
+    )
+    with pytest.raises(_PlanReviewLimitSignal) as raised:
+        adopt_plan_scan_result(excessive, PlanReviewProducerAdmission())
+
+    assert raised.value.fact == expected
+
+
+@pytest.mark.parametrize("count", (0, 1, 1_024), ids=("0", "1", "1024"))
+def test_scan_adoption_performs_no_repeated_leaf_certification(
+    count: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    file_record = _file("file.bin")
+    directory = _directory("folder")
+    unsupported = _unsupported("link.bin")
+    warning = ScanWarning(ScanWarningCode.DISAPPEARED, "gone.bin")
+    value = _scan(
+        SOURCE_ROOT,
+        files=(file_record,) * count,
+        directories=(directory,) * count,
+        unsupported=(unsupported,) * count,
+        warnings=(warning,) * count,
+    )
+    leaf_ids = {id(file_record), id(directory), id(unsupported), id(warning)}
+    certifications: list[int] = []
+
+    def count_leaf_certification(value: object, *args: object) -> type:
+        if not args and id(value) in leaf_ids:
+            certifications.append(id(value))
+        return type(value, *args)
+
+    monkeypatch.setattr(review_module, "type", count_leaf_certification, raising=False)
+    monkeypatch.setattr(model_module, "type", count_leaf_certification, raising=False)
+
+    assert adopt_plan_scan_result(value, PlanReviewProducerAdmission()) is value
+    assert certifications == []
 
 
 def test_scan_adoption_requires_the_exact_scan_result_type() -> None:
