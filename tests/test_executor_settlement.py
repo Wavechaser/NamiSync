@@ -5372,11 +5372,18 @@ class SettlementObservationFileSystem(NativeFileSystem):
     def __init__(
         self,
         observations: dict[Path, FileStat | None | Exception],
+        *,
+        labels: dict[Path, str] | None = None,
     ) -> None:
         self.observations = {
             os.path.normcase(os.path.normpath(str(path))): observed
             for path, observed in observations.items()
         }
+        self.labels = {
+            os.path.normcase(os.path.normpath(str(path))): label
+            for path, label in (labels or {}).items()
+        }
+        self.trace: list[str] = []
 
     def revalidate_root(self, root: Path, **_kwargs: object) -> None:
         return None
@@ -5386,16 +5393,261 @@ class SettlementObservationFileSystem(NativeFileSystem):
         return root.joinpath(*PureWindowsPath(relative_path).parts)
 
     def revalidate_trash_destination(self, *_args: object) -> None:
+        self.trace.append("revalidate-backup-destination")
         return None
 
     def stat_path(self, path: Path) -> FileStat | None:
         key = os.path.normcase(os.path.normpath(str(path)))
+        if key in self.labels:
+            self.trace.append(f"stat-{self.labels[key]}")
         if key not in self.observations:
             raise AssertionError(f"unexpected settlement observation: {path}")
         observed = self.observations[key]
         if isinstance(observed, Exception):
             raise observed
         return observed
+
+
+@dataclass(frozen=True, slots=True)
+class PublicationObservationCase:
+    id: str
+    kind: OperationKind
+    published: bool
+    temp: str
+    target: str
+    classification: str
+    target_state: str | None
+    temp_state: str | None
+    target_state_error: tuple[str, str, str] | None
+    probe_error: tuple[str, str, str] | None
+    probe_order: tuple[str, ...]
+
+
+_PUBLICATION_OBSERVATION_CASES = (
+    PublicationObservationCase("copy-published-expected", OperationKind.COPY, True, "not-probed", "prepared", "confirmed", "published", None, None, None, ("target",)),
+    PublicationObservationCase("copy-published-missing", OperationKind.COPY, True, "not-probed", "absent", "confirmed", "missing-after-publish", None, None, None, ("target",)),
+    PublicationObservationCase("copy-published-changed", OperationKind.COPY, True, "not-probed", "foreign", "confirmed", "changed-after-publish", None, None, None, ("target",)),
+    PublicationObservationCase("copy-published-unreadable", OperationKind.COPY, True, "not-probed", "published-error", "confirmed", "unverified-after-publish", None, ("io-error", "PermissionError", "published target probe unavailable"), None, ("target",)),
+    PublicationObservationCase("update-published-expected", OperationKind.UPDATE, True, "not-probed", "prepared", "confirmed", "published", None, None, None, ("target",)),
+    PublicationObservationCase("update-published-missing", OperationKind.UPDATE, True, "not-probed", "absent", "confirmed", "missing-after-publish", None, None, None, ("target",)),
+    PublicationObservationCase("update-published-changed", OperationKind.UPDATE, True, "not-probed", "foreign", "confirmed", "changed-after-publish", None, None, None, ("target",)),
+    PublicationObservationCase("update-published-unreadable", OperationKind.UPDATE, True, "not-probed", "published-error", "confirmed", "unverified-after-publish", None, ("io-error", "PermissionError", "published target probe unavailable"), None, ("target",)),
+    PublicationObservationCase("copy-unpublished-intact-absent", OperationKind.COPY, False, "prepared", "absent", "not-published", None, None, None, None, ("temp", "target")),
+    PublicationObservationCase("copy-unpublished-intact-reviewed-old", OperationKind.COPY, False, "prepared", "reviewed-old", "not-published", "unexpectedly-present-before-publish", None, None, None, ("temp", "target")),
+    PublicationObservationCase("copy-unpublished-intact-foreign", OperationKind.COPY, False, "prepared", "foreign", "not-published", "unexpectedly-present-before-publish", None, None, None, ("temp", "target")),
+    PublicationObservationCase("update-unpublished-intact-absent", OperationKind.UPDATE, False, "prepared", "absent", "not-published", "missing-before-publish", None, None, None, ("temp", "target")),
+    PublicationObservationCase("update-unpublished-intact-reviewed-old", OperationKind.UPDATE, False, "prepared", "reviewed-old", "not-published", None, None, None, None, ("temp", "target")),
+    PublicationObservationCase("update-unpublished-intact-foreign", OperationKind.UPDATE, False, "prepared", "foreign", "not-published", "changed-before-publish", None, None, None, ("temp", "target")),
+    PublicationObservationCase("copy-unpublished-changed-absent", OperationKind.COPY, False, "foreign", "absent", "not-published", "absent-before-publish", "changed-before-publish", None, None, ("temp", "target")),
+    PublicationObservationCase("copy-unpublished-changed-reviewed-old", OperationKind.COPY, False, "foreign", "reviewed-old", "unverified", "present", "unexpected", None, ("target-drift", "OperationFailure", "cannot classify prepared versus published state during cancel settlement"), ("temp", "target")),
+    PublicationObservationCase("copy-unpublished-changed-foreign", OperationKind.COPY, False, "foreign", "foreign", "unverified", "present", "unexpected", None, ("target-drift", "OperationFailure", "cannot classify prepared versus published state during cancel settlement"), ("temp", "target")),
+    PublicationObservationCase("update-unpublished-changed-absent", OperationKind.UPDATE, False, "foreign", "absent", "unverified", "missing", "unexpected", None, ("target-missing", "OperationFailure", "cannot classify live versus published update during cancel settlement"), ("temp", "target")),
+    PublicationObservationCase("update-unpublished-changed-reviewed-old", OperationKind.UPDATE, False, "foreign", "reviewed-old", "not-published", "retained-before-publish", "changed-before-publish", None, None, ("temp", "target")),
+    PublicationObservationCase("update-unpublished-changed-foreign", OperationKind.UPDATE, False, "foreign", "foreign", "unverified", "present", "unexpected", None, ("target-drift", "OperationFailure", "cannot classify live versus published update during cancel settlement"), ("temp", "target")),
+    PublicationObservationCase("copy-unpublished-missing-absent", OperationKind.COPY, False, "absent", "absent", "unverified", "missing", "missing", None, ("target-missing", "OperationFailure", "cannot classify prepared versus published state during cancel settlement"), ("temp", "target")),
+    PublicationObservationCase("copy-unpublished-missing-prepared", OperationKind.COPY, False, "absent", "prepared", "confirmed", "published", None, None, None, ("temp", "target")),
+    PublicationObservationCase("copy-unpublished-missing-foreign", OperationKind.COPY, False, "absent", "foreign", "confirmed", "changed-after-publish", None, None, None, ("temp", "target")),
+    PublicationObservationCase("update-unpublished-missing-absent", OperationKind.UPDATE, False, "absent", "absent", "unverified", "missing", "missing", None, ("target-missing", "OperationFailure", "cannot classify live versus published update during cancel settlement"), ("temp", "target")),
+    PublicationObservationCase("update-unpublished-missing-prepared", OperationKind.UPDATE, False, "absent", "prepared", "confirmed", "published", None, None, None, ("temp", "target")),
+    PublicationObservationCase("update-unpublished-missing-foreign", OperationKind.UPDATE, False, "absent", "foreign", "confirmed", "changed-after-publish", None, None, None, ("temp", "target")),
+    PublicationObservationCase("copy-temp-probe-error", OperationKind.COPY, False, "temp-error", "not-probed", "unverified", None, None, None, ("io-error", "PermissionError", "temp probe unavailable"), ("temp",)),
+    PublicationObservationCase("copy-target-probe-error", OperationKind.COPY, False, "prepared", "target-error", "unverified", None, None, None, ("io-error", "PermissionError", "target probe unavailable"), ("temp", "target")),
+    PublicationObservationCase("update-temp-probe-error", OperationKind.UPDATE, False, "temp-error", "not-probed", "unverified", None, None, None, ("io-error", "PermissionError", "temp probe unavailable"), ("temp",)),
+    PublicationObservationCase("update-target-probe-error", OperationKind.UPDATE, False, "prepared", "target-error", "unverified", None, None, None, ("io-error", "PermissionError", "target probe unavailable"), ("temp", "target")),
+)
+
+
+def _diagnostic_facts(
+    diagnostic: executor_runtime._ProbeDiagnostic | None,
+) -> tuple[str, str, str] | None:
+    if diagnostic is None:
+        return None
+    return (
+        diagnostic.reason.value,
+        diagnostic.type_name,
+        diagnostic.message,
+    )
+
+
+@pytest.mark.parametrize(
+    "case",
+    _PUBLICATION_OBSERVATION_CASES,
+    ids=lambda case: case.id,
+)
+def test_publication_observation_matrix(
+    tmp_path: Path,
+    case: PublicationObservationCase,
+) -> None:
+    source, target = _roots(tmp_path)
+    native = NativeFileSystem()
+    stats: dict[str, FileStat] = {}
+    for name, content in (
+        ("reviewed-old", b"reviewed-old"),
+        ("prepared", b"prepared-publication"),
+        ("foreign", b"foreign-publication"),
+    ):
+        path = source / f"{name}.bin"
+        path.write_bytes(content)
+        observed = native.stat(source, path.name)
+        assert observed is not None
+        stats[name] = observed
+    assert len({stat.file_identity for stat in stats.values()}) == 3
+
+    target_path = target / "target.bin"
+    temp_path = target / "target.bin.synctmp-owned"
+    prepared = executor_runtime._PreparedCopy(
+        source=source / "prepared.bin",
+        target=target_path,
+        temp=temp_path,
+        digest=CopyDigest(b"\x00" * 16, stats["prepared"].size),
+        intended=stats["prepared"],
+        finalized=stats["prepared"],
+    )
+    operation = _operation(
+        1,
+        case.kind,
+        source_rel_path="prepared.bin",
+        target_rel_path="target.bin",
+        source_expected=stats["prepared"],
+        target_expected=(
+            stats["reviewed-old"] if case.kind is OperationKind.UPDATE else None
+        ),
+        intended=stats["prepared"],
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    if case.kind is OperationKind.UPDATE:
+        continuation: executor_runtime._ByteEffect = (
+            executor_runtime._UpdateContinuation(
+                prepared=prepared,
+                prepared_stat=stats["prepared"],
+                live_stat=stats["reviewed-old"],
+                backup=None,
+                detail={"fixture": case.id},
+                published=case.published,
+                published_stat=stats["prepared"],
+            )
+        )
+    else:
+        continuation = executor_runtime._CopyContinuation(
+            prepared=prepared,
+            prepared_stat=stats["prepared"],
+            published=case.published,
+            published_stat=stats["prepared"],
+            detail={"fixture": case.id},
+        )
+
+    values: dict[str, FileStat | None | Exception] = {
+        "absent": None,
+        "reviewed-old": stats["reviewed-old"],
+        "prepared": stats["prepared"],
+        "foreign": stats["foreign"],
+        "published-error": PermissionError("published target probe unavailable"),
+        "temp-error": PermissionError("temp probe unavailable"),
+        "target-error": PermissionError("target probe unavailable"),
+    }
+    observations: dict[Path, FileStat | None | Exception] = {}
+    if case.temp != "not-probed":
+        observations[temp_path] = values[case.temp]
+    if case.target != "not-probed":
+        observations[target_path] = values[case.target]
+    fs = SettlementObservationFileSystem(
+        observations,
+        labels={temp_path: "temp", target_path: "target"},
+    )
+
+    verdict = executor_runtime._observe_publication(
+        operation,
+        continuation,
+        fs,
+        target,
+        xset,
+    )
+
+    assert verdict.classification.value == case.classification
+    assert (
+        None if verdict.target_state is None else verdict.target_state.value
+    ) == case.target_state
+    assert (
+        None if verdict.temp_state is None else verdict.temp_state.value
+    ) == case.temp_state
+    assert _diagnostic_facts(verdict.target_state_error) == case.target_state_error
+    assert _diagnostic_facts(verdict.probe_error) == case.probe_error
+    assert verdict.base_detail == {"fixture": case.id}
+    assert verdict.backup is None
+    assert verdict.move_update is None
+    assert fs.trace == [f"stat-{probe}" for probe in case.probe_order]
+
+
+def test_update_publication_observes_backup_before_temp_and_target(
+    tmp_path: Path,
+) -> None:
+    source, target = _roots(tmp_path)
+    native = NativeFileSystem()
+    (source / "prepared.bin").write_bytes(b"prepared-publication")
+    (source / "reviewed-old.bin").write_bytes(b"reviewed-old")
+    prepared_stat = native.stat(source, "prepared.bin")
+    reviewed_old = native.stat(source, "reviewed-old.bin")
+    assert prepared_stat is not None and reviewed_old is not None
+    assert prepared_stat.file_identity != reviewed_old.file_identity
+
+    target_path = target / "target.bin"
+    temp_path = target / "target.bin.synctmp-owned"
+    backup_path = target / ".synctrash" / str(RUN_ID) / "target.bin"
+    prepared = executor_runtime._PreparedCopy(
+        source=source / "prepared.bin",
+        target=target_path,
+        temp=temp_path,
+        digest=CopyDigest(b"\x00" * 16, prepared_stat.size),
+        intended=prepared_stat,
+        finalized=prepared_stat,
+    )
+    continuation = executor_runtime._UpdateContinuation(
+        prepared=prepared,
+        prepared_stat=prepared_stat,
+        live_stat=reviewed_old,
+        backup=executor_runtime._UpdateBackup(
+            backup_path,
+            "copy",
+            published_stat=reviewed_old,
+        ),
+        detail={},
+    )
+    operation = _operation(
+        1,
+        OperationKind.UPDATE,
+        source_rel_path="prepared.bin",
+        target_rel_path="target.bin",
+        source_expected=prepared_stat,
+        target_expected=reviewed_old,
+        intended=prepared_stat,
+    )
+    xset = _xset(_plan(source, target, (operation,)))
+    fs = SettlementObservationFileSystem(
+        {
+            backup_path: reviewed_old,
+            temp_path: prepared_stat,
+            target_path: reviewed_old,
+        },
+        labels={backup_path: "backup", temp_path: "temp", target_path: "target"},
+    )
+
+    verdict = executor_runtime._observe_publication(
+        operation,
+        continuation,
+        fs,
+        target,
+        xset,
+    )
+
+    assert verdict.classification is executor_runtime._PublicationClassification.NOT_PUBLISHED
+    assert verdict.backup is not None
+    assert verdict.backup.state is executor_runtime._BackupState.RETAINED
+    assert fs.trace == [
+        "revalidate-backup-destination",
+        "stat-backup",
+        "stat-temp",
+        "stat-target",
+    ]
 
 
 def _ordinary_settlement_cause() -> executor_runtime._TerminalCause:

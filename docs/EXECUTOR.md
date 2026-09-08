@@ -458,6 +458,14 @@ Otherwise an intact matching owned temp proves the publish did not occur even
 if the target changed independently; consumed temp plus a present target is the
 committed-but-raised fallback. Truly unverified byte state fails with its
 drift/I/O reason and does not by itself claim publication or degrade recording.
+One publication observer owns the common published-target and unpublished
+temp/target probes for COPY, UPDATE, and MOVE_UPDATE. Its prepublication
+classification remains operation-specific: an intact COPY/MOVE_UPDATE temp
+treats any live target as unexpected occupancy, while an intact UPDATE temp
+compares the target with the reviewed live version; with a changed temp, only
+UPDATE can prove nonpublication from that retained live version. UPDATE backup
+observation still precedes these probes, and MOVE_UPDATE observes its old/trash
+state only after the common result confirms the new target as published.
 Cancellation still settles an independent mutation marker: exact restored
 pre-state retains the byte result, while changed, ambiguous, or unreadable
 readonly/non-byte state becomes `canceled-after-mutation` and degrades

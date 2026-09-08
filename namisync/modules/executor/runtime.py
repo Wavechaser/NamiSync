@@ -3418,8 +3418,8 @@ def _observe_update_backup(
     )
 
 
-def _observe_new_publication(
-    continuation: _CopyContinuation | _MoveUpdateContinuation,
+def _observe_byte_publication(
+    continuation: _ByteEffect,
     fs: ExecutorFileSystem,
     xset: ExecutionSet,
     target_root: Path,
@@ -3450,18 +3450,45 @@ def _observe_new_publication(
     temp = _stat_target_path(fs, xset, target_root, prepared.temp)
     target = _stat_target_path(fs, xset, target_root, prepared.target)
     if temp is not None and _same_file_version(temp, continuation.prepared_stat):
-        return (
-            _PublicationClassification.NOT_PUBLISHED,
-            (
+        if isinstance(continuation, _UpdateContinuation):
+            target_state = (
+                _TargetState.MISSING_BEFORE_PUBLISH
+                if target is None
+                else _TargetState.CHANGED_BEFORE_PUBLISH
+                if not _same_file_version(target, continuation.live_stat)
+                else None
+            )
+        else:
+            target_state = (
                 _TargetState.UNEXPECTEDLY_PRESENT_BEFORE_PUBLISH
                 if target is not None
                 else None
-            ),
+            )
+        return (
+            _PublicationClassification.NOT_PUBLISHED,
+            target_state,
             None,
             None,
             None,
         )
-    if temp is not None and target is None:
+    if (
+        isinstance(continuation, _UpdateContinuation)
+        and temp is not None
+        and target is not None
+        and _same_file_version(target, continuation.live_stat)
+    ):
+        return (
+            _PublicationClassification.NOT_PUBLISHED,
+            _TargetState.RETAINED_BEFORE_PUBLISH,
+            None,
+            _TempState.CHANGED_BEFORE_PUBLISH,
+            None,
+        )
+    if (
+        not isinstance(continuation, _UpdateContinuation)
+        and temp is not None
+        and target is None
+    ):
         return (
             _PublicationClassification.NOT_PUBLISHED,
             _TargetState.ABSENT_BEFORE_PUBLISH,
@@ -3486,93 +3513,11 @@ def _observe_new_publication(
         )
     error = OperationFailure(
         ExecutionReason.TARGET_MISSING if target is None else ExecutionReason.TARGET_DRIFT,
-        "cannot classify prepared versus published state during cancel settlement",
-    )
-    return (
-        _PublicationClassification.UNVERIFIED,
-        _TargetState.MISSING if target is None else _TargetState.PRESENT,
-        None,
-        _TempState.MISSING if temp is None else _TempState.UNEXPECTED,
-        _probe_diagnostic(error),
-    )
-
-
-def _observe_update_publication(
-    continuation: _UpdateContinuation,
-    fs: ExecutorFileSystem,
-    xset: ExecutionSet,
-    target_root: Path,
-) -> tuple[
-    _PublicationClassification,
-    _TargetState | None,
-    _ProbeDiagnostic | None,
-    _TempState | None,
-    _ProbeDiagnostic | None,
-]:
-    prepared = continuation.prepared
-    if continuation.published:
-        target_state, target_error = _observe_published_target(
-            prepared.target,
-            continuation.published_stat or continuation.prepared_stat,
-            fs,
-            xset,
-            target_root,
-        )
-        return (
-            _PublicationClassification.CONFIRMED,
-            target_state,
-            target_error,
-            None,
-            None,
-        )
-
-    temp = _stat_target_path(fs, xset, target_root, prepared.temp)
-    target = _stat_target_path(fs, xset, target_root, prepared.target)
-    if temp is not None and _same_file_version(temp, continuation.prepared_stat):
-        target_state = (
-            _TargetState.MISSING_BEFORE_PUBLISH
-            if target is None
-            else _TargetState.CHANGED_BEFORE_PUBLISH
-            if not _same_file_version(target, continuation.live_stat)
-            else None
-        )
-        return (
-            _PublicationClassification.NOT_PUBLISHED,
-            target_state,
-            None,
-            None,
-            None,
-        )
-    if (
-        temp is not None
-        and target is not None
-        and _same_file_version(target, continuation.live_stat)
-    ):
-        return (
-            _PublicationClassification.NOT_PUBLISHED,
-            _TargetState.RETAINED_BEFORE_PUBLISH,
-            None,
-            _TempState.CHANGED_BEFORE_PUBLISH,
-            None,
-        )
-    if temp is None and target is not None:
-        return (
-            _PublicationClassification.CONFIRMED,
-            (
-                _TargetState.PUBLISHED
-                if _same_file_version(
-                    target,
-                    continuation.published_stat or continuation.prepared_stat,
-                )
-                else _TargetState.CHANGED_AFTER_PUBLISH
-            ),
-            None,
-            None,
-            None,
-        )
-    error = OperationFailure(
-        ExecutionReason.TARGET_MISSING if target is None else ExecutionReason.TARGET_DRIFT,
-        "cannot classify live versus published update during cancel settlement",
+        (
+            "cannot classify live versus published update during cancel settlement"
+            if isinstance(continuation, _UpdateContinuation)
+            else "cannot classify prepared versus published state during cancel settlement"
+        ),
     )
     return (
         _PublicationClassification.UNVERIFIED,
@@ -3678,35 +3623,18 @@ def _observe_publication(
                 target_root,
                 operation.target_rel_path,
             )
-            (
-                classification,
-                target_state,
-                target_error,
-                temp_state,
-                probe_error,
-            ) = (
-                _observe_update_publication(
-                    continuation,
-                    fs,
-                    xset,
-                    target_root,
-                )
-            )
-        else:
-            (
-                classification,
-                target_state,
-                target_error,
-                temp_state,
-                probe_error,
-            ) = (
-                _observe_new_publication(
-                    continuation,
-                    fs,
-                    xset,
-                    target_root,
-                )
-            )
+        (
+            classification,
+            target_state,
+            target_error,
+            temp_state,
+            probe_error,
+        ) = _observe_byte_publication(
+            continuation,
+            fs,
+            xset,
+            target_root,
+        )
     except Exception as error:
         return _PublicationVerdict(
             classification=_PublicationClassification.UNVERIFIED,

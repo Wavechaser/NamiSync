@@ -201,7 +201,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | NR-5 | Reuse local history item projections for hashes and readback columns. | NR-4 | Replay/corrupt-read/column/hash equality; no retained cache | complete |
 | NR-6 | Remove the three unused executor arguments and no-op exception wrapper. | NR-0 | Caller inspection, runtime/settlement/control tests and oracle repeat 3 | complete |
 | NR-7 | Share the MOVE/RECASE guarded rename sequence. | NR-6 | Separate operation traces/refusals, late recorder dispatch, oracle repeat 3 | complete |
-| NR-8 | Share publication observation with explicit new-file/update distinctions. | NR-7 | Independent observation matrix, settlement outcomes, oracle repeat 3 | pending |
+| NR-8 | Share publication observation with explicit new-file/update distinctions. | NR-7 | Independent observation matrix, settlement outcomes, oracle repeat 3 | complete |
 | NR-9 | Close combined reduction and evidence/documentation consistency. | NR-1–8 | Complete/headed suite, imports, unchanged oracle, control replay, final review | pending |
 
 These are semantic outcomes, not a list of every permitted edit. Exact caller
@@ -769,6 +769,25 @@ evidence and retained live-target meaning, then inspect source, traces and fault
 hits. A disagreement with baseline is a finding, never permission to change it.
 
 **Commit gate.** Shared gate complete; `refactor(executor): share publication observation mechanics`.
+
+**Execution evidence (2026-09-08).** Common publication observation retains
+explicit UPDATE intact/changed-temp rules, earlier backup probing, later
+MOVE_UPDATE composition and exact diagnostics. All 30 independent frozen rows
+and the backup-order witness pass; executor/workflows passed 1,182, imports 12,
+and the unchanged oracle 30 scenarios across three runs. All three fault controls
+hit retained assertions. A real wrapper relocation reached both wrappers and
+passed 31 matrix/order plus nine settlement cases. Evidence:
+`build/reduction-followup/18054ca/NR-8/20260908-163517/manifest.json`.
+
+Fresh GPT-5.6 Terra review matched every independent row and found no production
+blocker. The original 31-pass baseline log lacked source provenance; its result
+is historical only. Review reproduced 31 passes using the exact `18054ca` runtime
+and frozen candidate tests in `baseline-runtime-reproduction/` beside the
+manifest, with source hashes and actual import origins. This is explicitly a
+post-implementation reproduction, not invented provenance for the earlier run.
+Protected 11 remain exact. Four pure fixtures match filtered Git content; one
+checkout has a disclosed EOL-only raw fixture variance. No assertion retirement,
+verdict/reducer redesign or shelved cleanup entered the change.
 
 ### NR-9 — Integrated closure
 
