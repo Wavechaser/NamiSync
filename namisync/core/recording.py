@@ -191,6 +191,8 @@ class InventoryCommand:
         _require_utc(self.observed_at, "observed_at")
         if type(self.online) is not bool:
             raise TypeError("inventory online state must be a bool")
+
+
 class InventoryVisibilityAction(StrEnum):
     ACKNOWLEDGE = "acknowledge"
     RESTORE = "restore"
