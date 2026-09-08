@@ -202,6 +202,16 @@ each admissible reliable body. Distinct result-item identity and semantic hashes
 remain separate work and are excluded from that count. This is structural
 evidence, not a timing or resource-bound claim.
 
+Result-item projection reuse is likewise local to each admission or readback
+call. Admission hashes the item body already present in the validated envelope
+projection. Readback decodes the retained envelope into its typed canonical
+item once, then reuses that item's complete projection for its semantic hash and
+for the narrower SQL-column projection. The envelope payload, complete item,
+item identity, and disposition-bound receipt remain separate hashes. Detail and
+recording fields omitted from SQL columns remain part of the complete item hash.
+Window commit still projects its owned pending envelope independently; no item
+projection is retained in `_PendingEvent` or cached across calls.
+
 Only hashes for the current window are retained in memory. The observer keeps
 one scalar highest accepted sequence. A sequence within the pending window is
 verified from that bounded map; an older sequence is resolved with an indexed

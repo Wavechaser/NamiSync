@@ -198,7 +198,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | NR-2 | Use one normalized Progress snapshot at runner emission. | NR-0 | Accepted-emission fallback and control/field equivalence | complete |
 | NR-3 | Remove repeated scan element certification after full initial validation. | NR-0 | Constructor/transfer/limit/recorder witnesses and unchanged scan payloads | complete |
 | NR-4 | Persist history's already-validated canonical envelope bytes. | NR-0 | Byte equivalence, invalid-before-mutation, canonical byte limits | complete |
-| NR-5 | Reuse local history item projections for hashes and readback columns. | NR-4 | Replay/corrupt-read/column/hash equality; no retained cache | pending |
+| NR-5 | Reuse local history item projections for hashes and readback columns. | NR-4 | Replay/corrupt-read/column/hash equality; no retained cache | complete |
 | NR-6 | Remove the three unused executor arguments and no-op exception wrapper. | NR-0 | Caller inspection, runtime/settlement/control tests and oracle repeat 3 | complete |
 | NR-7 | Share the MOVE/RECASE guarded rename sequence. | NR-6 | Separate operation traces/refusals, late recorder dispatch, oracle repeat 3 | complete |
 | NR-8 | Share publication observation with explicit new-file/update distinctions. | NR-7 | Independent observation matrix, settlement outcomes, oracle repeat 3 | pending |
@@ -604,6 +604,21 @@ changed payload, including rejected receipts. Inspect readback normalization and
 the unchanged pending object fields.
 
 **Commit gate.** Shared gate complete; `refactor(history): reuse local item projections`.
+
+**Execution evidence (2026-09-08).** Admission hashes its already-validated body;
+readback projects decoded typed truth once for semantic hashes and SQL columns.
+The separate commit-time projection remains, with no new pending graph or cache.
+Five independent item rows count one projection at each distinct call boundary
+and preserve exact bytes, hashes, receipts and columns. Existing replay/conflict
+and corruption assertions remain. Focused history passed 144; the prescribed
+neighborhood passed 2,609; all 12 import contracts passed. Both deliberate faults
+hit their retained assertions; a real equal-decoded-item reconstruction passed
+17 selected cases. Evidence:
+`build/reduction-followup/b27b379/NR-5/20260908-164017/manifest.json`.
+Fresh GPT-5.6 Terra review passed, verifying runtime counters, source/control
+hashes, separate hash inputs, no retained graph and all evidence links. Protected
+11 and four pure fixtures match NR-0; the fixture-bearing consumer matches its
+authorized NR-4 base. Earlier harness-matching attempts are retained and excluded.
 
 ### NR-6 — Unused executor arguments and wrapper
 

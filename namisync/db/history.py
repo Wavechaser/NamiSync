@@ -961,7 +961,7 @@ class HistoryObserver:
         item_payload_hash = (
             None
             if not isinstance(envelope.body, ResultItem)
-            else _hash(result_item_to_dict(envelope.body))
+            else _hash(projection["body"])
         )
         prior = self._event_hashes.get(envelope.seq)
         if prior is not None:
@@ -1393,9 +1393,10 @@ class HistoryObserver:
                 raise TokenConflictError("finalized history cannot accept new events")
 
             envelope = event.envelope
-            projection = (
+            item_projection = (
                 None if envelope is None else _item_projection(envelope.body)
             )
+            projection = _item_column_projection(item_projection)
             item_order = None
             item_identity_hash = event.item_identity_hash
             item_payload_hash = event.item_payload_hash
@@ -2082,7 +2083,14 @@ def _item_identity_hash(item: ResultItem) -> bytes:
 def _item_projection(body: object) -> dict[str, object] | None:
     if not isinstance(body, ResultItem):
         return None
-    data = result_item_to_dict(body)
+    return result_item_to_dict(body)
+
+
+def _item_column_projection(
+    data: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    if data is None:
+        return None
     return {
         "item_type": str(data["item_type"]),
         "phase": str(data["phase"]),
@@ -2434,7 +2442,8 @@ def _history_event(
         or envelope.at != event_at
     ):
         raise HistoryIntegrityError("history event columns disagree with payload")
-    projection = _item_projection(envelope.body)
+    item_projection = _item_projection(envelope.body)
+    projection = _item_column_projection(item_projection)
     expected = (
         {
             "item_type": row["item_type"],
@@ -2456,8 +2465,8 @@ def _history_event(
         raise HistoryIntegrityError("history item columns disagree with payload")
     expected_item_hash = (
         None
-        if not isinstance(envelope.body, ResultItem)
-        else _hash(result_item_to_dict(envelope.body))
+        if item_projection is None
+        else _hash(item_projection)
     )
     if item_payload_hash != expected_item_hash:
         raise HistoryIntegrityError("history item payload hash disagrees")
