@@ -1491,7 +1491,7 @@ def _execute_operation(
     if operation.kind is OperationKind.DELETE:
         return _delete(operation, xset, recorder, fs, target_root, state)
     if operation.kind is OperationKind.NOOP:
-        return _noop(operation, recorder, fs, source_root, target_root, state)
+        return _noop(operation, recorder, fs, source_root, target_root)
     raise OperationFailure(
         ExecutionReason.IO_ERROR, f"unsupported operation kind: {operation.kind}"
     )
@@ -1541,70 +1541,67 @@ def _prepare_copy(
             cause=error,
         ) from error
     state.effects.claim_temporary_path(operation.op_id, temp)
-    try:
-        reviewed_size = operation.source_expected.size
-        chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
-        _revalidate_source_root(fs, xset, source_root)
-        with fs.open_source(source) as reader:
-            _resolve_target_path(
-                fs,
-                xset,
-                target_root,
-                temp,
-                must_exist=False,
-            )
-            with fs.create_temp(
-                temp, allocation_size=_allocation_size(reviewed_size)
-            ) as writer:
-                progress.begin_byte_stream(operation)
-                digest = policies.copy_backend.copy(
-                    reader,
-                    writer,
-                    chunk_size=chunk_size,
-                    checkpoint=ctx.checkpoint,
-                    on_chunk=progress.copied,
-                )
-        intended = operation.intended or operation.source_expected
-        if digest.size != reviewed_size:
-            raise OperationFailure(
-                ExecutionReason.SOURCE_DRIFT,
-                "source byte count changed during copy",
-            )
-        try:
-            _revalidate_source_root(fs, xset, source_root)
-            _resolve_target_path(
-                fs,
-                xset,
-                target_root,
-                temp,
-                must_exist=True,
-            )
-            finalized = fs.finalize_temp(
-                temp,
-                intended,
-                preserve_created=xset.plan.preservation.preserve_created,
-                acl_source=source if xset.plan.preservation.preserve_acl else None,
-            )
-        except _SecurityCopyFailure as error:
-            raise OperationFailure(
-                ExecutionReason.ACL_COPY_FAILED,
-                "security descriptor copy failed before publish",
-                cause=error.__cause__ if isinstance(error.__cause__, Exception) else error,
-            ) from error
-        ctx.checkpoint()
-        _revalidate_source_root(fs, xset, source_root)
-        _guard_present(
+    reviewed_size = operation.source_expected.size
+    chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
+    _revalidate_source_root(fs, xset, source_root)
+    with fs.open_source(source) as reader:
+        _resolve_target_path(
             fs,
-            source_root,
-            operation.source_rel_path,
-            operation.source_expected,
-            missing=ExecutionReason.SOURCE_MISSING,
-            drift=ExecutionReason.SOURCE_DRIFT,
+            xset,
+            target_root,
+            temp,
+            must_exist=False,
         )
-        _guard_expected_target(fs, target_root, operation)
-        return _PreparedCopy(source, target, temp, digest, intended, finalized)
-    except BaseException:
-        raise
+        with fs.create_temp(
+            temp, allocation_size=_allocation_size(reviewed_size)
+        ) as writer:
+            progress.begin_byte_stream(operation)
+            digest = policies.copy_backend.copy(
+                reader,
+                writer,
+                chunk_size=chunk_size,
+                checkpoint=ctx.checkpoint,
+                on_chunk=progress.copied,
+            )
+    intended = operation.intended or operation.source_expected
+    if digest.size != reviewed_size:
+        raise OperationFailure(
+            ExecutionReason.SOURCE_DRIFT,
+            "source byte count changed during copy",
+        )
+    try:
+        _revalidate_source_root(fs, xset, source_root)
+        _resolve_target_path(
+            fs,
+            xset,
+            target_root,
+            temp,
+            must_exist=True,
+        )
+        finalized = fs.finalize_temp(
+            temp,
+            intended,
+            preserve_created=xset.plan.preservation.preserve_created,
+            acl_source=source if xset.plan.preservation.preserve_acl else None,
+        )
+    except _SecurityCopyFailure as error:
+        raise OperationFailure(
+            ExecutionReason.ACL_COPY_FAILED,
+            "security descriptor copy failed before publish",
+            cause=error.__cause__ if isinstance(error.__cause__, Exception) else error,
+        ) from error
+    ctx.checkpoint()
+    _revalidate_source_root(fs, xset, source_root)
+    _guard_present(
+        fs,
+        source_root,
+        operation.source_rel_path,
+        operation.source_expected,
+        missing=ExecutionReason.SOURCE_MISSING,
+        drift=ExecutionReason.SOURCE_DRIFT,
+    )
+    _guard_expected_target(fs, target_root, operation)
+    return _PreparedCopy(source, target, temp, digest, intended, finalized)
 
 
 def _published_copy_stat(
@@ -1710,7 +1707,6 @@ def _complete_published_byte_operation(
     xset: ExecutionSet,
     policies: ExecutorPolicies,
     fs: ExecutorFileSystem,
-    state: _ExecutionState,
     target_root: Path,
     *,
     resumed_published: bool,
@@ -1754,7 +1750,6 @@ def _complete_published_byte_operation(
         )
     assert continuation.attestation is not None
     record_observation = _record(
-        continuation.detail,
         lambda: record_published(continuation.attestation),
         identity_required=True,
     )
@@ -1998,7 +1993,6 @@ def _copy(
         xset,
         policies,
         fs,
-        state,
         target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: (prepared.target.parent,),
@@ -2322,7 +2316,6 @@ def _update(
         xset,
         policies,
         fs,
-        state,
         target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: _finish_update_filesystem(
@@ -2407,7 +2400,6 @@ def _move(
         "moved target is not the reviewed target version",
     )
     record_observation = _record(
-        detail,
         lambda: recorder.record_moved(operation.op_id, moved),
     )
     return _Settled(
@@ -2493,7 +2485,6 @@ def _recase(
         "recased target is not the reviewed target version",
     )
     record_observation = _record(
-        detail,
         lambda: recorder.record_recased(operation.op_id, recased),
     )
     return _Settled(
@@ -2700,7 +2691,6 @@ def _move_update(
         xset,
         policies,
         fs,
-        state,
         target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: _finish_move_update_filesystem(
@@ -2789,7 +2779,6 @@ def _trash(
     )
     trash_relative = str(destination.relative_to(target_root)).replace(os.sep, "\\")
     record_observation = _record(
-        detail,
         lambda: recorder.record_trashed(operation.op_id, trash_relative, moved),
     )
     return _Settled(
@@ -2867,7 +2856,6 @@ def _delete(
                 )
     detail = _durability_detail(fs, target.parent)
     record_observation = _record(
-        detail,
         lambda: recorder.record_deleted(operation.op_id, operation.target_expected),
     )
     return _Settled(
@@ -2884,7 +2872,6 @@ def _noop(
     fs: ExecutorFileSystem,
     source_root: Path,
     target_root: Path,
-    state: _ExecutionState,
 ) -> _Settled:
     if (
         operation.source_rel_path is None
@@ -2912,7 +2899,6 @@ def _noop(
     )
     detail: dict[str, object] = {}
     record_observation = _record(
-        detail,
         lambda: recorder.record_noop(
             operation.op_id,
             _normalized_live_stat(source, operation.source_expected),
@@ -3019,7 +3005,6 @@ def _finalize_directories(
                     xset.plan.target_profile.stable_file_identity,
                 )
                 record_observation = _record(
-                    detail,
                     lambda operation=operation, actual=actual: recorder.record_mkdir(
                         operation.op_id, actual
                     ),
@@ -4860,7 +4845,6 @@ def _guard_attestation_size(digest: CopyDigest, subject: FileStat) -> None:
 
 
 def _record(
-    detail: dict[str, object],
     command: Callable[[], object],
     *,
     identity_required: bool = False,

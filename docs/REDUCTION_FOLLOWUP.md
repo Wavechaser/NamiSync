@@ -199,7 +199,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | NR-3 | Remove repeated scan element certification after full initial validation. | NR-0 | Constructor/transfer/limit/recorder witnesses and unchanged scan payloads | pending |
 | NR-4 | Persist history's already-validated canonical envelope bytes. | NR-0 | Byte equivalence, invalid-before-mutation, canonical byte limits | pending |
 | NR-5 | Reuse local history item projections for hashes and readback columns. | NR-4 | Replay/corrupt-read/column/hash equality; no retained cache | pending |
-| NR-6 | Remove the three unused executor arguments and no-op exception wrapper. | NR-0 | Caller inspection, runtime/settlement/control tests and oracle repeat 3 | pending |
+| NR-6 | Remove the three unused executor arguments and no-op exception wrapper. | NR-0 | Caller inspection, runtime/settlement/control tests and oracle repeat 3 | complete |
 | NR-7 | Share the MOVE/RECASE guarded rename sequence. | NR-6 | Separate operation traces/refusals, late recorder dispatch, oracle repeat 3 | pending |
 | NR-8 | Share publication observation with explicit new-file/update distinctions. | NR-7 | Independent observation matrix, settlement outcomes, oracle repeat 3 | pending |
 | NR-9 | Close combined reduction and evidence/documentation consistency. | NR-1–8 | Complete/headed suite, imports, unchanged oracle, control replay, final review | pending |
@@ -572,6 +572,19 @@ call site; verify removed arguments were side-effect-free values and only the
 outer re-raise was removed. Inspect oracle output, not merely its exit code.
 
 **Commit gate.** Shared gate complete; `refactor(executor): remove unused runtime plumbing`.
+
+**Execution evidence (2026-09-08).** Only `runtime.py` changed: the three named
+parameters/call arguments and outer no-op rethrow. Executor/workflows passed
+1,145 cases; the prechange harmless control passed the same 1,145; the unchanged
+oracle passed 30 scenarios across three runs. Evidence and exact import/source
+provenance are in
+`build/reduction-followup/7fe09b8/NR-6/20260908-151000/manifest.json`.
+Fresh GPT-5.6 Sol review passed after explicit runtime metadata was added.
+All protected/fixture paths remain unchanged. EXECUTOR already describes the
+retained semantics, so no textual module-doc edit was needed. No test assertions
+were removed. Initial temporary-directory denial is retained as environment-only
+evidence. NR-9's harmless replay reverses only this plumbing; remap overlapping
+rename call-site hunks narrowly if NR-7 prevents direct reverse-patch application.
 
 ### NR-7 — Guarded MOVE/RECASE rename
 
