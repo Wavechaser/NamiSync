@@ -477,7 +477,11 @@ item-free `TerminalSummary` through the sole domain-to-v5 projector,
 rejects a reliable envelope over 1,048,576 bytes before sequence, queue,
 replay, audit, or subscriber mutation. Persisted readback separately uses
 `validate_event_v5_envelope` as the exact adversarial decoder for keys, closed
-primitive variants, cross-field invariants, and canonical scalar text.
+primitive variants, cross-field invariants, and canonical scalar text. History
+admission uses `validate_and_encode_event_v5_envelope` to apply that same exact
+validation and receive the checked canonical bytes in one operation. The public
+validator still returns `None` and retains Progress's exemption from reliable
+canonical-byte encoding and its byte ceiling.
 
 Supported event producers and persisted event decoding use the exact ASCII
 grammar

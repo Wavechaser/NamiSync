@@ -14,7 +14,7 @@
 ## Scope and decisions
 
 Status: implementation authorized 2026-09-08. NR-0 qualification is complete;
-later implementation gates remain pending. The user authorized GPT-5.6 agent
+implementation progress is recorded in the register below. The user authorized GPT-5.6 agent
 implementation, fresh adversarial reviewers, independent atomic commits, and
 isolated parallel work where dependencies permit. This is the maintenance subregister linked by
 [M1_PLAN.md](M1_PLAN.md), not another M1 product roadmap. The closed PR-0–PR-9
@@ -197,7 +197,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | NR-1 | Reuse exact immutable file-stat graphs without redundant construction. | NR-0 | Initial refusals, independent fact tuples, stat consumer tests, construction witness | complete |
 | NR-2 | Use one normalized Progress snapshot at runner emission. | NR-0 | Accepted-emission fallback and control/field equivalence | complete |
 | NR-3 | Remove repeated scan element certification after full initial validation. | NR-0 | Constructor/transfer/limit/recorder witnesses and unchanged scan payloads | pending |
-| NR-4 | Persist history's already-validated canonical envelope bytes. | NR-0 | Byte equivalence, invalid-before-mutation, canonical byte limits | pending |
+| NR-4 | Persist history's already-validated canonical envelope bytes. | NR-0 | Byte equivalence, invalid-before-mutation, canonical byte limits | complete |
 | NR-5 | Reuse local history item projections for hashes and readback columns. | NR-4 | Replay/corrupt-read/column/hash equality; no retained cache | pending |
 | NR-6 | Remove the three unused executor arguments and no-op exception wrapper. | NR-0 | Caller inspection, runtime/settlement/control tests and oracle repeat 3 | complete |
 | NR-7 | Share the MOVE/RECASE guarded rename sequence. | NR-6 | Separate operation traces/refusals, late recorder dispatch, oracle repeat 3 | pending |
@@ -536,6 +536,20 @@ callers, including Progress and persisted decode, for compatibility.
 
 **Commit gate.** Shared gate complete; `refactor(history): reuse validated envelope bytes`.
 
+**Execution evidence (2026-09-08).** The checked core encoder shares exact
+validation and canonical encoding; the public validator retains its `None`
+return, refusal ownership, and Progress encoding exemption. History validates
+before any queue/flush mutation and reuses returned bytes for envelope size,
+digest and retained JSON. Dispatcher encoding and item projections are unchanged.
+Focused verification passed 409; the neighborhood passed 2,960 with one existing
+WinError 1314 skip; all 12 import contracts passed. Three actual fault variations
+were detected and harmless field insertion-order variation passed. Evidence:
+`build/reduction-followup/00061d7/NR-4/20260908-155455/manifest.json`.
+Fresh GPT-5.6 Terra review passed. The final logs explicitly capture native output;
+empty transcript attempts are preserved and excluded. Protected 11 and four pure
+fixture files match. `test_event_v5_consumers.py` adds encoder assertions/routes
+as predeclared; its existing expected literal data and fixture sources stay intact.
+
 ### NR-5 — Local item projection reuse
 
 **Objective.** Remove repeated projection within history admission/readback calls.
@@ -769,15 +783,18 @@ and protected authorities are untouched; verify evidence provenance directly.
 
 ## Resumption block
 
-- Current state: execution authorized; NR-0 baseline and disposition qualification
-  complete with separate GPT-5.6 agents and a fresh reviewer. Product edits
-  have not begun. Discovery's 25-pass result is historical evidence only.
+- Current state: execution is in progress with isolated GPT-5.6 builders and
+  fresh reviewers. The register and execution receipts record completed outcomes;
+  the final integrated gate remains pending. Discovery's 25-pass result is
+  historical evidence only.
 - Source base: `50bc05ebab57da724faa11ccf4f8882cdcb6a291`. Existing branch at
   creation: `milestone1-anthony`. Recheck HEAD/dirty files and qualify actual
-  product imports before running NR-0. Use a task branch with `codex/` prefix
-  when implementation is separately requested; do not commit unrelated changes.
-- Next action: launch isolated NR-1, NR-2, and NR-6 checkpoint builders from the
-  committed NR-0 baseline under root coordination.
+  product imports for every candidate. Task branches use `codex/` prefixes;
+  do not commit unrelated changes. `build/reduction-followup/integration.json`
+  records temporary branch/checkouts and their integration commits.
+- Next action: finish pending register rows in dependency order, give each a
+  fresh review and atomic commit, then complete NR-9 and account for temporary
+  checkouts before cleanup.
 - Evidence already present: prior PR-9 integrated evidence under
   `build/production-reduction/pr9/`; protected-input list under
   `build/production-reduction/40fd8a5/protected/authority-inputs.json`; this plan's

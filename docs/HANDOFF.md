@@ -2,67 +2,61 @@
 
 ## Current work
 
-Created docs/REDUCTION_FOLLOWUP.md using the user-invoked plan-work skill.
-The user has now authorized implementation with GPT-5.6 builders, fresh
-adversarial reviewers, and independent atomic commits. The user accepted narrow immutable/scan/history
-reductions and restricted executor work to MOVE/RECASE rename sharing, common
-new-file/update publication observation, and unused arguments/no-op wrappers.
-Recording tails, pause/cancel block merging, mutation-verdict compression and
-legacy recording-key pops are shelved. NR-0 evidence passed fresh review;
-product edits have not begun.
+The user authorized implementation of docs/REDUCTION_FOLLOWUP.md with GPT-5.6
+builders, fresh adversarial reviewers, and independent atomic commits. Root
+owns integration and documentation; builders work in isolated checkouts.
+The plan register and execution receipts are the completion authority.
 
-RF-E/RF-X discovery dispositions moved from M1_PLAN.md into the new plan.
-M1_PLAN now carries only its maintenance-subregister link. README's active index
-and the existing CHANGELOG task were updated. NR-0 baseline and finite assertion
-qualification precede all product edits. See the plan's resumption block.
+NR-0, NR-1, NR-2 and NR-6 are integrated on milestone1-anthony. This checkpoint
+adds NR-4 validated history encoding after fresh review. NR-3 and NR-7 are in
+verification/review; NR-5 follows NR-4 and NR-8 follows NR-7. NR-9 remains required.
 
-## Plan decisions
+Recording tails, pause/cancel blocks, mutation-verdict constructors, legacy key
+pops, native/pipeline changes, schemas, and unrelated cleanup remain shelved.
+No supported product defect or mandatory stop consequence has been accepted.
 
-- Immutable scope is the demonstrated FileStat graph and duplicate runner
-  Progress snapshot. Initial validation, exact adoption, progress acceptance,
-  mutable continuations and other value families remain protected.
-- Scan scope removes repeated graph certification, preserving constructor
-  validation, raw limits, root/scope checks, scalar command checks and DB truth.
-- History scope reuses checked bytes and local projections without cross-owner
-  caches, hash/schema/wire changes or validation removal.
-- Executor scope preserves operation distinctions, diagnostic/recording order,
-  filesystem probe order, settlement policy and protected oracle authority.
-- The plan classifies test assertion retirements separately from regressions,
-  requires independent expectations and finite fault/harmless controls, and
-  identifies extra publication-observation characterization plus conditional
-  gap-filling tests. It sets no test-deletion/LOC target or performance SLO.
+## Verification and dispositions
 
-## Verification and repository state
+Baseline: 50bc05ebab57da724faa11ccf4f8882cdcb6a291. NR-0 passed 4,741 tests with
+four exact WinError 1314 capability skips, all 28 headed cases, 12 import
+contracts and 30 oracle scenarios across three identical runs.
+Evidence is under build/reduction-followup/; each checkpoint receipt in the plan
+links its manifest, raw logs, assertion dispositions and controls.
 
-NR-0 evidence lives under build/reduction-followup/50bc05e/NR-0/.
-The 20260908-144229 run records two complete passes of 4,741 tests with four
-documented WinError 1314 capability skips, all 28 headed tests passing,
-12 import contracts kept, and 30 oracle scenarios passing three identical runs.
-All 11 protected paths and committed identity/event-v5 fixtures match HEAD
-filtered content; raw hashes and actual interpreter/module origins are recorded.
-The dispositions-20260908-145100 directory holds the finite assertion map and
-30 independent literal publication expectations fixed before implementation.
+NR-1 preserves constructor/type/fact semantics while adopting exact immutable
+stats. Two omitted old assertions were classified explicitly: fresh stat identity
+retired as representation-only; a reflective mutation fixture was replaced with
+supported candidate replacement, retaining verifier refusal and terminal truth.
+NR-2 retires only named reflective Progress protection and preserves first
+normalization, every field and accepted-emission fallback. NR-6 removes only
+the three unused parameters and outer no-op rethrow. NR-4 preserves validator
+Progress behavior and validates before history mutation, reusing checked bytes.
+Its neighborhood passed 2,960 with one baseline capability skip; focused 409,
+imports 12, and all declared controls passed with fresh review.
 
-Plan structure, local links and documentation diff are checked at completion.
-No product/test code, protected oracle or schema changed. Work is uncommitted.
-The user-owned root reports were already absent when execution began; do not
-restore them. Preserve prior ignored worktrees and evidence.
+Protected 11 files remain exact. Four pure identity/event fixture files remain
+exact; NR-4 extends assertions in the fixture-bearing consumer test without
+changing expected literal data. Initial failed/lost logging attempts are kept
+separately and excluded; final gate evidence uses captured native output.
+Every control must show a real variation, intended interception and the retained
+assertion it exercises. No net test/LOC or timing target is being claimed.
 
-## Continuing context
+## Resumption and preservation
 
-HEAD at planning: 50bc05ebab57da724faa11ccf4f8882cdcb6a291,
-branch milestone1-anthony. PR-0 through PR-9 remains closed;
-08572b7 is that pass's final product commit. Prior integrated evidence remains
-under build/production-reduction/pr9/. Schema versions are history 7,
-shared data epoch 7, ledger 4, with the existing manual reset contract.
+Read the plan register, receipts and build/reduction-followup/integration.json
+for current branches and integration commits. Verify actual interpreter/module
+origins in each checkout; the shared interpreter's editable install must not
+redirect tests. Qualified Python/Node paths and commands are in the plan.
+Native test runs require usable Windows temporary storage; poll returned tool
+sessions to completion and capture stdout/stderr explicitly.
 
-Qualified prior Python and Node paths and exact verification commands are in
-REDUCTION_FOLLOWUP.md. Recheck actual interpreter/import origins and dirty state
-in every isolated checkout; do not let the shared interpreter's editable install
-redirect tests to another checkout. The new run
-layout is build/reduction-followup/<base>/<checkpoint>/<run>/, governed by the
-plan's evidence and cleanup conventions. NR-0 is qualified; launch independent
-NR-1, NR-2, and NR-6 builders from its committed evidence index.
-Root owns integration and register updates. Account for and remove task-created
-worktrees/refs at NR-9. Block only affected/dependent work, finish independent
-lanes, then preserve blocked changes under AGENTS recovery rules.
+Finish pending rows with fresh reviews and independent commits, then run the
+complete/headed suite, imports, unchanged oracle repeat three, all integrated
+controls, and final adversarial review. NR-9 must account for all task-created
+checkouts/refs before removing them. NR-6 reverse-patch control may need narrow
+remapping after shared rename; never restore an old runtime wholesale.
+
+Preserve prior ignored worktrees/evidence and unrelated state. The user-owned
+root reports were already absent when execution began; do not restore them.
+Block only an affected/dependent lane, finish independent work, then preserve
+blocked changes using AGENTS recovery rules if necessary.

@@ -21,10 +21,12 @@ from _event_v5_fixtures import (
     review_limit_terminal_summary,
     terminal_summary,
 )
+import namisync.core.event_v5 as event_v5_module
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.event_v5 import (
     EVENT_V5_SCHEMA_VERSION,
     MAX_RELIABLE_EVENT_CANONICAL_BYTES,
+    validate_and_encode_event_v5_envelope,
     validate_event_v5_envelope,
 )
 from namisync.core.events import (
@@ -60,12 +62,24 @@ PROJECT_ROOT = Path(__file__).parents[2]
 
 @pytest.mark.parametrize("body_type", tuple(bodies()))
 def test_dormant_v5_consumers_accept_each_exact_body(body_type: str) -> None:
-    validate_event_v5_envelope(envelope(body_type))
+    assert validate_event_v5_envelope(envelope(body_type)) is None
 
 
 def test_dormant_v5_consumer_accepts_exact_review_limit_terminal() -> None:
     body = {"result": review_limit_terminal_summary()}
-    validate_event_v5_envelope(envelope("Terminal", body=body))
+    assert validate_event_v5_envelope(envelope("Terminal", body=body)) is None
+
+
+def test_public_validator_keeps_progress_canonical_encoding_exemption(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        event_v5_module,
+        "_encode_event_v5_envelope",
+        lambda *_args, **_kwargs: pytest.fail("Progress reached canonical encoding"),
+    )
+
+    assert validate_event_v5_envelope(envelope("Progress")) is None
 
 
 def test_canonical_v5_projection_preserves_exact_literal_body_bytes() -> None:
@@ -88,6 +102,29 @@ def test_canonical_v5_projection_preserves_exact_literal_body_bytes() -> None:
 
 
 @pytest.mark.parametrize(
+    "name",
+    (*bodies(), "Terminal.review-limit"),
+)
+def test_validate_and_encode_v5_matches_independent_literal_bytes(name: str) -> None:
+    expected = (
+        envelope(
+            "Terminal",
+            body={"result": review_limit_terminal_summary()},
+        )
+        if name == "Terminal.review-limit"
+        else envelope(name)
+    )
+    expected_bytes = json.dumps(
+        expected,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+    assert validate_and_encode_event_v5_envelope(expected) == expected_bytes
+
+
+@pytest.mark.parametrize(
     ("field", "invalid"),
     (
         ("schema_version", 4),
@@ -106,8 +143,12 @@ def test_dormant_v5_envelope_rejects_wrong_epoch_and_scalar_shapes(
 ) -> None:
     value = envelope()
     value[field] = invalid
-    with pytest.raises((TypeError, ValueError)):
-        validate_event_v5_envelope(value)
+    for route in (
+        validate_event_v5_envelope,
+        validate_and_encode_event_v5_envelope,
+    ):
+        with pytest.raises((TypeError, ValueError)):
+            route(deepcopy(value))
 
 
 def test_v5_envelope_and_decoder_require_an_exact_plain_shape() -> None:
@@ -116,8 +157,12 @@ def test_v5_envelope_and_decoder_require_an_exact_plain_shape() -> None:
     extra = envelope()
     extra["legacy"] = True
     for value in (missing, extra, tuple(envelope().items())):
-        with pytest.raises((TypeError, ValueError)):
-            validate_event_v5_envelope(value)
+        for route in (
+            validate_event_v5_envelope,
+            validate_and_encode_event_v5_envelope,
+        ):
+            with pytest.raises((TypeError, ValueError)):
+                route(deepcopy(value))
 
     with pytest.raises(ValueError, match="event envelope"):
         envelope_from_dict(extra)
@@ -138,7 +183,11 @@ def test_event_scalar64_routes_preserve_owner_error_family(
 ) -> None:
     value = envelope("Progress")
     value["body"]["bytes_done"] = invalid  # type: ignore[index]
-    for route in (validate_event_v5_envelope, envelope_from_dict):
+    for route in (
+        validate_event_v5_envelope,
+        validate_and_encode_event_v5_envelope,
+        envelope_from_dict,
+    ):
         with pytest.raises(error_type) as raised:
             route(deepcopy(value))
         assert type(raised.value) is error_type
@@ -463,8 +512,9 @@ def test_live_python_route_refuses_each_non_v5_version_class(
 ) -> None:
     value = envelope("PhaseChanged")
     value["schema_version"] = version
-    with pytest.raises((TypeError, ValueError), match="schema version|exactly 5"):
-        envelope_from_dict(value)
+    for route in (validate_and_encode_event_v5_envelope, envelope_from_dict):
+        with pytest.raises((TypeError, ValueError), match="schema version|exactly 5"):
+            route(deepcopy(value))
 
 
 def test_dormant_reliable_ceiling_accepts_the_exact_bound_and_refuses_one_more() -> None:
@@ -479,11 +529,14 @@ def test_dormant_reliable_ceiling_accepts_the_exact_bound_and_refuses_one_more()
 
     assert len(encoded) == MAX_RELIABLE_EVENT_CANONICAL_BYTES
     validate_event_v5_envelope(deepcopy(value))
+    assert validate_and_encode_event_v5_envelope(deepcopy(value)) == encoded
 
     oversized = deepcopy(value)
     oversized["body"]["path"] += "x"  # type: ignore[index,operator]
     with pytest.raises(ValueError, match="canonical byte ceiling"):
         validate_event_v5_envelope(oversized)
+    with pytest.raises(ValueError, match="canonical byte ceiling"):
+        validate_and_encode_event_v5_envelope(oversized)
 
 
 @pytest.mark.parametrize(
@@ -674,8 +727,17 @@ def test_reliable_v5_canonical_bytes_require_real_unicode(
         event["body"]["detail"] = {"message": value}
     else:
         event["body"][field] = value
-    with nullcontext() if accepted else pytest.raises(ValueError, match="valid Unicode"):
-        validate_event_v5_envelope(event)
+    for route in (
+        validate_event_v5_envelope,
+        validate_and_encode_event_v5_envelope,
+    ):
+        context = (
+            nullcontext()
+            if accepted
+            else pytest.raises(ValueError, match="valid Unicode")
+        )
+        with context:
+            route(deepcopy(event))
 
 
 @pytest.mark.parametrize(

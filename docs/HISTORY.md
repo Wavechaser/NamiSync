@@ -14,12 +14,11 @@ History v7 accepts only the coordinated exact core-event-v5 receipts, including
 duplicate and bounded rejection receipts; it has no mixed-version page or
 compatibility decoder. The observer stores the canonical envelope and matching
 typed projection from the same admitted snapshot. At admission it projects an
-envelope once, validates that exact projection against the retained v5
-persistence contract, and only then performs the observer's persisted-byte
-serialization, hashing, flushing, or queue mutation. A malformed projection
-therefore breaks the audit prefix before any event row, receipt, chain, or
-watermark mutation. `BRIDGE.md` owns the exact event/result shapes, bounds,
-and codec rules.
+envelope once, asks core to validate and canonically encode that exact projection,
+and reuses the returned checked bytes for size, payload hash, and retained JSON
+before any flush or queue mutation. A malformed projection therefore breaks the
+audit prefix before any event row, receipt, chain, or watermark mutation.
+`BRIDGE.md` owns the exact event/result shapes, bounds, and codec rules.
 
 Reliable item rows retain their accepted recording and omission facts as part
 of receipt identity. Once committed, an item receipt is immutable: later task,
@@ -194,6 +193,14 @@ refuses before observation or persistence. Optional item diagnostics already
 omit invalid Unicode and count the omission before serialization; strict
 encoding does not turn those omissions into lost result items. Event and
 recording-issue readback retains its existing typed Unicode validation.
+
+The source derivation for envelope work is local and finite:
+`HistoryObserver._admit` calls the core checked encoder once, then derives the
+envelope size, payload hash, and retained text from that one result. The
+parameterized history fixture witness counts one checked-envelope encoding for
+each admissible reliable body. Distinct result-item identity and semantic hashes
+remain separate work and are excluded from that count. This is structural
+evidence, not a timing or resource-bound claim.
 
 Only hashes for the current window are retained in memory. The observer keeps
 one scalar highest accepted sequence. A sequence within the pending window is

@@ -237,6 +237,24 @@ _DETAIL_KEYS = frozenset(
 def validate_event_v5_envelope(value: object) -> None:
     """Validate one exact core-event v5 persistence envelope."""
 
+    event, body_type = _validate_event_v5_envelope(value)
+    if body_type in _RELIABLE_BODY_TYPES:
+        _encode_event_v5_envelope(event, reliable=True)
+
+
+def validate_and_encode_event_v5_envelope(value: object) -> bytes:
+    """Validate one exact v5 envelope and return its canonical bytes."""
+
+    event, body_type = _validate_event_v5_envelope(value)
+    return _encode_event_v5_envelope(
+        event,
+        reliable=body_type in _RELIABLE_BODY_TYPES,
+    )
+
+
+def _validate_event_v5_envelope(
+    value: object,
+) -> tuple[dict[str, object], str]:
     event = _exact_object(value, _ENVELOPE_KEYS, "event envelope")
     _hex_id(event["session_id"], "event session_id")
     sequence = _positive_safe_int(event["seq"], "event sequence")
@@ -249,18 +267,25 @@ def validate_event_v5_envelope(value: object) -> None:
         "event body_type",
     )
     _validate_body(body_type, event["body"], sequence)
-    if body_type in _RELIABLE_BODY_TYPES:
-        try:
-            encoded = json.dumps(
-                event,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode("utf-8")
-        except (TypeError, UnicodeEncodeError, ValueError) as error:
-            raise ValueError("reliable event must be canonical JSON") from error
-        if len(encoded) > MAX_RELIABLE_EVENT_CANONICAL_BYTES:
-            raise ValueError("reliable event exceeds the canonical byte ceiling")
+    return event, body_type
+
+
+def _encode_event_v5_envelope(
+    event: dict[str, object], *, reliable: bool,
+) -> bytes:
+    try:
+        encoded = json.dumps(
+            event,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    except (TypeError, UnicodeEncodeError, ValueError) as error:
+        subject = "reliable event" if reliable else "event"
+        raise ValueError(f"{subject} must be canonical JSON") from error
+    if reliable and len(encoded) > MAX_RELIABLE_EVENT_CANONICAL_BYTES:
+        raise ValueError("reliable event exceeds the canonical byte ceiling")
+    return encoded
 
 
 def validate_operation_result_view_v5(value: object) -> None:

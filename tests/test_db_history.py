@@ -11,6 +11,7 @@ from weakref import ref
 import pytest
 
 import namisync.db.history as history_module
+from namisync.core.event_v5 import validate_and_encode_event_v5_envelope
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
     Envelope,
@@ -19,6 +20,7 @@ from namisync.core.events import (
     PhaseChanged,
     Progress,
     StateChanged,
+    envelope_from_dict,
     envelope_to_dict,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
@@ -66,6 +68,7 @@ from namisync.db.writer import RecordingError, TokenConflictError
 from namisync.workflows.views import operation_result_view
 
 from _db_fixtures import FakeClock, NOW
+from _event_v5_fixtures import SESSION_ID, envelope as event_v5_envelope
 
 
 def _raise_private_history_failure(errors, retained, message: str) -> None:
@@ -3429,22 +3432,26 @@ def test_invalid_event_projection_breaks_prefix_before_queue_or_durable_mutation
     observer = store.observer(record, HistoryContext("run-invalid", "host-1"))
     observer.on_event(first)
     pending_bytes = observer.pending_bytes
-    calls = 0
+    projection_calls = 0
+    encoding_calls = 0
 
     def invalid_projection(envelope: Envelope) -> dict[str, object]:
-        nonlocal calls
-        calls += 1
+        nonlocal projection_calls
+        projection_calls += 1
         projection = envelope_to_dict(envelope)
         projection["body"] = {"phase": 7}
         return projection
 
+    def checked_encoding(value: object) -> bytes:
+        nonlocal encoding_calls
+        encoding_calls += 1
+        return validate_and_encode_event_v5_envelope(value)
+
     monkeypatch.setattr(history_module, "envelope_to_dict", invalid_projection)
     monkeypatch.setattr(
         history_module,
-        "_json_bytes",
-        lambda value: pytest.fail(
-            f"invalid projection reached persisted serialization: {value!r}"
-        ),
+        "validate_and_encode_event_v5_envelope",
+        checked_encoding,
     )
     try:
         with pytest.raises(
@@ -3455,7 +3462,8 @@ def test_invalid_event_projection_breaks_prefix_before_queue_or_durable_mutation
 
         assert raised.value.__cause__ is None
         assert raised.value.__context__ is None
-        assert calls == 1
+        assert projection_calls == 1
+        assert encoding_calls == 1
         assert observer.pending_event_count == 1
         assert observer.pending_bytes == pending_bytes
     finally:
@@ -3472,6 +3480,43 @@ def test_invalid_event_projection_breaks_prefix_before_queue_or_durable_mutation
         ).fetchone()[0] == 0
     finally:
         connection.close()
+
+
+@pytest.mark.parametrize(
+    "body_type",
+    (
+        "StateChanged",
+        "PhaseChanged",
+        "Gap",
+        "ItemOutcome",
+        "IntegrityOutcome",
+    ),
+)
+def test_history_admission_encodes_each_reliable_fixture_once(
+    tmp_path: Path,
+    monkeypatch,
+    body_type: str,
+) -> None:
+    record = _record(SESSION_ID)
+    admitted = envelope_from_dict(event_v5_envelope(body_type))
+    calls = 0
+
+    def counted_encoding(value: object) -> bytes:
+        nonlocal calls
+        calls += 1
+        return validate_and_encode_event_v5_envelope(value)
+
+    monkeypatch.setattr(
+        history_module,
+        "validate_and_encode_event_v5_envelope",
+        counted_encoding,
+    )
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-count", "host-1"))
+        observer.on_event(admitted)
+
+        assert calls == 1
+        assert observer.pending_event_count == 1
 
 
 def test_history_flush_failure_preserves_window_and_retires_traceback_and_cause(

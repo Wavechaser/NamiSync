@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Callable, Mapping
 
 from namisync.core.clock import Clock
-from namisync.core.event_v5 import validate_event_v5_envelope
+from namisync.core.event_v5 import validate_and_encode_event_v5_envelope
 from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
@@ -946,12 +946,11 @@ class HistoryObserver:
 
         projection = envelope_to_dict(envelope)
         try:
-            validate_event_v5_envelope(projection)
+            encoded = validate_and_encode_event_v5_envelope(projection)
         except (TypeError, ValueError) as error:
             raise HistoryIntegrityError(
                 "history event projection is invalid"
             ) from error
-        encoded = _json_bytes(projection)
         encoded_size = len(encoded)
         digest = hashlib.sha256(encoded).digest()
         item_identity_hash = (
