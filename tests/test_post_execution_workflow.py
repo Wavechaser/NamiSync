@@ -3070,7 +3070,7 @@ def test_verifier_pause_cannot_silently_complete_an_unemitted_candidate() -> Non
     )
 
 
-def test_verify_handoff_rejects_candidate_mutation_before_verifier_entry() -> None:
+def test_verify_handoff_rejects_candidate_replacement_before_verifier_entry() -> None:
     operation = _operation(104, 5)
     xset = _execution_set(operation)
     verifier_calls = 0
@@ -3090,26 +3090,35 @@ def test_verify_handoff_rejects_candidate_mutation_before_verifier_entry() -> No
             bytes_total=operation.content_bytes,
         )
 
-    def mutate_handoff(value):
+    def replace_handoff(value):
         if not isinstance(value, VerifyContinuation):
             return
         candidate = value.candidates.candidates[0]
-        object.__setattr__(
+        changed_stat = replace(
             candidate.expected_stat,
-            "mtime_ns",
-            candidate.expected_stat.mtime_ns + 1,
+            mtime_ns=candidate.expected_stat.mtime_ns + 1,
+        )
+        value.candidates.candidates = (
+            replace(
+                candidate,
+                expected_stat=changed_stat,
+                copy_attestation=replace(
+                    candidate.copy_attestation,
+                    subject=changed_stat,
+                ),
+            ),
         )
 
     def verifier(*args):
         nonlocal verifier_calls
         verifier_calls += 1
-        pytest.fail("mutated verification candidate was admitted")
+        pytest.fail("changed verification candidate was admitted")
 
     result = run_execution(
         ExecuteContinuation(xset, verify_after_execute=True),
         RunContext(lambda _body: None, lambda: None),
         _deps(executor=executor, verifier=verifier, recordings=[]),
-        continuation_sink=mutate_handoff,
+        continuation_sink=replace_handoff,
     )
 
     assert verifier_calls == 0

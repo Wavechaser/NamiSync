@@ -755,6 +755,12 @@ it validates the structural protocol, wraps ordinary collaborator exceptions
 in the existing `HasherContractError` vocabulary, lets `BaseException`
 control flow escape, and validates the raw digest only after `digest()` returns.
 
+`FileIdentity`, `MetadataSnapshot`, and `FileStat` validate their scalar and
+exact-type contracts when first constructed. An exact-base `FileStat` is an
+immutable graph, so later stat adoption checks its exact outer and nested types
+and may reuse it; stat fact projection reads its eight scalar facts directly.
+Consumers depend on those admitted values rather than fresh object identity.
+
 `ContentEvidence` and `CopyDigest` accept only raw 16-byte `xxh3_128` content
 digests. Mixed algorithms are invalid, hasher collaborator failures raise the
 typed core `HasherContractError`, and `Attestation` requires content size to

@@ -250,7 +250,6 @@ def test_selection_authority_preserves_detached_completion_snapshot(
         assert authority.candidates is not selection.candidates
         assert authority.candidates[0] is not subject
         assert type(authority.candidates[0]) is PostCopyCandidate
-        assert authority.candidates[0].expected_stat is not subject.expected_stat
         assert authority.candidates[0].copy_attestation is not subject.copy_attestation
         assert type(authority.completed_bytes) is MappingProxyType
         selection._completed_bytes[subject.item_id] = 1

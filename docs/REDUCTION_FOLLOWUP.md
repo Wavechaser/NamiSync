@@ -194,7 +194,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | ID | Accepted outcome | Depends on | Primary verification | Status |
 | --- | --- | --- | --- | --- |
 | NR-0 | Qualify baseline and freeze assertion/evidence dispositions for this register. | — | Current-source complete baseline, imports, protected identities, oracle repeat 3, finite witness map | complete |
-| NR-1 | Reuse exact immutable file-stat graphs without redundant construction. | NR-0 | Initial refusals, independent fact tuples, stat consumer tests, construction witness | pending |
+| NR-1 | Reuse exact immutable file-stat graphs without redundant construction. | NR-0 | Initial refusals, independent fact tuples, stat consumer tests, construction witness | complete |
 | NR-2 | Use one normalized Progress snapshot at runner emission. | NR-0 | Accepted-emission fallback and control/field equivalence | complete |
 | NR-3 | Remove repeated scan element certification after full initial validation. | NR-0 | Constructor/transfer/limit/recorder witnesses and unchanged scan payloads | pending |
 | NR-4 | Persist history's already-validated canonical envelope bytes. | NR-0 | Byte equivalence, invalid-before-mutation, canonical byte limits | pending |
@@ -375,6 +375,26 @@ check every `snapshot_file_stat`/`file_stat_fact` consumer and distinguish a
 reflectively changed frozen value from a legitimately mutable continuation.
 
 **Commit gate.** Shared gate complete; `refactor(core): reuse admitted immutable stat graphs`.
+
+**Execution evidence (2026-09-08).** The three named model functions now trust
+exact admitted immutable leaves without reconstructing them; initial scalar/type
+checks and all eight facts remain. Thirty focused witnesses and the final
+seven-department neighborhood passed (2,779 passed, one existing WinError 1314
+skip); all 12 import contracts and protected/fixture comparisons passed.
+Both fault controls hit retained assertions, harmless fresh-stat substitution
+passed, and task-local constructor instrumentation confirmed no reconstruction.
+Evidence: `build/reduction-followup/7fe09b8/NR-1/20260908-152253/manifest.json`.
+Fresh GPT-5.6 Terra review passed with an independent 33-case focused run.
+
+Two NR-0 inventory omissions received supplemental dispositions within the
+accepted population: the post-copy `expected_stat is not` assertion retired as
+representation-only while value/candidate/attestation/completion assertions stay;
+the handoff fixture's reflective frozen-stat mutation retired as unsupported.
+The latter test was retained under a candidate-replacement name using valid
+`dataclasses.replace` values through mutable selection, preserving refusal before
+verifier entry and exact status/phase/error truth. The frozen map is unchanged;
+the checkpoint manifest records each supplemental fact, successor, and reason.
+Neither adjustment is a supported product regression or a scope expansion.
 
 ### NR-2 — One normalized Progress
 

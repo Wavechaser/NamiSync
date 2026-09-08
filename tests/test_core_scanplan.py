@@ -251,6 +251,206 @@ def _assert_declared_slots(value: object) -> None:
         object.__setattr__(value, "_undeclared", object())
 
 
+def _file_stat_with(**changes: object) -> model_contracts.FileStat:
+    fields = {
+        "kind": model_contracts.EntryKind.FILE,
+        "size": 1,
+        "mtime_ns": 1,
+        "file_identity": None,
+        "nlink": 1,
+        "metadata": model_contracts.MetadataSnapshot(0, None),
+    }
+    fields.update(changes)
+    return model_contracts.FileStat(**fields)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "construct",
+    (
+        pytest.param(
+            lambda: model_contracts.FileIdentity("", 1), id="identity-empty"
+        ),
+        pytest.param(
+            lambda: model_contracts.FileIdentity(1, 1), id="identity-nontext"
+        ),
+        pytest.param(
+            lambda: model_contracts.FileIdentity("serial", True),
+            id="identity-bool-index",
+        ),
+        pytest.param(
+            lambda: model_contracts.FileIdentity("serial", -1),
+            id="identity-negative-index",
+        ),
+        pytest.param(
+            lambda: model_contracts.FileIdentity(
+                "serial", scalar_contracts.MAX_FILE_INDEX_128 + 1
+            ),
+            id="identity-over-128",
+        ),
+        pytest.param(
+            lambda: model_contracts.MetadataSnapshot(True, None),
+            id="metadata-bool-attributes",
+        ),
+        pytest.param(
+            lambda: model_contracts.MetadataSnapshot(0, True),
+            id="metadata-bool-created",
+        ),
+        pytest.param(
+            lambda: model_contracts.MetadataSnapshot(0, -1),
+            id="metadata-created-negative",
+        ),
+        pytest.param(
+            lambda: model_contracts.MetadataSnapshot(
+                0, scalar_contracts.MAX_SIGNED_64 + 1
+            ),
+            id="metadata-created-over-s64",
+        ),
+        pytest.param(lambda: _file_stat_with(kind="file"), id="stat-wrong-kind"),
+        pytest.param(lambda: _file_stat_with(size=True), id="stat-bool-size"),
+        pytest.param(lambda: _file_stat_with(size=-1), id="stat-negative-size"),
+        pytest.param(
+            lambda: _file_stat_with(
+                mtime_ns=scalar_contracts.MAX_SIGNED_64 + 1
+            ),
+            id="stat-over-s64-mtime",
+        ),
+        pytest.param(lambda: _file_stat_with(nlink=True), id="stat-bool-nlink"),
+        pytest.param(lambda: _file_stat_with(nlink=0), id="stat-zero-nlink"),
+        pytest.param(
+            lambda: _file_stat_with(file_identity=object()),
+            id="stat-wrong-identity-type",
+        ),
+        pytest.param(
+            lambda: _file_stat_with(metadata=object()),
+            id="stat-wrong-metadata-type",
+        ),
+    ),
+)
+def test_file_stat_leaf_constructors_reject_invalid_inputs(construct) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        construct()
+
+
+@pytest.mark.parametrize(
+    ("kind", "identity", "created_ns"),
+    (
+        (
+            model_contracts.EntryKind.FILE,
+            model_contracts.FileIdentity("serial", 1),
+            2,
+        ),
+        (
+            model_contracts.EntryKind.FILE,
+            model_contracts.FileIdentity("serial", 1),
+            None,
+        ),
+        (model_contracts.EntryKind.FILE, None, 2),
+        (model_contracts.EntryKind.FILE, None, None),
+        (
+            model_contracts.EntryKind.DIRECTORY,
+            model_contracts.FileIdentity("serial", 1),
+            2,
+        ),
+    ),
+    ids=(
+        "identity-created",
+        "identity-no-created",
+        "no-identity-created",
+        "no-identity-no-created",
+        "directory",
+    ),
+)
+def test_snapshot_file_stat_adopts_exact_base_without_reconstruction(
+    kind,
+    identity,
+    created_ns,
+) -> None:
+    stat = model_contracts.FileStat(
+        kind,
+        3,
+        4,
+        identity,
+        5,
+        model_contracts.MetadataSnapshot(6, created_ns),
+    )
+
+    assert model_contracts.snapshot_file_stat(stat) == stat
+
+
+@pytest.mark.parametrize("field", ("identity", "metadata", "stat-subclass"))
+def test_snapshot_file_stat_rejects_wrong_nested_exact_types(field: str) -> None:
+    class IdentitySubclass(model_contracts.FileIdentity):
+        pass
+
+    class MetadataSubclass(model_contracts.MetadataSnapshot):
+        pass
+
+    class StatSubclass(model_contracts.FileStat):
+        pass
+
+    identity = model_contracts.FileIdentity("serial", 1)
+    metadata = model_contracts.MetadataSnapshot(2, 3)
+    stat = model_contracts.FileStat(
+        model_contracts.EntryKind.FILE, 4, 5, identity, 6, metadata
+    )
+    if field == "identity":
+        object.__setattr__(stat, "file_identity", IdentitySubclass("serial", 1))
+    elif field == "metadata":
+        object.__setattr__(stat, "metadata", MetadataSubclass(2, 3))
+    else:
+        stat = StatSubclass(
+            model_contracts.EntryKind.FILE, 4, 5, identity, 6, metadata
+        )
+
+    with pytest.raises(TypeError):
+        model_contracts.snapshot_file_stat(stat)
+
+
+@pytest.mark.parametrize(
+    "expected",
+    (
+        (model_contracts.EntryKind.FILE, 1, 2, "serial", 3, 4, 5, 6),
+        (model_contracts.EntryKind.FILE, 1, 2, "serial", 3, 4, 5, None),
+        (model_contracts.EntryKind.FILE, 1, 2, None, None, 4, 5, 6),
+        (model_contracts.EntryKind.DIRECTORY, 1, 2, None, None, 4, 5, None),
+        (
+            model_contracts.EntryKind.FILE,
+            scalar_contracts.MAX_SIGNED_64,
+            scalar_contracts.MAX_SIGNED_64,
+            "serial",
+            scalar_contracts.MAX_FILE_INDEX_128,
+            scalar_contracts.MAX_SAFE_INTEGER,
+            scalar_contracts.MAX_SAFE_INTEGER,
+            scalar_contracts.MAX_SIGNED_64,
+        ),
+    ),
+    ids=(
+        "identity-created-file",
+        "identity-no-created-file",
+        "no-identity-created-file",
+        "no-identity-no-created-directory",
+        "scalar-boundaries",
+    ),
+)
+def test_file_stat_fact_preserves_all_eight_facts(expected) -> None:
+    kind, size, mtime_ns, serial, file_index, nlink, attributes, created_ns = expected
+    identity = (
+        None
+        if serial is None
+        else model_contracts.FileIdentity(serial, file_index)
+    )
+    stat = model_contracts.FileStat(
+        kind,
+        size,
+        mtime_ns,
+        identity,
+        nlink,
+        model_contracts.MetadataSnapshot(attributes, created_ns),
+    )
+
+    assert model_contracts.file_stat_fact(stat) == expected
+
+
 def test_scan_model_contracts_are_exactly_slotted() -> None:
     volume = model_contracts.VolumeId("serial", "NTFS")
     evidence = model_contracts.VolumeEvidence("source", None, False)
