@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import os
 from pathlib import Path, PureWindowsPath
 from threading import Event
@@ -3692,6 +3692,7 @@ class NonByteMutationFaultFileSystem(NativeFileSystem):
         self.commit = commit
         self.sharing = sharing
         self.faults = 0
+        self.drift_after_flush = False
 
     def _fault(self) -> None:
         self.faults += 1
@@ -3728,6 +3729,24 @@ class NonByteMutationFaultFileSystem(NativeFileSystem):
             super().mkdir_new(path)
         self._fault()
 
+    def flush_directory(self, path: Path) -> bool:
+        if self.primitive == "flush-directory-drift":
+            self.drift_after_flush = True
+            self._fault()
+        if self.primitive != "flush-directory":
+            return super().flush_directory(path)
+        self._fault()
+
+    def stat_path(self, path: Path) -> FileStat | None:
+        result = super().stat_path(path)
+        if (
+            self.drift_after_flush
+            and path.name == "new.bin"
+            and result is not None
+        ):
+            return replace(result, size=result.size + 1)
+        return result
+
 
 @dataclass(frozen=True)
 class _NonByteMutationCase:
@@ -3748,6 +3767,14 @@ _NONBYTE_MUTATION_CASES = (
     _NonByteMutationCase(
         "recase", OperationKind.RECASE, "rename", False,
         "unverified", "recase-state-unverified", None,
+    ),
+    _NonByteMutationCase(
+        "move-durability", OperationKind.MOVE, "flush-directory-drift", False,
+        "committed", "move-state-ambiguous", None,
+    ),
+    _NonByteMutationCase(
+        "recase-durability", OperationKind.RECASE, "flush-directory", False,
+        "committed", "recase-state-unverified", None,
     ),
     _NonByteMutationCase(
         "trash", OperationKind.TRASH, "rename", False,

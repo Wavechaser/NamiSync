@@ -2348,6 +2348,30 @@ def _move(
             "move operation lacks source evidence",
         )
     old_rel, old_expected = _prior_target(operation)
+    return _guarded_reviewed_target_rename(
+        operation,
+        (old_rel, old_expected),
+        xset,
+        recorder,
+        fs,
+        source_root,
+        target_root,
+        state,
+    )
+
+
+def _guarded_reviewed_target_rename(
+    operation: PlanOperation,
+    prior_target: tuple[str, FileStat],
+    xset: ExecutionSet,
+    recorder: Recorder,
+    fs: ExecutorFileSystem,
+    source_root: Path,
+    target_root: Path,
+    state: _ExecutionState,
+) -> _Settled:
+    old_rel, old_expected = prior_target
+    is_move = operation.kind is OperationKind.MOVE
     _flush_before_destructive(recorder, state, operation.op_id)
     _revalidate_source_root(fs, xset, source_root)
     _revalidate_target_root(fs, xset, target_root)
@@ -2367,7 +2391,8 @@ def _move(
         missing=ExecutionReason.TARGET_MISSING,
         drift=ExecutionReason.TARGET_DRIFT,
     )
-    _guard_absent(fs, target_root, operation.target_rel_path)
+    if is_move:
+        _guard_absent(fs, target_root, operation.target_rel_path)
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
     _revalidate_source_root(fs, xset, source_root)
@@ -2384,24 +2409,37 @@ def _move(
     except FileExistsError as error:
         raise OperationFailure(
             ExecutionReason.DESTINATION_OCCUPIED,
-            "move destination appeared before conditional rename",
+            (
+                "move destination appeared before conditional rename"
+                if is_move
+                else "recase destination is a distinct occupied entry"
+            ),
             cause=error,
         ) from error
     mutation.committed = True
     detail = _durability_detail(fs, old.parent, new.parent)
-    moved = _profiled_stat(
+    renamed = _profiled_stat(
         _require_target_stat(fs, xset, target_root, new),
         xset.plan.target_profile.stable_file_identity,
     )
     _guard_path_stat(
-        moved,
+        renamed,
         old_expected,
         ExecutionReason.TARGET_DRIFT,
-        "moved target is not the reviewed target version",
+        (
+            "moved target is not the reviewed target version"
+            if is_move
+            else "recased target is not the reviewed target version"
+        ),
     )
-    record_observation = _record(
-        lambda: recorder.record_moved(operation.op_id, moved),
-    )
+    if is_move:
+        record_observation = _record(
+            lambda: recorder.record_moved(operation.op_id, renamed),
+        )
+    else:
+        record_observation = _record(
+            lambda: recorder.record_recased(operation.op_id, renamed),
+        )
     return _Settled(
         Outcome.SUCCEEDED,
         detail=detail,
@@ -2434,64 +2472,15 @@ def _recase(
             ExecutionReason.UNSAFE_PATH,
             "recase paths must differ only by Windows filename casing",
         )
-    _flush_before_destructive(recorder, state, operation.op_id)
-    _revalidate_source_root(fs, xset, source_root)
-    _revalidate_target_root(fs, xset, target_root)
-    _guard_present(
+    return _guarded_reviewed_target_rename(
+        operation,
+        (old_rel, old_expected),
+        xset,
+        recorder,
         fs,
         source_root,
-        operation.source_rel_path,
-        operation.source_expected,
-        missing=ExecutionReason.SOURCE_MISSING,
-        drift=ExecutionReason.SOURCE_DRIFT,
-    )
-    old_actual = _guard_present(
-        fs,
         target_root,
-        old_rel,
-        old_expected,
-        missing=ExecutionReason.TARGET_MISSING,
-        drift=ExecutionReason.TARGET_DRIFT,
-    )
-    old = fs.resolve(target_root, old_rel, must_exist=True)
-    new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
-    _revalidate_source_root(fs, xset, source_root)
-    _revalidate_target_root(fs, xset, target_root)
-    mutation = _retain_mutation_attempt(
         state,
-        operation,
-        primary=old,
-        primary_before=old_actual,
-        secondary=new,
-    )
-    try:
-        fs.rename_new(old, new)
-    except FileExistsError as error:
-        raise OperationFailure(
-            ExecutionReason.DESTINATION_OCCUPIED,
-            "recase destination is a distinct occupied entry",
-            cause=error,
-        ) from error
-    mutation.committed = True
-    detail = _durability_detail(fs, old.parent, new.parent)
-    recased = _profiled_stat(
-        _require_target_stat(fs, xset, target_root, new),
-        xset.plan.target_profile.stable_file_identity,
-    )
-    _guard_path_stat(
-        recased,
-        old_expected,
-        ExecutionReason.TARGET_DRIFT,
-        "recased target is not the reviewed target version",
-    )
-    record_observation = _record(
-        lambda: recorder.record_recased(operation.op_id, recased),
-    )
-    return _Settled(
-        Outcome.SUCCEEDED,
-        detail=detail,
-        recording_reason=record_observation.recording_reason,
-        recording_detail=record_observation.recording_detail,
     )
 
 

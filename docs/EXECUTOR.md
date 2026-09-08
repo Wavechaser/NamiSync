@@ -330,6 +330,15 @@ data consequence and settlement, never a timing-based safety claim.
 
 ## Other Operations
 
+MOVE and RECASE keep separate prologues so their missing-evidence precedence and
+RECASE path rules remain explicit. After those checks, one closed MOVE/RECASE
+sequence flushes pending recorder state, revalidates roots and reviewed subjects,
+applies MOVE's destination-absence guard, resolves the paths, repeats the final
+root guards, and performs the non-replacing rename. It marks the mutation
+committed immediately after the native rename, then flushes parent durability,
+checks the renamed target version, and only then resolves the operation-specific
+recorder method. No other operation uses this shared sequence.
+
 ### Recase
 
 Flush pending recorder state, validate the reviewed source and old target, and

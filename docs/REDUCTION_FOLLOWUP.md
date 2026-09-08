@@ -200,7 +200,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | NR-4 | Persist history's already-validated canonical envelope bytes. | NR-0 | Byte equivalence, invalid-before-mutation, canonical byte limits | complete |
 | NR-5 | Reuse local history item projections for hashes and readback columns. | NR-4 | Replay/corrupt-read/column/hash equality; no retained cache | pending |
 | NR-6 | Remove the three unused executor arguments and no-op exception wrapper. | NR-0 | Caller inspection, runtime/settlement/control tests and oracle repeat 3 | complete |
-| NR-7 | Share the MOVE/RECASE guarded rename sequence. | NR-6 | Separate operation traces/refusals, late recorder dispatch, oracle repeat 3 | pending |
+| NR-7 | Share the MOVE/RECASE guarded rename sequence. | NR-6 | Separate operation traces/refusals, late recorder dispatch, oracle repeat 3 | complete |
 | NR-8 | Share publication observation with explicit new-file/update distinctions. | NR-7 | Independent observation matrix, settlement outcomes, oracle repeat 3 | pending |
 | NR-9 | Close combined reduction and evidence/documentation consistency. | NR-1–8 | Complete/headed suite, imports, unchanged oracle, control replay, final review | pending |
 
@@ -672,6 +672,24 @@ flush, each guard, rename, durability, post-stat and recording. Reject abstracti
 that hides the operation distinction or adds policy parameters.
 
 **Commit gate.** Shared gate complete; `refactor(executor): share reviewed rename mechanics`.
+
+**Execution evidence (2026-09-08).** MOVE and RECASE retain distinct prologues
+and delegate their reviewed rename body. MOVE-only absence admission, exact
+errors, final guard/native order, immediate committed marker, durability/stat
+checks and late recorder lookup remain. The neighborhood passed 1,565 tests;
+the unchanged oracle passed 30 scenarios across three runs; all 12 import
+contracts and protected/fixture comparisons passed. Evidence:
+`build/reduction-followup/0027922/NR-7/20260908-155149/manifest.json`.
+Fresh GPT-5.6 Terra review passed with 15 independent focused cases.
+
+The frozen late-marker fault binding raised inside native rename and could not
+exercise the post-rename marker point. Two supplemental durability-fault rows
+bind that same accepted criterion; all 12 prechange characterization cases pass,
+and only the deliberate late-marker variant reports the detected unverified
+state. All three faults hit retained assertions. The harmless control applies
+a real unchanged-helper relocation, passing 31 retained cases and oracle repeat
+three; its earlier unchanged-candidate run is superseded and excluded. No product
+test retirement, new operation policy, or shelved recording-tail cleanup occurred.
 
 ### NR-8 — Common publication observation
 
