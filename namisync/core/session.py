@@ -811,20 +811,7 @@ def run_session(
                 item_bytes_done=body.item_bytes_done,
                 item_bytes_total=body.item_bytes_total,
             )
-            public_snapshot = Progress(
-                phase=snapshot.phase,
-                items_done=snapshot.items_done,
-                items_total=snapshot.items_total,
-                bytes_done=snapshot.bytes_done,
-                bytes_total=snapshot.bytes_total,
-                current_path=snapshot.current_path,
-                item_id=snapshot.item_id,
-                item_type=snapshot.item_type,
-                item_attempt_id=snapshot.item_attempt_id,
-                item_bytes_done=snapshot.item_bytes_done,
-                item_bytes_total=snapshot.item_bytes_total,
-            )
-            emit(public_snapshot)
+            emit(snapshot)
             latest_progress = snapshot
             if detect_accumulator_mutation():
                 raise RuntimeError(_RESULT_ITEM_MUTATION_MESSAGE)

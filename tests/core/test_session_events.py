@@ -1247,46 +1247,64 @@ def test_runner_releases_a_result_that_fails_snapshot_revalidation() -> None:
     assert release_checks == [True]
 
 
-def test_runner_uses_a_detached_progress_snapshot_for_terminal_fallback() -> None:
-    progress = Progress("execute", 1, 2, 5, 9, "reviewed.txt")
+@pytest.mark.parametrize(
+    "scenario",
+    (
+        "all-fields",
+        "producer-rebind-cancel",
+        "accepted-then-rejected-cancel",
+        "accepted-then-rejected-failure",
+    ),
+)
+def test_runner_normalizes_progress_once_and_preserves_all_fields(
+    scenario: str,
+) -> None:
+    class ProducerProgress(Progress):
+        pass
+
+    progress = ProducerProgress(
+        phase="execute",
+        items_done=2,
+        items_total=4,
+        bytes_done=23,
+        bytes_total=101,
+        current_path="folder\\reviewed.txt",
+        item_id="operation",
+        item_type="operation",
+        item_attempt_id="a" * 32,
+        item_bytes_done=7,
+        item_bytes_total=11,
+    )
+    rejected = replace(progress, bytes_done=61)
+    attempted: list[Progress] = []
     emitted: list[object] = []
 
-    def work(context: RunContext) -> OperationResult:
-        context.emit(progress)
-        object.__setattr__(progress, "bytes_done", 9)
-        raise Canceled()
-
-    outcome = run_session(
-        work,
-        emit=emitted.append,
-        checkpoint=lambda: None,
-        settle=lambda _state, _result: None,
-        finalize_audit=lambda _result: RecordingStatus.OK,
-        publish_result=lambda _result: None,
-    )
-
-    assert outcome.result is not None
-    assert (outcome.result.bytes_done, outcome.result.bytes_total) == (5, 9)
-    assert type(emitted[0]) is Progress
-    assert emitted[0].bytes_done == 5
-
-
-def test_runner_keeps_private_progress_truth_from_the_emitter() -> None:
-    progress = Progress("execute", 1, 1, 5, 9, "reviewed.txt")
-    public: list[object] = []
-
     def emit(body: object) -> None:
-        public.append(body)
         if isinstance(body, Progress):
-            object.__setattr__(body, "bytes_done", 9)
+            attempted.append(body)
+            if body.bytes_done == rejected.bytes_done:
+                if scenario == "accepted-then-rejected-cancel":
+                    raise Canceled()
+                if scenario == "accepted-then-rejected-failure":
+                    raise RuntimeError("progress rejected")
+        emitted.append(body)
 
     def work(context: RunContext) -> OperationResult:
-        context.emit(progress)
-        return OperationResult(
-            SessionState.COMPLETED,
-            bytes_done=5,
-            bytes_total=9,
-        )
+        offered = progress
+        if scenario == "all-fields":
+            offered = ProducerProgress(
+                **{
+                    field.name: getattr(progress, field.name)
+                    for field in fields(Progress)
+                }
+            )
+        context.emit(offered)
+        if scenario == "producer-rebind-cancel":
+            offered = replace(offered, bytes_done=47)
+            assert offered.bytes_done == 47
+        if scenario.startswith("accepted-then-rejected"):
+            context.emit(rejected)
+        raise Canceled()
 
     outcome = run_session(
         work,
@@ -1298,9 +1316,48 @@ def test_runner_keeps_private_progress_truth_from_the_emitter() -> None:
     )
 
     assert outcome.result is not None
+    expected_status = (
+        SessionState.FAILED
+        if scenario == "accepted-then-rejected-failure"
+        else SessionState.CANCELED
+    )
+    assert outcome.result.status is expected_status
+    assert (outcome.result.bytes_done, outcome.result.bytes_total) == (23, 101)
+    assert type(attempted[0]) is Progress
+    assert tuple(getattr(attempted[0], field.name) for field in fields(Progress)) == (
+        tuple(getattr(progress, field.name) for field in fields(Progress))
+    )
+    if scenario.startswith("accepted-then-rejected"):
+        assert len(attempted) == 2
+        assert attempted[1].bytes_done == 61
+    terminal = next(body for body in emitted if isinstance(body, Terminal))
+    assert (terminal.result.bytes_done, terminal.result.bytes_total) == (23, 101)
+
+
+def test_runner_keeps_returned_result_truth_after_progress_emission() -> None:
+    progress = Progress("execute", 1, 1, 5, 9, "reviewed.txt")
+    public: list[object] = []
+
+    def work(context: RunContext) -> OperationResult:
+        context.emit(progress)
+        return OperationResult(
+            SessionState.COMPLETED,
+            bytes_done=5,
+            bytes_total=9,
+        )
+
+    outcome = run_session(
+        work,
+        emit=public.append,
+        checkpoint=lambda: None,
+        settle=lambda _state, _result: None,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert outcome.result is not None
     assert (outcome.result.bytes_done, outcome.result.bytes_total) == (5, 9)
-    assert isinstance(public[0], Progress)
-    assert public[0].bytes_done == 9
+    assert public[0] == progress
 
 
 def test_runner_seeds_cancel_result_from_prior_pause_items() -> None:

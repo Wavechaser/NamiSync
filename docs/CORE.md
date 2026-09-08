@@ -373,10 +373,12 @@ audit finalizer, result publisher, terminal-summary builder, and returned
 `RunOutcome` then share that canonical immutable item tuple and object graph;
 settlement/audit use the pre-audit result header and publication/return use the
 post-audit header. Ordinary mutation is rejected, while reflective
-`object.__setattr__` corruption is outside the supported fault model. Progress
-events keep separate runner/emitter snapshots because the runner retains their
-latest mutable fallback truth. The external pause accumulator likewise remains
-detached on ingress and egress and never becomes the canonical result graph.
+`object.__setattr__` corruption is outside the supported fault model. The runner
+normalizes each Progress producer value once to an immutable base snapshot and
+shares that snapshot with the emitter and fallback state. It advances fallback
+authority only after the emitter accepts the snapshot. The external pause
+accumulator likewise remains detached on ingress and egress and never becomes
+the canonical result graph.
 Before settlement, audit finalization, or result publication, the runner applies
 the terminal summary's existing whole-value diagnostic rules to the full result
 header too. An oversized or invalid-Unicode phase error becomes null; an invalid

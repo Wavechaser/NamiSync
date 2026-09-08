@@ -195,7 +195,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | --- | --- | --- | --- | --- |
 | NR-0 | Qualify baseline and freeze assertion/evidence dispositions for this register. | — | Current-source complete baseline, imports, protected identities, oracle repeat 3, finite witness map | complete |
 | NR-1 | Reuse exact immutable file-stat graphs without redundant construction. | NR-0 | Initial refusals, independent fact tuples, stat consumer tests, construction witness | pending |
-| NR-2 | Use one normalized Progress snapshot at runner emission. | NR-0 | Accepted-emission fallback and control/field equivalence | pending |
+| NR-2 | Use one normalized Progress snapshot at runner emission. | NR-0 | Accepted-emission fallback and control/field equivalence | complete |
 | NR-3 | Remove repeated scan element certification after full initial validation. | NR-0 | Constructor/transfer/limit/recorder witnesses and unchanged scan payloads | pending |
 | NR-4 | Persist history's already-validated canonical envelope bytes. | NR-0 | Byte equivalence, invalid-before-mutation, canonical byte limits | pending |
 | NR-5 | Reuse local history item projections for hashes and readback columns. | NR-4 | Replay/corrupt-read/column/hash equality; no retained cache | pending |
@@ -410,6 +410,19 @@ and accepted-emission authority; do not broaden the DEFENSE fault model.
 fallback; show that fewer objects do not move the state-commit point.
 
 **Commit gate.** Shared gate complete; `refactor(core): reuse normalized runner progress`.
+
+**Execution evidence (2026-09-08).** Removed the second Progress construction;
+the first normalizes all fields and fallback advances only after accepted emit.
+The two named reflective tests were revised according to the frozen map, with
+ordinary rebinding, exact-base fields, cancel/failure fallback and returned-result
+truth retained. Prechange and candidate focused selections each passed six cases;
+the neighborhood passed 3,266 with one existing WinError 1314 capability skip.
+All 12 import contracts and 11 protected comparisons passed. Evidence:
+`build/reduction-followup/7fe09b8/NR-2/20260908-161500/manifest.json`.
+The fault reached the retained `17 == 5` failure; harmless producer reconstruction
+passed. Fresh GPT-5.6 Terra review passed after the task-local fault replacement
+gained an exact count-one guard and both controls were replayed. Initial sandbox
+failures are separately retained and excluded from candidate qualification.
 
 ### NR-3 — Narrow scan graph validation
 
