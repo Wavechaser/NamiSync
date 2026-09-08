@@ -13,8 +13,8 @@
 
 ## Scope and decisions
 
-Status: implementation authorized 2026-09-08. NR-0 qualification is complete;
-implementation progress is recorded in the register below. The user authorized GPT-5.6 agent
+Status: complete 2026-09-08. All NR-0–NR-9 gates are closed;
+execution evidence is recorded below. The user authorized GPT-5.6 agent
 implementation, fresh adversarial reviewers, independent atomic commits, and
 isolated parallel work where dependencies permit. This is the maintenance subregister linked by
 [M1_PLAN.md](M1_PLAN.md), not another M1 product roadmap. The closed PR-0–PR-9
@@ -94,8 +94,8 @@ are implementation choices when they preserve the declared behavior and seams.
 ### Migrated RF-E/RF-X dispositions
 
 These discovery findings were previously in M1_PLAN and are now owned here.
-RF-E and RF-X discovery are complete; their implementation successors below are
-pending. The original reports remain evidence, not governing instructions.
+RF-E and RF-X discovery and their accepted implementation successors below are
+complete. The original reports remain evidence, not governing instructions.
 
 - EventHub's `canonical_event_bytes` runs before sequence/replay/audit mutation.
   History separately projects, validates (including encoding), and encodes again.
@@ -202,7 +202,7 @@ spelling of the replacement implementation. No broad test-ablation pass is in sc
 | NR-6 | Remove the three unused executor arguments and no-op exception wrapper. | NR-0 | Caller inspection, runtime/settlement/control tests and oracle repeat 3 | complete |
 | NR-7 | Share the MOVE/RECASE guarded rename sequence. | NR-6 | Separate operation traces/refusals, late recorder dispatch, oracle repeat 3 | complete |
 | NR-8 | Share publication observation with explicit new-file/update distinctions. | NR-7 | Independent observation matrix, settlement outcomes, oracle repeat 3 | complete |
-| NR-9 | Close combined reduction and evidence/documentation consistency. | NR-1–8 | Complete/headed suite, imports, unchanged oracle, control replay, final review | pending |
+| NR-9 | Close combined reduction and evidence/documentation consistency. | NR-1–8 | Complete/headed suite, imports, unchanged oracle, control replay, final review | complete |
 
 These are semantic outcomes, not a list of every permitted edit. Exact caller
 updates, focused tests and matching documentation belong to their outcome.
@@ -782,8 +782,9 @@ passed 31 matrix/order plus nine settlement cases. Evidence:
 Fresh GPT-5.6 Terra review matched every independent row and found no production
 blocker. The original 31-pass baseline log lacked source provenance; its result
 is historical only. Review reproduced 31 passes using the exact `18054ca` runtime
-and frozen candidate tests in `baseline-runtime-reproduction/` beside the
-manifest, with source hashes and actual import origins. This is explicitly a
+and frozen candidate tests, with source hashes and actual import origins now
+preserved in `baseline-runtime-reproduction-evidence/` beside the manifest.
+This is explicitly a
 post-implementation reproduction, not invented provenance for the earlier run.
 Protected 11 remain exact. Four pure fixtures match filtered Git content; one
 checkout has a disclosed EOL-only raw fixture variance. No assertion retirement,
@@ -821,6 +822,43 @@ and protected authorities are untouched; verify evidence provenance directly.
 
 **Commit gate.** All final evidence complete; `docs: close narrow reduction verification`.
 
+**Execution evidence (2026-09-08).** The combined product at `ca263a0` passed
+4,862 tests with the exact four NR-0 WinError 1314 capability skips, including
+all 28 headed cases with no headed skip. All 12 import contracts passed. The
+unchanged settlement oracle passed 30 scenarios across three identical runs.
+Actual interpreter/module origins point to the main checkout. All 11 protected
+authorities and four pure fixtures match NR-0 in both filtered content and raw
+bytes. The only follow-up, `ca493b8`, restores two accidentally removed module
+blank lines; an empty ignore-blank-lines diff and identical parsed AST qualify
+the existing behavioral evidence. Final evidence:
+`build/reduction-followup/ca263a0/NR-9/20260908-170900/manifest.json`.
+
+Integrated replay detected all 17 declared faults and passed all eight actual
+harmless variations. Core/history reconciles 41 frozen assertion rows and 14
+witness groups; executor reconciles the remaining 25 rows and four groups.
+No assertion remains unclassified. Supplements retain the supported mutable
+handoff seam, actual leaf-certification counts, post-rename durability marker,
+and independent publication matrix. The NR-3 domain fault uses 120,001 valid
+distinct paths to reach the original refusal assertion; duplicate-key setup
+failures are excluded. Evidence manifests live under
+`build/reduction-followup/nr9-controls-core-history/20260908-170251/` and
+`build/reduction-followup/nr9-controls-executor/20260908-170830/`.
+
+Fresh GPT-5.6 Sol overall review passed source, test dispositions and evidence.
+Repeated evidence gaps were handled at control qualification: count actual work,
+require a real variation and exact seam, verify source origins, and inspect the
+intended assertion. They did not authorize broader product changes. Matching
+module documentation is current; schemas, protected inputs and shelved families
+remain unchanged. No timing, net-line-count or universal resource claim is made.
+
+All eight implementation branches and ten temporary worktrees were removed
+after clean-state, ancestry and patch/content accounting. Baseline-reproduction
+logs remain outside the removed checkout. Initial Windows cache cleanup denial
+was resolved by the bounded elevated cleanup; no manual action remains.
+`build/reduction-followup/integration.json` and `integration-accounting.json`
+retain the commit and cleanup record. Earlier ignored evidence and interpreter
+state were preserved. The final closeout is documentation-only.
+
 ## Overall final sweep
 
 1. Trace scan -> plan/inventory -> recorder and executor -> Progress/result ->
@@ -853,18 +891,16 @@ and protected authorities are untouched; verify evidence provenance directly.
 
 ## Resumption block
 
-- Current state: execution is in progress with isolated GPT-5.6 builders and
-  fresh reviewers. The register and execution receipts record completed outcomes;
-  the final integrated gate remains pending. Discovery's 25-pass result is
-  historical evidence only.
+- Current state: NR-0–NR-9 are complete after isolated GPT-5.6 implementation,
+  fresh reviews, integrated verification and temporary checkout/ref cleanup.
+  Discovery's 25-pass result remains historical evidence only.
 - Source base: `50bc05ebab57da724faa11ccf4f8882cdcb6a291`. Existing branch at
   creation: `milestone1-anthony`. Recheck HEAD/dirty files and qualify actual
   product imports for every candidate. Task branches use `codex/` prefixes;
   do not commit unrelated changes. `build/reduction-followup/integration.json`
   records temporary branch/checkouts and their integration commits.
-- Next action: finish pending register rows in dependency order, give each a
-  fresh review and atomic commit, then complete NR-9 and account for temporary
-  checkouts before cleanup.
+- Next action: none in this register. Future reductions require a separately
+  accepted bounded scope; the shelved families remain deferred.
 - Evidence already present: prior PR-9 integrated evidence under
   `build/production-reduction/pr9/`; protected-input list under
   `build/production-reduction/40fd8a5/protected/authority-inputs.json`; this plan's

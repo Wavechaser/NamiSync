@@ -1,62 +1,57 @@
 # Latest session handoff
 
-## Current work
+## Completed work
 
-The user authorized implementation of docs/REDUCTION_FOLLOWUP.md with GPT-5.6
-builders, fresh adversarial reviewers, and independent atomic commits. Root
-owns integration and documentation; builders work in isolated checkouts.
-The plan register and execution receipts are the completion authority.
+All NR-0–NR-9 checkpoints in docs/REDUCTION_FOLLOWUP.md are complete on
+milestone1-anthony. GPT-5.6 builders implemented isolated checkpoints; fresh
+reviewers checked each before root committed and integrated it. The eight
+product checkpoints end at ca263a0; ca493b8 restores only two module blank lines
+found by final review. This closeout changes documentation only.
 
-NR-0, NR-1, NR-2 and NR-6 are integrated on milestone1-anthony. This checkpoint
-adds NR-4 validated history encoding after fresh review. NR-3 and NR-7 are in
-verification/review; NR-5 follows NR-4 and NR-8 follows NR-7. NR-9 remains required.
+Implemented the bounded stat/progress, scan, history and executor reductions.
+Recording tails, pause/cancel, mutation-verdict constructors, legacy key pops,
+native/pipeline changes, root probes, schemas and unrelated cleanup remain shelved.
+No supported product defect or mandatory stop consequence remains unresolved.
 
-Recording tails, pause/cancel blocks, mutation-verdict constructors, legacy key
-pops, native/pipeline changes, schemas, and unrelated cleanup remain shelved.
-No supported product defect or mandatory stop consequence has been accepted.
+## Verification and evidence
 
-## Verification and dispositions
+Baseline: 50bc05ebab57da724faa11ccf4f8882cdcb6a291. Integrated evidence:
+build/reduction-followup/ca263a0/NR-9/20260908-170900/manifest.json.
+The complete suite passed 4,862 with the same four WinError 1314 privilege skips
+and all 28 headed cases passing. Actual imports point to the main checkout;
+all 12 import contracts and the unchanged oracle's 30 scenarios across three
+runs passed. The two-blank-line follow-up has identical parsed AST and an empty
+ignore-blank-lines diff, so no behavioral rerun was needed.
 
-Baseline: 50bc05ebab57da724faa11ccf4f8882cdcb6a291. NR-0 passed 4,741 tests with
-four exact WinError 1314 capability skips, all 28 headed cases, 12 import
-contracts and 30 oracle scenarios across three identical runs.
-Evidence is under build/reduction-followup/; each checkpoint receipt in the plan
-links its manifest, raw logs, assertion dispositions and controls.
+Integrated replay detected all 17 faults and passed all eight real harmless
+variations. All 66 frozen assertion rows and 18 witness groups are reconciled,
+with explicit supplements and zero unclassified assertions. Core/history and
+executor manifests are under build/reduction-followup/nr9-controls-core-history/
+20260908-170251/ and nr9-controls-executor/20260908-170830/ respectively.
+The fresh overall reviewer approved source, test dispositions and evidence.
 
-NR-1 preserves constructor/type/fact semantics while adopting exact immutable
-stats. Two omitted old assertions were classified explicitly: fresh stat identity
-retired as representation-only; a reflective mutation fixture was replaced with
-supported candidate replacement, retaining verifier refusal and terminal truth.
-NR-2 retires only named reflective Progress protection and preserves first
-normalization, every field and accepted-emission fallback. NR-6 removes only
-the three unused parameters and outer no-op rethrow. NR-4 preserves validator
-Progress behavior and validates before history mutation, reusing checked bytes.
-Its neighborhood passed 2,960 with one baseline capability skip; focused 409,
-imports 12, and all declared controls passed with fresh review.
+All 11 protected authorities and four pure fixtures match NR-0 in filtered Git
+content and raw bytes. NR-4 legitimately adds encoder assertions to the event
+consumer test; its expected literals remain unchanged. Checkpoint receipts
+explain reflective/representation-only retirements and preserve supported
+handoff replacement, accepted emission, hashes, limits and operation outcomes.
 
-Protected 11 files remain exact. Four pure identity/event fixture files remain
-exact; NR-4 extends assertions in the fixture-bearing consumer test without
-changing expected literal data. Initial failed/lost logging attempts are kept
-separately and excluded; final gate evidence uses captured native output.
-Every control must show a real variation, intended interception and the retained
-assertion it exercises. No net test/LOC or timing target is being claimed.
+Failed and superseded evidence attempts remain preserved and excluded. NR-3
+counts actual leaf certification; NR-7 detects the post-rename durability marker;
+NR-8 has an honestly labeled post-implementation reproduction against the exact
+pre-change runtime. Its logs remain in baseline-runtime-reproduction-evidence/
+beside the NR-8 manifest. No speedup or net-line-count target is claimed.
 
-## Resumption and preservation
+## Cleanup and next work
 
-Read the plan register, receipts and build/reduction-followup/integration.json
-for current branches and integration commits. Verify actual interpreter/module
-origins in each checkout; the shared interpreter's editable install must not
-redirect tests. Qualified Python/Node paths and commands are in the plan.
-Native test runs require usable Windows temporary storage; poll returned tool
-sessions to completion and capture stdout/stderr explicitly.
+All eight task branches and ten temporary worktrees were removed after exact
+content/evidence accounting. Windows cache cleanup initially failed but the
+bounded elevated workaround succeeded; no manual cleanup remains. The original
+branch/worktree remains. build/reduction-followup/integration.json and
+integration-accounting.json preserve the branch-to-commit accounting.
 
-Finish pending rows with fresh reviews and independent commits, then run the
-complete/headed suite, imports, unchanged oracle repeat three, all integrated
-controls, and final adversarial review. NR-9 must account for all task-created
-checkouts/refs before removing them. NR-6 reverse-patch control may need narrow
-remapping after shared rename; never restore an old runtime wholesale.
-
-Preserve prior ignored worktrees/evidence and unrelated state. The user-owned
-root reports were already absent when execution began; do not restore them.
-Block only an affected/dependent lane, finish independent work, then preserve
-blocked changes using AGENTS recovery rules if necessary.
+Earlier ignored evidence, interpreter state and unrelated files were preserved.
+The root reports were absent at execution start and were not restored. No push
+was requested or performed. There is no remaining action in this register;
+future work follows M1_PLAN and a separately accepted scope. The unchanged
+AGENTS/DEFENSE stop and recovery rules remain binding.

@@ -25,17 +25,24 @@ preserving public behavior, real boundary checks, and persisted contracts.
 
 #### Reduce redundant production mechanisms (2026-09-07 – 2026-09-08)
 
-- Accepted a pending immutable-value and narrow scan-validation follow-up.
-  Investigated event encoding and executor condensation without changing product
-  code: recommended local history byte/projection reuse and explicit rename/
-  publication-observer sharing; retained boundary validation and settlement
-  ordering. RF-E/RF-X dispositions and 25 passing focused checks are retained in
-  REDUCTION_FOLLOWUP, migrated from M1_PLAN.
-- Planned finite stat/progress, scan, history, and executor reductions with
-  explicit test retirements, retained guarantees, added-witness criteria and
-  integrated gates. Recording tails, pause/cancel and mutation-verdict compression
-  remain shelved. Qualified the follow-up baseline and assertion dispositions
-  with a fresh adversarial review; product checkpoints remain pending.
+- Implemented the narrow follow-up in eight independently reviewed commits:
+  reuse admitted immutable stats and normalized Progress, remove repeated scan
+  certification, reuse history encoding and local item projections, share
+  MOVE/RECASE rename and publication observation, and remove only the named
+  unused executor arguments/no-op wrapper. Boundary validation, recording order,
+  schemas and settlement policy remain unchanged.
+- Migrated RF-E/RF-X dispositions from M1_PLAN to REDUCTION_FOLLOWUP and qualified
+  finite assertion/control evidence. Retired only named representation or
+  unsupported reflective expectations, retaining supported handoff replacement,
+  emitter refusal, hashes, limits and operation-specific outcomes. Recording
+  tails, pause/cancel and mutation-verdict compression remain shelved.
+- The integrated complete suite passed 4,862 with the four unchanged privilege
+  skips and all 28 headed cases; all 12 import contracts and the unchanged
+  30-scenario oracle across three runs passed. Integrated replay detected all
+  17 faults and passed all eight harmless variations; all 66 assertion rows and
+  18 witness groups are accounted for. Fresh final review passed. All eight task
+  branches and ten temporary worktrees were removed after content accounting;
+  verification evidence remains preserved.
 
 - Consolidated required sync recording finishing and five verification terminal
   projections, shared event vocabularies and Clock, and reused admitted exact
