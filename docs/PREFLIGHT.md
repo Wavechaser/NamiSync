@@ -62,6 +62,16 @@ drops, cleans, or executes operations. Admitted execution uses the immutable
 reviewed policy snapshot already bound into the plan; it never reinterprets the
 run from newer global defaults.
 
+An insufficient-space verdict does not mutate or invalidate the reviewed plan.
+Review preflight runs after plan construction and can publish that immutable
+artifact with a negative verdict. This differs from scan/planner population or
+logical-byte admission refusal, which publishes no plan. Execution preflight
+can refuse an admitted execution without starting the executor. The accepted
+M1 desktop recovery is explicit Plan again in a new task with fresh scans and
+review, not terminal subset retry or in-place plan repair. If the user frees
+space by deleting source/target entries, those fresh scans account for the
+changed world; preflight never silently adopts those changes into an old plan.
+
 During each preflight cycle, workflow creates one exact immutable
 `ExecutionReview` and passes that same instance to observation and judgment.
 Plan review supplies empty status; execution and resume copy current status only

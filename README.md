@@ -214,7 +214,7 @@ never hides the other result axes in rendered output.
 - [Production reduction register](docs/PRODUCTION_REDUCTION.md) — bounded
   simplifications, retained guarantees, and verification.
 - [Narrow reduction follow-up](docs/REDUCTION_FOLLOWUP.md) — closed simplification
-  scope, assertion dispositions, and pending implementation checkpoints.
+  scope, assertion dispositions, and completed verification.
 - [Detailed changelog](CHANGELOG.md) — dated task history grouped by milestone
   or version and phase.
 - [Development tools](docs/TOOLS.md) — measurement tooling, the
@@ -224,6 +224,8 @@ never hides the other result axes in rendered output.
 - [Presentation](docs/PRESENTATION.md) — tree/view, search/sort and scale contracts.
 - [Interfaces](docs/INTERFACES.md) — adapters, host/package and lifecycle contracts.
 - [M1 plan](docs/M1_PLAN.md) — remaining outcomes, order and verification.
+- [M2 proposal](docs/M2_PROPOSAL.md) — proposed later features, without an
+  implementation plan or delivery commitment.
 - [Handoff](docs/HANDOFF.md) — immediate operational context.
 
 Historical plans and delivery records are under `docs/obsolete/`:
@@ -260,16 +262,17 @@ also consolidate repeated implementation. History schema reductions follow the
 explicit coordinated-reset contract; behavioral test witnesses retain safety,
 snapshot consistency, and bounded work.
 
+Shared root authority, stable executor/verifier package boundaries, an oracle-
+guarded typed settlement reducer, and layered test operations made internal
+ownership explicit. Consolidated documentation now scopes the remaining M1
+task surfaces, fresh Plan-again recovery, capacity/trash information, and
+integrity controls; terminal domain retries and user-invoked session cleanup
+are proposed for M2.
+
 ### M1 Hardening
 
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
-
-### M1 Maintenance Refactor
-
-Shared root authority, stable executor/verifier package boundaries, an oracle-
-guarded typed settlement reducer, and layered test operations made internal
-ownership explicit without changing public or persisted contracts.
 
 ### M1 GUI
 

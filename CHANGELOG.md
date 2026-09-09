@@ -20,168 +20,101 @@ history, and workflow product while building its secured headed WebView2 shell.
 
 ### M1 Consolidation
 
-Redundant in-process transports and certification layers were removed while
-preserving public behavior, real boundary checks, and persisted contracts.
+Product, test, and documentation maintenance clarified ownership and removed
+repeated machinery while preserving operational safety and boundary contracts.
 
-#### Reduce redundant production mechanisms (2026-09-07 – 2026-09-08)
+#### Product simplification (2026-09-01 – 2026-09-08)
 
-- Implemented the narrow follow-up in eight independently reviewed commits:
-  reuse admitted immutable stats and normalized Progress, remove repeated scan
-  certification, reuse history encoding and local item projections, share
-  MOVE/RECASE rename and publication observation, and remove only the named
-  unused executor arguments/no-op wrapper. Boundary validation, recording order,
-  schemas and settlement policy remain unchanged.
-- Migrated RF-E/RF-X dispositions from M1_PLAN to REDUCTION_FOLLOWUP and qualified
-  finite assertion/control evidence. Retired only named representation or
-  unsupported reflective expectations, retaining supported handoff replacement,
-  emitter refusal, hashes, limits and operation-specific outcomes. Recording
-  tails, pause/cancel and mutation-verdict compression remain shelved.
-- The integrated complete suite passed 4,862 with the four unchanged privilege
-  skips and all 28 headed cases; all 12 import contracts and the unchanged
-  30-scenario oracle across three runs passed. Integrated replay detected all
-  17 faults and passed all eight harmless variations; all 66 assertion rows and
-  18 witness groups are accounted for. Fresh final review passed. All eight task
-  branches and ten temporary worktrees were removed after content accounting;
-  verification evidence remains preserved.
+- Removed internal workflow JSON transports and repeated event certification;
+  shared admitted immutable stats, progress, event details, history encoding,
+  and item projections while preserving external and persistence validation.
+- Consolidated task effect ownership, plan retirement, session observation,
+  metadata storage, and idempotent cleanup replay. Fixed the plan-selection
+  retirement race and bounded CLI ingress without changing mutation authority.
+- Shared sync recording finishing, verification terminal projection, event
+  vocabularies, clock contracts, and bounded database query batching. Removed
+  the redundant history update trigger: history schema/shared data epoch is 7,
+  ledger schema is 4, and old or mixed pairs require coordinated reset.
+- Narrowed repeated scan validation; shared MOVE/RECASE rename mechanics and
+  new-file/publication observation; removed named unused executor plumbing.
+  Recording tails, pause/cancel blocks, and mutation-verdict constructors remain
+  shelved. Native/pipeline behavior and settlement policy remain unchanged.
+- Final integrated verification passed 4,862 tests with four unchanged privilege
+  skips, including all 28 headed cases, plus 12 import contracts and the retained
+  30-scenario oracle across three identical runs. Narrow-reduction replay
+  detected 17 faults and passed eight harmless variations. Reviewed temporary
+  branches/worktrees were removed; evidence remains in REDUCTION_FOLLOWUP.
 
-- Consolidated required sync recording finishing and five verification terminal
-  projections, shared event vocabularies and Clock, and reused admitted exact
-  immutable event details while retaining normalization and boundary validators.
-- Removed only the subsumed history duplicate-link UPDATE trigger. History
-  schema and shared data epoch are now 7; ledger schema remains 4. Old or mixed
-  database pairs still require the documented coordinated manual reset.
-- Centralized the 400-subject policy across ten variable-IN query loops and
-  retained snapshot, parameter-bound, completeness, and atomicity witnesses.
-  Selection tests now protect results and bounded work without prescribing
-  frozenset or shared identity; production selection is unchanged.
-- Delivered separately reviewed atomic checkpoints under PRODUCTION_REDUCTION.md.
-  The complete suite passed 4,741 tests with four unchanged capability skips,
-  including all 28 headed tests; all 12 import contracts passed. The unchanged
-  oracle passed 30 scenarios across three identical runs. Final replay qualified
-  25 fault detections, four harmless controls, and one required-finisher refusal;
-  all 11 protected inputs match. Rejected findings and unintegrated feature
-  components remain untouched.
+#### Test consolidation (2026-09-01 – 2026-09-07)
 
-#### Study test ablation and refine retained test machinery (2026-09-05 – 2026-09-07)
+- Consolidated boundary, lifecycle, review, inventory, executor, integrity, and
+  browser witnesses around their behavioral owners. Shared fixtures, SQL,
+  selection, theme, and required Node harness setup; retired redundant spelling
+  assertions and temporary migration corpora without losing protected cases.
+- Used isolated cohort ablation, fault probes, harmless variations, and fresh
+  review to distinguish duplicate machinery from detection loss. Preserved the
+  executor settlement oracle, native operation families, source-owner guards,
+  population bounds, snapshot/atomicity checks, and visual/privacy evidence.
+- Corrected headed native-return and reinjection observations separately from
+  consolidation. The refinement closeout passed 4,678 tests with four capability
+  skips, 12 import contracts, and replay of 63 faults plus five harmless
+  variations; TEST_REFINEMENT and TEST_ABLATION retain the qualified evidence.
 
-- Evaluated six finite test cohorts through isolated selection ablation, harmless
-  variations, fault probes and independent reviews; retained detection losses
-  and policy-retirement costs separately from source-size estimates.
-- The combined ordinary ablation passed 4,504 tests with four capability skips;
-  no live tests or product code were removed. Full evidence and limitations
-  remain in TEST_ABLATION.md.
-- Rebased the four non-oracle recommendation areas on the documentation
-  compaction. No new whole-test removal follows from retired future machinery;
-  corrected the source-owner recommendation to recognize CORE's explicit AST
-  guard requirement. SH-G-15 remains scoped future acceptance; oracle unchanged.
-- Followed the approved refinement register: retained source-owner guards while
-  sharing fixture, SQL, selection and theme setup; removed eight harness spelling
-  assertions with demonstrated ordinary behavioral owners. Preserved batching,
-  index, snapshot, visual, privacy and evidence-authority requirements.
-- Repaired the bounded test-child reinjection handshake in its own checkpoint,
-  requalified the baseline and pruned the reviewed, superseded recovery branch.
-- The test/harness diff is a diagnostic net increase of 27 lines; this delivery
-  reduces repeated machinery, not overall test bulk. Final combined replay passed
-  63 faults and five harmless variations; the qualified complete suite passed
-  4,678 tests with four capability skips. All 12 import contracts and protected
-  input identities remain intact; TEST_REFINEMENT.md records the reviewed evidence.
+#### Documentation consolidation (2026-09-05 – 2026-09-09)
 
-#### Ablate documentation and separate active contracts from delivery history (2026-09-05 – 2026-09-06)
+- Tested documentation removal against retained answers and counterexamples;
+  separated active contracts from delivery history. BRIDGE and PRESENTATION
+  own their subjects, INTERFACES owns lifecycle/host criteria, and M1_PLAN is
+  the sole remaining delivery register. Superseded plans and studies are archived.
+- Retired aggregate object-graph prescriptions while preserving admission walls
+  and scoped resource-release evidence. The superseded compact-plan memory
+  prerequisite does not govern frontend delivery; no new resource pass is claimed.
+- Scoped the next task slice to page creation, rail/navigation, and safe close;
+  folded later lifecycle closure into integrated verification. Retained fresh
+  Plan-again review after refusal, first manual post-copy verification, and
+  planned capacity/trash information. Deferred terminal domain retries,
+  user-invoked session cleanup, and richer I/O categories to the M2 feature list.
+- Reconciled behavior/status prose, inspected defect ownership, and consolidated
+  this history. Documentation review and link/diff checks do not substitute for
+  implementing or testing the remaining product features.
 
-- Evaluated six documentation removal cohorts with retained-answer witnesses,
-  unique losses, and counterexamples; proposed one remaining-work plan and
-  direct subject ownership instead of the M1 plan ancestry chain.
-- Identified retired task-reservation prescriptions surviving in active prose.
-  Preserved accepted outcomes while reopening unrealized mechanisms by user
-  decision; production code and tests are unchanged.
-- Narrowed SH-G-15 to scoped cold-start resource budgets and repeated/long-
-  workload leak/growth acceptance, preserving independent runtime request and
-  population bounds. Reconciled active references and evidence-tier policy.
-- Traced milestone1's compact-plan prerequisite to its 128 MiB/15% reserve
-  model, distinguishing planned compaction from landed scaling improvements.
-  Numeric resource acceptance remains open; no runtime pass is claimed.
-- Split bridge protocol and presentation contracts into BRIDGE and PRESENTATION;
-  consolidated host/lifecycle criteria in INTERFACES and remaining outcomes in
-  M1_PLAN. Archived the original plans and M1_SIMPLIFICATION delivery record.
-- Removed retired aggregate prescriptions and duplicated recaps/shape inventories,
-  reconciled references, and archived the study and two obsolete acceptance-target
-  ledger entries without claiming runtime fixes.
-- Reviewed contracts and source-backed protocol witnesses with independent agents;
-  checked relative links/anchors and diff integrity. Production, tests, tools,
-  and protected evidence are unchanged.
+#### Separate historical criteria from active contracts (2026-08-27)
 
-#### Remove duplicate internal transport, certification, and lifecycle authority (2026-09-01 – 2026-09-05)
+- Reconstructed a retrospective M0 plan from the final pre-M1 documentation
+  snapshot, preserving historical qualifications and verification notes without
+  treating them as current acceptance evidence.
+- Removed 13 inherited component checklists after checking their later contract
+  prose; retained the few unique current rules and measurement-fixture details
+  in their owning documents. Newer prose prevails over stale criteria.
+- Kept current M1 gates and explicitly deferred ingest criteria separate;
+  updated references to the archived M0 source without changing runtime policy.
+- Relocated all five imported PoC documents to `docs/obsolete/PoC_import/`
+  byte-for-byte, updating references to identify them as historical evidence.
 
-- Removed process-local workflow JSON codecs, payload versions, and byte
-  custody. Dispatcher now retains opaque detached checkpoints, and workflows
-  materialize fresh invocation state when opening them.
-- Made the canonical v5 event projector the shared live, history, and browser
-  body representation while preserving validation at filesystem, bridge, CLI,
-  persistence, and event-delivery boundaries.
-- Centralized domain-effect receipts, task/session association, admission
-  rollback, exact plan retirement, and logical settlement in `TaskLifecycle`
-  behind the narrow `TaskLifecyclePort`. Dispatcher still owns custody,
-  `SessionObserver` owns subscription lifetime, and adapters own bounded
-  response replay and delivery state; an import rule prevents web drain from
-  reaching the domain lifecycle owners.
-- Simplified cleanup retry to replay one fixed exact-owner sequence over
-  idempotent or monotone operations. No per-step cursor or acknowledgement is
-  retained, and a completed physical transition or observable effect remains
-  unique even when an owner call repeats.
-- Made `StoredSessionRecord` the canonical metadata/result value and composed
-  live `SessionRecord` around it. Named access and persisted/public behavior
-  remain stable; generic live-dataclass introspection intentionally changed.
-- Retained Dispatcher’s condition-guarded parallel session maps after a
-  disposable aggregate added translation machinery without proving stronger
-  lock safety. A separate terminal-field probe required no lifecycle-specific
-  handling, so no further result machinery was added.
-- Closed the plan-selection/drop retirement race and reanchored the installed-
-  wheel headed fixture to the task-port surface.
-- Preserved recognizable structured refusal after origin loss by making exact
-  native response-token acknowledgment cleanup-only and independent of document
-  trust. Command dispatch retains its post-reservation origin check, and exact
-  worker-exit custody remains unchanged.
-- Repaired the TS-0 headed measuring system by removing an unrelated materials
-  transport sentinel, checking database reset guidance semantically, recording
-  the off-origin command refusal once, reacquiring transient UI Automation
-  trees under exact window ownership, and correlating the delayed native return
-  by its result token. All 28 headed cases now pass without deleting a
-  behavioral scenario; the active simplification register requires causally
-  identified interception hits rather than merely nonempty recorders.
-- Reduced review/inventory test duplication at shared admission and cleanup
-  owners, retaining all distinct population, selection, authority, and save
-  boundaries. TS-R2 removes 18 rows with independent adversarial review and
-  old/new defect witnesses; bridge tests reuse the equivalent DB file builder.
-- Replaced 31 manual service initializations with real construction around
-  existing composition seams; removed one duplicate observer retry case and
-  replaced response-cache counts with exact replay and capacity-reuse evidence.
-- Replaced private desktop timing patches with the approved per-owner delay,
-  promoted two behavioral Node probes to required gates, shared four probes'
-  listener mechanics, and allowed unconsumed runtime diagnostics in headed
-  reports. TS-R4 retains all 28 installed headed witnesses and strict required
-  evidence; independent adversarial and finite fault reviews pass.
-- Added the approved bounded-pipeline queue/poll seams and consolidated
-  verifier, recording, compound-exclusion, and forwarding test products while
-  preserving native operation families and the original settlement oracle.
-  TS-R5 preserves those obligations with independent old/new failure proofs.
-- Closed the TS-R2 through TS-R5 external-review gaps: migrated the final three
-  normal service fixtures, aligned required Node launch diagnostics, and
-  clarified support accounting and probe guidance. Independent Claude review
-  reconciliation and targeted mutation checks preserve the accepted scope.
-- Closed test simplification through TS-R9. Rejected the shadow oracle at trace
-  and independent-decision prerequisites and retained its original protected
-  authority. Shared only the remaining identical required Node launch scaffold;
-  no cleanup-created support orphan was found.
-- Final ordinary/installed headed/complete verification, all import contracts,
-  original three-run oracle and the full calibrated defect/variation replay pass.
-  Collection is 4,674, down 299 from the repaired baseline, with all ten repair
-  witnesses preserved. Complete test/support/checker volume is nearly unchanged.
-  Archived the register and retired delivery drivers; independent Codex/GPT
-  adversarial reviews found no actionable issue.
-- Retired both temporary boundary corpora and their self-tests after final
-  exact comparisons. Enduring boundary, owner, and import-law tests remain.
-  The lifecycle work consolidated authority but did not reduce production
-  source size; further reduction requires separate scope.
+#### Establish layered test operations (2026-08-16)
+
+- Added focused, department, cross-department, ordinary, and complete/headed
+  run policy with short and long department selectors backed by one exhaustive,
+  fail-closed primary-ownership manifest.
+- Reduced evidence-neutral fixture cost through pip-less ordinary wheel
+  installation, success-only junction capability reuse, exact-boundary native
+  verifier data, test-sized log rollover, and lazy headed scenario evidence.
+- Consolidated duplicate coverage and shared helpers without merging behavioral
+  cases; selection-independence guards reject test-tree back edges into
+  collected modules, while lazy-failure guards preserve original headed
+  failures.
+- Left protected custody and settlement evidence, the live 33k-row database
+  scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
+
+#### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
+
+- Centralized fresh root-authority evidence in core while preserving the
+  distinct admission policies and probe timing of scanner, preflight,
+  workflows, executor, and verifier.
+- Corrected and froze executor settlement behavior in a retained three-run,
+  30-scenario oracle before splitting executor and verifier behind stable
+  facades; a typed effect journal, pure reducer, and ownership-aligned tests
+  replaced the monolithic implementation.
 
 ### M1 Hardening
 
@@ -287,50 +220,6 @@ claims explicit, independently reviewable, and regression-backed.
 - Hardened database snapshots and incomplete-scan authority, rejected coercive
   persisted and bridge JSON, and added temporal/concurrency/recovery stress
   coverage.
-
-### M1 Maintenance Refactor
-
-Shared root authority, stable executor/verifier package boundaries, an oracle-
-guarded typed settlement reducer, and layered test operations made internal
-ownership explicit without changing public or persisted contracts.
-
-#### Separate historical criteria from active contracts (2026-08-27)
-
-- Reconstructed a retrospective M0 plan from the final pre-M1 documentation
-  snapshot, preserving historical qualifications and verification notes without
-  treating them as current acceptance evidence.
-- Removed 13 inherited component checklists after checking their later contract
-  prose; retained the few unique current rules and measurement-fixture details
-  in their owning documents. Newer prose prevails over stale criteria.
-- Kept current M1 gates and explicitly deferred ingest criteria separate;
-  updated references to the archived M0 source without changing runtime policy.
-- Relocated all five imported PoC documents to `docs/obsolete/PoC_import/`
-  byte-for-byte, updating references to identify them as historical evidence.
-
-#### Establish layered test operations (2026-08-16)
-
-- Added focused, department, cross-department, ordinary, and complete/headed
-  run policy with short and long department selectors backed by one exhaustive,
-  fail-closed primary-ownership manifest.
-- Reduced evidence-neutral fixture cost through pip-less ordinary wheel
-  installation, success-only junction capability reuse, exact-boundary native
-  verifier data, test-sized log rollover, and lazy headed scenario evidence.
-- Consolidated duplicate coverage and shared helpers without merging behavioral
-  cases; selection-independence guards reject test-tree back edges into
-  collected modules, while lazy-failure guards preserve original headed
-  failures.
-- Left protected custody and settlement evidence, the live 33k-row database
-  scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
-
-#### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
-
-- Centralized fresh root-authority evidence in core while preserving the
-  distinct admission policies and probe timing of scanner, preflight,
-  workflows, executor, and verifier.
-- Corrected and froze executor settlement behavior in a retained three-run,
-  30-scenario oracle before splitting executor and verifier behind stable
-  facades; a typed effect journal, pure reducer, and ownership-aligned tests
-  replaced the monolithic implementation.
 
 ### M1 GUI
 

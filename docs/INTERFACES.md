@@ -111,13 +111,18 @@ internal replacement of an artifact under one request resets user selection
 and advances that request's revision monotonically, even when deterministic
 operation ids repeat. Recognized selection command ids remain retry tombstones
 across that replacement, so a lost response cannot reapply old intent to the
-new artifact. The H2 desktop exposes no such in-task replacement: changed Setup
+new artifact. In the accepted, unrealized desktop flow, changed Setup
 or explicit Plan again creates a new task, while the old plan slot stays
 immutable. Plan again asks the backend to resolve the retained plan's reviewed
 volume identities into fresh Setup slots; it never submits the old display path
-or copies selection state. A refused/unrun execution reopens only the old task's
-selection at a new revision, so subset retry remains a new commitment over the
-same plan rather than artifact replacement.
+or copies selection state. Only a failed admission restores `reviewing` today;
+a preflight refusal after successful admission leaves selection committed. M1
+does not add terminal subset retry or reopen that committed selection. Its
+recovery is explicit Plan again, fresh scans, and new review/authorization. This
+also accounts for source or target files removed while freeing disk space;
+neither an old selection digest nor a new free-space reading certifies an
+unchanged filesystem. The direct-service replacement behavior above is not a
+desktop recovery command.
 Folder gestures expand only toggleable descendants; a
 safety-disabled row remains disabled without making selectable siblings inert.
 Only the execution registration supplies

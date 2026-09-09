@@ -310,7 +310,12 @@ discarding the only known-good version.
 The planner/preflight formula includes backup-copy bytes on no-hardlink targets.
 A partial backup remains under exact temp grammar, is ignored by restore
 planning, and remains with the trash run directory. A reviewed maintenance
-purge is unrealized; ordinary temp recovery still never walks `.synctrash`.
+purge is deferred to M2 with user-invoked session cleanup; ordinary temp recovery
+still never walks `.synctrash`. Task close never implies trash purge. M1's
+accepted trash-location information belongs to execution review: it may include
+an exact completed count only when supported by outcome evidence, otherwise
+location alone. It does not require a new trash walk or claim a complete count
+of preserved update backups from ordinary trash-operation records.
 Readonly ordering/recovery restores the old version's planned attributes after
 replacement so the hardlinked trash inode is not left silently degraded.
 
@@ -653,6 +658,17 @@ copy-recording result across a same-process execute pause. If status reaches
 `SUCCEEDED` without evidence, the compound workflow reports a named
 verification-incomplete invariant failure rather than silently omitting
 readback.
+
+Generic I/O failure already carries `ExecutionReason.IO_ERROR`; sharing
+violations are separately typed. The current default failure policy retries
+sharing violations and continues past other item failures. Accepted M1 work in
+[M1_PLAN.md](M1_PLAN.md) will distinguish recognized disk-capacity errors and
+use the existing `Stop` policy decision after current-operation settlement so
+later operations remain unrun. That behavior is not implemented yet. It requires
+classification, settled-effect/recording, later-operation, and projection
+regressions; it does not reopen settlement design. Richer I/O categories and
+user-invoked terminal retry remain M2 proposals. Existing bounded automatic
+retries and live pause/resume are unchanged.
 
 Sharing violations use bounded retry with injected clock/backoff and checkpoints
 between attempts. COPY, UPDATE, and MOVE_UPDATE install an operation-local stage

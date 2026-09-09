@@ -260,6 +260,7 @@ Lifecycle describes task cards and run status.
 | plain `CANCELED` | neutral | fill |
 | execution reason `CANCELED_AFTER_PUBLISH` / `CANCELED_AFTER_MUTATION` | yellow | fill |
 | `REFUSED` | yellow | fill |
+| capacity exhaustion or capacity refusal | yellow | fill |
 | errored / `FAILED` | red | fill |
 
 Yellow means that nothing is known broken, but the result needs user attention
@@ -992,15 +993,38 @@ and terminal headline; subject-only work never fabricates a source-to-target
 label. Exact task/result revisions and named-generation rules are bridge
 authority.
 
+M1-4 activates task page creation, selection/navigation, rail interactions, and
+explicit closure. Page bodies may remain blank until their owning delivery
+checkpoint activates Setup, review, execution, or inventory content. Task
+identity, activity/terminal state, and pending/failed close remain truthful and
+observable; this slice does not prebuild those later content projections.
+
 An accepted pause renders **Pausing…** until custody actually reaches
 **Paused**; repeat pause/resume is disabled during the drain and cancellation
 remains available. Terminal presentation releases only that exact session while
-review artifacts remain. Closing a live task asks once, renders
-**Closing…**, requests cancellation, and stays visible until terminal-record
-cleanup completes. Failure is actionable and retryable; there is no force-close
+review artifacts remain. Closing a live task renders
+**Closing…**, immediately requests best-effort cooperative cancellation, and
+stays visible until cancellation settlement and resource release permit close.
+An incomplete close remains actionable through close/shutdown recovery; this
+does not retry the domain operation. There is no force-close
 path. Close and publication-fault observations invalidate rail, panel, and
 affected tree request generations before clearing cached data, so detached old
 responses are inert before payload read.
+
+Task closure never purges trash. User-invoked session cleanup and terminal
+execution/verification retry actions, including **Verify remaining**, are
+deferred to M2. Existing automatic owned-temp recovery, bounded operation/read
+retries, pause/resume, transport replay, and shutdown recovery remain unchanged.
+A forced process exit cannot wait for settlement and provides no durable live
+task or resume promise; later work starts from fresh observation and review.
+
+Normally completed linked execution/verification retains read-only file lists,
+item status, and each phase's aggregate status. Normal execution-only completion
+may offer the first manual post-copy verification when eligible. Non-stopping
+degradation retains that same review experience with visible issue axes, without
+item retries. Canceled or otherwise abnormally terminated sessions retain their
+terminal truth for review and close, without resume, retry, or session cleanup.
+Paused live sessions retain their existing controls.
 
 On `review-publication-protocol-failed`, the pane keeps prior settled review
 truth, clears the faulting live row decoration, disables mutating actions, and
@@ -1030,8 +1054,9 @@ Sync is a serial task interaction: Setup creates one immutable reviewed
 plan, the user chooses a dependency-closed selection, and Execute attaches to
 the same task only after commitment and fresh preflight of that set. A terminal
 with `filesystem="refused"` and `disposition="unrun"` displays the generic
-“Execution did not start” state, returns selection controls at a new revision,
-and offers subset retry or explicit **Plan again**. Plan again freshly resolves
+“Execution did not start” state and retains the committed selection for review.
+Recovery is explicit **Plan again**. Only failure to admit an execution restores
+editable selection; a preflight rejection after admission does not. Plan again freshly resolves
 the immutable reviewed volume pair, then creates a new task with the old frozen
 Setup and default selection; changed Setup also creates a new task. Neither path
 copies authorization. There is no background replan, execute-anyway,
@@ -1039,7 +1064,28 @@ auto-commit, or unattended path. Automatic linked verification stays in the
 execution session; manual
 exact post-copy verification is a later session that never rewrites execution.
 When exact handoff is blocked, the UI explains why and offers only the clearly
-labelled ordinary **Verify current state** fallback.
+labelled ordinary **Verify current state** fallback for an otherwise eligible,
+normally completed execution; this is not a terminal retry action.
+
+Pre-execution capacity refusal, including queued wakeup refusal, keeps the task
+visible without execution, automatic retry, or automatic close. Scan/planner
+population refusals may have no plan; review-preflight space refusal may retain
+an immutable plan with a negative verdict. They must not share a fabricated
+partial review. After resolving the cause, explicit Plan again performs fresh
+scans and review. Recognized disk-capacity failure during execution is an
+accepted, unrealized M1 stop outcome: settle the current operation, admit no
+later operation, and show the yellow capacity message. This color does not
+erase any known failure or independent recording/integrity issue. Other I/O
+failures use the existing typed generic reason and available diagnostic detail;
+a richer I/O taxonomy is deferred to M2.
+
+M1 execution review also supplies an informational trash-location string; its
+placement (for example, text or tooltip) remains open. An exact completed count
+may accompany it only when outcome evidence supports that count. Otherwise
+show location information without a total. Planned operation counts are not
+completed counts, and this message is not a scan of everything in `.synctrash`
+or a promise that externally removable files still exist. No purge action is
+implied.
 
 The Plan pane distinguishes immutable **Review snapshot** context from the
 current edited selection and the latest fresh-execution notices. Search,
@@ -1177,7 +1223,8 @@ Contrast and no-color-only signaling remain requirements in every theme.
   selection, process-local restart limits, and one-instance behavior.
 - Setup and task-review headed evidence covers editable typed/picker/recent
   admission, serial multi-pair behavior, immutable plan review, bounded
-  reinjection, stale-response suppression, unrun selection reopening, reviewed-
+  reinjection, stale-response suppression, admission rollback versus retained
+  preflight refusal, reviewed-
   identity Plan again, and action-guiding refusal/close states.
 - Plan and inventory headed evidence proves server-owned hierarchy, accessible
   grouping, independent evidence/result axes, confirmation-gated rebaseline,

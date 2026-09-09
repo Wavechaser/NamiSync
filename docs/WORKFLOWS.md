@@ -320,12 +320,13 @@ Execution rejects an empty or mismatched re-derived set before observation and
 preflight. The service integration owns review revisions, lower-level direct-
 artifact replacement discard, and the reviewing/committing/committed
 transition; the client submits revisions and opaque ids but never becomes
-selection authority. The H2 desktop never replaces a published task plan in
-place. A terminal unrun attempt returns the unchanged plan's selection to
-reviewing at a new revision so a fresh commitment may authorize another subset;
-the first ran result freezes it permanently. Explicit Plan again resolves the
-retained reviewed location identities and creates a new task with default
-selection rather than replacing the old artifact or carrying authorization.
+selection authority. The accepted M1 desktop never replaces a published task
+plan in place. Failed execution admission restores reviewing; a preflight
+refusal after admission leaves selection committed. Terminal subset retry and
+selection reopening are deferred, not implicit workflow recovery. Explicit
+Plan again resolves the retained reviewed location identities into fresh Setup,
+then creates a new task with fresh scans and default selection, requiring new
+review rather than replacing the old artifact or carrying authorization.
 
 ### M0 implementation
 
