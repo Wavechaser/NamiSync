@@ -32,6 +32,7 @@ from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import (
     DeletionPolicy,
     FilterSet,
+    IdentityDestinationPolicy,
     MappingSnapshot,
     OperationKind,
     Plan,
@@ -57,7 +58,13 @@ from namisync.core.session import (
     SessionRecord,
     SessionState,
 )
-from namisync.core.scalars import require_safe_int, scalar_64_to_text
+from namisync.core.scalars import (
+    MAX_REQUEST_ID_UTF8_BYTES,
+    require_safe_int,
+    require_utf16_path,
+    require_utf8_text,
+    scalar_64_to_text,
+)
 from namisync.db.connections import validate_database_path
 from namisync.db.history import (
     DEFAULT_HISTORY_WINDOW_POLICY,
@@ -85,7 +92,7 @@ from namisync.modules.executor import (
     SystemClock,
     execute,
 )
-from namisync.modules.planner import plan
+from namisync.modules.planner import plan, snapshot_plan_options
 from namisync.modules.preflight import LocalObservationFileSystem, observe, preflight
 from namisync.modules.scanner import NativeScannerBackend, WalkingScanner
 from namisync.modules.verifier import baseline, rebaseline, verify, verify_post_copy
@@ -106,10 +113,6 @@ from .inventory import (
     bind_integrity_request,
     bind_inventory_request,
     change_inventory_visibility,
-    decode_integrity_request,
-    decode_inventory_request,
-    encode_integrity_request,
-    encode_inventory_request,
     run_integrity,
     run_inventory,
     settle_canceled_integrity,
@@ -124,6 +127,7 @@ from .database_pair import (
 )
 from .models import (
     ExecuteContinuation,
+    ExecutionCheckpoint,
     ExecutionDetails,
     ExecutionRequest,
     HistoryEventView,
@@ -136,12 +140,6 @@ from .models import (
     PlanRequest,
     PlanReview,
     WorkflowPreparation,
-)
-from .payloads import (
-    decode_execution_request,
-    decode_plan_request,
-    encode_execution_request,
-    encode_plan_request,
 )
 from .sync import (
     SyncDependencies,
@@ -410,22 +408,47 @@ class LocalWorkflowRuntime:
 
     def prepare_plan(self, request: object) -> WorkflowPreparation:
         self._require_open()
-        if not isinstance(request, PlanRequest):
+        if type(request) is not PlanRequest:
             raise TypeError("sync planning requires PlanRequest")
+        options = request.options
+        if type(options) is not SyncOptions:
+            raise TypeError("sync planning requires exact SyncOptions")
+        policy = options.destination_policy
+        if type(policy) is not IdentityDestinationPolicy:
+            raise ValueError("sync planning supports only the identity policy")
+        if policy.name != "identity" or policy.version != "1":
+            raise ValueError("identity destination policy fields changed")
+        require_utf8_text(
+            request.request_id,
+            "plan request id",
+            minimum_bytes=1,
+            maximum_bytes=MAX_REQUEST_ID_UTF8_BYTES,
+        )
+        require_utf16_path(request.source_path, "plan source path")
+        require_utf16_path(request.target_path, "plan target path")
+        _, retained_options = snapshot_plan_options(options)
+        checkpoint = PlanRequest(
+            request.request_id,
+            request.source_path,
+            request.target_path,
+            retained_options,
+        )
         self._validate_database_roots(
-            (request.source_path, request.target_path)
+            (checkpoint.source_path, checkpoint.target_path)
         )
         contract = self.validate_database_contracts()
         if contract.state is DatabasePairState.REFUSED:
             raise DatabasePairRefusedError(contract)
         resources = self._resources_for_paths(
-            request.source_path, request.target_path
+            checkpoint.source_path, checkpoint.target_path
         )
-        return WorkflowPreparation(encode_plan_request(request), resources)
+        return WorkflowPreparation(checkpoint, resources)
 
-    def open_plan(self, payload: bytes) -> _PlanInvocation:
+    def open_plan(self, checkpoint: object) -> _PlanInvocation:
         self._require_open()
-        return _PlanInvocation(decode_plan_request(payload), payload, self._deps)
+        if type(checkpoint) is not PlanRequest:
+            raise TypeError("sync planning requires a PlanRequest checkpoint")
+        return _PlanInvocation(checkpoint, self._deps)
 
     def prepare_execution(self, request: object) -> WorkflowPreparation:
         self._require_open()
@@ -440,11 +463,13 @@ class LocalWorkflowRuntime:
             )
         )
         self._ensure_database_contracts()
-        return WorkflowPreparation(encode_execution_request(request), resources)
+        return WorkflowPreparation(ExecutionCheckpoint(request), resources)
 
-    def open_execution(self, payload: bytes) -> _ExecutionInvocation:
+    def open_execution(self, checkpoint: object) -> _ExecutionInvocation:
         self._require_open()
-        request = decode_execution_request(payload)
+        if type(checkpoint) is not ExecutionCheckpoint:
+            raise TypeError("sync execution requires an ExecutionCheckpoint")
+        request = checkpoint.materialize()
         resumed = request.started_at is not None
         started_at = request.started_at or self.clock.now()
         _require_utc(started_at, "execution start")
@@ -461,13 +486,15 @@ class LocalWorkflowRuntime:
 
     def settle_canceled_execution(
         self,
-        payload: bytes,
+        checkpoint: object,
         disposition: Disposition,
     ) -> OperationResult:
         """Settle a started execution cancellation from its exact continuation."""
 
         self._require_open()
-        request = decode_execution_request(payload)
+        if type(checkpoint) is not ExecutionCheckpoint:
+            raise TypeError("sync execution requires an ExecutionCheckpoint")
+        request = checkpoint.materialize()
         if request.started_at is None:
             raise ValueError(
                 "started execution cancellation lacks its original start time"
@@ -503,74 +530,78 @@ class LocalWorkflowRuntime:
         self._validate_prepared_location(prepared.binding)
         self._ensure_database_contracts()
         return WorkflowPreparation(
-            encode_inventory_request(prepared),
+            prepared,
             (("volume", _volume_resource_key(prepared.binding.volume_id)),),
         )
 
-    def open_inventory(self, payload: bytes) -> _InventoryInvocation:
+    def open_inventory(self, checkpoint: object) -> _InventoryInvocation:
         self._require_open()
+        if type(checkpoint) is not InventoryWorkflowRequest:
+            raise TypeError("inventory requires an InventoryWorkflowRequest checkpoint")
         return _InventoryInvocation(
-            decode_inventory_request(payload),
-            payload,
+            checkpoint,
             self._inventory_deps,
         )
 
     def prepare_baseline(self, request: object) -> WorkflowPreparation:
         return self._prepare_integrity(request, IntegrityMode.BASELINE)
 
-    def open_baseline(self, payload: bytes) -> _IntegrityInvocation:
-        return self._open_integrity(payload, IntegrityMode.BASELINE)
+    def open_baseline(self, checkpoint: object) -> _IntegrityInvocation:
+        return self._open_integrity(checkpoint, IntegrityMode.BASELINE)
 
     def prepare_verify(self, request: object) -> WorkflowPreparation:
         return self._prepare_integrity(request, IntegrityMode.VERIFY)
 
-    def open_verify(self, payload: bytes) -> _IntegrityInvocation:
-        return self._open_integrity(payload, IntegrityMode.VERIFY)
+    def open_verify(self, checkpoint: object) -> _IntegrityInvocation:
+        return self._open_integrity(checkpoint, IntegrityMode.VERIFY)
 
     def prepare_rebaseline(self, request: object) -> WorkflowPreparation:
         return self._prepare_integrity(request, IntegrityMode.REBASELINE)
 
-    def open_rebaseline(self, payload: bytes) -> _IntegrityInvocation:
-        return self._open_integrity(payload, IntegrityMode.REBASELINE)
+    def open_rebaseline(self, checkpoint: object) -> _IntegrityInvocation:
+        return self._open_integrity(checkpoint, IntegrityMode.REBASELINE)
 
     def settle_canceled_baseline(
         self,
-        payload: bytes,
+        checkpoint: object,
         disposition: Disposition,
     ) -> OperationResult:
         return self._settle_canceled_integrity(
-            payload,
+            checkpoint,
             disposition,
             IntegrityMode.BASELINE,
         )
 
     def settle_canceled_verify(
         self,
-        payload: bytes,
+        checkpoint: object,
         disposition: Disposition,
     ) -> OperationResult:
         return self._settle_canceled_integrity(
-            payload,
+            checkpoint,
             disposition,
             IntegrityMode.VERIFY,
         )
 
     def settle_canceled_rebaseline(
         self,
-        payload: bytes,
+        checkpoint: object,
         disposition: Disposition,
     ) -> OperationResult:
         return self._settle_canceled_integrity(
-            payload,
+            checkpoint,
             disposition,
             IntegrityMode.REBASELINE,
         )
 
     def audit_observer(self, record: SessionRecord) -> HistoryObserver | None:
-        if record.payload is None:
-            raise ValueError("audit observer requires a nonterminal payload")
+        if record.checkpoint is None:
+            raise ValueError("audit observer requires a nonterminal checkpoint")
+        checkpoint = record.checkpoint
         if record.kind == EXECUTION_KIND:
-            request = decode_execution_request(record.payload)
+            if type(checkpoint) is not ExecutionCheckpoint:
+                raise TypeError("execution history requires its typed checkpoint")
+            request = checkpoint.materialize()
             plan_value = request.execution_set.plan
             store = self._ensure_history_store(
                 (
@@ -589,13 +620,17 @@ class LocalWorkflowRuntime:
                 ),
             )
         if record.kind == INVENTORY_KIND:
-            request = decode_inventory_request(record.payload)
+            if type(checkpoint) is not InventoryWorkflowRequest:
+                raise TypeError("inventory history requires its typed checkpoint")
+            request = checkpoint
             activity_kind = INVENTORY_KIND
         elif record.kind in _INTEGRITY_KINDS:
-            request = decode_integrity_request(record.payload)
+            if type(checkpoint) is not IntegrityWorkflowRequest:
+                raise TypeError("integrity history requires its typed checkpoint")
+            request = checkpoint
             expected_mode = _INTEGRITY_KINDS[record.kind]
             if request.mode is not expected_mode:
-                raise ValueError("integrity history kind does not match its payload")
+                raise ValueError("integrity history kind does not match its checkpoint")
             activity_kind = request.mode.value
         else:
             return None
@@ -1007,32 +1042,36 @@ class LocalWorkflowRuntime:
         self._validate_prepared_location(prepared.binding)
         self._ensure_database_contracts()
         return WorkflowPreparation(
-            encode_integrity_request(prepared),
+            prepared,
             (("volume", _volume_resource_key(prepared.binding.volume_id)),),
         )
 
     def _open_integrity(
-        self, payload: bytes, mode: IntegrityMode
+        self, checkpoint: object, mode: IntegrityMode
     ) -> _IntegrityInvocation:
         self._require_open()
-        request = decode_integrity_request(payload)
+        if type(checkpoint) is not IntegrityWorkflowRequest:
+            raise TypeError("integrity requires an IntegrityWorkflowRequest checkpoint")
+        request = checkpoint
         if request.mode is not mode:
             raise ValueError(
-                f"{mode.value} invocation payload contains {request.mode.value}"
+                f"{mode.value} invocation checkpoint contains {request.mode.value}"
             )
         return _IntegrityInvocation(request, self._integrity_deps)
 
     def _settle_canceled_integrity(
         self,
-        payload: bytes,
+        checkpoint: object,
         disposition: Disposition,
         mode: IntegrityMode,
     ) -> OperationResult:
         self._require_open()
-        request = decode_integrity_request(payload)
+        if type(checkpoint) is not IntegrityWorkflowRequest:
+            raise TypeError("integrity requires an IntegrityWorkflowRequest checkpoint")
+        request = checkpoint
         if request.mode is not mode:
             raise ValueError(
-                f"{mode.value} cancellation payload contains {request.mode.value}"
+                f"{mode.value} cancellation checkpoint contains {request.mode.value}"
             )
         return settle_canceled_integrity(request, disposition)
 
@@ -1231,18 +1270,15 @@ class LocalWorkflowRuntime:
 
 
 class _PlanInvocation:
-    def __init__(
-        self, request: PlanRequest, payload: bytes, deps: SyncDependencies
-    ) -> None:
+    def __init__(self, request: PlanRequest, deps: SyncDependencies) -> None:
         self._request = request
-        self._payload = payload
         self._deps = deps
 
     def run(self, context) -> object:
         return run_plan(self._request, context, self._deps)
 
-    def snapshot(self) -> bytes:
-        return self._payload
+    def snapshot(self) -> PlanRequest:
+        return self._request
 
 
 class _ExecutionInvocation:
@@ -1282,9 +1318,9 @@ class _ExecutionInvocation:
                 self._release_start(self._request)
                 self._started = False
 
-    def snapshot(self) -> bytes:
+    def snapshot(self) -> ExecutionCheckpoint:
         self._ensure_started()
-        return encode_execution_request(
+        return ExecutionCheckpoint(
             ExecutionRequest(
                 self._continuation,
                 self._request.started_at,
@@ -1308,18 +1344,16 @@ class _InventoryInvocation:
     def __init__(
         self,
         request: InventoryWorkflowRequest,
-        payload: bytes,
         deps: InventoryDependencies,
     ) -> None:
         self._request = request
-        self._payload = payload
         self._deps = deps
 
     def run(self, context) -> object:
         return run_inventory(self._request, context, self._deps)
 
-    def snapshot(self) -> bytes:
-        return self._payload
+    def snapshot(self) -> InventoryWorkflowRequest:
+        return self._request
 
 
 class _IntegrityInvocation:
@@ -1344,7 +1378,7 @@ class _IntegrityInvocation:
             recording_sink=self._capture_recording,
         )
 
-    def snapshot(self) -> bytes:
+    def snapshot(self) -> IntegrityWorkflowRequest:
         completed_bytes = self._request.completed_bytes
         processed_bytes = self._request.processed_bytes
         bytes_total_high_water = self._request.bytes_total_high_water
@@ -1357,27 +1391,25 @@ class _IntegrityInvocation:
             )
             processed_bytes = self._selection.processed_bytes
             bytes_total_high_water = self._selection.bytes_total_high_water
-        return encode_integrity_request(
-            replace(
-                self._request,
-                selection_item_ids=(
-                    self._request.selection_item_ids
-                    if self._selection is None
-                    else tuple(
-                        item.item_id for item in self._selection.items
-                    )
-                ),
-                completed_bytes=completed_bytes,
-                processed_bytes=processed_bytes,
-                bytes_total_high_water=bytes_total_high_water,
-                recording=self._recording,
-                recording_issues=self._recording_issues,
-                omitted_detail_count=self._omitted_detail_count,
-                refresh_generation=require_safe_int(
-                    self._request.refresh_generation + 1,
-                    "inventory refresh generation",
-                ),
-            )
+        return replace(
+            self._request,
+            selection_item_ids=(
+                self._request.selection_item_ids
+                if self._selection is None
+                else tuple(
+                    item.item_id for item in self._selection.items
+                )
+            ),
+            completed_bytes=completed_bytes,
+            processed_bytes=processed_bytes,
+            bytes_total_high_water=bytes_total_high_water,
+            recording=self._recording,
+            recording_issues=self._recording_issues,
+            omitted_detail_count=self._omitted_detail_count,
+            refresh_generation=require_safe_int(
+                self._request.refresh_generation + 1,
+                "inventory refresh generation",
+            ),
         )
 
     def _capture_selection(self, selection: IntegritySelection) -> None:

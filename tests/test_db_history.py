@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from contextlib import closing, contextmanager
 import sqlite3
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import timedelta
 import json
 from pathlib import Path
@@ -10,7 +10,9 @@ from weakref import ref
 
 import pytest
 
+import namisync.core.events as event_module
 import namisync.db.history as history_module
+from namisync.core.event_v5 import validate_and_encode_event_v5_envelope
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
     Envelope,
@@ -19,6 +21,7 @@ from namisync.core.events import (
     PhaseChanged,
     Progress,
     StateChanged,
+    envelope_from_dict,
     envelope_to_dict,
 )
 from namisync.core.evidence import Outcome, RecordingStatus
@@ -31,6 +34,8 @@ from namisync.core.integrity import (
     IntegrityOutcome,
     IntegrityReason,
     IntegrityResult,
+    ReadStrategy,
+    RecordDisposition,
 )
 from namisync.core.session import (
     Disposition,
@@ -38,6 +43,7 @@ from namisync.core.session import (
     OperationResult,
     PhaseResult,
     PhaseStatus,
+    ResultItem,
     SessionId,
     SessionRecord,
     SessionState,
@@ -45,6 +51,7 @@ from namisync.core.session import (
 from namisync.core.review import ReviewFactLimitExceeded
 from namisync.core.scalars import MAX_SAFE_INTEGER
 from namisync.db.connections import (
+    QUERY_SUBJECT_BATCH_SIZE,
     connect_history_reader,
     connect_history_writer,
 )
@@ -65,6 +72,7 @@ from namisync.db.writer import RecordingError, TokenConflictError
 from namisync.workflows.views import operation_result_view
 
 from _db_fixtures import FakeClock, NOW
+from _event_v5_fixtures import SESSION_ID, envelope as event_v5_envelope
 
 
 def _raise_private_history_failure(errors, retained, message: str) -> None:
@@ -148,7 +156,8 @@ def _insert_history_event(
 ) -> None:
     encoded = history_module._json_bytes(envelope_to_dict(envelope))
     payload_hash = history_module.hashlib.sha256(encoded).digest()
-    projection = history_module._item_projection(envelope.body)
+    item_projection = history_module._item_projection(envelope.body)
+    projection = history_module._item_column_projection(item_projection)
     item_identity_hash = (
         None
         if projection is None
@@ -158,7 +167,7 @@ def _insert_history_event(
         None
         if projection is None
         else history_module._hash(
-            history_module.result_item_to_dict(envelope.body)
+            item_projection
         )
     )
     receipt_hash = history_module._receipt_hash(
@@ -244,6 +253,102 @@ def test_history_window_policy_freezes_balanced_defaults_and_rejects_bad_bounds(
             HistoryWindowPolicy(**values)
 
 
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    tuple(
+        (count, QUERY_SUBJECT_BATCH_SIZE)
+        for count in (0, 1, 399, 400, 401, 801)
+    )
+    + ((801, 37),),
+)
+def test_canonical_item_lookup_batches_only_relevant_history_subjects(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
+) -> None:
+    monkeypatch.setattr(history_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    record = _record()
+    context = HistoryContext("run-batched-canonical", "host-1")
+    items = tuple(_item(index) for index in range(1, count + 1))
+
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, context)
+        if items:
+            for index, item in enumerate(items, 1):
+                observer.on_event(_envelope(record, index, item))
+        else:
+            observer.on_event(_envelope(record, 1, PhaseChanged("execute")))
+        observer.flush()
+
+        if items:
+            other_record = _record("22222222222222222222222222222222")
+            other = store.observer(
+                other_record,
+                HistoryContext("run-irrelevant-canonical", "host-2"),
+            )
+            other.on_event(
+                _envelope(other_record, 1, _item(1, Outcome.FAILED))
+            )
+            other.flush()
+
+        connection = connect_history_reader(store.path)
+        calls: list[tuple[str, tuple[object, ...]]] = []
+
+        class RecordingConnection:
+            def execute(
+                self, statement: str, parameters: tuple[object, ...] = ()
+            ) -> sqlite3.Cursor:
+                calls.append((statement, tuple(parameters)))
+                return connection.execute(statement, parameters)
+
+        try:
+            run_id = int(
+                connection.execute(
+                    "SELECT id FROM history_runs WHERE run_token = ?",
+                    (context.run_token,),
+                ).fetchone()[0]
+            )
+            pending = tuple(
+                history_module._PendingEvent(
+                    event_seq=count + index,
+                    event_at=NOW,
+                    schema_version=CORE_EVENT_SCHEMA_VERSION,
+                    body_type="ItemOutcome",
+                    envelope=None,
+                    envelope_json=None,
+                    encoded_size=0,
+                    payload_hash=bytes(32),
+                    item_identity_hash=history_module._item_identity_hash(item),
+                    item_payload_hash=history_module._hash(
+                        history_module.result_item_to_dict(item)
+                    ),
+                )
+                for index, item in enumerate(items, 1)
+            )
+            canonical = history_module._canonical_items_for_window(
+                RecordingConnection(), run_id, max(1, count), pending
+            )
+        finally:
+            connection.close()
+
+    lookup_calls = [
+        parameters
+        for statement, parameters in calls
+        if "INDEXED BY history_events_run_identity_hash_idx" in statement
+    ]
+    assert bool(lookup_calls) is bool(count)
+    assert all(len(parameters) <= batch_size + 2 for parameters in lookup_calls)
+    assert len(canonical.by_identity_hash) == count
+    assert canonical.by_identity == {
+        ("operation", item.item_id): (
+            index,
+            history_module._hash(history_module.result_item_to_dict(item)),
+        )
+        for index, item in enumerate(items, 1)
+    }
+
+
 def test_history_finalization_round_trips_summary_items_events_and_phases(
     tmp_path: Path,
 ) -> None:
@@ -307,6 +412,187 @@ def test_history_finalization_round_trips_summary_items_events_and_phases(
     assert items.items[0].item == item
     assert [event.event_seq for event in events.events] == [1, 2]
     assert events.events[1].envelope.body == item
+
+
+@pytest.mark.parametrize(
+    "item",
+    (
+        ItemOutcome(
+            "1" * 32,
+            "copy",
+            "full-detail.bin",
+            Outcome.SUCCEEDED,
+            detail={
+                "message": "copied",
+                "published_path": "full-detail.bin",
+                "continued": True,
+            },
+        ),
+        ItemOutcome(
+            "2" * 32,
+            "noop",
+            "reason-none.bin",
+            Outcome.SKIPPED,
+            reason=None,
+        ),
+        ItemOutcome(
+            "3" * 32,
+            "copy",
+            "recording-failure.bin",
+            Outcome.SUCCEEDED,
+            detail={"message": "filesystem mutation completed"},
+            recording=RecordingStatus.DEGRADED,
+            recording_reason=ItemRecordingReason.RECORD_WRITE_FAILED,
+            recording_detail="ledger write unavailable",
+            detail_omitted_count=2,
+        ),
+        IntegrityOutcome(
+            item_id="integrity-reason",
+            row_id="row-1",
+            location_id="location-1",
+            path="integrity-reason.bin",
+            result=IntegrityResult.MISMATCHED,
+            reason=IntegrityReason.HASH_MISMATCH,
+            detail="digest differs",
+            read_strategy=ReadStrategy.WINDOWS_UNBUFFERED,
+        ),
+        IntegrityOutcome(
+            item_id="integrity-recording-failure",
+            row_id="row-2",
+            location_id="location-2",
+            path="integrity-recording-failure.bin",
+            result=IntegrityResult.VERIFIED,
+            detail="content matched before recording",
+            recording=RecordingStatus.DEGRADED,
+            record_disposition=RecordDisposition.CONFLICT,
+            detail_omitted_count=3,
+        ),
+    ),
+    ids=(
+        "operation-full-detail",
+        "operation-reason-none",
+        "operation-recording-failure",
+        "integrity-reason",
+        "integrity-recording-failure",
+    ),
+)
+def test_local_item_projection_reuse_preserves_hashes_and_columns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    item: ItemOutcome | IntegrityOutcome,
+) -> None:
+    path = tmp_path / "history.db"
+    record = _record()
+    envelope = _envelope(record, 1, item)
+    expected_envelope = envelope_to_dict(envelope)
+    expected_body = event_module.result_item_to_dict(item)
+    expected_envelope_bytes = validate_and_encode_event_v5_envelope(
+        expected_envelope
+    )
+
+    def canonical_hash(value: object) -> bytes:
+        encoded = json.dumps(
+            value,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        return history_module.hashlib.sha256(encoded).digest()
+
+    expected_item_hash = canonical_hash(expected_body)
+    expected_identity_hash = canonical_hash(
+        {
+            "item_type": expected_body["item_type"],
+            "item_id": expected_body["item_id"],
+        }
+    )
+    expected_columns = {
+        "item_type": expected_body["item_type"],
+        "phase": expected_body["phase"],
+        "item_id": expected_body["item_id"],
+        "kind": expected_body["kind"],
+        "path": expected_body["path"],
+        "result": expected_body["result"],
+        "reason": expected_body["reason"],
+        "recording": expected_body["recording"],
+        "recording_reason": expected_body.get("recording_reason"),
+        "recording_detail": expected_body.get("recording_detail"),
+        "detail_omitted_count": expected_body["detail_omitted_count"],
+    }
+    original_projection = event_module.result_item_to_dict
+    projection_calls: list[ResultItem] = []
+
+    def counted_projection(value: ResultItem) -> dict[str, object]:
+        projection_calls.append(value)
+        return original_projection(value)
+
+    monkeypatch.setattr(event_module, "result_item_to_dict", counted_projection)
+    monkeypatch.setattr(history_module, "result_item_to_dict", counted_projection)
+
+    with HistoryStore(path, clock=FakeClock()) as store:
+        observer = store.observer(
+            record,
+            HistoryContext(f"run-local-projection-{item.item_id}", "host-1"),
+        )
+        observer.on_event(envelope)
+        assert len(projection_calls) == 1
+        assert original_projection(projection_calls[0]) == expected_body
+
+        projection_calls.clear()
+        observer.flush()
+        assert len(projection_calls) == 1
+        assert original_projection(projection_calls[0]) == expected_body
+
+        with closing(connect_history_reader(path)) as connection:
+            row = connection.execute(
+                "SELECT * FROM history_events WHERE event_seq = 1"
+            ).fetchone()
+        assert str(row["envelope_json"]).encode("utf-8") == expected_envelope_bytes
+        assert bytes(row["payload_hash"]) == history_module.hashlib.sha256(
+            expected_envelope_bytes
+        ).digest()
+        assert bytes(row["item_identity_hash"]) == expected_identity_hash
+        assert bytes(row["item_payload_hash"]) == expected_item_hash
+        assert {
+            key: row[key] for key in expected_columns
+        } == expected_columns
+        assert bytes(row["receipt_hash"]) == history_module._receipt_hash(
+            event_seq=1,
+            event_at=history_module.encode_utc(NOW),
+            schema_version=CORE_EVENT_SCHEMA_VERSION,
+            body_type=type(item).__name__,
+            disposition=history_module.HistoryEventDisposition.RECORDED,
+            payload_hash=bytes(row["payload_hash"]),
+            item_identity_hash=expected_identity_hash,
+            item_payload_hash=expected_item_hash,
+            item_order=1,
+        )
+
+        projection_calls.clear()
+        with HistoryRepository(path) as repository:
+            page = repository.get_event_page(
+                f"run-local-projection-{item.item_id}"
+            )
+        assert len(projection_calls) == 1
+        assert original_projection(projection_calls[0]) == expected_body
+
+    assert envelope_to_dict(page.events[0].envelope) == expected_envelope
+
+
+def test_pending_history_shape_does_not_retain_item_projection() -> None:
+    assert tuple(field.name for field in fields(history_module._PendingEvent)) == (
+        "event_seq",
+        "event_at",
+        "schema_version",
+        "body_type",
+        "envelope",
+        "envelope_json",
+        "encoded_size",
+        "payload_hash",
+        "item_identity_hash",
+        "item_payload_hash",
+        "rejection_reason",
+    )
 
 
 def test_history_review_fact_columns_are_all_null_or_reconstruct_exact_truth(
@@ -1900,6 +2186,46 @@ def test_history_event_rows_are_append_only_and_item_projections_are_validated(
             repository.get_event_page("run-guarded")
 
 
+def test_history_event_duplicate_insert_requires_canonical_link(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "history.db"
+    record = _record()
+    item = _item(1)
+    with HistoryStore(
+        path, clock=FakeClock(), window_policy=HistoryWindowPolicy(max_events=1)
+    ) as store:
+        observer = store.observer(
+            record, HistoryContext("run-duplicate-guard", "host-1")
+        )
+        observer.on_event(_envelope(record, 1, item))
+        observer.on_event(_envelope(record, 2, item))
+
+    connection = connect_history_writer(path)
+    try:
+        with pytest.raises(
+            sqlite3.DatabaseError, match="duplicate receipt link mismatch"
+        ):
+            connection.execute(
+                """INSERT INTO history_events(
+                       run_id, event_seq, event_at, schema_version, body_type,
+                       event_disposition, envelope_json, payload_hash, receipt_hash,
+                       item_identity_hash, item_payload_hash, duplicate_of_seq,
+                       rejection_reason, item_order, item_type, phase, item_id, kind,
+                       path, result, reason, recording, recording_reason,
+                       recording_detail, detail_omitted_count
+                   ) SELECT run_id, event_seq + 1, event_at, schema_version, body_type,
+                            event_disposition, envelope_json, payload_hash, receipt_hash,
+                            item_identity_hash, item_payload_hash, 2,
+                            rejection_reason, item_order, item_type, phase, item_id, kind,
+                            path, result, reason, recording, recording_reason,
+                            recording_detail, detail_omitted_count
+                       FROM history_events WHERE run_id = 1 AND event_seq = 2"""
+            )
+    finally:
+        connection.close()
+
+
 def test_replace_cannot_overwrite_a_durable_history_event(
     tmp_path: Path,
 ) -> None:
@@ -2496,9 +2822,7 @@ def test_event_readback_validates_duplicate_link_against_canonical_item(
             item_payload_hash=bytes(row["item_payload_hash"]),
             duplicate_of_seq=2,
         )
-        with _without_history_triggers(
-            connection, "history_events_append_only_update", "history_events_duplicate_link_update",
-        ):
+        with _without_history_triggers(connection, "history_events_append_only_update"):
             connection.execute(
                 """UPDATE history_events
                   SET duplicate_of_seq = 2, receipt_hash = ?
@@ -3273,6 +3597,112 @@ def test_history_event_failure_retires_traceback_and_cause_before_propagating_id
     finally:
         observer.close()
         store.close()
+
+
+def test_invalid_event_projection_breaks_prefix_before_queue_or_durable_mutation(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    path = tmp_path / "history.db"
+    record = _record()
+    first = _envelope(record, 1, PhaseChanged("scan"))
+    first_size = len(history_module._json_bytes(envelope_to_dict(first)))
+    store = HistoryStore(
+        path,
+        clock=FakeClock(),
+        window_policy=HistoryWindowPolicy(
+            max_bytes=first_size + 1,
+            max_event_bytes=first_size + 1,
+        ),
+    )
+    observer = store.observer(record, HistoryContext("run-invalid", "host-1"))
+    observer.on_event(first)
+    pending_bytes = observer.pending_bytes
+    projection_calls = 0
+    encoding_calls = 0
+
+    def invalid_projection(envelope: Envelope) -> dict[str, object]:
+        nonlocal projection_calls
+        projection_calls += 1
+        projection = envelope_to_dict(envelope)
+        projection["body"] = {"phase": 7}
+        return projection
+
+    def checked_encoding(value: object) -> bytes:
+        nonlocal encoding_calls
+        encoding_calls += 1
+        return validate_and_encode_event_v5_envelope(value)
+
+    monkeypatch.setattr(history_module, "envelope_to_dict", invalid_projection)
+    monkeypatch.setattr(
+        history_module,
+        "validate_and_encode_event_v5_envelope",
+        checked_encoding,
+    )
+    try:
+        with pytest.raises(
+            HistoryIntegrityError,
+            match="history event projection is invalid",
+        ) as raised:
+            observer.on_event(_envelope(record, 2, PhaseChanged("execute")))
+
+        assert raised.value.__cause__ is None
+        assert raised.value.__context__ is None
+        assert projection_calls == 1
+        assert encoding_calls == 1
+        assert observer.pending_event_count == 1
+        assert observer.pending_bytes == pending_bytes
+    finally:
+        observer.close()
+        store.close()
+
+    connection = connect_history_reader(path)
+    try:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM history_runs"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT COUNT(*) FROM history_events"
+        ).fetchone()[0] == 0
+    finally:
+        connection.close()
+
+
+@pytest.mark.parametrize(
+    "body_type",
+    (
+        "StateChanged",
+        "PhaseChanged",
+        "Gap",
+        "ItemOutcome",
+        "IntegrityOutcome",
+    ),
+)
+def test_history_admission_encodes_each_reliable_fixture_once(
+    tmp_path: Path,
+    monkeypatch,
+    body_type: str,
+) -> None:
+    record = _record(SESSION_ID)
+    admitted = envelope_from_dict(event_v5_envelope(body_type))
+    calls = 0
+
+    def counted_encoding(value: object) -> bytes:
+        nonlocal calls
+        calls += 1
+        return validate_and_encode_event_v5_envelope(value)
+
+    monkeypatch.setattr(
+        history_module,
+        "validate_and_encode_event_v5_envelope",
+        counted_encoding,
+    )
+    with HistoryStore(tmp_path / "history.db", clock=FakeClock()) as store:
+        observer = store.observer(record, HistoryContext("run-count", "host-1"))
+        observer.on_event(admitted)
+
+        assert calls == 1
+        assert observer.pending_event_count == 1
 
 
 def test_history_flush_failure_preserves_window_and_retires_traceback_and_cause(

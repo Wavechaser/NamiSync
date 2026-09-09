@@ -7,9 +7,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import ClassVar, Mapping, TypeAlias
 
-from namisync.core.execution import ExecutionSet
+from namisync.core.execution import (
+    ExecutionSet,
+    ExecutionSetAuthority,
+    snapshot_execution_set_authority,
+    validate_execution_set,
+)
 from namisync.core.evidence import Outcome, RecordingStatus
-from namisync.core.integrity import PostCopySelection
+from namisync.core.integrity import (
+    PostCopySelection,
+    PostCopySelectionAuthority,
+    snapshot_post_copy_selection_authority,
+)
 from namisync.core.models import ScanResult
 from namisync.core.planning import OperationKind, Plan, SyncOptions
 from namisync.core.preflight import Verdict
@@ -34,7 +43,7 @@ class PlanRequest:
 
 @dataclass(frozen=True, slots=True)
 class ExecuteContinuation:
-    """Execution-phase continuation retained by the opaque workflow payload."""
+    """Execution-phase continuation retained by the workflow checkpoint."""
 
     phase: ClassVar[str] = "execute"
 
@@ -276,8 +285,104 @@ class ExecutionRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class _ExecuteDelta:
+    verify_after_execute: bool
+    reported_exclusion_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class _VerifyDelta:
+    candidates: PostCopySelectionAuthority
+    filesystem_status: SessionState
+    recording: RecordingStatus
+    execute_phase: PhaseResult
+    missing_evidence_ids: tuple[str, ...]
+
+
+_ExecutionDelta: TypeAlias = _ExecuteDelta | _VerifyDelta
+
+
+@dataclass(frozen=True, slots=True, init=False)
+class ExecutionCheckpoint:
+    """Detached semantic state retained while an execution is not running."""
+
+    _execution: ExecutionSetAuthority
+    _started_at: datetime | None
+    _delta: _ExecutionDelta
+
+    def __init__(self, request: ExecutionRequest) -> None:
+        if type(request) is not ExecutionRequest:
+            raise TypeError(
+                "execution checkpoint requires an exact ExecutionRequest"
+            )
+        continuation = request.continuation
+        validate_execution_set(continuation.execution_set)
+        if isinstance(continuation, VerifyContinuation):
+            continuation = _exact_verify_continuation(continuation)
+        execution = snapshot_execution_set_authority(
+            continuation.execution_set
+        )
+        if isinstance(continuation, ExecuteContinuation):
+            delta: _ExecutionDelta = _ExecuteDelta(
+                continuation.verify_after_execute,
+                continuation.reported_exclusion_count,
+            )
+        else:
+            delta = _VerifyDelta(
+                snapshot_post_copy_selection_authority(continuation.candidates),
+                continuation.filesystem_status,
+                continuation.recording,
+                continuation.execute_phase,
+                continuation.missing_evidence_ids,
+            )
+        object.__setattr__(self, "_execution", execution)
+        object.__setattr__(self, "_started_at", request.started_at)
+        object.__setattr__(self, "_delta", delta)
+
+    def materialize(self) -> ExecutionRequest:
+        """Create fresh mutable continuation state for one invocation."""
+
+        retained = self._execution
+        execution_set = ExecutionSet(
+            plan=retained.plan,
+            selection=retained.selection,
+            run_id=retained.run_id,
+            commitment=retained.commitment,
+            user_deselected=retained.user_deselected,
+            status=dict(retained.status),
+            recording_reasons=dict(retained.recording_reasons),
+            published_evidence=dict(retained.published_evidence),
+            recording_issues=retained.recording_issues,
+            omitted_detail_count=retained.omitted_detail_count,
+            bytes_done_high_water=retained.bytes_done_high_water,
+        )
+        delta = self._delta
+        if isinstance(delta, _ExecuteDelta):
+            continuation: ExecutionContinuation = ExecuteContinuation(
+                execution_set,
+                verify_after_execute=delta.verify_after_execute,
+                reported_exclusion_count=delta.reported_exclusion_count,
+            )
+        else:
+            candidates = delta.candidates
+            continuation = VerifyContinuation(
+                execution_set=execution_set,
+                candidates=PostCopySelection(
+                    candidates.candidates,
+                    dict(candidates.completed_bytes),
+                    candidates.processed_bytes,
+                ),
+                filesystem_status=delta.filesystem_status,
+                recording=delta.recording,
+                execute_phase=delta.execute_phase,
+                missing_evidence_ids=delta.missing_evidence_ids,
+            )
+        return ExecutionRequest(continuation, self._started_at)
+
+
+@dataclass(frozen=True, slots=True)
 class WorkflowPreparation:
-    payload: bytes
+    checkpoint: object
     resources: tuple[tuple[str, str], ...]
 
 

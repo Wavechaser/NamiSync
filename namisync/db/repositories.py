@@ -34,7 +34,11 @@ from namisync.core.review import (
 )
 from namisync.core.scalars import file_index_128_from_text, file_index_128_to_text
 
-from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_reader
+from .connections import (
+    DEFAULT_BUSY_TIMEOUT_MS,
+    QUERY_SUBJECT_BATCH_SIZE,
+    connect_ledger_reader,
+)
 from .contracts import require_database_file_contract
 from .schema import validate_ledger_reader_contract
 from .timestamps import decode_utc, encode_utc
@@ -414,8 +418,8 @@ class LedgerRepository:
             if keys:
                 self._connection.execute("BEGIN")
                 try:
-                    for start in range(0, len(keys), 400):
-                        chunk = keys[start : start + 400]
+                    for start in range(0, len(keys), QUERY_SUBJECT_BATCH_SIZE):
+                        chunk = keys[start : start + QUERY_SUBJECT_BATCH_SIZE]
                         placeholders = ",".join("?" for _ in chunk)
                         cursor = self._connection.execute(
                             f"""SELECT * FROM inventory
@@ -464,8 +468,8 @@ class LedgerRepository:
         if requested:
             self._connection.execute("BEGIN")
             try:
-                for start in range(0, len(requested), 400):
-                    chunk = requested[start : start + 400]
+                for start in range(0, len(requested), QUERY_SUBJECT_BATCH_SIZE):
+                    chunk = requested[start : start + QUERY_SUBJECT_BATCH_SIZE]
                     placeholders = ",".join("?" for _ in chunk)
                     for row in self._connection.execute(
                         f"""SELECT * FROM inventory
@@ -547,8 +551,8 @@ class LedgerRepository:
             _append_integrity_candidates(candidates, cursor)
             return tuple(candidates)
 
-        for start in range(0, len(path_keys), 400):
-            chunk = path_keys[start : start + 400]
+        for start in range(0, len(path_keys), QUERY_SUBJECT_BATCH_SIZE):
+            chunk = path_keys[start : start + QUERY_SUBJECT_BATCH_SIZE]
             placeholders = ",".join("?" for _ in chunk)
             cursor = self._connection.execute(
                 f"""SELECT * FROM inventory
@@ -573,8 +577,8 @@ class LedgerRepository:
         row_ids: tuple[str, ...],
     ) -> tuple[InventorySnapshot, ...]:
         rows_by_id: dict[str, InventorySnapshot] = {}
-        for start in range(0, len(row_ids), 400):
-            chunk = row_ids[start : start + 400]
+        for start in range(0, len(row_ids), QUERY_SUBJECT_BATCH_SIZE):
+            chunk = row_ids[start : start + QUERY_SUBJECT_BATCH_SIZE]
             placeholders = ",".join("?" for _ in chunk)
             cursor = self._connection.execute(
                 f"""SELECT * FROM inventory
@@ -606,8 +610,8 @@ class LedgerRepository:
             tuple[tuple[str, int], InventorySnapshot],
         ] = {}
         found_completed: set[str] = set()
-        for start in range(0, len(completed_row_ids), 400):
-            chunk = completed_row_ids[start : start + 400]
+        for start in range(0, len(completed_row_ids), QUERY_SUBJECT_BATCH_SIZE):
+            chunk = completed_row_ids[start : start + QUERY_SUBJECT_BATCH_SIZE]
             placeholders = ",".join("?" for _ in chunk)
             cursor = self._connection.execute(
                 f"""SELECT * FROM inventory
@@ -925,8 +929,8 @@ class LedgerRepository:
             target_location_id = int(row["target_location_id"])
             pairs: list[MappingPair] = []
             if current_target_keys and source_identity_values:
-                for start in range(0, len(current_target_keys), 400):
-                    chunk = current_target_keys[start : start + 400]
+                for start in range(0, len(current_target_keys), QUERY_SUBJECT_BATCH_SIZE):
+                    chunk = current_target_keys[start : start + QUERY_SUBJECT_BATCH_SIZE]
                     placeholders = ",".join("?" for _ in chunk)
                     cursor = self._connection.execute(
                         f"""SELECT source.rel_path_key AS source_rel_path_key,
@@ -1013,8 +1017,8 @@ class LedgerRepository:
         identities: tuple[tuple[str, str], ...],
     ) -> frozenset[FileIdentity]:
         disqualified: set[FileIdentity] = set()
-        for start in range(0, len(identities), 400):
-            chunk = identities[start : start + 400]
+        for start in range(0, len(identities), QUERY_SUBJECT_BATCH_SIZE):
+            chunk = identities[start : start + QUERY_SUBJECT_BATCH_SIZE]
             values = ",".join("(?, ?)" for _ in chunk)
             parameters = tuple(value for identity in chunk for value in identity)
             cursor = self._connection.execute(

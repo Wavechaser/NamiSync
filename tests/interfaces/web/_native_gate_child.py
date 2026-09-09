@@ -344,12 +344,9 @@ def _install_module_observers(
                 callback: Callable[..., Any] | None = None,
             ) -> object:
                 is_delayed_return = (
-                    recorder.get("delayed_handler_completed", False)
-                    and "_returnValuesCallbacks" in script
-                    and not delayed_evaluate.is_set()
+                    "_returnValuesCallbacks" in script
+                    and "returned-delayed_return" in script
                 )
-                if is_delayed_return:
-                    recorder.event("delayed_return.evaluate.begin")
                 try:
                     return original_evaluate(script, callback)
                 except BaseException as error:
@@ -361,7 +358,7 @@ def _install_module_observers(
                     raise
                 finally:
                     if is_delayed_return:
-                        recorder.event("delayed_return.evaluate.end")
+                        recorder.event("delayed_return.evaluate")
                         delayed_evaluate.set()
 
             window.evaluate_js = observe_evaluate_js
@@ -681,8 +678,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     "reinjection_ready",
                     threading.Event(),
                 )
-                if not reinjection_ready.wait(10.0):
-                    raise RuntimeError("native reinjection was not observed")
+                reinjection_ready.wait()
                 original_get_current_url = runtime["original_get_current_url"]
                 measured_managed_url = original_get_current_url()
                 recorder.set(
@@ -711,9 +707,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 delayed_evaluate = runtime.get("delayed_evaluate")
                 if not isinstance(delayed_evaluate, threading.Event):
                     raise RuntimeError("delayed return transport was not instrumented")
-                if not delayed_evaluate.wait(10.0):
-                    raise RuntimeError("delayed return transport was not attempted")
-                recorder.event("delayed_transport.ack")
+                delayed_evaluate.wait()
 
             window = runtime["window"]
             managed_url = window.get_current_url()

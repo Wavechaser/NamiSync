@@ -15,15 +15,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from _event_v5_fixtures import maximum_non_ascii_reliable_envelope, maximum_reliable_envelope
-
 import namisync.interfaces.web.bridge as bridge_module
-import namisync.interfaces.web.drain as drain_module
-from namisync.core.events import ItemOutcome, PhaseChanged, Progress, envelope_from_dict
+from namisync.core.events import ItemOutcome, PhaseChanged, Progress
 from namisync.core.planning import OperationKind
 from namisync.core.session import OperationResult, RunContext, SessionId, SessionState
 from namisync.dispatcher.event_bus import EventHub
-from namisync.interfaces.service import NamiSyncService
+from namisync.interfaces.task_lifecycle import (
+    TASK_EFFECT_CAPACITY,
+)
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
     AdmissionRefused,
@@ -68,6 +67,8 @@ from namisync.workflows.views import (
     session_event_view,
     operation_result_view,
 )
+
+from _service_fixtures import make_service
 from tests._executor_fixtures import (
     FakeRecorder,
     FixedClock,
@@ -574,23 +575,38 @@ def test_br_g_32_surrogate_payload_keys_are_refused_before_handler(
     assert handled == []
 
 
-@pytest.mark.supplemental_node
-def test_supplemental_node_start_plan_identity_and_timeout_contract() -> None:
+def _run_required_bridge_probe(probe_name: str) -> None:
     node = _node_executable()
     if node is None:
-        pytest.skip("Node.js is unavailable for the supplemental bridge probe")
-    probe = Path(__file__).parents[2] / "assets" / "bridge_timeout_probe.mjs"
+        pytest.fail("This bridge gate requires Node.js; install node on PATH or set NAMISYNC_TEST_NODE.")
+    if not node.is_file():
+        pytest.fail(
+            "NAMISYNC_TEST_NODE or the node PATH entry does not identify a "
+            f"file: {node}"
+        )
+    probe = Path(__file__).parents[2] / "assets" / probe_name
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
 
-    completed = subprocess.run(
-        [str(node), str(probe), str(bridge)],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=10,
-    )
+    try:
+        completed = subprocess.run(
+            [str(node), str(probe), str(bridge)],
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        pytest.fail(
+            f"This bridge gate could not run Node.js at {node}: {exc}. "
+            "Set NAMISYNC_TEST_NODE to a working executable."
+        )
 
     assert completed.returncode == 0, completed.stdout + completed.stderr
+
+
+
+def test_required_node_start_plan_identity_and_timeout_contract() -> None:
+    _run_required_bridge_probe("bridge_timeout_probe.mjs")
 
 
 @pytest.mark.parametrize(
@@ -785,7 +801,7 @@ def test_br_g_36_node_discovery_prefers_explicit_test_runtime(
     assert _node_executable() == configured
 
 
-def test_br_g_36_node_drain_validates_progress_before_batch_delivery(
+def test_br_g_36_node_drain_validates_transport_before_batch_delivery(
     tmp_path: Path,
 ) -> None:
     node = _node_executable()
@@ -803,10 +819,6 @@ def test_br_g_36_node_drain_validates_progress_before_batch_delivery(
     bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
     producer_fixture = tmp_path / "executor-progress.json"
     fixture = _real_deferred_mkdir_drain_fixture(tmp_path)
-    fixture["reliable_size_events"] = [
-        asdict(session_event_view(envelope_from_dict(factory())))
-        for factory in (maximum_reliable_envelope, maximum_non_ascii_reliable_envelope)
-    ]
     producer_fixture.write_text(
         json.dumps(fixture),
         encoding="utf-8",
@@ -833,23 +845,8 @@ def test_br_g_36_node_drain_validates_progress_before_batch_delivery(
     )
 
 
-@pytest.mark.supplemental_node
-def test_supplemental_node_interactive_wrapper_is_bounded_single_attempt() -> None:
-    node = _node_executable()
-    if node is None:
-        pytest.skip("Node.js is unavailable for the supplemental bridge probe")
-    probe = Path(__file__).parents[2] / "assets" / "bridge_interactive_probe.mjs"
-    bridge = Path(bridge_module.__file__).parent / "assets" / "bridge.js"
-
-    completed = subprocess.run(
-        [str(node), str(probe), str(bridge)],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=10,
-    )
-
-    assert completed.returncode == 0, completed.stdout + completed.stderr
+def test_required_node_interactive_wrapper_is_bounded_single_attempt() -> None:
+    _run_required_bridge_probe("bridge_interactive_probe.mjs")
 
 
 def test_br_g_32_neutral_wrapper_cannot_authorize_a_test_command() -> None:
@@ -1580,21 +1577,22 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         def __init__(self) -> None:
             self.submissions: list[object] = []
 
-        def submit(self, kind: str, request: object) -> str:
+        def submit(
+            self,
+            kind: str,
+            request: object,
+            *,
+            attach=None,
+        ) -> str:
             del kind
             self.submissions.append(request)
-            return "5" * 32
+            session_id = "5" * 32
+            if attach is not None:
+                attach(session_id, SimpleNamespace(close=lambda: None))
+            return session_id
 
     runtime = Runtime()
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._dispatcher = Dispatcher()
-    service._lock = Lock()
-    service._session_receipts = {}
-    service._receipt_ids_by_session = {}
-    service._session_receipt_locks = tuple(Lock() for _ in range(64))
-    service._session_receipt_lifecycle = Lock()
-    service._closed = False
+    service = make_service(runtime=runtime, dispatcher=Dispatcher())
 
     class Registry:
         def replay_start(self, *args: object, **kwargs: object) -> None:
@@ -1781,7 +1779,7 @@ def test_br_g_32_admitted_call_finishes_while_close_refuses_new_body() -> None:
 def test_bridge_admission_ceiling_is_sized_for_shared_task_headroom() -> None:
     assert (
         bridge_module._MAX_ADMITTED_HANDLERS
-        == drain_module._TASK_CAPACITY + 16
+        == TASK_EFFECT_CAPACITY + 16
     )
 
 

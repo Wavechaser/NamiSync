@@ -1,39 +1,15 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { TestEventTarget } from "./_event_target.mjs";
 
 
-class TestWindow {
+class TestWindow extends TestEventTarget {
   constructor() {
-    this.listeners = new Map();
+    super();
     this.pywebview = undefined;
   }
 
-  addEventListener(name, handler, options = {}) {
-    const listeners = this.listeners.get(name) ?? [];
-    listeners.push({ handler, once: options.once === true });
-    this.listeners.set(name, listeners);
-  }
 
-  removeEventListener(name, handler) {
-    const listeners = this.listeners.get(name) ?? [];
-    this.listeners.set(
-      name,
-      listeners.filter((listener) => listener.handler !== handler),
-    );
-  }
-
-  emit(name) {
-    for (const listener of [...(this.listeners.get(name) ?? [])]) {
-      if (listener.once) {
-        this.removeEventListener(name, listener.handler);
-      }
-      listener.handler();
-    }
-  }
-
-  listenerCount(name) {
-    return (this.listeners.get(name) ?? []).length;
-  }
 }
 
 
@@ -529,126 +505,91 @@ assert.deepEqual(acceptedNullRecord.map((update) => update.update_type), [
 assert.equal(releaseRequests.length, nullRecordReleases + 1);
 stopNullRecord();
 
-// Session events carry the nested core event version independently of the
-// bridge command/response version. Exact-shape failures leave the replay
-// cursor unchanged, while the current core version is accepted.
-const eventVersionSession = "98".repeat(16);
-const eventVersionTask = `task-${"76".repeat(16)}`;
-const acceptedEventVersions = [];
-const refusedEventVersions = [];
-let eventVersionRequestIndex = requests.length;
-const stopEventVersions = bridge.startTaskDrain(
-  eventVersionTask,
-  eventVersionSession,
-  (update) => acceptedEventVersions.push(update),
-  (error) => refusedEventVersions.push(error),
+// Live session events retain one browser-owned transport envelope. Event-body
+// semantics belong to the trusted Python producer; malformed transport rejects
+// the whole batch before callback delivery or replay-cursor movement.
+const transportEventSession = "98".repeat(16);
+const transportEventTask = `task-${"76".repeat(16)}`;
+const acceptedTransportEvents = [];
+const refusedTransportEvents = [];
+let transportEventRequestIndex = requests.length;
+const stopTransportEvents = bridge.startTaskDrain(
+  transportEventTask,
+  transportEventSession,
+  (update) => acceptedTransportEvents.push(update),
+  (error) => refusedTransportEvents.push(error),
 );
-const validVersionedEvent = event(eventVersionSession, 1);
-const { schema_version: omittedEventVersion, ...eventWithoutVersion } =
-  validVersionedEvent.event;
-void omittedEventVersion;
-const invalidVersionedEvents = [
+const canonicalTransportUpdate = event(
+  transportEventSession,
+  1,
+  "StateChanged",
+  { producer_owned: true },
+);
+canonicalTransportUpdate.event.at = 42;
+const secondTransportEnvelope = {
+  ...canonicalTransportUpdate.event,
+  sequence: 2,
+};
+const invalidTransportEnvelopes = [
+  ["non-object envelope", null],
   [
-    "missing nested event version",
-    { ...validVersionedEvent, event: eventWithoutVersion },
+    "wrong schema version",
+    { ...secondTransportEnvelope, schema_version: 4 },
   ],
   [
-    "retired v3 nested event version",
+    "wrong session",
+    { ...secondTransportEnvelope, session_id: "87".repeat(16) },
+  ],
+  ["zero sequence", { ...secondTransportEnvelope, sequence: 0 }],
+  [
+    "unsafe sequence",
     {
-      ...validVersionedEvent,
-      event: { ...validVersionedEvent.event, schema_version: 3 },
+      ...secondTransportEnvelope,
+      sequence: Number.MAX_SAFE_INTEGER + 1,
     },
   ],
+  ["non-object body", { ...secondTransportEnvelope, body: [] }],
   [
-    "retired v4 nested event version",
-    {
-      ...validVersionedEvent,
-      event: { ...validVersionedEvent.event, schema_version: 4 },
-    },
-  ],
-  [
-    "extra nested event key",
-    {
-      ...validVersionedEvent,
-      event: { ...validVersionedEvent.event, extra: null },
-    },
-  ],
-  [
-    "unsafe integer in a non-Progress live body",
-    event(eventVersionSession, 1, "Gap", {
+    "unsafe Gap cursor",
+    event(transportEventSession, 2, "Gap", {
       first_missed_seq: Number.MAX_SAFE_INTEGER + 1,
-    }),
+    }).event,
   ],
-  [
-    "unsafe Terminal aggregate integer",
-    event(eventVersionSession, 1, "Terminal", {
-      result: {
-        ...coreOperationResult,
-        bytes_done: Number.MAX_SAFE_INTEGER + 1,
-        bytes_total: Number.MAX_SAFE_INTEGER + 1,
-      },
-    }),
-  ],
-  [
-    "unsafe Terminal phase integer",
-    event(eventVersionSession, 1, "Terminal", {
-      result: {
-        ...coreOperationResult,
-        phases: [{
-          phase: "execute",
-          status: "completed",
-          items_done: 0,
-          items_total: 0,
-          bytes_done: Number.MAX_SAFE_INTEGER + 1,
-          bytes_total: Number.MAX_SAFE_INTEGER + 1,
-          error: null,
-        }],
-      },
-    }),
-  ],
+  ["extra envelope key", { ...secondTransportEnvelope, extra: null }],
 ];
 
-for (const [label, invalidEvent] of invalidVersionedEvents) {
-  const malformed = await nextRequest(eventVersionRequestIndex);
-  eventVersionRequestIndex += 1;
+for (const [label, invalidEnvelope] of invalidTransportEnvelopes) {
+  const malformed = await nextRequest(transportEventRequestIndex);
+  transportEventRequestIndex += 1;
   assert.equal(malformed.request.payload.replay_from, null, label);
-  success(malformed, [
-    validVersionedEvent,
-    { ...invalidEvent, event: { ...invalidEvent.event, sequence: 2 } },
-  ]);
+  const invalidUpdate = {
+    update_type: "event",
+    event: invalidEnvelope,
+  };
+  success(malformed, [canonicalTransportUpdate, invalidUpdate]);
 
-  const recovery = await nextRequest(eventVersionRequestIndex);
-  eventVersionRequestIndex += 1;
+  const recovery = await nextRequest(transportEventRequestIndex);
+  transportEventRequestIndex += 1;
   assert.equal(recovery.request.payload.replay_from, 1, label);
-  assert.equal(acceptedEventVersions.length, 0, label);
-  assert.equal(refusedEventVersions.length, 0, label);
+  assert.equal(acceptedTransportEvents.length, 0, label);
+  assert.equal(refusedTransportEvents.length, 0, label);
   success(recovery, []);
   await turns();
 }
 
-const validEventVersionRequest = await nextRequest(eventVersionRequestIndex);
-assert.equal(validEventVersionRequest.request.payload.replay_from, null);
-success(validEventVersionRequest, [validVersionedEvent]);
+const validTransportRequest = await nextRequest(transportEventRequestIndex);
+assert.equal(validTransportRequest.request.payload.replay_from, null);
+success(validTransportRequest, [canonicalTransportUpdate]);
 await turns();
-assert.equal(refusedEventVersions.length, 0);
-assert.equal(acceptedEventVersions.length, 1);
-assert.equal(acceptedEventVersions[0].event.schema_version, 5);
-stopEventVersions();
-
-// Progress is an exact current-source shape. Malformed item identity or byte
-// telemetry invalidates the whole batch and recovers from the unchanged
-// cursor. A valid populated zero-byte stream remains determinate.
-const progressMatrixSession = "ab".repeat(16);
-const progressMatrixTask = `task-${"cd".repeat(16)}`;
-const acceptedProgressMatrix = [];
-const refusedProgressMatrix = [];
-let progressMatrixRequestIndex = requests.length;
-const stopProgressMatrix = bridge.startTaskDrain(
-  progressMatrixTask,
-  progressMatrixSession,
-  (update) => acceptedProgressMatrix.push(update),
-  (error) => refusedProgressMatrix.push(error),
+assert.equal(refusedTransportEvents.length, 0);
+assert.equal(acceptedTransportEvents.length, 1);
+assert.deepEqual(
+  acceptedTransportEvents[0].event.body,
+  { producer_owned: true },
 );
+assert.equal(acceptedTransportEvents[0].event.at, 42);
+stopTransportEvents();
+
 const validProgressBody = Object.freeze({
   phase: "execute",
   items_done: 0,
@@ -662,236 +603,6 @@ const validProgressBody = Object.freeze({
   item_bytes_done: "1",
   item_bytes_total: "1",
 });
-const invalidProgressBodies = [
-  [
-    "legacy nine-key body",
-    {
-      items_done: 0,
-      items_total: 1,
-      bytes_done: 0,
-      bytes_total: 1,
-      current_path: "matrix.bin",
-      item_id: "matrix-operation",
-      item_type: "operation",
-      item_bytes_done: 0,
-      item_bytes_total: 1,
-    },
-  ],
-  ["extra key", { ...validProgressBody, extra: null }],
-  ["empty phase", { ...validProgressBody, phase: "" }],
-  ["non-text phase", { ...validProgressBody, phase: 7 }],
-  ["boolean items done", { ...validProgressBody, items_done: true }],
-  ["fractional items done", { ...validProgressBody, items_done: 0.5 }],
-  ["negative items done", { ...validProgressBody, items_done: -1 }],
-  [
-    "unsafe items done",
-    { ...validProgressBody, items_done: Number.MAX_SAFE_INTEGER + 1 },
-  ],
-  ["boolean items total", { ...validProgressBody, items_total: true }],
-  ["fractional items total", { ...validProgressBody, items_total: 1.5 }],
-  ["negative items total", { ...validProgressBody, items_total: -1 }],
-  [
-    "unsafe items total",
-    { ...validProgressBody, items_total: Number.MAX_SAFE_INTEGER + 1 },
-  ],
-  ["boolean bytes done", { ...validProgressBody, bytes_done: true }],
-  ["fractional bytes done", { ...validProgressBody, bytes_done: 0.5 }],
-  ["negative bytes done", { ...validProgressBody, bytes_done: -1 }],
-  [
-    "unsafe bytes done",
-    { ...validProgressBody, bytes_done: Number.MAX_SAFE_INTEGER + 1 },
-  ],
-  ["boolean bytes total", { ...validProgressBody, bytes_total: true }],
-  ["fractional bytes total", { ...validProgressBody, bytes_total: 1.5 }],
-  ["negative bytes total", { ...validProgressBody, bytes_total: -1 }],
-  [
-    "unsafe bytes total",
-    { ...validProgressBody, bytes_total: Number.MAX_SAFE_INTEGER + 1 },
-  ],
-  ["items done exceeds total", { ...validProgressBody, items_done: 2 }],
-  ["bytes done exceeds total", { ...validProgressBody, bytes_done: 2 }],
-  ["non-text current path", { ...validProgressBody, current_path: 7 }],
-  ["item id without type", { ...validProgressBody, item_type: null }],
-  ["item type without id", { ...validProgressBody, item_id: null }],
-  ["empty item id", { ...validProgressBody, item_id: "" }],
-  ["non-text item id", { ...validProgressBody, item_id: 7 }],
-  ["unknown item type", { ...validProgressBody, item_type: "scan" }],
-  [
-    "active item after admission settled",
-    {
-      ...validProgressBody,
-      items_done: 1,
-    },
-  ],
-  [
-    "attempt without identity",
-    {
-      ...validProgressBody,
-      item_id: null,
-      item_type: null,
-      item_bytes_done: null,
-      item_bytes_total: null,
-    },
-  ],
-  [
-    "bytes without attempt",
-    { ...validProgressBody, item_attempt_id: null },
-  ],
-  [
-    "short attempt id",
-    { ...validProgressBody, item_attempt_id: "12" },
-  ],
-  [
-    "uppercase attempt id",
-    { ...validProgressBody, item_attempt_id: "AB".repeat(16) },
-  ],
-  [
-    "non-text attempt id",
-    { ...validProgressBody, item_attempt_id: 7 },
-  ],
-  [
-    "item bytes done without total",
-    { ...validProgressBody, item_bytes_total: null },
-  ],
-  [
-    "item bytes total without done",
-    { ...validProgressBody, item_bytes_done: null },
-  ],
-  [
-    "item bytes without identity",
-    {
-      ...validProgressBody,
-      item_id: null,
-      item_type: null,
-      item_attempt_id: null,
-    },
-  ],
-  [
-    "boolean item bytes done",
-    { ...validProgressBody, item_bytes_done: true },
-  ],
-  [
-    "boolean item bytes total",
-    { ...validProgressBody, item_bytes_total: true },
-  ],
-  [
-    "fractional item bytes done",
-    { ...validProgressBody, item_bytes_done: 0.5 },
-  ],
-  [
-    "fractional item bytes total",
-    { ...validProgressBody, item_bytes_total: 1.5 },
-  ],
-  [
-    "unsafe item byte counters",
-    {
-      ...validProgressBody,
-      item_bytes_done: Number.MAX_SAFE_INTEGER + 1,
-      item_bytes_total: Number.MAX_SAFE_INTEGER + 1,
-    },
-  ],
-  [
-    "negative item bytes done",
-    { ...validProgressBody, item_bytes_done: -1 },
-  ],
-  [
-    "negative item bytes total",
-    { ...validProgressBody, item_bytes_total: -1 },
-  ],
-  [
-    "item bytes done exceeds total",
-    { ...validProgressBody, item_bytes_done: 2 },
-  ],
-  [
-    "item bytes done exceeds aggregate",
-    {
-      ...validProgressBody,
-      bytes_done: 0,
-      item_bytes_done: 1,
-    },
-  ],
-  [
-    "item bytes total exceeds aggregate total",
-    {
-      ...validProgressBody,
-      bytes_total: 0,
-      item_bytes_total: 1,
-    },
-  ],
-];
-
-for (const [label, body] of invalidProgressBodies) {
-  const malformed = await nextRequest(progressMatrixRequestIndex);
-  progressMatrixRequestIndex += 1;
-  assert.equal(malformed.request.payload.replay_from, null, label);
-  success(malformed, [event(progressMatrixSession, 1, "Progress", body)]);
-
-  const recovery = await nextRequest(progressMatrixRequestIndex);
-  progressMatrixRequestIndex += 1;
-  assert.equal(recovery.request.payload.replay_from, 1, label);
-  assert.equal(acceptedProgressMatrix.length, 0, label);
-  assert.equal(refusedProgressMatrix.length, 0, label);
-  success(recovery, []);
-  await turns();
-}
-
-const validZeroProgress = {
-  ...validProgressBody,
-  bytes_done: "0",
-  bytes_total: "0",
-  item_bytes_done: "0",
-  item_bytes_total: "0",
-};
-const validIndeterminateProgress = {
-  ...validProgressBody,
-  phase: "verify",
-  item_attempt_id: "34".repeat(16),
-  item_bytes_done: null,
-  item_bytes_total: null,
-};
-const validPrestreamProgress = {
-  ...validProgressBody,
-  phase: "baseline",
-  item_attempt_id: null,
-  item_bytes_done: null,
-  item_bytes_total: null,
-};
-const progressMatrixValid = await nextRequest(progressMatrixRequestIndex);
-assert.equal(progressMatrixValid.request.payload.replay_from, null);
-success(progressMatrixValid, [
-  event(progressMatrixSession, 1, "Progress", validZeroProgress),
-  event(progressMatrixSession, 2, "PhaseChanged", { phase: "verify" }),
-  event(progressMatrixSession, 3, "Progress", validIndeterminateProgress),
-  event(progressMatrixSession, 4, "PhaseChanged", { phase: "baseline" }),
-  event(progressMatrixSession, 5, "Progress", validPrestreamProgress),
-]);
-await turns();
-assert.equal(refusedProgressMatrix.length, 0);
-assert.equal(acceptedProgressMatrix.length, 5);
-assert.deepEqual(acceptedProgressMatrix[0].event.body, validZeroProgress);
-assert.deepEqual(
-  acceptedProgressMatrix[2].event.body,
-  validIndeterminateProgress,
-);
-assert.deepEqual(
-  acceptedProgressMatrix[4].event.body,
-  validPrestreamProgress,
-);
-stopProgressMatrix();
-
-// One malformed lossy Progress invalidates reliable siblings in the same
-// response before any callback or cursor movement. Replaying only the reliable
-// siblings delivers each once, and bridge recovery resumes after their tail.
-const progressBatchSession = "ef".repeat(16);
-const progressBatchTask = `task-${"01".repeat(16)}`;
-const acceptedProgressBatch = [];
-const refusedProgressBatch = [];
-const stopProgressBatch = bridge.startTaskDrain(
-  progressBatchTask,
-  progressBatchSession,
-  (update) => acceptedProgressBatch.push(update),
-  (error) => refusedProgressBatch.push(error),
-);
 const operationOutcomeBody = Object.freeze({
   item_type: "operation",
   phase: "execute",
@@ -906,55 +617,8 @@ const operationOutcomeBody = Object.freeze({
   recording_detail: null,
   detail_omitted_count: 0,
 });
-const malformedProgressBatch = await nextRequest(requests.length);
-assert.equal(malformedProgressBatch.request.payload.replay_from, null);
-success(malformedProgressBatch, [
-  event(progressBatchSession, 1, "ItemOutcome", operationOutcomeBody),
-  event(progressBatchSession, 2, "Progress", {
-    ...validProgressBody,
-    extra: null,
-  }),
-  event(progressBatchSession, 3, "StateChanged", { state: "running" }),
-  event(progressBatchSession, 4, "Terminal", { result: coreOperationResult }),
-]);
 
-const cleanProgressBatchReplay = await nextRequest(requests.length);
-assert.equal(cleanProgressBatchReplay.request.payload.replay_from, 1);
-assert.equal(acceptedProgressBatch.length, 0);
-assert.equal(refusedProgressBatch.length, 0);
-success(cleanProgressBatchReplay, [
-  event(progressBatchSession, 1, "ItemOutcome", operationOutcomeBody),
-  event(progressBatchSession, 3, "StateChanged", { state: "running" }),
-  event(progressBatchSession, 4, "Terminal", { result: coreOperationResult }),
-]);
 
-const progressBatchTail = await nextRequest(requests.length);
-assert.equal(progressBatchTail.request.payload.replay_from, null);
-assert.deepEqual(
-  acceptedProgressBatch.map((update) => update.event.body_type),
-  ["ItemOutcome", "StateChanged", "Terminal"],
-);
-assert.deepEqual(
-  acceptedProgressBatch.map((update) => update.event.sequence),
-  [1, 3, 4],
-);
-assert.equal(refusedProgressBatch.length, 0);
-
-reinjectBridge();
-const progressBatchCursorRecovery = await nextRequest(requests.length);
-assert.equal(progressBatchCursorRecovery.request.payload.replay_from, 5);
-success(progressBatchTail, []);
-success(progressBatchCursorRecovery, [terminalRecord(progressBatchSession)]);
-await turns();
-assert.deepEqual(
-  acceptedProgressBatch
-    .filter((update) => update.update_type === "event")
-    .map((update) => update.event.sequence),
-  [1, 3, 4],
-);
-assert.equal(acceptedProgressBatch.at(-1).update_type, "record");
-assert.equal(refusedProgressBatch.length, 0);
-stopProgressBatch();
 
 // The reducer preflights temporal semantics for the whole applicable batch.
 // Its immutable callback view follows reliable phase authority, admits numeric
@@ -1221,15 +885,6 @@ const overshootRecoveryUpdates = [
   event(reducerSession, 12, "Terminal", { result: coreOperationResult }),
   terminalRecord(reducerSession),
 ];
-for (const update of overshootRecoveryUpdates.filter(
-  (candidate) => candidate.update_type === "event",
-)) {
-  assert.equal(
-    bridge.validateSessionEventV5(update.event, reducerSession),
-    true,
-    update.event.body_type,
-  );
-}
 success(reducerOvershootRecovery, overshootRecoveryUpdates);
 await turns();
 assert.equal(acceptedReducer.length, countBeforeOvershootRecovery + 3);
@@ -1425,65 +1080,6 @@ if (crossBoundaryFixture !== null) {
     assert.equal(acceptedCrossBoundary.at(-1).progressState.activeItem, null);
   }
   stopCrossBoundary();
-}
-
-// A per-field-valid oversized reliable event invalidates its whole batch.
-// Use untouched production Python projections at the exact envelope ceiling;
-// the view key "sequence" itself is five bytes longer than persistence "seq".
-for (const [index, maximumEvent] of (
-  crossBoundaryFixture?.reliable_size_events ?? []
-).entries()) {
-  const sizeTask = `task-${String(index + 1).padStart(32, "0")}`;
-  const sizeSession = maximumEvent.session_id;
-  const acceptedSizes = [];
-  const refusedSizes = [];
-  const requestIndex = requests.length;
-  const releasesBefore = releaseRequests.length;
-  const stopSizes = bridge.startTaskDrain(
-    sizeTask,
-    sizeSession,
-    (update, progressState) => acceptedSizes.push({ update, progressState }),
-    (error) => refusedSizes.push(error),
-  );
-  const pending = await nextRequest(requestIndex);
-  const oversized = structuredClone(maximumEvent);
-  oversized.body.path += "x";
-  success(pending, [
-    event(sizeSession, 1, "PhaseChanged", { phase: "verify" }),
-    { update_type: "event", event: oversized },
-    terminalRecord(sizeSession),
-  ]);
-  await turns();
-  assert.equal(acceptedSizes.length, 0);
-  assert.equal(refusedSizes.length, 0);
-  assert.equal(releaseRequests.length, releasesBefore);
-  const recovery = await nextRequest(requestIndex + 1);
-  assert.equal(recovery.request.payload.replay_from, 1);
-
-  // A leaked reliable "verify" phase would reject this self-described
-  // "execute" Progress; no new PhaseChanged may erase that evidence.
-  success(recovery, [
-    event(sizeSession, 1, "Progress", {
-      ...validProgressBody,
-      item_id: maximumEvent.body.item_id,
-    }),
-    { update_type: "event", event: maximumEvent },
-    terminalRecord(sizeSession),
-  ]);
-  await turns();
-  assert.deepEqual(
-    acceptedSizes.map(({ update }) => update.update_type),
-    ["event", "event", "record"],
-  );
-  assert.deepEqual(
-    acceptedSizes.slice(0, 2).map(({ update }) => update.event.sequence),
-    [1, 3],
-  );
-  assert.deepEqual(acceptedSizes[1].update.event, maximumEvent);
-  assert.equal(acceptedSizes.at(-1).progressState.activeItem, null);
-  assert.equal(refusedSizes.length, 0);
-  assert.equal(releaseRequests.length, releasesBefore + 1);
-  stopSizes();
 }
 
 // Gap discards the pre-gap reducer domain. A matching recovery Gap can then
@@ -2236,8 +1832,6 @@ stopRelease();
 stopTerminalCallback();
 stopExhaustedRelease();
 stopPersistent();
-stopProgressMatrix();
-stopProgressBatch();
 await turns();
 assert.equal(testWindow.listenerCount("pywebviewready"), 1);
 assert.equal(timers.size, 0);

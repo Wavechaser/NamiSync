@@ -11,8 +11,10 @@ from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import datetime
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Callable, Mapping, Protocol
+from typing import Callable, Mapping
 
+from namisync.core.clock import Clock
+from namisync.core.event_v5 import validate_and_encode_event_v5_envelope
 from namisync.core.exception_graph import retire_exception_graph
 from namisync.core.events import (
     CORE_EVENT_SCHEMA_VERSION,
@@ -53,6 +55,7 @@ from namisync.core.scalars import require_safe_int
 
 from .connections import (
     DEFAULT_BUSY_TIMEOUT_MS,
+    QUERY_SUBJECT_BATCH_SIZE,
     connect_history_reader,
     connect_history_writer,
 )
@@ -97,13 +100,8 @@ def _unique_json_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
         result[key] = value
     return result
 
-
-class Clock(Protocol):
-    def now(self) -> datetime: ...
-
-
 class HistoryIntegrityError(RecordingError):
-    """The reliable event stream was duplicated or reordered inconsistently."""
+    """The reliable event prefix violates the history integrity contract."""
 
 
 class HistoryEventDisposition(StrEnum):
@@ -946,7 +944,13 @@ class HistoryObserver:
                 f"unsupported reliable event body: {type(envelope.body).__name__}"
             )
 
-        encoded = _json_bytes(envelope_to_dict(envelope))
+        projection = envelope_to_dict(envelope)
+        try:
+            encoded = validate_and_encode_event_v5_envelope(projection)
+        except (TypeError, ValueError) as error:
+            raise HistoryIntegrityError(
+                "history event projection is invalid"
+            ) from error
         encoded_size = len(encoded)
         digest = hashlib.sha256(encoded).digest()
         item_identity_hash = (
@@ -957,7 +961,7 @@ class HistoryObserver:
         item_payload_hash = (
             None
             if not isinstance(envelope.body, ResultItem)
-            else _hash(result_item_to_dict(envelope.body))
+            else _hash(projection["body"])
         )
         prior = self._event_hashes.get(envelope.seq)
         if prior is not None:
@@ -1389,9 +1393,10 @@ class HistoryObserver:
                 raise TokenConflictError("finalized history cannot accept new events")
 
             envelope = event.envelope
-            projection = (
+            item_projection = (
                 None if envelope is None else _item_projection(envelope.body)
             )
+            projection = _item_column_projection(item_projection)
             item_order = None
             item_identity_hash = event.item_identity_hash
             item_payload_hash = event.item_payload_hash
@@ -2078,7 +2083,14 @@ def _item_identity_hash(item: ResultItem) -> bytes:
 def _item_projection(body: object) -> dict[str, object] | None:
     if not isinstance(body, ResultItem):
         return None
-    data = result_item_to_dict(body)
+    return result_item_to_dict(body)
+
+
+def _item_column_projection(
+    data: Mapping[str, object] | None,
+) -> dict[str, object] | None:
+    if data is None:
+        return None
     return {
         "item_type": str(data["item_type"]),
         "phase": str(data["phase"]),
@@ -2117,8 +2129,8 @@ def _canonical_items_for_window(
     )
     by_identity: dict[tuple[str, str], tuple[int, bytes]] = {}
     by_identity_hash: dict[bytes, tuple[int, bytes]] = {}
-    for offset in range(0, len(identity_hashes), 400):
-        chunk = identity_hashes[offset : offset + 400]
+    for offset in range(0, len(identity_hashes), QUERY_SUBJECT_BATCH_SIZE):
+        chunk = identity_hashes[offset : offset + QUERY_SUBJECT_BATCH_SIZE]
         requested = ",".join("?" for _ in chunk)
         for row in connection.execute(
             f"""SELECT event_seq AS first_seq,
@@ -2430,7 +2442,8 @@ def _history_event(
         or envelope.at != event_at
     ):
         raise HistoryIntegrityError("history event columns disagree with payload")
-    projection = _item_projection(envelope.body)
+    item_projection = _item_projection(envelope.body)
+    projection = _item_column_projection(item_projection)
     expected = (
         {
             "item_type": row["item_type"],
@@ -2452,8 +2465,8 @@ def _history_event(
         raise HistoryIntegrityError("history item columns disagree with payload")
     expected_item_hash = (
         None
-        if not isinstance(envelope.body, ResultItem)
-        else _hash(result_item_to_dict(envelope.body))
+        if item_projection is None
+        else _hash(item_projection)
     )
     if item_payload_hash != expected_item_hash:
         raise HistoryIntegrityError("history item payload hash disagrees")

@@ -12,13 +12,21 @@ from typing import ClassVar
 
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.event_v5 import (
+    _DETAIL_BOOLEAN_KEYS,
+    _DETAIL_ID_ARRAY_KEYS,
+    _DETAIL_KEYS,
+    _DETAIL_PATH_KEYS,
+    _DETAIL_SIDE_ARRAY_KEYS,
+    _DETAIL_TEXT_ARRAY_KEYS,
+    _DETAIL_TEXT_KEYS,
+    _OPERATION_REASONS,
     EVENT_V5_SCHEMA_VERSION,
     MAX_DETAIL_LEAVES,
     MAX_DETAIL_PATH_LEAVES,
+    MAX_RELIABLE_EVENT_CANONICAL_BYTES,
     validate_event_v5_envelope,
 )
 from namisync.core.execution import (
-    ExecutionReason,
     ItemRecordingReason,
     TaskRecordingIssue,
     TaskRecordingIssueReason,
@@ -31,7 +39,7 @@ from namisync.core.integrity import (
     ReadStrategy,
     RecordDisposition,
 )
-from namisync.core.planning import BlockedReason, OperationKind
+from namisync.core.planning import OperationKind
 from namisync.core.review import (
     ReviewFactLimitExceeded,
     ReviewLimitAxis,
@@ -63,67 +71,6 @@ from namisync.core.session import (
 CORE_EVENT_SCHEMA_VERSION = EVENT_V5_SCHEMA_VERSION
 
 _HEX_ID = re.compile(r"[0-9a-f]{32}\Z")
-_DETAIL_TEXT_KEYS = frozenset(
-    {
-        "backup",
-        "backup_metadata",
-        "backup_state",
-        "backup_state_error",
-        "blocked_reason",
-        "cleanup_error",
-        "destination_state",
-        "durable_state",
-        "error_type",
-        "message",
-        "mutation_durable_state",
-        "mutation_state",
-        "mutation_state_error",
-        "old_state_error",
-        "publish_state",
-        "retry_error",
-        "retry_error_type",
-        "source_state",
-        "state_error",
-        "state_error_type",
-        "target_state",
-        "target_state_error",
-        "temp_state",
-        "trash_state_error",
-    }
-)
-_DETAIL_PATH_KEYS = frozenset(
-    {
-        "backup_path",
-        "mutation_destination",
-        "prior_path",
-        "published_path",
-        "trash_path",
-    }
-)
-_DETAIL_BOOLEAN_KEYS = frozenset({"continued"})
-_DETAIL_TEXT_ARRAY_KEYS = frozenset({"durability_warnings"})
-_DETAIL_SIDE_ARRAY_KEYS = frozenset({"incomplete_sides"})
-_DETAIL_ID_ARRAY_KEYS = frozenset({"excluded_dependencies"})
-_DETAIL_KEYS = frozenset(
-    {
-        *_DETAIL_TEXT_KEYS,
-        *_DETAIL_PATH_KEYS,
-        *_DETAIL_BOOLEAN_KEYS,
-        *_DETAIL_TEXT_ARRAY_KEYS,
-        *_DETAIL_SIDE_ARRAY_KEYS,
-        *_DETAIL_ID_ARRAY_KEYS,
-    }
-)
-_OPERATION_REASONS = frozenset(
-    {
-        *(reason.value for reason in ExecutionReason),
-        *(reason.value for reason in BlockedReason),
-        "blocked-correspondence",
-        "blocked-dependency",
-        "incomplete-scan",
-        "user-deselected",
-    }
-)
 
 
 class DeliveryClass(StrEnum):
@@ -232,20 +179,9 @@ class DetailProjection(Mapping[str, DetailValue]):
         raise KeyError(key)
 
     def to_wire(self) -> dict[str, object]:
-        source_entries = getattr(self, "entries", None)
-        if type(source_entries) is not tuple:
-            raise TypeError(
-                "canonical operation detail entries must be an exact tuple"
-            )
-        entries, omitted = _project_detail_entries(
-            source_entries,
-            canonical=True,
-        )
-        if omitted:
-            raise ValueError("canonical operation detail cannot omit values")
         return {
             key: list(value) if isinstance(value, tuple) else value
-            for key, value in entries
+            for key, value in self.entries
         }
 
 
@@ -520,16 +456,7 @@ def project_detail(
     """Snapshot one declared detail map and omit only oversized diagnostics."""
 
     if type(value) is DetailProjection:
-        source_entries = getattr(value, "entries", None)
-        if type(source_entries) is not tuple:
-            raise TypeError(
-                "canonical operation detail entries must be an exact tuple"
-            )
-        entries, omitted = _project_detail_entries(
-            source_entries,
-            canonical=True,
-        )
-        return DetailProjection(entries), omitted
+        return value, 0
     if not isinstance(value, Mapping):
         raise TypeError("operation detail must be a mapping")
     entries, omitted = _project_detail_entries(value.items(), canonical=False)
@@ -653,7 +580,7 @@ def _project_detail_entries(
 
 
 def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
-    """Serialize and validate one exact core-event v5 envelope."""
+    """Project one exact core-event v5 envelope."""
 
     body = envelope.body
     if isinstance(body, StateChanged):
@@ -680,19 +607,24 @@ def envelope_to_dict(envelope: Envelope) -> dict[str, object]:
         "body_type": type(body).__name__,
         "body": body_data,
     }
-    validate_event_v5_envelope(value)
     return value
 
 
 def canonical_event_bytes(envelope: Envelope) -> bytes:
     """Return the exact bytes used for reliable-event admission."""
 
-    return json.dumps(
+    encoded = json.dumps(
         envelope_to_dict(envelope),
         ensure_ascii=False,
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
+    if (
+        delivery_class(envelope.body) is DeliveryClass.RELIABLE
+        and len(encoded) > MAX_RELIABLE_EVENT_CANONICAL_BYTES
+    ):
+        raise ValueError("reliable event exceeds the canonical byte ceiling")
+    return encoded
 
 
 def envelope_from_dict(data: Mapping[str, object]) -> Envelope:

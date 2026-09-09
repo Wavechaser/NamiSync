@@ -10,6 +10,7 @@ import sys
 import time
 from ctypes import wintypes
 from pathlib import Path
+from typing import Callable
 from unittest.mock import patch
 
 from _headed_evidence import EvidencePaths, EvidencePublisher
@@ -116,39 +117,86 @@ def _wait_for_named_gate(name: str, *, timeout_ms: int) -> bool:
 def _run_uia_probe(argv: list[str]) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--handle", required=True, type=int)
+    parser.add_argument("--process-id", required=True, type=int)
     parser.add_argument("--expected", required=True)
-    parser.add_argument("--timeout", required=True, type=float)
+    parser.add_argument("--deadline", required=True, type=float)
     arguments = parser.parse_args(argv)
-    deadline = time.monotonic() + max(0.0, arguments.timeout)
-    last: tuple[str, ...] = ()
+    result = {
+        "names": [],
+        "transient_count": 0,
+        "successful_observations": 0,
+        "last_transient": None,
+    }
     try:
-        while time.monotonic() < deadline:
-            if _automation_has_name(arguments.handle, arguments.expected):
-                last = (arguments.expected,)
-                print(json.dumps({"names": last}))
-                return 0
-            time.sleep(0.1)
+        observe, expired_element = _prepare_uia_observation(
+            arguments.handle,
+            arguments.expected,
+            arguments.process_id,
+        )
+        while time.monotonic() < arguments.deadline:
+            try:
+                found = observe()
+            except expired_element as error:
+                result["transient_count"] += 1
+                result["last_transient"] = _uia_error_details(error)
+            else:
+                result["successful_observations"] += 1
+                if found:
+                    result["names"] = [arguments.expected]
+                    print(json.dumps(result))
+                    return 0
+            time.sleep(
+                min(0.1, max(0.0, arguments.deadline - time.monotonic()))
+            )
     except Exception as error:
-        print(json.dumps({"names": last, "error": repr(error)}))
+        print(json.dumps({**result, "error": _uia_error_details(error)}))
         return 2
-    print(json.dumps({"names": last}))
+    print(json.dumps(result))
     return 1
 
 
-def _automation_has_name(handle: int, expected: str) -> bool:
+def _uia_error_details(error: Exception) -> dict[str, object]:
+    return {
+        "type": type(error).__name__,
+        "message": str(getattr(error, "Message", error)),
+        "hresult": getattr(error, "HResult", None),
+    }
+
+
+def _prepare_uia_observation(
+    handle: int,
+    expected: str,
+    process_id: int,
+) -> tuple[Callable[[], bool], type[Exception]]:
+    """Load UIA once without retaining an element between observations."""
+
     import clr
 
     clr.AddReference(_UI_AUTOMATION_CLIENT)
     from System import IntPtr
     from System.Windows.Automation import (
         AutomationElement,
+        ElementNotAvailableException,
         PropertyCondition,
         TreeScope,
     )
 
-    root = AutomationElement.FromHandle(IntPtr(handle))
+    user32 = _user32()
     condition = PropertyCondition(AutomationElement.NameProperty, expected)
-    return root.FindFirst(TreeScope.Descendants, condition) is not None
+
+    def require_owner() -> None:
+        thread_id, observed_process_id = _window_identity(handle, user32=user32)
+        if thread_id == 0 or observed_process_id != process_id:
+            raise RuntimeError("UI Automation window ownership changed")
+
+    def observe() -> bool:
+        require_owner()
+        root = AutomationElement.FromHandle(IntPtr(handle))
+        found = root.FindFirst(TreeScope.Descendants, condition) is not None
+        require_owner()
+        return found
+
+    return observe, ElementNotAvailableException
 
 
 def _run_uia_select_folder(argv: list[str]) -> int:

@@ -1,7 +1,15 @@
 const BRIDGE_SCHEMA_VERSION = 1;
 const NATIVE_TRANSPORT_VERSION = 1;
 const CORE_EVENT_SCHEMA_VERSION = 5;
-const MAX_RELIABLE_EVENT_CANONICAL_BYTES = 1_048_576;
+const LIVE_EVENT_BODY_TYPES = Object.freeze([
+  "StateChanged",
+  "PhaseChanged",
+  "Progress",
+  "ItemOutcome",
+  "IntegrityOutcome",
+  "Gap",
+  "Terminal",
+]);
 const ID_PATTERN = /^[0-9a-f]{32}$/;
 const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
 const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
@@ -55,18 +63,6 @@ const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([
 ]);
 const SESSION_RELEASE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);
 const TASK_CLOSE_RECOVERY_DELAYS_MS = Object.freeze([100, 250, 500]);
-const SESSION_STATES = Object.freeze([
-  "pending",
-  "running",
-  "pausing",
-  "paused",
-  "canceling",
-  "completed",
-  "failed",
-  "canceled",
-  "refused",
-  "interrupted",
-]);
 const TERMINAL_STATES = Object.freeze([
   "completed",
   "failed",
@@ -74,6 +70,13 @@ const TERMINAL_STATES = Object.freeze([
   "refused",
 ]);
 const RECORDING_STATES = Object.freeze(["ok", "degraded"]);
+const TASK_RECORDING_REASONS_V5 = Object.freeze([
+  "recording-open-failed",
+  "final-flush-failed",
+  "finish-failed",
+  "recording-close-failed",
+  "post-settlement-state-diverged",
+]);
 const DISPOSITIONS = Object.freeze(["ran", "unrun"]);
 const THEMES = Object.freeze(["system", "light", "dark"]);
 const COSMETIC_DISPOSITIONS = Object.freeze(["applied", "noop", "conflict"]);
@@ -92,48 +95,6 @@ const PHASE_STATES = Object.freeze([
   "failed",
   "canceled",
   "incomplete",
-]);
-const OPERATION_OUTCOMES = Object.freeze([
-  "succeeded",
-  "skipped",
-  "failed",
-  "canceled",
-  "deferred",
-  "blocked",
-]);
-const INTEGRITY_MODES = Object.freeze(["baseline", "verify", "rebaseline"]);
-const INTEGRITY_RESULTS = Object.freeze([
-  "verified",
-  "baselined",
-  "mismatched",
-  "modified",
-  "missing",
-  "unsupported",
-  "canceled",
-  "error",
-]);
-const INTEGRITY_REASONS = Object.freeze([
-  "path-invalid",
-  "inventory-missing",
-  "inventory-unsupported",
-  "not-found",
-  "unsupported-read",
-  "stat-changed",
-  "read-drift",
-  "hash-mismatch",
-  "baseline-exists",
-  "read-error",
-  "recording-stale",
-  "recording-conflict",
-  "recording-error",
-  "canceled",
-]);
-const READ_STRATEGIES = Object.freeze(["windows-unbuffered"]);
-const RECORD_DISPOSITIONS = Object.freeze([
-  "applied",
-  "noop",
-  "stale",
-  "conflict",
 ]);
 const RESULT_HEADLINES = Object.freeze([
   "failed",
@@ -1561,7 +1522,8 @@ function validateTaskUpdates(updates, sessionId, lastAcceptedSequence) {
     }
     if (
       update.event.body_type === "Gap" &&
-      (update.event.body.first_missed_seq <= lastSequence ||
+      (!Number.isSafeInteger(update.event.body.first_missed_seq) ||
+        update.event.body.first_missed_seq <= lastSequence ||
         update.event.body.first_missed_seq > update.event.sequence)
     ) {
       return false;
@@ -1591,7 +1553,22 @@ function validateTaskUpdate(update, sessionId) {
 }
 
 function validateLiveSessionEvent(event, sessionId) {
-  return validateSessionEventV5(event, sessionId);
+  return (
+    isExactObject(event, [
+      "session_id",
+      "sequence",
+      "at",
+      "schema_version",
+      "body_type",
+      "body",
+    ]) &&
+    event.session_id === sessionId &&
+    Number.isSafeInteger(event.sequence) &&
+    event.sequence > 0 &&
+    event.schema_version === CORE_EVENT_SCHEMA_VERSION &&
+    isOneOf(event.body_type, LIVE_EVENT_BODY_TYPES) &&
+    isPlainJsonObject(event.body)
+  );
 }
 
 function validateSessionRecord(record, sessionId) {
@@ -1717,393 +1694,6 @@ function validateOperationResultView(value) {
   );
 }
 
-export function validateSessionEventV5(event, sessionId) {
-  if (
-    !isExactObject(event, [
-      "session_id",
-      "sequence",
-      "at",
-      "schema_version",
-      "body_type",
-      "body",
-    ]) ||
-    event.session_id !== sessionId ||
-    !ID_PATTERN.test(event.session_id) ||
-    !Number.isSafeInteger(event.sequence) ||
-    event.sequence < 1 ||
-    !isUtcTimestamp(event.at) ||
-    event.schema_version !== CORE_EVENT_SCHEMA_VERSION ||
-    !isPlainJsonObject(event.body)
-  ) {
-    return false;
-  }
-  let validBody;
-  switch (event.body_type) {
-    case "StateChanged":
-      validBody = (
-        isExactObject(event.body, ["state"]) &&
-        isOneOf(event.body.state, SESSION_STATES)
-      );
-      break;
-    case "PhaseChanged":
-      validBody = (
-        isExactObject(event.body, ["phase"]) &&
-        isBoundedV5Text(event.body.phase, true)
-      );
-      break;
-    case "Progress":
-      return validateProgressV5(event.body);
-    case "ItemOutcome":
-      validBody = validateOperationItemV5(event.body);
-      break;
-    case "IntegrityOutcome":
-      validBody = validateIntegrityItemV5(event.body);
-      break;
-    case "Gap":
-      validBody = (
-        isExactObject(event.body, ["first_missed_seq"]) &&
-        Number.isSafeInteger(event.body.first_missed_seq) &&
-        event.body.first_missed_seq > 0 &&
-        event.body.first_missed_seq <= event.sequence
-      );
-      break;
-    case "Terminal":
-      validBody = (
-        isExactObject(event.body, ["result"]) &&
-        validateTerminalSummaryV5(event.body.result)
-      );
-      break;
-    default:
-      return false;
-  }
-  if (!validBody) {
-    return false;
-  }
-  // Validated v5 primitives have the same compact JSON byte length in Python
-  // and JavaScript. Count the persistence envelope ("seq"), not this view.
-  const canonical = JSON.stringify({
-    session_id: event.session_id,
-    seq: event.sequence,
-    at: event.at,
-    schema_version: event.schema_version,
-    body_type: event.body_type,
-    body: event.body,
-  });
-  return new TextEncoder().encode(canonical).length <=
-    MAX_RELIABLE_EVENT_CANONICAL_BYTES;
-}
-
-function validateProgressV5(value) {
-  if (
-    !isExactObject(value, [
-      "phase",
-      "items_done",
-      "items_total",
-      "bytes_done",
-      "bytes_total",
-      "current_path",
-      "item_id",
-      "item_type",
-      "item_attempt_id",
-      "item_bytes_done",
-      "item_bytes_total",
-    ]) ||
-    !isBoundedV5Text(value.phase, true) ||
-    !isNonnegativeInteger(value.items_done) ||
-    !isNullableNonnegativeInteger(value.items_total) ||
-    !isScalar64(value.bytes_done) ||
-    !(value.bytes_total === null || isScalar64(value.bytes_total)) ||
-    !(value.current_path === null || isV5Path(value.current_path)) ||
-    (value.items_total !== null && value.items_done > value.items_total) ||
-    (value.bytes_total !== null &&
-      BigInt(value.bytes_done) > BigInt(value.bytes_total))
-  ) {
-    return false;
-  }
-  const identityAbsent = value.item_id === null && value.item_type === null;
-  const identityPresent =
-    isBoundedV5Text(value.item_id, true) &&
-    (value.item_type === "operation" || value.item_type === "integrity");
-  if (
-    (!identityAbsent && !identityPresent) ||
-    (identityPresent &&
-      value.items_total !== null &&
-      value.items_done >= value.items_total)
-  ) {
-    return false;
-  }
-  const attemptAbsent = value.item_attempt_id === null;
-  const attemptPresent =
-    identityPresent &&
-    typeof value.item_attempt_id === "string" &&
-    ID_PATTERN.test(value.item_attempt_id);
-  if (!attemptAbsent && !attemptPresent) {
-    return false;
-  }
-  const itemBytesAbsent =
-    value.item_bytes_done === null && value.item_bytes_total === null;
-  const itemBytesPresent =
-    attemptPresent &&
-    isScalar64(value.item_bytes_done) &&
-    isScalar64(value.item_bytes_total) &&
-    BigInt(value.item_bytes_done) <= BigInt(value.item_bytes_total) &&
-    BigInt(value.item_bytes_done) <= BigInt(value.bytes_done) &&
-    (value.bytes_total === null ||
-      BigInt(value.item_bytes_total) <= BigInt(value.bytes_total));
-  return (
-    (attemptAbsent && itemBytesAbsent) ||
-    (attemptPresent && (itemBytesAbsent || itemBytesPresent))
-  );
-}
-
-const OPERATION_REASONS_V5 = Object.freeze([
-  "noop",
-  "already-exists",
-  "blocked",
-  "dependency-failed",
-  "source-drift",
-  "target-drift",
-  "destination-occupied",
-  "wrong-type",
-  "source-missing",
-  "target-missing",
-  "trash-collision",
-  "unsafe-path",
-  "sharing-violation",
-  "acl-copy-failed",
-  "cleanup-failed",
-  "published-size-mismatch",
-  "io-error",
-  "policy-stop",
-  "canceled",
-  "canceled-after-publish",
-  "canceled-after-mutation",
-  "recorder-failed",
-  "unsupported",
-  "case_mismatch",
-  "case_collision",
-  "type_collision",
-  "destination_collision",
-  "blocked_dependency",
-  "blocked-correspondence",
-  "blocked-dependency",
-  "incomplete-scan",
-  "user-deselected",
-]);
-const OPERATION_KINDS_V5 = Object.freeze([
-  "copy",
-  "update",
-  "move",
-  "move_update",
-  "recase",
-  "mkdir",
-  "trash",
-  "delete",
-  "noop",
-]);
-const ITEM_RECORDING_REASONS_V5 = Object.freeze([
-  "record-write-failed",
-  "unrecorded-mutation",
-  "recording-prerequisite-failed",
-]);
-const TASK_RECORDING_REASONS_V5 = Object.freeze([
-  "recording-open-failed",
-  "final-flush-failed",
-  "finish-failed",
-  "recording-close-failed",
-  "post-settlement-state-diverged",
-]);
-const DETAIL_TEXT_KEYS_V5 = Object.freeze([
-  "backup",
-  "backup_metadata",
-  "backup_state",
-  "backup_state_error",
-  "blocked_reason",
-  "cleanup_error",
-  "destination_state",
-  "durable_state",
-  "error_type",
-  "message",
-  "mutation_durable_state",
-  "mutation_state",
-  "mutation_state_error",
-  "old_state_error",
-  "publish_state",
-  "retry_error",
-  "retry_error_type",
-  "source_state",
-  "state_error",
-  "state_error_type",
-  "target_state",
-  "target_state_error",
-  "temp_state",
-  "trash_state_error",
-]);
-const DETAIL_PATH_KEYS_V5 = Object.freeze([
-  "backup_path",
-  "mutation_destination",
-  "prior_path",
-  "published_path",
-  "trash_path",
-]);
-const DETAIL_ARRAY_KEYS_V5 = Object.freeze([
-  "durability_warnings",
-  "incomplete_sides",
-  "excluded_dependencies",
-]);
-
-function validateOperationItemV5(value) {
-  return (
-    isExactObject(value, [
-      "item_type",
-      "phase",
-      "item_id",
-      "kind",
-      "path",
-      "result",
-      "reason",
-      "detail",
-      "recording",
-      "recording_reason",
-      "recording_detail",
-      "detail_omitted_count",
-    ]) &&
-    value.item_type === "operation" &&
-    value.phase === "execute" &&
-    typeof value.item_id === "string" &&
-    ID_PATTERN.test(value.item_id) &&
-    isOneOf(value.kind, OPERATION_KINDS_V5) &&
-    isV5Path(value.path) &&
-    isOneOf(value.result, OPERATION_OUTCOMES) &&
-    (value.reason === null ||
-      isOneOf(value.reason, OPERATION_REASONS_V5)) &&
-    validateDetailProjectionV5(value.detail) &&
-    validateItemRecordingV5(
-      value.recording,
-      value.recording_reason,
-      value.recording_detail,
-      value.result,
-    ) &&
-    isNonnegativeInteger(value.detail_omitted_count)
-  );
-}
-
-function validateIntegrityItemV5(value) {
-  const rowPair =
-    (value?.row_id === null && value?.location_id === null) ||
-    (isBoundedV5Text(value?.row_id, true) &&
-      isBoundedV5Text(value?.location_id, true));
-  return (
-    isExactObject(value, [
-      "item_type",
-      "phase",
-      "item_id",
-      "row_id",
-      "location_id",
-      "kind",
-      "path",
-      "result",
-      "reason",
-      "detail",
-      "read_strategy",
-      "recording",
-      "record_disposition",
-      "detail_omitted_count",
-    ]) &&
-    value.item_type === "integrity" &&
-    isOneOf(value.phase, INTEGRITY_MODES) &&
-    isBoundedV5Text(value.item_id, true) &&
-    rowPair &&
-    value.kind === "integrity" &&
-    isV5Path(value.path) &&
-    isOneOf(value.result, INTEGRITY_RESULTS) &&
-    (value.reason === null || isOneOf(value.reason, INTEGRITY_REASONS)) &&
-    (value.detail === null || isBoundedV5Text(value.detail, false)) &&
-    (value.read_strategy === null ||
-      isOneOf(value.read_strategy, READ_STRATEGIES)) &&
-    isOneOf(value.recording, RECORDING_STATES) &&
-    (value.record_disposition === null ||
-      isOneOf(value.record_disposition, RECORD_DISPOSITIONS)) &&
-    isNonnegativeInteger(value.detail_omitted_count)
-  );
-}
-
-function validateTerminalSummaryV5(value) {
-  if (
-    !isExactObject(value, [
-      "status",
-      "recording",
-      "audit",
-      "disposition",
-      "canceled",
-      "phases",
-      "bytes_done",
-      "bytes_total",
-      "error",
-      "recording_degraded_items",
-      "recording_issues",
-      "omitted_detail_count",
-      "review_fact_limit",
-    ]) ||
-    !isOneOf(value.status, TERMINAL_STATES) ||
-    !isOneOf(value.recording, RECORDING_STATES) ||
-    !isOneOf(value.audit, RECORDING_STATES) ||
-    !isOneOf(value.disposition, DISPOSITIONS) ||
-    typeof value.canceled !== "boolean" ||
-    !Array.isArray(value.phases) ||
-    value.phases.length > 3 ||
-    !value.phases.every(validatePhaseResultV5) ||
-    new Set(value.phases.map((phase) => phase.phase)).size !==
-      value.phases.length ||
-    !isScalar64(value.bytes_done) ||
-    !isScalar64(value.bytes_total) ||
-    BigInt(value.bytes_done) > BigInt(value.bytes_total) ||
-    !(
-      value.error === null ||
-      (isExactObject(value.error, ["type_name", "message"]) &&
-        isBoundedV5Text(value.error.type_name, true) &&
-        isBoundedV5Text(value.error.message, false))
-    ) ||
-    !isNonnegativeInteger(value.recording_degraded_items) ||
-    !Array.isArray(value.recording_issues) ||
-    value.recording_issues.length > 5 ||
-    !value.recording_issues.every(validateRecordingIssueV5) ||
-    new Set(value.recording_issues.map((issue) => issue.reason)).size !==
-      value.recording_issues.length ||
-    !isNonnegativeInteger(value.omitted_detail_count) ||
-    !(
-      value.review_fact_limit === null ||
-      validateReviewFactV5(value.review_fact_limit)
-    )
-  ) {
-    return false;
-  }
-  const expectedRecording =
-    value.recording_degraded_items > 0 || value.recording_issues.length > 0
-      ? "degraded"
-      : "ok";
-  if (
-    value.recording !== expectedRecording ||
-    !validateCancellationTruth(
-      value.status, value.disposition, value.canceled, value.phases,
-    )
-  ) {
-    return false;
-  }
-  return (
-    value.review_fact_limit === null ||
-    (value.status === "refused" &&
-      value.disposition === "unrun" &&
-      !value.canceled &&
-      value.bytes_done === "0" &&
-      value.bytes_total === "0" &&
-      value.phases.length === 0 &&
-      value.recording_degraded_items === 0 &&
-      value.recording_issues.length === 0 &&
-      value.omitted_detail_count === 0 &&
-      value.error === null)
-  );
-}
 
 function validatePhaseResultV5(value) {
   return (
@@ -2176,82 +1766,6 @@ function validateReviewFactV5(value) {
   return value.byte_limit === expected;
 }
 
-function validateItemRecordingV5(status, reason, detail, outcome) {
-  if (!isOneOf(status, RECORDING_STATES)) {
-    return false;
-  }
-  if (status === "ok") {
-    return reason === null && detail === null;
-  }
-  return (
-    isOneOf(reason, ITEM_RECORDING_REASONS_V5) &&
-    (detail === null || isBoundedV5Text(detail, false)) &&
-    (reason === "record-write-failed"
-      ? outcome === "succeeded" || outcome === "skipped"
-      : outcome === "failed")
-  );
-}
-
-function validateDetailProjectionV5(value) {
-  if (!isPlainJsonObject(value)) {
-    return false;
-  }
-  let leaves = 0;
-  let pathLeaves = 0;
-  for (const [key, item] of Object.entries(value)) {
-    if (!/^[\x20-\x7e]{1,64}$/.test(key)) {
-      return false;
-    }
-    if (DETAIL_TEXT_KEYS_V5.includes(key)) {
-      if (!isBoundedV5Text(item, false)) {
-        return false;
-      }
-      leaves += 1;
-    } else if (DETAIL_PATH_KEYS_V5.includes(key)) {
-      if (!isV5Path(item)) {
-        return false;
-      }
-      leaves += 1;
-      pathLeaves += 1;
-    } else if (key === "continued") {
-      if (typeof item !== "boolean") {
-        return false;
-      }
-      leaves += 1;
-    } else if (DETAIL_ARRAY_KEYS_V5.includes(key)) {
-      if (!Array.isArray(item) || item.length > 32) {
-        return false;
-      }
-      if (
-        key === "incomplete_sides" &&
-        !item.every((member) => ["source", "target"].includes(member))
-      ) {
-        return false;
-      }
-      if (
-        key === "excluded_dependencies" &&
-        !item.every(
-          (member) => typeof member === "string" && ID_PATTERN.test(member),
-        )
-      ) {
-        return false;
-      }
-      if (
-        key === "durability_warnings" &&
-        !item.every((member) => isBoundedV5Text(member, false))
-      ) {
-        return false;
-      }
-      leaves += item.length;
-    } else {
-      return false;
-    }
-    if (leaves > 32 || pathLeaves > 8) {
-      return false;
-    }
-  }
-  return true;
-}
 
 function isScalar64(value) {
   return (
@@ -2267,15 +1781,6 @@ function isBoundedV5Text(value, nonempty) {
     isValidUnicode(value) &&
     (!nonempty || value.length > 0) &&
     new TextEncoder().encode(value).length <= 1024
-  );
-}
-
-function isV5Path(value) {
-  return (
-    typeof value === "string" &&
-    isValidUnicode(value) &&
-    !value.includes("\u0000") &&
-    value.length <= 32767
   );
 }
 

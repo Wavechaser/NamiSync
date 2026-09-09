@@ -1,14 +1,9 @@
 # Planner Module
 
-Status: M0 path-preserving paired-sync implementation complete. M1 Stage 1
-removes the unused worker-count field from the immutable plan contract.
-Stage 5.5 relocates the planner's three relative hierarchy helpers to
-`core.pathing` without changing planning behavior. Later scopes, content
-evidence, ingest policies, replay, repair, and undo reuse the same plan shape.
-The signed-64 scalar boundary and planning-source admission are active. The
-complete Setup snapshot and task-artifact retained-graph contract below remain
-accepted but unrealized. The
-100,000-operation shape is a performance fixture, not the production maximum.
+The deterministic paired-sync planner, signed-64 boundary and independent
+planning-source admission are active. Desktop Setup remains unrealized. The
+100,000-operation shape is a performance fixture, not a production maximum;
+DEFENSE owns active admission and PRESENTATION owns focused review-scale checks.
 
 ## Purpose
 
@@ -81,8 +76,8 @@ The Stage 6 adapter supplies one backend-canonical frozen Setup snapshot. The
 workflow translates its planning fields into immutable `SyncOptions`; linked
 verification remains workflow/session policy rather than planner input.
 Planner never rereads settings or accepts a parallel execution-time choice.
-The exact Setup and filter contracts are owned by
-[M1_BRIDGE.md](M1_BRIDGE.md).
+Setup behavior is owned by DESKTOP_UI and INTERFACES; exact future DTOs are reopened. External encoding is owned by
+[BRIDGE.md](BRIDGE.md).
 
 No input may be fetched from SQLite, settings, clock, or filesystem inside the
 planner.
@@ -182,12 +177,11 @@ implementation state. Unsupported objects or keys and nonfinite numbers refuse
 at the shared closed JSON boundary described in [CORE.md](CORE.md).
 
 The shared epoch-6 cutover changes identity-bearing hashes; frozen identityless
-plan bytes remain identical. Plan-v5 and the
-then-current execution-v6 workflow wire shapes were unchanged, so workflow
-refingerprinting rejected an old numeric-identity fingerprint before execution
-while unchanged identityless fingerprints remained compatible. Current exact-v7
-execution admission refuses v6 before that check; database reset does not
-silently rewrite old commitments.
+plan bytes remain identical. Workflow refingerprinting rejects an old
+numeric-identity fingerprint before execution while unchanged identityless
+fingerprints remain compatible. Current process-local workflow checkpoints are
+unversioned typed values; database reset does not silently rewrite old
+commitments.
 
 Valid Unicode strings retain their established UTF-8 encoding, including
 supplementary characters and literal backslash text. Malformed surrogate code
@@ -277,7 +271,7 @@ contract has no dormant file-concurrency tuning input.
 
 Planner construction follows the active checked-arithmetic and pre-publication
 refusal contract in
-[M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; planner defines
+[BRIDGE.md](BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3; planner defines
 no local numeric domain. Every logical-byte rollup uses checked signed-64
 addition; an aggregate excess refuses publication with the typed plan/domain
 `logical-bytes` review-limit fact rather than wrapping or becoming a free-space
@@ -310,9 +304,9 @@ members even when presentation groups them. Selection is global and
 dependency-closed, independent of filter and viewport, and execution commits to
 its exact digest. Notices are informational and cannot enter selection,
 collapse, path, detail, or execution scope. A refused bounded projection stages
-no partial review artifact. Exact tree frames, revisions, hard walls, paging,
+no partial review artifact. Tree identity, revision safety, paging,
 rollups, overlays, and move-peer suppression rules are owned by
-[M1_BRIDGE.md](M1_BRIDGE.md), with numeric containment in
+[PRESENTATION.md](PRESENTATION.md), with numeric containment in
 [DEFENSE.md](DEFENSE.md) §1.3.
 
 Replay, undo, and repair always plan fresh against current scans/evidence. A

@@ -1,105 +1,61 @@
-# Session Handoff
+# Latest session handoff
 
-Status (2026-08-30): checkpoint-4 prerequisite consolidation and the bounded
-post-review corrections are complete on `milestone1`. Checkpoint 4 proper has
-not started. No process-live task surface or implementation-level ownership/
-reservation formula, constant set, maximum fixture, independent validator,
-command row, or BR-G-45 evidence is ratified or active. The higher-level
-accepted walls and task graph remain authoritative.
+## Documentation reconciliation (2026-09-09)
 
-## Delivered
+This session updates documentation only on `milestone1-anthony`, starting from
+`cc9f8cd`. Product simplification is complete; further executor or frontend
+implementation is not part of this task. M1_PLAN owns the revised delivery rows.
 
-- Repository and process rules now use the four-rung external, reentrant,
-  internal-module, and reflective/forged trust model. The reviewed auxiliary
-  branches were removed after accepted extraction; task containment, recovery,
-  defect escalation, and documentation ownership are ratified. Python support
-  is lower-bound-only at 3.13 with no exact-patch or upper-version gate.
-- Workflow custody now uses incremental execution, linked post-copy, and
-  standalone-integrity reconciliation; one-time adoption of exact immutable
-  scan/plan/world/verdict values; read-only reentrant review inputs; reduced
-  execution authority; and centralized retained-exception projection.
-- Plan and inventory review-limit refusal requires the exact private signal,
-  fact scope, and active same-run domain token. Direct internal, different-run,
-  cross-domain, malformed, and lookalike failures cannot claim refusal
-  authority. Legitimate first-excess status, save boundaries, and raw exception
-  retirement are unchanged.
-- Linked and standalone integrity completion use one validated selection-owned
-  immutable id index exposed to verifier progress through a public read-only
-  property. Completion tests construction-admitted membership without a tuple
-  scan; later authority revalidation rejects a changed selection before the
-  workflow accepts a clean phase or terminal result. Same-length identity
-  replacement again reports the changed item or candidate rather than the
-  derived index. Equality, continuation, payloads, walls, status, and durable
-  outcomes are unchanged.
-- The repeated 120,000-item populations now express one M1 performance-and-
-  safety support target. Existing independent first-excess behavior remains
-  through M1; there is no support promise above the target and no asserted
-  failure cliff at 120,001.
-- Durable references now state active versus accepted-but-unrealized contracts
-  without numbered checkpoint routing or session-local closeout chronology. M1
-  plans, task history, and this handoff retain delivery sequencing; runtime
-  checkpoints and product sessions keep their behavioral names.
+- M1-4 delivers process-live task page creation, rail/navigation, and explicit
+  cancel-settle-close, with blank bodies until later slices supply content.
+- Fresh Plan again creates a separate task and rescans before review. Current
+  admission failure restores editing; preflight refusal after admission does
+  not reopen committed selection. No old authorization/selection carries over.
+- Terminal user retries, Verify remaining, and user-invoked session cleanup are
+  proposed for M2. Live pause/resume, internal automatic retries, protocol replay,
+  automatic owned-temp recovery, and close/shutdown recovery remain unchanged.
+- Recognized execution disk-capacity failure is a narrow future M1 typed-stop
+  addition using existing settlement. Other I/O errors retain generic treatment.
+  Trash-location information is accepted; exact counts require complete outcome
+  evidence. Closing never purges trash. Early M1-12 absorbs former M1-11.
+- FEATURES and the plain M2_PROPOSAL feature list distinguish these targets from
+  current behavior. CHANGELOG combines the simplification history and moves old
+  maintenance tasks under Consolidation. BUGS ownership was inspected; existing
+  module sections remain appropriate, with no entry/status edits justified.
 
-## Deferred to checkpoint 4
+## Verification and inherited evidence
 
-- Freeze the complete simultaneous owner graph, constants, formula, maximum
-  fixtures, independent validator, reservation outcomes, and BR-G-45 evidence
-  before activating any task surface.
-- Choose a domain-neutral owner for the shared 120,000 target and generic
-  population primitives, centralize the repeated constants, and resolve the
-  plan-specific `core/review.py` name. Current imports and first-excess behavior
-  remain unchanged.
-- Model or eliminate remaining complete-graph, construction, tree/index,
-  container-capacity, shallow callback-guard/overlap, codec, Python/CLR,
-  native/browser, raw-frame, and multi-session owners.
-- Inventory callback edges and their full mutation/control/error policies
-  before considering guard consolidation. Current guards are shallow or
-  fixed-frequency where possible, not necessarily constant-time; no H2
-  workflow refactor is required.
-- The 33 core contracts slotted by the prerequisite pass do not support weak
-  references. Add support only to a named class when a concrete ownership or
-  leak witness requires it and charge that representation cost.
+Documentation checks passed: stale retry/reopening promise search, all 148
+local links/anchors across 34 active Markdown files, whitespace, original
+history-section preservation, docs-only scope, and fresh adversarial review.
+The DOC-1 status in M1_PLAN records the pre-commit result. No product tests are
+changed or rerun.
 
-## Repository custody
+The prior completed reduction evidence remains under
+`build/reduction-followup/ca263a0/NR-9/20260908-170900/manifest.json`: 4,862
+complete-suite passes, four unchanged WinError 1314 skips, all 28 headed cases,
+12 import contracts, and the unchanged 30-scenario oracle across three runs.
+This is inherited evidence, not a result from this documentation session.
+REDUCTION_FOLLOWUP retains the detailed receipts and protected-input accounting.
 
-Only `main` and `milestone1` remain as local branches, with one worktree.
-Preserve these stashes by descriptive name and stable object id:
+## Authorized branch operation after documentation commit
 
-- `checkpoint 4 model draft before prerequisite consolidation` —
-  `3940df5abf6056435e7d70a309324c0442664a74`
-- `safety: pre-simplicity exception audit 2026-08-27` —
-  `5adbe65a2ed318943429aaeeb439b5918d71b6ad`
-- `recovery: paused exception retirement for source-wall simplicity audit
-  2026-08-27` — `8a639ab77cae98ea3ae0b8db2dc41c328c1b1391`
-- `recovery: interrupted checkpoint-4 audit 2026-08-27` —
-  `33f699448b5940b2aa4b0464b3a238297c68ab86`
+At inspection, local `milestone1` is `9ec1277` and has exactly four exclusive
+commits: `dc11972`, `9ec27e6`, `8d8c798`, `9ec1277`. They contain documentation
+and test-only compact-plan prerequisite work, with no exclusive production code.
+The common ancestor and current remote `milestone1` are both
+`8926019497e12626ca8a6ee189d1c65f5184a9c5`.
 
-The recovery object remains reachable as `33f6994`. The saved model draft is
-recovery context only; do not apply it wholesale or reuse its conclusions
-without rederiving them from current source and ratified requirements.
+After DOC-1 commits and passes review, DOC-2 preserves the old tip as local tag
+`recovery/milestone1-compact-plan-20260909`, then resets only local `milestone1`
+to that ancestor. Verify remote tips again: the inspected remote base already
+needs no rewrite. Push the documentation branch and open a draft PR targeting
+`milestone1`, with the branch reconciliation and inherited verification stated
+in its body. The PR and task completion message are the post-commit operation
+receipt; this pre-operation handoff does not claim the reset or PR already ran.
+Do not merge the PR or implement remaining delivery rows without a new request.
 
-## Verification
-
-- Node-enabled affected departments: 2,556 passed, 1 capability skip, 2,671
-  deselected.
-- Node-enabled ordinary suite: 5,196 passed, 4 capability skips, 28 headed
-  deselected.
-- Import boundaries: all 11 contracts kept.
-- Integrity boundary follow-up: combined core/verifier departments passed
-  1,484 tests with one capability skip and 3,747 deselections; the verifier
-  source guard contains no cross-object private known-index read.
-- Protected settlement oracle: 30 scenarios across three identical successful
-  prerequisite runs; the corrective follow-up did not change executor
-  settlement.
-- Active documents: 29 documents, 189 relative targets, and 84 Markdown
-  anchors resolve; stale-contract searches, repository custody, and
-  `git diff --check` are clean.
-- Independent final review found no blocking code, documentation-authority,
-  overclaim, or repository-custody finding.
-
-## Next safe action
-
-Begin checkpoint 4 proper from the compact boundary in `M1_SHELL_H2.md`.
-Freeze and independently review the complete analytical model before dormant
-lifecycle machinery or task activation. Do not change current population walls
-or apply the saved model draft as implementation authority.
+The current worktree remains on `milestone1-anthony`; no extra worktree is needed.
+Unrelated files and prior verification artifacts stay untouched. Unexpected
+additional branch work stops reconciliation. Git/GitHub network operations need
+the host credential context here; the bounded escalated read checks succeeded.

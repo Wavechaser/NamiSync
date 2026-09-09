@@ -4,7 +4,7 @@ Status: the verifier component package and M1 Stage 3 location-centric
 inventory/baseline/verify/rebaseline workflows are implemented. M1 Stage 4
 also feeds the same ledger-neutral classifier transient post-copy candidates
 for optional in-session readback. The production dispatcher registry carries
-all four headless kinds and receipt-aware history v6 commits standalone and
+all four headless kinds and receipt-aware history v7 commits standalone and
 compound detail incrementally before terminal.
 Stage 5 exposes standalone activities through the shared-service CLI with
 explicit location/scope binding and guarded selected rebaseline; desktop
@@ -51,13 +51,16 @@ Selections contain immutable inventory row id, location/root, canonical path
 key, display path, expected current state/stat, retained `Attestation` (if any),
 scope token, and reappearance state. `IntegritySelection` adds the mutable
 completed-item state, processed-byte high-water, and nondecreasing admitted
-physical-read budget needed for pause/resume. Each selection retains one
-immutable `known_item_ids` snapshot derived from its fixed candidate tuple at
-construction. Completion and progress share the exact `frozenset` through its
-read-only public property without copying or rescanning, while the mutable
-completed map remains the first replay check. Workflow
-must inventory or scoped-refresh before constructing selections; verifier never
-silently inventories, changes mappings, or scans unselected paths.
+physical-read budget needed for pause/resume. Each selection derives retained
+construction-admitted membership from its fixed candidate tuple during setup.
+Completion checks mutable completion state first for replay refusal, and
+progress admits outcomes only for selected ids without enumerating the selected
+population per outcome. A progress implementation may share or detach that
+membership representation. The bound is analytical and source-derived; named
+operation counts are drift witnesses, while elapsed time remains diagnostic.
+Workflow must inventory or scoped-refresh before constructing selections;
+verifier never silently inventories, changes mappings, or scans unselected
+paths.
 
 Each file emits a reliable typed `IntegrityOutcome` carrying `IntegrityResult`:
 `verified`, `baselined`, `mismatched`, `modified`, `missing`, `unsupported`,
@@ -248,7 +251,7 @@ atomically with the evidence transaction. Pause/resume retains exact admitted
 ids/order and completed results without reapplying fresh-selection filters.
 Automatic linked and manual exact post-copy verification remain separate.
 Delivery and regression gates live in the
-[active M1 plan](M1_SHELL_H2.md#10-deliver-integrity-and-deferred-post-copy-verification).
+[active M1 plan](M1_PLAN.md#remaining-checkpoints).
 
 ## Selected And Post-Execution Verification
 
@@ -259,7 +262,7 @@ successfully executed operations; no-op or failed operations are not marked
 verified merely because they appeared in the plan.
 
 Standalone selections come from freshly refreshed role-free inventory. A
-paused standalone session serializes the exact original candidate row ids plus
+paused standalone session retains the exact original candidate row ids plus
 completed ids/bytes: resume inventories current physical state but cannot
 silently add a newly appeared row or drop an admitted pending row.
 
@@ -276,14 +279,12 @@ from the readable candidate selection. A successful operation whose publication
 evidence is missing therefore remains visible in every verify `Progress`
 `items_total` and `bytes_total` even though no `PostCopyCandidate` can be built
 for it; the same admission feeds the incomplete terminal phase. This paired
-invocation context is not continuation state and does not alter the plan
-payload's exact version 5: resume re-derives it from the exact
-`VerifyContinuation` before constructing the reporter. Exact continuation and
-event versions, closed detail projection, scalar domains, omission witnesses,
+invocation context is not checkpoint state: resume re-derives it from the exact
+typed `VerifyContinuation` before constructing the reporter. Exact event
+versions, closed detail projection, scalar domains, omission witnesses,
 and envelope limits are owned by
-[M1_BRIDGE.md](M1_BRIDGE.md); verifier preserves only the local pause/resume
-state needed to continue the same admitted work. The enclosing sync-execution
-payload is exact v7.
+[BRIDGE.md](BRIDGE.md); verifier preserves only the local pause/resume
+state needed to continue the same admitted work.
 
 Ordinary manual verification is location-scoped and independent of any current
 plan or mapping. It must not require both source and target roots. The deferred
@@ -296,7 +297,7 @@ reconstructs candidates from retained operation-time hashes. Those transient
 attestations exist only for immediate linked verification and same-session
 pause/resume and never become history, ledger, task, or JavaScript state. The
 exact atomic join and presentation classification are centralized in
-[M1_BRIDGE.md](M1_BRIDGE.md) and [DATABASE.md](DATABASE.md).
+[BRIDGE.md](BRIDGE.md) and [DATABASE.md](DATABASE.md).
 
 A handoff is ready only when every applicable selected byte-producing operation
 has a successful terminal outcome and current committed evidence. An unrelated
@@ -321,7 +322,7 @@ scope. Exact replacement retention and task attachment semantics remain bridge
 authority.
 
 Verifier totals follow the active checked-arithmetic contract in
-[M1_BRIDGE.md](M1_BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
+[BRIDGE.md](BRIDGE.md) and [DEFENSE.md](DEFENSE.md) §1.3;
 verifier defines no local numeric or file-identity variant.
 
 Verify, baseline, and the implemented rebaseline entry point carry per-item
@@ -336,20 +337,19 @@ and unexpected failure build terminal byte truth from the live selection's
 physical-read high-water and admitted item sizes, never from whichever lossy
 Progress happened to reach the session runner. `PauseRequested` remains a
 control signal and is not normalized into a terminal result. Cancellation of a
-paused baseline/verify/rebaseline session instead uses the exact stored v2
-continuation without reopening an invocation, rescanning, or hashing. Version 2
-persists `processed_bytes`, the nondecreasing physical-read
+paused baseline/verify/rebaseline session instead uses the typed stored
+checkpoint without reopening an invocation, rescanning, or hashing. It retains
+`processed_bytes`, the nondecreasing physical-read
 `bytes_total_high_water`, and the one-way aggregate `recording` status. Paused
 cancellation and failures before selection reconstruction therefore retain the
 attempted-work budget and degradation already earned before pause. These byte
 counters describe attempted physical read work, not durable publication;
 reliable outcomes and recorded evidence remain the authority for item and
-durability truth. Version 1 is refused rather than migrated because this
-payload remains process-local paused custody and is never persisted as a
-restart-stable workflow artifact.
+durability truth. The checkpoint is process-local custody and is never
+persisted as a restart-stable workflow artifact.
 
 A degraded reliable outcome or recorder-close failure advances aggregate
-recording to `DEGRADED` before a paused snapshot is serialized, and later resume
+recording to `DEGRADED` before a paused checkpoint is captured, and later resume
 cannot recover it to `OK`. During one live invocation, ledger owner close
 failure cannot replace an in-flight pause, cancellation, or verifier exception;
 it degrades recording where a terminal result exists, and a lone close failure

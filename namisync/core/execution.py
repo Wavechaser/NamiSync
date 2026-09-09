@@ -11,6 +11,7 @@ import re
 from types import MappingProxyType
 from typing import BinaryIO, NewType, Protocol, TypeAlias
 
+from .clock import Clock
 from .evidence import (
     Attestation,
     ContentEvidence,
@@ -913,11 +914,6 @@ class CopyBackend(Protocol):
         checkpoint: Callable[[], None],
         on_chunk: Callable[[int], None],
     ) -> CopyDigest: ...
-
-
-class Clock(Protocol):
-    def now(self) -> datetime: ...
-
 
 class Recorder(Protocol):
     """Typed ledger commands consumed by the M0 executor."""

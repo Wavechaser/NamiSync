@@ -60,8 +60,6 @@ from namisync.modules.executor import (
 )
 from namisync.modules.executor.pipeline import (
     _PREALLOCATION_THRESHOLD,
-    _allocation_size,
-    _copy_chunk_size,
 )
 from namisync.modules.scanner import scan
 
@@ -516,17 +514,11 @@ class AllocationRecordingFileSystem(NativeFileSystem):
 
 
 @pytest.mark.parametrize(
-    "size",
-    [
-        0,
-        8 * 1024 * 1024 - 1,
-        8 * 1024 * 1024,
-        32 * 1024 * 1024 - 1,
-        32 * 1024 * 1024,
-    ],
+    ("size", "expected_chunk", "expected_allocation"),
+    [(0, 256 * 1024, None), (32 * 1024 * 1024, 4 * 1024 * 1024, 32 * 1024 * 1024)],
 )
 def test_prepare_copy_passes_actual_adaptive_chunk_and_allocation_request(
-    tmp_path: Path, size: int
+    tmp_path: Path, size: int, expected_chunk: int, expected_allocation: int | None
 ) -> None:
     case = tmp_path / f"size-{size}"
     case.mkdir()
@@ -558,10 +550,8 @@ def test_prepare_copy_passes_actual_adaptive_chunk_and_allocation_request(
     )
 
     assert result.status is SessionState.COMPLETED
-    assert backend.chunk_sizes == [
-        _copy_chunk_size(size, 4 * 1024 * 1024)
-    ]
-    assert fs.allocation_sizes == [_allocation_size(size)]
+    assert backend.chunk_sizes == [expected_chunk]
+    assert fs.allocation_sizes == [expected_allocation]
 
 
 class ConcurrencyProbeBackend:
@@ -2523,6 +2513,161 @@ def test_recase_refuses_source_drift_before_renaming_target(tmp_path: Path) -> N
     assert recorder.calls == []
 
 
+@pytest.mark.parametrize(
+    ("kind", "expected_reason", "expected_message"),
+    (
+        (
+            OperationKind.MOVE,
+            "source-missing",
+            "move operation lacks source evidence",
+        ),
+        (
+            OperationKind.RECASE,
+            "target-missing",
+            "move operation lacks prior-target evidence",
+        ),
+    ),
+    ids=("move", "recase"),
+)
+def test_pure_rename_both_invalid_prologue_precedence(
+    tmp_path: Path,
+    kind: OperationKind,
+    expected_reason: str,
+    expected_message: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    operation = _operation(
+        1,
+        kind,
+        source_rel_path=None,
+        target_rel_path="new.bin",
+        source_expected=None,
+        target_expected=None,
+        intended=None,
+        prior_target_rel_path=None,
+        prior_target_expected=None,
+        reason=(
+            OperationReason.IDENTITY_RENAME
+            if kind is OperationKind.MOVE
+            else OperationReason.CASE_MISMATCH
+        ),
+    )
+
+    result, events, recorder = _run(
+        _xset(_plan(source, target, (operation,)))
+    )
+
+    item = _item_outcome(events)
+    assert result.status is SessionState.FAILED
+    assert item.reason == expected_reason
+    assert item.detail["message"] == expected_message
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize(
+    ("kind", "source_name", "old_name", "new_name", "recorder_method"),
+    (
+        (
+            OperationKind.MOVE,
+            "new.bin",
+            "old.bin",
+            "new.bin",
+            "record_moved",
+        ),
+        (
+            OperationKind.RECASE,
+            "KEEP.txt",
+            "keep.txt",
+            "KEEP.txt",
+            "record_recased",
+        ),
+    ),
+    ids=("move", "recase"),
+)
+def test_pure_rename_recorder_method_is_resolved_only_after_durability(
+    tmp_path: Path,
+    kind: OperationKind,
+    source_name: str,
+    old_name: str,
+    new_name: str,
+    recorder_method: str,
+) -> None:
+    source, target = _roots(tmp_path)
+    source_file = source / source_name
+    source_file.write_bytes(b"same")
+    (target / old_name).write_bytes(b"same")
+
+    class RenameOrderFileSystem(NativeFileSystem):
+        def __init__(self) -> None:
+            self.renamed = False
+            self.durability_flushes = 0
+            self.post_rename_stats = 0
+
+        def rename_new(self, old: Path, new: Path) -> None:
+            super().rename_new(old, new)
+            self.renamed = True
+
+        def flush_directory(self, path: Path) -> bool:
+            if self.renamed:
+                self.durability_flushes += 1
+            return super().flush_directory(path)
+
+        def stat_path(self, path: Path) -> FileStat | None:
+            result = super().stat_path(path)
+            if self.renamed:
+                self.post_rename_stats += 1
+            return result
+
+    class LateAccessRecorder(FakeRecorder):
+        def __init__(self, fs: RenameOrderFileSystem) -> None:
+            super().__init__()
+            self.fs = fs
+            self.method_accesses: list[str] = []
+
+        def __getattribute__(self, name: str) -> object:
+            if name in {"record_moved", "record_recased"}:
+                fs = object.__getattribute__(self, "fs")
+                if not fs.renamed or not fs.durability_flushes:
+                    raise RuntimeError("recorder method resolved before durability")
+                if not fs.post_rename_stats:
+                    raise RuntimeError("recorder method resolved before post-stat")
+                object.__getattribute__(self, "method_accesses").append(name)
+            return super().__getattribute__(name)
+
+    fs = RenameOrderFileSystem()
+    old_stat = fs.stat(target, old_name)
+    assert old_stat is not None
+    os.utime(source_file, ns=(old_stat.mtime_ns, old_stat.mtime_ns))
+    source_stat = fs.stat(source, source_name)
+    assert source_stat is not None
+    operation = _operation(
+        1,
+        kind,
+        source_rel_path=source_name,
+        target_rel_path=new_name,
+        source_expected=source_stat,
+        target_expected=old_stat if kind is OperationKind.RECASE else None,
+        intended=old_stat if kind is OperationKind.RECASE else source_stat,
+        prior_target_rel_path=old_name,
+        prior_target_expected=old_stat,
+        reason=(
+            OperationReason.IDENTITY_RENAME
+            if kind is OperationKind.MOVE
+            else OperationReason.CASE_MISMATCH
+        ),
+    )
+    recorder = LateAccessRecorder(fs)
+
+    result, _, _ = _run(
+        _xset(_plan(source, target, (operation,))),
+        fs=fs,
+        recorder=recorder,
+    )
+
+    assert result.status is SessionState.COMPLETED
+    assert recorder.method_accesses == [recorder_method]
+
+
 @pytest.mark.parametrize("old_missing", [False, True])
 def test_move_occupancy_or_vanished_old_path_fails_without_overwrite(
     tmp_path: Path, old_missing: bool
@@ -2564,6 +2709,11 @@ def test_move_occupancy_or_vanished_old_path_fails_without_overwrite(
     item = _item_outcome(events)
     assert item.reason == (
         "target-missing" if old_missing else "destination-occupied"
+    )
+    assert item.detail["message"] == (
+        "planned path is missing: old.bin"
+        if old_missing
+        else "planned absent destination is occupied: new.bin"
     )
     if not old_missing:
         assert (target / "old.bin").read_bytes() == b"old"
@@ -5014,7 +5164,7 @@ def test_executor_public_facade_preserves_exact_exports_and_signatures() -> None
         "NativeFileSystem": "()",
         "NativeCopyBackend": (
             "(*, hasher_factory: 'HasherFactory', collect_metrics: 'bool' = "
-            "False) -> 'None'"
+            "False, queue_items: 'int' = 32, poll_seconds: 'float' = 0.01) -> 'None'"
         ),
         "CopyPipelineMetrics": (
             "(reader_blocked_seconds: 'float' = 0.0, writer_starved_seconds: "

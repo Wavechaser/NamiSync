@@ -16,6 +16,8 @@ from namisync.interfaces.service import (
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
 
+from _service_fixtures import make_service
+
 
 def _wait_for_terminal(service: NamiSyncService, session_id: str):
     current = service.observe(session_id, lambda _update: None)
@@ -249,9 +251,7 @@ def test_malformed_settings_refuse_planning_before_dispatcher_submit(
         def submit(self, kind: str, request: object):
             raise AssertionError("malformed settings must fail before submission")
 
-    service = object.__new__(NamiSyncService)
-    service._runtime = runtime
-    service._dispatcher = Dispatcher()
+    service = make_service(runtime=runtime, dispatcher=Dispatcher())
     try:
         with pytest.raises(ValueError, match="missing or unknown"):
             service.start_plan(str(source), str(target))
@@ -361,7 +361,7 @@ def test_xv_11_committed_plan_executes_every_original_semantic_default(
             str(target),
         )
         plan_preparation = runtime.prepare_plan(request)
-        plan_result = runtime.open_plan(plan_preparation.payload).run(context)
+        plan_result = runtime.open_plan(plan_preparation.checkpoint).run(context)
         review = runtime.get_plan_review(request.request_id)
         committed = runtime.commit_plan(request.request_id)
 
@@ -380,7 +380,7 @@ def test_xv_11_committed_plan_executes_every_original_semantic_default(
         )
         execution_preparation = runtime.prepare_execution(committed)
         execution_result = runtime.open_execution(
-            execution_preparation.payload
+            execution_preparation.checkpoint
         ).run(context)
         reviewed_again = runtime.get_plan_review(request.request_id)
 

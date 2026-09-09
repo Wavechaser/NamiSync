@@ -7,7 +7,7 @@ managed-data mutation, on resume, and on queued wakeup. Stage 6's pre-model
 plan-review source/refusal admission is active for workflow-supplied review.
 
 Preflight uses the active capacity-observation and refusal contract in
-[M1_BRIDGE.md](M1_BRIDGE.md) and
+[BRIDGE.md](BRIDGE.md) and
 [DEFENSE.md](DEFENSE.md) §1.3 without defining a local numeric variant.
 
 ## Purpose
@@ -61,6 +61,16 @@ declared compound relations.
 drops, cleans, or executes operations. Admitted execution uses the immutable
 reviewed policy snapshot already bound into the plan; it never reinterprets the
 run from newer global defaults.
+
+An insufficient-space verdict does not mutate or invalidate the reviewed plan.
+Review preflight runs after plan construction and can publish that immutable
+artifact with a negative verdict. This differs from scan/planner population or
+logical-byte admission refusal, which publishes no plan. Execution preflight
+can refuse an admitted execution without starting the executor. The accepted
+M1 desktop recovery is explicit Plan again in a new task with fresh scans and
+review, not terminal subset retry or in-place plan repair. If the user frees
+space by deleting source/target entries, those fresh scans account for the
+changed world; preflight never silently adopts those changes into an old plan.
 
 During each preflight cycle, workflow creates one exact immutable
 `ExecutionReview` and passes that same instance to observation and judgment.

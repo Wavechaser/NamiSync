@@ -11,7 +11,7 @@ below rather than presented as closed.
 
 ## Recording Settlement (Event v5 Active)
 
-The exact result/event shapes are owned by [M1_BRIDGE.md](M1_BRIDGE.md).
+Exact internal result/event shapes are source-owned through the [core locator](ARCHITECTURE.md#31-contract-authority-and-source-locator).
 Executor attributes recording degradation
 internally by scope. `_record()` returns a typed observation; settled operations
 retain only their own `ItemRecordingReason`, while final-flush and
@@ -53,9 +53,9 @@ never turns an otherwise canceled or successful item into a failed item.
 
 Publication evidence remains success-only and process-local. An identityless
 attestation is valid only beside that same operation's
-`record-write-failed` reason. Execution payload v7 preserves these reasons,
+`record-write-failed` reason. The typed execution checkpoint preserves these reasons,
 ordered task issues, permitted attestations, and the accepted exclusion cursor
-across pause/resume, while the dispatcher clears the opaque payload on every
+across pause/resume, while the dispatcher clears the opaque checkpoint on every
 terminal edge. None of this is ledger/history state or desktop presentation
 data.
 
@@ -63,7 +63,7 @@ The settlement oracle remains the change gate. Typed projection must preserve
 its protected scenario/row manifest, normalized filesystem and recorder
 traces, baseline, and semantic hash. Structural settlement work stays blocked
 until three identical runs and independent review pass. The oracle owns its
-scenario manifest, [M1_SHELL_H2.md](M1_SHELL_H2.md) owns the delivery
+scenario manifest, [archived recording acceptance](obsolete/M1_SHELL_H2.md) owns the delivery
 acceptance record, and [TESTS.md](TESTS.md) owns test-scope policy; none is
 duplicated here.
 
@@ -111,7 +111,7 @@ execute(xset, ctx, recorder, policies, fs) -> OperationResult
 ```
 
 The caller holds deterministic physical-volume custody and validates the exact
-core `Commitment` defined by [M1_BRIDGE.md](M1_BRIDGE.md). Execution admission
+core `Commitment` defined in [execution.py](../namisync/core/execution.py). Execution admission
 cannot resupply or reinterpret frozen setup choices. Workflow alone performs a
 fresh observe → preflight → execute sequence
 on every start/resume; executor imports no preflight sibling. A refusal permits
@@ -124,7 +124,7 @@ The core generic session runner emits the single terminal event. Executor emits
 phase, progress, and item outcomes only, returns one complete
 `OperationResult`, and never emits the terminal projection. Event-v5 detail,
 scalar, omission, and envelope rules are centralized in
-[M1_BRIDGE.md](M1_BRIDGE.md). `Canceled`/`PauseRequested` unwind to the runner
+[BRIDGE.md](BRIDGE.md). `Canceled`/`PauseRequested` unwind to the runner
 after executor's own safe operation-boundary cleanup.
 
 ## Universal Operation Rules
@@ -240,6 +240,13 @@ removes exact-grammar regular files whose embedded run id differs from the
 current run; current-run temps remain under per-operation retry/cancel cleanup.
 Recovery never recurses, enters `.synctrash`, or deletes a substring lookalike.
 
+`NativeCopyBackend` accepts keyword-only `queue_items=32` and
+`poll_seconds=0.01` for focused pipeline scheduling tests. Queue capacity is a
+strict non-Boolean integer from 1 through 32. Poll intervals are non-Boolean,
+finite positive integers or floats; native waits saturate at `TIMEOUT_MAX` so
+large finite inputs remain usable. The defaults and 32 MiB byte budget remain
+unchanged. These constructor seams are not application settings.
+
 ## Update And Trash-On-Update
 
 An update completely prepares the replacement temp before backup/publication,
@@ -303,7 +310,12 @@ discarding the only known-good version.
 The planner/preflight formula includes backup-copy bytes on no-hardlink targets.
 A partial backup remains under exact temp grammar, is ignored by restore
 planning, and remains with the trash run directory. A reviewed maintenance
-purge is unrealized; ordinary temp recovery still never walks `.synctrash`.
+purge is deferred to M2 with user-invoked session cleanup; ordinary temp recovery
+still never walks `.synctrash`. Task close never implies trash purge. M1's
+accepted trash-location information belongs to execution review: it may include
+an exact completed count only when supported by outcome evidence, otherwise
+location alone. It does not require a new trash walk or claim a complete count
+of preserved update backups from ordinary trash-operation records.
 Readonly ordering/recovery restores the old version's planned attributes after
 replacement so the hardlinked trash inode is not left silently degraded.
 
@@ -322,6 +334,15 @@ to the displaced object. `DEFENSE.md` classifies this as EW-3. Tests assert the
 data consequence and settlement, never a timing-based safety claim.
 
 ## Other Operations
+
+MOVE and RECASE keep separate prologues so their missing-evidence precedence and
+RECASE path rules remain explicit. After those checks, one closed MOVE/RECASE
+sequence flushes pending recorder state, revalidates roots and reviewed subjects,
+applies MOVE's destination-absence guard, resolves the paths, repeats the final
+root guards, and performs the non-replacing rename. It marks the mutation
+committed immediately after the native rename, then flushes parent durability,
+checks the renamed target version, and only then resolves the operation-specific
+recorder method. No other operation uses this shared sequence.
 
 ### Recase
 
@@ -442,6 +463,14 @@ Otherwise an intact matching owned temp proves the publish did not occur even
 if the target changed independently; consumed temp plus a present target is the
 committed-but-raised fallback. Truly unverified byte state fails with its
 drift/I/O reason and does not by itself claim publication or degrade recording.
+One publication observer owns the common published-target and unpublished
+temp/target probes for COPY, UPDATE, and MOVE_UPDATE. Its prepublication
+classification remains operation-specific: an intact COPY/MOVE_UPDATE temp
+treats any live target as unexpected occupancy, while an intact UPDATE temp
+compares the target with the reviewed live version; with a changed temp, only
+UPDATE can prove nonpublication from that retained live version. UPDATE backup
+observation still precedes these probes, and MOVE_UPDATE observes its old/trash
+state only after the common result confirms the new target as published.
 Cancellation still settles an independent mutation marker: exact restored
 pre-state retains the byte result, while changed, ambiguous, or unreadable
 readonly/non-byte state becomes `canceled-after-mutation` and degrades
@@ -629,6 +658,17 @@ copy-recording result across a same-process execute pause. If status reaches
 `SUCCEEDED` without evidence, the compound workflow reports a named
 verification-incomplete invariant failure rather than silently omitting
 readback.
+
+Generic I/O failure already carries `ExecutionReason.IO_ERROR`; sharing
+violations are separately typed. The current default failure policy retries
+sharing violations and continues past other item failures. Accepted M1 work in
+[M1_PLAN.md](M1_PLAN.md) will distinguish recognized disk-capacity errors and
+use the existing `Stop` policy decision after current-operation settlement so
+later operations remain unrun. That behavior is not implemented yet. It requires
+classification, settled-effect/recording, later-operation, and projection
+regressions; it does not reopen settlement design. Richer I/O categories and
+user-invoked terminal retry remain M2 proposals. Existing bounded automatic
+retries and live pause/resume are unchanged.
 
 Sharing violations use bounded retry with injected clock/backoff and checkpoints
 between attempts. COPY, UPDATE, and MOVE_UPDATE install an operation-local stage

@@ -127,6 +127,58 @@ def test_no_subcommand_prints_usage_and_returns_nonzero() -> None:
     assert "usage:" in stderr.getvalue()
 
 
+def test_cli_ingress_bound_uses_complete_utf8_byte_size() -> None:
+    exact = ["é" * 32_767, "x"]
+    one_byte_over = ["é" * 32_767, "xx"]
+
+    assert cli_module._arguments_within_ingress_bound(exact) is True
+    assert cli_module._arguments_within_ingress_bound(one_byte_over) is False
+
+
+def test_cli_ingress_bound_counts_separators() -> None:
+    assert cli_module._arguments_within_ingress_bound(["x" * 65_536]) is True
+    assert cli_module._arguments_within_ingress_bound(
+        ["x" * 65_535, ""]
+    ) is True
+    assert cli_module._arguments_within_ingress_bound(
+        ["x" * 65_536, ""]
+    ) is False
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    (
+        ["history", object()],
+        ["history", type("Text", (str,), {})("subclass")],
+        ["history", "\ud800"],
+    ),
+)
+def test_cli_ingress_rejects_non_exact_or_unencodable_arguments(
+    arguments: list[object],
+) -> None:
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(arguments, stdout=stdout, stderr=stderr)  # type: ignore[arg-type]
+
+    assert result == EXIT_USAGE
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == "Invalid command request.\n"
+
+
+def test_cli_ingress_rejects_oversized_content_without_echoing_it() -> None:
+    secret = "DO_NOT_ECHO_" + "x" * 65_536
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    result = main(["history", secret], stdout=stdout, stderr=stderr)
+
+    assert result == EXIT_USAGE
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == "Invalid command request.\n"
+    assert "DO_NOT_ECHO" not in stderr.getvalue()
+
+
 def test_stage5_commands_are_explicit_parser_choices() -> None:
     parser = build_parser()
     choices = next(

@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 import namisync.db.recorder as recorder_module
+import namisync.core.models as model_contracts
+import namisync.core.recording as recording_module
 from namisync.core.evidence import Provenance, RecordingStatus
 from namisync.core.integrity import (
     IntegrityMode,
@@ -325,6 +327,110 @@ def test_recorder_hash_projections_cover_exact_known_dataclasses() -> None:
     assert _payload_hash({"kind": "recorder", "item": 7}) == hashlib.sha256(
         frozen_vector("recorder/existing_primitive")
     ).digest()
+
+
+@pytest.mark.parametrize("count", (0, 1, 1_024), ids=("0", "1", "1024"))
+def test_inventory_command_performs_no_repeated_leaf_certification(
+    count: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, inputs = hash_fixtures(True)
+    template = inputs["inventory"].scan
+    file_record = template.files[0]
+    directory = template.directories[0]
+    unsupported = template.unsupported[0]
+    warning = template.warnings[0]
+    scan = ScanResult(
+        template.root,
+        template.volume_id,
+        template.volume_evidence,
+        template.profile,
+        (file_record,) * count,
+        (directory,) * count,
+        (unsupported,) * count,
+        (warning,) * count,
+        template.scope,
+        template.complete,
+    )
+    leaf_ids = {id(file_record), id(directory), id(unsupported), id(warning)}
+    certifications: list[int] = []
+
+    def count_leaf_certification(value: object, *args: object) -> type:
+        if not args and id(value) in leaf_ids:
+            certifications.append(id(value))
+        return type(value, *args)
+
+    monkeypatch.setattr(
+        model_contracts,
+        "type",
+        count_leaf_certification,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        recording_module,
+        "type",
+        count_leaf_certification,
+        raising=False,
+    )
+
+    InventoryCommand(1, 1, scan, "scan-count", NOW)
+    assert certifications == []
+
+
+@pytest.mark.parametrize("count", (0, 1, 1_024), ids=("0", "1", "1024"))
+def test_scan_projection_has_no_preliminary_full_graph_validation_pass(
+    count: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _, inputs = hash_fixtures(True)
+    template = inputs["inventory"].scan
+    calls = 0
+
+    def count_validation(value: object) -> ScanResult:
+        nonlocal calls
+        calls += 1
+        raise AssertionError("scan projection repeated full graph validation")
+
+    scan = ScanResult(
+        template.root,
+        template.volume_id,
+        template.volume_evidence,
+        template.profile,
+        (template.files[0],) * count,
+        (template.directories[0],) * count,
+        (template.unsupported[0],) * count,
+        (template.warnings[0],) * count,
+        template.scope,
+        template.complete,
+    )
+    monkeypatch.setattr(
+        recorder_module,
+        "validate_scan_result",
+        count_validation,
+        raising=False,
+    )
+
+    InventoryCommand(1, 1, scan, "scan-validation", NOW)
+    recorder_module._scan_projection(scan)
+
+    assert calls == 0
+
+
+@pytest.mark.parametrize(
+    "population",
+    ("files", "directories", "unsupported", "warnings"),
+)
+def test_inventory_command_and_scan_projection_require_exact_tuple_transfer(
+    population: str,
+) -> None:
+    _, inputs = hash_fixtures(True)
+    scan = inputs["inventory"].scan
+    object.__setattr__(scan, population, [])
+
+    with pytest.raises(TypeError):
+        InventoryCommand(1, 1, scan, "scan-transfer", NOW)
+    with pytest.raises(TypeError):
+        recorder_module._scan_projection(scan)
 
 
 def _ledger_state(path: Path) -> tuple[str, ...]:

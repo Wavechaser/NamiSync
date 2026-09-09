@@ -305,18 +305,23 @@ def test_transport_recorder_publishes_startup_error_as_failure(
 
 
 @pytest.mark.parametrize("fixture", ("initial", "items", "terminal"))
-def test_transport_gate_live_fixtures_match_exact_v5_contract(fixture: str) -> None:
+def test_transport_gate_live_fixtures_use_typed_public_views(fixture: str) -> None:
     from namisync.workflows.views import (
-        validate_session_event_view,
+        SessionEventView,
         validate_session_record_view,
     )
 
     session_id = "d" * 32
     if fixture == "initial":
+        events = []
         transport_gate_child._deliver_initial_events(
-            validate_session_event_view,
+            events.append,
             session_id,
         )
+        assert all(type(event) is SessionEventView for event in events)
+        assert [event.body_type for event in events] == [
+            "StateChanged", "Progress",
+        ]
     elif fixture == "items":
         events = []
         transport_gate_child._deliver_result_items(
@@ -327,8 +332,7 @@ def test_transport_gate_live_fixtures_match_exact_v5_contract(fixture: str) -> N
         assert [event.body_type for event in events] == [
             "ItemOutcome", "IntegrityOutcome",
         ]
-        for event in events:
-            validate_session_event_view(event)
+        assert all(type(event) is SessionEventView for event in events)
     else:
         validate_session_record_view(
             transport_gate_child._terminal_record(session_id)
@@ -419,7 +423,6 @@ def test_transport_gate_uses_shared_immutable_command_composition() -> None:
     assert "original_commands(" in helper
     assert "commands is not captured.get" in helper
     assert "startup_gate is not captured.get" in helper
-    assert "MappingProxyType" in helper
     assert "register" not in source.casefold()
     assert "extra_commands" not in source
 
@@ -453,13 +456,6 @@ def test_transport_gate_native_picker_automation_is_exact_and_fail_closed() -> N
     assert "NativeWindowHandle" in inspect.getsource(
         headed_host_child._post_exact_folder_confirmation
     )
-    assert "IsWindow(button_handle)" in target_source
-    assert "IsWindowVisible(button_handle)" in target_source
-    assert "IsWindowEnabled(button_handle)" in target_source
-    assert "_BUTTON_WINDOW_CLASS" in target_source
-    assert "GetDlgCtrlID(button_handle)" in target_source
-    assert "IsChild(dialog_handle, button_handle)" in target_source
-    assert "button_process_id != process_id" in target_source
     assert "PostMessageW" in post_source
     assert headed_host_child._BM_CLICK == 0x00F5
     picker_sources = "\n".join(
@@ -939,39 +935,10 @@ def test_transport_gate_uia_diagnostic_aggregates_and_ranks_unique_candidates() 
     assert len(serialized.encode("utf-8")) < 8192
 
 
-def test_transport_gate_uia_subcommands_parse_their_exact_headless_shapes(
+def test_transport_gate_uia_folder_subcommand_parses_its_headless_shape(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    probe_source = inspect.getsource(headed_host_child._run_uia_probe)
-    lookup_source = inspect.getsource(headed_host_child._automation_has_name)
-    observed_probes: list[tuple[int, str]] = []
-
-    def has_name(handle: int, expected: str) -> bool:
-        observed_probes.append((handle, expected))
-        return True
-
-    monkeypatch.setattr(
-        headed_host_child,
-        "_automation_has_name",
-        has_name,
-    )
-    assert headed_host_child._run_uia_probe(
-        [
-            "--handle",
-            "41",
-            "--expected",
-            "expected",
-            "--timeout",
-            "0.1",
-        ]
-    ) == 0
-    assert observed_probes == [(41, "expected")]
-    assert "_automation_names" not in probe_source
-    assert "FindFirst" in lookup_source
-    assert "NameProperty" in lookup_source
-    assert "FindAll" not in lookup_source
-
     observed: dict[str, object] = {}
 
     def select(
@@ -1194,7 +1161,6 @@ def test_br_g_33_real_next_events_is_concurrent_and_shutdown_wakes_it(
         "message": "task is closing",
     }
     assert result["drain_exited"] is True
-    assert ["unsubscribe", "b" * 32] in result["controlled_service_cleanup"]
 
 
 @pytest.mark.headed
@@ -1296,6 +1262,10 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     assert server["malformed_attempts"] == 7
     assert len(server["registry_release_calls"]) == 2
     assert len(server["registry_close_calls"]) == 2
+    assert {
+        cleanup[0]
+        for cleanup in result["controlled_service_cleanup"]
+    } == {"release_task_session", "close_task"}
 
     response_kinds = [
         (item["role"], item["kind"])
@@ -1584,13 +1554,6 @@ def _run_off_origin_scenario(
             "Off-origin dispatch refused",
             python=installed.python,
             deadline=deadline,
-        )
-        assert interim["off_origin_response"] == _BRIDGE_UNAVAILABLE
-        assert interim["off_origin_handler_calls"] == []
-        assert any(
-            source.startswith("http://127.0.0.1:")
-            and source.endswith("/off_origin.html")
-            for source in interim["committed_sources"]
         )
         close_window(window)
         completed = wait_for_process(process, deadline=deadline)

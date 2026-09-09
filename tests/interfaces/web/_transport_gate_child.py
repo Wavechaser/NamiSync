@@ -653,11 +653,10 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original_expose_bridge = host._expose_bridge_api
     original_task_registry = host._task_registry
     original_dispatch = bridge.BridgeDispatcher._dispatch_native
-    original_start_plan = NamiSyncService.start_plan
-    original_reobserve = NamiSyncService.reobserve
-    original_unsubscribe = NamiSyncService.unsubscribe
-    original_close_session = NamiSyncService.close_session
-    original_drop_plan = NamiSyncService.drop_plan
+    original_start_task_plan = NamiSyncService.start_task_plan
+    original_reobserve_task = NamiSyncService.reobserve_task
+    original_release_task_session = NamiSyncService.release_task_session
+    original_close_task = NamiSyncService.close_task
     original_log_renderer = host._log_startup_renderer
     original_pending_document = host._pending_document
     original_attach = bridge._NativeNavigationGuard.attach
@@ -781,15 +780,21 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 return response
 
         response = original_dispatch(dispatcher, command_json)
+        command_response = response
+        if (
+            type(response) is dict
+            and type(response.get("response")) is dict
+        ):
+            command_response = response["response"]
         if (
             browser_gate is not None
             and request is not None
             and request.get("command") == "start_plan"
-            and type(response) is dict
-            and response.get("ok") is True
-            and type(response.get("result")) is dict
+            and type(command_response) is dict
+            and command_response.get("ok") is True
+            and type(command_response.get("result")) is dict
         ):
-            result = response["result"]
+            result = command_response["result"]
             browser_gate.note_task(
                 result.get("task_id"),
                 result.get("session_id"),
@@ -812,16 +817,23 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     browser_gate.main_stale_response_held = True
             if hold_stale and not browser_gate.main_recovery_entered.wait(5):
                 raise RuntimeError("stale drain recovery did not enter")
-        if type(command_json) is str:
+        is_native_ack = (
+            type(command_json) is str
+            and bridge._NATIVE_RESPONSE_ACK.fullmatch(command_json) is not None
+        )
+        if type(command_json) is str and not is_native_ack:
             recorder.append("raw_dispatch_bodies", command_json)
             if '"phase":"off_origin_attempt"' in command_json:
-                recorder.set("off_origin_response", response)
+                recorder.set("off_origin_response", command_response)
                 recorder.publish_ready()
         if request is not None and request.get("command") == "next_events":
             role = None if browser_gate is None else browser_gate.role_for_task(task_id)
             kind = "success"
-            if type(response) is dict and response.get("ok") is False:
-                error = response.get("error")
+            if (
+                type(command_response) is dict
+                and command_response.get("ok") is False
+            ):
+                error = command_response.get("error")
                 if type(error) is dict and type(error.get("code")) is str:
                     kind = error["code"]
             recorder.append(
@@ -843,7 +855,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         registry = original_task_registry(service)
         if drain_probe is None:
             return registry
-        original_drain = registry.drain
+        original_drain = registry.drain_for_bridge
         original_release = registry.release_terminal_session
         original_close_task = registry.close_task
 
@@ -924,19 +936,19 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     )
             return original_close_task(task_id, session_id)
 
-        registry.drain = observed_drain  # type: ignore[method-assign]
+        registry.drain_for_bridge = observed_drain  # type: ignore[method-assign]
         registry.release_terminal_session = release_terminal_session  # type: ignore[method-assign]
         registry.close_task = close_task  # type: ignore[method-assign]
         return registry
 
-    def start_plan(
+    def start_task_plan(
         service: object,
         source: str,
         target: str,
         *,
-        deletion_policy: str | None = None,
-        command_id: str | None = None,
-        observation_sink=None,
+        deletion_policy: str | None,
+        command_id: str,
+        delivery_factory,
     ) -> object:
         recorder.append(
             "service_start_plan_calls",
@@ -948,9 +960,12 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             },
         )
         if deletion_policy == "trash" and browser_gate is not None:
+            task_id = f"task-{command_id}"
+            observation_sink = delivery_factory(task_id)
             role, request_id, session_id = browser_gate.start_controlled(
                 observation_sink
             )
+            browser_gate.note_task(task_id, session_id)
             recorder.append(
                 "controlled_plan_roles",
                 {
@@ -959,25 +974,28 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     "session_id": session_id,
                 },
             )
-            from namisync.interfaces.service import PlanSession
+            from namisync.interfaces.task_port import TaskStartView
 
-            return PlanSession(request_id, session_id)
+            return TaskStartView(task_id, request_id, session_id)
         if deletion_policy == "additive":
-            from namisync.interfaces.service import PlanSession
+            task_id = f"task-{command_id}"
+            delivery_factory(task_id)
+            from namisync.interfaces.task_port import TaskStartView
 
             recorder.set("controlled_plan_session", "b" * 32)
-            return PlanSession("a" * 32, "b" * 32)
-        return original_start_plan(
+            return TaskStartView(task_id, "a" * 32, "b" * 32)
+        return original_start_task_plan(
             service,
             source,
             target,
             deletion_policy=deletion_policy,
             command_id=command_id,
-            observation_sink=observation_sink,
+            delivery_factory=delivery_factory,
         )
 
-    def reobserve(
+    def reobserve_task(
         service: object,
+        task_id: str,
         session_id: str,
         sink: object,
         from_sequence: int,
@@ -1009,47 +1027,59 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 _deliver_result_items(sink, session_id, browser_gate.hostile)
                 return _terminal_record(session_id)
             raise RuntimeError("unexpected main browser gate replay cursor")
-        return original_reobserve(service, session_id, sink, from_sequence)
+        return original_reobserve_task(
+            service,
+            task_id,
+            session_id,
+            sink,
+            from_sequence,
+        )
 
-    def unsubscribe(service: object, session_id: str) -> None:
-        if session_id == "b" * 32 or (
-            browser_gate is not None
-            and browser_gate.is_controlled_session(session_id)
-        ):
-            recorder.append(
-                "controlled_service_cleanup",
-                ["unsubscribe", session_id],
-            )
-            return
-        original_unsubscribe(service, session_id)
-
-    def close_session(service: object, session_id: str) -> None:
+    def release_task_session(
+        service: object,
+        task_id: str,
+        session_id: str,
+        delivery: object,
+    ) -> object:
         if browser_gate is not None and browser_gate.is_controlled_session(
             session_id
         ):
             recorder.append(
                 "controlled_service_cleanup",
-                ["close_session", session_id],
+                ["release_task_session", session_id],
             )
-            return
-        original_close_session(service, session_id)
+            from namisync.interfaces.task_port import TaskSessionReleaseView
 
-    def drop_plan(service: object, request_id: str) -> None:
-        controlled_requests = (
-            set()
-            if browser_gate is None
-            else {
-                browser_gate.controlled_session(role)[0]
-                for role in ("main", "busy", "malformed")
-            }
+            return TaskSessionReleaseView(task_id, session_id)
+        return original_release_task_session(
+            service,
+            task_id,
+            session_id,
+            delivery,
         )
-        if request_id in controlled_requests:
+
+    def close_task(
+        service: object,
+        task_id: str,
+        session_id: str,
+        delivery: object,
+    ) -> object:
+        if browser_gate is not None and browser_gate.is_controlled_session(
+            session_id
+        ):
             recorder.append(
                 "controlled_service_cleanup",
-                ["drop_plan", request_id],
+                ["close_task", session_id],
             )
-            return
-        original_drop_plan(service, request_id)
+            from namisync.interfaces.task_port import TaskCloseView
+
+            return TaskCloseView(task_id, session_id)
+        return original_close_task(
+            service,
+            task_id,
+            session_id,
+            delivery,
+        )
 
     def log_renderer(browser_version: str) -> None:
         recorder.set("native_browser_version", browser_version)
@@ -1093,19 +1123,20 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         stack.enter_context(patch.object(host, "_log_startup_renderer", log_renderer))
         if arguments.mode == "transport":
             stack.enter_context(
-                patch.object(NamiSyncService, "start_plan", start_plan)
+                patch.object(NamiSyncService, "start_task_plan", start_task_plan)
             )
             stack.enter_context(
-                patch.object(NamiSyncService, "reobserve", reobserve)
+                patch.object(NamiSyncService, "reobserve_task", reobserve_task)
             )
             stack.enter_context(
-                patch.object(NamiSyncService, "unsubscribe", unsubscribe)
+                patch.object(
+                    NamiSyncService,
+                    "release_task_session",
+                    release_task_session,
+                )
             )
             stack.enter_context(
-                patch.object(NamiSyncService, "close_session", close_session)
-            )
-            stack.enter_context(
-                patch.object(NamiSyncService, "drop_plan", drop_plan)
+                patch.object(NamiSyncService, "close_task", close_task)
             )
         elif arguments.mode == "off-origin":
             stack.enter_context(

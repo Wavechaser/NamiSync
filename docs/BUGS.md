@@ -71,6 +71,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Workspace and measurement integrity
 
+- MINOR - FIXED (2026-09-07). Fixed-wait headed synchronization. The native-host
+  evidence child could exhaust its 10-second reinjection waits before WebView
+  reported the next ready document, losing the off-thread URL measurement.
+  Cause: `_native_gate_child.py` imposed independent waits inside a 60-second
+  whole-scenario deadline. Fixed by making the reinjection and delayed-return
+  transport events use that parent-owned deadline. A 12.7-second delayed-ready
+  probe now distinguishes the old failure from the repaired pass; a suppressed
+  signal reaches the parent deadline, publishes no success, and reaps the
+  launched child plus all eight observed descendants. Evidence and hashes are
+  under `build/test-refinement/1026541/st-h/`; no product defect was found.
+
 - MINOR - FIXED (2026-08-29). Checkout line-ending conversion. Windows clones
   rewrote the pinned Fluent token transcripts and shipped icon-source assets to
   CRLF, so their working-tree SHA-256 values no longer matched the reviewed
@@ -478,16 +489,6 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- MODERATE - OPEN (2026-08-27). Task-adjacent owner-count gap. The desktop
-  registry caps live cards, but the complete runtime/service/dispatcher graphs
-  and close-time owners do not yet share one task-wide byte reservation.
-  Unpublished desktop session attachment is now structural: every desktop start
-  binds its exact reservation before scheduling, observer timeout keeps that
-  capacity charged under Dispatcher retry, and exact-session release detaches
-  only after observer/detail retirement. Malformed return cleanup cannot drop
-  an unauthenticated plan. The remaining cause is the absent task-wide graph
-  charge and multi-session lifecycle; closure must bind those owners, and no
-  formula may treat a timeout as retirement.
 - MODERATE - FIXED (2026-08-27). Pre-run exception closure retention. Lock
   acquisition, continuation open, and canceled-session settlement passed a raw
   collaborator exception through a nested runner callback, keeping its
@@ -744,8 +745,56 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Application task lifecycle
+
+- MODERATE - FIXED (2026-09-02). Plan-selection retirement race. A selection
+  mutation could read a retained plan, lose a race to successful `drop_plan`,
+  then return the existing `KeyError` while leaving unreachable selection
+  state and its mutation receipt until shutdown; repeated races could
+  accumulate memory. Persisted bytes, filesystem effects, and later readers
+  remained correct because every reader rechecked runtime plan truth. Cause:
+  `_selection_state` installed or refreshed service state after its initial
+  runtime read without revalidating plan liveness. Fixed by revalidating
+  outside `self._lock`, retiring only the exact stale state while preserving
+  successors and receipt lineage, and retrying observed replacements. A
+  deterministic barrier proves no stale state, receipt, effect, or
+  same-command replay remains.
+
 ### Desktop bridge and native-owner lifecycle
 
+- MINOR - FIXED (2026-09-05). Receipt-cleanup trust conflation. An off-origin
+  native call returned the exact structured refusal with a response token, but
+  the same origin check rejected its cleanup acknowledgment; JavaScript then
+  replaced the cloned refusal with generic transport uncertainty. Fixed by
+  making an exact existing-token acknowledgment independent of document trust.
+  It grants no dispatch authority, and worker exit remains mandatory before
+  capacity is reaped. Native and browser regressions preserve recognizable
+  refusal, zero handler calls, exact-token ownership, and duplicate-receipt
+  refusal.
+- MINOR - FIXED (2026-09-03 - 2026-09-05). Headed accessibility target expiry.
+  The off-origin UI Automation provider could expire between root acquisition
+  and descendant lookup, and the probe treated that transient as an
+  infrastructure failure. Fixed by loading UIA once, reacquiring the exact
+  process-owned window tree on every attempt, and retrying only
+  `ElementNotAvailableException`. Timeout evidence retains transient and
+  successful-read counts plus value-only error details; the parent hard
+  deadline and exact-text acceptance remain unchanged.
+- MINOR - FIXED (2026-09-03). Adapter-surface interception drift. After the
+  bridge moved to task-port methods, the installed-wheel fixture still patched
+  the valid session-oriented methods, so interception was inert and its recorder
+  stayed empty. Fixed by intercepting the four task-port methods and bridge
+  drain, preserving delivery-factory/task identity, unwrapping native response
+  custody, and excluding only exact native acknowledgements.
+  The old symbols still existed, so patch installation succeeded even though
+  they were no longer on the call path; lint, types, and `raising=False` audits
+  could not detect the lost observation.
+- MINOR - FIXED (2026-09-05). Delayed-return observer aliasing. The BR-G-30
+  fixture labeled any concurrent `evaluate_js` script containing the callback
+  table after handler completion as the delayed result, so unrelated renderer
+  traffic could create duplicate events. Fixed by correlating the interception
+  with the serialized `returned-delayed_return` value and retaining one
+  terminal observation. Reinjection, callback loss, and the working
+  post-navigation bridge remain the asserted behavior.
 - MODERATE - FIXED (2026-08-29). Orphan analytical admission. Desktop startup
   refused every runtime outside one exact CPython patch, GIL, and allocator
   profile even though no object model, validator, or acceptance evidence could
@@ -823,28 +872,31 @@ defect, and move implementation-level test choreography out of the log.
   tests guard that dependency assumption; a runtime upgrade must revalidate it.
 - MINOR - FIXED (2026-08-26). Cross-version gate aliasing. The unreachable
   private browser seam accepted v5-stamped numeric-v4 bodies and rejected v4,
-  while source gates could find legacy text instead of the live route or active
-  Progress validator. Cause: a shared version constant and overbroad source
-  slices conflated retained and current contracts. Fixed with literal v4 at the
-  private seam, exact live-function isolation, active-v5 shape/vocabulary checks,
-  and mutation regressions. No production legacy route was added.
+  while source gates could find legacy text instead of the live route. Cause: a
+  shared version constant and overbroad source slices conflated retained and
+  current contracts. Fixed by isolating the live route and its exact version;
+  the consolidation pass later removed the redundant body-schema mirror while
+  retaining wrong-version batch refusal and reducer regressions. No legacy
+  route was added.
 - MINOR - FIXED (2026-08-26). Unbound producer fixtures. Separate Python public
   view witnesses and browser literals could stay green while the real codec
   drifted away from JavaScript. Cause: no differential check passed the actual
   Python primitive projection to the packaged consumer. Fixed by binding all
-  seven event families and relevant public-view witnesses through that codec
-  and the live event arm, retaining independent literal expectations and
-  post-projection negative mutations.
+  seven event families and relevant public-view witnesses through that projector
+  and the live event arm. The consolidation pass retained those positive
+  producer witnesses while persistence and transport/reducer negatives remain
+  with their real boundaries.
 - MODERATE - FIXED (2026-08-26). Shallow view admission. Exact dataclass wrappers
   could carry old-version events, malformed nested results, or result-free
   terminal records through Python task drains and bridge serialization. Queue
   consumption and terminal-delivery receipts could precede semantic refusal,
   while the browser accepted null terminal results and released session custody.
-  Cause: outer type checks substituted for the v5 view contract. Fixed with
-  shared primitive/typed validation at each consuming boundary, whole-candidate
-  validation before drain mutation, and matching result-bearing terminal gates.
-  Valid result-free recovery snapshots do not earn receipts; replay cache
-  invalidation does not revoke a prior validated delivery receipt.
+  Cause: outer type checks substituted for the required boundary checks. Current
+  enforcement keeps event transport/session/sequence checks, whole-candidate
+  admission before drain mutation, and exact result-bearing terminal gates;
+  body semantics stay with supported producers and persistence decode. Valid
+  result-free recovery snapshots do not earn receipts, and replay invalidation
+  does not revoke a prior validated delivery receipt.
 - MODERATE - FIXED (2026-08-25). Execution-authority state conflation. The
   accepted desktop design permanently froze a committed selection even when
   submission failed or the attached attempt terminated `unrun`, making its
@@ -879,13 +931,16 @@ defect, and move implementation-level test choreography out of the log.
   live-only validator, and keeping mixed persisted v3/v4 `HistoryEventView`
   validation version-dispatched per row.
 - MINOR - FIXED (2026-08-21). Executable consumer-evidence omission. The
-  ordinary suite checked the expanded Progress validator through source-text
-  tokens while its actual JavaScript behavior lived in an optional Node probe,
+  ordinary suite checked packaged Progress behavior through source-text tokens
+  while its actual JavaScript behavior lived in an optional Node probe,
   so dead or unconditional validation could pass when Node was unavailable.
   Fixed by making the packaged drain-manager probe non-skippable, resolving an
-  explicit `NAMISYNC_TEST_NODE` before `PATH`, and executing malformed-batch
-  rejection plus clean reliable replay. Other Node probes remain supplemental;
-  installed WebView2 still owns their named browser-behavior acceptance.
+  explicit `NAMISYNC_TEST_NODE` before `PATH`, and executing transport/reducer
+  batch rejection plus clean reliable replay. At that fix, the other Node
+  probes remained supplemental. The current suite also requires public
+  event-v5 consumer probes; `TESTS.md` owns the unmarked-required versus
+  `supplemental_node` policy. Installed WebView2 still owns named browser-
+  behavior acceptance.
 - MODERATE - FIXED (2026-08-19). Partial-attachment rollback gap. If `loaded`
   event registration failed and removal of the already-installed `before_load`
   handler also raised, appearance configuration escaped without aborting its
@@ -1041,17 +1096,17 @@ defect, and move implementation-level test choreography out of the log.
   holdout passed at 1,351,794 ordinary and 1,513,014 exact-maximum bytes against
   the frozen 1,966,080-byte ceiling, with exact source/runtime/dependency
   authority plus no-`Gap`, ordering, 128/64/64, cleanup, and terminal truth.
-  This closes SH-G-8 and BR-G-42 event/transport custody only. BR-G-45
-  terminal-artifact retention and SH-G-15 whole-runtime containment remain
-  open and untested by this evidence.
+  This closes SH-G-8 and BR-G-42 event/transport custody only. BR-G-45 is now
+  retired; scoped SH-G-15 resource and leak/growth acceptance remains open
+  and untested by this evidence.
 - MINOR - FIXED (2026-08-13). Split protocol authority. Active
-  documents delegated exact errors and retry rules to `M1_SHELL.md` while also
+  documents delegated exact errors and retry rules to `obsolete/M1_SHELL.md` while also
   retaining stale command, sequence, and lifecycle summaries, so reviewers
   could follow incompatible contracts and SH-G-8 appeared closed without its
   normal-envelope evidence. Cause: the Stage 6 delivery plan was promoted into
-  a second protocol authority after `M1_BRIDGE.md` had already settled the
-  seam. Fixed by making `M1_BRIDGE.md` the sole bridge/BR-G authority, reducing
-  `M1_SHELL.md` to delivery/package/SH-G ownership, and correcting active links
+  a second protocol authority after `obsolete/M1_BRIDGE.md` had already settled the
+  seam. Current protocol authority is `BRIDGE.md`. The original fix made M1_BRIDGE the sole bridge/BR-G authority, reducing
+  `obsolete/M1_SHELL.md` to delivery/package/SH-G ownership, and correcting active links
   and status. Numeric-hole, `start_plan`, and installed real-WebView2 browser
   witnesses have landed. Realigned SH-G-8 later closed under its separate
   transport-custody contract rather than the former whole-Job predicate.
@@ -1338,16 +1393,6 @@ defect, and move implementation-level test choreography out of the log.
 
 ### M1 Hardening
 
-- SEVERE - OPEN (2026-08-27). Inventory complete-graph admission gap. Raw scan
-  rows, returned repository rows, and tree input members now stop before first
-  excess; requested paths, row ids, and mapping identities independently stop
-  before their first raw excess and before normalization/deduplication/sorting,
-  closing the inherited path-key `limit + 1` error. Integrity checks the exact
-  candidate-row tuple before construction, and no valid excess publishes
-  partial work. Synthetic tree/index and candidate construction, their finite
-  preprocessing transients, old/new task generations, and the complete byte
-  authority remain outside active admission. `DEFENSE.md` §1.3 owns the walls;
-  `M1_BRIDGE.md` owns the accepted complete task/artifact graph.
 - SEVERE - FIXED (2026-08-28). Hostile resolution alias mutation. Inventory
   retained resolver-returned mount/evidence objects across the later root probe,
   so callback mutation could change the root or volume facts used for scan and
@@ -1601,29 +1646,29 @@ defect, and move implementation-level test choreography out of the log.
   structurally valid reliable event above 1,048,576 canonical bytes could pass
   Python's public-view validator and the browser, then advance browser state
   despite persistence-envelope refusal. Cause: those validators checked field
-  shapes but omitted the shared envelope ceiling. Fixed by reconstructing the
-  persistence shape (`seq`, not `sequence`) and applying its UTF-8 byte wall.
-  Exact-maximum/plus-one public projections include mixed Unicode; rejected
-  batches preserve callbacks, replay cursor, reducer phase, and release state.
+  shapes but omitted the shared envelope ceiling. The consolidation pass made
+  `canonical_event_bytes` the sole production enforcer before `EventHub`
+  sequence, replay, audit, or subscriber mutation and removed the redundant
+  downstream checks. Exact-maximum/plus-one canonical bytes remain frozen.
 - MODERATE - FIXED (2026-08-26). Cross-runtime primitive grammar drift.
   Python and JavaScript admitted different timestamp spellings, and the browser
   normalized impossible dates. Its Unicode guard also admitted a trailing lone
   high surrogate because comparisons with the missing next unit's NaN did not
   reject. Cause: permissive runtime parsers and an incomplete surrogate-pair
-  predicate. Fixed with one literal UTC timestamp grammar, real Gregorian
-  calendar validation, and mandatory valid low-surrogate pairing before byte
-  accounting. Shared positive/negative Python and Node corpora preserve valid
-  early/leap dates and non-ASCII text while refusing the divergent inputs.
+  predicate. Exact persistence decode and public record/result validation retain
+  the UTC calendar and Unicode rules. The consolidation pass removed their
+  duplicate live-event browser copy; supported producer projection and
+  canonical UTF-8 encoding own that path instead.
 - MODERATE - FIXED (2026-08-26). Cross-axis validation omission. Item and
   terminal projections could admit recording reasons that contradicted the
   filesystem outcome, or cancellation without matching execute/verify truth,
   even though continuation/full-result contracts rejected those combinations.
   Cause: projection validators checked each closed field independently and
-  omitted their relationships. Fixed by sharing the existing recording matrix
-  and cancellation rules across core objects and Python decoders and mirroring
-  them in browser event/result validation. A literal complete recording matrix
-  and cancellation corpus include public-view Node witnesses; valid plain and
-  compound cancellation behavior is preserved.
+  omitted their relationships. Fixed by sharing the recording matrix and
+  cancellation rules across core objects and persistence decoding, with browser
+  public record/result validation retained. The consolidation pass removed only
+  the live-event semantic mirror; valid plain and compound cancellation remains
+  covered.
 - MINOR - FIXED (2026-08-26). Scalar error-family drift. Shared decimal and
   public event decoders classified malformed strings as wrong types, while
   very long canonical Scalar64 overflow escaped as Python's generic conversion
@@ -1631,7 +1676,7 @@ defect, and move implementation-level test choreography out of the log.
   carried a redundant optimization-sensitive assertion. Cause: combined
   type/grammar checks and conversion before domain validation. Fixed with
   exact type/grammar/domain error families, bounded-domain comparison before
-  conversion, shared public event decoding, and explicit 16-byte unsigned
+  conversion, persistence event decoding, and explicit 16-byte unsigned
   construction. Public payload and optimized-mode regressions preserve valid
   full-width identity and unchanged volume/hash/epoch semantics.
 - MODERATE - FIXED (2026-08-25). Native file-identity narrowing. Scanner and
@@ -1647,7 +1692,7 @@ defect, and move implementation-level test choreography out of the log.
   decoder previously retained v3 history compatibility beside v4 while the live
   browser and canonical history projection accepted different populations.
   Cause: consumer-local compatibility lacked one event/data epoch and removal
-  point. Production is exact-v5-only at data epoch 6; the private v3/v4 decoders,
+  point. Production events are exact-v5-only; the private v3/v4 decoders,
   exclusive helpers, and positive compatibility fixtures are removed.
   Removal guards and all-family negative cases pin the source boundary;
   co-batched retired-version events preserve the drain cursor and replay.
@@ -1776,7 +1821,7 @@ defect, and move implementation-level test choreography out of the log.
   Construction, sorting/index storage, previews, codecs, native/browser copies,
   complete graphs, exceptions, and multi-session owners remain outside active
   admission under [DEFENSE.md](DEFENSE.md) §1.3 and
-  [M1_BRIDGE.md](M1_BRIDGE.md).
+  [BRIDGE.md](BRIDGE.md).
 - SEVERE - FIXED (2026-08-28). Reliable result custody aliasing. The generic
   runner, execution workflow, and integrity workflow could give a callback the
   same item/result graph retained for terminal truth, or run a later validator

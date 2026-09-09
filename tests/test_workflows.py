@@ -3,15 +3,13 @@ from __future__ import annotations
 import gc
 import os
 import stat as stat_module
-from dataclasses import replace
+from dataclasses import fields, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from weakref import ref
 
 import pytest
-
-from _identity_epoch5 import frozen_execution
 
 import namisync.workflows.sync as sync_workflow
 import namisync.workflows.runtime as runtime_module
@@ -37,6 +35,7 @@ from namisync.core.planning import (
     BlockedReason,
     DeletionPolicy,
     FilterSet,
+    IdentityDestinationPolicy,
     MappingSnapshot,
     OpId,
     OperationKind,
@@ -70,7 +69,6 @@ from namisync.workflows.models import (
     VerifyContinuation,
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
-from namisync.workflows.payloads import decode_execution_request
 
 
 NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
@@ -78,6 +76,113 @@ NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
 
 def _empty_world() -> ObservedWorld:
     return ObservedWorld({}, {}, frozenset({""}), {}, None, 0, None, NOW)
+
+
+def test_plan_domain_contracts_have_no_worker_count() -> None:
+    assert "worker_count" not in {field.name for field in fields(SyncOptions)}
+    assert "worker_count" not in {field.name for field in fields(Plan)}
+    with pytest.raises(TypeError):
+        SyncOptions(worker_count=2)  # type: ignore[call-arg]
+
+
+def test_prepare_plan_rejects_noncanonical_domain_values(tmp_path: Path) -> None:
+    class DerivedPlanRequest(PlanRequest):
+        pass
+
+    class DerivedSyncOptions(SyncOptions):
+        pass
+
+    class OtherPolicy:
+        name = "identity"
+        version = "1"
+
+        def assign(self, records, meta, target):
+            raise AssertionError("rejected policy callback ran")
+
+    def request_with(policy: object) -> PlanRequest:
+        return PlanRequest(
+            "request",
+            r"C:\source",
+            r"D:\target",
+            SyncOptions(destination_policy=policy),  # type: ignore[arg-type]
+        )
+
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        for request, error, message in (
+            (
+                DerivedPlanRequest("request", r"C:\source", r"D:\target"),
+                TypeError,
+                "requires PlanRequest",
+            ),
+            (
+                PlanRequest(
+                    "request", r"C:\source", r"D:\target", DerivedSyncOptions()
+                ),
+                TypeError,
+                "exact SyncOptions",
+            ),
+            (
+                request_with(IdentityDestinationPolicy("renamed", "1")),
+                ValueError,
+                "fields changed",
+            ),
+            (
+                request_with(IdentityDestinationPolicy("identity", "2")),
+                ValueError,
+                "fields changed",
+            ),
+            (
+                request_with(OtherPolicy()),
+                ValueError,
+                "supports only the identity policy",
+            ),
+        ):
+            with pytest.raises(error, match=message):
+                runtime.prepare_plan(request)
+    finally:
+        runtime.close()
+
+
+def test_prepare_plan_retains_a_detached_identity_checkpoint(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    policy = IdentityDestinationPolicy()
+    options = SyncOptions(destination_policy=policy)
+    request = PlanRequest("1" * 32, str(source), str(target), options)
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        checkpoint = runtime.prepare_plan(request).checkpoint
+
+        assert type(checkpoint) is PlanRequest
+        assert checkpoint is not request
+        assert type(checkpoint.options) is SyncOptions
+        assert checkpoint.options is not options
+        assert (
+            type(checkpoint.options.destination_policy)
+            is IdentityDestinationPolicy
+        )
+        assert checkpoint.options.destination_policy is not policy
+
+        object.__setattr__(policy, "name", "changed")
+        object.__setattr__(options, "trash_on_update", False)
+        object.__setattr__(request, "request_id", "2" * 32)
+        object.__setattr__(request, "source_path", str(tmp_path / "changed"))
+
+        assert checkpoint.request_id == "1" * 32
+        assert checkpoint.source_path == str(source)
+        assert checkpoint.options.trash_on_update is True
+        assert checkpoint.options.destination_policy == IdentityDestinationPolicy()
+        result = runtime.open_plan(checkpoint).run(
+            RunContext(lambda _event: None, lambda: None)
+        )
+        assert result.status is SessionState.COMPLETED
+    finally:
+        runtime.close()
 
 
 class _PrivatePathFrameValue:
@@ -1181,16 +1286,6 @@ def test_execution_refuses_plan_content_that_no_longer_matches_fingerprint() -> 
     assert "plan content" in saved[0].commitment_error
 
 
-@pytest.mark.parametrize(
-    "with_identity", [True, False], ids=["identity-bearing", "identityless"]
-)
-def test_frozen_execution_v6_payload_is_rejected(
-    with_identity: bool,
-) -> None:
-    with pytest.raises(ValueError, match="unsupported workflow payload schema"):
-        decode_execution_request(frozen_execution(with_identity))
-
-
 def _selection_mismatch_fixture() -> tuple[ExecutionSet, PlanOperation]:
     folder = _operation(1, OperationKind.MKDIR, "folder", source="folder")
     child = _operation(
@@ -1336,6 +1431,9 @@ def test_resumed_execution_settles_selection_mismatch_without_preflight(
             save_execution_details=lambda details: None,
             observer=lambda *args: pytest.fail("preflight observation ran"),
             open_recording=lambda _spec: Recording(),
+            finish_existing_recording=lambda _spec, status, _recording: finished.append(
+                status
+            ),
         ),
         resumed=True,
     )
@@ -1369,12 +1467,12 @@ def _real_cycle(
         options=SyncOptions(propagate_source_casing=True),
     )
     context = RunContext(lambda _: None, lambda: None)
-    plan_result = runtime.open_plan(runtime.prepare_plan(request).payload).run(context)
+    plan_result = runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(context)
     assert plan_result.status is SessionState.COMPLETED
     review = runtime.get_plan_review(request_id)
     execution = runtime.commit_plan(request_id, run_id=run_id, committed_at=NOW)
-    payload = runtime.prepare_execution(execution).payload
-    return review, runtime.open_execution(payload).run(context)
+    checkpoint = runtime.prepare_execution(execution).checkpoint
+    return review, runtime.open_execution(checkpoint).run(context)
 
 
 def test_opt_in_recase_runs_end_to_end_without_copying_or_trashing(

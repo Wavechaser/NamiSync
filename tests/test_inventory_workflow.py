@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import ctypes
 import gc
-import json
 import os
 import stat as stat_module
 from contextlib import nullcontext
@@ -45,7 +44,6 @@ from namisync.core.models import (
     ScanResult,
     ScanScope,
     ScanScopeKind,
-    SCAN_SCOPE_ENTRY_LIMIT,
     ScanWarning,
     ScanWarningCode,
     UnsupportedReason,
@@ -100,10 +98,6 @@ from namisync.workflows.inventory import (
     VolumeResolutionState,
     bind_integrity_request,
     bind_inventory_request,
-    decode_integrity_request,
-    decode_inventory_request,
-    encode_integrity_request,
-    encode_inventory_request,
     resolve_binding,
     run_integrity,
     run_inventory,
@@ -494,37 +488,6 @@ def test_integrity_request_rejects_empty_list_alias() -> None:
             root_path="M:\\managed",
             selected_paths=[],
         )
-
-
-@pytest.mark.parametrize("kind", ("inventory", "integrity"))
-def test_inventory_encoders_revalidate_forged_exact_requests_before_projection(
-    kind: str,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
-    if kind == "inventory":
-        request = InventoryWorkflowRequest("request", binding)
-        object.__setattr__(
-            request,
-            "selected_paths",
-            ("a",) * (SCAN_SCOPE_ENTRY_LIMIT + 1),
-        )
-        encode = encode_inventory_request
-    else:
-        request = IntegrityWorkflowRequest(
-            "request",
-            binding,
-            IntegrityMode.VERIFY,
-        )
-        object.__setattr__(request, "request_id", "r" * 65_537)
-        encode = encode_integrity_request
-
-    def forbidden_json(*_args, **_kwargs):
-        raise AssertionError("forged request must not reach JSON projection")
-
-    monkeypatch.setattr(inventory_workflow, "_json_bytes", forbidden_json)
-    with pytest.raises((IntegrityCandidateLimitError, ValueError)):
-        encode(request)
 
 
 @pytest.mark.parametrize("kind", ("inventory", "integrity"))
@@ -3857,14 +3820,6 @@ def test_stale_integrity_selection_preserves_mode_filtering(
     assert tuple(row.rel_path for row in selected) == (expected_path,)
 
 
-@pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
-@pytest.mark.parametrize("position", ("key", "value"))
-def test_inventory_json_rejects_nested_surrogate_code_units(text: str, position: str) -> None:
-    nested = {text: "scalar"} if position == "key" else {"scalar": text}
-    with pytest.raises(UnicodeEncodeError):
-        inventory_workflow._json_bytes({"nested": [nested]})
-
-
 @pytest.mark.parametrize("kind", ("inventory", "integrity"))
 @pytest.mark.parametrize("text", ("\ud800", "\udcff", "\ud83d\ude00"))
 def test_inventory_workflow_request_rejects_surrogate_code_units(
@@ -3882,131 +3837,45 @@ def test_inventory_workflow_request_rejects_surrogate_code_units(
             )
 
 
-def test_inventory_decode_counts_combined_scope_before_text_projection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    value = {
-        "version": 2,
-        "kind": "inventory",
-        "request_id": "request",
-        "binding": {},
-        "selected_paths": ["a"] * 60_000,
-        "subtree_roots": ["b"] * 60_001,
-    }
-
-    monkeypatch.setattr(
-        inventory_workflow,
-        "_payload",
-        lambda *_args, **_kwargs: value,
+def test_integrity_checkpoint_enforces_recording_relationships() -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    issue = TaskRecordingIssue(
+        TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
+        None,
     )
 
-    def forbidden_string(*_args):
-        raise AssertionError("excess scope must not project text")
-
-    monkeypatch.setattr(inventory_workflow, "_string", forbidden_string)
-    with pytest.raises(ValueError, match="scan-scope item limit"):
-        decode_inventory_request(b"")
-
-
-@pytest.mark.parametrize("kind", ("inventory", "integrity"))
-@pytest.mark.parametrize("text", ("\ud800", "\udcff"))
-@pytest.mark.parametrize("position", ("key", "value"))
-def test_inventory_payload_decoding_rejects_escaped_surrogates(
-    kind: str, text: str, position: str,
-) -> None:
-    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
-    if kind == "inventory":
-        encoded = encode_inventory_request(InventoryWorkflowRequest("request", binding))
-        decode = decode_inventory_request
-    else:
-        encoded = encode_integrity_request(
-            IntegrityWorkflowRequest("request", binding, IntegrityMode.VERIFY)
+    with pytest.raises(ValueError, match="require degraded status"):
+        IntegrityWorkflowRequest(
+            "integrity-recording",
+            binding,
+            IntegrityMode.VERIFY,
+            recording_issues=(issue,),
         )
-        decode = decode_integrity_request
-    value = json.loads(encoded)
-    if position == "key":
-        value["binding"][text] = "unexpected"
-    else:
-        value["request_id"] = text
-    with pytest.raises(ValueError, match="valid Unicode"):
-        decode(json.dumps(value).encode("utf-8"))
-
-
-@pytest.mark.parametrize("kind", ("inventory", "integrity"))
-def test_inventory_payload_preserves_scalar_unicode_and_literal_escapes(kind: str) -> None:
-    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
-    request_id = "caf\u00e9-\U0001f600-" + r"\ud800"
-    if kind == "inventory":
-        request = InventoryWorkflowRequest(request_id, binding)
-        encode, decode = encode_inventory_request, decode_inventory_request
-    else:
-        request = IntegrityWorkflowRequest(request_id, binding, IntegrityMode.VERIFY)
-        encode, decode = encode_integrity_request, decode_integrity_request
-    encoded = encode(request)
-    assert b"caf\xc3\xa9-\xf0\x9f\x98\x80-\\\\ud800" in encoded
-    assert decode(encoded) == request
-    escaped = json.dumps(json.loads(encoded)).encode("utf-8")
-    assert b"\\ud83d\\ude00" in escaped
-    assert decode(escaped) == request
-
-
-def test_inventory_and_integrity_payloads_round_trip_continuation() -> None:
-    binding = LocationBinding(
-        VOLUME_ID,
-        "managed",
-        "M:\\",
-        ("M:\\",),
-        False,
-        7,
-    )
-    inventory = InventoryWorkflowRequest(
-        "inventory-payload",
-        binding,
-        ("Folder/File.txt",),
-    )
-    integrity = IntegrityWorkflowRequest(
-        request_id="integrity-payload",
-        binding=binding,
-        mode=IntegrityMode.REBASELINE,
-        selected_paths=("Folder/File.txt",),
-        stale_before=datetime(2026, 7, 24, tzinfo=timezone.utc),
-        selection_item_ids=("7:11",),
-        completed_bytes=(("7:11", 13),),
-        processed_bytes=13,
-        bytes_total_high_water=17,
-        recording=RecordingStatus.DEGRADED,
-        recording_issues=(
-            TaskRecordingIssue(
-                TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
-                None,
-            ),
-        ),
-        omitted_detail_count=2,
-    )
-
-    encoded_integrity = encode_integrity_request(integrity)
-    integrity_body = json.loads(encoded_integrity)
-
-    assert decode_inventory_request(encode_inventory_request(inventory)) == inventory
-    assert decode_integrity_request(encoded_integrity) == integrity
-    assert integrity_body["version"] == 2
-    assert set(integrity_body) == {
-        "version",
-        "kind",
-        "request_id",
-        "binding",
-        "mode",
-        "selected_paths",
-        "stale_before",
-        "selection_item_ids",
-        "completed_bytes",
-        "processed_bytes",
-        "bytes_total_high_water",
-        "recording",
-        "recording_issues",
-        "omitted_detail_count",
-        "refresh_generation",
-    }
+    with pytest.raises(ValueError, match="reasons must be unique"):
+        IntegrityWorkflowRequest(
+            "integrity-recording",
+            binding,
+            IntegrityMode.VERIFY,
+            recording=RecordingStatus.DEGRADED,
+            recording_issues=(issue, issue),
+        )
+    for recording in (1, "unknown", None, IntegrityMode.VERIFY):
+        with pytest.raises(TypeError, match="recording status"):
+            IntegrityWorkflowRequest(
+                "integrity-recording",
+                binding,
+                IntegrityMode.VERIFY,
+                recording=recording,  # type: ignore[arg-type]
+            )
+    for recording_issues in ([issue], (object(),), (None,)):
+        with pytest.raises(TypeError, match="recording issues"):
+            IntegrityWorkflowRequest(
+                "integrity-recording",
+                binding,
+                IntegrityMode.VERIFY,
+                recording=RecordingStatus.DEGRADED,
+                recording_issues=recording_issues,  # type: ignore[arg-type]
+            )
 
 
 @pytest.mark.parametrize(
@@ -4042,6 +3911,31 @@ def test_integrity_request_rejects_boolean_counters(
         IntegrityWorkflowRequest(**fields)  # type: ignore[arg-type]
 
 
+def test_integrity_request_rejects_non_integer_counter_types() -> None:
+    binding = LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7)
+    for invalid in (1.5, "1", None):
+        for field in (
+            "completed_bytes",
+            "processed_bytes",
+            "bytes_total_high_water",
+            "omitted_detail_count",
+            "refresh_generation",
+        ):
+            fields: dict[str, object] = {
+                "request_id": "integrity-counter-type",
+                "binding": binding,
+                "mode": IntegrityMode.VERIFY,
+                "selection_item_ids": ("7:11",),
+            }
+            fields[field] = (
+                (("7:11", invalid),)
+                if field == "completed_bytes"
+                else invalid
+            )
+            with pytest.raises(TypeError):
+                IntegrityWorkflowRequest(**fields)  # type: ignore[arg-type]
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -4075,190 +3969,6 @@ def test_integrity_request_rejects_out_of_domain_counters(
         IntegrityWorkflowRequest(**fields)  # type: ignore[arg-type]
 
 
-def test_inventory_and_integrity_codecs_reject_coercive_or_ambiguous_json() -> None:
-    binding = LocationBinding(
-        VOLUME_ID,
-        "managed",
-        "M:\\",
-        ("M:\\",),
-        False,
-        7,
-    )
-    inventory = InventoryWorkflowRequest(
-        "inventory-strict",
-        binding,
-        ("Folder/File.txt",),
-    )
-    integrity = IntegrityWorkflowRequest(
-        request_id="integrity-strict",
-        binding=binding,
-        mode=IntegrityMode.VERIFY,
-        selection_item_ids=("7:11",),
-        completed_bytes=(("7:11", 13),),
-        processed_bytes=13,
-        bytes_total_high_water=13,
-    )
-
-    invalid_inventory = json.loads(encode_inventory_request(inventory))
-    invalid_inventory["request_id"] = 7
-    with pytest.raises(ValueError):
-        decode_inventory_request(
-            json.dumps(invalid_inventory, separators=(",", ":")).encode()
-        )
-
-    invalid_inventory = json.loads(encode_inventory_request(inventory))
-    invalid_inventory["binding"]["location_id"] = True
-    with pytest.raises(ValueError):
-        decode_inventory_request(
-            json.dumps(invalid_inventory, separators=(",", ":")).encode()
-        )
-
-    invalid_inventory = json.loads(encode_inventory_request(inventory))
-    invalid_inventory["unknown"] = "field"
-    with pytest.raises(ValueError):
-        decode_inventory_request(
-            json.dumps(invalid_inventory, separators=(",", ":")).encode()
-        )
-
-    duplicate_kind = (
-        encode_inventory_request(inventory)
-        .decode("utf-8")
-        .replace(
-            '"kind":"inventory"',
-            '"kind":"inventory","kind":"inventory"',
-        )
-    )
-    with pytest.raises(ValueError, match="duplicate"):
-        decode_inventory_request(duplicate_kind.encode("utf-8"))
-
-    invalid_integrity = json.loads(encode_integrity_request(integrity))
-    invalid_integrity["processed_bytes"] = 13.0
-    with pytest.raises(ValueError):
-        decode_integrity_request(
-            json.dumps(invalid_integrity, separators=(",", ":")).encode()
-        )
-
-    invalid_integrity = json.loads(encode_integrity_request(integrity))
-    invalid_integrity["completed_bytes"] = [["7:11", "13"]]
-    with pytest.raises(ValueError):
-        decode_integrity_request(
-            json.dumps(invalid_integrity, separators=(",", ":")).encode()
-        )
-
-
-@pytest.mark.parametrize(
-    "field, value",
-    [
-        ("bytes_total_high_water", 13.0),
-        ("bytes_total_high_water", "13"),
-        ("bytes_total_high_water", True),
-        ("bytes_total_high_water", None),
-        ("recording", 1),
-        ("recording", "unknown"),
-        ("omitted_detail_count", -1),
-        ("omitted_detail_count", MAX_SAFE_INTEGER + 1),
-        ("processed_bytes", MAX_SIGNED_64 + 1),
-    ],
-)
-def test_integrity_v2_codec_rejects_invalid_authority_scalars(
-    field: str,
-    value: object,
-) -> None:
-    request = IntegrityWorkflowRequest(
-        request_id="integrity-v2-scalars",
-        binding=LocationBinding(
-            VOLUME_ID,
-            "managed",
-            "M:\\",
-            ("M:\\",),
-            False,
-            7,
-        ),
-        mode=IntegrityMode.VERIFY,
-        selection_item_ids=("7:11",),
-        processed_bytes=13,
-        bytes_total_high_water=17,
-        recording=RecordingStatus.DEGRADED,
-        refresh_generation=1,
-    )
-    body = json.loads(encode_integrity_request(request))
-    body[field] = value
-
-    with pytest.raises((TypeError, ValueError)):
-        decode_integrity_request(
-            json.dumps(body, separators=(",", ":")).encode()
-        )
-
-
-def test_integrity_v2_codec_requires_exact_authority_shape() -> None:
-    request = IntegrityWorkflowRequest(
-        request_id="integrity-v2-shape",
-        binding=LocationBinding(
-            VOLUME_ID,
-            "managed",
-            "M:\\",
-            ("M:\\",),
-            False,
-            7,
-        ),
-        mode=IntegrityMode.VERIFY,
-        selection_item_ids=("7:11",),
-        processed_bytes=13,
-        bytes_total_high_water=17,
-        recording=RecordingStatus.DEGRADED,
-        refresh_generation=1,
-    )
-    encoded = encode_integrity_request(request)
-
-    for missing in (
-        "bytes_total_high_water",
-        "recording",
-        "omitted_detail_count",
-    ):
-        body = json.loads(encoded)
-        del body[missing]
-        with pytest.raises(ValueError, match="missing or unknown"):
-            decode_integrity_request(
-                json.dumps(body, separators=(",", ":")).encode()
-            )
-
-    body = json.loads(encoded)
-    body["unknown"] = 1
-    with pytest.raises(ValueError, match="missing or unknown"):
-        decode_integrity_request(
-            json.dumps(body, separators=(",", ":")).encode()
-        )
-
-    body = json.loads(encoded)
-    body["version"] = 1
-    with pytest.raises(ValueError, match="unsupported"):
-        decode_integrity_request(
-            json.dumps(body, separators=(",", ":")).encode()
-        )
-
-    body = json.loads(encoded)
-    body["bytes_total_high_water"] = 12
-    with pytest.raises(ValueError, match="cannot trail processed"):
-        decode_integrity_request(
-            json.dumps(body, separators=(",", ":")).encode()
-        )
-
-    body = json.loads(
-        encode_integrity_request(
-            IntegrityWorkflowRequest(
-                request_id="integrity-v2-no-selection",
-                binding=request.binding,
-                mode=IntegrityMode.VERIFY,
-            )
-        )
-    )
-    body["bytes_total_high_water"] = 1
-    with pytest.raises(ValueError, match="saved admitted selection"):
-        decode_integrity_request(
-            json.dumps(body, separators=(",", ":")).encode()
-        )
-
-
 def test_integrity_continuation_rejects_progress_without_saved_selection() -> None:
     binding = LocationBinding(
         VOLUME_ID,
@@ -4283,6 +3993,15 @@ def test_integrity_continuation_rejects_progress_without_saved_selection() -> No
             completed_bytes=(("7:11", 1),),
             processed_bytes=1,
         )
+    with pytest.raises(ValueError, match="cannot trail processed"):
+        IntegrityWorkflowRequest(
+            request_id="integrity-trailing-high-water",
+            binding=binding,
+            mode=IntegrityMode.VERIFY,
+            selection_item_ids=("7:11",),
+            processed_bytes=13,
+            bytes_total_high_water=12,
+        )
     with pytest.raises(ValueError, match="belong to the saved selection"):
         IntegrityWorkflowRequest(
             request_id="integrity-wrong-completed",
@@ -4299,229 +4018,4 @@ def test_integrity_continuation_rejects_progress_without_saved_selection() -> No
         mode=IntegrityMode.VERIFY,
         refresh_generation=1,
     )
-    assert decode_integrity_request(encode_integrity_request(valid)) == valid
-
-
-def test_integrity_codec_rejects_progress_without_saved_selection() -> None:
-    binding = LocationBinding(
-        VOLUME_ID,
-        "managed",
-        "M:\\",
-        ("M:\\",),
-        False,
-        7,
-    )
-    payload = json.loads(
-        encode_integrity_request(
-            IntegrityWorkflowRequest(
-                request_id="integrity-codec",
-                binding=binding,
-                mode=IntegrityMode.VERIFY,
-            )
-        )
-    )
-    payload["processed_bytes"] = 1
-
-    with pytest.raises(ValueError, match="saved admitted selection"):
-        decode_integrity_request(
-            json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        )
-
-    payload["completed_bytes"] = [["7:11", 1]]
-    with pytest.raises(ValueError, match="belong to the saved selection"):
-        decode_integrity_request(
-            json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        )
-
-
-@pytest.mark.parametrize(
-    ("payload_request", "encoder", "decoder", "limit_name"),
-    (
-        (
-            InventoryWorkflowRequest(
-                "bounded-inventory",
-                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
-            ),
-            encode_inventory_request,
-            decode_inventory_request,
-            "INVENTORY_PAYLOAD_BYTE_LIMIT",
-        ),
-        (
-            IntegrityWorkflowRequest(
-                "bounded-integrity",
-                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
-                IntegrityMode.VERIFY,
-            ),
-            encode_integrity_request,
-            decode_integrity_request,
-            "INTEGRITY_PAYLOAD_BYTE_LIMIT",
-        ),
-    ),
-)
-def test_inventory_codec_raw_ceiling_precedes_decode_and_json_parse(
-    monkeypatch: pytest.MonkeyPatch,
-    payload_request: object,
-    encoder,
-    decoder,
-    limit_name: str,
-) -> None:
-    payload = encoder(payload_request)
-    monkeypatch.setattr(inventory_workflow, limit_name, len(payload))
-
-    assert decoder(payload) == payload_request
-
-    def forbidden_loads(*_args, **_kwargs):
-        raise AssertionError("oversize payload reached json.loads")
-
-    monkeypatch.setattr(inventory_workflow.json, "loads", forbidden_loads)
-    with pytest.raises(ValueError, match="byte ceiling"):
-        decoder(payload + b" ")
-    with pytest.raises(TypeError, match="exact bytes"):
-        decoder(bytearray(payload))
-
-
-@pytest.mark.parametrize(
-    ("payload_request", "encoder", "charge_name", "limit_name"),
-    (
-        (
-            InventoryWorkflowRequest(
-                "bounded-inventory",
-                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
-            ),
-            encode_inventory_request,
-            "_charge_inventory_workflow_request",
-            "_INVENTORY_MAX_OCCURRENCE_CHARGE",
-        ),
-        (
-            IntegrityWorkflowRequest(
-                "bounded-integrity",
-                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
-                IntegrityMode.VERIFY,
-            ),
-            encode_integrity_request,
-            "_charge_integrity_workflow_request",
-            "_INTEGRITY_MAX_OCCURRENCE_CHARGE",
-        ),
-    ),
-)
-def test_inventory_codec_occurrence_ceiling_precedes_projection_without_mutation(
-    monkeypatch: pytest.MonkeyPatch,
-    payload_request: object,
-    encoder,
-    charge_name: str,
-    limit_name: str,
-) -> None:
-    charge = getattr(inventory_workflow, charge_name)(payload_request).occurrence_charge
-    monkeypatch.setattr(inventory_workflow, limit_name, charge)
-    encoder(payload_request)
-    monkeypatch.setattr(inventory_workflow, limit_name, charge - 1)
-
-    def forbidden_projection(*_args, **_kwargs):
-        raise AssertionError("over-budget request reached projection")
-
-    monkeypatch.setattr(inventory_workflow, "_binding_dict", forbidden_projection)
-    with pytest.raises(ValueError, match="occurrence bound"):
-        encoder(payload_request)
-
-
-def test_inventory_preprojection_rejects_combined_scope_n_plus_one(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request = InventoryWorkflowRequest(
-        "inventory-scope",
-        LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
-    )
-    object.__setattr__(request, "selected_paths", ("a",) * 60_000)
-    object.__setattr__(request, "subtree_roots", ("b",) * 60_001)
-
-    def forbidden_projection(*_args, **_kwargs):
-        raise AssertionError("oversize scope reached projection")
-
-    monkeypatch.setattr(inventory_workflow, "_binding_dict", forbidden_projection)
-    with pytest.raises(ValueError, match="scan-scope item limit"):
-        encode_inventory_request(request)
-    assert len(request.selected_paths) + len(request.subtree_roots) == 120_001
-
-
-def test_integrity_preprojection_rejects_population_n_plus_one(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request = IntegrityWorkflowRequest(
-        "integrity-selection",
-        LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
-        IntegrityMode.VERIFY,
-    )
-    object.__setattr__(
-        request,
-        "selection_item_ids",
-        ("1:a",) * (INTEGRITY_CANDIDATE_ROW_LIMIT + 1),
-    )
-
-    def forbidden_projection(*_args, **_kwargs):
-        raise AssertionError("oversize selection reached projection")
-
-    monkeypatch.setattr(inventory_workflow, "_binding_dict", forbidden_projection)
-    with pytest.raises(ValueError, match="selection_item_ids exceeds"):
-        encode_integrity_request(request)
-    assert len(request.selection_item_ids) == INTEGRITY_CANDIDATE_ROW_LIMIT + 1
-
-
-def test_inventory_preprojection_readmits_nested_volume_text(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request = InventoryWorkflowRequest(
-        "inventory-volume",
-        LocationBinding(
-            VolumeId("forged-volume", "NTFS"),
-            "managed",
-            "M:\\",
-            ("M:\\",),
-            False,
-            7,
-        ),
-    )
-    object.__setattr__(request.binding.volume_id, "serial", "v" * 261)
-
-    def forbidden_projection(*_args, **_kwargs):
-        raise AssertionError("invalid binding reached projection")
-
-    monkeypatch.setattr(inventory_workflow, "_binding_dict", forbidden_projection)
-    with pytest.raises(ValueError, match="UTF-16 text bound"):
-        encode_inventory_request(request)
-    assert request.binding.volume_id.serial == "v" * 261
-
-
-@pytest.mark.parametrize(
-    ("payload_request", "encoder"),
-    (
-        (
-            InventoryWorkflowRequest(
-                "stable-inventory",
-                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
-            ),
-            encode_inventory_request,
-        ),
-        (
-            IntegrityWorkflowRequest(
-                "stable-integrity",
-                LocationBinding(VOLUME_ID, "managed", "M:\\", ("M:\\",), False, 7),
-                IntegrityMode.VERIFY,
-            ),
-            encode_integrity_request,
-        ),
-    ),
-)
-def test_inventory_codec_rechecks_exact_final_byte_length(
-    monkeypatch: pytest.MonkeyPatch,
-    payload_request: object,
-    encoder,
-) -> None:
-    original_json_bytes = inventory_workflow._json_bytes
-    monkeypatch.setattr(
-        inventory_workflow,
-        "_json_bytes",
-        lambda value: original_json_bytes(value) + b" ",
-    )
-
-    with pytest.raises(RuntimeError, match="changed after JSON admission"):
-        encoder(payload_request)
+    assert valid.refresh_generation == 1

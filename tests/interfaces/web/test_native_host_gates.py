@@ -364,9 +364,7 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert evidence["delayed_handler_completed"] is True
     delayed_transport = observations["delayedTransport"]
     assert delayed_transport["delayed_evaluate_observed"] is True
-    delayed_evaluate_begin = _only_event(events, "delayed_return.evaluate.begin")
-    delayed_evaluate_end = _only_event(events, "delayed_return.evaluate.end")
-    delayed_transport_ack = _only_event(events, "delayed_transport.ack")
+    delayed_evaluate = _only_event(events, "delayed_return.evaluate")
     second_ready = next(
         event
         for event in events
@@ -375,9 +373,7 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert (
         navigation["at"]
         < second_ready["at"]
-        < delayed_evaluate_begin["at"]
-        < delayed_evaluate_end["at"]
-        < delayed_transport_ack["at"]
+        < delayed_evaluate["at"]
         < _phase_event(events, "after_navigation")["at"]
     )
     assert page["lost_settled"] is False

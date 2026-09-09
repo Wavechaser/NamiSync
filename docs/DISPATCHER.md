@@ -17,8 +17,8 @@ dispatcher; any implementation of that target must preserve this boundary.
 ## Purpose
 
 Dispatcher admits, schedules, controls, and observes generic sessions. It knows
-session ids, states, required resources, opaque workflow kind/request/result
-payloads, and event delivery classes. It does not know what sync, verify,
+session ids, states, required resources, opaque workflow kind/request/checkpoint/
+result values, and event delivery classes. It does not know what sync, verify,
 baseline, import, or ingest means and never imports modules, database, or
 workflows.
 
@@ -37,12 +37,22 @@ shutdown(timeout) -> ShutdownResult
 ```
 
 An injected registry maps opaque kind to a generic callable/capability adapter.
-`prepare(request)` returns opaque bytes plus a set of generic `ResourceId`
-values. `open(payload)` belongs to the adapter and returns a fresh invocation
-with `run(ctx)` and `snapshot()` methods. The dispatcher calls those methods but
-never decodes, reflects over, or otherwise interprets the payload. Reopening the
+Each registration must make `prepare(request)` return a semantic checkpoint
+detached from request- and workflow-owned mutable state plus a set of generic
+`ResourceId` values. `snapshot()` has the same detachment obligation after a
+cooperative pause. `open(checkpoint)` belongs to the adapter, treats the retained
+checkpoint as read-only, and materializes a fresh invocation with `run(ctx)` and
+`snapshot()` methods. `settle_canceled`, when present, likewise treats the
+checkpoint as read-only. The dispatcher calls those methods but never reflects
+over or otherwise interprets or certifies the checkpoint. Reopening the
 invocation on every resume is the generic seam through which the owning workflow
 runs its fresh guard.
+
+This is a mandatory workflow-registration contract. Each workflow's checkpoint
+constructor establishes detachment, and public ownership tests prove it.
+Detachment is a construction property: there is no
+`WorkflowCheckpointAuthority`, `adopt_checkpoint()`, generic freezer,
+certification flag, or dispatcher domain check.
 
 The optional domain-blind admission `attach` callback receives only a newly
 allocated session id and preopened `EventStream`, and returns an idempotent
@@ -84,18 +94,18 @@ may complete independently; task detachment occurs only after observer and
 detail owners are both absent. The initiating submit exception remains the
 public failure throughout.
 
-The desktop task owner-claim, binding, lease, epoch, and release protocol is an
-interface obligation specified by [M1_BRIDGE.md](M1_BRIDGE.md); it uses the
+The implemented desktop task association and release protocol is an
+interface obligation specified by [INTERFACES.md](INTERFACES.md); it uses the
 existing transactional `attach` seam and does not expand dispatcher policy.
 Dispatcher retains the full opaque `OperationResult` until explicit session
 close, but neither builds the bridge summary nor serializes result items to
 JavaScript.
 
 One optional registration callback,
-`settle_canceled(payload, disposition) -> OperationResult`, handles cancellation
+`settle_canceled(checkpoint, disposition) -> OperationResult`, handles cancellation
 of work that already has a start time but will not re-enter its normal
 invocation (paused work and resume→pending cancellation races). Dispatcher
-passes the opaque payload and generic disposition only, validates that the
+passes the opaque checkpoint and generic disposition only, validates that the
 returned result projects to lifecycle `CANCELED`, then follows the ordinary
 audit/Terminal/custody path. Registrations without the callback retain the
 generic canceled result. A callback failure is an explicit adapter failure and
@@ -138,7 +148,7 @@ results and emit only nonterminal events through `RunContext`; dispatcher owns
 custody around the runner and releases it in every exit path.
 
 Failures raised before invocation entry by lock acquisition, continuation open,
-or retained-payload cancellation settlement are projected to fixed terminal or
+or retained-checkpoint cancellation settlement are projected to fixed terminal or
 control truth before the core runner is called. Dispatcher clears the caught
 exception's traceback, cause, and context after bounded diagnostic projection,
 so the runner closure and terminal store cannot retain collaborator frames or
@@ -149,10 +159,18 @@ worker retry behavior remain unchanged.
 Each process-local runner attempt has a monotonically increasing private
 generation key. A session has at most one current generation; every resource
 reservation and acquired lease is owned by that exact key, and state/result/
-payload callbacks reject stale keys. Generations never enter public records,
-payloads, stores, or databases. This keeps the public lifecycle unchanged while
+checkpoint callbacks reject stale keys. Generations never enter public records,
+checkpoints, stores, or databases. This keeps the public lifecycle unchanged while
 preventing a retiring pause/cancel attempt from settling twice or releasing a
 resumed successor's custody.
+
+Per-session custody remains in explicit parallel dictionaries whose mutations
+occur under the dispatcher condition; scheduler-wide order, reservation, lease,
+worker, and generation state stays separate. A disposable session-entry
+aggregate added translation and retention surface without proving stronger lock
+safety, so production deliberately retains the parallel maps. Any later
+aggregation must prove condition ownership at the mutators and prevent mutable
+entry references from escaping.
 
 Pause is accepted only when the registered kind declares a continuation:
 execution in M0 and verify/baseline item-list sessions in M1. Scan and plan
@@ -180,25 +198,25 @@ paused continuation.
 M0 preserves the adapter's opaque continuation by calling `snapshot()` after a
 pause unwind and before releasing custody or publishing `PAUSED`. This includes
 a pause observed at the runner's entry checkpoint before `invocation.run()`;
-the admitted invocation still establishes and serializes its resumable
+the admitted invocation still establishes its detached resumable
 continuation before the dispatcher reports `PAUSED`. Reliable item outcomes are
 accumulated by session across attempts, so a pause followed by a later cancel or
 failure retains outcomes earned before the pause without asking the workflow to
 emit them twice. If cancel reaches a resumed attempt's RUNNING checkpoint before
-`invocation.run()`, dispatcher uses the registration's retained-payload
+`invocation.run()`, dispatcher uses the registration's retained-checkpoint
 cancellation settlement before publishing the terminal; it cannot substitute a
 generic canceled result that strands workflow custody.
 
-`SessionRecord.payload: bytes | None` is process-local opaque continuation
+`SessionRecord.checkpoint: object | None` is process-local opaque continuation
 state only while nonterminal. Every edge into `COMPLETED`, `FAILED`, `CANCELED`,
-or `REFUSED` atomically clears the current live record's payload before
+or `REFUSED` atomically clears the current live record's checkpoint before
 publishing the terminal state; the state-before-result settlement record and
-the later record with its result are both payload-free. Dispatcher does not
-inspect or decode the bytes. It may pass them to a registered cancellation
+the later record with its result are both checkpoint-free. Dispatcher does not
+inspect the value. It may pass it to a registered cancellation
 settler before the transition. Ordinary return/failure, cooperative cancel,
 queued discard, workflow refusal, paused cancellation, and resume-to-pending
 cancellation all retain this live-record invariant. Separately, admission and
-every later store write project metadata without any payload field. A store
+every later store write project metadata without any checkpoint field. A store
 that accepts one of these values and rejects an update can retain stale
 metadata, not that session's continuation. This is not a claim that all earlier
 Python references have been erased.
@@ -213,7 +231,7 @@ reacquires and revalidates volumes.
 Scheduler selection installs the current generation, its worker registration,
 and all reservations atomically before removing the pending entry or starting
 the thread. The selection loop releases its temporary record reference before
-launching or waiting, so an idle scheduler cannot retain an earlier payload
+launching or waiting, so an idle scheduler cannot retain an earlier checkpoint
 after the session closes. `CANCELING` never creates a second worker while an
 acquisition or pause generation is current. Worker retirement identity-checks
 again under the session publication lock and enqueues any surviving
@@ -280,14 +298,17 @@ that gap, so the leading `Gap` occupies a slot inside the bound: a new stream
 never starts with more buffered envelopes than its capacity.
 
 Core event v5 is active under the coordinated cutover defined by
-[M1_BRIDGE.md](M1_BRIDGE.md). Dispatcher accepts only that exact event version;
-it does not version-dispatch a mixed live stream. The core projector
-validates, deeply copies, and size-checks one immutable emitter-owned snapshot
-before sequence, replay, history, or subscriber publication. All consumers see
-that same snapshot, and every schema-valid queue head remains drainable under
-the independent bridge response bound. Exact event fields, scalar domains,
-path/detail limits, omission witnesses, and byte ceilings remain centralized in
-the bridge and defense authorities.
+[BRIDGE.md](BRIDGE.md). Dispatcher accepts only that exact event version;
+it does not version-dispatch a mixed live stream. The hub wraps one supported
+emitter-owned domain value in an envelope, then `canonical_event_bytes`
+projects it and enforces the reliable byte wall before sequence, replay,
+history, or subscriber publication. All consumers see that same envelope, and
+every admitted queue head remains drainable under the independent bridge
+response bound. Supported producers own live body semantics; one retained
+history-boundary validator checks the exact projected contract at admission
+and decode/readback. Dispatcher does not recertify either. Exact event fields,
+scalar domains, path/detail limits, omission witnesses, and byte ceilings
+remain centralized in the core, bridge, and defense authorities.
 
 That full initial buffer is deliberate for now. No finite number of reserved
 slots is a contract-derived burst tolerance: a workflow can emit an arbitrarily
@@ -398,13 +419,16 @@ join allowance.
 ## Session Store
 
 `SessionStore` accepts exact `StoredSessionRecord` values: a separate frozen,
-slotted core metadata/result contract with neither a payload field nor a
+slotted core metadata/result contract with neither a checkpoint field nor a
 live-record backreference. Its exact shape lives in `core/session.py`.
-Dispatcher explicitly projects that value before admission's `put()` and every
-later `put()`, including pause snapshots and the terminal record before audit
-finalization supplies its result. This does not weaken `SessionRecord`:
-nonterminal live records still require opaque bytes, and terminal live records
-require null. The projection retains the full `OperationResult` by identity,
+Live `SessionRecord` composes that exact stored value with its opaque checkpoint.
+Dispatcher constructs both once at admission, replaces the contained stored
+value for metadata/result transitions, reuses it for checkpoint-only changes,
+and passes `record.stored` itself to every `put()`, including pause snapshots
+and the terminal record before audit finalization supplies its result. This does
+not weaken `SessionRecord`: nonterminal live records still require an opaque
+checkpoint, and terminal live records require null. Composition retains the
+full `OperationResult` by identity,
 including independent filesystem/recording/audit/cancellation axes, item and
 phase detail, errors, recording issues, omission counts, and review-limit
 witnesses; it does not substitute a terminal summary. `result=None` remains
@@ -437,10 +461,10 @@ M2 restart recovery is not enabled by swapping in a SQLite metadata store.
 It requires a separately designed protected continuation/recovery-store
 contract, explicit recovery and retention rules, unique durable queue ownership,
 and fresh workflow authority/custody reconciliation before pending re-admission
-or `RUNNING`→`INTERRUPTED` recovery. The current execution-v7 continuation and
-its transient attestations are not a durable recovery format. Exact active
-continuation and event/database versions remain owned by
-[M1_BRIDGE.md](M1_BRIDGE.md); none changes for this metadata boundary.
+or `RUNNING`→`INTERRUPTED` recovery. The current process-local semantic
+checkpoint and its transient attestations are not a durable recovery format.
+Exact active event/database versions remain owned by
+[BRIDGE.md](BRIDGE.md); none changes for this metadata boundary.
 
 ### Stored-record retention classification
 
@@ -453,20 +477,23 @@ follows, separately from transport-memory measurement authority:
   each session id to its latest accepted stored wrapper; replacement retires
   that mapping's previous value, and successful close drops it. No new
   retained-session-count or byte ceiling is claimed.
-- `resources` shares the live record's immutable sorted resource tuple.
+- `resources` is the live record's immutable sorted resource tuple because the
+  live record contains the exact stored value.
   `result` is null or shares the existing full result graph by identity, without
   a second detail graph. Its result contract is unchanged.
-- Continuation bytes and a live-record backreference are structurally absent.
-  The separate `Dispatcher._records` map remains the live continuation owner;
-  its representation has not changed.
+- Workflow checkpoints and a live-record backreference are structurally absent.
+  The separate `Dispatcher._records` map remains the owner of live wrappers and
+  their checkpoints.
 
 The stored wrappers and store table are outside the frozen SH-G-8 transport roots
 (replay, subscribers, and adapter queues); their validators, corpus, and byte
 ceiling are unchanged. Field-shape and fault tests establish the store handoff
 contract, not a total-memory reduction or a new measured acceptance ceiling.
 The shared full result remains a subject-scaled terminal artifact, separately
-observed through live dispatcher result roots. The terminal-artifact and whole-
-runtime gates (BR-G-45 and SH-G-15) remain open; this change claims neither bound.
+observed through live dispatcher result roots. The former BR-G-45 aggregate
+terminal-artifact model is retired and supplies no active bound. SH-G-15 scoped resource
+and leak/growth acceptance remains open; this change claims neither a replacement
+aggregate bound nor whole-runtime containment.
 Contained store-write and custody-release failures retain only separate sticky
 Boolean failure markers. The dispatcher does not retain the exception, its
 arguments, attributes, cause, context, or traceback: any of those can keep an
@@ -485,7 +512,9 @@ keeping the existing failed-prefix audit behavior without retaining factory
 frames.
 Caller-owned exceptions and audit observers
 may still reference earlier records; this boundary does not promise
-whole-process or secure-memory erasure. BR-G-45 remains open.
+whole-process or secure-memory erasure. Any future task-surface aggregate-
+retention contract requires a new finite register rather than revival of the
+retired BR-G-45 model.
 
 Dispatcher construction occurs before any desktop task exists. An
 unsuccessful scheduler-thread construction and an independently injected second
@@ -494,7 +523,7 @@ caller or thread hook; they are not retained task artifacts and this boundary
 does not convert them into synthetic lifecycle truth.
 
 Queued execution carries the exact core `Commitment` defined by
-[M1_BRIDGE.md](M1_BRIDGE.md). Workflow admission validates it and freshly
+[BRIDGE.md](BRIDGE.md). Workflow admission validates it and freshly
 preflights; dispatcher neither reconstructs nor reinterprets the commitment.
 Replanning after wakeup produces a material-difference review; it is not a
 silent replacement.
@@ -528,7 +557,7 @@ until its owning worker acknowledges control and retires.
 - Core owns states, events, context, store protocol, and generic records.
 - Composition root provides registry, lock provider, clock, store, and event
   capacity policy.
-- Workflows declare resources and deserialize their own opaque request.
+- Workflows declare resources and materialize their own opaque checkpoint.
 - Interfaces only call this public contract and subscribe. Their task registry
   may serialize sessions and retain presentation artifacts, but it does not
   manage a second domain session lifecycle.

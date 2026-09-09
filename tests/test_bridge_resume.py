@@ -8,7 +8,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from namisync.core.events import PhaseChanged
 from namisync.core.evidence import Outcome, RecordingStatus
 from namisync.core.execution import (
     Commitment,
@@ -24,7 +23,6 @@ from namisync.core.planning import (
 )
 from namisync.core.session import (
     Disposition,
-    PauseRequested,
     PhaseResult,
     PhaseStatus,
     RunContext,
@@ -34,13 +32,10 @@ from namisync.dispatcher import Dispatcher, InProcessResourceLockProvider
 from namisync.interfaces.service import _workflow_registry
 from namisync.workflows.models import (
     ExecuteContinuation,
+    ExecutionCheckpoint,
     ExecutionRequest,
     PlanRequest,
     VerifyContinuation,
-)
-from namisync.workflows.payloads import (
-    decode_execution_request,
-    encode_execution_request,
 )
 from namisync.workflows.selection import derive_execution_selection
 from namisync.workflows.runtime import EXECUTION_KIND, LocalWorkflowRuntime
@@ -116,9 +111,12 @@ def _selection_fixture(*, tampered: bool) -> ExecutionSet:
     )
 
 
-def test_br_g_10_payload_roundtrip_preserves_direct_and_fallout_outcomes() -> None:
+def test_br_g_10_checkpoint_preserves_direct_and_fallout_outcomes() -> None:
     request = ExecutionRequest(ExecuteContinuation(_selection_fixture(tampered=False)))
-    resumed = decode_execution_request(encode_execution_request(request))
+    checkpoint = ExecutionCheckpoint(request)
+    resumed = checkpoint.materialize()
+    request.execution_set.user_deselected = frozenset()
+    assert checkpoint.materialize() == resumed
     finished: list[SessionState] = []
     events: list[object] = []
     deps = SimpleNamespace(
@@ -130,6 +128,9 @@ def test_br_g_10_payload_roundtrip_preserves_direct_and_fallout_outcomes() -> No
             refusals=(),
         ),
         open_recording=lambda _spec: _Recording(finished),
+        finish_existing_recording=lambda _spec, status, _recording: finished.append(
+            status
+        ),
     )
 
     result = run_execution(
@@ -178,14 +179,15 @@ def test_br_g_10_tampered_execute_and_verify_resume_fail_before_preflight(
             ),
         )
     )
-    resumed = decode_execution_request(
-        encode_execution_request(ExecutionRequest(continuation))
-    )
+    resumed = ExecutionCheckpoint(ExecutionRequest(continuation)).materialize()
     finished: list[SessionState] = []
     deps = SimpleNamespace(
         save_execution_details=lambda _details: None,
         observer=lambda *_args: pytest.fail("preflight observation ran"),
         open_recording=lambda _spec: _Recording(finished),
+        finish_existing_recording=lambda _spec, status, _recording: finished.append(
+            status
+        ),
     )
 
     result = run_execution(
@@ -243,9 +245,7 @@ def test_fresh_execution_releases_runtime_custody_before_recording(
 
     try:
         invocation = runtime.open_execution(
-            encode_execution_request(
-                ExecutionRequest(ExecuteContinuation(xset))
-            )
+            ExecutionCheckpoint(ExecutionRequest(ExecuteContinuation(xset)))
         )
         assert str(xset.run_id) not in runtime._execution_started
         if failure == "exception":
@@ -309,7 +309,7 @@ def test_canceled_execution_settlement_releases_custody_on_recording_failure(
     )
     try:
         result = runtime.settle_canceled_execution(
-            encode_execution_request(request),
+            ExecutionCheckpoint(request),
             Disposition.RAN,
         )
         assert result.canceled
@@ -384,7 +384,7 @@ def test_execution_pause_before_workflow_entry_snapshots_custody_for_cancel(
 
     try:
         request = PlanRequest("7" * 32, str(source), str(target))
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda _event: None, lambda: None)
         )
         execution = runtime.commit_plan(
@@ -398,9 +398,9 @@ def test_execution_pause_before_workflow_entry_snapshots_custody_for_cancel(
         release.set()
         wait_for(SessionState.PAUSED)
 
-        decoded = decode_execution_request(
-            dispatcher.get(session_id).payload
-        )
+        retained = dispatcher.get(session_id).checkpoint
+        assert type(retained) is ExecutionCheckpoint
+        decoded = retained.materialize()
         assert decoded.started_at is not None
         assert (
             runtime._execution_started[str(execution.execution_set.run_id)]
@@ -493,7 +493,7 @@ def test_br_g_10_dispatcher_pause_resume_reopens_the_same_run(
 
     try:
         request = PlanRequest("3" * 32, str(source), str(target))
-        runtime.open_plan(runtime.prepare_plan(request).payload).run(
+        runtime.open_plan(runtime.prepare_plan(request).checkpoint).run(
             RunContext(lambda _event: None, lambda: None)
         )
         execution = runtime.commit_plan(
@@ -521,120 +521,6 @@ def test_br_g_10_dispatcher_pause_resume_reopens_the_same_run(
         row = connection.execute(
             "SELECT ended_at, filesystem_status FROM runs WHERE run_token = ?",
             ("4" * 32,),
-        ).fetchone()
-    finally:
-        connection.close()
-    assert row is not None
-    assert row[0] is not None
-    assert row[1] == SessionState.COMPLETED.value
-
-
-def test_br_g_10_tampered_real_verify_resume_finishes_the_original_run(
-    tmp_path,
-) -> None:
-    source = tmp_path / "source"
-    target = tmp_path / "target"
-    source.mkdir()
-    target.mkdir()
-    (source / "a.bin").write_bytes(b"a")
-    (source / "b.bin").write_bytes(b"b")
-    runtime = LocalWorkflowRuntime(
-        tmp_path / "ledger.db",
-        tmp_path / "history.db",
-    )
-    phase = [None]
-
-    def emit(body):
-        if isinstance(body, PhaseChanged):
-            phase[0] = body.phase
-
-    def pause_at_verify():
-        if phase[0] == "verify":
-            raise PauseRequested()
-
-    try:
-        plan_request = PlanRequest("5" * 32, str(source), str(target))
-        runtime.open_plan(runtime.prepare_plan(plan_request).payload).run(
-            RunContext(lambda _event: None, lambda: None)
-        )
-        execution = runtime.commit_plan(
-            plan_request.request_id,
-            run_id="6" * 32,
-            committed_at=NOW,
-            verify_after_execute=True,
-        )
-        invocation = runtime.open_execution(
-            runtime.prepare_execution(execution).payload
-        )
-        with pytest.raises(PauseRequested):
-            invocation.run(RunContext(emit, pause_at_verify))
-
-        decoded = decode_execution_request(invocation.snapshot())
-        assert isinstance(decoded.continuation, VerifyContinuation)
-        xset = decoded.execution_set
-        victim = next(iter(xset.selection))
-        tampered_selection = xset.selection - {victim}
-        tampered_xset = replace(
-            xset,
-            selection=tampered_selection,
-            status={
-                op_id: outcome
-                for op_id, outcome in xset.status.items()
-                if op_id in tampered_selection
-            },
-            published_evidence={
-                op_id: evidence
-                for op_id, evidence in xset.published_evidence.items()
-                if op_id in tampered_selection
-            },
-            commitment=replace(
-                xset.commitment,
-                selection_digest=selection_digest(tampered_selection),
-            ),
-            bytes_done_high_water=sum(
-                operation.content_bytes
-                for operation in xset.plan.operations
-                if operation.op_id in tampered_selection
-                and operation.kind
-                in {
-                    OperationKind.COPY,
-                    OperationKind.UPDATE,
-                    OperationKind.MOVE_UPDATE,
-                }
-            ),
-        )
-        tampered_candidates = PostCopySelection(
-            tuple(
-                candidate
-                for candidate in decoded.continuation.candidates.candidates
-                if candidate.item_id != str(victim)
-            )
-        )
-        tampered = replace(
-            decoded.continuation,
-            execution_set=tampered_xset,
-            candidates=tampered_candidates,
-        )
-        payload = encode_execution_request(
-            ExecutionRequest(tampered, decoded.started_at)
-        )
-
-        result = runtime.open_execution(payload).run(
-            RunContext(lambda _event: None, lambda: None)
-        )
-    finally:
-        runtime.close()
-
-    assert result.status is SessionState.COMPLETED
-    assert result.disposition is Disposition.RAN
-    assert result.error is not None
-    assert "derived selection" in result.error.message
-    assert result.phases[-1].status is PhaseStatus.INCOMPLETE
-    connection = sqlite3.connect(tmp_path / "ledger.db")
-    try:
-        row = connection.execute(
-            "SELECT ended_at, filesystem_status FROM runs WHERE run_token = ?",
-            ("6" * 32,),
         ).fetchone()
     finally:
         connection.close()

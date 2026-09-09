@@ -30,7 +30,7 @@ from namisync.interfaces.service import (
     SessionRecordView,
     ShutdownView,
 )
-from namisync.interfaces.web.drain import (
+from namisync.interfaces.task_port import (
     TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,

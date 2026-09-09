@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { TestEventTarget } from "./_event_target.mjs";
 
 
-class TestWindow {
+class TestWindow extends TestEventTarget {
   constructor() {
-    this.listeners = new Map();
+    super();
     this.requests = [];
     this.acknowledgments = [];
     this.acknowledgedTokens = new Set();
@@ -16,20 +17,6 @@ class TestWindow {
         dispatch: (requestJson) => this.dispatch(requestJson),
       },
     };
-  }
-
-  addEventListener(name, handler, options = {}) {
-    const listeners = this.listeners.get(name) ?? [];
-    listeners.push({ handler, once: options.once === true });
-    this.listeners.set(name, listeners);
-  }
-
-  removeEventListener(name, handler) {
-    const listeners = this.listeners.get(name) ?? [];
-    this.listeners.set(
-      name,
-      listeners.filter((listener) => listener.handler !== handler),
-    );
   }
 
   dispatch(requestJson) {
@@ -56,15 +43,27 @@ class TestWindow {
       ? { id: `slot-${"2".repeat(32)}`, display: "Selected 🌊" }
       : request.payload;
     const responseToken = (this.nextResponseToken++).toString(16).padStart(32, "0");
+    const response = request.command === "untrusted_refusal"
+      ? {
+          schema_version: 1,
+          request_id: null,
+          ok: false,
+          error: {
+            code: "bridge_unavailable",
+            message:
+              "NamiSync is closing or this desktop page is no longer trusted.",
+          },
+        }
+      : {
+          schema_version: 1,
+          request_id: request.request_id,
+          ok: true,
+          result,
+        };
     const nativeResponse = {
       transport_version: 1,
       response_token: responseToken,
-      response: {
-        schema_version: 1,
-        request_id: request.request_id,
-        ok: true,
-        result,
-      },
+      response,
     };
     this.nativeResponses.set(`ack:${responseToken}`, nativeResponse);
     return Promise.resolve(nativeResponse);
@@ -135,6 +134,22 @@ assert.equal(
   testWindow.acknowledgments[2],
   testWindow.acknowledgments[3],
   "a lost cleanup response retries the exact token",
+);
+
+const beforeStructuredRefusal = testWindow.acknowledgments.length;
+await assert.rejects(
+  bridge.dispatchInteractive("untrusted_refusal", {}, () => false),
+  {
+    name: "BridgeCommandError",
+    code: "bridge_unavailable",
+    message:
+      "NamiSync is closing or this desktop page is no longer trusted.",
+  },
+);
+assert.equal(
+  testWindow.acknowledgments.length,
+  beforeStructuredRefusal + 1,
+  "a recognized refusal acknowledges its exact detached response",
 );
 
 const beforeRefusal = testWindow.requests.length;

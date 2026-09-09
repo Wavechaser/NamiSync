@@ -163,8 +163,11 @@ def test_wrong_role_contract_marker_refuses_read_only(
     (
         ("ledger", "schema_version", "3"),
         ("history", "schema_version", "5"),
+        ("history", "schema_version", "6"),
         ("ledger", "data_epoch", "4"),
         ("history", "data_epoch", "4"),
+        ("ledger", "data_epoch", "6"),
+        ("history", "data_epoch", "6"),
     ),
 )
 def test_old_or_mixed_database_epoch_refuses_without_mutation(
@@ -211,7 +214,7 @@ def test_matching_database_pair_is_ready_and_read_only(tmp_path: Path) -> None:
     service.close()
 
 
-def test_fresh_identity_epoch_six_pair_reopens_with_exact_current_markers(
+def test_fresh_identity_epoch_seven_pair_reopens_with_exact_current_markers(
     tmp_path: Path,
 ) -> None:
     service, ledger, history = _service(tmp_path)
@@ -220,7 +223,7 @@ def test_fresh_identity_epoch_six_pair_reopens_with_exact_current_markers(
         assert service.validate_database_contracts().state == "ready"
         for path, version, contract_id in (
             (ledger, "4", "m1-ledger-v4-event-v5-evidence-v2"),
-            (history, "6", "m1-history-v6-event-v5-recording-v1"),
+            (history, "7", "m1-history-v7-event-v5-recording-v1"),
         ):
             with closing(sqlite3.connect(
                 path.resolve().as_uri() + "?mode=ro&immutable=1", uri=True,
@@ -228,7 +231,7 @@ def test_fresh_identity_epoch_six_pair_reopens_with_exact_current_markers(
                 markers = dict(connection.execute("SELECT key, value FROM schema_metadata"))
             assert markers == {
                 "schema_version": version,
-                "data_epoch": "6",
+                "data_epoch": "7",
                 "contract_id": contract_id,
             }
         before = _snapshot(ledger, history)
@@ -292,7 +295,7 @@ def _assert_epoch_pair_refused_without_mutation(
         ):
             with pytest.raises(
                 SchemaResetRequired,
-                match="data epoch 6.*archive or delete both database main files",
+                match="data epoch 7.*archive or delete both database main files",
             ) as raised:
                 consumer(selected)
             assert "Close every NamiSync process" in str(raised.value)
@@ -369,11 +372,11 @@ def test_identity_epoch_cut_sees_old_markers_committed_only_in_wal(
         )) as main_reader:
             current_markers = dict(main_reader.execute("SELECT key, value FROM schema_metadata"))
         assert current_markers == {
-            "schema_version": "4" if role == "ledger" else "6",
-            "data_epoch": "6",
+            "schema_version": "4" if role == "ledger" else "7",
+            "data_epoch": "7",
             "contract_id": (
                 "m1-ledger-v4-event-v5-evidence-v2" if role == "ledger"
-                else "m1-history-v6-event-v5-recording-v1"
+                else "m1-history-v7-event-v5-recording-v1"
             ),
         }
         _write_markers(writer, markers)
@@ -892,9 +895,15 @@ def test_snapshot_failure_closes_handles_cleans_private_files_and_preserves_caus
     assert _snapshot(candidate) == before
 
 
-@pytest.mark.parametrize("history_role", [False, True], ids=["ledger", "history"])
-@pytest.mark.parametrize("primary_kind", ["none", "ordinary", "interrupt"])
-@pytest.mark.parametrize("cleanup_kind", ["ordinary", "interrupt"])
+@pytest.mark.parametrize(
+    ("history_role", "primary_kind", "cleanup_kind"),
+    [
+        *((False, primary, cleanup)
+          for primary in ("none", "ordinary", "interrupt")
+          for cleanup in ("ordinary", "interrupt")),
+        pytest.param(True, "ordinary", "interrupt", id="history-validator-route"),
+    ],
+)
 def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, primary_kind: str, cleanup_kind: str,
     history_role: bool,
@@ -910,6 +919,7 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
     validator_name = "validate_history_reader_contract" if history_role else "validate_ledger_reader_contract"
     validate = getattr(file_contracts, validator_name)
     owned = []
+    validated_connections = []
 
     def fail_cleanup():
         raise cleanup_error
@@ -921,6 +931,7 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
         return temporary
 
     def validate_or_fail(connection):
+        validated_connections.append(connection)
         if primary is not None:
             raise primary
         validate(connection)
@@ -935,6 +946,7 @@ def test_snapshot_cleanup_failure_preserves_error_and_control_precedence(
             file_contracts.require_database_file_contract(candidate, history=history_role)
         assert (raised.value.__cause__ if isinstance(expected, Exception) else raised.value) is expected
         assert len(owned) == 1
+        assert len(validated_connections) == 1
         directory, _cleanup = owned[0]
         assert directory.is_dir()
         if primary is not None and expected is primary:

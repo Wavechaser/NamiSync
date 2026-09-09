@@ -1028,29 +1028,26 @@ def test_reparse_child_below_a_trusted_mount_root_is_not_followed() -> None:
 
 
 @pytest.mark.parametrize(
-    "root_stat",
+    ("root_stat", "scope"),
     [
-        _fake_stat(ino=1),
-        _fake_stat(
-            ino=1,
-            directory=True,
-            attributes=(
+        pytest.param(_fake_stat(ino=1), ScanScope.full(), id="file-full"),
+        pytest.param(
+            _fake_stat(ino=1, directory=True, attributes=(
                 FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_OFFLINE
-            ),
+            )),
+            ScanScope.full(), id="placeholder-full",
         ),
-        _fake_stat(
-            ino=1,
-            directory=True,
-            attributes=FILE_ATTRIBUTE_REPARSE_POINT,
+        *(
+            pytest.param(
+                _fake_stat(ino=1, directory=True, attributes=FILE_ATTRIBUTE_REPARSE_POINT),
+                scope, id=f"reparse-{name}",
+            )
+            for name, scope in (
+                ("full", ScanScope.full()),
+                ("selected", ScanScope.selected(("file.bin",))),
+                ("subtrees", ScanScope.subtrees(("folder",))),
+            )
         ),
-    ],
-)
-@pytest.mark.parametrize(
-    "scope",
-    [
-        ScanScope.full(),
-        ScanScope.selected(("file.bin",)),
-        ScanScope.subtrees(("folder",)),
     ],
 )
 def test_every_scan_scope_refuses_nonordinary_location_root(

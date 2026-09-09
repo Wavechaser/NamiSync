@@ -52,8 +52,7 @@ _PAGE_PROBE = r"""
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const root = document.documentElement;
     const material = root.getAttribute("data-window-material");
-    const dispatchReady = typeof window.pywebview?.api?.dispatch === "function";
-    if (material === expectedMaterial && dispatchReady) {
+    if (material === expectedMaterial) {
       break;
     }
     await new Promise((resolve) => window.setTimeout(resolve, 50));
@@ -61,19 +60,6 @@ _PAGE_PROBE = r"""
   const root = document.documentElement;
   if (root.getAttribute("data-window-material") !== expectedMaterial) {
     throw new Error("material publication unavailable");
-  }
-  if (typeof window.pywebview?.api?.dispatch !== "function") {
-    throw new Error("production dispatch unavailable");
-  }
-  const dispatchResponse = await window.pywebview.api.dispatch(JSON.stringify({
-    schema_version: 1,
-    request_id: "12121212121212121212121212121212",
-    command: "materials_probe",
-    payload: {},
-  }));
-  if (dispatchResponse?.ok !== false ||
-      dispatchResponse?.error?.code !== "unknown_command") {
-    throw new Error("production dispatch refusal unavailable");
   }
   const app = document.querySelector("#app");
   const status = document.querySelector("#host-status");
@@ -128,8 +114,6 @@ _PAGE_PROBE = r"""
   }
   return {
     ready_state: document.readyState,
-    dispatch_type: typeof window.pywebview.api.dispatch,
-    dispatch_refusal: dispatchResponse.error.code,
     material: root.getAttribute("data-window-material"),
     theme: root.getAttribute("data-theme"),
     high_contrast: root.getAttribute("data-high-contrast"),

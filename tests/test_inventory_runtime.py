@@ -52,8 +52,6 @@ from namisync.workflows.inventory import (
     IntegrityWorkflowRequest,
     InventoryRequest,
     VolumeResolutionState,
-    decode_integrity_request,
-    encode_integrity_request,
 )
 from namisync.workflows.runtime import (
     BASELINE_KIND,
@@ -102,7 +100,7 @@ def _refresh_inventory(
     prepared = runtime.prepare_inventory(
         InventoryRequest(request_id, location_id=location_id)
     )
-    result = runtime.open_inventory(prepared.payload).run(
+    result = runtime.open_inventory(prepared.checkpoint).run(
         RunContext(lambda _event: None, lambda: None)
     )
     assert result.status is SessionState.COMPLETED
@@ -157,13 +155,13 @@ def _run_integrity_mode(
     request = IntegrityRequest(request_id, mode, location_id=location_id)
     if mode is IntegrityMode.BASELINE:
         prepared = runtime.prepare_baseline(request)
-        invocation = runtime.open_baseline(prepared.payload)
+        invocation = runtime.open_baseline(prepared.checkpoint)
     elif mode is IntegrityMode.REBASELINE:
         prepared = runtime.prepare_rebaseline(request)
-        invocation = runtime.open_rebaseline(prepared.payload)
+        invocation = runtime.open_rebaseline(prepared.checkpoint)
     else:
         prepared = runtime.prepare_verify(request)
-        invocation = runtime.open_verify(prepared.payload)
+        invocation = runtime.open_verify(prepared.checkpoint)
     return invocation.run(RunContext(lambda _event: None, lambda: None))
 
 
@@ -369,7 +367,7 @@ def test_native_runtime_baseline_then_verify_uses_production_composition(
                 root_path=str(root),
             )
         )
-        baseline_result = runtime.open_baseline(baseline_request.payload).run(
+        baseline_result = runtime.open_baseline(baseline_request.checkpoint).run(
             context
         )
         assert baseline_result.status is SessionState.COMPLETED
@@ -392,7 +390,7 @@ def test_native_runtime_baseline_then_verify_uses_production_composition(
                 location_id=location_id,
             )
         )
-        verify_result = runtime.open_verify(verify_request.payload).run(context)
+        verify_result = runtime.open_verify(verify_request.checkpoint).run(context)
         assert verify_result.status is SessionState.COMPLETED
         assert [(item.phase, item.result) for item in verify_result.items] == [
             ("verify", IntegrityResult.VERIFIED)
@@ -455,7 +453,7 @@ def test_repeat_full_baseline_refreshes_inventory_but_runs_no_verifier_work(
                 location_id=location_id,
             )
         )
-        result = runtime.open_baseline(prepared.payload).run(context)
+        result = runtime.open_baseline(prepared.checkpoint).run(context)
 
         assert result.status is SessionState.COMPLETED
         assert result.disposition is Disposition.RAN
@@ -605,7 +603,7 @@ def test_resumed_baseline_keeps_frozen_order_after_evidence_changes(
         )
         request = IntegrityWorkflowRequest(
             request_id="resume-baseline",
-            binding=decode_integrity_request(prepared.payload).binding,
+            binding=prepared.checkpoint.binding,
             mode=IntegrityMode.BASELINE,
             selection_item_ids=frozen,
             completed_bytes=((frozen[0], 7),),
@@ -614,7 +612,7 @@ def test_resumed_baseline_keeps_frozen_order_after_evidence_changes(
             refresh_generation=1,
         )
 
-        result = runtime.open_baseline(encode_integrity_request(request)).run(
+        result = runtime.open_baseline(request).run(
             RunContext(lambda _event: None, lambda: None)
         )
 
@@ -651,7 +649,7 @@ def test_resumed_integrity_runtime_queries_only_frozen_row_ids(
                 location_id=location_id,
             )
         )
-        binding = decode_integrity_request(prepared.payload).binding
+        binding = prepared.checkpoint.binding
         full_reads: list[int] = []
         row_id_reads: list[tuple[int, tuple[str, ...]]] = []
 
@@ -689,7 +687,7 @@ def test_resumed_integrity_runtime_queries_only_frozen_row_ids(
             refresh_generation=1,
         )
 
-        result = runtime.open_verify(encode_integrity_request(request)).run(
+        result = runtime.open_verify(request).run(
             RunContext(lambda _event: None, lambda: None)
         )
 
@@ -789,7 +787,7 @@ def test_runtime_exposes_stale_and_missing_visibility_inventory_facade(
             InventoryRequest("present", location_id=location_id)
         )
         assert (
-            runtime.open_inventory(prepared.payload).run(context).status
+            runtime.open_inventory(prepared.checkpoint).run(context).status
             is SessionState.COMPLETED
         )
         stale = runtime.list_stale_inventory(location_id, NOW)
@@ -799,7 +797,7 @@ def test_runtime_exposes_stale_and_missing_visibility_inventory_facade(
         prepared = runtime.prepare_inventory(
             InventoryRequest("missing", location_id=location_id)
         )
-        runtime.open_inventory(prepared.payload).run(context)
+        runtime.open_inventory(prepared.checkpoint).run(context)
         missing = runtime.list_unacknowledged_missing(location_id)
         assert [row.rel_path for row in missing] == ["a.txt"]
 
@@ -850,20 +848,121 @@ def test_integrity_snapshot_orders_completed_rows_by_frozen_selection(
         )
         request = IntegrityWorkflowRequest(
             request_id="ordered-completion",
-            binding=decode_integrity_request(prepared.payload).binding,
+            binding=prepared.checkpoint.binding,
             mode=IntegrityMode.VERIFY,
             selection_item_ids=frozen,
             refresh_generation=1,
         )
-        session = runtime.open_verify(encode_integrity_request(request))
+        session = runtime.open_verify(request)
 
         with pytest.raises(PauseRequested, match="ordered continuation"):
             session.run(RunContext(lambda _event: None, lambda: None))
-        continuation = decode_integrity_request(session.snapshot())
+        continuation = session.snapshot()
 
         assert continuation.selection_item_ids == frozen
         assert tuple(item_id for item_id, _ in continuation.completed_bytes) == frozen
     finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize(
+    "mode, kind, expected_path",
+    [
+        (IntegrityMode.BASELINE, BASELINE_KIND, "b.txt"),
+        (IntegrityMode.REBASELINE, REBASELINE_KIND, "a.txt"),
+    ],
+)
+def test_paused_baseline_and_rebaseline_resume_without_repeating_or_losing_items(
+    tmp_path: Path,
+    mode: IntegrityMode,
+    kind: str,
+    expected_path: str,
+) -> None:
+    started = Event()
+    release = Event()
+    calls = 0
+
+    def runner(selection, context, recorder):
+        nonlocal calls
+        del recorder
+        calls += 1
+        if calls == 1:
+            item = selection.pending[0]
+            size = 0 if item.expected_stat is None else item.expected_stat.size
+            selection.note_bytes_processed(size)
+            selection.advance_bytes_total_high_water(
+                sum(
+                    0
+                    if selected.expected_stat is None
+                    else selected.expected_stat.size
+                    for selected in selection.items
+                )
+            )
+            outcome = IntegrityOutcome(
+                item_id=item.item_id,
+                row_id=item.row_id,
+                location_id=item.location_id,
+                path=item.display_path,
+                phase=mode.value,
+                result=IntegrityResult.BASELINED,
+            )
+            context.run.emit(outcome)
+            selection.mark_completed(item.item_id, size)
+            started.set()
+            assert release.wait(2)
+            context.run.checkpoint()
+            raise AssertionError("pause checkpoint must stop the runner")
+        return IntegrityRunResult((), RecordingStatus.OK)
+
+    runtime, location_id, scanner = _mixed_integrity_runtime(
+        tmp_path,
+        {mode: runner},
+    )
+    scanner_calls_before = len(scanner.calls)
+    dispatcher = Dispatcher(
+        _workflow_registry(runtime),
+        lock_provider=InProcessResourceLockProvider(),
+        clock=FakeClock(),
+        audit_observer_factory=runtime.audit_observer,
+    )
+    request_id = f"pause-resume-{mode.value}"
+    try:
+        session_id = dispatcher.submit(
+            kind,
+            IntegrityRequest(request_id, mode, location_id=location_id),
+        )
+        assert started.wait(2)
+        assert dispatcher.pause(session_id).accepted
+        release.set()
+        _wait_for(dispatcher, session_id, SessionState.PAUSED)
+
+        assert dispatcher.resume(session_id).accepted
+        completed = _wait_for(dispatcher, session_id, SessionState.COMPLETED)
+
+        assert completed.result is not None
+        assert completed.result.status is SessionState.COMPLETED
+        assert completed.result.canceled is False
+        assert [
+            (item.path, item.phase, item.result)
+            for item in completed.result.items
+        ] == [
+            (expected_path, mode.value, IntegrityResult.BASELINED)
+        ]
+        assert calls == 2
+        assert len(scanner.calls) == scanner_calls_before + 2
+
+        history = runtime.get_history_summary(request_id)
+        history_items = runtime.get_history_items(request_id)
+        assert history.activity_kind == mode.value
+        assert history.current_state == SessionState.COMPLETED.value
+        assert history.item_count == 1
+        assert [
+            (retained.item.path, retained.item.phase, retained.item.result)
+            for retained in history_items.items
+        ] == [(expected_path, mode.value, IntegrityResult.BASELINED.value)]
+    finally:
+        release.set()
+        assert dispatcher.shutdown().complete
         runtime.close()
 
 
@@ -949,7 +1048,8 @@ def test_paused_integrity_cancel_uses_exact_continuation_without_reopening(
         assert dispatcher.pause(session_id).accepted
         release.set()
         paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
-        continuation = decode_integrity_request(paused.payload)
+        continuation = paused.checkpoint
+        assert type(continuation) is IntegrityWorkflowRequest
         assert continuation.mode is mode
         assert continuation.refresh_generation == 1
         assert continuation.selection_item_ids
@@ -1066,7 +1166,8 @@ def test_pause_during_integrity_context_creation_retains_admitted_total(
         assert dispatcher.pause(session_id).accepted
         release_context.set()
         paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
-        continuation = decode_integrity_request(paused.payload)
+        continuation = paused.checkpoint
+        assert type(continuation) is IntegrityWorkflowRequest
 
         assert len(continuation.selection_item_ids) == 2
         assert continuation.completed_bytes == ()
@@ -1151,7 +1252,8 @@ def test_paused_integrity_snapshot_persists_recorder_close_degradation(
         assert dispatcher.pause(session_id).accepted
         release.set()
         paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
-        continuation = decode_integrity_request(paused.payload)
+        continuation = paused.checkpoint
+        assert type(continuation) is IntegrityWorkflowRequest
 
         assert continuation.processed_bytes == 3
         assert continuation.bytes_total_high_water == 14
@@ -1249,7 +1351,8 @@ def test_preselection_pause_persists_recorder_close_degradation(
         assert dispatcher.pause(session_id).accepted
         release.set()
         paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
-        continuation = decode_integrity_request(paused.payload)
+        continuation = paused.checkpoint
+        assert type(continuation) is IntegrityWorkflowRequest
 
         assert continuation.selection_item_ids == ()
         assert continuation.processed_bytes == 0
@@ -1370,7 +1473,8 @@ def test_paused_verify_resumes_without_repeating_or_losing_items(
         assert dispatcher.pause(session_id).accepted
         allow_checkpoint.set()
         paused = _wait_for(dispatcher, session_id, SessionState.PAUSED)
-        continuation = decode_integrity_request(paused.payload)
+        continuation = paused.checkpoint
+        assert type(continuation) is IntegrityWorkflowRequest
         assert continuation.refresh_generation == 1
         assert len(continuation.selection_item_ids) == 2
         assert len(continuation.completed_bytes) == 1
@@ -1454,8 +1558,8 @@ class _BlockingInvocation:
         assert self.release.wait(2)
         return OperationResult(SessionState.COMPLETED)
 
-    def snapshot(self) -> bytes:
-        return b"blocker"
+    def snapshot(self) -> str:
+        return "blocker"
 
 
 def test_queued_verify_reopens_and_refuses_new_clone_before_scan_or_hash(
@@ -1487,9 +1591,9 @@ def test_queued_verify_reopens_and_refuses_new_clone_before_scan_or_hash(
     registrations = _workflow_registry(runtime)
     registrations["blocker"] = WorkflowRegistration(
         prepare=lambda _request: PreparedSession(
-            b"blocker", frozenset({resource})
+            "blocker", frozenset({resource})
         ),
-        open=lambda _payload: _BlockingInvocation(started, release),
+        open=lambda _checkpoint: _BlockingInvocation(started, release),
     )
     dispatcher = Dispatcher(
         registrations,

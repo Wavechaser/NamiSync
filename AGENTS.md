@@ -53,6 +53,15 @@ reused by CLI, queue, or service entry points.
   - `BUGS.md` for substantive defects, verified fixes, and current status.
   - `FEATURES.md` for all planned and existing features.
   - `ARCHITECTURE.md` for project architectural decisions and design principles. 
+  - `BRIDGE.md` for external command/event protocol, transport, retry/recovery,
+    and its focused acceptance evidence; `PRESENTATION.md` for tree/view,
+    window/search/sort/selection presentation and focused scale contracts.
+  - `INTERFACES.md` for adapter, host/package, and implemented task lifecycle.
+    `M1_PLAN.md` is the sole remaining M1 delivery register; completed plan
+    ancestry and decision history are archived, not parallel active authorities.
+  - Accepted future user outcomes remain binding; unrealized representation,
+    reservation, DTO, and command-count recipes are reconsidered at first use.
+    Keep only narrow admission and measured scale obligations with named owners.
   - `HANDOFF.md` for the latest session only: changes made, verification, and
     immediate next-session operational context. Replace it each session rather
     than accumulating project-level reference material.

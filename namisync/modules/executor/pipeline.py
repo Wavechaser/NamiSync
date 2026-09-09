@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from queue import Empty, Full, Queue, ShutDown, SimpleQueue
-from threading import Event, Lock, Thread
+from threading import TIMEOUT_MAX, Event, Lock, Thread
+import math
 import time
 from typing import BinaryIO, cast
 
@@ -20,8 +21,6 @@ from namisync.core.session import Canceled, PauseRequested
 
 
 _PIPELINE_BYTE_BUDGET = 32 * 1024 * 1024
-_PIPELINE_QUEUE_ITEMS = 32
-_PIPELINE_POLL_SECONDS = 0.01
 _PIPELINE_EOF = object()
 _SMALL_CHUNK_SIZE = 256 * 1024
 _MEDIUM_CHUNK_SIZE = 1024 * 1024
@@ -80,11 +79,25 @@ class NativeCopyBackend:
         *,
         hasher_factory: HasherFactory,
         collect_metrics: bool = False,
+        queue_items: int = 32,
+        poll_seconds: float = 0.01,
     ) -> None:
         if not callable(hasher_factory):
             raise TypeError("content hasher factory must be callable")
         if not isinstance(collect_metrics, bool):
             raise TypeError("collect_metrics must be a bool")
+        if type(queue_items) is not int:
+            raise TypeError("queue_items must be an integer")
+        if not 1 <= queue_items <= 32:
+            raise ValueError("queue_items must be between 1 and 32")
+        if isinstance(poll_seconds, bool) or not isinstance(poll_seconds, (int, float)):
+            raise TypeError("poll_seconds must be numeric")
+        if poll_seconds <= 0 or (
+            isinstance(poll_seconds, float) and not math.isfinite(poll_seconds)
+        ):
+            raise ValueError("poll_seconds must be finite and positive")
+        self._queue_items = queue_items
+        self._poll_seconds = float(min(poll_seconds, TIMEOUT_MAX))
         self._hasher_factory = hasher_factory
         self._collect_metrics = collect_metrics
         self._last_metrics: CopyPipelineMetrics | None = None
@@ -107,8 +120,8 @@ class NativeCopyBackend:
         if chunk_size <= 0:
             raise ValueError("copy chunk size must be positive")
 
-        hash_queue: Queue[bytes | object] = Queue(maxsize=_PIPELINE_QUEUE_ITEMS)
-        write_queue: Queue[bytes | object] = Queue(maxsize=_PIPELINE_QUEUE_ITEMS)
+        hash_queue: Queue[bytes | object] = Queue(maxsize=self._queue_items)
+        write_queue: Queue[bytes | object] = Queue(maxsize=self._queue_items)
         completions: SimpleQueue[int] = SimpleQueue()
         abort = Event()
         first_error = _FirstPipelineError()
@@ -133,7 +146,7 @@ class NativeCopyBackend:
         def put_worker(queue: Queue[bytes | object], value: bytes | object) -> None:
             while not abort.is_set():
                 try:
-                    queue.put(value, timeout=_PIPELINE_POLL_SECONDS)
+                    queue.put(value, timeout=self._poll_seconds)
                     return
                 except Full:
                     continue
@@ -145,7 +158,7 @@ class NativeCopyBackend:
                 hasher = new_content_hasher(self._hasher_factory)
                 while not abort.is_set():
                     try:
-                        item = hash_queue.get(timeout=_PIPELINE_POLL_SECONDS)
+                        item = hash_queue.get(timeout=self._poll_seconds)
                     except Empty:
                         continue
                     except ShutDown:
@@ -173,7 +186,7 @@ class NativeCopyBackend:
                         else None
                     )
                     try:
-                        item = write_queue.get(timeout=_PIPELINE_POLL_SECONDS)
+                        item = write_queue.get(timeout=self._poll_seconds)
                     except Empty:
                         if started_waiting is not None:
                             diagnostics.writer_starved_seconds += (
@@ -269,7 +282,7 @@ class NativeCopyBackend:
                     <= _PIPELINE_BYTE_BUDGET
                 ):
                     break
-                time.sleep(_PIPELINE_POLL_SECONDS)
+                time.sleep(self._poll_seconds)
             if wait_started is not None:
                 diagnostics.reader_blocked_seconds += (
                     time.perf_counter() - wait_started
@@ -287,7 +300,7 @@ class NativeCopyBackend:
                 raise_worker_error()
                 drain_completions()
                 try:
-                    queue.put(value, timeout=_PIPELINE_POLL_SECONDS)
+                    queue.put(value, timeout=self._poll_seconds)
                     if wait_started is not None:
                         diagnostics.reader_blocked_seconds += (
                             time.perf_counter() - wait_started
@@ -355,7 +368,7 @@ class NativeCopyBackend:
                     raise_checkpoint_failure(error)
                 raise_worker_error()
                 drain_completions()
-                if writer_done.wait(_PIPELINE_POLL_SECONDS):
+                if writer_done.wait(self._poll_seconds):
                     break
             drain_completions()
             try:

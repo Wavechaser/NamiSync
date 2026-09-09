@@ -22,48 +22,55 @@ from namisync.core.session import (
 
 @dataclass(frozen=True, slots=True)
 class PreparedSession:
-    """Opaque workflow bytes plus generic resources required for custody."""
+    """Detached opaque checkpoint plus generic resources required for custody.
 
-    payload: bytes
+    The registering adapter must detach request- and workflow-owned mutable
+    state before construction; dispatcher deliberately cannot certify it.
+    """
+
+    checkpoint: object
     resources: frozenset[ResourceId] = frozenset()
 
     def __post_init__(self) -> None:
-        if not isinstance(self.payload, bytes):
-            raise TypeError("prepared workflow payload must be bytes")
         if not all(isinstance(resource, ResourceId) for resource in self.resources):
             raise TypeError("prepared resources must contain ResourceId values")
 
     @classmethod
     def from_resource_keys(
         cls,
-        payload: bytes,
+        checkpoint: object,
         resources: tuple[tuple[str, str], ...],
     ) -> PreparedSession:
         """Build generic custody ids without exposing core types to interfaces."""
 
         return cls(
-            payload,
+            checkpoint,
             frozenset(ResourceId(namespace, key) for namespace, key in resources),
         )
 
 
 class WorkflowInvocation(Protocol):
-    """Adapter-owned decoded invocation; dispatcher never inspects it."""
+    """Fresh adapter-owned invocation materialized from a read-only checkpoint."""
 
     def run(self, context: RunContext) -> OperationResult: ...
 
-    def snapshot(self) -> bytes:
-        """Serialize continuation after a cooperative pause."""
+    def snapshot(self) -> object:
+        """Return continuation detached from invocation-owned mutable state."""
 
 
 @dataclass(frozen=True, slots=True)
 class WorkflowRegistration:
-    """Generic preparation/invocation adapter and capability metadata."""
+    """Detached-checkpoint adapter contract and capability metadata.
+
+    ``prepare`` and invocation ``snapshot`` transfer detached checkpoints;
+    ``open`` and ``settle_canceled`` treat them as read-only, and ``open``
+    materializes fresh invocation-owned state.
+    """
 
     prepare: Callable[[object], PreparedSession]
-    open: Callable[[bytes], WorkflowInvocation]
+    open: Callable[[object], WorkflowInvocation]
     supports_pause: bool = False
-    settle_canceled: Callable[[bytes, Disposition], OperationResult] | None = None
+    settle_canceled: Callable[[object, Disposition], OperationResult] | None = None
 
 
 Registry = Mapping[str, WorkflowRegistration]

@@ -1491,7 +1491,7 @@ def _execute_operation(
     if operation.kind is OperationKind.DELETE:
         return _delete(operation, xset, recorder, fs, target_root, state)
     if operation.kind is OperationKind.NOOP:
-        return _noop(operation, recorder, fs, source_root, target_root, state)
+        return _noop(operation, recorder, fs, source_root, target_root)
     raise OperationFailure(
         ExecutionReason.IO_ERROR, f"unsupported operation kind: {operation.kind}"
     )
@@ -1541,70 +1541,67 @@ def _prepare_copy(
             cause=error,
         ) from error
     state.effects.claim_temporary_path(operation.op_id, temp)
-    try:
-        reviewed_size = operation.source_expected.size
-        chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
-        _revalidate_source_root(fs, xset, source_root)
-        with fs.open_source(source) as reader:
-            _resolve_target_path(
-                fs,
-                xset,
-                target_root,
-                temp,
-                must_exist=False,
-            )
-            with fs.create_temp(
-                temp, allocation_size=_allocation_size(reviewed_size)
-            ) as writer:
-                progress.begin_byte_stream(operation)
-                digest = policies.copy_backend.copy(
-                    reader,
-                    writer,
-                    chunk_size=chunk_size,
-                    checkpoint=ctx.checkpoint,
-                    on_chunk=progress.copied,
-                )
-        intended = operation.intended or operation.source_expected
-        if digest.size != reviewed_size:
-            raise OperationFailure(
-                ExecutionReason.SOURCE_DRIFT,
-                "source byte count changed during copy",
-            )
-        try:
-            _revalidate_source_root(fs, xset, source_root)
-            _resolve_target_path(
-                fs,
-                xset,
-                target_root,
-                temp,
-                must_exist=True,
-            )
-            finalized = fs.finalize_temp(
-                temp,
-                intended,
-                preserve_created=xset.plan.preservation.preserve_created,
-                acl_source=source if xset.plan.preservation.preserve_acl else None,
-            )
-        except _SecurityCopyFailure as error:
-            raise OperationFailure(
-                ExecutionReason.ACL_COPY_FAILED,
-                "security descriptor copy failed before publish",
-                cause=error.__cause__ if isinstance(error.__cause__, Exception) else error,
-            ) from error
-        ctx.checkpoint()
-        _revalidate_source_root(fs, xset, source_root)
-        _guard_present(
+    reviewed_size = operation.source_expected.size
+    chunk_size = _copy_chunk_size(reviewed_size, policies.max_chunk_size)
+    _revalidate_source_root(fs, xset, source_root)
+    with fs.open_source(source) as reader:
+        _resolve_target_path(
             fs,
-            source_root,
-            operation.source_rel_path,
-            operation.source_expected,
-            missing=ExecutionReason.SOURCE_MISSING,
-            drift=ExecutionReason.SOURCE_DRIFT,
+            xset,
+            target_root,
+            temp,
+            must_exist=False,
         )
-        _guard_expected_target(fs, target_root, operation)
-        return _PreparedCopy(source, target, temp, digest, intended, finalized)
-    except BaseException:
-        raise
+        with fs.create_temp(
+            temp, allocation_size=_allocation_size(reviewed_size)
+        ) as writer:
+            progress.begin_byte_stream(operation)
+            digest = policies.copy_backend.copy(
+                reader,
+                writer,
+                chunk_size=chunk_size,
+                checkpoint=ctx.checkpoint,
+                on_chunk=progress.copied,
+            )
+    intended = operation.intended or operation.source_expected
+    if digest.size != reviewed_size:
+        raise OperationFailure(
+            ExecutionReason.SOURCE_DRIFT,
+            "source byte count changed during copy",
+        )
+    try:
+        _revalidate_source_root(fs, xset, source_root)
+        _resolve_target_path(
+            fs,
+            xset,
+            target_root,
+            temp,
+            must_exist=True,
+        )
+        finalized = fs.finalize_temp(
+            temp,
+            intended,
+            preserve_created=xset.plan.preservation.preserve_created,
+            acl_source=source if xset.plan.preservation.preserve_acl else None,
+        )
+    except _SecurityCopyFailure as error:
+        raise OperationFailure(
+            ExecutionReason.ACL_COPY_FAILED,
+            "security descriptor copy failed before publish",
+            cause=error.__cause__ if isinstance(error.__cause__, Exception) else error,
+        ) from error
+    ctx.checkpoint()
+    _revalidate_source_root(fs, xset, source_root)
+    _guard_present(
+        fs,
+        source_root,
+        operation.source_rel_path,
+        operation.source_expected,
+        missing=ExecutionReason.SOURCE_MISSING,
+        drift=ExecutionReason.SOURCE_DRIFT,
+    )
+    _guard_expected_target(fs, target_root, operation)
+    return _PreparedCopy(source, target, temp, digest, intended, finalized)
 
 
 def _published_copy_stat(
@@ -1710,7 +1707,6 @@ def _complete_published_byte_operation(
     xset: ExecutionSet,
     policies: ExecutorPolicies,
     fs: ExecutorFileSystem,
-    state: _ExecutionState,
     target_root: Path,
     *,
     resumed_published: bool,
@@ -1754,7 +1750,6 @@ def _complete_published_byte_operation(
         )
     assert continuation.attestation is not None
     record_observation = _record(
-        continuation.detail,
         lambda: record_published(continuation.attestation),
         identity_required=True,
     )
@@ -1998,7 +1993,6 @@ def _copy(
         xset,
         policies,
         fs,
-        state,
         target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: (prepared.target.parent,),
@@ -2322,7 +2316,6 @@ def _update(
         xset,
         policies,
         fs,
-        state,
         target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: _finish_update_filesystem(
@@ -2355,6 +2348,30 @@ def _move(
             "move operation lacks source evidence",
         )
     old_rel, old_expected = _prior_target(operation)
+    return _guarded_reviewed_target_rename(
+        operation,
+        (old_rel, old_expected),
+        xset,
+        recorder,
+        fs,
+        source_root,
+        target_root,
+        state,
+    )
+
+
+def _guarded_reviewed_target_rename(
+    operation: PlanOperation,
+    prior_target: tuple[str, FileStat],
+    xset: ExecutionSet,
+    recorder: Recorder,
+    fs: ExecutorFileSystem,
+    source_root: Path,
+    target_root: Path,
+    state: _ExecutionState,
+) -> _Settled:
+    old_rel, old_expected = prior_target
+    is_move = operation.kind is OperationKind.MOVE
     _flush_before_destructive(recorder, state, operation.op_id)
     _revalidate_source_root(fs, xset, source_root)
     _revalidate_target_root(fs, xset, target_root)
@@ -2374,7 +2391,8 @@ def _move(
         missing=ExecutionReason.TARGET_MISSING,
         drift=ExecutionReason.TARGET_DRIFT,
     )
-    _guard_absent(fs, target_root, operation.target_rel_path)
+    if is_move:
+        _guard_absent(fs, target_root, operation.target_rel_path)
     old = fs.resolve(target_root, old_rel, must_exist=True)
     new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
     _revalidate_source_root(fs, xset, source_root)
@@ -2391,25 +2409,37 @@ def _move(
     except FileExistsError as error:
         raise OperationFailure(
             ExecutionReason.DESTINATION_OCCUPIED,
-            "move destination appeared before conditional rename",
+            (
+                "move destination appeared before conditional rename"
+                if is_move
+                else "recase destination is a distinct occupied entry"
+            ),
             cause=error,
         ) from error
     mutation.committed = True
     detail = _durability_detail(fs, old.parent, new.parent)
-    moved = _profiled_stat(
+    renamed = _profiled_stat(
         _require_target_stat(fs, xset, target_root, new),
         xset.plan.target_profile.stable_file_identity,
     )
     _guard_path_stat(
-        moved,
+        renamed,
         old_expected,
         ExecutionReason.TARGET_DRIFT,
-        "moved target is not the reviewed target version",
+        (
+            "moved target is not the reviewed target version"
+            if is_move
+            else "recased target is not the reviewed target version"
+        ),
     )
-    record_observation = _record(
-        detail,
-        lambda: recorder.record_moved(operation.op_id, moved),
-    )
+    if is_move:
+        record_observation = _record(
+            lambda: recorder.record_moved(operation.op_id, renamed),
+        )
+    else:
+        record_observation = _record(
+            lambda: recorder.record_recased(operation.op_id, renamed),
+        )
     return _Settled(
         Outcome.SUCCEEDED,
         detail=detail,
@@ -2442,65 +2472,15 @@ def _recase(
             ExecutionReason.UNSAFE_PATH,
             "recase paths must differ only by Windows filename casing",
         )
-    _flush_before_destructive(recorder, state, operation.op_id)
-    _revalidate_source_root(fs, xset, source_root)
-    _revalidate_target_root(fs, xset, target_root)
-    _guard_present(
+    return _guarded_reviewed_target_rename(
+        operation,
+        (old_rel, old_expected),
+        xset,
+        recorder,
         fs,
         source_root,
-        operation.source_rel_path,
-        operation.source_expected,
-        missing=ExecutionReason.SOURCE_MISSING,
-        drift=ExecutionReason.SOURCE_DRIFT,
-    )
-    old_actual = _guard_present(
-        fs,
         target_root,
-        old_rel,
-        old_expected,
-        missing=ExecutionReason.TARGET_MISSING,
-        drift=ExecutionReason.TARGET_DRIFT,
-    )
-    old = fs.resolve(target_root, old_rel, must_exist=True)
-    new = fs.resolve(target_root, operation.target_rel_path, must_exist=False)
-    _revalidate_source_root(fs, xset, source_root)
-    _revalidate_target_root(fs, xset, target_root)
-    mutation = _retain_mutation_attempt(
         state,
-        operation,
-        primary=old,
-        primary_before=old_actual,
-        secondary=new,
-    )
-    try:
-        fs.rename_new(old, new)
-    except FileExistsError as error:
-        raise OperationFailure(
-            ExecutionReason.DESTINATION_OCCUPIED,
-            "recase destination is a distinct occupied entry",
-            cause=error,
-        ) from error
-    mutation.committed = True
-    detail = _durability_detail(fs, old.parent, new.parent)
-    recased = _profiled_stat(
-        _require_target_stat(fs, xset, target_root, new),
-        xset.plan.target_profile.stable_file_identity,
-    )
-    _guard_path_stat(
-        recased,
-        old_expected,
-        ExecutionReason.TARGET_DRIFT,
-        "recased target is not the reviewed target version",
-    )
-    record_observation = _record(
-        detail,
-        lambda: recorder.record_recased(operation.op_id, recased),
-    )
-    return _Settled(
-        Outcome.SUCCEEDED,
-        detail=detail,
-        recording_reason=record_observation.recording_reason,
-        recording_detail=record_observation.recording_detail,
     )
 
 
@@ -2700,7 +2680,6 @@ def _move_update(
         xset,
         policies,
         fs,
-        state,
         target_root,
         resumed_published=resumed_published,
         finish_filesystem=lambda: _finish_move_update_filesystem(
@@ -2789,7 +2768,6 @@ def _trash(
     )
     trash_relative = str(destination.relative_to(target_root)).replace(os.sep, "\\")
     record_observation = _record(
-        detail,
         lambda: recorder.record_trashed(operation.op_id, trash_relative, moved),
     )
     return _Settled(
@@ -2867,7 +2845,6 @@ def _delete(
                 )
     detail = _durability_detail(fs, target.parent)
     record_observation = _record(
-        detail,
         lambda: recorder.record_deleted(operation.op_id, operation.target_expected),
     )
     return _Settled(
@@ -2884,7 +2861,6 @@ def _noop(
     fs: ExecutorFileSystem,
     source_root: Path,
     target_root: Path,
-    state: _ExecutionState,
 ) -> _Settled:
     if (
         operation.source_rel_path is None
@@ -2912,7 +2888,6 @@ def _noop(
     )
     detail: dict[str, object] = {}
     record_observation = _record(
-        detail,
         lambda: recorder.record_noop(
             operation.op_id,
             _normalized_live_stat(source, operation.source_expected),
@@ -3019,7 +2994,6 @@ def _finalize_directories(
                     xset.plan.target_profile.stable_file_identity,
                 )
                 record_observation = _record(
-                    detail,
                     lambda operation=operation, actual=actual: recorder.record_mkdir(
                         operation.op_id, actual
                     ),
@@ -3444,8 +3418,8 @@ def _observe_update_backup(
     )
 
 
-def _observe_new_publication(
-    continuation: _CopyContinuation | _MoveUpdateContinuation,
+def _observe_byte_publication(
+    continuation: _ByteEffect,
     fs: ExecutorFileSystem,
     xset: ExecutionSet,
     target_root: Path,
@@ -3476,18 +3450,45 @@ def _observe_new_publication(
     temp = _stat_target_path(fs, xset, target_root, prepared.temp)
     target = _stat_target_path(fs, xset, target_root, prepared.target)
     if temp is not None and _same_file_version(temp, continuation.prepared_stat):
-        return (
-            _PublicationClassification.NOT_PUBLISHED,
-            (
+        if isinstance(continuation, _UpdateContinuation):
+            target_state = (
+                _TargetState.MISSING_BEFORE_PUBLISH
+                if target is None
+                else _TargetState.CHANGED_BEFORE_PUBLISH
+                if not _same_file_version(target, continuation.live_stat)
+                else None
+            )
+        else:
+            target_state = (
                 _TargetState.UNEXPECTEDLY_PRESENT_BEFORE_PUBLISH
                 if target is not None
                 else None
-            ),
+            )
+        return (
+            _PublicationClassification.NOT_PUBLISHED,
+            target_state,
             None,
             None,
             None,
         )
-    if temp is not None and target is None:
+    if (
+        isinstance(continuation, _UpdateContinuation)
+        and temp is not None
+        and target is not None
+        and _same_file_version(target, continuation.live_stat)
+    ):
+        return (
+            _PublicationClassification.NOT_PUBLISHED,
+            _TargetState.RETAINED_BEFORE_PUBLISH,
+            None,
+            _TempState.CHANGED_BEFORE_PUBLISH,
+            None,
+        )
+    if (
+        not isinstance(continuation, _UpdateContinuation)
+        and temp is not None
+        and target is None
+    ):
         return (
             _PublicationClassification.NOT_PUBLISHED,
             _TargetState.ABSENT_BEFORE_PUBLISH,
@@ -3512,93 +3513,11 @@ def _observe_new_publication(
         )
     error = OperationFailure(
         ExecutionReason.TARGET_MISSING if target is None else ExecutionReason.TARGET_DRIFT,
-        "cannot classify prepared versus published state during cancel settlement",
-    )
-    return (
-        _PublicationClassification.UNVERIFIED,
-        _TargetState.MISSING if target is None else _TargetState.PRESENT,
-        None,
-        _TempState.MISSING if temp is None else _TempState.UNEXPECTED,
-        _probe_diagnostic(error),
-    )
-
-
-def _observe_update_publication(
-    continuation: _UpdateContinuation,
-    fs: ExecutorFileSystem,
-    xset: ExecutionSet,
-    target_root: Path,
-) -> tuple[
-    _PublicationClassification,
-    _TargetState | None,
-    _ProbeDiagnostic | None,
-    _TempState | None,
-    _ProbeDiagnostic | None,
-]:
-    prepared = continuation.prepared
-    if continuation.published:
-        target_state, target_error = _observe_published_target(
-            prepared.target,
-            continuation.published_stat or continuation.prepared_stat,
-            fs,
-            xset,
-            target_root,
-        )
-        return (
-            _PublicationClassification.CONFIRMED,
-            target_state,
-            target_error,
-            None,
-            None,
-        )
-
-    temp = _stat_target_path(fs, xset, target_root, prepared.temp)
-    target = _stat_target_path(fs, xset, target_root, prepared.target)
-    if temp is not None and _same_file_version(temp, continuation.prepared_stat):
-        target_state = (
-            _TargetState.MISSING_BEFORE_PUBLISH
-            if target is None
-            else _TargetState.CHANGED_BEFORE_PUBLISH
-            if not _same_file_version(target, continuation.live_stat)
-            else None
-        )
-        return (
-            _PublicationClassification.NOT_PUBLISHED,
-            target_state,
-            None,
-            None,
-            None,
-        )
-    if (
-        temp is not None
-        and target is not None
-        and _same_file_version(target, continuation.live_stat)
-    ):
-        return (
-            _PublicationClassification.NOT_PUBLISHED,
-            _TargetState.RETAINED_BEFORE_PUBLISH,
-            None,
-            _TempState.CHANGED_BEFORE_PUBLISH,
-            None,
-        )
-    if temp is None and target is not None:
-        return (
-            _PublicationClassification.CONFIRMED,
-            (
-                _TargetState.PUBLISHED
-                if _same_file_version(
-                    target,
-                    continuation.published_stat or continuation.prepared_stat,
-                )
-                else _TargetState.CHANGED_AFTER_PUBLISH
-            ),
-            None,
-            None,
-            None,
-        )
-    error = OperationFailure(
-        ExecutionReason.TARGET_MISSING if target is None else ExecutionReason.TARGET_DRIFT,
-        "cannot classify live versus published update during cancel settlement",
+        (
+            "cannot classify live versus published update during cancel settlement"
+            if isinstance(continuation, _UpdateContinuation)
+            else "cannot classify prepared versus published state during cancel settlement"
+        ),
     )
     return (
         _PublicationClassification.UNVERIFIED,
@@ -3704,35 +3623,18 @@ def _observe_publication(
                 target_root,
                 operation.target_rel_path,
             )
-            (
-                classification,
-                target_state,
-                target_error,
-                temp_state,
-                probe_error,
-            ) = (
-                _observe_update_publication(
-                    continuation,
-                    fs,
-                    xset,
-                    target_root,
-                )
-            )
-        else:
-            (
-                classification,
-                target_state,
-                target_error,
-                temp_state,
-                probe_error,
-            ) = (
-                _observe_new_publication(
-                    continuation,
-                    fs,
-                    xset,
-                    target_root,
-                )
-            )
+        (
+            classification,
+            target_state,
+            target_error,
+            temp_state,
+            probe_error,
+        ) = _observe_byte_publication(
+            continuation,
+            fs,
+            xset,
+            target_root,
+        )
     except Exception as error:
         return _PublicationVerdict(
             classification=_PublicationClassification.UNVERIFIED,
@@ -4860,7 +4762,6 @@ def _guard_attestation_size(digest: CopyDigest, subject: FileStat) -> None:
 
 
 def _record(
-    detail: dict[str, object],
     command: Callable[[], object],
     *,
     identity_required: bool = False,

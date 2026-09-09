@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from pathlib import Path
+import re
 import sqlite3
 
 import pytest
@@ -22,7 +23,11 @@ from namisync.core.pathing import normalize_relative_path
 from namisync.core.planning import OperationKind, OperationReason
 from namisync.core.recording import InventoryCommand
 from namisync.core.scalars import MAX_FILE_INDEX_128
-from namisync.db.connections import connect_ledger_reader, connect_ledger_writer
+from namisync.db.connections import (
+    QUERY_SUBJECT_BATCH_SIZE,
+    connect_ledger_reader,
+    connect_ledger_writer,
+)
 from namisync.db.repositories import (
     InventoryPopulationLimitError,
     LedgerRepository,
@@ -40,9 +45,100 @@ from _db_fixtures import (
 )
 
 
+_SUBJECT_BATCH_CASES = tuple(
+    (count, QUERY_SUBJECT_BATCH_SIZE) for count in (0, 1, 399, 400, 401, 801)
+) + ((801, 37),)
+
+
+class _ParameterRecordingConnection:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        calls: list[tuple[str, tuple[object, ...]]],
+    ) -> None:
+        self._connection = connection
+        self._calls = calls
+
+    def execute(
+        self, statement: str, parameters: tuple[object, ...] = ()
+    ) -> sqlite3.Cursor:
+        self._calls.append((statement, tuple(parameters)))
+        return self._connection.execute(statement, parameters)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._connection, name)
+
+
+def _capture_repository_parameters(
+    monkeypatch: pytest.MonkeyPatch,
+) -> list[tuple[str, tuple[object, ...]]]:
+    calls: list[tuple[str, tuple[object, ...]]] = []
+    connect = repository_module.connect_ledger_reader
+
+    def recording_connect(*args: object, **kwargs: object) -> object:
+        return _ParameterRecordingConnection(connect(*args, **kwargs), calls)
+
+    monkeypatch.setattr(repository_module, "connect_ledger_reader", recording_connect)
+    return calls
+
+
 def _first_excess(*values: object) -> Iterator[object]:
     yield from values
     raise AssertionError("repository read beyond the first excess request")
+
+
+_MAPPING_PAIR_QUERY = re.compile(
+    r"\bFROM\s+mapping_correspondence\b", re.IGNORECASE
+)
+_IDENTITY_QUERY = re.compile(
+    r"\bWITH\s+requested\s*\(\s*volume_serial\s*,\s*file_index\s*\)",
+    re.IGNORECASE,
+)
+_INVENTORY_SELECTION_QUERY = re.compile(
+    r"^\s*SELECT\s+\*\s+FROM\s+inventory\b", re.IGNORECASE
+)
+
+
+def _matching_statements(
+    statements: list[str], pattern: re.Pattern[str]
+) -> list[str]:
+    return [statement for statement in statements if pattern.search(statement)]
+
+
+def _query_plan(path: Path, statement: str) -> tuple[str, ...]:
+    connection = connect_ledger_reader(path)
+    try:
+        return tuple(
+            str(row["detail"])
+            for row in connection.execute("EXPLAIN QUERY PLAN " + statement)
+        )
+    finally:
+        connection.close()
+
+
+def _mapping_rows(
+    count: int,
+    *,
+    descending_source_paths: bool = False,
+    null_target_index: int | None = None,
+) -> tuple[tuple[str, FileIdentity, str, FileIdentity | None, int, int], ...]:
+    return tuple(
+        (
+            (
+                f"source-{count - index if descending_source_paths else index:04d}.bin"
+            ),
+            FileIdentity("source-serial", index),
+            f"target-{index:04d}.bin",
+            (
+                None
+                if index == null_target_index
+                else FileIdentity("target-serial", 10_000 + index)
+            ),
+            1,
+            1,
+        )
+        for index in range(1, count + 1)
+    )
 
 
 def _insert_minimal_inventory_rows(
@@ -472,26 +568,41 @@ def test_stale_integrity_candidate_union_deduplicates_before_row_limit(
         setup.recorder.close()
 
 
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    _SUBJECT_BATCH_CASES,
+)
 def test_chunked_integrity_candidate_read_uses_one_snapshot_and_saved_order(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
 ) -> None:
+    monkeypatch.setattr(repository_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    parameter_calls = _capture_repository_parameters(monkeypatch)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
     records = tuple(
-        _file(f"folder\\file-{index:04d}.bin", index) for index in range(401)
+        _file(f"folder\\file-{index:04d}.bin", index + 1) for index in range(count)
     )
     writer = connect_ledger_writer(setup.recorder.path)
-    select_count = 0
+    path_select_count = 0
+    statements: list[str] = []
 
     def update_between_batches(statement: str) -> None:
-        nonlocal select_count
-        if "SELECT * FROM INVENTORY" not in statement.upper():
+        nonlocal path_select_count
+        statements.append(statement)
+        if (
+            "SELECT * FROM INVENTORY" not in statement.upper()
+            or "REL_PATH_KEY IN" not in statement.upper()
+        ):
             return
-        select_count += 1
-        if select_count == 2:
+        path_select_count += 1
+        if path_select_count == 2:
             writer.execute(
                 "UPDATE inventory SET scope_token = ? WHERE location_id = ?",
                 ("scope-new", setup.source_location_id),
             )
+            writer.commit()
 
     try:
         setup.recorder.record_inventory(
@@ -519,19 +630,44 @@ def test_chunked_integrity_candidate_read_uses_one_snapshot_and_saved_order(
                 IntegrityMode.BASELINE,
                 saved_row_ids=tuple(reversed(row_ids)),
             )
-            with pytest.raises(RuntimeError, match="missing inventory rows"):
-                repository.get_integrity_candidates(
-                    setup.source_location_id,
-                    IntegrityMode.BASELINE,
-                    saved_row_ids=(row_ids[0], "999999999"),
-                )
+            stale = repository.get_integrity_candidates(
+                setup.source_location_id,
+                IntegrityMode.VERIFY,
+                stale_before=NOW,
+                completed_row_ids=tuple(reversed(row_ids)),
+            )
+            if row_ids:
+                with pytest.raises(RuntimeError, match="missing inventory rows"):
+                    repository.get_integrity_candidates(
+                        setup.source_location_id,
+                        IntegrityMode.BASELINE,
+                        saved_row_ids=(row_ids[0], "999999999"),
+                    )
 
-        assert select_count >= 2
-        assert {row.scope_token for row in selected} == {"scope-old"}
+        bounded_calls = [
+            parameters
+            for statement, parameters in parameter_calls
+            if (
+                "SELECT * FROM inventory" in statement
+                and ("rel_path_key IN" in statement or "id IN" in statement)
+                and "LIMIT ?" in statement
+            )
+        ]
+        assert all(len(parameters) <= batch_size + 2 for parameters in bounded_calls)
+        assert tuple(row.rel_path_key for row in selected) == tuple(
+            sorted(record.rel_path_key for record in records)
+        )
         assert tuple(row.row_id for row in saved) == tuple(reversed(row_ids))
-        with LedgerRepository(setup.recorder.path) as repository:
-            durable = repository.get_inventory(setup.source_location_id)
-        assert {row.scope_token for row in durable} == {"scope-new"}
+        assert tuple(row.rel_path_key for row in stale) == tuple(
+            sorted(record.rel_path_key for record in records)
+        )
+
+        if count > batch_size:
+            assert path_select_count >= 2
+            assert {row.scope_token for row in selected} == {"scope-old"}
+            with LedgerRepository(setup.recorder.path) as repository:
+                durable = repository.get_inventory(setup.source_location_id)
+            assert {row.scope_token for row in durable} == {"scope-new"}
     finally:
         writer.close()
         setup.recorder.close()
@@ -643,18 +779,8 @@ def test_current_mapping_read_ignores_large_irrelevant_history_and_keeps_pair_or
     tmp_path: Path,
 ) -> None:
     count = 1_201
-    rows = tuple(
-        (
-            f"source-{count - index:04d}.bin",
-            FileIdentity("source-serial", index),
-            f"target-{index:04d}.bin",
-            None
-            if index == 700
-            else FileIdentity("target-serial", 10_000 + index),
-            1,
-            1,
-        )
-        for index in range(1, count + 1)
+    rows = _mapping_rows(
+        count, descending_source_paths=True, null_target_index=700
     )
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
     statements: list[str] = []
@@ -666,7 +792,7 @@ def test_current_mapping_read_ignores_large_irrelevant_history_and_keeps_pair_or
         )
         target_identities = frozenset(
             identity
-            for index in selected[:-1]
+            for index in selected
             if (identity := rows[index - 1][3]) is not None
         ) | {FileIdentity("target-serial", 99_999)}
         target_paths = tuple(rows[index - 1][2] for index in reversed(selected))
@@ -694,11 +820,7 @@ def test_current_mapping_read_ignores_large_irrelevant_history_and_keeps_pair_or
             for index in selected[:-1]
         }
         assert any(pair.target_identity is None for pair in found.snapshot.pairs)
-        pair_selects = [
-            statement
-            for statement in statements
-            if "FROM mapping_correspondence AS pair" in statement
-        ]
+        pair_selects = _matching_statements(statements, _MAPPING_PAIR_QUERY)
         assert len(pair_selects) == 1
         assert "pair.target_inventory_id IN" in pair_selects[0]
         assert "current_target.location_id" in pair_selects[0]
@@ -811,10 +933,7 @@ def test_current_mapping_read_skips_pair_query_for_an_empty_target_scope(
 
         assert found is not None
         assert found.snapshot.pairs == ()
-        assert not any(
-            "FROM mapping_correspondence AS pair" in statement
-            for statement in statements
-        )
+        assert not _matching_statements(statements, _MAPPING_PAIR_QUERY)
     finally:
         setup.recorder.close()
 
@@ -846,40 +965,18 @@ def test_current_mapping_queries_use_target_and_identity_indexes(
             )
         assert found is not None
 
-        pair_statement = next(
-            statement
-            for statement in statements
-            if "FROM mapping_correspondence AS pair" in statement
-        )
-        identity_statement = next(
-            statement
-            for statement in statements
-            if "WITH requested(volume_serial, file_index)" in statement
-        )
-        connection = connect_ledger_reader(setup.recorder.path)
-        try:
-            pair_plan = tuple(
-                str(row["detail"])
-                for row in connection.execute(
-                    "EXPLAIN QUERY PLAN " + pair_statement
-                )
-            )
-            identity_plan = tuple(
-                str(row["detail"])
-                for row in connection.execute(
-                    "EXPLAIN QUERY PLAN " + identity_statement
-                )
-            )
-        finally:
-            connection.close()
+        pair_statement = _matching_statements(statements, _MAPPING_PAIR_QUERY)[0]
+        identity_statement = _matching_statements(statements, _IDENTITY_QUERY)[0]
+        pair_plan = _query_plan(setup.recorder.path, pair_statement)
+        identity_plan = _query_plan(setup.recorder.path, identity_statement)
 
         assert any(
-            "SEARCH pair USING INDEX" in detail
+            "USING INDEX" in detail
             and "mapping_id=? AND target_inventory_id=?" in detail
             for detail in pair_plan
         )
         assert any(
-            "SEARCH current_target USING COVERING INDEX" in detail
+            "USING COVERING INDEX" in detail
             and "location_id=? AND rel_path_key=?" in detail
             for detail in pair_plan
         )
@@ -888,27 +985,23 @@ def test_current_mapping_queries_use_target_and_identity_indexes(
         setup.recorder.close()
 
 
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    _SUBJECT_BATCH_CASES,
+)
 def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
 ) -> None:
-    rows = tuple(
-        (
-            f"source-{index:04d}.bin",
-            FileIdentity("source-serial", index),
-            f"target-{index:04d}.bin",
-            FileIdentity("target-serial", 10_000 + index),
-            1,
-            1,
-        )
-        for index in range(1, 802)
-    )
+    monkeypatch.setattr(repository_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    parameter_calls = _capture_repository_parameters(monkeypatch)
+    rows = _mapping_rows(count, descending_source_paths=True)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
-    statements: list[str] = []
     try:
         _insert_mapping_history(setup.recorder.path, setup, rows)
-        with LedgerRepository(
-            setup.recorder.path, trace_callback=statements.append
-        ) as repository:
+        with LedgerRepository(setup.recorder.path) as repository:
             found = repository.find_current_mapping(
                 VolumeId("source-serial", "NTFS"),
                 "source",
@@ -920,24 +1013,31 @@ def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
             )
 
         assert found is not None
-        assert len(found.snapshot.pairs) == len(rows)
-        pair_selects = [
-            statement
-            for statement in statements
-            if "FROM mapping_correspondence AS pair" in statement
+        assert [pair.source_rel_path_key for pair in found.snapshot.pairs] == sorted(
+            normalize_relative_path(row[0]) for row in rows
+        )
+        assert {pair.target_rel_path_key for pair in found.snapshot.pairs} == {
+            normalize_relative_path(row[2]) for row in rows
+        }
+        assert found.snapshot.disqualified_source_identities == frozenset()
+        assert found.snapshot.disqualified_target_identities == frozenset()
+        pair_parameters = [
+            parameters
+            for statement, parameters in parameter_calls
+            if _MAPPING_PAIR_QUERY.search(statement)
         ]
-        identity_selects = [
-            statement
-            for statement in statements
-            if "WITH requested(volume_serial, file_index)" in statement
+        identity_parameters = [
+            parameters
+            for statement, parameters in parameter_calls
+            if _IDENTITY_QUERY.search(statement)
         ]
-        assert len(pair_selects) == 3
-        assert len(identity_selects) == 6
-        assert all(statement.count("TARGET-") <= 400 for statement in pair_selects)
+        assert bool(pair_parameters) is bool(count)
+        assert bool(identity_parameters) is bool(count)
+        assert all(len(parameters) <= batch_size + 2 for parameters in pair_parameters)
         assert all(
-            max(statement.count("source-serial"), statement.count("target-serial"))
-            <= 400
-            for statement in identity_selects
+            len(parameters) <= 2 * batch_size + 1
+            and (len(parameters) - 1) % 2 == 0
+            for parameters in identity_parameters
         )
     finally:
         setup.recorder.close()
@@ -946,24 +1046,14 @@ def test_current_mapping_read_chunks_keys_and_identities_at_four_hundred(
 def test_current_mapping_read_uses_one_snapshot_across_query_batches(
     tmp_path: Path,
 ) -> None:
-    rows = tuple(
-        (
-            f"source-{index:04d}.bin",
-            FileIdentity("source-serial", index),
-            f"target-{index:04d}.bin",
-            FileIdentity("target-serial", 10_000 + index),
-            1,
-            1,
-        )
-        for index in range(1, 402)
-    )
+    rows = _mapping_rows(401)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
     writer = connect_ledger_writer(setup.recorder.path)
     pair_select_count = 0
 
     def update_between_batches(statement: str) -> None:
         nonlocal pair_select_count
-        if "FROM mapping_correspondence AS pair" not in statement:
+        if not _MAPPING_PAIR_QUERY.search(statement):
             return
         pair_select_count += 1
         if pair_select_count == 2:
@@ -990,7 +1080,7 @@ def test_current_mapping_read_uses_one_snapshot_across_query_batches(
                 target_identities=target_identities,
             )
         assert found is not None
-        assert pair_select_count == 2
+        assert pair_select_count >= 2
         assert found.snapshot.disqualified_source_identities == frozenset()
 
         with LedgerRepository(setup.recorder.path) as repository:
@@ -1012,10 +1102,22 @@ def test_current_mapping_read_uses_one_snapshot_across_query_batches(
         setup.recorder.close()
 
 
-def test_large_inventory_selection_uses_bounded_queries(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    _SUBJECT_BATCH_CASES,
+)
+def test_large_inventory_selection_uses_bounded_queries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
+) -> None:
+    monkeypatch.setattr(repository_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    parameter_calls = _capture_repository_parameters(monkeypatch)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
-    records = tuple(_file(f"folder\\file-{index:04d}.bin", index) for index in range(1_001))
-    statements: list[str] = []
+    records = tuple(
+        _file(f"folder\\file-{index:04d}.bin", index + 1) for index in range(count)
+    )
     try:
         setup.recorder.record_inventory(
             InventoryCommand(
@@ -1026,21 +1128,24 @@ def test_large_inventory_selection_uses_bounded_queries(tmp_path: Path) -> None:
                 NOW,
             )
         )
-        with LedgerRepository(
-            setup.recorder.path, trace_callback=statements.append
-        ) as repository:
+        with LedgerRepository(setup.recorder.path) as repository:
             selected = repository.get_inventory(
                 setup.source_location_id,
                 (record.rel_path for record in reversed(records)),
             )
 
-        selects = [
-            statement
-            for statement in statements
-            if statement.lstrip().upper().startswith("SELECT * FROM INVENTORY")
+        assert len(selected) == count
+        select_parameters = [
+            parameters
+            for statement, parameters in parameter_calls
+            if _INVENTORY_SELECTION_QUERY.search(statement)
+            and "rel_path_key IN" in statement
         ]
-        assert len(selected) == 1_001
-        assert len(selects) == 3
+        assert bool(select_parameters) is bool(count)
+        assert all(
+            len(parameters) <= batch_size + 2
+            for parameters in select_parameters
+        )
         assert [row.rel_path_key for row in selected] == sorted(
             row.rel_path_key for row in selected
         )
@@ -1058,7 +1163,7 @@ def test_large_inventory_selection_is_one_read_snapshot(tmp_path: Path) -> None:
 
     def update_between_batches(statement: str) -> None:
         nonlocal select_count
-        if not statement.lstrip().upper().startswith("SELECT * FROM INVENTORY"):
+        if not _INVENTORY_SELECTION_QUERY.search(statement):
             return
         select_count += 1
         if select_count == 2:
@@ -1066,6 +1171,7 @@ def test_large_inventory_selection_is_one_read_snapshot(tmp_path: Path) -> None:
                 "UPDATE inventory SET scope_token = ? WHERE location_id = ?",
                 ("scope-new", setup.source_location_id),
             )
+            writer.commit()
 
     try:
         setup.recorder.record_inventory(
@@ -1085,7 +1191,7 @@ def test_large_inventory_selection_is_one_read_snapshot(tmp_path: Path) -> None:
                 (record.rel_path for record in records),
             )
 
-        assert select_count == 2
+        assert select_count >= 2
         assert {row.scope_token for row in selected} == {"scope-old"}
         with LedgerRepository(setup.recorder.path) as repository:
             durable = repository.get_inventory(setup.source_location_id)

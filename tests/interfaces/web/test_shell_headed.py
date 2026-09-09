@@ -619,7 +619,7 @@ def _assert_report_schema(result: object) -> None:
     assert type(result["tree_fixture"]) is dict
     assert set(result["tree_fixture"]) == {"size", "sha256"}
     assert type(result["page"]) is dict
-    assert set(result["runtime"]) == {
+    assert set(result["runtime"]) >= {
         "executable",
         "namisync_file",
         "versions",

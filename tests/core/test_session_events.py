@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import FrozenInstanceError, dataclass, fields, replace
 from datetime import datetime, timedelta, timezone
 import gc
+from inspect import signature
 import subprocess
 import sys
 from weakref import ref
@@ -541,12 +542,12 @@ def test_compound_cancel_preserves_filesystem_truth_and_projects_lifecycle() -> 
     assert record.result.status is SessionState.COMPLETED
 
 
-def test_session_record_payload_exists_only_while_nonterminal() -> None:
+def test_session_record_checkpoint_exists_only_while_nonterminal() -> None:
     created_at = datetime(2026, 7, 18, tzinfo=timezone.utc)
 
-    with pytest.raises(ValueError, match="terminal session payload"):
+    with pytest.raises(ValueError, match="terminal session checkpoint"):
         SessionRecord(
-            SessionId("terminal-payload"),
+            SessionId("terminal-checkpoint"),
             "sync-execution",
             SessionState.COMPLETED,
             (),
@@ -557,9 +558,9 @@ def test_session_record_payload_exists_only_while_nonterminal() -> None:
             ended_at=created_at,
         )
 
-    with pytest.raises(TypeError, match="nonterminal workflow payload"):
+    with pytest.raises(TypeError, match="nonterminal workflow checkpoint"):
         SessionRecord(
-            SessionId("missing-payload"),
+            SessionId("missing-checkpoint"),
             "sync-execution",
             SessionState.PAUSED,
             (),
@@ -567,6 +568,102 @@ def test_session_record_payload_exists_only_while_nonterminal() -> None:
             True,
             2,
             created_at,
+        )
+
+
+def test_session_record_composes_exact_stored_value_with_compatible_constructor() -> None:
+    created_at = datetime(2026, 8, 26, tzinfo=timezone.utc)
+    resources = (ResourceId("volume", "a"), ResourceId("volume", "b"))
+    result = OperationResult(SessionState.COMPLETED)
+    record = SessionRecord(
+        SessionId("composed-session"),
+        "opaque-workflow",
+        SessionState.COMPLETED,
+        resources,
+        None,
+        True,
+        3,
+        created_at,
+        started_at=created_at,
+        ended_at=created_at,
+        result=result,
+    )
+    equivalent = SessionRecord(
+        session_id=record.session_id,
+        kind=record.kind,
+        state=record.state,
+        resources=resources,
+        checkpoint=None,
+        supports_pause=True,
+        admission_order=3,
+        created_at=created_at,
+        started_at=created_at,
+        ended_at=created_at,
+        result=result,
+    )
+
+    assert str(signature(SessionRecord)) == (
+        "(session_id: 'SessionId', kind: 'str', state: 'SessionState', "
+        "resources: 'tuple[ResourceId, ...]', checkpoint: 'object | None', "
+        "supports_pause: 'bool', admission_order: 'int', "
+        "created_at: 'datetime', started_at: 'datetime | None' = None, "
+        "ended_at: 'datetime | None' = None, "
+        "result: 'OperationResult | None' = None) -> None"
+    )
+    assert tuple(field.name for field in fields(record)) == (
+        "stored",
+        "checkpoint",
+    )
+    assert type(record.stored) is StoredSessionRecord
+    assert record.stored.resources is resources
+    assert record.stored.result is result
+    assert tuple(
+        getattr(record, name)
+        for name in (
+            "session_id",
+            "kind",
+            "state",
+            "resources",
+            "supports_pause",
+            "admission_order",
+            "created_at",
+            "started_at",
+            "ended_at",
+            "result",
+        )
+    ) == tuple(
+        getattr(record.stored, name)
+        for name in (
+            "session_id",
+            "kind",
+            "state",
+            "resources",
+            "supports_pause",
+            "admission_order",
+            "created_at",
+            "started_at",
+            "ended_at",
+            "result",
+        )
+    )
+    assert record == equivalent
+    assert hash(record) == hash(equivalent)
+    assert not hasattr(record, "__dict__")
+    with pytest.raises(FrozenInstanceError):
+        record.checkpoint = b"changed"  # type: ignore[misc]
+
+
+def test_session_record_constructor_uses_canonical_stored_validation() -> None:
+    with pytest.raises(ValueError, match="session id and kind must be non-empty"):
+        SessionRecord(
+            SessionId("invalid-live-metadata"),
+            "",
+            SessionState.PENDING,
+            (),
+            b"continuation",
+            False,
+            0,
+            datetime(2026, 8, 26, tzinfo=timezone.utc),
         )
 
 
@@ -598,13 +695,13 @@ def test_stored_session_record_has_exact_frozen_metadata_shape() -> None:
         "result",
     )
     assert not hasattr(record, "__dict__")
-    assert not hasattr(record, "payload")
+    assert not hasattr(record, "checkpoint")
     with pytest.raises(FrozenInstanceError):
         record.kind = "changed"  # type: ignore[misc]
 
 
-@pytest.mark.parametrize("field_name", ["payload", "live_record"])
-def test_stored_session_record_rejects_payload_and_live_reference_fields(
+@pytest.mark.parametrize("field_name", ["checkpoint", "live_record"])
+def test_stored_session_record_rejects_checkpoint_and_live_reference_fields(
     field_name: str,
 ) -> None:
     with pytest.raises(TypeError, match="unexpected keyword"):
@@ -612,7 +709,7 @@ def test_stored_session_record_rejects_payload_and_live_reference_fields(
 
 
 @pytest.mark.parametrize("state", tuple(SessionState))
-def test_stored_session_record_can_represent_every_lifecycle_without_payload(
+def test_stored_session_record_can_represent_every_lifecycle_without_checkpoint(
     state: SessionState,
 ) -> None:
     record = _stored_record()
@@ -624,7 +721,7 @@ def test_stored_session_record_can_represent_every_lifecycle_without_payload(
 
     assert stored.state is state
     assert stored.result is None
-    assert not hasattr(stored, "payload")
+    assert not hasattr(stored, "checkpoint")
 
 
 @pytest.mark.parametrize(
@@ -681,12 +778,12 @@ def test_in_memory_store_rejects_nonexact_records_before_replacing_metadata(
     stored = _stored_record()
 
     @dataclass(frozen=True, slots=True)
-    class PayloadRecord(StoredSessionRecord):
-        payload: bytes = b"smuggled continuation"
+    class CheckpointRecord(StoredSessionRecord):
+        checkpoint: object = b"smuggled continuation"
 
     class Lookalike:
         session_id = stored.session_id
-        payload = b"smuggled continuation"
+        checkpoint = b"smuggled continuation"
 
     if record_kind == "live":
         invalid = SessionRecord(
@@ -695,7 +792,7 @@ def test_in_memory_store_rejects_nonexact_records_before_replacing_metadata(
             stored.created_at,
         )
     elif record_kind == "subclass":
-        invalid = PayloadRecord(
+        invalid = CheckpointRecord(
             stored.session_id, stored.kind, stored.state, stored.resources,
             stored.supports_pause, stored.admission_order, stored.created_at,
         )
@@ -872,7 +969,7 @@ def test_verify_cancellation_round_trips_terminal_event_and_session_record(
     restored = store.snapshot()[0]
     assert restored is stored
     assert restored.result is record.result
-    assert not hasattr(restored, "payload")
+    assert not hasattr(restored, "checkpoint")
     assert restored.result is not None
     assert restored.result.status is filesystem_status
     assert restored.result.canceled
@@ -1150,46 +1247,64 @@ def test_runner_releases_a_result_that_fails_snapshot_revalidation() -> None:
     assert release_checks == [True]
 
 
-def test_runner_uses_a_detached_progress_snapshot_for_terminal_fallback() -> None:
-    progress = Progress("execute", 1, 2, 5, 9, "reviewed.txt")
+@pytest.mark.parametrize(
+    "scenario",
+    (
+        "all-fields",
+        "producer-rebind-cancel",
+        "accepted-then-rejected-cancel",
+        "accepted-then-rejected-failure",
+    ),
+)
+def test_runner_normalizes_progress_once_and_preserves_all_fields(
+    scenario: str,
+) -> None:
+    class ProducerProgress(Progress):
+        pass
+
+    progress = ProducerProgress(
+        phase="execute",
+        items_done=2,
+        items_total=4,
+        bytes_done=23,
+        bytes_total=101,
+        current_path="folder\\reviewed.txt",
+        item_id="operation",
+        item_type="operation",
+        item_attempt_id="a" * 32,
+        item_bytes_done=7,
+        item_bytes_total=11,
+    )
+    rejected = replace(progress, bytes_done=61)
+    attempted: list[Progress] = []
     emitted: list[object] = []
 
-    def work(context: RunContext) -> OperationResult:
-        context.emit(progress)
-        object.__setattr__(progress, "bytes_done", 9)
-        raise Canceled()
-
-    outcome = run_session(
-        work,
-        emit=emitted.append,
-        checkpoint=lambda: None,
-        settle=lambda _state, _result: None,
-        finalize_audit=lambda _result: RecordingStatus.OK,
-        publish_result=lambda _result: None,
-    )
-
-    assert outcome.result is not None
-    assert (outcome.result.bytes_done, outcome.result.bytes_total) == (5, 9)
-    assert type(emitted[0]) is Progress
-    assert emitted[0].bytes_done == 5
-
-
-def test_runner_keeps_private_progress_truth_from_the_emitter() -> None:
-    progress = Progress("execute", 1, 1, 5, 9, "reviewed.txt")
-    public: list[object] = []
-
     def emit(body: object) -> None:
-        public.append(body)
         if isinstance(body, Progress):
-            object.__setattr__(body, "bytes_done", 9)
+            attempted.append(body)
+            if body.bytes_done == rejected.bytes_done:
+                if scenario == "accepted-then-rejected-cancel":
+                    raise Canceled()
+                if scenario == "accepted-then-rejected-failure":
+                    raise RuntimeError("progress rejected")
+        emitted.append(body)
 
     def work(context: RunContext) -> OperationResult:
-        context.emit(progress)
-        return OperationResult(
-            SessionState.COMPLETED,
-            bytes_done=5,
-            bytes_total=9,
-        )
+        offered = progress
+        if scenario == "all-fields":
+            offered = ProducerProgress(
+                **{
+                    field.name: getattr(progress, field.name)
+                    for field in fields(Progress)
+                }
+            )
+        context.emit(offered)
+        if scenario == "producer-rebind-cancel":
+            offered = replace(offered, bytes_done=47)
+            assert offered.bytes_done == 47
+        if scenario.startswith("accepted-then-rejected"):
+            context.emit(rejected)
+        raise Canceled()
 
     outcome = run_session(
         work,
@@ -1201,9 +1316,48 @@ def test_runner_keeps_private_progress_truth_from_the_emitter() -> None:
     )
 
     assert outcome.result is not None
+    expected_status = (
+        SessionState.FAILED
+        if scenario == "accepted-then-rejected-failure"
+        else SessionState.CANCELED
+    )
+    assert outcome.result.status is expected_status
+    assert (outcome.result.bytes_done, outcome.result.bytes_total) == (23, 101)
+    assert type(attempted[0]) is Progress
+    assert tuple(getattr(attempted[0], field.name) for field in fields(Progress)) == (
+        tuple(getattr(progress, field.name) for field in fields(Progress))
+    )
+    if scenario.startswith("accepted-then-rejected"):
+        assert len(attempted) == 2
+        assert attempted[1].bytes_done == 61
+    terminal = next(body for body in emitted if isinstance(body, Terminal))
+    assert (terminal.result.bytes_done, terminal.result.bytes_total) == (23, 101)
+
+
+def test_runner_keeps_returned_result_truth_after_progress_emission() -> None:
+    progress = Progress("execute", 1, 1, 5, 9, "reviewed.txt")
+    public: list[object] = []
+
+    def work(context: RunContext) -> OperationResult:
+        context.emit(progress)
+        return OperationResult(
+            SessionState.COMPLETED,
+            bytes_done=5,
+            bytes_total=9,
+        )
+
+    outcome = run_session(
+        work,
+        emit=public.append,
+        checkpoint=lambda: None,
+        settle=lambda _state, _result: None,
+        finalize_audit=lambda _result: RecordingStatus.OK,
+        publish_result=lambda _result: None,
+    )
+
+    assert outcome.result is not None
     assert (outcome.result.bytes_done, outcome.result.bytes_total) == (5, 9)
-    assert isinstance(public[0], Progress)
-    assert public[0].bytes_done == 9
+    assert public[0] == progress
 
 
 def test_runner_seeds_cancel_result_from_prior_pause_items() -> None:
@@ -1811,7 +1965,7 @@ def test_detail_projection_accepts_only_its_exact_canonical_shape() -> None:
 
     admitted, omitted = project_detail(projection)
 
-    assert admitted is not projection
+    assert admitted is projection
     assert admitted.entries == projection.entries
     assert omitted == 0
     assert admitted.to_wire() == {
@@ -1876,19 +2030,13 @@ def test_detail_projection_bounds_invalid_text_before_encoding() -> None:
         DetailProjection((("published_path", overlong_invalid_path),))
 
 
-def test_detail_projection_revalidates_forged_exact_instances() -> None:
-    missing_entries = object.__new__(DetailProjection)
-    projection = object.__new__(DetailProjection)
-    object.__setattr__(
-        projection,
-        "entries",
-        (("message", "first"), ("message", "second")),
-    )
+def test_detail_projection_reuses_admitted_exact_instance() -> None:
+    projection = DetailProjection((("message", "copy complete"),))
 
-    with pytest.raises(TypeError, match="exact tuple"):
-        project_detail(missing_entries)
-    with pytest.raises(ValueError, match="duplicate"):
-        project_detail(projection)
+    admitted, omitted = project_detail(projection)
+
+    assert admitted is projection
+    assert omitted == 0
 
 
 def test_detail_projection_subclass_is_copied_to_exact_base_shape() -> None:
@@ -1907,7 +2055,7 @@ def test_detail_projection_subclass_is_copied_to_exact_base_shape() -> None:
     assert omitted == 0
 
 
-def test_item_detail_snapshot_does_not_retain_the_callers_projection() -> None:
+def test_item_detail_reuses_callers_exact_projection() -> None:
     source = DetailProjection((("message", "copy complete"),))
     item = ItemOutcome(
         item_id="1" * 32,
@@ -1917,27 +2065,25 @@ def test_item_detail_snapshot_does_not_retain_the_callers_projection() -> None:
         detail=source,
     )
 
-    object.__setattr__(source, "entries", (("message", object()),))
-
-    assert item.detail is not source
+    assert item.detail is source
     assert item.detail.entries == (("message", "copy complete"),)
 
 
-def test_result_item_serialization_revalidates_owned_detail() -> None:
+def test_result_item_serialization_projects_owned_detail_to_canonical_wire() -> None:
     item = ItemOutcome(
         item_id="1" * 32,
         kind="copy",
         path="file.bin",
         outcome=Outcome.SUCCEEDED,
-        detail={"message": "copy complete"},
+        detail={"durability_warnings": ["flush unavailable"]},
     )
     assert isinstance(item.detail, DetailProjection)
-    object.__setattr__(item.detail, "entries", (("message", object()),))
+    direct_wire = item.detail.to_wire()
+    result_wire = result_item_to_dict(item)
 
-    with pytest.raises(TypeError, match="message must be text"):
-        item.detail.to_wire()
-    with pytest.raises(TypeError, match="message must be text"):
-        result_item_to_dict(item)
+    assert direct_wire == {"durability_warnings": ["flush unavailable"]}
+    assert result_wire["detail"] == direct_wire
+    assert result_wire["detail"] is not direct_wire
 
 
 def test_detail_projection_rejects_duplicate_custom_mapping_items_before_omission() -> None:
@@ -2461,9 +2607,9 @@ def test_v5_terminal_codec_preserves_signed_64_values_above_safe_int() -> None:
     assert envelope_from_dict(envelope_to_dict(envelope)) == envelope
 
 
-@pytest.mark.parametrize("version", (3, 4, 6))
-def test_non_v5_epoch_is_explicitly_refused_by_envelope_and_decoder(
-    version: int,
+@pytest.mark.parametrize("version", (4, 6, True))
+def test_envelope_constructor_requires_current_event_epoch(
+    version: object,
 ) -> None:
     with pytest.raises(ValueError, match="exactly 5"):
         Envelope(
@@ -2473,11 +2619,6 @@ def test_non_v5_epoch_is_explicitly_refused_by_envelope_and_decoder(
             schema_version=version,
             body=_progress(),
         )
-
-    serialized = envelope_to_dict(_progress_envelope())
-    serialized["schema_version"] = version
-    with pytest.raises(ValueError, match="exactly 5"):
-        envelope_from_dict(serialized)
 
 
 @pytest.mark.parametrize(
@@ -2697,20 +2838,6 @@ def test_integrity_event_codec_preserves_absent_post_copy_ledger_identity() -> N
     assert isinstance(decoded.body, IntegrityOutcome)
     assert decoded.body.row_id is None
     assert decoded.body.location_id is None
-
-
-def test_event_deserialization_rejects_unknown_schema() -> None:
-    envelope = Envelope(
-        session_id=SessionId("a" * 32),
-        seq=1,
-        at=datetime(2026, 7, 18, tzinfo=timezone.utc),
-        schema_version=CORE_EVENT_SCHEMA_VERSION,
-        body=PhaseChanged("phase"),
-    )
-    serialized = envelope_to_dict(envelope)
-    serialized["schema_version"] = 999
-    with pytest.raises(ValueError, match="exactly 5"):
-        envelope_from_dict(serialized)
 
 
 def test_event_sequence_scalars_share_the_browser_safe_integer_domain() -> None:

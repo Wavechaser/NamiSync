@@ -29,7 +29,7 @@ class AppPathError(ValueError):
     """The GUI application root is unavailable or is not a local path."""
 
 
-class _PathLeaseNative(Protocol):
+class PathLeaseNative(Protocol):
     def open(self, path: Path, *, directory: bool) -> object: ...
 
     def close(self, handle: object) -> None: ...
@@ -41,7 +41,7 @@ class AppPathLease:
     def __init__(
         self,
         paths: AppPaths,
-        native: _PathLeaseNative,
+        native: PathLeaseNative,
         handles: dict[Path, object],
     ) -> None:
         self._paths = paths
@@ -137,7 +137,7 @@ class AppPaths:
     def acquire_lease(
         self,
         *,
-        native: _PathLeaseNative | None = None,
+        native: PathLeaseNative | None = None,
     ) -> AppPathLease:
         """Pin the application directory chain for the headed process lifetime."""
 

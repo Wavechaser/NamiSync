@@ -315,8 +315,8 @@ class _BenchmarkInvocation:
             bytes_total=1_500,
         )
 
-    def snapshot(self) -> bytes:
-        return str(self._task_index).encode("ascii")
+    def snapshot(self) -> object:
+        return self._task_index
 
 
 def _arguments() -> argparse.Namespace:
@@ -561,14 +561,14 @@ def _run_benchmark(
     from namisync.workflows import PLAN_KIND
 
     roots = []
-    task_by_payload: dict[bytes, int] = {}
+    task_by_checkpoint: dict[object, int] = {}
     for index in range(4):
         source = arguments.data_dir / "sources" / f"task-{index}"
         target = arguments.data_dir / "targets" / f"task-{index}"
         source.mkdir(parents=True)
         target.mkdir(parents=True)
         roots.append((str(source), str(target)))
-        task_by_payload[str(source).encode("utf-8")] = index
+        task_by_checkpoint[str(source)] = index
     fixture_clock = _FixtureClock()
     start_barrier = threading.Barrier(4, action=fixture_clock.begin)
     begin_marker = arguments.data_dir / "benchmark.begin"
@@ -578,12 +578,12 @@ def _run_benchmark(
     presented_marker = arguments.data_dir / "benchmark.presented"
 
     def prepare(request) -> PreparedSession:
-        payload = str(request.source_path).encode("utf-8")
-        return PreparedSession(payload)
+        checkpoint = str(request.source_path)
+        return PreparedSession(checkpoint)
 
-    def open_invocation(payload: bytes) -> _BenchmarkInvocation:
+    def open_invocation(checkpoint: object) -> _BenchmarkInvocation:
         return _BenchmarkInvocation(
-            task_by_payload[payload],
+            task_by_checkpoint[checkpoint],
             start_barrier,
             fixture_clock,
             recorder,

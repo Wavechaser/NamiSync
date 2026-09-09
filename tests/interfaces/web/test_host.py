@@ -7,7 +7,7 @@ import inspect
 import json
 from pathlib import Path
 from textwrap import dedent
-from threading import Event, Lock, Thread, current_thread
+from threading import Condition, Event, Lock, Thread, current_thread
 from time import monotonic
 from types import MappingProxyType, SimpleNamespace
 
@@ -49,17 +49,18 @@ from namisync.interfaces.web.readiness import (
 _OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
 
 
-def test_task_registry_has_no_task_model_runtime_admission(
+def test_task_registry_composition_preserves_one_argument_constructor(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    registry = object()
-    service = object()
-    constructed: list[object] = []
-    monkeypatch.setenv("PYTHONMALLOC", "malloc")
     import namisync.interfaces.web.drain as drain_module
 
-    def construct(value: object) -> object:
-        constructed.append(value)
+    registry = object()
+    service = object()
+    constructed: list[tuple[tuple[object, ...], dict[str, object]]] = []
+    monkeypatch.setenv("PYTHONMALLOC", "malloc")
+
+    def construct(*args, **kwargs) -> object:
+        constructed.append((args, kwargs))
         return registry
 
     monkeypatch.setattr(
@@ -69,10 +70,10 @@ def test_task_registry_has_no_task_model_runtime_admission(
     )
 
     assert host._task_registry(service) is registry
-    assert constructed == [service]
+    assert constructed == [((service,), {})]
 
 
-def test_desktop_service_requires_session_attachment(
+def test_desktop_service_uses_no_adapter_attachment_contract(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -94,7 +95,6 @@ def test_desktop_service_requires_session_attachment(
             (paths.ledger, paths.history),
             {
                 "settings_path": paths.settings,
-                "require_session_attachment": True,
             },
         )
     ]
@@ -558,7 +558,6 @@ def _patch_primary(
     slots = SimpleNamespace()
     registry = SimpleNamespace(
         begin_close=lambda: order.append("registry.begin_close"),
-        unsubscribe_all=lambda: order.append("registry.unsubscribe_all"),
     )
     commands = SimpleNamespace()
     dispatcher = SimpleNamespace(
@@ -763,7 +762,6 @@ def test_host_prepares_before_create_and_starts_only_edge(
         "reject_dispatch",
         "registry.begin_close",
         "wait_handlers",
-        "registry.unsubscribe_all",
         "service.close",
         "appearance.close",
         "cosmetics.close",
@@ -1389,7 +1387,6 @@ def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
     )
     registry = SimpleNamespace(
         begin_close=lambda: order.append("wake"),
-        unsubscribe_all=lambda: order.append("unsubscribe"),
     )
     service = _ControllerService(order, [_shutdown_view(complete=True)])
     cosmetics = SimpleNamespace(close=lambda: order.append("cosmetics.close"))
@@ -1410,7 +1407,6 @@ def test_startup_finalizer_quiesces_registry_before_service_close() -> None:
         "reject",
         "wake",
         "wait",
-        "unsubscribe",
         "service.close",
         "cosmetics.close",
     ]
@@ -1432,7 +1428,6 @@ def test_startup_finalizer_keeps_cosmetics_open_until_handlers_quiesce() -> None
     )
     registry = SimpleNamespace(
         begin_close=lambda: None,
-        unsubscribe_all=lambda: None,
     )
     service = _ControllerService([], [_shutdown_view(complete=True)])
     cosmetics = SimpleNamespace(close=cosmetics_closed.set)
@@ -1478,7 +1473,6 @@ def test_startup_finalizer_preserves_quiesce_error_without_unsafe_service_close(
     )
     registry = SimpleNamespace(
         begin_close=fail_wake,
-        unsubscribe_all=lambda: order.append("unsubscribe"),
     )
     service = _ControllerService(
         order,
@@ -1534,7 +1528,6 @@ def test_startup_finalizer_retains_every_owner_until_complete_retry(
     )
     registry = SimpleNamespace(
         begin_close=lambda: order.append("wake"),
-        unsubscribe_all=lambda: order.append("unsubscribe"),
     )
     first_outcome = (
         _shutdown_view(complete=False)
@@ -1574,7 +1567,7 @@ def test_startup_finalizer_retains_every_owner_until_complete_retry(
     first_failure = host._finalize_primary(service, **options)
 
     assert first_failure is not None
-    assert order == ["reject", "wake", "wait", "unsubscribe", "service.close"]
+    assert order == ["reject", "wake", "wait", "service.close"]
 
     retry_failure = host._finalize_primary(service, **options)
 
@@ -1583,12 +1576,10 @@ def test_startup_finalizer_retains_every_owner_until_complete_retry(
         "reject",
         "wake",
         "wait",
-        "unsubscribe",
         "service.close",
         "reject",
         "wake",
         "wait",
-        "unsubscribe",
         "service.close",
         "presentation.close",
         "cosmetics.close",
@@ -1893,7 +1884,7 @@ def test_appearance_cleanup_failure_is_nonfatal(
 
         def close(self) -> None:
             order.append("appearance.close")
-            raise RuntimeError("injected unsubscribe failure")
+            raise RuntimeError("injected appearance cleanup failure")
 
     monkeypatch.setattr(
         host,
@@ -1985,20 +1976,17 @@ def test_close_hooks_quiesce_tasks_without_retiring_appearance() -> None:
     )
     registry = SimpleNamespace(
         begin_close=lambda: order.append("wake"),
-        unsubscribe_all=lambda: order.append("unsubscribe"),
     )
 
     hooks = host._desktop_close_hooks(dispatcher, registry)
     hooks.reject_dispatch()
     hooks.wake_waiters()
     hooks.wait_for_handlers()
-    hooks.unsubscribe_observations()
 
     assert order == [
         "reject",
         "wake",
         "wait",
-        "unsubscribe",
     ]
 
 
@@ -2509,7 +2497,6 @@ def _close_hooks(order: list[str]) -> host._DesktopCloseHooks:
         reject_dispatch=lambda: order.append("reject"),
         wake_waiters=lambda: order.append("wake"),
         wait_for_handlers=lambda: order.append("wait"),
-        unsubscribe_observations=lambda: order.append("unsubscribe"),
     )
 
 
@@ -2570,6 +2557,143 @@ def _shutdown_view(*, complete: bool):
     )
 
 
+def test_disc_b2_delivery_shutdown_wakes_offer_before_observer_release() -> None:
+    from namisync.interfaces.task_port import TaskStartView
+    from namisync.interfaces.web.drain import TaskRegistry
+    from namisync.workflows.views import SessionEventView
+
+    task_id = "task-" + "a" * 32
+    request_id = "b" * 32
+    session_id = "c" * 32
+    command_id = "d" * 32
+    offer_waiting = Event()
+    offer_finished = Event()
+    offer_failures: list[BaseException] = []
+    order: list[str] = []
+
+    class ObservedCondition(Condition):
+        def wait(self, timeout: float | None = None) -> bool:
+            offer_waiting.set()
+            return super().wait(timeout)
+
+    class Lifecycle:
+        sink: object | None = None
+
+        def start_task_plan(
+            self,
+            source: str,
+            target: str,
+            *,
+            deletion_policy: str | None,
+            command_id: str,
+            delivery_factory,
+        ) -> TaskStartView:
+            del source, target, deletion_policy, command_id
+            self.sink = delivery_factory(task_id)
+            return TaskStartView(task_id, request_id, session_id)
+
+        def close(self):
+            order.append("service.close")
+            assert offer_finished.wait(1.0)
+            order.append("observer.release")
+            return _shutdown_view(complete=True)
+
+    lifecycle = Lifecycle()
+    import namisync.interfaces.web.bridge as bridge_module
+    import namisync.interfaces.web.drain as drain_module
+
+    registry = TaskRegistry(
+        lifecycle,
+        response_codec=drain_module._TaskDrainResponseCodec(
+            bridge_module.BridgeResponseTooLargeError,
+            bridge_module._admit_task_drain_response_prefix,
+            bridge_module._peek_task_drain_response,
+            bridge_module._consume_task_drain_response,
+        ),
+    )
+    started = registry.start_plan(
+        "source",
+        "target",
+        deletion_policy=None,
+        command_id=command_id,
+    )
+    task = registry._tasks[started.task_id]
+    task.condition = ObservedCondition()
+    assert callable(lifecycle.sink)
+
+    def event(sequence: int) -> SessionEventView:
+        return SessionEventView(
+            session_id,
+            sequence,
+            "2026-01-01T00:00:00+00:00",
+            1,
+            "StateChanged",
+            MappingProxyType({"state": "running"}),
+        )
+
+    lifecycle.sink(event(1))
+    first_drain = registry.drain(
+        started.task_id,
+        session_id,
+        "e" * 32,
+        replay_from=None,
+    )
+    assert [update.event.sequence for update in first_drain.updates] == [1]
+
+    for sequence in range(2, 66):
+        lifecycle.sink(event(sequence))
+
+    def offer_reliable_update() -> None:
+        try:
+            assert callable(lifecycle.sink)
+            lifecycle.sink(event(66))
+        except BaseException as error:
+            offer_failures.append(error)
+        finally:
+            offer_finished.set()
+
+    producer = Thread(target=offer_reliable_update)
+    producer.start()
+    assert offer_waiting.wait(1.0)
+    assert not offer_finished.is_set()
+
+    real_begin_close = registry.begin_close
+
+    def close_delivery() -> None:
+        order.append("delivery.close")
+        real_begin_close()
+
+    registry.begin_close = close_delivery
+    dispatcher = SimpleNamespace(
+        begin_close=lambda: order.append("dispatch.reject"),
+        wait_for_handlers=lambda: order.append("handlers.drained"),
+    )
+    window = _ControllerWindow(order)
+    controller = host._DesktopCloseController(
+        window,
+        lifecycle,
+        host._desktop_close_hooks(dispatcher, registry),
+        window_title="NamiSync Test Close",
+        render_status=lambda _window, _phase: None,
+        retry_prompt=lambda: pytest.fail("complete shutdown requested a retry"),
+    )
+    window.controller = controller
+    controller._mark_loaded()
+
+    assert controller._on_closing() is False
+    assert window.destroyed.wait(1.0)
+    producer.join(1.0)
+
+    assert not producer.is_alive()
+    assert offer_failures == []
+    assert order.index("dispatch.reject") < order.index("delivery.close")
+    assert order.index("delivery.close") < order.index("handlers.drained")
+    assert order.index("handlers.drained") < order.index("service.close")
+    assert order.index("service.close") < order.index("observer.release")
+    assert order.index("observer.release") < order.index("destroy")
+    assert controller.service_shutdown_complete
+
+
 def _wait_until(predicate, *, timeout: float = 2.0) -> None:
     deadline = monotonic() + timeout
     while monotonic() < deadline:
@@ -2605,7 +2729,6 @@ def test_reload_readiness_refusal_records_before_normal_service_close() -> None:
         "reject",
         "wake",
         "wait",
-        "unsubscribe",
         "service.close",
         "destroy",
     ]
@@ -2726,7 +2849,6 @@ def test_close_callback_is_nonblocking_and_quiesces_in_exact_order() -> None:
         "reject",
         "wake",
         "wait",
-        "unsubscribe",
         "service.close",
         "appearance.close",
         "destroy",
@@ -2854,7 +2976,6 @@ def test_handler_wait_timeout_keeps_service_open_until_explicit_retry() -> None:
             reject_dispatch=lambda: order.append("reject"),
             wake_waiters=lambda: order.append("wake"),
             wait_for_handlers=wait_for_handlers,
-            unsubscribe_observations=lambda: order.append("unsubscribe"),
         ),
         window_title="NamiSync Test Close",
         close_appearance=lambda: order.append("appearance.close"),
@@ -2867,7 +2988,6 @@ def test_handler_wait_timeout_keeps_service_open_until_explicit_retry() -> None:
     assert controller._on_closing() is False
     _wait_until(lambda: prompts == [1] and not controller._prompt_active)
     assert service.close_count == 0
-    assert "unsubscribe" not in order
     assert window.destroy_count == 0
 
     assert controller._on_closing() is False
@@ -2881,60 +3001,10 @@ def test_handler_wait_timeout_keeps_service_open_until_explicit_retry() -> None:
         "reject",
         "wake",
         "wait.2",
-        "unsubscribe",
         "service.close",
         "appearance.close",
         "destroy",
     ]
-
-
-def test_observation_unsubscribe_failure_retains_appearance_until_retry() -> None:
-    order: list[str] = []
-    prompts: list[int] = []
-    unsubscribes = 0
-    window = _ControllerWindow(order)
-    service = _ControllerService(order, [_shutdown_view(complete=True)])
-
-    def unsubscribe() -> None:
-        nonlocal unsubscribes
-        unsubscribes += 1
-        order.append(f"unsubscribe.{unsubscribes}")
-        if unsubscribes == 1:
-            raise RuntimeError("synthetic observation unsubscribe failure")
-
-    def retry_prompt() -> bool:
-        prompts.append(len(prompts) + 1)
-        return len(prompts) == 2
-
-    controller = host._DesktopCloseController(
-        window,
-        service,
-        host._DesktopCloseHooks(
-            reject_dispatch=lambda: order.append("reject"),
-            wake_waiters=lambda: order.append("wake"),
-            wait_for_handlers=lambda: order.append("wait"),
-            unsubscribe_observations=unsubscribe,
-        ),
-        window_title="NamiSync Test Close",
-        close_appearance=lambda: order.append("appearance.close"),
-        render_status=lambda _window, _phase: None,
-        retry_prompt=retry_prompt,
-    )
-    window.controller = controller
-    controller._mark_loaded()
-
-    assert controller._on_closing() is False
-    _wait_until(lambda: prompts == [1] and not controller._prompt_active)
-    assert service.close_count == 0
-    assert "appearance.close" not in order
-    assert window.destroy_count == 0
-
-    assert controller._on_closing() is False
-    assert window.destroyed.wait(1.0)
-    assert service.close_count == 1
-    assert order.count("appearance.close") == 1
-    assert order.index("service.close") < order.index("appearance.close")
-    assert order.index("appearance.close") < order.index("destroy")
 
 
 def test_bridge_rejection_precedes_a_blocked_close_status_render() -> None:
@@ -2953,7 +3023,6 @@ def test_bridge_rejection_precedes_a_blocked_close_status_render() -> None:
         reject_dispatch=lambda: (order.append("reject"), rejected.set()),
         wake_waiters=lambda: order.append("wake"),
         wait_for_handlers=lambda: order.append("wait"),
-        unsubscribe_observations=lambda: order.append("unsubscribe"),
     )
 
     def blocked_render(_window: object, _phase: host._ClosePhase) -> None:
@@ -2978,7 +3047,7 @@ def test_bridge_rejection_precedes_a_blocked_close_status_render() -> None:
     assert rejected.wait(0.2)
     assert render_entered.wait(0.2)
     _wait_until(lambda: service.close_count == 1)
-    assert order[:4] == ["reject", "wake", "wait", "unsubscribe"]
+    assert order[:4] == ["reject", "wake", "wait", "service.close"]
     release_service.set()
     assert window.destroyed.wait(1.0)
     release_render.set()
@@ -2999,7 +3068,6 @@ def test_closing_status_can_render_while_an_admitted_handler_is_still_waiting() 
             release_wait.wait(1.0),
             order.append("wait"),
         ),
-        unsubscribe_observations=lambda: order.append("unsubscribe"),
     )
     controller = host._DesktopCloseController(
         window,
@@ -3292,7 +3360,6 @@ def test_close_status_binds_each_loaded_document_before_async_render() -> None:
             reject_dispatch=lambda: None,
             wake_waiters=lambda: None,
             wait_for_handlers=lambda: None,
-            unsubscribe_observations=lambda: None,
         ),
         window_title="NamiSync Test",
     )
@@ -3335,7 +3402,6 @@ def test_close_status_write_failure_is_sanitized_and_does_not_change_truth(
             reject_dispatch=lambda: None,
             wake_waiters=lambda: None,
             wait_for_handlers=lambda: None,
-            unsubscribe_observations=lambda: None,
         ),
         window_title="NamiSync Test",
     )
@@ -3373,7 +3439,6 @@ def test_missing_bound_close_status_does_not_block_loaded_state(
             reject_dispatch=lambda: None,
             wake_waiters=lambda: None,
             wait_for_handlers=lambda: None,
-            unsubscribe_observations=lambda: None,
         ),
         window_title="NamiSync Test",
     )

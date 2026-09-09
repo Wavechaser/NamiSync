@@ -8,8 +8,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Protocol
 
+from namisync.core.clock import Clock
 from namisync.core.evidence import Attestation, ContentEvidence, Provenance, RecordingStatus
 from namisync.core.execution import RecordedCopyIdentity
 from namisync.core.integrity import (
@@ -41,7 +41,6 @@ from namisync.core.models import (
     root_projection,
     volume_evidence_projection,
     volume_id_projection,
-    validate_scan_result,
     validate_scan_scope,
     validate_scan_warning,
 )
@@ -72,7 +71,11 @@ from namisync.core.recording import (
 )
 from namisync.core.session import SessionState
 
-from .connections import DEFAULT_BUSY_TIMEOUT_MS, connect_ledger_writer
+from .connections import (
+    DEFAULT_BUSY_TIMEOUT_MS,
+    QUERY_SUBJECT_BATCH_SIZE,
+    connect_ledger_writer,
+)
 from .schema import initialize_ledger
 from .timestamps import encode_utc
 from .writer import (
@@ -81,11 +84,6 @@ from .writer import (
     SerializedWriter,
     TokenConflictError,
 )
-
-
-class Clock(Protocol):
-    def now(self) -> datetime: ...
-
 
 class VolumeRebindRequired(RecordingError):
     """A known serial appeared with a different filesystem type."""
@@ -203,7 +201,16 @@ def _scan_scope_projection(value: ScanScope) -> dict[str, object]:
 
 
 def _scan_projection(value: ScanResult) -> dict[str, object]:
-    validate_scan_result(value)
+    if type(value) is not ScanResult:
+        raise TypeError("scan projection requires an exact ScanResult")
+    for field_name, population in (
+        ("files", value.files),
+        ("directories", value.directories),
+        ("unsupported", value.unsupported),
+        ("warnings", value.warnings),
+    ):
+        if type(population) is not tuple:
+            raise TypeError(f"scan projection {field_name} must be an exact tuple")
     return {
         "root": root_projection(value.root),
         "volume_id": volume_id_projection(value.volume_id),
@@ -934,8 +941,8 @@ class LedgerRecorder:
                 for path in command.scan.scope.selected_paths
                 if normalize_relative_path(path) not in observed
             ]
-            for start in range(0, len(absent), 400):
-                chunk = absent[start : start + 400]
+            for start in range(0, len(absent), QUERY_SUBJECT_BATCH_SIZE):
+                chunk = absent[start : start + QUERY_SUBJECT_BATCH_SIZE]
                 placeholders = ",".join("?" for _ in chunk)
                 cursor = connection.execute(
                     f"""UPDATE inventory
@@ -965,8 +972,8 @@ class LedgerRecorder:
                 for path in command.scan.scope.selected_paths
                 if normalize_relative_path(path) not in observed
             ]
-            for start in range(0, len(absent_exact), 400):
-                chunk = absent_exact[start : start + 400]
+            for start in range(0, len(absent_exact), QUERY_SUBJECT_BATCH_SIZE):
+                chunk = absent_exact[start : start + QUERY_SUBJECT_BATCH_SIZE]
                 placeholders = ",".join("?" for _ in chunk)
                 cursor = connection.execute(
                     f"""UPDATE inventory

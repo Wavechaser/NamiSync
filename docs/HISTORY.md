@@ -1,20 +1,24 @@
 # History Module
 
-Status: history schema v6 records exact core-event-v5 reliable receipts in
+Status: history schema v7 records exact core-event-v5 reliable receipts in
 bounded, incrementally durable windows and exposes bounded summary, item-page,
 and event-page reads. Retention, export, durable task custody, and execution
 resume remain unrealized.
 
-## Active Schema-V6 Persistence Boundary
+## Active Schema-V7 Persistence Boundary
 
 Status: active beside ledger v4. `DATABASE.md` owns the pair metadata, refusal
 boundary, and reset instructions; there is no in-place migration.
 
-History v6 accepts only the coordinated exact core-event-v5 receipts, including
+History v7 accepts only the coordinated exact core-event-v5 receipts, including
 duplicate and bounded rejection receipts; it has no mixed-version page or
 compatibility decoder. The observer stores the canonical envelope and matching
-typed projection from the same admitted snapshot. `M1_BRIDGE.md` owns the exact
-event/result shapes, bounds, and codec rules.
+typed projection from the same admitted snapshot. At admission it projects an
+envelope once, asks core to validate and canonically encode that exact projection,
+and reuses the returned checked bytes for size, payload hash, and retained JSON
+before any flush or queue mutation. A malformed projection therefore breaks the
+audit prefix before any event row, receipt, chain, or watermark mutation.
+`BRIDGE.md` owns the exact event/result shapes, bounds, and codec rules.
 
 Reliable item rows retain their accepted recording and omission facts as part
 of receipt identity. Once committed, an item receipt is immutable: later task,
@@ -61,13 +65,12 @@ uses execute as the top-level byte domain. History records what NamiSync
 attempted and reported; reliable item receipts and the independent filesystem
 ledger, not this aggregate byte pair, own settlement and publication truth.
 
-## Schema V6 And Reset Boundary
+## Schema V7 And Reset Boundary
 
 The current exact marker is
-`contract_id=m1-history-v6-event-v5-recording-v1` with
-`HISTORY_SCHEMA_VERSION = 6` and `data_epoch=6`. The coordinated identity-hash
-cut advances the shared epoch without changing this schema or contract id.
-NamiSync refuses history v1-v5 and a v6 database with a missing or mismatched
+`contract_id=m1-history-v7-event-v5-recording-v1` with
+`HISTORY_SCHEMA_VERSION = 7` and `data_epoch=7`. The trigger reduction advances the history schema and shared epoch together.
+NamiSync refuses history v1-v6 and a v7 database with a missing or mismatched
 marker through a read-only connection. Refusal
 must not alter the database or its WAL, SHM, or journal sidecars. This remains
 a pre-release reset-only boundary: close every NamiSync process and reset the
@@ -90,7 +93,11 @@ committed run rows cannot be deleted or replaced.
 `history_events` is the append-only reliable-event receipt journal. Its primary
 key is `(run_id, event_seq)`. Every row retains timestamp, schema/body type,
 the original payload hash, a disposition-bound receipt hash, and exactly one of
-three checked shapes:
+three checked shapes. Duplicate and rejected links are admitted only by the
+retained duplicate-link INSERT guard, which requires a canonical target. The
+append-only UPDATE trigger unconditionally rejects every UPDATE, including a
+duplicate-link rewrite; it therefore subsumes the removed duplicate-link UPDATE
+guard:
 
 - `recorded` retains the canonical envelope and, for a result item, its typed
   projection plus identity and semantic item hashes;
@@ -137,11 +144,11 @@ these defaults:
 - `max_event_bytes = 1_048_576` serialized bytes
 - `max_age_seconds = 1.0`
 
-An observer serializes and hashes a reliable envelope before retaining it. The
-production event-v5 hub rejects an envelope over the same per-event ceiling
-before assigning a sequence; history's bounded hash-only `event-too-large`
-receipt remains a defensive observer seam for direct injection or a deliberately
-stricter policy. Before accepting an
+An observer validates, serializes, and hashes a reliable envelope before
+retaining it. The production event-v5 hub rejects an envelope over the same
+per-event ceiling before assigning a sequence. History's bounded hash-only
+`event-too-large` receipt remains a defensive observer seam for a v5-valid
+event admitted under a deliberately stricter history policy. Before accepting an
 event that would cross the window byte or count bound, the existing window is
 committed. Reaching either bound commits immediately. `StateChanged(PAUSED)`
 forces a commit after that event is admitted. The audit pump commits by the
@@ -186,6 +193,24 @@ refuses before observation or persistence. Optional item diagnostics already
 omit invalid Unicode and count the omission before serialization; strict
 encoding does not turn those omissions into lost result items. Event and
 recording-issue readback retains its existing typed Unicode validation.
+
+The source derivation for envelope work is local and finite:
+`HistoryObserver._admit` calls the core checked encoder once, then derives the
+envelope size, payload hash, and retained text from that one result. The
+parameterized history fixture witness counts one checked-envelope encoding for
+each admissible reliable body. Distinct result-item identity and semantic hashes
+remain separate work and are excluded from that count. This is structural
+evidence, not a timing or resource-bound claim.
+
+Result-item projection reuse is likewise local to each admission or readback
+call. Admission hashes the item body already present in the validated envelope
+projection. Readback decodes the retained envelope into its typed canonical
+item once, then reuses that item's complete projection for its semantic hash and
+for the narrower SQL-column projection. The envelope payload, complete item,
+item identity, and disposition-bound receipt remain separate hashes. Detail and
+recording fields omitted from SQL columns remain part of the complete item hash.
+Window commit still projects its owned pending envelope independently; no item
+projection is retained in `_PendingEvent` or cached across calls.
 
 Only hashes for the current window are retained in memory. The observer keeps
 one scalar highest accepted sequence. A sequence within the pending window is
@@ -264,8 +289,14 @@ lease. Durable custody and automatic interruption classification belong to M2.
   metadata/hash/reason with `envelope=None`.
 
 Read limits are explicit and bounded at 256; invalid limits are rejected rather
-than truncated. When a page omits `through_order` or `through_seq`, the
-repository starts a fresh traversal by capturing the corresponding durable
+than truncated.
+
+Canonical-item identity-hash lookups partition subjects by
+`connections.QUERY_SUBJECT_BATCH_SIZE` (400). Each statement retains its fixed
+run and sequence bounds, so the subject bound is distinct from the total
+parameter count and is at most the batch size plus two. When a page omits
+`through_order` or `through_seq`, the repository starts a fresh traversal by
+capturing the corresponding durable
 watermark in the same SQLite read transaction as the page. Callers reuse that
 watermark for later pages, so one traversal sees a stable committed prefix even
 while a writer commits newer windows. A caller-supplied event watermark is an
@@ -281,7 +312,7 @@ receipts instead expose `body=None`. The coordinated reset makes a mixed-version
 page unrepresentable: old, mixed, markerless, or incomplete database pairs
 refuse before mutating commands. The payload hash remains the identity of the
 retained envelope. Core source contains only the exact v5 decoder; no
-history-v6 row or repository route can select an older event decoder.
+history-v7 row or repository route can select an older event decoder.
 
 Every event-page request verifies that `history_runs.last_committed_seq` is the
 actual maximum durable event sequence in the same read snapshot, including
@@ -350,11 +381,12 @@ internal degraded cleanup state, but that post-finalization state is not a
 public session-health axis. A persistent dispatcher/store projection is
 unrealized and must be defined and tested before activation.
 
-A supported, canonically serializable event exceeding `max_event_bytes` is the
-single contained per-event failure. Its bounded durable receipt degrades audit,
-later events and finalization continue, and reopening/replay derives the same
-degraded result from durable rejection count. Exact replay of its sequence and
-payload hash is idempotent; a changed hash is fatal.
+A v5-valid event exceeding a deliberately stricter history
+`max_event_bytes` is the single contained per-event failure. Its bounded
+durable receipt degrades audit, later events and finalization continue, and
+reopening/replay derives the same degraded result from durable rejection count.
+Exact replay of its sequence and payload hash is idempotent; a changed hash is
+fatal.
 
 Finalization remains a two-party ownership decision. If the caller reaches its
 cutoff before the pump owns finalization, both live and any late retained
@@ -436,9 +468,18 @@ Current coverage proves exact event-v5-only persistence, canonical-envelope/
 typed-projection agreement, immutable item recording facts, once-only full-
 result finalization, the all-null-or-complete review-limit group, and bounded
 rejection recovery. Shared event-shape and scalar boundary cases remain with
-the owning [core](CORE.md) and [bridge](M1_BRIDGE.md) authorities rather than
+the owning [core](CORE.md) and [bridge](BRIDGE.md) authorities rather than
 being cataloged here.
 
 The structural sequence-admission test must continue to prove that adding an
 event cannot iterate all prior hashes. Wall-clock timing is not an acceptable
 CI assertion for that O(1) property.
+
+## Focused history scale acceptance
+
+Under the [shared reference profile](BRIDGE.md#focused-measurement-profile), the
+remaining history criteria are a 50-run summary over 1,000,000 retained items,
+including a 100,000-item run, in at most 3 seconds; and a 256-row detail window in
+500 ms p95 / 1 second maximum. These scoped Tier-2 targets remain separate from
+query-boundedness proofs and do not activate the deferred history page. Preserve
+raw samples and rerun after query, index, decode or pagination changes.

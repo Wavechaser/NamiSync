@@ -12,6 +12,10 @@ deferred.
 `nami-sync` and `python -m namisync` execute the same `main()` and read real
 `sys.argv[1:]` when no explicit test argument is supplied. Tests exercise both
 real process entry points. No command is reachable only through injected argv.
+Before parser construction, the CLI bounds the complete argument vector to
+65,536 UTF-8 bytes, including one separator byte between arguments. Non-string
+or non-UTF-8 arguments and a first-excess vector receive the same non-reflecting
+usage refusal; no rejected argument content enters parser diagnostics.
 The CLI delegates process composition, session observation, and typed result
 classification to `interfaces/service.py`; it does not construct a dispatcher
 or workflow runtime.
@@ -54,17 +58,17 @@ explicit `--database` also selects an isolated sibling settings file.
 
 At the active Stage 6 database cutover, mutating commands require the
 coordinated database pair. Standalone history remains deliberately read-only
-and may inspect one exact history-v6 database without a ledger peer. CLI history
+and may inspect one exact history-v7 database without a ledger peer. CLI history
 summary/detail output renders a persisted review-fact limit as typed durable
 history truth, gives the same narrow-roots or resolve-scan/preflight guidance
 as the desktop, and never reconstructs the refusal from diagnostic text or
 shows a presentation-only omission as history. `DATABASE.md` and `HISTORY.md`
-own the persisted consequence; `M1_BRIDGE.md` owns the shared protocol shape
+own the persisted consequence; `BRIDGE.md` owns the shared protocol shape
 and `DEFENSE.md` §1.3 owns the scalar wall.
 
-At the current M1 pre-migrator boundary, ledger v4 and receipt-aware history v6
+At the current M1 pre-migrator boundary, ledger v4 and receipt-aware history v7
 require their exact contract markers. Opening any ledger v1-v3 database, any
-history v1-v5 database, or a current-version file with a missing/mismatched
+history v1-v6 database, or a current-version file with a missing/mismatched
 marker fails
 before schema mutation with an instruction to close NamiSync and manually
 archive or delete **both** local database mains and all SQLite sidecars, then

@@ -18,230 +18,153 @@ versioning begins, headings use the version and codename, such as
 M1 expands the reviewed-sync runtime into a complete headless integrity,
 history, and workflow product while building its secured headed WebView2 shell.
 
+### M1 Consolidation
+
+Product, test, and documentation maintenance clarified ownership and removed
+repeated machinery while preserving operational safety and boundary contracts.
+
+#### Product simplification (2026-09-01 – 2026-09-08)
+
+- Removed internal workflow JSON transports and repeated event certification;
+  shared admitted immutable stats, progress, event details, history encoding,
+  and item projections while preserving external and persistence validation.
+- Consolidated task effect ownership, plan retirement, session observation,
+  metadata storage, and idempotent cleanup replay. Fixed the plan-selection
+  retirement race and bounded CLI ingress without changing mutation authority.
+- Shared sync recording finishing, verification terminal projection, event
+  vocabularies, clock contracts, and bounded database query batching. Removed
+  the redundant history update trigger: history schema/shared data epoch is 7,
+  ledger schema is 4, and old or mixed pairs require coordinated reset.
+- Narrowed repeated scan validation; shared MOVE/RECASE rename mechanics and
+  new-file/publication observation; removed named unused executor plumbing.
+  Recording tails, pause/cancel blocks, and mutation-verdict constructors remain
+  shelved. Native/pipeline behavior and settlement policy remain unchanged.
+- Final integrated verification passed 4,862 tests with four unchanged privilege
+  skips, including all 28 headed cases, plus 12 import contracts and the retained
+  30-scenario oracle across three identical runs. Narrow-reduction replay
+  detected 17 faults and passed eight harmless variations. Reviewed temporary
+  branches/worktrees were removed; evidence remains in REDUCTION_FOLLOWUP.
+
+#### Test consolidation (2026-09-01 – 2026-09-07)
+
+- Consolidated boundary, lifecycle, review, inventory, executor, integrity, and
+  browser witnesses around their behavioral owners. Shared fixtures, SQL,
+  selection, theme, and required Node harness setup; retired redundant spelling
+  assertions and temporary migration corpora without losing protected cases.
+- Used isolated cohort ablation, fault probes, harmless variations, and fresh
+  review to distinguish duplicate machinery from detection loss. Preserved the
+  executor settlement oracle, native operation families, source-owner guards,
+  population bounds, snapshot/atomicity checks, and visual/privacy evidence.
+- Corrected headed native-return and reinjection observations separately from
+  consolidation. The refinement closeout passed 4,678 tests with four capability
+  skips, 12 import contracts, and replay of 63 faults plus five harmless
+  variations; TEST_REFINEMENT and TEST_ABLATION retain the qualified evidence.
+
+#### Documentation consolidation (2026-09-05 – 2026-09-09)
+
+- Tested documentation removal against retained answers and counterexamples;
+  separated active contracts from delivery history. BRIDGE and PRESENTATION
+  own their subjects, INTERFACES owns lifecycle/host criteria, and M1_PLAN is
+  the sole remaining delivery register. Superseded plans and studies are archived.
+- Retired aggregate object-graph prescriptions while preserving admission walls
+  and scoped resource-release evidence. The superseded compact-plan memory
+  prerequisite does not govern frontend delivery; no new resource pass is claimed.
+- Scoped the next task slice to page creation, rail/navigation, and safe close;
+  folded later lifecycle closure into integrated verification. Retained fresh
+  Plan-again review after refusal, first manual post-copy verification, and
+  planned capacity/trash information. Deferred terminal domain retries,
+  user-invoked session cleanup, and richer I/O categories to the M2 feature list.
+- Reconciled behavior/status prose, inspected defect ownership, and consolidated
+  this history. Documentation review and link/diff checks do not substitute for
+  implementing or testing the remaining product features.
+
+#### Separate historical criteria from active contracts (2026-08-27)
+
+- Reconstructed a retrospective M0 plan from the final pre-M1 documentation
+  snapshot, preserving historical qualifications and verification notes without
+  treating them as current acceptance evidence.
+- Removed 13 inherited component checklists after checking their later contract
+  prose; retained the few unique current rules and measurement-fixture details
+  in their owning documents. Newer prose prevails over stale criteria.
+- Kept current M1 gates and explicitly deferred ingest criteria separate;
+  updated references to the archived M0 source without changing runtime policy.
+- Relocated all five imported PoC documents to `docs/obsolete/PoC_import/`
+  byte-for-byte, updating references to identify them as historical evidence.
+
+#### Establish layered test operations (2026-08-16)
+
+- Added focused, department, cross-department, ordinary, and complete/headed
+  run policy with short and long department selectors backed by one exhaustive,
+  fail-closed primary-ownership manifest.
+- Reduced evidence-neutral fixture cost through pip-less ordinary wheel
+  installation, success-only junction capability reuse, exact-boundary native
+  verifier data, test-sized log rollover, and lazy headed scenario evidence.
+- Consolidated duplicate coverage and shared helpers without merging behavioral
+  cases; selection-independence guards reject test-tree back edges into
+  collected modules, while lazy-failure guards preserve original headed
+  failures.
+- Left protected custody and settlement evidence, the live 33k-row database
+  scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
+
+#### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
+
+- Centralized fresh root-authority evidence in core while preserving the
+  distinct admission policies and probe timing of scanner, preflight,
+  workflows, executor, and verifier.
+- Corrected and froze executor settlement behavior in a retained three-run,
+  30-scenario oracle before splitting executor and verifier behind stable
+  facades; a typed effect journal, pure reducer, and ownership-aligned tests
+  replaced the monolithic implementation.
+
 ### M1 Hardening
 
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
 
-#### Close checkpoint-4 finite-model prerequisites (2026-08-27 – 2026-08-30)
+#### Bound task inputs, custody, and retained settlement (2026-08-27 – 2026-08-30)
 
-- Moved inventory scan, returned repository-row, tree-input-member, and
-  standalone-integrity candidate-row admission ahead of their first excess
-  retained value. Exact first-party scan outputs are adopted once at the named
-  workflow transfer before ledger save; initial inventory excess is
-  `REFUSED+UNRUN` and integrity excess remains `FAILED+RAN`, both without partial
-  downstream artifacts.
-- Streamed repository rows directly into immutable snapshots and applied the
-  population ceiling to actual returned rows rather than absent requested keys
-  or ids. Every requested path, row-id, and file-identity population now also
-  stops at its independent raw 120,000-occurrence wall before normalization,
-  deduplication, sorting, or SQL batching; the inherited 120,001-path admission
-  is closed while requested-but-absent values within the wall still return no
-  rows. Across plan, inventory, and standalone integrity, the repeated limit is
-  one M1 performance-and-safety support target; current domain-owned first-
-  excess behavior remains through M1, with no support promise above the target
-  and no asserted failure cliff at 120,001. Checkpoint 4 still owns complete
-  preprocessing/retained-byte authority, neutral constant/primitive ownership,
-  and resolution of the plan-specific `core/review.py` name.
-- Made every production desktop session attach its exact task reservation and
-  observation before scheduling. Dispatcher retains the sole retryable rollback
-  authority; an observer timeout keeps capacity charged until exact retirement,
-  while ordinary CLI/service composition remains unchanged.
-- Limited malformed or mismatched successful-start compensation to the exact
-  attached session. Only an exact returned-session match grants plan-drop
-  authority, preventing hostile return ids and hidden failed reservations from
-  corrupting another plan or exhausting capacity.
-- Reused one current-document post owner across reloads and bounded production
-  custody to one acknowledged in-flight value, one required readiness value,
-  one replaceable appearance value, and one native dispatch. Exact page echoes
-  retire their matching identities; replacement, close, and supersession
-  terminally release stale callbacks without changing the nine-command map.
-  Required readiness always dispatches first: appearance publication remains
-  revoked until the exact current challenge opens the document.
-- Admitted each complete Python response while taking one detached hostile
-  snapshot against the exact 8 MiB canonical-JSON wall, then retired the raw
-  result before primitive projection. Task drains now consume only their
-  longest admitted update prefix, so an oversized batch cannot lose reliable
-  truth or earn a premature terminal receipt; reentrant task mutation refuses
-  before it can replace, supersede, or self-block that captured population.
-- Extended native return custody through both exact worker exit and an exact
-  post-clone browser receipt. Document retirement is generation-linearized,
-  late timeout responses still clean up, and an uncertain first receipt can
-  retry without a delayed finite-LRU false refusal. Receipt-token collisions
-  are unreceipted and cannot release an earlier response's custody.
+- In scanner, planner, inventory, integrity, and repository paths, admitted raw
+  populations before normalization or retention, detached collaborator results,
+  and applied the shared 120,000-item support target to actual returned values.
+  First excess now fails with the owning workflow's typed result and never saves
+  a partial plan, inventory, or integrity artifact.
+- In dispatcher, service, and the web bridge, attached exact task reservations
+  before scheduling, scoped rollback and compensation to the returned session,
+  bounded document/response custody and receipts, and consumed only the longest
+  admitted drain prefix. Reload, timeout, collision, and reentrant paths cannot
+  release another task's capacity or discard reliable updates.
+- Across the core runner, workflows, history, dispatcher, and service adapters,
+  retired consumed traceback, cause, context, callback, and dependency graphs
+  while preserving public error identity, redaction, fail-stop behavior,
+  cancellation precedence, retry state, and durable watermarks.
+- In execution and integrity, retained reliable outcomes before reentrant work,
+  added a plan-ordered exclusion cursor for pause/resume, revalidated settlement
+  around recording finalization, and replaced repeated candidate reconciliation
+  with one immutable selection-owned identity index.
+- In root resolution, verifier I/O, and runtime shutdown, detached and rechecked
+  mounted-volume facts before effects, bounded verifier chunks to 1 byte–4 MiB,
+  and released or coherently retained all workflow custody maps according to
+  dependency-close success.
+- In core contracts and policy docs, separated cumulative review budgets from
+  producer gates, recorded one-time adoption and scaling-evidence rules, slotted
+  retained immutable values, removed a dormant Python patch-version gate, and
+  kept Python 3.13+ without an upper-version restriction.
 
-- Retired callback traceback, cause, and context links whenever the core runner
-  consumes or supersedes an error. Nested exception-group members are traversed
-  identity-once, while escaping process-fatal and custom exception state remains
-  caller-owned rather than entering retained session artifacts.
-- Isolated planner and sync-workflow public frames, replacing consumed callback
-  and recording errors with closed typed truth before later work. Public
-  identity/message behavior, path redaction, cancellation, exclusion ordering,
-  and ordinary scanner/planner/preflight policy remain unchanged.
-- Retired history callback and replay-reader frames while preserving fail-stop
-  identity, retry timing, pending windows, and durable watermarks. Busy retries
-  retain no raw SQLite error, and receipt-reader-close failure cannot replace
-  an initiating receipt failure.
-- Retired dispatcher admission, audit, store, custody, subscription, and worker-
-  start frames without moving task policy into the dispatcher. A provably
-  unstarted worker now settles once through public `FAILED + UNRUN` behavior,
-  accepted cancellation wins, real started threads keep ownership, and later
-  scheduling, close, and shutdown remain usable.
-- Separated task-start failure from compensation and retired dependency frames
-  at replay, release, close, and shutdown-unsubscribe retry boundaries. Normal
-  service path refusal now drops its workflow validation graph while preserving
-  the existing unchained public type, message, and redaction behavior.
-- Bound public verifier chunks to exact integer sizes from one byte through the
-  existing 4 MiB default. The Windows reader's per-file transient is now
-  finitely chargeable as one aligned native buffer plus one Python bytes copy,
-  while every ordinary runtime configuration remains unchanged.
-- Made successful workflow-runtime shutdown release retained plans and
-  execution-start claims alongside execution and inventory details. A failed
-  dependency close preserves all four custody maps for one coherent retry.
-- Removed the dormant task-surface exact-patch gate. Packaging and production
-  now require Python `>=3.13` with no upper-version bound; later versions remain
-  admitted unless direct evidence reaches a catastrophic stop class.
-- Established distinct custody for reliable session items, progress, terminal
-  results, inventory selections, execution evidence, and verifier contexts at
-  their applicable ownership boundaries. An accepted item is retained before
-  later reentrant reconciliation, while forged collaborator aggregates and
-  workflow-owned executor phases fail without replacing the reliable stream.
-- Advanced the exact process-local execution continuation to v7 with a required
-  plan-ordered exclusion acceptance cursor and removed the v6 compatibility
-  path. Resume emits only the unaccepted suffix; the local cursor advances
-  before hostile capture so sink cancellation cannot replay an accepted item,
-  and terminal refusal/failure/cancellation cannot pause into replay. Fresh
-  refusal control remains a typed phase-free `REFUSED+UNRUN` accepted prefix.
-- Revalidated exact execution and post-copy authority across recording finish,
-  fallback finish, and context exit. Hostile mutation now yields failed execution
-  or incomplete verification from pre-finish items, counters, phases, and
-  mutation provenance, including paused cancellation and fallback settlement,
-  rather than false success or mutated terminal truth.
-- Detached resolver binding/mount/evidence results, reobserved the mounted set
-  after root admission, and refused changed resolution before inventory or
-  integrity effects. Kept the complete-graph and optimization concerns assigned
-  to the next consolidation/model pass.
-- Pruned the three reviewed auxiliary refs only after their accepted content
-  had an authoritative home. Four named stashes retain recovery/model evidence
-  without making any stash merge authority.
-- Ratified the four-rung external, reentrant, internal-module, and reflective/
-  forged trust ladder. Immutable first-party results are adopted once at named
-  ownership transfers and then shared, while population admission, filesystem
-  freshness, and mutable-overlay checks retain their separate policy owners.
-- Replaced repeated whole-result reconciliation and reconstruction with
-  incremental settlement, canonical retained result identities, validated path
-  folds, slotted immutable contracts, read-only execution review inputs, exact
-  compound adoption, and shallow recording custody. Linked and standalone
-  integrity completion now use one validated selection-owned immutable id index
-  shared with verifier progress, removing the remaining quadratic candidate
-  scan without changing durable workflow outcome truth. Completion membership
-  is the construction-admitted snapshot; authority revalidation rejects later
-  tuple changes, and same-length identity replacement retains its fact-oriented
-  diagnostic before the private-index guard. Verifier progress consumes the
-  exact snapshot through its public read-only property. Continuation, payload,
-  wire, schema, wall, and status remain unchanged. The 33 newly slotted core
-  contracts remain non-weakrefable;
-  future support is class-specific when a concrete ownership/leak witness needs
-  it rather than a blanket per-instance cost.
-- Split cumulative retained review budgets from counter-free producer gates.
-  Plan and inventory keep domain-local private signals and tokens; typed refusal
-  requires exact signal type, fact scope, and active same-run token. Direct
-  internal, different-run, cross-domain, malformed, and lookalike failures
-  cannot claim refusal authority, while first-excess status, save boundaries,
-  rollback/close precedence, and graph retirement remain unchanged.
-- Centralized rendered live-exception detail projection with lifecycle-link
-  retirement and an exact direct-construction drift guard. Independent final
-  review found no blocking code, documentation-authority, overclaim, or
-  repository-custody finding.
-- Removed numbered checkpoint routing and session-local closeout chronology
-  from durable fundamental, product, and component references. Those references
-  now state active versus accepted-but-unrealized contracts; the M1 plans, task
-  history, and handoff retain delivery sequencing. Runtime checkpoint/session
-  terminology remains where it names product behavior.
-- Clarified that workflow authority guards are shallow and fixed-frequency only
-  where their lifecycle permits, not asymptotically constant. Callback-owner
-  inventory and any consolidation judgment remain checkpoint-4 model work
-  rather than an H2 refactor.
-- Generalized the integrity membership boundary guard from one private name in
-  one verifier file to exact direct or literal-reflective reads across every
-  production module outside the defining core contract. The guard names each
-  offending file and expression on failure.
-- Recorded scaling claims as a distinct evidence class: an analytical or
-  source-derived bound owns the named domain, counted accesses/lookups at named
-  sizes provide preferred regression evidence, and any timing claim used beyond
-  diagnosis predeclares its statistic/comparison and reports fresh-process
-  count, dispersion, and uncertainty.
+#### Close cross-layer contract review findings (2026-08-26 – 2026-08-27)
 
-#### Bound checkpoint-4 planning source ownership (2026-08-27)
-
-- Added independent first-excess gates to raw scanner, mapping, assignment,
-  operation, observation, and refusal populations. Exact declared collaborator
-  results and callback inputs are detached and revalidated at each distinct
-  hostile seam; correspondence remains structurally bounded by admitted scans
-  and its result is captured exactly once before planning.
-- Charged only the unavoidable shallow reference slots retained together in the
-  final scan, plan, observed-world, and verdict graphs. Capacity failure is a
-  typed `REFUSED+UNRUN` result and never saves a partial plan; ordinary scanner,
-  planner, selection, and preflight policy remains unchanged.
-- Bound exact review-limit facts to one opaque issuer shared only by the current
-  plan's fresh admissions. Phase delivery, correspondence, nested module
-  collaborators, destination policy, mutated preflight input, malformed facts,
-  and subtypes cannot spoof a typed refusal; they fail without a plan save.
-- Kept the source wall separate from checkpoint 4's complete-object
-  reservation constants, fixtures, and BR-G-45 evidence. Construction,
-  sorting/index storage, selection and preview values, codec/native/browser
-  copies, complete projections, raw exception frames, and later task owners
-  remain explicit checkpoint prerequisites.
-
-#### Remediate independent H2 checkpoint reviews (2026-08-26 – 2026-08-27)
-
-- Restored settlement-gate authority and pinned continuation invariants before
-  repairing retained receipts, cancellation, prerequisite recording causes,
-  diagnostic faults, and compound workflow failure. Accepted-settlement
-  validation cannot mask the original external error or silently retire
-  inconsistent journal evidence.
-- Aligned scalar/native identity, exact-v5 operation truth, timestamps,
-  reliable-envelope bounds, and browser source/differential gates. Malformed
-  task updates refuse before custody release; the live schema, validator family,
-  vocabulary names, and timestamp comment now describe the active contract.
-- Made database admission inspect complete WAL-visible topology without
-  changing source evidence, reused admitted runtime readers with fresh reads,
-  and placed private full-file snapshots beside the local database. Recorded
-  admission's database-size cost without inventing an acceptance ceiling.
-- Gave session storage a separate payload-free metadata/result shape while
-  preserving strict live records. Continuations remain process-local, and M2
-  restart requires a separate protected recovery contract rather than a
-  metadata-store substitution.
-- Replaced inferred dataclass hash forms with closed, explicit projections and
-  frozen old-byte compatibility witnesses. Canonical full-width file identity
-  advances the shared data epoch to 6 with explicit paired reset guidance;
-  schema numbers and execution-v6 wire shape stay unchanged. A follow-up makes
-  the four JSON/UTF-8 boundaries and workflow decoders strict about Unicode
-  scalar text, preserving valid bytes and omitting malformed optional warning
-  detail before it can suppress inventory observations; no further reset.
-- Delivered small independently reviewed commits, reconciled active versus
-  historical documentation, and removed completed findings from HANDOFF.
-  Condensed the completed 3R plan to a commit/issue index pointing to BUGS and
-  refreshed HANDOFF for the whole bug hunt. Checkpoint 3.3 then removed the
-  private legacy decoders and made exact-v5-only refusal active; separately
-  deferred diagnostic and inspection notes and open headed/resource acceptance
-  gates remain separate.
-- Retired residual adapter exception graphs before observer dependency shutdown
-  and task-recovery reconciliation. Dispatcher now also projects pre-run lock,
-  continuation-open, and canceled-settlement failures before the core runner,
-  retiring raw and diagnostic graphs before terminal storage while preserving
-  process-fatal propagation and retry truth. Consolidated their duplicate
-  lifecycle cleanup behind one descriptor-safe core primitive without widening
-  ordinary runner, planner, or workflow exception policy.
-- Corrected the stale canonical-plan SHA-256 vector left when the shared test
-  fixture's invalid policy fingerprint was replaced with valid hexadecimal text.
-  Independent canonical projection reproduced both the old and corrected hashes;
-  production identity behavior is unchanged.
-- Specified future checkpoint-7/9 server-owned sibling sorting with initial/
-  reset path-key order and unchanged selection/execution authority, plus
-  checkpoint-10 null-evidence rebaseline with unconditional fresh hash-and-
-  replace semantics. Added acceptance, regression, and test requirements and
-  aligned owner docs; this closeout changes documentation only.
+- Restored execution settlement and continuation authority, then aligned event
+  v5, scalar/native identity, timestamp, reliable-byte, and browser transport
+  contracts so malformed updates fail before custody changes.
+- Made database admission inspect complete WAL-visible topology, reused admitted
+  readers for fresh reads, stored private snapshots beside the local database,
+  and separated payload-free session metadata/results from live continuations.
+- Replaced inferred hash forms with explicit canonical projections, advanced
+  full-width file identity to data epoch 6 with paired-reset guidance, and made
+  JSON/UTF-8 boundaries reject non-scalar Unicode without changing valid bytes.
+- Retired residual adapter/dispatcher exception graphs, removed private legacy
+  event decoders, corrected the stale canonical-plan test vector, and recorded
+  future server-owned sorting and null-evidence rebaseline behavior as accepted
+  but unimplemented product work.
 
 #### Ratify measurement and documentation authority (2026-08-14 – 2026-08-18)
 
@@ -298,50 +221,6 @@ claims explicit, independently reviewable, and regression-backed.
   persisted and bridge JSON, and added temporal/concurrency/recovery stress
   coverage.
 
-### M1 Maintenance Refactor
-
-Shared root authority, stable executor/verifier package boundaries, an oracle-
-guarded typed settlement reducer, and layered test operations made internal
-ownership explicit without changing public or persisted contracts.
-
-#### Separate historical criteria from active contracts (2026-08-27)
-
-- Reconstructed a retrospective M0 plan from the final pre-M1 documentation
-  snapshot, preserving historical qualifications and verification notes without
-  treating them as current acceptance evidence.
-- Removed 13 inherited component checklists after checking their later contract
-  prose; retained the few unique current rules and measurement-fixture details
-  in their owning documents. Newer prose prevails over stale criteria.
-- Kept current M1 gates and explicitly deferred ingest criteria separate;
-  updated references to the archived M0 source without changing runtime policy.
-- Relocated all five imported PoC documents to `docs/obsolete/PoC_import/`
-  byte-for-byte, updating references to identify them as historical evidence.
-
-#### Establish layered test operations (2026-08-16)
-
-- Added focused, department, cross-department, ordinary, and complete/headed
-  run policy with short and long department selectors backed by one exhaustive,
-  fail-closed primary-ownership manifest.
-- Reduced evidence-neutral fixture cost through pip-less ordinary wheel
-  installation, success-only junction capability reuse, exact-boundary native
-  verifier data, test-sized log rollover, and lazy headed scenario evidence.
-- Consolidated duplicate coverage and shared helpers without merging behavioral
-  cases; selection-independence guards reject test-tree back edges into
-  collected modules, while lazy-failure guards preserve original headed
-  failures.
-- Left protected custody and settlement evidence, the live 33k-row database
-  scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
-
-#### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
-
-- Centralized fresh root-authority evidence in core while preserving the
-  distinct admission policies and probe timing of scanner, preflight,
-  workflows, executor, and verifier.
-- Corrected and froze executor settlement behavior in a retained three-run,
-  30-scenario oracle before splitting executor and verifier behind stable
-  facades; a typed effect journal, pure reducer, and ownership-aligned tests
-  replaced the monolithic implementation.
-
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design
@@ -369,22 +248,22 @@ later workflow surfaces and beta packaging remain future phases.
   refuse with coordinated reset guidance.
 - Preserved canonical CLI item detail for sessions that finish before
   observation by reading the finalized fixed history watermark; degraded audit
-  remains an explicit live-only fallback. Checkpoint 3.3 retains the separate
-  job of deleting the now-unreachable private v3/v4 decoder source.
+  remains an explicit live-only fallback. The now-unreachable private v3/v4
+  decoder source was removed separately after the protocol cutover.
 
 #### Ratify the Stage 6 second-half reslice (2026-08-24 – 2026-08-25)
 
-- Accepted the H2 checkpoint sequence for Slices 5–6 and early Slice 7 while
-  keeping every target contract inactive until its implementation checkpoint;
-  split checkpoint 0 into five serviceable documentation commits.
+- Accepted the ordered prerequisites for Slices 5–6 and early Slice 7 while
+  keeping every target contract inactive until implementation; split the
+  foundation documentation into five serviceable commits.
 - Centralized exact protocol, command, result, task-authority, and retry shapes
   in one Bridge register mapped back to the owning DR-BR records, with explicit
   supersession instead of a blanket precedence clause.
 - Made Defense the normative owner of the signed-64 and retained-resource hard
   walls, replaced Core's decoder-debt discussion with current and accepted
   boundaries, and reduced component docs to local consequences and pointers.
-- Kept Features at product behavior and Tests free of a parallel checkpoint or
-  case catalog. Independent authority, component, Bridge, and final integration
+- Kept Features at product behavior and Tests free of a parallel implementation
+  or case catalog. Independent authority, component, Bridge, and final integration
   reviews closed the discovered selection, publication, epoch, recents, and
   mixed-version contradictions before ratification.
 - Restored useful retry after an execution that did not run: the unchanged
@@ -396,12 +275,12 @@ later workflow surfaces and beta packaging remain future phases.
   scalar walls from assertion-only capacity and post-admission arithmetic,
   corrected native file identity to full-width canonical text from one shared
   adapter, and assigned reachable plan/timestamp failures exact typed outcomes.
-  Retained checkpoint 3 before its v5-dependent task foundation with three
-  independently testable landing stops and added four nonduplicative causal bug
-  records.
-- Bound every command-activating checkpoint to BR-G-32's executable exact-order
-  production table and JavaScript mirror, while keeping BR-G-46's reopened
-  command-map status scoped to its checkpoint-4 and checkpoint-6 revisions.
+  Retained the protocol transition before its v5-dependent task foundation with
+  three independently testable landing stops and added four nonduplicative
+  causal bug records.
+- Bound every command-activating delivery step to BR-G-32's executable exact-
+  order production table and JavaScript mirror, while keeping BR-G-46's
+  command-map status scoped to the later task-rail and Setup revisions.
 
 #### Extract truthful per-item progress (2026-08-21 – 2026-08-23)
 
@@ -589,7 +468,8 @@ later workflow surfaces and beta packaging remain future phases.
   whole-runtime containment remain separate gates.
 - Coalesced progress-only drains behind a fixed 150 ms maximum wait while
   receipts, reliable state, terminal, recovery, and lifecycle feedback bypass
-  it; installed WebView2 witnesses are authoritative and Node is supplemental.
+  it; installed WebView2 witnesses are authoritative and Node is supplemental
+  for that historical custody claim.
 
 #### Establish the secured WebView2 bridge foundation (2026-07-31 – 2026-08-03)
 

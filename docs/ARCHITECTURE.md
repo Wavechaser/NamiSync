@@ -163,8 +163,10 @@ wait for an event consumer to decide what happens next.
 
 #### Progress v5 protocol
 
-The active exact core event-envelope v5 contract below is the shared authority for
-Progress producers, adapters, and consumers.
+The active exact core event-envelope v5 contract below is the shared semantic
+authority for supported Progress producers and persistence. Live adapters carry
+its tagged transport projection; they do not implement a second field-by-field
+body schema.
 
 Under this protocol, a forced Progress emission bypasses source throttling but
 remains lossy and coalescible. It is always derived from authoritative live
@@ -208,9 +210,11 @@ known `0/0` counter pair.
 
 Item counts, sequences, and other bounded counters are exact JavaScript-safe
 integers. Byte-work counters are checked nonnegative signed-64 integers in
-Python and canonical decimal `Scalar64` strings on event/public wires. Every
-reliable envelope is validated and bounded to 1,048,576 canonical bytes before
-sequence, replay, audit, or subscriber mutation.
+Python and canonical decimal `Scalar64` strings on event/public wires. Before
+sequence, replay, audit, or subscriber mutation, `canonical_event_bytes`
+measures the supported producer's canonical projection and enforces the
+1,048,576-byte reliable-envelope wall. Persisted readback separately validates
+the exact v5 structure.
 
 The normative reporter transitions are below. They describe authoritative
 reporter state; because Progress is lossy, a transition guarantees delivery
@@ -287,23 +291,25 @@ retained Progress.
 
 Version numbers are boundary-specific, not one global product number. The
 active core event envelope is exact v5; the desktop bridge command/response
-envelope remains v1, plan continuation remains v5, execution continuation is
-v7, and the persistence cut is ledger v4/history v6 at data epoch 6. The exact
-browser-facing `SessionEventView` carries nested core version 5, and current
-history cannot contain another event version. No private compatibility decoder
-or positive older-version fixture remains.
+envelope remains v1; and the persistence cut is ledger v4/history v7 at data
+epoch 7. Process-local workflow continuation is an unversioned typed semantic
+checkpoint, not a wire protocol. The exact browser-facing `SessionEventView`
+carries nested core version 5, and current history cannot contain another event
+version.
 
 Protocol evidence is intentionally layered:
 
-1. Core and JavaScript validation prove snapshot structure and cross-field
-   coherence.
+1. Supported producer/projector tests prove live snapshot semantics, while one
+   history-boundary validator proves exact write admission and corrupt-input
+   refusal on readback.
 2. Reporter transition tests prove executor and verifier state machines.
 3. Workflow/session tests prove phase coordination, continuation, and terminal
    authority.
 4. The settlement oracle proves integrated executor policy across its complete
    settlement matrix and stable normalized traces.
-5. Browser tests prove delivery, replay, Gap recovery, atomic batch rejection,
-   and consumer precedence.
+5. Browser tests prove the transport envelope, delivery, replay, Gap recovery,
+   atomic batch staging, reducer behavior, and consumer precedence without
+   recertifying every body field.
 
 ### 2.4 Review, commitment, and execution
 
@@ -338,8 +344,9 @@ the already-settled filesystem/recording truth.
 Phase is explicit; it is never inferred from past events. The workflow alone
 translates executor-owned publication evidence into verifier-owned candidates,
 so executor and verifier remain independent modules. Process-local resume is
-active. Live session records hold continuation bytes; the separate stored
-metadata/result contract has no continuation or live-record reference. Durable
+active. Each live session record composes the exact stored metadata/result value
+with its opaque typed checkpoint; the stored value has no checkpoint or
+live-record reference. Durable
 restart recovery requires a separate protected continuation/recovery contract
 and fresh authority/custody reconciliation in a later milestone.
 
@@ -378,7 +385,7 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | --- | --- |
 | Live/stored session records, phase/run results, and `SessionStore` | `namisync/core/session.py` |
 | Exception lifecycle-link retirement and rendered retained-failure projection | `namisync/core/exception_graph.py` |
-| Event bodies, envelopes, delivery classes, codec, and exact-v5 validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
+| Event bodies, envelopes, delivery classes, domain-to-v5 projector, and history-boundary validator | `namisync/core/events.py`, `namisync/core/event_v5.py` |
 | Filesystem identity, complete Windows file-id adaptation, capability, metadata, records, and scan scopes | `namisync/core/models.py`, `namisync/core/file_identity.py` |
 | Safe integer, signed-64, canonical scalar/file-index codecs, shared population-measure/excess primitives, distinct retained-plan and counter-free producer admissions, admission-bound private exact plan-review signals, scanner population-admission protocol, exact immutable scan adoption, and final shallow-slot admission | `namisync/core/scalars.py`, `namisync/core/review.py` |
 | Relative-path validation, keys, hierarchy, containment, and Windows spelling | `namisync/core/pathing.py` |
@@ -386,11 +393,12 @@ such as the session states, outcome vocabulary, or observation/judgment split.
 | Planning policy, operations, mappings, scopes, plans, fingerprints, and selection digests | `namisync/core/planning.py` |
 | Deeply read-only preflight subjects, observations, refusals, and verdicts | `namisync/core/preflight.py` |
 | Outcomes, recording status, provenance, content evidence, attestation, and hashing protocols | `namisync/core/evidence.py` |
+| Clock protocol for injected wall time | `namisync/core/clock.py` |
 | Commitments, mutable execution state/evidence, reduced execution authority, immutable execution-review and recording projections, scoped recording reasons/issues, failure decisions, copy/recorder/filesystem protocols | `namisync/core/execution.py` |
 | Integrity state, selections, outcomes, commands, and verifier/recorder protocols | `namisync/core/integrity.py` |
 | Ledger-bound host, volume, location, mapping, run, and inventory commands | `namisync/core/recording.py` |
 
-Workflow-owned continuation envelopes and interface wire views are not core
+Workflow-owned typed checkpoints and interface wire views are not core
 contracts. Their owning workflow or interface source defines exact shape,
 subject to the meanings and invariants established here.
 
@@ -512,17 +520,17 @@ The core declares narrow protocols for infrastructure and replaceable policy:
 - `execution.Recorder` and `integrity.IntegrityRecorder` are the core ledger
   mutation protocols; database-owned recording commands cover the remaining
   ledger boundaries.
-- Core clock protocols are the only source of current time.
+- The `Clock` protocol in `core/clock.py` is the only source of current time.
 - `FailurePolicy` returns retry/continue/stop decisions to the executor.
 - `StreamingHasher` and `HasherFactory` abstract the concrete content hasher
   without importing it into core.
 - `CopyBackend` owns byte transfer, not publication, retry, or recording.
 - `DestinationPolicy` assigns target paths for a batch before diffing.
 - `SessionStore` retains exact `StoredSessionRecord` metadata and full results,
-  without continuation bytes or a live-record backreference. `SessionRecord`
-  retains the separate live lifecycle/payload invariant. Durable metadata and
-  protected continuation recovery are unrealized M2 contracts, not one
-  interchangeable store implementation.
+  without checkpoints or a live-record backreference. `SessionRecord` composes
+  that exact stored value with a process-live checkpoint and adds the separate
+  checkpoint invariant. Durable metadata and protected continuation recovery
+  are unrealized M2 contracts, not one interchangeable store implementation.
 
 Incremental `ChangeSource` and ingest `MetadataExtractor` seams are accepted
 but unrealized directions, not standardized core protocols. Their exact shapes
@@ -705,7 +713,17 @@ subscribe, list, get, and close operations.
 Owns domain-blind admission, volume-scoped concurrency, worker-generation
 custody, cross-process mutation exclusion, lifecycle control, event sequencing,
 bounded replay, and orderly teardown. Workflow kinds and pause capability are
-registry data; the dispatcher never interprets domain payloads.
+registry data; the dispatcher never interprets domain checkpoints.
+
+Dispatcher authority begins at session admission and ends at session custody,
+control, concurrency, and close. It owns no desktop task, drain, response replay,
+domain-effect receipt, detail owner, compensation, or plan-retirement state.
+
+Every workflow registration must transfer a checkpoint detached from producer-
+owned mutable state, treat retained custody as read-only, and materialize fresh
+invocation state on open. This is a workflow-construction obligation, not a
+dispatcher certification; no `WorkflowCheckpointAuthority`,
+`adopt_checkpoint()`, or generic freezer exists.
 
 The active store is process-local metadata; dispatcher reads its live records
 for session state and continuation. Durable queue ownership, startup
@@ -720,7 +738,7 @@ See `DISPATCHER.md`.
 **Tier:** Interface coordination · **Status:** Active
 
 Plain workflow functions are the only place modules meet. They sequence typed
-calls, translate between sibling component contracts, own continuation payloads,
+calls, translate between sibling component contracts, own continuation checkpoints,
 derive authoritative safe/user selections, and maintain one logical recording
 across compound phases.
 
@@ -744,8 +762,86 @@ shared presentation active; remaining product surfaces unrealized
 
 The service facade exposes primitive typed views over workflows and dispatcher
 state. CLI and desktop adapters are siblings and own no sync, selection,
-inventory, or history policy. Interface-owned task identity may outlive an
-individual session but does not replace plan or session authority.
+inventory, history, session-custody, or domain-effect policy.
+
+`TaskLifecycle` is the sole application owner of domain-effect receipts,
+task/session association, admission compensation, detail-owner liability, plan
+mutation retirement exclusion, and logical settlement. Every admitted session,
+including a direct CLI session with no desktop task, receives an exact
+application association. The aggregate retains receipts and their immutable
+intent, exact association, terminal digest, settlement target, and coarse
+single-flight claims only. It retains no physical-step acknowledgement or
+cursor and never retains an event stream, sink, callback, observer thread,
+transport queue, drain claim, connection, delivery generation, or bridge
+response.
+
+Receipt retirement follows the effect owner, not dispatcher custody. A direct
+session-start receipt retires after successful direct session close. A
+task-bound start receipt survives terminal-session release and retires at task
+close. Selection-mutation receipts survive artifact replacement and retire with
+the exact plan on plan drop or service shutdown; remaining application receipts
+retire with their owning session, plan, task, or service shutdown.
+
+Plan retirement has one tolerant exact-token claim acquisition. A retired token
+produces no cleanup work, readers and mutation claims remain excluded by an
+active retirement, and supported callers do not intentionally reuse fresh
+service-minted plan request ids. A live or retiring collision is not a waitable
+key-reuse protocol.
+
+`SessionObserver` and its private `SessionSubscription` are implemented in
+`interfaces/session_observer.py`. They alone own adopted stream, callback,
+worker-thread, and subscription lifetime; the application aggregate records no
+independent observer-release acknowledgement or cursor. Dispatcher alone owns
+admitted session custody and close.
+Adapters own only presentation and transport state: bounded response replay,
+queueing, drain claims, connection state, delivery generations, terminal-
+delivery facts, and response delivery.
+
+Application admission is bounded to 48 active desktop task effects before any
+delivery factory or lower work begins. Adapter start-response state is also
+bounded to 48 entries; successful entries retire with their task and failed
+entries after their participants leave. Close-response tombstones are a separate
+48-entry least-recently-used cache. These are count bounds only;
+architecture claims no aggregate retained bytes or whole-runtime memory ceiling
+from them.
+
+Adapter-bound terminal teardown is ordered as delivery fact → application
+settlement → confirmed observer release → dispatcher close → exact runtime
+detail retirement → optional plan/task retirement. Those fixed cleanup owners
+are independently idempotent or monotone. After failure or interruption, the
+whole cleanup call sequence may repeat from current owner truth; each completed
+observable effect remains unique. Observer and runtime absence operations
+accept repetition; Dispatcher close remains strict, with `SessionNotFound`
+treated as already absent only inside a sealed exact application settlement.
+Application state uses one coarse
+single-flight claim rather than a physical-step journal. A task delivery factory
+may construct provisional adapter queue state before admission; its call frame
+discards that state locally on failure. Neither the service nor `TaskLifecycle`
+retains or invokes an adapter rollback.
+
+Dispatcher's existing `_AdmissionCleanup` remains unchanged and separate from
+this application cleanup rule. No recovery is claimed across the inherited gap
+between `Dispatcher.submit` returning and application start publication;
+closing that gap would require separately authorized dispatcher/application
+reconciliation.
+
+The adapter-facing `TaskLifecyclePort` exposes only task-bound plan start with a
+delivery factory, exact task/session reobservation, terminal-session release,
+and task close. It exposes no raw unsubscribe, dispatcher/session close, plan
+drop, compensation, stream, or rollback primitive. The import contract named
+`Web task drain cannot reach domain lifecycle owners` forbids every direct or
+indirect path from `interfaces/web/drain.py` to the dispatcher, service,
+session observer, or private lifecycle aggregate.
+
+Interface lifecycle source ownership is:
+
+| Contract family | Canonical source |
+| --- | --- |
+| Adapter-facing task views and narrow lifecycle port | `namisync/interfaces/task_port.py` |
+| Application effect receipts, association, compensation, and settlement | `namisync/interfaces/task_lifecycle.py` |
+| Session observation lifetime | `namisync/interfaces/session_observer.py` |
+| Service composition and application-facing operations | `namisync/interfaces/service.py` |
+| Desktop response replay, queue, drain, generation, and delivery state | `namisync/interfaces/web/drain.py` |
 
 The desktop bridge exposes one versioned, allowlisted command surface and
 bounds the complete serialized request to 65,536 UTF-8 bytes before
@@ -787,7 +883,7 @@ consumes only an exact generic admission verdict and forwards a granted opaque
 context without interpreting readiness. `interfaces/web/document_channel.py`
 is the sole production WebView2 host-to-page message sink and rechecks document
 currency inside its queued UI callback. Exact limits, evidence, and delivery
-status belong to `M1_BRIDGE.md`, `M1_SHELL.md`, `INTERFACES.md`, and
+status belong to `BRIDGE.md`, `INTERFACES.md`, and
 `DESKTOP_UI.md`, not this document.
 
 See also `COMMANDLINE.md`.
@@ -856,7 +952,7 @@ predeclared bound.
 The tier definitions and required evidence are normative policy in
 `DEFENSE.md` §7. Architecture adds one constraint: incompatible scaling axes
 are never merged because one tool can measure them. Transport custody, retained
-terminal results, projection caches, and whole-runtime containment have
+terminal results, projection caches, and scoped runtime resource acceptance have
 distinct owners and acceptance claims. Exact datasets, byte counts, run
 results, validator identities, and open/closed gate status belong to the owning
 module or delivery document.
@@ -866,8 +962,8 @@ Current claim and evidence ownership is:
 | Claim | Owner |
 | --- | --- |
 | Executor settlement semantics | `TOOLS.md` |
-| Desktop bridge behavior and transport custody | `M1_BRIDGE.md` |
-| Desktop host/runtime containment | `M1_SHELL.md` |
+| Desktop bridge behavior and transport custody | `BRIDGE.md` |
+| Desktop cold-start resource and leak/growth acceptance | `INTERFACES.md` |
 | Component-specific performance | Owning module document |
 
 ---
@@ -893,8 +989,8 @@ Adds canonical content evidence, role-free inventory, standalone and linked
 integrity workflows, bounded durable history readback, shared service/selection
 facades, and the secured WebView2 desktop. The remaining work is product-facing
 desktop completion and beta hardening, not a new domain architecture. Exact
-delivery slices, gates, and current status live in `M1_PLAN.md`,
-`M1_BRIDGE.md`, and `M1_SHELL.md`.
+remaining delivery lives in `M1_PLAN.md`; subject criteria live in
+`BRIDGE.md`, and `INTERFACES.md`.
 
 ### M2 — durable sessions and queue ownership
 
@@ -905,7 +1001,7 @@ and the first production use of `INTERRUPTED`, durable committed plans, launch
 policy, and cross-process task visibility. Restartable continuations require a
 separate protected recovery-store contract with explicit retention and fresh
 workflow authority/custody reconciliation; persisting current process-local
-payloads through the metadata store is not that design. Coordination remains
+checkpoints through the metadata store is not that design. Coordination remains
 domain-blind and workflow-owned continuation meaning remains outside dispatcher.
 
 ### M3+ — maintenance, scale, and new workflows
@@ -931,8 +1027,7 @@ existing identity, evidence, custody, and settlement contracts.
 - Module documents own implemented component policy, algorithms, local tests,
   current state, and limits that do not redefine a cross-cutting defense or
   bridge contract.
-- `M1_PLAN.md`, `M1_BRIDGE.md`, and `M1_SHELL.md` own active delivery plans and
-  gates.
+- `M1_PLAN.md` owns remaining delivery. `BRIDGE.md` owns protocol/transport, `PRESENTATION.md` owns views and focused scale, and `INTERFACES.md` owns host/lifecycle and release criteria.
 - `CHANGELOG.md` owns dated task outcomes.
 - `HANDOFF.md` owns only immediate operational context.
 
@@ -941,10 +1036,8 @@ owning module document rather than copying it here. Add architecture detail
 only when multiple layers must coordinate around the decision or when changing
 it would reinterpret durable state or public contracts.
 
-The accepted Stage 6 second-half target is intentionally not restated here.
-`M1_BRIDGE.md` maps its event, database, task-authority, publication, and
-retention decisions to the existing DR-BR records; `DEFENSE.md` §1.3 owns the
-normative scalar and containment walls. Accepted but unrealized contracts do
-not describe running code; the active current-version contracts above do. A
-coordinated replacement must update this document and the contract-to-source
-locator in the same implementation commit that activates it.
+`BRIDGE.md` owns exact bridge commands and wire behavior; `DEFENSE.md` §1.3
+owns normative scalar and containment walls. The active interface lifecycle
+ownership and source locator are stated in §4.10 above. A coordinated
+replacement must update this document and that locator in the same
+implementation commit that activates it.

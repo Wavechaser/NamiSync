@@ -1,64 +1,15 @@
 # Desktop UI
 
-Status: M1 Stage 6 design and delivery contract. M1 Stages 1–5.5 provide the
-desktop's service, view, settings, session-observation, and bridge-security
-seams. The classified launchers, wheel-packaged bootstrap assets, secured
-product-host composition, and the production transport defined by
-`M1_BRIDGE.md` now exist. Ordinary and installed-wheel evidence covers host
-isolation, runtime refusal, popup/navigation guards, single-instance behavior,
-native picker path confinement, committed-origin refusal, hostile text, and
-logging privacy. The named browser-behavior witnesses now run through the
-installed production bridge and renderer in real WebView2. Slice 3 evidence
-covers transactional observation, bounded drain behavior, recovery, and
-repeated bridge readiness. The fixed, non-sliding 150 ms progress-only linger
-and its immediate reliable/lifecycle wake regressions have landed. An active
-long poll may hold the first detailed progress snapshot for the full interval;
-receipt and reliable running-state feedback bypass that linger. Benchmark
-accounting now streams bounded browser/producer evidence, performs final
-assembly after the child exits, and labels whole-runtime memory as a
-non-acceptance diagnostic; its event pass alone is not SH-G-8 custody closure
-authority. The accepted independent custody evidence below supplies closure.
-The frozen/disjoint realistic corpus and production-path runner have also
-landed, including exact real-deque 128/64/64 no-`Gap`, terminal path-cut,
-cleanup, and clean source/dependency/runtime/digest-authority witnesses. The
-committed calibration-a artifact records normative ordinary/exact-maximum
-transport measurements, the separate contract freezes the 1,966,080-byte
-ceiling, and three fresh holdout-b runs pass at 1,351,794 ordinary and 1,513,014
-exact-maximum bytes. This closes the frozen historical v1 SH-G-8 and BR-G-42
-event/transport-custody claim only. The v4 diagnostic event evidence and Tier-1
-custody drift evidence remain historical, not a new calibration or acceptance;
-`M1_BRIDGE.md` owns the exact disposition. A separate current-source one-child
-guard requires both live custody shapes to remain within that frozen ceiling on
-ordinary suite runs;
-BR-G-45 separately leaves full terminal-artifact retention open, and
-shell-owned SH-G-15 leaves version-bound whole-runtime containment open. The
-earlier whole-Job delta is diagnostic input only, not a result for any of those
-new predicates. GUI Break 1 and Slice 4 completed their audited realignment and
-were hardened and reverified on 2026-08-17 with ordinary, scale, and real
-clean-wheel headed evidence. User-facing plan, inventory, history,
-and control surfaces remain in the wider M1 design; the accepted reslice below
-defers the history page. `M1_SHELL.md` owns implementation order and
-beta-package closure.
+The secured host, theme/accessibility foundation, generic tree renderer and
+file-row gallery are implemented. Setup and production plan/execution/inventory/
+integrity task surfaces remain unrealized; history and global settings pages are
+deferred. Current v5 item progress is reduced by the bridge, while production
+row binding remains future work.
 
-The product-surface portion of the accepted Stage 6 second-half reslice remains
-target state. Its exact event-v5 and persistence-epoch cut is active; Setup and
-process-live task review for plan/execution, inventory, and integrity/manual
-post-copy work remain unrealized. History, global-settings mutation,
-drag-and-drop, and remaining cosmetic-state consumers are deferred.
-[M1_SHELL_H2.md](M1_SHELL_H2.md) is the newest implementation checklist and
-[M1_BRIDGE.md](M1_BRIDGE.md) owns all exact cutover contracts.
-
-Current executor/verifier item progress now crosses the production bridge
-under the expanded exact browser shape. The browser reduces that protocol into
-phase, latest-snapshot, and active-item presentation state, including Gap and
-reliable-outcome precedence. The test-only gallery can render an explicitly
-projected per-item percentage; stable production row projection, item matching,
-and live visual consumption remain Slice 5 work.
-
-`M1_BRIDGE.md` is the sole normative authority for bridge envelopes, commands,
-errors, retry/revision identity, sequence and terminal lifecycle, and BR-G
-acceptance gates. This document owns the user-facing and visual contract; it
-does not restate the wire protocol.
+This document owns visual/user interaction behavior. BRIDGE owns exact transport,
+PRESENTATION owns projection/window/search/sort behavior, INTERFACES owns the host,
+and M1_PLAN owns remaining delivery. Historical build and calibration recaps are
+archived with the original plans; current bridge evidence has one BRIDGE owner.
 
 ## Purpose
 
@@ -139,7 +90,7 @@ ready state continues; refused state runs the bounded finalizer and shows the
 coordinated reset action through the stable native startup dialog. It then
 resolves `index.html` from package resources, creates one pending native
 document and a dispatcher snapshotted from the production command mapping
-defined exclusively by `M1_BRIDGE.md`, and starts only Edge Chromium with
+defined exclusively by `BRIDGE.md`, and starts only Edge Chromium with
 the packaged page served on a random loopback origin. The initialized callback
 binds that exact origin once. Renderer/origin failure aborts before native
 window creation. An initial guard failure or pre-open loaded refusal rejects
@@ -309,6 +260,7 @@ Lifecycle describes task cards and run status.
 | plain `CANCELED` | neutral | fill |
 | execution reason `CANCELED_AFTER_PUBLISH` / `CANCELED_AFTER_MUTATION` | yellow | fill |
 | `REFUSED` | yellow | fill |
+| capacity exhaustion or capacity refusal | yellow | fill |
 | errored / `FAILED` | red | fill |
 
 Yellow means that nothing is known broken, but the result needs user attention
@@ -683,7 +635,7 @@ commit_semantic_settings(patch) -> SemanticSettingsView
 and event/record views. Plan start's optional sink is currently attached
 transactionally before the session can run. The accepted target requires that
 same attach-before-schedulability path for every desktop-created execution,
-inventory, integrity, and manual-verification session. `M1_BRIDGE.md`
+inventory, integrity, and manual-verification session. `BRIDGE.md`
 exclusively defines the recovery cursor and command-receipt identity exposed
 across the wire. The desktop owns the bounded presentation queue fed by that
 sink; it does not expose raw dispatcher streams to JavaScript. It must
@@ -781,7 +733,7 @@ state must not become another semantic-settings, task, or session store.
 ## Bridge and renderer security
 
 The host exposes one function-table `dispatch` entry, and only packaged
-`bridge.js` references `window.pywebview`. `M1_BRIDGE.md` exclusively defines
+`bridge.js` references `window.pywebview`. `BRIDGE.md` exclusively defines
 the complete envelope bound, immutable command mapping, opaque identities,
 exact errors, deadlines and retry classes, revision rules, drain recovery,
 sequence/`Gap`/terminal semantics, and terminal-session release versus explicit
@@ -799,12 +751,14 @@ unused synchronous callback-registry entries without changing the return
 channel. [INTERFACES.md](INTERFACES.md) owns those compatibility mechanisms and
 their remaining containment boundary. The exact pythonnet 3.1.0 pin is equally
 part of that boundary because native delegate subscription, WinForms thread
-affinity, and `CoreWebView2` access pass through it. Browserless/Node probes are
-supplemental; the exception is the ordinary, non-skippable drain-manager Progress
-validator/replay gate, which resolves Node.js from `NAMISYNC_TEST_NODE` before
-`PATH` and proves atomic rejection before cursor or reliable-sibling delivery.
-The installed real-WebView2 witnesses own the remaining named
-browser-behavior gates.
+affinity, and `CoreWebView2` access pass through it. Required ordinary Node
+probes are unmarked and non-skippable; probes marked `supplemental_node` may
+skip. Both resolve Node.js from `NAMISYNC_TEST_NODE` before `PATH`. Required
+bridge probes cover start-plan deadline/replay and bounded single-attempt
+interactive wrappers. The required drain-manager Progress validator/replay gate
+proves atomic rejection before cursor or reliable-sibling delivery. Installed
+real-WebView2 witnesses cover native custody and renderer behavior;
+[TESTS.md](TESTS.md) owns the ordinary gate requirements.
 
 The host must force `gui="edgechromium"` and fail with an install action if the
 Microsoft Edge WebView2 Runtime is unavailable; silent MSHTML fallback is not
@@ -856,7 +810,7 @@ committed off-origin source replaces it and causes dispatch to fail closed.
 Origin authorization is an entry-time admission check; the bridge neither
 holds the document lock across a handler nor rolls back completed work if
 navigation or reinjection makes its response undeliverable. That state is
-uncertain delivery, not uncertain commit; `M1_BRIDGE.md` owns the corresponding
+uncertain delivery, not uncertain commit; `BRIDGE.md` owns the corresponding
 retry and recovery rules. The packaged static-asset server is not an API or
 event channel.
 
@@ -895,8 +849,8 @@ This remains visually inactive until the Setup surface is implemented. Setup exp
 trash/additive deletion, trash-on-update, filters, creation-time and ACL
 preservation, source-casing propagation, and linked verification. Mirror has no
 control. ADS is visibly unavailable and frozen off; the page never implies a
-disabled checked option will be honored. Exact Setup and filter shapes are
-owned by [M1_BRIDGE.md](M1_BRIDGE.md).
+disabled checked option will be honored. Accepted Setup behavior is defined here; future exact Setup/filter DTOs are reopened at implementation. Wire encoding is
+owned by [BRIDGE.md](BRIDGE.md).
 
 A path row remains editable until explicit native admission. Editing an
 accepted path immediately drops the page's slot reference and marks it
@@ -952,8 +906,8 @@ activating it; clicking the label activates as usual. It never filters a viewpor
 searches a path, owns selection, or talks to the bridge. Slices 5 and 6 remain the first owners
 of real plan/inventory rows and their command wiring. The exact Python
 structural/search/filter/window/anchor contract and installed shell/tree
-contract live in `M1_BRIDGE.md`; the installed shell/tree witness is SH-G-7 in
-`M1_SHELL.md`.
+contract live in `PRESENTATION.md`; the installed shell/tree witness is SH-G-7 in
+`INTERFACES.md`.
 
 The accepted but unrealized view contract adds server-owned sibling sorting for
 plan and inventory views.
@@ -973,7 +927,7 @@ latent, but production commands, validators, state, raw row facts, and window/
 anchor behavior must be complete when sorting activates. Later GUI
 layout work must not reopen those contracts. Status/progress sorting, global
 flat sorting, and durable preferences are excluded from M1. Exact rules and
-acceptance live in [Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9);
+acceptance live in [Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow);
 the existing shell/tree witness does not close this new work. The active M1
 delivery plan owns sequencing.
 
@@ -1039,23 +993,46 @@ and terminal headline; subject-only work never fabricates a source-to-target
 label. Exact task/result revisions and named-generation rules are bridge
 authority.
 
+M1-4 activates task page creation, selection/navigation, rail interactions, and
+explicit closure. Page bodies may remain blank until their owning delivery
+checkpoint activates Setup, review, execution, or inventory content. Task
+identity, activity/terminal state, and pending/failed close remain truthful and
+observable; this slice does not prebuild those later content projections.
+
 An accepted pause renders **Pausing…** until custody actually reaches
 **Paused**; repeat pause/resume is disabled during the drain and cancellation
 remains available. Terminal presentation releases only that exact session while
-review artifacts remain. Closing a live task asks once, renders
-**Closing…**, requests cancellation, and stays visible until terminal-record
-cleanup completes. Failure is actionable and retryable; there is no force-close
+review artifacts remain. Closing a live task renders
+**Closing…**, immediately requests best-effort cooperative cancellation, and
+stays visible until cancellation settlement and resource release permit close.
+An incomplete close remains actionable through close/shutdown recovery; this
+does not retry the domain operation. There is no force-close
 path. Close and publication-fault observations invalidate rail, panel, and
 affected tree request generations before clearing cached data, so detached old
 responses are inert before payload read.
+
+Task closure never purges trash. User-invoked session cleanup and terminal
+execution/verification retry actions, including **Verify remaining**, are
+deferred to M2. Existing automatic owned-temp recovery, bounded operation/read
+retries, pause/resume, transport replay, and shutdown recovery remain unchanged.
+A forced process exit cannot wait for settlement and provides no durable live
+task or resume promise; later work starts from fresh observation and review.
+
+Normally completed linked execution/verification retains read-only file lists,
+item status, and each phase's aggregate status. Normal execution-only completion
+may offer the first manual post-copy verification when eligible. Non-stopping
+degradation retains that same review experience with visible issue axes, without
+item retries. Canceled or otherwise abnormally terminated sessions retain their
+terminal truth for review and close, without resume, retry, or session cleanup.
+Paused live sessions retain their existing controls.
 
 On `review-publication-protocol-failed`, the pane keeps prior settled review
 truth, clears the faulting live row decoration, disables mutating actions, and
 shows: **NamiSync could not publish this review safely. Close the task and try
 again.** Event drain and exact release continue for custody, but queued events
 cannot repopulate the discarded generation. The issue remains visible after
-release until task close. Exact fault precedence, phase mapping, disposal, and
-allowed operations are defined in [M1_BRIDGE.md](M1_BRIDGE.md).
+release until task close. Fault precedence, phase mapping, disposal, and
+allowed operations follow this document and [INTERFACES.md](INTERFACES.md).
 
 The browser retains only one accepted byte-fitting tree window for the selected
 pane. It never keeps a hidden complete plan/inventory list and never receives
@@ -1077,8 +1054,9 @@ Sync is a serial task interaction: Setup creates one immutable reviewed
 plan, the user chooses a dependency-closed selection, and Execute attaches to
 the same task only after commitment and fresh preflight of that set. A terminal
 with `filesystem="refused"` and `disposition="unrun"` displays the generic
-“Execution did not start” state, returns selection controls at a new revision,
-and offers subset retry or explicit **Plan again**. Plan again freshly resolves
+“Execution did not start” state and retains the committed selection for review.
+Recovery is explicit **Plan again**. Only failure to admit an execution restores
+editable selection; a preflight rejection after admission does not. Plan again freshly resolves
 the immutable reviewed volume pair, then creates a new task with the old frozen
 Setup and default selection; changed Setup also creates a new task. Neither path
 copies authorization. There is no background replan, execute-anyway,
@@ -1086,7 +1064,28 @@ auto-commit, or unattended path. Automatic linked verification stays in the
 execution session; manual
 exact post-copy verification is a later session that never rewrites execution.
 When exact handoff is blocked, the UI explains why and offers only the clearly
-labelled ordinary **Verify current state** fallback.
+labelled ordinary **Verify current state** fallback for an otherwise eligible,
+normally completed execution; this is not a terminal retry action.
+
+Pre-execution capacity refusal, including queued wakeup refusal, keeps the task
+visible without execution, automatic retry, or automatic close. Scan/planner
+population refusals may have no plan; review-preflight space refusal may retain
+an immutable plan with a negative verdict. They must not share a fabricated
+partial review. After resolving the cause, explicit Plan again performs fresh
+scans and review. Recognized disk-capacity failure during execution is an
+accepted, unrealized M1 stop outcome: settle the current operation, admit no
+later operation, and show the yellow capacity message. This color does not
+erase any known failure or independent recording/integrity issue. Other I/O
+failures use the existing typed generic reason and available diagnostic detail;
+a richer I/O taxonomy is deferred to M2.
+
+M1 execution review also supplies an informational trash-location string; its
+placement (for example, text or tooltip) remains open. An exact completed count
+may accompany it only when outcome evidence supports that count. Otherwise
+show location information without a total. Planned operation counts are not
+completed counts, and this message is not a scan of everything in `.synctrash`
+or a promise that externally removable files still exist. No purge action is
+implied.
 
 The Plan pane distinguishes immutable **Review snapshot** context from the
 current edited selection and the latest fresh-execution notices. Search,
@@ -1103,8 +1102,8 @@ atomic ledger view classifies it as execution-owned; current-state evidence is
 labelled separately. Execution and manual post-copy overlays remain independent
 fields. A replacement attempt decorates from one complete new generation, never
 a mixture or old fallback, while settled membership remains stable until
-terminal publication. Exact view fields, grouping, evidence classes, overlays,
-and anchor behavior are defined in [M1_BRIDGE.md](M1_BRIDGE.md).
+terminal publication. View behavior, grouping, evidence classes, overlays,
+and anchor behavior are defined here and in [PRESENTATION.md](PRESENTATION.md); future exact DTOs remain open.
 
 Inventory remains distinct from plan review. The pane supports literal search,
 server facets, collapse, default acknowledged-row hiding, and shared Refresh,
@@ -1142,7 +1141,7 @@ a fallback for missing task artifacts.
 
 Progress is replaceable telemetry. The browser reports the active nested event
 version truthfully; exact current/target versions and atomic cutover are owned
-by [M1_BRIDGE.md](M1_BRIDGE.md).
+by [BRIDGE.md](BRIDGE.md).
 Every snapshot self-describes its phase and may carry optional nominal
 active-item identity plus an opaque attempt id and paired attempt-local byte
 counters alongside aggregate bytes, item counts, and the display path. Only
@@ -1224,12 +1223,13 @@ Contrast and no-color-only signaling remain requirements in every theme.
   selection, process-local restart limits, and one-instance behavior.
 - Setup and task-review headed evidence covers editable typed/picker/recent
   admission, serial multi-pair behavior, immutable plan review, bounded
-  reinjection, stale-response suppression, unrun selection reopening, reviewed-
+  reinjection, stale-response suppression, admission rollback versus retained
+  preflight refusal, reviewed-
   identity Plan again, and action-guiding refusal/close states.
 - Plan and inventory headed evidence proves server-owned hierarchy, accessible
   grouping, independent evidence/result axes, confirmation-gated rebaseline,
   exact-handoff fallback labeling, and no browser-retained full result.
 - Exact target contracts and gates remain in
-  [M1_BRIDGE.md](M1_BRIDGE.md), delivery coverage in
-  [M1_SHELL_H2.md](M1_SHELL_H2.md), and test-scope policy in
+  [BRIDGE.md](BRIDGE.md), delivery coverage in
+  [M1_PLAN.md](M1_PLAN.md), and test-scope policy in
   [TESTS.md](TESTS.md).

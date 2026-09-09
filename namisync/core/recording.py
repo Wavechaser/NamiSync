@@ -11,7 +11,6 @@ from .models import (
     ScanResult,
     VolumeEvidence,
     VolumeId,
-    validate_scan_result,
 )
 from .pathing import validate_relative_path
 from .scalars import (
@@ -167,7 +166,18 @@ class InventoryCommand:
         require_safe_int(self.host_id, "inventory host id")
         if self.location_id < 1 or self.host_id < 1:
             raise ValueError("inventory database ids must be positive")
-        validate_scan_result(self.scan)
+        if type(self.scan) is not ScanResult:
+            raise TypeError("inventory scan must be an exact ScanResult")
+        for field_name, population in (
+            ("files", self.scan.files),
+            ("directories", self.scan.directories),
+            ("unsupported", self.scan.unsupported),
+            ("warnings", self.scan.warnings),
+        ):
+            if type(population) is not tuple:
+                raise TypeError(
+                    f"inventory scan {field_name} must be an exact tuple"
+                )
         require_utf8_text(
             self.scope_token,
             "inventory scope token",

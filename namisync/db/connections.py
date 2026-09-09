@@ -14,6 +14,7 @@ from namisync.core.pathing import (
 
 
 DEFAULT_BUSY_TIMEOUT_MS = 5_000
+QUERY_SUBJECT_BATCH_SIZE = 400
 
 
 class DatabaseLocationError(ValueError):

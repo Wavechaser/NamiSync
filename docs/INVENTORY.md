@@ -51,9 +51,7 @@ deduplication, sorting, or SQL construction. Absent or ineligible values within
 that wall can still produce an empty result; duplicates and malformed row ids
 retain their existing selection semantics, but none bypasses raw request
 admission. Chunked reads retain their one-snapshot ordering and do not
-accumulate raw `sqlite3.Row` shells beside the typed result. A complete retained-
-graph charge must cover the now-finite normalized sets, ordered copies, sort
-scratch, query slices, and final tuples.
+accumulate raw `sqlite3.Row` shells beside the typed result. These count bounds do not establish an aggregate memory guarantee; focused scale checks belong to PRESENTATION.
 
 The inventory workflow re-resolves stable volume identity before each
 invocation, registers first locations in the exact order host -> volume
@@ -110,8 +108,8 @@ identity before enforcing the count, so an overlap is charged once. An excess
 after successful refresh is `FAILED+RAN`, publishes no partial selection, and
 starts no verifier work; a recorder finalization failure retains error
 precedence. Accepted rows share one root `Path` owner rather than copying it per
-candidate. The independent retained-byte axis remains inactive until its
-complete graph charge is frozen.
+candidate. Request and population bounds remain independently enforced by
+scanner and workflow admission.
 
 The workflow checks the exact candidate-row tuple and its first-excess count,
 then constructs `IntegritySelection` directly; no injectable builder or second
@@ -122,9 +120,10 @@ partial behavior are supported.
 
 Inventory scanning likewise receives a mandatory workflow-owned population
 admission. The production scanner checks the next combined domain or warning
-row before append, while workflow validates the exact complete `ScanResult` and
-rechecks both populations before any host, location, or inventory ledger row is
-written. A valid initial inventory excess is `REFUSED+UNRUN` with no saved
+row before append. `ScanResult` construction owns complete graph validation;
+workflow then exact-adopts its tuple transfer, rechecks both raw populations,
+and compares the requested root and scope before any host, location, or
+inventory ledger row is written. A valid initial inventory excess is `REFUSED+UNRUN` with no saved
 details or partial inventory; malformed first-party scanner output remains a
 loud internal (rung 3) contract failure and keeps structural-error precedence.
 Integrity refresh has already started the request and therefore settles the
@@ -172,35 +171,22 @@ Desktop rebaseline requires explicit acknowledgement of current evidence;
 baseline and verify do not. The bridge owns the exact receipted request shape
 and rejects a mismatched intent before scope, ledger, or native work.
 
-Inventory continuation payloads are strict version 2 because they carry
-`subtree_roots` separately from exact `selected_paths`. Integrity continuations
-independently advance to strict version 2 so a pause retains its physical-read
-total high-water and aggregate recording status beside the exact frozen
-subjects. Their shared decoder validates the exact field set and JSON scalar
-types, rejects duplicate object keys, and checks kind and expected version
-independently. Inventory and integrity details retain the scanner's typed
-warnings; an incomplete refresh therefore preserves the warning code, relative
-path, and detail rather than reporting only `complete=False`.
+Inventory and integrity pause state is a process-local typed checkpoint, not a
+JSON payload or a durable protocol. Inventory retains the exact admitted
+binding, `subtree_roots`, and `selected_paths`; integrity additionally retains
+the exact frozen subjects, physical-read high-water, and aggregate recording
+status. Checkpoint construction detaches mutable collections, while reopening
+materializes fresh mutable state. The request constructors and their existing
+domain limits remain the enforcers; dispatcher custody neither decodes nor
+recertifies the checkpoint.
 
-Before either v2 encoder constructs dictionaries or lists, a typed walk
-re-admits the binding and every serialized occurrence and computes its exact
-canonical byte length. Inventory derives its maximum from the combined 120,000
-`ScanScope` entries, 27 expected mounts, and the request, path, and volume text
-walls. Integrity independently derives its maximum from 120,000 selected paths,
-120,000 database-derived item ids, at most 120,000 completions, five recording
-issues, and the same binding/scalar walls. Item ids retain their existing
-protocol spelling but are bounded to the enclosing two signed-64 database ids
-plus separator, 39 UTF-8 bytes. Repeated paths or ids are charged per wire
-occurrence rather than identity-deduplicated.
-
-Using the shared predeclared JSON coefficient catalog and its conservative
-two-times canonical-byte proof gives raw ceilings of 118,024,959,994 bytes for
-inventory and 118,241,513,170 bytes for integrity. Exact `bytes` and raw length
-are checked before UTF-8 decoding or `json.loads`; encoding rejects any final
-length different from the typed count. These theoretical source maxima are not
-task-retention allowances. Later custody admission must reserve each task's
-actual occurrence charge, and reducing the large duplicated-path ceiling would
-require a versioned continuation-schema change.
+Typed warnings remain part of the inventory and integrity domain values. An
+incomplete refresh therefore preserves the warning code, relative path, and
+detail rather than reporting only `complete=False`. Item ids retain their
+existing protocol spelling and enclosing signed-64 database-id bound. No
+process-local checkpoint byte budget, JSON version, or parallel wire vocabulary
+exists; external interface adapters remain responsible for bounding and
+validating their own requests before constructing these values.
 
 Those details are process-local terminal readback artifacts, not durable
 inventory. Each admitted inventory or integrity session owns its exact request
@@ -221,9 +207,7 @@ refuses before hashing.
 
 ## Stage 6 Desktop Contracts (Protocol Subset Active)
 
-Exact Setup admission, recents, bridge wire shapes, paging, hard walls, scalar
-domains, and retention accounting are centralized in
-[M1_BRIDGE.md](M1_BRIDGE.md), with safety classification in
+Setup admission and recents are owned by INTERFACES; paging by PRESENTATION; external wire encoding by [BRIDGE.md](BRIDGE.md), with safety classification and active bounds in
 [DEFENSE.md](DEFENSE.md). Inventory consumes the shared workflow-owned location
 candidate pipeline and always re-admits a real start; a slot or
 `RootAuthority` is evidence, never cached authorization.
@@ -242,7 +226,7 @@ view identity unchanged.
 
 The accepted but unrealized view contract adds the shared server-owned sibling
 sorter from
-[Bridge DR-BR-15](M1_BRIDGE.md#sibling-sorting-accepted-checkpoints-7-and-9).
+[Bridge DR-BR-15](PRESENTATION.md#search-filters-sorting-and-follow).
 New views and reset use canonical path-key order; filename, size, and mtime
 are explicit opt-in column/direction choices. Sort the complete projection
 before windowing, using raw own-object values, deterministic ties, and

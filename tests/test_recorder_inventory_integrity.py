@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+import sqlite3
 
 import pytest
 
+import namisync.db.recorder as recorder_module
+import namisync.db.repositories as repository_module
 from namisync.core.evidence import Provenance
 from namisync.core.integrity import (
     InventoryVerificationState,
@@ -27,11 +30,35 @@ from namisync.core.recording import (
     InventoryVisibilityAction,
     InventoryVisibilityCommand,
 )
-from namisync.db.connections import connect_ledger_reader
+from namisync.db.connections import (
+    QUERY_SUBJECT_BATCH_SIZE,
+    connect_ledger_reader,
+    connect_ledger_writer,
+)
 from namisync.db.repositories import LedgerRepository
+from namisync.db.writer import RecordingError
 from namisync.workflows.views import inventory_row_view
 
 from _db_fixtures import NOW, _file, _scan, attestation, plan, setup_recorder
+
+
+class _ParameterRecordingConnection:
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        calls: list[tuple[str, tuple[object, ...]]],
+    ) -> None:
+        self._connection = connection
+        self._calls = calls
+
+    def execute(
+        self, statement: str, parameters: tuple[object, ...] = ()
+    ) -> sqlite3.Cursor:
+        self._calls.append((statement, tuple(parameters)))
+        return self._connection.execute(statement, parameters)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._connection, name)
 
 
 def _unsupported(path: str) -> UnsupportedRecord:
@@ -202,6 +229,179 @@ def test_selected_inventory_reconciles_only_its_complete_scope(tmp_path: Path) -
         setup.recorder.close()
 
 
+@pytest.mark.parametrize("scope_kind", ("paths", "subtrees"))
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    tuple(
+        (count, QUERY_SUBJECT_BATCH_SIZE)
+        for count in (0, 1, 399, 400, 401, 801)
+    )
+    + ((801, 37),),
+)
+def test_exact_inventory_reconciliation_batches_every_absent_subject(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scope_kind: str,
+    count: int,
+    batch_size: int,
+) -> None:
+    monkeypatch.setattr(recorder_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
+    parameter_calls: list[tuple[str, tuple[object, ...]]] = []
+    connect = recorder_module.connect_ledger_writer
+
+    def recording_connect(*args: object, **kwargs: object) -> object:
+        return _ParameterRecordingConnection(
+            connect(*args, **kwargs), parameter_calls
+        )
+
+    monkeypatch.setattr(recorder_module, "connect_ledger_writer", recording_connect)
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    retained = _file("retained.bin", count + 1)
+    subjects = tuple(
+        _file(f"subject-{index:04d}.bin", index + 1) for index in range(count)
+    )
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (retained, *subjects)),
+                "seed",
+                NOW,
+            )
+        )
+        parameter_calls.clear()
+        selected_paths = (retained.rel_path, *(row.rel_path for row in subjects))
+        scope = (
+            ScanScope.selected(selected_paths)
+            if scope_kind == "paths"
+            else ScanScope.subtrees(
+                ("unobserved-tree",), selected_paths=selected_paths
+            )
+        )
+        result = setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (retained,), scope=scope),
+                "batched-missing",
+                NOW,
+            )
+        )
+
+        update_parameters = [
+            parameters
+            for statement, parameters in parameter_calls
+            if "UPDATE inventory" in statement and "rel_path_key IN" in statement
+        ]
+        assert bool(update_parameters) is bool(count)
+        assert all(
+            len(parameters) <= batch_size + 4
+            and len(parameters) - 4 <= batch_size
+            for parameters in update_parameters
+        )
+        assert result.missing_count == count
+        with LedgerRepository(setup.recorder.path) as repository:
+            rows = repository.get_inventory(setup.source_location_id)
+        assert {row.rel_path_key for row in rows if row.presence.value == "missing"} == {
+            row.rel_path_key for row in subjects
+        }
+        assert {
+            row.rel_path_key for row in rows if row.presence.value == "present"
+        } == {retained.rel_path_key}
+    finally:
+        setup.recorder.close()
+
+
+@pytest.mark.parametrize("scope_kind", ("paths", "subtrees"))
+def test_batched_exact_inventory_reconciliation_rolls_back_all_chunks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    scope_kind: str,
+) -> None:
+    successful_updates: list[tuple[object, ...]] = []
+    connect = recorder_module.connect_ledger_writer
+
+    class SuccessfulUpdateConnection(_ParameterRecordingConnection):
+        def execute(
+            self, statement: str, parameters: tuple[object, ...] = ()
+        ) -> sqlite3.Cursor:
+            cursor = self._connection.execute(statement, parameters)
+            if "UPDATE inventory" in statement and "rel_path_key IN" in statement:
+                successful_updates.append(tuple(parameters))
+            return cursor
+
+    def recording_connect(*args: object, **kwargs: object) -> object:
+        return SuccessfulUpdateConnection(connect(*args, **kwargs), [])
+
+    monkeypatch.setattr(recorder_module, "connect_ledger_writer", recording_connect)
+    setup = setup_recorder(tmp_path / "ledger.db", plan(()))
+    count = QUERY_SUBJECT_BATCH_SIZE + 1
+    retained = _file("retained.bin", count + 1)
+    subjects = tuple(
+        _file(f"subject-{index:04d}.bin", index + 1) for index in range(count)
+    )
+    selected_paths = (retained.rel_path, *(row.rel_path for row in subjects))
+    scope = (
+        ScanScope.selected(selected_paths)
+        if scope_kind == "paths"
+        else ScanScope.subtrees(("unobserved-tree",), selected_paths=selected_paths)
+    )
+    try:
+        setup.recorder.record_inventory(
+            InventoryCommand(
+                setup.source_location_id,
+                setup.host_id,
+                _scan(setup, (retained, *subjects)),
+                "seed",
+                NOW,
+            )
+        )
+        writer = connect_ledger_writer(setup.recorder.path)
+        try:
+            writer.executescript(
+                f"""CREATE TRIGGER reject_later_missing_batch
+                    BEFORE UPDATE OF presence ON inventory
+                    WHEN OLD.rel_path_key = '{subjects[QUERY_SUBJECT_BATCH_SIZE].rel_path_key}'
+                     AND NEW.presence = 'missing'
+                    BEGIN
+                        SELECT RAISE(ABORT, 'reject later missing batch');
+                    END;"""
+            )
+        finally:
+            writer.close()
+
+        successful_updates.clear()
+        with pytest.raises(RecordingError, match="reject later missing batch"):
+            setup.recorder.record_inventory(
+                InventoryCommand(
+                    setup.source_location_id,
+                    setup.host_id,
+                    _scan(setup, (retained,), scope=scope),
+                    "rejected-batched-missing",
+                    NOW,
+                )
+            )
+        assert successful_updates
+
+        connection = connect_ledger_reader(setup.recorder.path)
+        try:
+            assert connection.execute(
+                """SELECT count(*) FROM inventory
+                     WHERE location_id = ? AND presence = 'present'""",
+                (setup.source_location_id,),
+            ).fetchone()[0] == count + 1
+            assert connection.execute(
+                """SELECT count(*) FROM inventory
+                     WHERE location_id = ? AND presence = 'missing'""",
+                (setup.source_location_id,),
+            ).fetchone()[0] == 0
+        finally:
+            connection.close()
+    finally:
+        setup.recorder.close()
+
+
 def test_inventory_row_id_lookup_is_bounded_ordered_and_location_scoped(
     tmp_path: Path,
 ) -> None:
@@ -260,9 +460,25 @@ def test_inventory_row_id_lookup_is_bounded_ordered_and_location_scoped(
         setup.recorder.close()
 
 
-def test_inventory_row_id_chunks_share_one_read_snapshot(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("count", "batch_size"),
+    tuple(
+        (count, QUERY_SUBJECT_BATCH_SIZE)
+        for count in (0, 1, 399, 400, 401, 801)
+    )
+    + ((801, 37),),
+)
+def test_inventory_row_id_chunks_share_one_read_snapshot(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    count: int,
+    batch_size: int,
+) -> None:
+    monkeypatch.setattr(repository_module, "QUERY_SUBJECT_BATCH_SIZE", batch_size)
     setup = setup_recorder(tmp_path / "ledger.db", plan(()))
-    records = tuple(_file(f"file-{index:03d}.bin", index) for index in range(1, 402))
+    records = tuple(
+        _file(f"file-{index:04d}.bin", index + 1) for index in range(count)
+    )
     try:
         setup.recorder.record_inventory(
             InventoryCommand(
@@ -281,6 +497,17 @@ def test_inventory_row_id_chunks_share_one_read_snapshot(tmp_path: Path) -> None
 
         select_count = 0
         refreshed = False
+        parameter_calls: list[tuple[str, tuple[object, ...]]] = []
+        connect = repository_module.connect_ledger_reader
+
+        def recording_connect(*args: object, **kwargs: object) -> object:
+            return _ParameterRecordingConnection(
+                connect(*args, **kwargs), parameter_calls
+            )
+
+        monkeypatch.setattr(
+            repository_module, "connect_ledger_reader", recording_connect
+        )
 
         def trace(statement: str) -> None:
             nonlocal select_count, refreshed
@@ -306,19 +533,27 @@ def test_inventory_row_id_chunks_share_one_read_snapshot(tmp_path: Path) -> None
             setup.recorder.path, trace_callback=trace
         ) as repository:
             selected = repository.get_inventory_by_row_ids(
-                setup.source_location_id, row_ids
+                setup.source_location_id, tuple(reversed(row_ids))
             )
 
-        assert select_count == 2
-        assert refreshed is True
-        assert {row.scope_token for row in selected} == {"snapshot-old"}
-        with LedgerRepository(setup.recorder.path) as repository:
-            assert {
-                row.scope_token
-                for row in repository.get_inventory_by_row_ids(
-                    setup.source_location_id, (row_ids[-1],)
-                )
-            } == {"snapshot-new"}
+        assert tuple(row.row_id for row in selected) == tuple(reversed(row_ids))
+        id_parameters = [
+            parameters
+            for statement, parameters in parameter_calls
+            if "SELECT * FROM inventory" in statement and "AND id IN" in statement
+        ]
+        assert all(len(parameters) <= batch_size + 1 for parameters in id_parameters)
+        if count > batch_size:
+            assert select_count >= 2
+            assert refreshed is True
+            assert {row.scope_token for row in selected} == {"snapshot-old"}
+            with LedgerRepository(setup.recorder.path) as repository:
+                assert {
+                    row.scope_token
+                    for row in repository.get_inventory_by_row_ids(
+                        setup.source_location_id, (row_ids[-1],)
+                    )
+                } == {"snapshot-new"}
     finally:
         setup.recorder.close()
 

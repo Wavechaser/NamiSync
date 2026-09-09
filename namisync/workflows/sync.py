@@ -37,7 +37,6 @@ from namisync.core.integrity import (
     IntegrityRecorder,
     IntegrityRunResult,
     PostCopyCandidate,
-    PostCopyCandidateFact,
     PostCopyRecordIdentity,
     PostCopySelection,
     PostCopySelectionAuthority,
@@ -307,9 +306,9 @@ class SyncDependencies:
     open_recording: Callable[[RecordingSpec], AbstractContextManager[RunRecording]]
     save_plan: Callable[[PlanArtifact], None]
     save_execution_details: Callable[[ExecutionDetails], None]
-    finish_existing_recording: (
-        Callable[[RecordingSpec, SessionState, RecordingStatus], None] | None
-    ) = None
+    finish_existing_recording: Callable[
+        [RecordingSpec, SessionState, RecordingStatus], None
+    ]
     ignores: IgnoreSet = IgnoreSet()
 
 
@@ -1779,18 +1778,12 @@ def _run_execution(
                 incomplete=True,
                 error=f"{failure.type_name}: {failure.message}",
             )
-            terminal = OperationResult(
-                status=current.filesystem_status,
-                recording=current_recording,
-                disposition=Disposition.RAN,
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
                 items=take_result_items(),
-                phases=(current.execute_phase, verify_phase),
-                bytes_done=current.execute_phase.bytes_done,
-                bytes_total=(
-                    current.execute_phase.bytes_total
-                    if current.execute_phase.bytes_total is not None
-                    else current.execute_phase.bytes_done
-                ),
+                recording=current_recording,
+                canceled=False,
                 error=failure,
             )
             recording_status = finish_once(
@@ -1880,18 +1873,12 @@ def _run_execution(
                     verify_phase.error,
                 )
             )
-            terminal = OperationResult(
-                status=current.filesystem_status,
-                recording=current_recording,
-                disposition=Disposition.RAN,
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
                 items=take_result_items(),
-                phases=(current.execute_phase, verify_phase),
-                bytes_done=current.execute_phase.bytes_done,
-                bytes_total=(
-                    current.execute_phase.bytes_total
-                    if current.execute_phase.bytes_total is not None
-                    else current.execute_phase.bytes_done
-                ),
+                recording=current_recording,
+                canceled=False,
                 error=error,
             )
             recording_status = finish_once(
@@ -1930,19 +1917,13 @@ def _run_execution(
                 canceled=True,
                 error="verification canceled",
             )
-            terminal = OperationResult(
-                status=current.filesystem_status,
-                recording=current_recording,
-                disposition=Disposition.RAN,
-                canceled=True,
+            terminal = _verification_terminal_result(
+                current,
+                verify_phase=verify_phase,
                 items=take_result_items(),
-                phases=(current.execute_phase, verify_phase),
-                bytes_done=current.execute_phase.bytes_done,
-                bytes_total=(
-                    current.execute_phase.bytes_total
-                    if current.execute_phase.bytes_total is not None
-                    else current.execute_phase.bytes_done
-                ),
+                recording=current_recording,
+                canceled=True,
+                error=None,
             )
             recording_status = finish_once(
                 current.filesystem_status,
@@ -2058,7 +2039,7 @@ def _settle_canceled_execution_admitted(
         recording_status = xset.recording
         terminal_authority = snapshot_execution_set_authority(xset)
         try:
-            recording_status = _finish_recording_without_open(
+            recording_status = _finish_existing_recording(
                 deps,
                 xset,
                 filesystem_status,
@@ -2348,10 +2329,10 @@ def _validate_executor_result(
 
 def _canonical_integrity_outcome(
     value: IntegrityOutcome,
-    candidate_by_id: dict[str, PostCopyCandidateFact],
+    candidate_by_id: dict[str, PostCopyCandidate],
     completed_ids: set[str],
 ) -> IntegrityOutcome:
-    """Bind a verifier outcome to its admitted post-copy candidate facts."""
+    """Bind a verifier outcome to its admitted post-copy candidate."""
 
     item_id = value.item_id
     if type(item_id) is not str:
@@ -2365,8 +2346,8 @@ def _canonical_integrity_outcome(
     return snapshot_integrity_outcome(
         value,
         item_id=candidate.item_id,
-        row_id=None if identity is None else identity[0],
-        location_id=None if identity is None else identity[1],
+        row_id=None if identity is None else identity.row_id,
+        location_id=None if identity is None else identity.location_id,
         path=candidate.display_path,
         phase="verify",
     )
@@ -2375,7 +2356,7 @@ def _canonical_integrity_outcome(
 def _validate_post_copy_verifier_completion(
     selection: PostCopySelection,
     authority: PostCopySelectionAuthority,
-    pending_by_id: dict[str, PostCopyCandidateFact],
+    pending_by_id: dict[str, PostCopyCandidate],
     *,
     complete: bool,
 ) -> None:
@@ -2619,6 +2600,35 @@ def _verify_phase(
     )
 
 
+def _verification_terminal_result(
+    continuation: VerifyContinuation,
+    *,
+    verify_phase: PhaseResult,
+    items: tuple[ItemOutcome | IntegrityOutcome, ...],
+    recording: RecordingStatus,
+    canceled: bool,
+    error: FailureDetail | None,
+) -> OperationResult:
+    """Project already-settled verification truth with its execute continuation."""
+
+    execute_phase = continuation.execute_phase
+    return OperationResult(
+        status=continuation.filesystem_status,
+        recording=recording,
+        disposition=Disposition.RAN,
+        canceled=canceled,
+        items=items,
+        phases=(execute_phase, verify_phase),
+        bytes_done=execute_phase.bytes_done,
+        bytes_total=(
+            execute_phase.bytes_total
+            if execute_phase.bytes_total is not None
+            else execute_phase.bytes_done
+        ),
+        error=error,
+    )
+
+
 def _verify_progress_totals(
     continuation: VerifyContinuation,
 ) -> tuple[int, int]:
@@ -2830,21 +2840,16 @@ def _recording_open_failure_result(
             incomplete=True,
             error=f"{detail.type_name}: {detail.message}",
         )
-        terminal = OperationResult(
-            status=continuation.filesystem_status,
+        terminal = _verification_terminal_result(
+            continuation,
+            verify_phase=phase,
+            items=(),
             recording=RecordingStatus.DEGRADED,
-            disposition=Disposition.RAN,
-            phases=(continuation.execute_phase, phase),
-            bytes_done=continuation.execute_phase.bytes_done,
-            bytes_total=(
-                continuation.execute_phase.bytes_total
-                if continuation.execute_phase.bytes_total is not None
-                else continuation.execute_phase.bytes_done
-            ),
+            canceled=False,
             error=detail,
         )
         try:
-            _finish_recording_without_open(
+            _finish_existing_recording(
                 deps,
                 xset,
                 continuation.filesystem_status,
@@ -2911,7 +2916,7 @@ def _recording_open_failure_result(
         error=detail,
     )
     try:
-        _finish_recording_without_open(
+        _finish_existing_recording(
             deps,
             xset,
             SessionState.FAILED,
@@ -3002,7 +3007,7 @@ def _recording_entry_canceled_result(
     )
     execution_authority = snapshot_execution_set_authority(xset)
     try:
-        recording_status = _finish_recording_without_open(
+        recording_status = _finish_existing_recording(
             deps,
             xset,
             filesystem_status,
@@ -3114,17 +3119,12 @@ def _settle_verify_incomplete(
         continuation.execution_set.recording,
         continuation.recording,
     )
-    terminal = OperationResult(
-        status=continuation.filesystem_status,
+    terminal = _verification_terminal_result(
+        continuation,
+        verify_phase=phase,
+        items=(),
         recording=recording_status,
-        disposition=Disposition.RAN,
-        phases=(continuation.execute_phase, phase),
-        bytes_done=continuation.execute_phase.bytes_done,
-        bytes_total=(
-            continuation.execute_phase.bytes_total
-            if continuation.execute_phase.bytes_total is not None
-            else continuation.execute_phase.bytes_done
-        ),
+        canceled=False,
         error=error,
     )
     execution_authority = snapshot_execution_set_authority(
@@ -3180,108 +3180,16 @@ def _finish_existing_recording(
     status: SessionState,
     recording_status: RecordingStatus,
 ) -> RecordingStatus:
-    finisher = getattr(deps, "finish_existing_recording", None)
-    if finisher is not None:
-        authority = snapshot_execution_set_authority(xset)
-        try:
-            finisher(_recording_spec(xset), status, recording_status)
-        except Exception as error:
-            try:
-                revalidate_execution_set_authority(
-                    xset,
-                    authority,
-                    allow_progress=False,
-                )
-            except Exception:
-                retire_exception_graph(error)
-                raise
-            _note_task_recording_issue(
-                xset,
-                TaskRecordingIssueReason.FINISH_FAILED,
-                error,
-            )
-        else:
-            revalidate_execution_set_authority(
-                xset,
-                authority,
-                allow_progress=False,
-            )
-        return _combined_recording(recording_status, xset.recording)
-    boundary = _RecordingBoundary(
-        deps.open_recording,
-        lambda: _strict_execution_revalidator(xset),
+    finisher = deps.finish_existing_recording
+    return _invoke_recording_finish(
+        xset,
+        recording_status,
+        lambda: finisher(
+            _recording_spec(xset),
+            status,
+            recording_status,
+        ),
     )
-    try:
-        with boundary.open(_recording_spec(xset)) as recording:
-            recording_status = _finish_recording(
-                recording,
-                xset,
-                status,
-                recording_status,
-            )
-    except Exception as error:
-        if boundary.integrity_failure is not None:
-            failure = boundary.integrity_failure
-            retire_exception_graph(error)
-            raise RuntimeError(
-                f"recording boundary changed continuation truth: "
-                f"{failure.type_name}: {failure.message}"
-            ) from None
-        failure = boundary.enter_failure or _close_recording_failure(error)
-        _note_closed_recording_issue(
-            xset,
-            TaskRecordingIssueReason.RECORDING_OPEN_FAILED,
-            failure,
-        )
-    if boundary.integrity_failure is not None:
-        failure = boundary.integrity_failure
-        raise RuntimeError(
-            f"recording boundary changed continuation truth: "
-            f"{failure.type_name}: {failure.message}"
-        )
-    if boundary.exit_failure is not None:
-        _note_closed_recording_issue(
-            xset,
-            TaskRecordingIssueReason.RECORDING_CLOSE_FAILED,
-            boundary.exit_failure,
-        )
-    return _combined_recording(recording_status, xset.recording)
-
-
-def _finish_recording_without_open(
-    deps: SyncDependencies,
-    xset: ExecutionSet,
-    status: SessionState,
-    recording_status: RecordingStatus,
-) -> RecordingStatus:
-    finisher = getattr(deps, "finish_existing_recording", None)
-    if finisher is None:
-        return _combined_recording(recording_status, xset.recording)
-    authority = snapshot_execution_set_authority(xset)
-    try:
-        finisher(_recording_spec(xset), status, recording_status)
-    except Exception as error:
-        try:
-            revalidate_execution_set_authority(
-                xset,
-                authority,
-                allow_progress=False,
-            )
-        except Exception:
-            retire_exception_graph(error)
-            raise
-        _note_task_recording_issue(
-            xset,
-            TaskRecordingIssueReason.FINISH_FAILED,
-            error,
-        )
-    else:
-        revalidate_execution_set_authority(
-            xset,
-            authority,
-            allow_progress=False,
-        )
-    return _combined_recording(recording_status, xset.recording)
 
 
 def _finish_recording(
@@ -3290,9 +3198,23 @@ def _finish_recording(
     status: SessionState,
     recording_status: RecordingStatus,
 ) -> RecordingStatus:
+    return _invoke_recording_finish(
+        xset,
+        recording_status,
+        lambda: recording.finish(status, recording_status),
+    )
+
+
+def _invoke_recording_finish(
+    xset: ExecutionSet,
+    recording_status: RecordingStatus,
+    invoke: Callable[[], None],
+) -> RecordingStatus:
+    """Invoke one recording finish under its execution-set guard."""
+
     authority = snapshot_execution_set_authority(xset)
     try:
-        recording.finish(status, recording_status)
+        invoke()
     except Exception as error:
         try:
             revalidate_execution_set_authority(

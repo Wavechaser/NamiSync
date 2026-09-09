@@ -19,14 +19,13 @@ from uuid import uuid4
 from namisync.dispatcher import retire_exception_graph
 from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 from namisync.workflows.views import (
-    OperationResultView, SessionEventView, SessionRecordView,
-    validate_operation_result_view, validate_session_event_view,
+    OperationResultView, SessionRecordView, validate_operation_result_view,
     validate_session_record_view,
 )
 
-from .drain import (
+from namisync.interfaces.task_port import (
     TaskDrainView, TaskEventUpdateView, TaskRecordUpdateView,
-    validate_task_drain_view, validate_task_update_view,
+    TaskUnavailableError, validate_task_drain_view, validate_task_update_view,
 )
 
 from .pywebview_runtime import (
@@ -40,13 +39,14 @@ if TYPE_CHECKING:
 
 
 _VIEW_VALIDATORS = {
-    SessionEventView: validate_session_event_view,
     SessionRecordView: validate_session_record_view,
     OperationResultView: validate_operation_result_view,
     TaskDrainView: validate_task_drain_view,
     TaskEventUpdateView: validate_task_update_view,
     TaskRecordUpdateView: validate_task_update_view,
 }
+# SessionEventView is intentionally absent: the bridge does not recertify a
+# trusted producer's event-body semantics.
 
 
 BRIDGE_SCHEMA_VERSION = 1
@@ -787,7 +787,6 @@ class BridgeDispatcher:
             from .drain import (
                 DrainBusyError,
                 ObservationConflictError,
-                TaskUnavailableError,
             )
             from .slots import SlotUnavailableError
 
@@ -958,11 +957,8 @@ class BridgeDispatcher:
         self._admitted -= len(finished)
 
     def _acknowledge_native_response(self, response_token: str) -> bool:
-        try:
-            self._document.require_trusted()
-        except BaseException as error:
-            retire_exception_graph(error)
-            return False
+        """Release exact response custody without granting document authority."""
+
         with self._handler_condition:
             custody = self._native_responses.get(response_token)
             if custody is None:
@@ -1274,7 +1270,7 @@ def _snapshot_response_value(
 
 
 def _validate_owned_response_tree(value: object, active: set[int]) -> None:
-    """Invoke only the first complete public-view validator for each subtree."""
+    """Invoke the retained type-specific validator when one exists."""
 
     validator = _VIEW_VALIDATORS.get(type(value))
     if validator is not None:
