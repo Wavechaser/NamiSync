@@ -430,6 +430,26 @@ def test_supplemental_node_startup_rearms_per_bridge_generation() -> None:
         timeout=10,
     )
     assert completed.returncode == 0, completed.stderr
+
+
+def test_process_live_task_shell_transitions_use_production_modules() -> None:
+    node = _node_executable()
+    assert node is not None, "Node.js is required for the task-shell witness"
+    assets = PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets"
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "task_shell_probe.mjs"),
+            str(assets / "app.js"),
+            str(assets / "rail.js"),
+            str(assets / "panels.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
     assert completed.stdout == "ok"
 
 
@@ -1077,7 +1097,7 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
         "installAppearanceReceiver("
     )
     assert app.index("installAppearanceReceiver(") < app.index(
-        "app.append(createTaskRail(), createWorkPanel());"
+        "app.append(rail.element, panel.element);"
     )
     startup = app.split("async function finishStartup(", 1)[1]
     assert startup.index("whenBridgeApiReady()") < startup.index(
@@ -1119,7 +1139,7 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
     assert app.count('renderText(status, "Ready")') == 1
 
 
-def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
+def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     built_wheel: BuiltWheel,
 ) -> None:
     assets = _wheel_assets(built_wheel)
@@ -1151,15 +1171,23 @@ def test_sh_g_7_packaged_shell_is_accessible_honest_and_command_inert(
     assert 'emptySlot.classList.add("nami-card", "nami-task-rail__empty-slot");' in rail
     assert 'ariaLabel = "Work area";' in panels
     assert 'panel.setAttribute("role", "region");' in panels
-    assert 'renderText(heading, "Work area");' in panels
+    assert 'task === null ? "Work area" : task.label' in panels
     assert 'renderText(empty, "No task selected.");' in panels
-    assert "Task details will appear here when a task is available." in panels
     assert "tabIndex" not in rail
     assert "tabIndex" not in panels
     assert 'rail.classList.add("nami-task-rail");' in rail
     assert 'rail.classList.add("nami-card"' not in rail
     assert 'panel.classList.add("nami-card", "nami-work-panel");' in panels
-    assert "app.append(createTaskRail(), createWorkPanel());" in app
+    assert "app.append(rail.element, panel.element);" in app
+    assert 'renderText(create, "New task");' in rail
+    assert 'renderText(entry.close, task.error === null ? "Close" : "Retry");' in rail
+    assert "createTask()" in app
+    assert "listTasks()" in app
+    assert "closeTask(task.taskId, task.sessionId)" in app
+    assert "result.disposition === \"closed\"" in app
+    assert "task.closePending = true;" in app
+    assert "tasks.get(task.taskId) !== task" in app
+    assert "epoch !== startupEpoch" in app
     assert '"./plan.js"' not in app + panels
     assert '"./integrity.js"' not in app + panels
     assert "renderPlanRow" not in shell

@@ -49,11 +49,13 @@ from namisync.interfaces.web.drain import (
     TaskRegistry,
 )
 from namisync.interfaces.task_port import (
+    TaskCloseRequestView,
     TaskIntentConflictError,
     TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
     TaskSessionReleaseView,
+    TaskShellView,
     TaskStartView,
     TaskTerminalDelivery,
     TaskUnavailableError,
@@ -227,6 +229,7 @@ class _Service:
         self.start_calls = []
         self.reobserve_calls = []
         self.lifecycle_calls = []
+        self.shells: dict[str, str] = {}
         self._task_token = task_token or (lambda: "a" * 32)
         self.start_entered = Event()
         self.release_start = Event()
@@ -235,6 +238,22 @@ class _Service:
         self.release_reobserve = Event()
         self.release_reobserve.set()
         self.reobserve_result = _record(terminal=False)
+
+    def create_task_shell(self, command_id, delivery_factory):
+        task_id = self.shells.get(command_id)
+        if task_id is None:
+            task_id = f"task-{self._task_token()}"
+            self.shells[command_id] = task_id
+        delivery_factory(task_id)
+        return TaskShellView(task_id)
+
+    def close_task_shell(self, task_id):
+        self.lifecycle_calls.append(("close_task_shell", task_id))
+        return TaskShellView(task_id)
+
+    def cancel_task_session(self, task_id, session_id):
+        self.lifecycle_calls.append(("cancel_task_session", task_id, session_id))
+        return object()
 
     def start_task_plan(
         self,
@@ -305,6 +324,188 @@ def _make_registry(lifecycle, **kwargs) -> TaskRegistry:
         ),
         **kwargs,
     )
+
+
+def test_task_shell_create_list_replay_and_exact_close() -> None:
+    service = _Service()
+    registry = _make_registry(service)
+    command_id = "4" * 32
+
+    created = registry.create_task_shell(command_id)
+    replay = registry.create_task_shell(command_id)
+    retained = registry.list_tasks()
+
+    assert replay == created
+    assert retained.tasks[0].task_id == created.task_id
+    assert retained.tasks[0].session_id is None
+    assert retained.tasks[0].session_state is None
+    assert retained.tasks[0].session_released is False
+    assert registry.request_task_close(created.task_id, None) == TaskCloseRequestView(
+        created.task_id,
+        None,
+        "closed",
+    )
+    assert registry.request_task_close(created.task_id, None) == TaskCloseRequestView(
+        created.task_id,
+        None,
+        "closed",
+    )
+    assert registry.list_tasks().tasks == ()
+    assert service.lifecycle_calls == [("close_task_shell", created.task_id)]
+
+
+def test_task_shell_is_not_listed_before_adapter_publication() -> None:
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.delivered = Event()
+            self.release = Event()
+
+        def create_task_shell(self, command_id, delivery_factory):
+            task_id = f"task-{self._task_token()}"
+            delivery_factory(task_id)
+            self.delivered.set()
+            assert self.release.wait(2)
+            return TaskShellView(task_id)
+
+    service = Service()
+    registry = _make_registry(service)
+    results = []
+    worker = Thread(
+        target=lambda: results.append(registry.create_task_shell("4" * 32))
+    )
+    worker.start()
+    assert service.delivered.wait(2)
+
+    assert registry.list_tasks().tasks == ()
+    service.release.set()
+    worker.join(2)
+
+    assert not worker.is_alive()
+    assert registry.list_tasks().tasks[0].task_id == results[0].task_id
+
+
+def test_shell_and_session_closes_share_one_bounded_receipt_population() -> None:
+    tokens = iter(f"{value:032x}" for value in range(1, 51))
+    service = _Service(task_token=lambda: next(tokens))
+    registry = _make_registry(service)
+    closed = []
+    for value in range(49):
+        task = registry.create_task_shell(f"{value + 100:032x}")
+        closed.append(task.task_id)
+        registry.request_task_close(task.task_id, None)
+
+    assert len(registry._close_receipts) == drain_module._CLOSE_RECEIPT_CAPACITY
+    with pytest.raises(TaskUnavailableError):
+        registry.request_task_close(closed[0], None)
+    assert registry.request_task_close(closed[-1], None).disposition == "closed"
+
+
+def test_busy_task_close_requests_cancel_and_retains_task() -> None:
+    service = _Service()
+    registry = _make_registry(service)
+    started = registry.start_plan(
+        r"C:\source",
+        r"D:\target",
+        deletion_policy=None,
+        command_id="5" * 32,
+    )
+
+    result = registry.request_task_close(started.task_id, started.session_id)
+
+    assert result == TaskCloseRequestView(
+        started.task_id,
+        started.session_id,
+        "pending",
+    )
+    summary = registry.list_tasks().tasks[0]
+    assert summary.task_id == started.task_id
+    assert summary.session_id == started.session_id
+    assert summary.session_state == "active"
+    assert summary.session_released is False
+    assert service.lifecycle_calls == [
+        ("cancel_task_session", started.task_id, started.session_id)
+    ]
+
+
+def test_repeated_busy_task_close_is_pending_without_duplicate_cancel_event(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    entered = Event()
+    release = Event()
+
+    class Invocation:
+        def run(self, context):
+            entered.set()
+            assert release.wait(2)
+            context.checkpoint()
+            return OperationResult(SessionState.COMPLETED)
+
+        def snapshot(self) -> object:
+            return "busy"
+
+    dispatcher = Dispatcher(
+        {
+            PLAN_KIND: WorkflowRegistration(
+                lambda _request: PreparedSession("busy"),
+                lambda _checkpoint: Invocation(),
+            )
+        }
+    )
+    monkeypatch.setattr(service_module, "_dispatcher", lambda _runtime: dispatcher)
+    service = NamiSyncService(tmp_path / "ledger.db", tmp_path / "history.db")
+    registry = _make_registry(service, drain_wait=0.1)
+    source = tmp_path / "source"
+    target = tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+
+    try:
+        started = registry.start_plan(
+            str(source),
+            str(target),
+            deletion_policy=None,
+            command_id="5" * 32,
+        )
+        assert entered.wait(1)
+        registry.drain(
+            started.task_id,
+            started.session_id,
+            "6" * 32,
+            replay_from=None,
+        )
+
+        first = registry.request_task_close(started.task_id, started.session_id)
+        canceled = registry.drain(
+            started.task_id,
+            started.session_id,
+            "7" * 32,
+            replay_from=None,
+        )
+        second = registry.request_task_close(started.task_id, started.session_id)
+        repeated = registry.drain(
+            started.task_id,
+            started.session_id,
+            "8" * 32,
+            replay_from=None,
+        )
+
+        assert first.disposition == second.disposition == "pending"
+        assert dispatcher.get(SessionId(started.session_id)).state is SessionState.CANCELING
+        assert [
+            update.event.body
+            for update in canceled.updates
+            if type(update) is TaskEventUpdateView
+            and update.event.body_type == "StateChanged"
+            and update.event.body == {"state": "canceling"}
+        ] == [{"state": "canceling"}]
+        assert repeated.updates == ()
+        assert registry.list_tasks().tasks[0].task_id == started.task_id
+    finally:
+        release.set()
+        registry.begin_close()
+        service.close(timeout=2)
 
 
 def test_task_response_codec_binding_is_exact_idempotent_and_conflict_safe() -> None:
@@ -2284,11 +2485,14 @@ def test_terminal_session_release_lost_response_replay_is_idempotent() -> None:
 
     first = registry.release_terminal_session(start.task_id, start.session_id)
     replay = registry.release_terminal_session(start.task_id, start.session_id)
+    summary = registry.list_tasks().tasks[0]
 
     assert first == replay == TaskSessionReleaseView(
         start.task_id,
         start.session_id,
     )
+    assert summary.session_state == "completed"
+    assert summary.session_released is True
     assert [call[0] for call in service.lifecycle_calls] == [
         "release_task_session",
         "release_task_session",
@@ -2303,8 +2507,14 @@ def test_delayed_terminal_release_converges_from_close_receipt() -> None:
     registry.close_task(start.task_id, start.session_id)
 
     released = registry.release_terminal_session(start.task_id, start.session_id)
+    close_replay = registry.request_task_close(start.task_id, start.session_id)
 
     assert released == TaskSessionReleaseView(start.task_id, start.session_id)
+    assert close_replay == TaskCloseRequestView(
+        start.task_id,
+        start.session_id,
+        "closed",
+    )
     assert start.task_id not in registry._tasks
     assert [call[0] for call in service.lifecycle_calls] == ["close_task"]
 

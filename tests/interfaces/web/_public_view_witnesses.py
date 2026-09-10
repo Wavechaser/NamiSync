@@ -31,12 +31,16 @@ from namisync.interfaces.service import (
     ShutdownView,
 )
 from namisync.interfaces.task_port import (
+    TaskCloseRequestView,
     TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
     TaskRecordUpdateView,
     TaskSessionReleaseView,
+    TaskShellView,
     TaskStartView,
+    TaskListView,
+    TaskSummaryView,
 )
 from namisync.workflows import PLAN_KIND
 from namisync.workflows.models import (
@@ -1060,6 +1064,48 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "request_id": REQUEST_ID,
                 "session_id": SESSION_ID,
             },
+        ),
+    ),
+    TaskShellView: (
+        PublicViewWitness(
+            "task-shell",
+            TaskShellView(TASK_ID),
+            {"task_id": TASK_ID},
+        ),
+    ),
+    TaskSummaryView: (
+        PublicViewWitness(
+            "task-summary",
+            TaskSummaryView(TASK_ID, None, None, False),
+            {
+                "task_id": TASK_ID,
+                "session_id": None,
+                "session_state": None,
+                "session_released": False,
+            },
+        ),
+    ),
+    TaskListView: (
+        PublicViewWitness(
+            "task-list",
+            TaskListView((TaskSummaryView(TASK_ID, None, None, False),)),
+            {
+                "tasks": [
+                    {
+                        "task_id": TASK_ID,
+                        "session_id": None,
+                        "session_state": None,
+                        "session_released": False,
+                    }
+                ]
+            },
+        ),
+    ),
+    TaskCloseRequestView: (
+        PublicViewWitness(
+            "task-close-request",
+            TaskCloseRequestView(TASK_ID, None, "closed"),
+            {"task_id": TASK_ID, "session_id": None, "disposition": "closed"},
         ),
     ),
     TaskCloseView: (

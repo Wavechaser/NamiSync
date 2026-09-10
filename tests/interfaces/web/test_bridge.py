@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import inspect
 import json
+from collections.abc import Callable
 from pathlib import Path
 from threading import Event, Lock, Thread
 from types import SimpleNamespace
@@ -527,6 +528,7 @@ def test_prepare_pywebview_host_uses_only_read_only_runtime_probes(
         del args, kwargs
         pytest.fail("runtime detection attempted a registry write")
 
+    monkeypatch.setattr(pywebview_runtime, "machine", lambda: "AMD64")
     monkeypatch.setattr(pywebview_runtime.winreg, "OpenKey", open_key)
     monkeypatch.setattr(pywebview_runtime.winreg, "QueryValueEx", query_value)
     monkeypatch.setattr(pywebview_runtime.winreg, "CreateKeyEx", reject_write)
@@ -1310,6 +1312,94 @@ def test_br_g_32_native_return_retains_handler_capacity_until_worker_exit(
     assert bridge._admitted == 0
 
 
+@pytest.mark.parametrize(
+    ("retirement", "expected_evaluations", "expected_failures"),
+    [
+        ("before_evaluation", 0, []),
+        ("during_evaluation", 1, []),
+        ("current", 1, ["JavascriptException"]),
+    ],
+)
+def test_pinned_pywebview_native_return_is_generation_contained(
+    monkeypatch: pytest.MonkeyPatch,
+    retirement: str,
+    expected_evaluations: int,
+    expected_failures: list[str],
+) -> None:
+    import webview.util
+    from webview.errors import JavascriptException
+
+    from namisync.interfaces.web import host
+
+    entered = Event()
+    release = Event()
+    effects: list[object] = []
+    evaluations: list[str] = []
+    failures: list[str] = []
+    workers: list[Thread] = []
+
+    def handler(payload: object) -> object:
+        effects.append(payload)
+        entered.set()
+        assert release.wait(1.0)
+        return payload
+
+    bridge = _dispatcher(_trusted_document(), {"echo": handler})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {"value": "native return"},
+    })
+
+    def evaluate(script: str) -> None:
+        evaluations.append(script)
+        if retirement == "during_evaluation":
+            bridge._retire_document_responses()
+        if retirement in {"during_evaluation", "current"}:
+            raise JavascriptException({"name": "TypeError"})
+
+    def worker(*, target: Callable[[], None]) -> Thread:
+        def capture() -> None:
+            try:
+                target()
+            except BaseException as error:
+                failures.append(type(error).__name__)
+
+        thread = Thread(target=capture)
+        workers.append(thread)
+        return thread
+
+    window = SimpleNamespace(
+        _js_api=None,
+        _functions={},
+        _callbacks={},
+        expose=lambda *functions: window._functions.update(
+            {function.__name__: function for function in functions}
+        ),
+        evaluate_js=evaluate,
+    )
+    host._expose_bridge_api(window, bridge)
+    monkeypatch.setattr(webview.util, "Thread", worker)
+
+    webview.util.js_bridge_call(window, "dispatch", [command], "return-id")
+    assert entered.wait(1.0)
+    if retirement == "before_evaluation":
+        bridge._retire_document_responses()
+    release.set()
+    for thread in workers:
+        thread.join(1.0)
+        assert not thread.is_alive()
+    if retirement == "current":
+        bridge._retire_document_responses()
+    bridge.wait_for_handlers(1.0)
+
+    assert effects == [{"value": "native return"}]
+    assert len(evaluations) == expected_evaluations
+    assert failures == expected_failures
+    assert bridge._admitted == 0
+
+
 def test_br_g_32_native_return_requires_worker_exit_and_exact_browser_receipt() -> None:
     bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
     command = json.dumps({
@@ -1340,6 +1430,54 @@ def test_br_g_32_native_return_requires_worker_exit_and_exact_browser_receipt() 
     assert bridge._dispatch_native(f"ack:{response_token}") is False
     bridge.wait_for_handlers(1.0)
     assert bridge.dispatch(command)["ok"] is True
+
+
+def test_native_acknowledgment_return_carries_a_one_shot_generation() -> None:
+    bridge = _dispatcher(_trusted_document(), {"echo": lambda payload: payload})
+    command = json.dumps({
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "request_id": _REQUEST_ID,
+        "command": "echo",
+        "payload": {},
+    })
+    responses: list[dict[str, object]] = []
+    producer = Thread(
+        target=lambda: responses.append(bridge._dispatch_native(command))
+    )
+    producer.start()
+    producer.join(1.0)
+    assert not producer.is_alive()
+    token = responses[0]["response_token"]
+    assert isinstance(token, str)
+
+    acknowledgments: list[object] = []
+    generations: list[int | None] = []
+    current: list[bool] = []
+    acknowledged = Event()
+    inspect_return = Event()
+
+    def acknowledge() -> None:
+        acknowledgments.append(bridge._dispatch_native(f"ack:{token}"))
+        acknowledged.set()
+        assert inspect_return.wait(1.0)
+        generation = bridge._claim_native_return_generation()
+        generations.append(generation)
+        assert generation is not None
+        current.append(bridge._is_document_generation_current(generation))
+        generations.append(bridge._claim_native_return_generation())
+
+    consumer = Thread(target=acknowledge)
+    consumer.start()
+    assert acknowledged.wait(1.0)
+    bridge._retire_document_responses()
+    inspect_return.set()
+    consumer.join(1.0)
+
+    assert not consumer.is_alive()
+    assert acknowledgments == [True]
+    assert generations == [0, None]
+    assert current == [False]
+    bridge.wait_for_handlers(1.0)
 
 
 def test_br_g_32_exact_native_receipt_remains_available_after_trust_loss() -> None:
@@ -1490,6 +1628,7 @@ def test_br_g_32_document_retirement_refuses_a_preempted_native_entry(
     entered_token_generation = Event()
     resume_token_generation = Event()
     responses: list[dict[str, object]] = []
+    generations: list[int | None] = []
 
     class DelayedToken:
         @property
@@ -1499,7 +1638,12 @@ def test_br_g_32_document_retirement_refuses_a_preempted_native_entry(
             return "a" * 32
 
     monkeypatch.setattr(bridge_module, "uuid4", lambda: DelayedToken())
-    owner = Thread(target=lambda: responses.append(bridge._dispatch_native(command)))
+    def dispatch() -> None:
+        responses.append(bridge._dispatch_native(command))
+        generations.append(bridge._claim_native_return_generation())
+        generations.append(bridge._claim_native_return_generation())
+
+    owner = Thread(target=dispatch)
     owner.start()
     assert entered_token_generation.wait(1.0)
 
@@ -1510,6 +1654,8 @@ def test_br_g_32_document_retirement_refuses_a_preempted_native_entry(
     assert not owner.is_alive()
     assert responses[0]["response_token"] is None
     assert responses[0]["response"]["error"]["code"] == "bridge_unavailable"
+    assert generations == [0, None]
+    assert bridge._is_document_generation_current(generations[0]) is False
     bridge.wait_for_handlers(1.0)
     assert bridge.dispatch(command)["ok"] is True
 

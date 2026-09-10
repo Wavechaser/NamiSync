@@ -762,6 +762,17 @@ defect, and move implementation-level test choreography out of the log.
 
 ### Desktop bridge and native-owner lifecycle
 
+- MINOR - FIXED (2026-09-10). Obsolete native-return delivery. A delayed
+  create or terminal-release response crossed a document reload, then pywebview
+  6.2.1 invoked the destroyed JavaScript callback outside its exception boundary.
+  Command effects remained intact, but native callback tracebacks failed headed
+  acceptance. The host now consumes one post-handler worker-local generation
+  marker: skip an obsolete return, or contain only a `JavascriptException`
+  concurrent with generation retirement. Stable-generation JS errors and non-JS
+  failures propagate; receipts and true worker-exit custody remain unchanged.
+  Pinned-worker controls and the installed-wheel create/release reload witness
+  pass with strict empty stderr. This contains obsolete delivery, not an atomic
+  JavaScript execution fence or a new asynchronous command boundary.
 - MINOR - FIXED (2026-09-05). Receipt-cleanup trust conflation. An off-origin
   native call returned the exact structured refusal with a response token, but
   the same origin check rejected its cleanup acknowledgment; JavaScript then

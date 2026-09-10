@@ -1018,6 +1018,8 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     assert dom["hostile_marker_defined"] is False
     assert result["production_command_names"] == [
         "close_task",
+        "create_task",
+        "list_tasks",
         "next_events",
         "pick_folder",
         "read_cosmetic_section",
@@ -1029,6 +1031,8 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     ]
     assert result["combined_command_names"] == [
         "close_task",
+        "create_task",
+        "list_tasks",
         "next_events",
         "pick_folder",
         "read_cosmetic_section",
@@ -1112,6 +1116,8 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
     assert result["final_document_url"] in result["committed_sources"]
     assert result["production_command_names"] == [
         "close_task",
+        "create_task",
+        "list_tasks",
         "next_events",
         "pick_folder",
         "read_cosmetic_section",

@@ -15,6 +15,8 @@ from pathlib import Path
 from threading import Event, Lock, Thread, Timer
 from typing import Callable, Protocol, TYPE_CHECKING
 
+from namisync.dispatcher import retire_exception_graph
+
 from .readiness import DesktopReadinessGate, DesktopStartupError
 
 if TYPE_CHECKING:
@@ -1233,11 +1235,38 @@ def _expose_bridge_api(window: object, dispatcher: object) -> None:
     if type(window._callbacks) is not dict or window._callbacks:
         raise RuntimeError("native callback registry is not empty before exposure")
     window._callbacks = _PywebviewCallbackRegistry()
+    _contain_obsolete_native_returns(window, dispatcher)
 
     def dispatch(command_json: str) -> object:
         return dispatcher._dispatch_native(command_json)
 
     window.expose(dispatch)
+
+
+def _contain_obsolete_native_returns(window: object, dispatcher: object) -> None:
+    """Keep pywebview from returning into a retired document callback."""
+
+    from webview.errors import JavascriptException
+
+    evaluate = window.evaluate_js
+    if not callable(evaluate):
+        raise TypeError("native JavaScript evaluator must be callable")
+
+    def evaluate_current_document(*args: object, **kwargs: object) -> object:
+        generation = dispatcher._claim_native_return_generation()
+        if generation is None:
+            return evaluate(*args, **kwargs)
+        if not dispatcher._is_document_generation_current(generation):
+            return None
+        try:
+            return evaluate(*args, **kwargs)
+        except JavascriptException as error:
+            if dispatcher._is_document_generation_current(generation):
+                raise
+            retire_exception_graph(error)
+            return None
+
+    window.evaluate_js = evaluate_current_document
 
 
 def _document_channel(window: object):

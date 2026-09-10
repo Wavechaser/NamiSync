@@ -21,6 +21,7 @@ _TASK_ID = re.compile(r"task-[0-9a-f]{32}")
 TaskDeliveryUpdate = SessionEventView | SessionRecordView
 TaskDeliverySink = Callable[[TaskDeliveryUpdate], None]
 TaskDeliveryFactory = Callable[[str], TaskDeliverySink]
+TaskShellDeliveryFactory = Callable[[str], None]
 
 
 class TaskUnavailableError(LookupError):
@@ -41,6 +42,75 @@ class TaskStartView:
         _require_task_id(self.task_id)
         _require_opaque_id(self.request_id, "task request id")
         _require_opaque_id(self.session_id, "task session id")
+
+
+@dataclass(frozen=True, slots=True)
+class TaskShellView:
+    task_id: str
+
+    def __post_init__(self) -> None:
+        _require_task_id(self.task_id)
+
+
+@dataclass(frozen=True, slots=True)
+class TaskSummaryView:
+    task_id: str
+    session_id: str | None
+    session_state: str | None
+    session_released: bool
+
+    def __post_init__(self) -> None:
+        _require_task_id(self.task_id)
+        if self.session_id is not None:
+            _require_opaque_id(self.session_id, "task session id")
+        if self.session_state not in {
+            None,
+            "active",
+            "completed",
+            "failed",
+            "canceled",
+            "refused",
+        }:
+            raise ValueError("task summary state is invalid")
+        if type(self.session_released) is not bool:
+            raise TypeError("task summary release state is invalid")
+        if (self.session_state is None) != (self.session_id is None):
+            raise ValueError("task summary session state is inconsistent")
+        if self.session_released and self.session_state in {None, "active"}:
+            raise ValueError("released task requires terminal session truth")
+
+
+@dataclass(frozen=True, slots=True)
+class TaskListView:
+    tasks: tuple[TaskSummaryView, ...]
+
+    def __post_init__(self) -> None:
+        if type(self.tasks) is not tuple or len(self.tasks) > 48:
+            raise ValueError("task list is invalid")
+        seen: set[str] = set()
+        for task in self.tasks:
+            if type(task) is not TaskSummaryView:
+                raise TypeError("task list item is invalid")
+            task.__post_init__()
+            if task.task_id in seen:
+                raise ValueError("task list repeats an identity")
+            seen.add(task.task_id)
+
+
+@dataclass(frozen=True, slots=True)
+class TaskCloseRequestView:
+    task_id: str
+    session_id: str | None
+    disposition: str
+
+    def __post_init__(self) -> None:
+        _require_task_id(self.task_id)
+        if self.session_id is not None:
+            _require_opaque_id(self.session_id, "task session id")
+        if self.disposition not in {"pending", "closed"}:
+            raise ValueError("task close disposition is invalid")
+        if self.session_id is None and self.disposition != "closed":
+            raise ValueError("blank task close cannot remain pending")
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +196,16 @@ class TaskTerminalDelivery:
 
 class TaskLifecyclePort(Protocol):
     """Narrow task-bound application lifecycle surface for adapters."""
+
+    def create_task_shell(
+        self,
+        command_id: str,
+        delivery_factory: TaskShellDeliveryFactory,
+    ) -> TaskShellView: ...
+
+    def close_task_shell(self, task_id: str) -> TaskShellView: ...
+
+    def cancel_task_session(self, task_id: str, session_id: str) -> object: ...
 
     def start_task_plan(
         self,
@@ -243,6 +323,7 @@ def _require_task_id(value: object) -> None:
 
 __all__ = [
     "TaskCloseView",
+    "TaskCloseRequestView",
     "TaskDeliveryFactory",
     "TaskDeliverySink",
     "TaskDeliveryUpdate",
@@ -250,9 +331,13 @@ __all__ = [
     "TaskEventUpdateView",
     "TaskIntentConflictError",
     "TaskLifecyclePort",
+    "TaskListView",
     "TaskRecordUpdateView",
     "TaskSessionReleaseView",
+    "TaskShellDeliveryFactory",
+    "TaskShellView",
     "TaskStartView",
+    "TaskSummaryView",
     "TaskTerminalDelivery",
     "TaskUnavailableError",
     "TaskUpdateView",

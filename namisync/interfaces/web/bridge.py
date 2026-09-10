@@ -10,7 +10,7 @@ from collections.abc import Callable, Iterable, Mapping, MutableMapping
 from dataclasses import dataclass, fields, is_dataclass
 from datetime import datetime
 from pathlib import Path
-from threading import Condition, Lock, Thread, current_thread
+from threading import Condition, Lock, Thread, current_thread, local
 from time import monotonic
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import SplitResult, urlsplit
@@ -633,6 +633,7 @@ class BridgeDispatcher:
         self._admitted = 0
         self._native_responses: dict[str, _NativeResponseCustody] = {}
         self._document_generation = 0
+        self._native_return_marker = local()
 
     def dispatch(self, command_json: str) -> dict[str, object]:
         """Return one exact response envelope; never export a Python failure."""
@@ -642,48 +643,71 @@ class BridgeDispatcher:
     def _dispatch_native(self, command_json: str) -> object:
         """Retain native/browser custody until worker exit and exact receipt."""
 
-        if type(command_json) is str and len(command_json) == 36:
-            acknowledgment = _NATIVE_RESPONSE_ACK.fullmatch(command_json)
-            if acknowledgment is not None:
-                return self._acknowledge_native_response(
-                    acknowledgment.group(1)
-                )
-
         owner = current_thread()
-        if type(owner) is not Thread:
-            return self._native_response(
-                None,
-                self._failure(None, None, "internal_error"),
-            )
-        with self._handler_condition:
-            native_generation = self._document_generation
+        native_generation = None
         try:
-            response_token = uuid4().hex
-            if (
-                type(response_token) is not str
-                or _OPAQUE_ID.fullmatch(response_token) is None
-            ):
-                raise RuntimeError("native response token generation failed")
-        except BaseException as error:
-            retire_exception_graph(error)
-            return self._native_response(
-                None,
-                self._failure(None, None, "internal_error"),
+            if type(owner) is Thread:
+                with self._handler_condition:
+                    native_generation = self._document_generation
+            else:
+                native_generation = None
+
+            if type(command_json) is str and len(command_json) == 36:
+                acknowledgment = _NATIVE_RESPONSE_ACK.fullmatch(command_json)
+                if acknowledgment is not None:
+                    return self._acknowledge_native_response(
+                        acknowledgment.group(1)
+                    )
+
+            if native_generation is None:
+                return self._native_response(
+                    None,
+                    self._failure(None, None, "internal_error"),
+                )
+            try:
+                response_token = uuid4().hex
+                if (
+                    type(response_token) is not str
+                    or _OPAQUE_ID.fullmatch(response_token) is None
+                ):
+                    raise RuntimeError("native response token generation failed")
+            except BaseException as error:
+                retire_exception_graph(error)
+                return self._native_response(
+                    None,
+                    self._failure(None, None, "internal_error"),
+                )
+            custody = _NativeResponseCustody(owner)
+            response = self._dispatch(
+                command_json,
+                native_custody=custody,
+                native_token=response_token,
+                native_generation=native_generation,
             )
-        custody = _NativeResponseCustody(owner)
-        response = self._dispatch(
-            command_json,
-            native_custody=custody,
-            native_token=response_token,
-            native_generation=native_generation,
-        )
+            with self._handler_condition:
+                admitted_token = (
+                    response_token
+                    if self._native_responses.get(response_token) is custody
+                    else None
+                )
+            return self._native_response(admitted_token, response)
+        finally:
+            if type(owner) is Thread and native_generation is not None:
+                self._native_return_marker.generation = native_generation
+
+    def _claim_native_return_generation(self) -> int | None:
+        """Consume the calling native worker's one pending return marker."""
+
+        generation = getattr(self._native_return_marker, "generation", None)
+        if generation is not None:
+            del self._native_return_marker.generation
+        return generation
+
+    def _is_document_generation_current(self, generation: int) -> bool:
+        """Compare one claimed native return with the current document."""
+
         with self._handler_condition:
-            admitted_token = (
-                response_token
-                if self._native_responses.get(response_token) is custody
-                else None
-            )
-        return self._native_response(admitted_token, response)
+            return generation == self._document_generation
 
     def _dispatch(
         self,

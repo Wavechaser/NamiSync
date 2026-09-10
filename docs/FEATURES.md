@@ -347,18 +347,18 @@ unrealized unless an entry says otherwise.
   no presentation-specific cap, while callbacks receive raw opaque node ids.
   Ordinary Unicode and long labels are unchanged.
   The production
-  shell exposes labelled task navigation and work regions
-  with honest empty guidance; it fabricates no task, session, or product row
-  and adds no presentation command. The exact bridge surface remains solely in
-  `BRIDGE.md`.
+  shell exposes labelled task navigation and work regions. Its empty guidance
+  and blank task bodies fabricate no session or product row. The exact bridge
+  surface remains solely in `BRIDGE.md`.
 - **Task Rail**. The transparent rail exposes the window's Mica or opaque
   fallback base. Resting cards are transparent; hover/press and selected/current
   states use the primary translucent content tint, with a weaker secondary tint
   while an active card is hovered or pressed. Task cards remain borderless and
   do not conflate selection with running status. This visual contract is active.
-  The accepted task-backed behavior is unrealized: a newest-first rail retains
-  each task's plan, execution, inventory, integrity, and optional post-copy
-  results across same-process navigation while only one session runs at a time.
+  The newest-first process-live rail now creates, selects, reconstructs, and
+  closes blank task pages while preserving stable labels and current selection.
+  Retaining each task's plan, execution, inventory, integrity, and optional
+  post-copy results activates with those later content surfaces.
   Busy close requests cooperative cancellation and closes only after settlement and
   release are complete; there is no force-close or purge path. Open tasks are
   never silently evicted; capacity guidance asks the user to close a task or
@@ -512,7 +512,7 @@ unrealized unless an entry says otherwise.
   count/percentage for paused or canceled work is a recorded decision point,
   not a current payload or renderer feature. Channel-specific aliases,
   component forms, complete static gallery fixtures, and their evidence are
-  active; production task/list surfaces remain dormant.
+  active; production workflow-list color consumers remain dormant.
 - **Closed Fluent Icon Foundation**. GUI Break 1 seeds a minimal frozen registry
   with four pinned local regular Microsoft Fluent SVG masks and their source,
   hash, and license record. Icons inherit `currentColor`; tokens own shared

@@ -128,6 +128,7 @@ class _Window:
         self.destroy_count = 0
         self.destroyed = Event()
         self.exposed_functions: tuple[object, ...] = ()
+        self.evaluate_js = lambda *_args, **_kwargs: None
 
     def expose(self, *functions: object) -> None:
         self.exposed_functions = functions
@@ -980,6 +981,8 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         "shell_ready",
         "readiness_echo",
         "pick_folder",
+        "create_task",
+        "list_tasks",
         "start_plan",
         "next_events",
         "release_terminal_session",
@@ -991,6 +994,8 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         "shell_ready",
         "readiness_echo",
         "pick_folder",
+        "create_task",
+        "list_tasks",
         "start_plan",
         "next_events",
         "release_terminal_session",
@@ -1002,6 +1007,7 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         _js_api=None,
         _functions={},
         _callbacks={},
+        evaluate_js=lambda *_args, **_kwargs: None,
         expose=lambda *functions: window._functions.update(
             {function.__name__: function for function in functions}
         ),
@@ -1039,6 +1045,7 @@ def test_pywebview_synchronous_callback_cells_are_not_retained() -> None:
         _js_api=None,
         gui=SimpleNamespace(renderer="edgechromium", evaluate_js=lambda *_args: None),
         uid="callback-test",
+        evaluate_js=lambda *_args, **_kwargs: None,
         expose=lambda *_functions: None,
     )
     host._expose_bridge_api(window, object())
@@ -1063,6 +1070,129 @@ def test_pywebview_synchronous_callback_cells_are_not_retained() -> None:
     with pytest.raises(RuntimeError, match="native evaluation failed"):
         evaluate(window, "null")
     assert window._callbacks == {}
+
+
+def test_native_return_wrapper_skips_one_stale_evaluation_only() -> None:
+    evaluations: list[str] = []
+
+    class Dispatcher:
+        marker: int | None = 4
+        generation = 5
+
+        def _claim_native_return_generation(self) -> int | None:
+            marker = self.marker
+            self.marker = None
+            return marker
+
+        def _is_document_generation_current(self, generation: int) -> bool:
+            return generation == self.generation
+
+    window = SimpleNamespace(
+        evaluate_js=lambda script: evaluations.append(script) or "evaluated"
+    )
+    host._contain_obsolete_native_returns(window, Dispatcher())
+
+    assert window.evaluate_js("stale return") is None
+    assert window.evaluate_js("ordinary call") == "evaluated"
+    assert evaluations == ["ordinary call"]
+
+
+def test_native_return_wrapper_contains_only_javascript_failure_after_reload() -> None:
+    from webview.errors import JavascriptException
+
+    class Dispatcher:
+        marker: int | None = 7
+        generation = 7
+
+        def _claim_native_return_generation(self) -> int | None:
+            marker = self.marker
+            self.marker = None
+            return marker
+
+        def _is_document_generation_current(self, generation: int) -> bool:
+            return generation == self.generation
+
+    dispatcher = Dispatcher()
+
+    def evaluate(_script: str) -> None:
+        dispatcher.generation += 1
+        raise JavascriptException({"name": "TypeError"})
+
+    window = SimpleNamespace(evaluate_js=evaluate)
+    host._contain_obsolete_native_returns(window, dispatcher)
+
+    assert window.evaluate_js("retired callback") is None
+
+
+def test_native_return_wrapper_keeps_current_javascript_failure_visible() -> None:
+    from webview.errors import JavascriptException
+
+    class Dispatcher:
+        marker: int | None = 9
+
+        def _claim_native_return_generation(self) -> int | None:
+            marker = self.marker
+            self.marker = None
+            return marker
+
+        def _is_document_generation_current(self, generation: int) -> bool:
+            return generation == 9
+
+    failure = JavascriptException({"name": "TypeError"})
+    window = SimpleNamespace(
+        evaluate_js=lambda _script: (_ for _ in ()).throw(failure)
+    )
+    host._contain_obsolete_native_returns(window, Dispatcher())
+
+    with pytest.raises(JavascriptException) as raised:
+        window.evaluate_js("current callback")
+    assert raised.value is failure
+
+
+def test_native_return_wrapper_keeps_unmarked_javascript_failure_visible() -> None:
+    from webview.errors import JavascriptException
+
+    class Dispatcher:
+        def _claim_native_return_generation(self) -> None:
+            return None
+
+    failure = JavascriptException({"name": "TypeError"})
+    window = SimpleNamespace(
+        evaluate_js=lambda _script: (_ for _ in ()).throw(failure)
+    )
+    host._contain_obsolete_native_returns(window, Dispatcher())
+
+    with pytest.raises(JavascriptException) as raised:
+        window.evaluate_js("handler-owned evaluation")
+    assert raised.value is failure
+
+
+def test_native_return_wrapper_keeps_non_javascript_failure_visible_after_reload() -> None:
+    class Dispatcher:
+        marker: int | None = 11
+        generation = 11
+
+        def _claim_native_return_generation(self) -> int | None:
+            marker = self.marker
+            self.marker = None
+            return marker
+
+        def _is_document_generation_current(self, generation: int) -> bool:
+            return generation == self.generation
+
+    dispatcher = Dispatcher()
+    failure = RuntimeError("native evaluation failed")
+
+    def evaluate(_script: str) -> None:
+        dispatcher.generation += 1
+        raise failure
+
+    window = SimpleNamespace(evaluate_js=evaluate)
+    host._contain_obsolete_native_returns(window, dispatcher)
+
+    with pytest.raises(RuntimeError, match="native evaluation failed") as raised:
+        window.evaluate_js("retired callback")
+    assert raised.value is failure
 
 
 def test_pinned_pywebview_none_callback_has_no_async_reader() -> None:

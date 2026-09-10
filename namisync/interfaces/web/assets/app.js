@@ -1,8 +1,12 @@
 import {
   acknowledgeShellReady,
   BridgeTransportError,
+  closeTask,
+  createTask,
   echoReadiness,
+  listTasks,
   markBridgeOperational,
+  startTaskDrain,
   whenBridgeApiReady,
 } from "./bridge.js";
 import { installReadinessReceiver } from "./readiness.js";
@@ -36,7 +40,217 @@ installAppearanceReceiver(
   },
 );
 
-app.append(createTaskRail(), createWorkPanel());
+const tasks = new Map();
+let selectedTaskId = null;
+let navigationRevision = 0;
+let taskMutationRevision = 0;
+let creatingTask = false;
+let nextTaskNumber = 1;
+
+const panel = createWorkPanel();
+const rail = createTaskRail({
+  onCreate: () => { void createBlankTask(); },
+  onSelect: selectTask,
+  onClose: (taskId) => { void closeRetainedTask(taskId); },
+});
+app.append(rail.element, panel.element);
+
+function taskArray() {
+  return Array.from(tasks.values()).reverse();
+}
+
+function renderTasks() {
+  rail.render(taskArray(), selectedTaskId, creatingTask);
+  panel.render(selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null);
+}
+
+function selectTask(taskId) {
+  if (!tasks.has(taskId)) {
+    return;
+  }
+  navigationRevision += 1;
+  selectedTaskId = taskId;
+  renderTasks();
+}
+
+function adoptTask(summary) {
+  let task = tasks.get(summary.task_id);
+  if (task === undefined) {
+    task = {
+      taskId: summary.task_id,
+      sessionId: summary.session_id,
+      sessionState: summary.session_state,
+      sessionReleased: summary.session_released,
+      closePending: false,
+      error: null,
+      label: `Task ${nextTaskNumber}`,
+      stopDrain: null,
+    };
+    nextTaskNumber += 1;
+    tasks.set(task.taskId, task);
+  } else {
+    task.sessionId = summary.session_id;
+    task.sessionState = summary.session_state;
+    task.sessionReleased = summary.session_released;
+  }
+  if (
+    task.sessionId !== null &&
+    task.stopDrain === null
+  ) {
+    task.stopDrain = startTaskDrain(
+      task.taskId,
+      task.sessionId,
+      (update) => acceptTaskUpdate(task, update),
+      () => acceptTaskRefusal(task),
+      {
+        terminal: task.sessionState !== "active",
+        sessionReleased: task.sessionReleased,
+      },
+    );
+  }
+  return task;
+}
+
+function acceptTaskUpdate(task, update) {
+  if (tasks.get(task.taskId) !== task) {
+    return;
+  }
+  if (update.update_type === "record") {
+    taskMutationRevision += 1;
+    task.sessionState = update.record.state;
+    if (task.closePending) {
+      task.closePending = false;
+      void closeRetainedTask(task.taskId);
+    }
+    renderTasks();
+  }
+}
+
+function acceptTaskRefusal(task) {
+  if (tasks.get(task.taskId) !== task) {
+    return;
+  }
+  task.error = "Task updates stopped. Close can be retried.";
+  task.closePending = false;
+  renderTasks();
+}
+
+async function refreshTasks(epoch) {
+  const mutationBaseline = taskMutationRevision;
+  const result = await listTasks();
+  if (epoch !== startupEpoch) {
+    return;
+  }
+  if (mutationBaseline !== taskMutationRevision) {
+    void refreshTasks(epoch);
+    return;
+  }
+  const retainedIds = new Set();
+  for (const summary of result.tasks) {
+    retainedIds.add(summary.task_id);
+    adoptTask(summary);
+  }
+  for (const [taskId, task] of tasks) {
+    if (!retainedIds.has(taskId)) {
+      task.stopDrain?.();
+      tasks.delete(taskId);
+    }
+  }
+  if (selectedTaskId !== null && !tasks.has(selectedTaskId)) {
+    selectedTaskId = null;
+  }
+  if (selectedTaskId === null && tasks.size > 0) {
+    selectedTaskId = taskArray()[0].taskId;
+  }
+  renderTasks();
+}
+
+async function createBlankTask() {
+  if (creatingTask) {
+    return;
+  }
+  const epoch = startupEpoch;
+  const selectionBaseline = navigationRevision;
+  creatingTask = true;
+  renderTasks();
+  try {
+    const result = await createTask();
+    taskMutationRevision += 1;
+    if (epoch !== startupEpoch) {
+      void refreshTasks(startupEpoch);
+      return;
+    }
+    const task = adoptTask({
+      task_id: result.task_id,
+      session_id: null,
+      session_state: null,
+      session_released: false,
+    });
+    if (navigationRevision === selectionBaseline) {
+      selectedTaskId = task.taskId;
+    }
+  } catch (_error) {
+    if (epoch === startupEpoch) {
+      renderText(
+        status,
+        "A task could not be created. Close an unused task or wait, then try again.",
+      );
+    }
+  } finally {
+    if (epoch === startupEpoch) {
+      creatingTask = false;
+      renderTasks();
+    }
+  }
+}
+
+async function closeRetainedTask(taskId) {
+  const task = tasks.get(taskId);
+  if (task === undefined || task.closePending) {
+    return;
+  }
+  const epoch = startupEpoch;
+  task.closePending = true;
+  task.error = null;
+  renderTasks();
+  let remainsPending = false;
+  try {
+    const result = await closeTask(task.taskId, task.sessionId);
+    if (result.disposition === "closed") {
+      taskMutationRevision += 1;
+    }
+    if (epoch !== startupEpoch) {
+      void refreshTasks(startupEpoch);
+      return;
+    }
+    if (tasks.get(taskId) !== task) {
+      return;
+    }
+    if (result.disposition === "closed") {
+      task.stopDrain?.();
+      tasks.delete(taskId);
+      if (selectedTaskId === taskId) {
+        selectedTaskId = tasks.size === 0 ? null : taskArray()[0].taskId;
+        navigationRevision += 1;
+      }
+    } else {
+      remainsPending = true;
+    }
+  } catch (_error) {
+    if (epoch === startupEpoch && tasks.get(taskId) === task) {
+      task.error = "Close did not finish. Retry.";
+    }
+  } finally {
+    if (
+      !remainsPending &&
+      epoch === startupEpoch &&
+      tasks.get(taskId) === task
+    ) {
+      task.closePending = false;
+    }
+    renderTasks();
+  }
+}
 
 class StartupSupersededError extends Error {}
 
@@ -87,6 +301,7 @@ async function finishStartup(epoch, readinessBaseline) {
     );
   }
   markBridgeOperational();
+  await awaitCurrent(refreshTasks(epoch));
   void theme.open(appliedPresentationRevision);
   if (status.textContent === "Starting...") {
     renderText(status, "Ready");
@@ -131,6 +346,10 @@ function ensureStartup({
 
 window.addEventListener("pywebviewready", () => {
   startupEpoch += 1;
+  creatingTask = false;
+  for (const task of tasks.values()) {
+    task.closePending = false;
+  }
   theme.invalidate();
   rejectSupersededStartup?.(new StartupSupersededError());
   if (status.textContent === "Ready") {

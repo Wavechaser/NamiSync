@@ -1208,11 +1208,47 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         for name, value in TaskLifecyclePort.__dict__.items()
         if not name.startswith("_") and callable(value)
     } == {
+        "create_task_shell",
+        "close_task_shell",
+        "cancel_task_session",
         "start_task_plan",
         "reobserve_task",
         "release_task_session",
         "close_task",
     }
+
+
+def test_lifecycle_task_shell_replays_then_closes_without_session_effects() -> None:
+    lifecycle = TaskLifecycle(task_capacity=1)
+    command_id = f"{39_001:032x}"
+
+    first = lifecycle.begin_task_shell(command_id)
+    assert not first.replay
+    lifecycle.complete_task_shell(first)
+
+    replay = lifecycle.begin_task_shell(command_id)
+    assert replay == type(first)(first.task_id, True)
+    assert lifecycle._sessions == {}
+    assert lifecycle._plans == {}
+    assert lifecycle._start_receipts == {}
+
+    with pytest.raises(LifecycleTaskCapacityError, match="capacity"):
+        lifecycle.begin_task_shell(f"{39_002:032x}")
+
+    lifecycle.close_task_shell(first.task_id)
+    successor = lifecycle.begin_task_shell(f"{39_002:032x}")
+    assert successor.task_id != first.task_id
+    with pytest.raises(LifecycleAssociationError, match="unavailable"):
+        lifecycle.close_task_shell(first.task_id)
+
+
+def test_lifecycle_task_shell_abort_releases_only_unpublished_claim() -> None:
+    lifecycle = TaskLifecycle(task_capacity=1)
+    claim = lifecycle.begin_task_shell(f"{39_101:032x}")
+    lifecycle.abort_task_shell(claim)
+
+    replacement = lifecycle.begin_task_shell(f"{39_102:032x}")
+    assert replacement.task_id != claim.task_id
 
 
 def test_lifecycle_signatures_retain_only_immutable_scalars() -> None:

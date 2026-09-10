@@ -43,15 +43,17 @@ M1's headless product is implemented and usable through the service and CLI:
 reviewed sync, inventory, integrity baseline/verify/rebaseline, optional
 post-copy verification, and retained history. The Windows desktop shell now has
 a secured WebView2 host, bounded command/event transport, native folder picking,
-the Fluent/accessibility foundation, and dormant gallery-proven sync/integrity
-file-list row renderers. User-facing workflow views and controls, final packaging, and beta
+the Fluent/accessibility foundation, process-live blank task creation,
+newest-first navigation and explicit close, and dormant gallery-proven
+sync/integrity file-list row renderers. Setup and user-facing workflow content,
+final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
 Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work covers Setup, bounded plan/execution review,
-inventory/integrity, and process-live tasks. Accepted sorting and rebaseline
+Remaining desktop work covers Setup, bounded plan/execution review, and
+inventory/integrity content within the active task shell. Accepted sorting and rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
 External requests and applicable populations are bounded at their owners;
@@ -249,6 +251,16 @@ README intentionally stops at milestone and phase summaries.
 M1 expands the reviewed-sync runtime into a complete headless integrity,
 history, and workflow product while building its secured headed WebView2 shell.
 
+### M1 GUI
+
+Stage 6 delivered the secured desktop host, command/event transport, design
+foundation, bounded presentation core, dormant sync/integrity file-list row
+renderers, and a persisted native/page theme override over the refrozen
+cosmetic-state channel. Process-live blank tasks now support newest-first
+navigation, safe cancellation/closure, and retained terminal status. The exact
+event-v5/data-epoch-7 protocol cut is active. Setup, workflow content, and beta
+packaging remain open.
+
 ### M1 Consolidation
 
 Redundant in-process transports, certification layers, and task-lifecycle
@@ -273,15 +285,6 @@ are proposed for M2.
 
 Safety, settlement, authority, and measurement work made high-risk release
 claims explicit, independently reviewable, and regression-backed.
-
-### M1 GUI
-
-Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, bounded presentation core, dormant sync/integrity file-list row
-renderers, and a persisted native/page theme override over the refrozen
-cosmetic-state channel. The remaining second-half product/task contracts
-are accepted but unrealized, and the exact event-v5/data-epoch-7 protocol cut
-is active. Product surfaces and beta packaging remain open.
 
 ### M1 Features
 

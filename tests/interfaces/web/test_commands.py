@@ -61,14 +61,18 @@ from namisync.interfaces.web.commands import (
     production_command_specs,
 )
 from namisync.interfaces.web.drain import (
+    TaskCloseRequestView,
     TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
     TaskIntentConflictError,
+    TaskListView,
     TaskRecordUpdateView,
     TaskRegistry,
     TaskSessionReleaseView,
+    TaskShellView,
     TaskStartView,
+    TaskSummaryView,
     _TaskDrainResponseCodec,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
@@ -118,6 +122,14 @@ class _Service:
     def __init__(self) -> None:
         self.calls: list[tuple[object, ...]] = []
         self.replays: list[tuple[object, ...]] = []
+
+    def create_task_shell(self, command_id: str) -> TaskShellView:
+        self.calls.append(("create", command_id))
+        return TaskShellView(TASK_ID)
+
+    def list_tasks(self) -> TaskListView:
+        self.calls.append(("list",))
+        return TaskListView(())
 
     def replay_start(
         self,
@@ -185,9 +197,13 @@ class _Service:
             result.updates,
         )
 
-    def close_task(self, task_id: str, session_id: str) -> TaskCloseView:
+    def request_task_close(
+        self,
+        task_id: str,
+        session_id: str | None,
+    ) -> TaskCloseRequestView:
         self.calls.append(("close", task_id, session_id))
-        return TaskCloseView(task_id, session_id)
+        return TaskCloseRequestView(task_id, session_id, "closed")
 
     def release_terminal_session(
         self,
@@ -309,6 +325,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "shell_ready",
         "readiness_echo",
         "pick_folder",
+        "create_task",
+        "list_tasks",
         "start_plan",
         "next_events",
         "release_terminal_session",
@@ -364,6 +382,32 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         FieldRequirement.FORBIDDEN,
         CommandTimeout.INTERACTIVE,
         CommandRetry.NONE,
+    )
+    assert (
+        commands["create_task"].access,
+        commands["create_task"].command_id,
+        commands["create_task"].revision,
+        commands["create_task"].timeout,
+        commands["create_task"].retry,
+    ) == (
+        CommandAccess.MUTATING,
+        FieldRequirement.REQUIRED,
+        FieldRequirement.FORBIDDEN,
+        CommandTimeout.MUTATION_30_SECONDS,
+        CommandRetry.SAME_COMMAND_ONCE,
+    )
+    assert (
+        commands["list_tasks"].access,
+        commands["list_tasks"].command_id,
+        commands["list_tasks"].revision,
+        commands["list_tasks"].timeout,
+        commands["list_tasks"].retry,
+    ) == (
+        CommandAccess.READ_ONLY,
+        FieldRequirement.FORBIDDEN,
+        FieldRequirement.FORBIDDEN,
+        CommandTimeout.LOCAL_5_SECONDS,
+        CommandRetry.SAME_PAYLOAD_ONCE,
     )
     assert (
         commands["start_plan"].access,
@@ -1291,8 +1335,30 @@ def test_task_close_delegates_exact_authority_and_echoes_identity() -> None:
         {"task_id": TASK_ID, "session_id": SESSION_ID}
     )
 
-    assert result == TaskCloseView(TASK_ID, SESSION_ID)
+    assert result == TaskCloseRequestView(TASK_ID, SESSION_ID, "closed")
     assert registry.calls == [("close", TASK_ID, SESSION_ID)]
+    assert slots.resolved == []
+
+
+def test_task_shell_create_list_and_close_use_no_domain_identity() -> None:
+    commands, slots, registry = _commands()
+
+    created = _invoke(commands["create_task"], {"command_id": COMMAND_ID})
+    listed = _invoke(commands["list_tasks"], {})
+    closed = _invoke(
+        commands["close_task"],
+        {"task_id": TASK_ID, "session_id": None},
+    )
+
+    assert created == TaskShellView(TASK_ID)
+    assert listed == TaskListView(())
+    assert closed == TaskCloseRequestView(TASK_ID, None, "closed")
+    assert registry.calls == [
+        ("create", COMMAND_ID),
+        ("list",),
+        ("close", TASK_ID, None),
+    ]
+    assert registry.replays == []
     assert slots.resolved == []
 
 
@@ -1343,15 +1409,15 @@ def test_terminal_session_release_refuses_mismatched_registry_result(
     "result",
     [
         object(),
-        TaskCloseView("task-" + "9" * 32, SESSION_ID),
-        TaskCloseView(TASK_ID, "9" * 32),
+        TaskCloseRequestView("task-" + "9" * 32, SESSION_ID, "closed"),
+        TaskCloseRequestView(TASK_ID, "9" * 32, "closed"),
     ],
 )
 def test_task_close_refuses_invalid_or_mismatched_registry_result(
     result: object,
 ) -> None:
     class InvalidRegistry(_Service):
-        def close_task(self, *args: object) -> object:
+        def request_task_close(self, *args: object) -> object:
             del args
             return result
 
@@ -1841,6 +1907,10 @@ def test_br_g_33_codec_approves_only_exact_adapter_task_views() -> None:
 
     assert ADAPTER_PUBLIC_VIEW_DATACLASSES == {
         TaskStartView,
+        TaskShellView,
+        TaskSummaryView,
+        TaskListView,
+        TaskCloseRequestView,
         TaskCloseView,
         TaskSessionReleaseView,
         TaskDrainView,

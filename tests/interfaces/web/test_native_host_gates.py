@@ -363,17 +363,26 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert after_navigation["document_attached"] is True
     assert evidence["delayed_handler_completed"] is True
     delayed_transport = observations["delayedTransport"]
-    assert delayed_transport["delayed_evaluate_observed"] is True
-    delayed_evaluate = _only_event(events, "delayed_return.evaluate")
+    assert delayed_transport["delayed_handler_joined"] is True
+    assert delayed_transport["delayed_evaluate_observed"] is False
+    assert delayed_transport["delayed_evaluate_error"] is None
+    assert [
+        event for event in events if event["name"] == "delayed_return.evaluate"
+    ] == []
+    delayed_handler_complete = _only_event(events, "delayed_handler.complete")
+    delayed_handler_joined = _only_event(events, "delayed_handler.joined")
+    delayed_transport_dispatch = _phase_event(events, "wait_delayed_transport")
     second_ready = next(
         event
         for event in events
         if event["name"] == "pywebviewready" and event["count"] == 2
     )
+    assert navigation["at"] < second_ready["at"]
+    assert second_ready["at"] < delayed_handler_complete["at"]
+    assert second_ready["at"] < delayed_transport_dispatch["at"]
     assert (
-        navigation["at"]
-        < second_ready["at"]
-        < delayed_evaluate["at"]
+        max(delayed_handler_complete["at"], delayed_transport_dispatch["at"])
+        < delayed_handler_joined["at"]
         < _phase_event(events, "after_navigation")["at"]
     )
     assert page["lost_settled"] is False
@@ -386,6 +395,8 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert all(revision > 0 for revision in presentation_revisions)
     assert evidence["production_command_names"] == [
         "close_task",
+        "create_task",
+        "list_tasks",
         "next_events",
         "pick_folder",
         "read_cosmetic_section",
@@ -971,6 +982,8 @@ def _assert_packaged_popup_evidence(
     assert page["ready_count"] >= 2
     assert evidence["production_command_names"] == [
         "close_task",
+        "create_task",
+        "list_tasks",
         "next_events",
         "pick_folder",
         "read_cosmetic_section",

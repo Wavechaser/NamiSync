@@ -1917,6 +1917,8 @@ def _summarize(
     )
     production_names = [
         "close_task",
+        "create_task",
+        "list_tasks",
         "next_events",
         "pick_folder",
         "read_cosmetic_section",

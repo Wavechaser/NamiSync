@@ -19,6 +19,8 @@ const COMMAND_POLICY_JSON = `{
   "shell_ready": {"timeout": "startup-5-seconds", "retry": "none", "phase": "bootstrap"},
   "readiness_echo": {"timeout": "startup-5-seconds", "retry": "same-payload-once", "phase": "bootstrap"},
   "pick_folder": {"timeout": "interactive", "retry": "none", "phase": "open"},
+  "create_task": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
+  "list_tasks": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "read_cosmetic_section": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "replace_cosmetic_section": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
@@ -46,6 +48,10 @@ const COSMETIC_REPLACE_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.replace_cosmetic_section.timeout];
 const START_PLAN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_plan.timeout];
+const CREATE_TASK_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.create_task.timeout];
+const LIST_TASKS_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.list_tasks.timeout];
 const DRAIN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.next_events.timeout];
 const SESSION_RELEASE_TIMEOUT_MS =
@@ -331,11 +337,54 @@ export async function startPlan(sourceId, targetId, deletionPolicy = null) {
   return submit();
 }
 
+export async function createTask() {
+  const payload = Object.freeze({ command_id: mintId() });
+  let replayUsed = false;
+  const submit = async () => {
+    try {
+      return await dispatchAttempt(
+        "create_task",
+        payload,
+        validateTaskShellResult,
+        CREATE_TASK_TIMEOUT_MS,
+      );
+    } catch (error) {
+      if (!isUncertainStartPlanFailure(error) || replayUsed) {
+        throw error;
+      }
+      replayUsed = true;
+      return submit();
+    }
+  };
+  return submit();
+}
+
+export async function listTasks() {
+  try {
+    return await listTasksAttempt();
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) {
+      throw error;
+    }
+  }
+  return listTasksAttempt();
+}
+
+function listTasksAttempt() {
+  return dispatchAttempt(
+    "list_tasks",
+    Object.freeze({}),
+    validateTaskListResult,
+    LIST_TASKS_TIMEOUT_MS,
+  );
+}
+
 export function startTaskDrain(
   taskId,
   sessionId,
   acceptUpdate,
   acceptRefusal,
+  initialState = null,
 ) {
   if (
     typeof taskId !== "string" ||
@@ -347,6 +396,15 @@ export function startTaskDrain(
   }
   if (typeof acceptUpdate !== "function" || typeof acceptRefusal !== "function") {
     throw new TypeError("startTaskDrain requires update and refusal callbacks");
+  }
+  if (
+    initialState !== null &&
+    (!isExactObject(initialState, ["terminal", "sessionReleased"]) ||
+      typeof initialState.terminal !== "boolean" ||
+      typeof initialState.sessionReleased !== "boolean" ||
+      (initialState.sessionReleased && !initialState.terminal))
+  ) {
+    throw new TypeError("startTaskDrain initial state is invalid");
   }
   if (taskDrains.has(taskId)) {
     throw new TypeError("that task already has a browser drain");
@@ -366,10 +424,10 @@ export function startTaskDrain(
     progressState: emptyProgressReducerState(),
     busyRearmUsed: false,
     transportFailures: 0,
-    terminal: false,
+    terminal: initialState?.terminal ?? false,
     pendingTerminalUpdate: null,
     terminalPresentationInProgress: false,
-    sessionReleased: false,
+    sessionReleased: initialState?.sessionReleased ?? false,
     releaseControl: null,
     releaseTimer: null,
     releaseEpoch: 0,
@@ -377,7 +435,11 @@ export function startTaskDrain(
     stopped: false,
   };
   taskDrains.set(taskId, task);
-  rearmTask(task, null);
+  if (task.terminal) {
+    beginTaskRelease(task);
+  } else {
+    rearmTask(task, null);
+  }
 
   return () => {
     if (
@@ -465,17 +527,15 @@ export function echoReadiness(challenge) {
   );
 }
 
-export async function closeTask(taskId, sessionId) {
+export async function closeTask(taskId, sessionId = null) {
   const task = taskDrains.get(taskId);
   if (
     typeof taskId !== "string" ||
-    typeof sessionId !== "string" ||
     !TASK_PATTERN.test(taskId) ||
-    !ID_PATTERN.test(sessionId) ||
-    task?.sessionId !== sessionId ||
-    task.stopped
+    !(sessionId === null || (typeof sessionId === "string" && ID_PATTERN.test(sessionId))) ||
+    (sessionId !== null && (task?.sessionId !== sessionId || task.stopped))
   ) {
-    throw new TypeError("closeTask requires a retained task and session");
+    throw new TypeError("closeTask requires an exact retained task identity");
   }
 
   const submit = async () => {
@@ -488,10 +548,12 @@ export async function closeTask(taskId, sessionId) {
         const result = await dispatchAttempt(
           "close_task",
           Object.freeze({ task_id: taskId, session_id: sessionId }),
-          (value) => validateTaskIdentityResult(value, task),
+          (value) => validateTaskCloseResult(value, taskId, sessionId),
           TASK_CLOSE_TIMEOUT_MS,
         );
-        stopTask(task);
+        if (result.disposition === "closed" && task !== undefined) {
+          stopTask(task);
+        }
         return result;
       } catch (error) {
         if (
@@ -791,6 +853,52 @@ function validateStartPlanResult(value) {
     TASK_PATTERN.test(value.task_id) &&
     ID_PATTERN.test(value.request_id) &&
     ID_PATTERN.test(value.session_id)
+  );
+}
+
+function validateTaskShellResult(value) {
+  return (
+    isExactObject(value, ["task_id"]) &&
+    typeof value.task_id === "string" &&
+    TASK_PATTERN.test(value.task_id)
+  );
+}
+
+function validateTaskSummary(value) {
+  return (
+    isExactObject(value, [
+      "task_id", "session_id", "session_state", "session_released",
+    ]) &&
+    typeof value.task_id === "string" &&
+    TASK_PATTERN.test(value.task_id) &&
+    (value.session_id === null ||
+      (typeof value.session_id === "string" && ID_PATTERN.test(value.session_id))) &&
+    [null, "active", "completed", "failed", "canceled", "refused"].includes(
+      value.session_state,
+    ) &&
+    typeof value.session_released === "boolean" &&
+    ((value.session_state === null) === (value.session_id === null)) &&
+    !(value.session_released && [null, "active"].includes(value.session_state))
+  );
+}
+
+function validateTaskListResult(value) {
+  return (
+    isExactObject(value, ["tasks"]) &&
+    Array.isArray(value.tasks) &&
+    value.tasks.length <= 48 &&
+    value.tasks.every(validateTaskSummary) &&
+    new Set(value.tasks.map((task) => task.task_id)).size === value.tasks.length
+  );
+}
+
+function validateTaskCloseResult(value, taskId, sessionId) {
+  return (
+    isExactObject(value, ["task_id", "session_id", "disposition"]) &&
+    value.task_id === taskId &&
+    value.session_id === sessionId &&
+    ["pending", "closed"].includes(value.disposition) &&
+    !(sessionId === null && value.disposition !== "closed")
   );
 }
 

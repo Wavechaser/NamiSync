@@ -63,6 +63,7 @@ from namisync.interfaces.task_lifecycle import (
 )
 from namisync.interfaces.task_port import (
     TaskCloseView,
+    TaskShellView,
     TaskSessionReleaseView,
     TaskStartView,
     TaskTerminalDelivery,
@@ -4919,3 +4920,117 @@ def test_selection_liveness_retry_preserves_concurrent_successor() -> None:
     assert len(responses) == 1
     assert runtime.current is final_successor
     assert service._plan_selections[request_id] is final_successor_state
+
+
+def test_create_task_shell_replays_identity_without_domain_work_and_closes() -> None:
+    service = make_service(
+        runtime=SimpleNamespace(),
+        dispatcher=SimpleNamespace(),
+        observer=SimpleNamespace(),
+    )
+    command_id = f"{53_001:032x}"
+    deliveries: list[str] = []
+
+    def deliver(task_id: str) -> None:
+        deliveries.append(task_id)
+
+    created = service.create_task_shell(command_id, deliver)
+    replayed = service.create_task_shell(command_id, deliver)
+
+    assert created == replayed
+    assert deliveries == [created.task_id, created.task_id]
+    assert service._lifecycle._sessions == {}
+    assert service._lifecycle._plans == {}
+    assert service._lifecycle._start_receipts == {}
+    assert service.close_task_shell(created.task_id) == TaskShellView(created.task_id)
+    with pytest.raises(TaskUnavailableError):
+        service.close_task_shell(created.task_id)
+
+
+def test_create_task_shell_delivery_failure_rolls_back_fresh_claim_only() -> None:
+    service = make_service()
+    service._lifecycle = TaskLifecycle(task_capacity=1)
+    command_id = f"{53_101:032x}"
+
+    def fail(message: str):
+        def delivery(_task_id: str) -> None:
+            raise RuntimeError(message)
+
+        return delivery
+
+    with pytest.raises(RuntimeError, match="delivery failed"):
+        service.create_task_shell(command_id, fail("delivery failed"))
+
+    created = service.create_task_shell(
+        f"{53_102:032x}",
+        lambda _task_id: None,
+    )
+    assert service.close_task_shell(created.task_id) == TaskShellView(created.task_id)
+
+    published = service.create_task_shell(command_id, lambda _task_id: None)
+    with pytest.raises(RuntimeError, match="replay delivery failed"):
+        service.create_task_shell(
+            command_id,
+            fail("replay delivery failed"),
+        )
+    assert service.close_task_shell(published.task_id) == TaskShellView(
+        published.task_id
+    )
+
+
+def test_create_task_shell_refuses_49th_before_delivery() -> None:
+    service = make_service()
+    delivered: list[str] = []
+
+    for index in range(TASK_EFFECT_CAPACITY):
+        service.create_task_shell(
+            f"{53_200 + index:032x}",
+            delivered.append,
+        )
+
+    with pytest.raises(TaskUnavailableError, match="capacity"):
+        service.create_task_shell(f"{53_299:032x}", delivered.append)
+    assert len(delivered) == TASK_EFFECT_CAPACITY
+
+
+def test_cancel_task_session_requires_exact_live_task_association() -> None:
+    lifecycle = TaskLifecycle()
+    task_id, _association = _publish_task_plan(
+        lifecycle,
+        f"{53_301:032x}",
+        f"{53_302:032x}",
+        f"{53_303:032x}",
+        ("source", "target", None),
+    )
+    direct_session_id = f"{53_304:032x}"
+    _publish_session(lifecycle, direct_session_id, kind="inventory")
+    cancel_calls: list[str] = []
+
+    class Dispatcher:
+        def cancel(self, session_id: str) -> object:
+            cancel_calls.append(session_id)
+            return SimpleNamespace(
+                code=SimpleNamespace(value="accepted"),
+                session_id=session_id,
+                before=SimpleNamespace(value="running"),
+                after=SimpleNamespace(value="canceling"),
+                detail="cancellation requested",
+                accepted=True,
+            )
+
+    service = make_service(dispatcher=Dispatcher())
+    service._lifecycle = lifecycle
+
+    with pytest.raises(TaskUnavailableError):
+        service.cancel_task_session(f"task-{'f' * 32}", f"{53_301:032x}")
+    with pytest.raises(TaskUnavailableError):
+        service.cancel_task_session(task_id, direct_session_id)
+    assert cancel_calls == []
+
+    result = service.cancel_task_session(task_id, f"{53_301:032x}")
+    assert (result.session_id, result.code, result.accepted) == (
+        f"{53_301:032x}",
+        "accepted",
+        True,
+    )
+    assert cancel_calls == [f"{53_301:032x}"]

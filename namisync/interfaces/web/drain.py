@@ -15,15 +15,19 @@ from typing import Never
 
 from namisync.interfaces.task_port import (
     _validate_task_observation,
+    TaskCloseRequestView,
     TaskCloseView,
     TaskDeliveryUpdate,
     TaskDrainView,
     TaskEventUpdateView,
     TaskIntentConflictError,
     TaskLifecyclePort,
+    TaskListView,
     TaskRecordUpdateView,
     TaskSessionReleaseView,
+    TaskShellView,
     TaskStartView,
+    TaskSummaryView,
     TaskTerminalDelivery,
     TaskUnavailableError,
     TaskUpdateView,
@@ -162,6 +166,7 @@ class _TaskState:
     terminal_pending: bool = False
     delivered_terminal_event: SessionEventView | None = None
     delivered_terminal_record: SessionRecordView | None = None
+    session_released: bool = False
     active_drain: _DrainClaim | None = None
     transition: bool = False
     closing: bool = False
@@ -327,7 +332,7 @@ class TaskRegistry:
         self._provisional: dict[str, _TaskState] = {}
         self._start_responses: OrderedDict[str, _StartResponse] = OrderedDict()
         self._close_receipts: OrderedDict[
-            tuple[str, str], TaskCloseView
+            tuple[str, str | None], TaskCloseView | TaskShellView
         ] = OrderedDict()
         self._closing = False
 
@@ -360,6 +365,84 @@ class TaskRegistry:
         if response_codec is None:
             raise RuntimeError("task drain response codec is not bound")
         return response_codec
+
+    def create_task_shell(self, command_id: str) -> TaskShellView:
+        """Publish one lifecycle-owned task without a session or domain result."""
+
+        _require_opaque_id(command_id, "task command id")
+        registered: _TaskState | None = None
+
+        def delivery_factory(task_id: str) -> None:
+            nonlocal registered
+            if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+                raise RuntimeError("application task id is invalid")
+            with self._condition:
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                while task_id in self._provisional and not self._closing:
+                    self._condition.wait()
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                existing = self._tasks.get(task_id)
+                if existing is not None:
+                    if existing.command_id != command_id or existing.session_id is not None:
+                        raise RuntimeError("application reused an adapter task id")
+                    return
+                task = _TaskState(task_id, command_id, self._clock)
+                self._provisional[task_id] = task
+                registered = task
+                self._condition.notify_all()
+
+        try:
+            result = self._lifecycle.create_task_shell(command_id, delivery_factory)
+            if type(result) is not TaskShellView:
+                raise RuntimeError("task lifecycle returned invalid shell data")
+            result.__post_init__()
+            with self._condition:
+                if registered is not None:
+                    if self._provisional.get(result.task_id) is not registered:
+                        raise RuntimeError("task shell publication is unavailable")
+                    self._provisional.pop(result.task_id, None)
+                    self._tasks[result.task_id] = registered
+                    self._condition.notify_all()
+                task = self._tasks.get(result.task_id)
+                if (
+                    task is None
+                    or task.command_id != command_id
+                    or task.session_id is not None
+                ):
+                    raise RuntimeError("task shell publication is unavailable")
+            return result
+        except BaseException:
+            if registered is not None:
+                with self._condition:
+                    if self._provisional.get(registered.task_id) is registered:
+                        self._provisional.pop(registered.task_id, None)
+                    self._condition.notify_all()
+            raise
+
+    def list_tasks(self) -> TaskListView:
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            tasks = tuple(self._task_summary(task) for task in self._tasks.values())
+        return TaskListView(tasks)
+
+    @staticmethod
+    def _task_summary(task: _TaskState) -> TaskSummaryView:
+        with task.condition:
+            if task.session_id is None:
+                session_state = None
+            elif task.delivered_terminal_record is not None:
+                session_state = task.delivered_terminal_record.state
+            else:
+                session_state = "active"
+            return TaskSummaryView(
+                task.task_id,
+                task.session_id,
+                session_state,
+                task.session_released,
+            )
 
     def start_plan(
         self,
@@ -933,7 +1016,89 @@ class TaskRegistry:
         ):
             raise RuntimeError("task lifecycle returned invalid release data")
         result.__post_init__()
+        with task.condition:
+            task.session_released = True
+            task.condition.notify_all()
         return result
+
+    def request_task_close(
+        self,
+        task_id: str,
+        session_id: str | None,
+    ) -> TaskCloseRequestView:
+        """Cancel a busy session or close one exact task when it is ready."""
+
+        if session_id is None:
+            return self._close_task_shell(task_id)
+        self._require_task_identity(task_id, session_id)
+        receipt_key = (task_id, session_id)
+        with self._condition:
+            receipt = self._close_receipts.get(receipt_key)
+            if receipt is not None:
+                if type(receipt) is not TaskCloseView:
+                    raise RuntimeError("task close receipt has invalid ownership")
+                self._close_receipts.move_to_end(receipt_key)
+                return TaskCloseRequestView(task_id, session_id, "closed")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            task.require_no_response_capture_reentry()
+            if task.session_id != session_id:
+                raise TaskUnavailableError("task is unavailable")
+            terminal_delivered = task.delivered_terminal_record is not None
+        if not terminal_delivered:
+            try:
+                self._lifecycle.cancel_task_session(task_id, session_id)
+            except TaskUnavailableError:
+                with task.condition:
+                    terminal_delivered = task.delivered_terminal_record is not None
+                if not terminal_delivered:
+                    raise
+            else:
+                return TaskCloseRequestView(task_id, session_id, "pending")
+        result = self.close_task(task_id, session_id)
+        return TaskCloseRequestView(result.task_id, result.session_id, "closed")
+
+    def _close_task_shell(self, task_id: str) -> TaskCloseRequestView:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        receipt_key = (task_id, None)
+        with self._condition:
+            receipt = self._close_receipts.get(receipt_key)
+            if receipt is not None:
+                if type(receipt) is not TaskShellView:
+                    raise RuntimeError("task shell close receipt has invalid ownership")
+                self._close_receipts.move_to_end(receipt_key)
+                return TaskCloseRequestView(task_id, None, "closed")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            if task.session_id is not None:
+                raise TaskUnavailableError("task is unavailable")
+            task.closing = True
+            task.generation += 1
+            task.condition.notify_all()
+        try:
+            result = self._lifecycle.close_task_shell(task_id)
+            if type(result) is not TaskShellView or result.task_id != task_id:
+                raise RuntimeError("task lifecycle returned invalid shell close data")
+            result.__post_init__()
+        except BaseException:
+            with task.condition:
+                task.closing = False
+                task.condition.notify_all()
+            raise
+        with self._condition:
+            if self._tasks.get(task_id) is task:
+                self._tasks.pop(task_id, None)
+            self._close_receipts[receipt_key] = result
+            self._close_receipts.move_to_end(receipt_key)
+            while len(self._close_receipts) > _CLOSE_RECEIPT_CAPACITY:
+                self._close_receipts.popitem(last=False)
+            self._condition.notify_all()
+        return TaskCloseRequestView(task_id, None, "closed")
 
     def close_task(self, task_id: str, session_id: str) -> TaskCloseView:
         """Explicitly release one terminal task and its retained plan."""
@@ -943,6 +1108,8 @@ class TaskRegistry:
         with self._condition:
             receipt = self._close_receipts.get(receipt_key)
             if receipt is not None:
+                if type(receipt) is not TaskCloseView:
+                    raise RuntimeError("task close receipt has invalid ownership")
                 self._close_receipts.move_to_end(receipt_key)
                 return receipt
             task = self._tasks.get(task_id)
@@ -966,6 +1133,8 @@ class TaskRegistry:
             while True:
                 receipt = self._close_receipts.get(receipt_key)
                 if receipt is not None:
+                    if type(receipt) is not TaskCloseView:
+                        raise RuntimeError("task close receipt has invalid ownership")
                     self._close_receipts.move_to_end(receipt_key)
                     return receipt
                 if self._closing:

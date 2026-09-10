@@ -1325,6 +1325,9 @@ def test_component_gallery_script_declares_exact_required_matrix() -> None:
     assert 'import("/plan.js")' in script
     assert 'import("/integrity.js")' in script
     assert 'import("/rail.js")' in script
+    assert "const galleryRail = createTaskRail({" in script
+    assert "galleryRail.render([], null, false);" in script
+    assert "app.append(galleryRail.element);" in script
     assert "PLAN_ROW_CASES,\n    renderPlanRow," in script
     assert "INTEGRITY_ROW_CASES,\n    renderIntegrityRow," in script
     assert "renderer(row, definition.rowView);" in script
@@ -2130,6 +2133,8 @@ def _run_gallery_mode(
     )
     assert result["production_command_names"] == [
         "close_task",
+        "create_task",
+        "list_tasks",
         "next_events",
         "pick_folder",
         "read_cosmetic_section",

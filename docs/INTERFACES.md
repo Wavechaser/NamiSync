@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline; the desktop currently exposes the bounded host/transport foundation. Process-live desktop tasks, frozen Setup, plan/execution review, inventory projections, manual post-copy verification, and the history/settings pages remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live blank task pages with creation, navigation, reconstruction, and explicit close. Frozen Setup, plan/execution review, inventory projections, manual post-copy verification, and the history/settings pages remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -367,12 +367,14 @@ evicted source/target slots. A fresh resolution refusal for which no response is
 retained creates no application receipt, association, observer, or dispatcher
 session; refusal replay is not cached.
 
-`TaskLifecyclePort` exposes only task-bound start with a presentation delivery
-factory, exact task/session reobservation, terminal-session release, and task
-close. The application mints the task id and supplies it to the factory before
-dispatcher admission. The factory may create provisional adapter queue state;
-its own call frame discards that state on failure, and no application or service
-rollback refers back into the adapter.
+`TaskLifecyclePort` exposes lifecycle-only shell create/close, task-bound start
+and cancellation, exact task/session reobservation, terminal-session release,
+and task close. A shell owns only its task id; it creates no request, plan,
+session, observer, or domain result. The application mints the task id and
+supplies it to the factory before publication or dispatcher admission. A
+factory may create provisional adapter state; its own call frame discards that
+state on failure, and no application or service rollback refers back into the
+adapter. The web registry enumerates only successfully published tasks.
 
 A task-bound release consumes a truthful adapter terminal-delivery fact, advances
 application settlement, confirms service-observer release, closes Dispatcher
@@ -413,9 +415,14 @@ another interface consumer needs the operation.
 The application admits at most 48 active desktop task effects before invoking a
 delivery factory or lower application work. Independently, the adapter keeps at
 most 48 successful/in-flight start-response entries, retiring successful entries
-with their tasks, and 48 close-response tombstones with least-recently-used
-eviction. These are exact count bounds and make no retained-byte or whole-runtime
-memory claim.
+with their tasks, and one shared population of 48 shell/session close-response
+tombstones with least-recently-used eviction. These are exact count bounds and
+make no retained-byte or whole-runtime memory claim. Terminal-session release
+closes observer and Dispatcher custody while retaining the task and its actual
+terminal headline; only explicit task close retires the card and remaining
+task/plan ownership. Busy close is an exact task/session cancellation request,
+then a close after delivered settlement. A failed close leaves the task
+available for the same close recovery path.
 
 Plan task records retain the workflow's exact `sync-plan` kind across the
 service and browser boundary; retained database history remains independent of
@@ -579,6 +586,15 @@ NamiSync has one GUI implementation and two correctly classified Windows entry-p
 GUI arguments are closed: no arguments or one absolute local `--data-dir PATH` (including equals spelling). Unknown/positional/repeated/missing arguments and relative or non-local paths fail before directory creation, mutex acquisition, logging, or pywebview import. A dependency-free Win32 `MessageBoxW` reporter with caption `NamiSync - Startup Error` shows actionable startup failures when no console exists. Logging records failures once available; a second-instance activation is the settled non-error case.
 
 The supported desktop stack is CPython 3.13 on Windows 11 x64, `pywebview==6.2.1`, `pythonnet==3.1.0` on Windows, and Bottle 0.13.4 or later. NamiSync supports the tested pythonnet netfx route and refuses a conflicting `PYTHONNET_RUNTIME`. A change affecting pywebview, pythonnet, clr_loader, or return transport reruns the relevant native reality and hostile-text checks.
+
+The window's native return adapter consumes a one-shot marker from the bridge's
+existing document generation after command processing. It contains obsolete
+pywebview JavaScript callback failures across reload without canceling or
+repeating command effects. Stable-generation JavaScript failures and non-JS
+failures remain visible; handler custody still waits for true worker exit.
+[BRIDGE.md](BRIDGE.md#current-envelopes-and-admission) owns the precise containment
+boundary and its race limitation. This is separate from the proposed future
+asynchronous command boundary.
 
 One immutable `AppPaths` resolves all GUI artifacts. Production uses `%LOCALAPPDATA%\NamiSync`; tests and development inject an isolated root, including for every headed test. The root contains ledger/history databases, settings and UI state, logs, and WebView2 storage. The data-dir override is application composition input only: it is never browser supplied or persisted as session authority. Pywebview uses private mode and the explicit root-local WebView2 storage path.
 

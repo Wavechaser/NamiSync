@@ -19,13 +19,17 @@ from namisync.interfaces.ui_state import (
     ThemeMode,
 )
 from namisync.interfaces.task_port import (
+    TaskCloseRequestView,
     TaskCloseView,
     TaskDrainView,
     TaskEventUpdateView,
     TaskIntentConflictError,
+    TaskListView,
     TaskRecordUpdateView,
     TaskSessionReleaseView,
+    TaskShellView,
     TaskStartView,
+    TaskSummaryView,
 )
 from namisync.interfaces.web.readiness import (
     CommandPhase,
@@ -130,11 +134,15 @@ NESTED_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
 ADAPTER_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
     {
         TaskDrainView,
+        TaskCloseRequestView,
         TaskCloseView,
         TaskEventUpdateView,
         TaskRecordUpdateView,
         TaskSessionReleaseView,
+        TaskShellView,
         TaskStartView,
+        TaskSummaryView,
+        TaskListView,
     }
 )
 PUBLIC_VIEW_DATACLASSES = (
@@ -196,6 +204,10 @@ class FolderSlotAuthority(Protocol):
 
 
 class TaskAuthority(Protocol):
+    def create_task_shell(self, command_id: str) -> TaskShellView: ...
+
+    def list_tasks(self) -> TaskListView: ...
+
     def replay_start(
         self,
         command_id: str,
@@ -227,7 +239,11 @@ class TaskAuthority(Protocol):
         session_id: str,
     ) -> TaskSessionReleaseView: ...
 
-    def close_task(self, task_id: str, session_id: str) -> TaskCloseView: ...
+    def request_task_close(
+        self,
+        task_id: str,
+        session_id: str | None,
+    ) -> TaskCloseRequestView: ...
 
 
 @runtime_checkable
@@ -337,6 +353,11 @@ class _StartPlanPayload:
 
 
 @dataclass(frozen=True, slots=True)
+class _CreateTaskPayload:
+    command_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class _NextEventsPayload:
     task_id: str
     session_id: str
@@ -347,7 +368,7 @@ class _NextEventsPayload:
 @dataclass(frozen=True, slots=True)
 class _CloseTaskPayload:
     task_id: str
-    session_id: str
+    session_id: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -511,6 +532,27 @@ def production_command_specs(
             raise RuntimeError("planning service returned invalid data")
         return result
 
+    def create_task(payload: object) -> object:
+        if not isinstance(payload, _CreateTaskPayload):
+            raise TypeError("create_task received an unvalidated payload")
+        try:
+            result = registry.create_task_shell(payload.command_id)
+        except TaskIntentConflictError as error:
+            raise CommandConflictError(
+                "create_task command id conflicts with retained intent"
+            ) from error
+        if type(result) is not TaskShellView:
+            raise RuntimeError("task registry returned invalid shell data")
+        result.__post_init__()
+        return result
+
+    def list_tasks(_payload: object) -> object:
+        result = registry.list_tasks()
+        if type(result) is not TaskListView:
+            raise RuntimeError("task registry returned invalid task list")
+        result.__post_init__()
+        return result
+
     def next_events(payload: object) -> object:
         if not isinstance(payload, _NextEventsPayload):
             raise TypeError("next_events received an unvalidated payload")
@@ -538,13 +580,14 @@ def production_command_specs(
     def close_task(payload: object) -> object:
         if not isinstance(payload, _CloseTaskPayload):
             raise TypeError("close_task received an unvalidated payload")
-        result = registry.close_task(payload.task_id, payload.session_id)
+        result = registry.request_task_close(payload.task_id, payload.session_id)
         if (
-            type(result) is not TaskCloseView
+            type(result) is not TaskCloseRequestView
             or result.task_id != payload.task_id
             or result.session_id != payload.session_id
         ):
             raise RuntimeError("task registry returned invalid close data")
+        result.__post_init__()
         return result
 
     def release_terminal_session(payload: object) -> object:
@@ -620,6 +663,24 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.INTERACTIVE,
                 retry=CommandRetry.NONE,
+            ),
+            "create_task": CommandSpec(
+                validate_payload=_validate_create_task,
+                handler=create_task,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.MUTATION_30_SECONDS,
+                retry=CommandRetry.SAME_COMMAND_ONCE,
+            ),
+            "list_tasks": CommandSpec(
+                validate_payload=_validate_empty_payload,
+                handler=list_tasks,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
             "start_plan": CommandSpec(
                 validate_payload=_validate_start_plan,
@@ -736,6 +797,15 @@ def _validate_start_plan(value: object) -> _StartPlanPayload:
     )
 
 
+def _validate_create_task(value: object) -> _CreateTaskPayload:
+    if not isinstance(value, dict) or set(value) != {"command_id"}:
+        raise CommandPayloadError("create_task payload is invalid")
+    command_id = value["command_id"]
+    if type(command_id) is not str or _OPAQUE_ID.fullmatch(command_id) is None:
+        raise CommandPayloadError("create_task payload is invalid")
+    return _CreateTaskPayload(command_id)
+
+
 def _validate_next_events(value: object) -> _NextEventsPayload:
     if not isinstance(value, dict) or set(value) != {
         "task_id",
@@ -768,7 +838,9 @@ def _validate_close_task(value: object) -> _CloseTaskPayload:
     session_id = value["session_id"]
     if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
         raise CommandPayloadError("close_task payload is invalid")
-    if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
+    if session_id is not None and (
+        type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None
+    ):
         raise CommandPayloadError("close_task payload is invalid")
     return _CloseTaskPayload(task_id, session_id)
 

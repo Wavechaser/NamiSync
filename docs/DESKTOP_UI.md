@@ -2,8 +2,8 @@
 
 The secured host, theme/accessibility foundation, generic tree renderer and
 file-row gallery are implemented. Setup and production plan/execution/inventory/
-integrity task surfaces remain unrealized; history and global settings pages are
-deferred. Current v5 item progress is reduced by the bridge, while production
+integrity task content remains unrealized; process-live blank task pages are
+active, while history and global settings pages are deferred. Current v5 item progress is reduced by the bridge, while production
 row binding remains future work.
 
 This document owns visual/user interaction behavior. BRIDGE owns exact transport,
@@ -196,10 +196,10 @@ evidence records the exact installed pairs and measured ratios.
 
 ### Semantic color channels
 
-Status (2026-08-21): the 15-token palette, channel-scoped aliases and
+Status (2026-09-10): the 15-token palette, channel-scoped aliases and
 components, static projected fixtures, and gallery evidence implement this
-contract. Production task and file-list surfaces remain dormant, so the
-delivered visual foundation still presents no live workflow data.
+contract. The task rail uses neutral lifecycle text; production workflow and
+file-list color consumers remain dormant.
 
 Intentions and information are never conveyed through color or form alone.
 Hue answers **what class** a signal belongs to; form answers **how much the
@@ -994,10 +994,14 @@ label. Exact task/result revisions and named-generation rules are bridge
 authority.
 
 M1-4 activates task page creation, selection/navigation, rail interactions, and
-explicit closure. Page bodies may remain blank until their owning delivery
-checkpoint activates Setup, review, execution, or inventory content. Task
-identity, activity/terminal state, and pending/failed close remain truthful and
-observable; this slice does not prebuild those later content projections.
+explicit closure. The rail is newest-first, keeps stable process-local labels
+and card elements across re-observation, and restores published blank,
+active-session, and terminal/released tasks after document reinjection. Page
+bodies remain blank until their owning delivery checkpoint activates Setup,
+review, execution, or inventory content. Task identity, activity/terminal state,
+and pending/failed close remain truthful and observable; this slice does not
+prebuild those later content projections. Stale create, close, list, and drain
+responses cannot replace current-generation state or steal a later selection.
 
 An accepted pause renders **Pausing…** until custody actually reaches
 **Paused**; repeat pause/resume is disabled during the drain and cancellation

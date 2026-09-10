@@ -46,7 +46,7 @@ from namisync.interfaces.web.commands import (
 from namisync.interfaces.web.commands import production_command_specs
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
 from namisync.interfaces.web.drain import (
-    TaskCloseView,
+    TaskCloseRequestView,
     TaskDrainView,
     TaskEventUpdateView,
     TaskRecordUpdateView,
@@ -980,9 +980,11 @@ def test_task_close_crosses_production_dispatch_as_exact_echo() -> None:
     session_id = "3" * 32
 
     class Registry:
-        def close_task(self, received_task: str, received_session: str) -> TaskCloseView:
+        def request_task_close(
+            self, received_task: str, received_session: str
+        ) -> TaskCloseRequestView:
             assert (received_task, received_session) == (task_id, session_id)
-            return TaskCloseView(received_task, received_session)
+            return TaskCloseRequestView(received_task, received_session, "closed")
 
     dispatcher = _bridge_dispatcher(
         document=_Document(),
@@ -1007,7 +1009,11 @@ def test_task_close_crosses_production_dispatch_as_exact_echo() -> None:
         "schema_version": 1,
         "request_id": REQUEST_ID,
         "ok": True,
-        "result": {"task_id": task_id, "session_id": session_id},
+        "result": {
+            "task_id": task_id,
+            "session_id": session_id,
+            "disposition": "closed",
+        },
     }
 
 

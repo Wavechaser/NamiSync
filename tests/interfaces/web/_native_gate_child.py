@@ -336,8 +336,6 @@ def _install_module_observers(
             window = original_create(*args, **kwargs)
             runtime["original_get_current_url"] = window.get_current_url
             original_evaluate = window.evaluate_js
-            delayed_evaluate = threading.Event()
-            runtime["delayed_evaluate"] = delayed_evaluate
 
             def observe_evaluate_js(
                 script: str,
@@ -347,6 +345,8 @@ def _install_module_observers(
                     "_returnValuesCallbacks" in script
                     and "returned-delayed_return" in script
                 )
+                if is_delayed_return:
+                    recorder.set("delayed_return_evaluate_observed", True)
                 try:
                     return original_evaluate(script, callback)
                 except BaseException as error:
@@ -359,7 +359,6 @@ def _install_module_observers(
                 finally:
                     if is_delayed_return:
                         recorder.event("delayed_return.evaluate")
-                        delayed_evaluate.set()
 
             window.evaluate_js = observe_evaluate_js
             runtime["window"] = window
@@ -673,6 +672,7 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 recorder.set("off_origin_inner_handler_called", True)
                 return {"unexpected": True}
             if phase == "delayed_return":
+                runtime["delayed_handler_thread"] = threading.current_thread()
                 delayed_handler_started.set()
                 reinjection_ready = runtime.setdefault(
                     "reinjection_ready",
@@ -704,10 +704,15 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 if not delayed_handler_started.wait(10.0):
                     raise RuntimeError("delayed bridge handler did not start")
             elif phase == "wait_delayed_transport":
-                delayed_evaluate = runtime.get("delayed_evaluate")
-                if not isinstance(delayed_evaluate, threading.Event):
-                    raise RuntimeError("delayed return transport was not instrumented")
-                delayed_evaluate.wait()
+                delayed_worker = runtime.get("delayed_handler_thread")
+                if type(delayed_worker) is not threading.Thread:
+                    raise RuntimeError("delayed bridge worker was not captured")
+                if delayed_worker is threading.current_thread():
+                    raise RuntimeError("delayed bridge worker joined itself")
+                delayed_worker.join(10.0)
+                if delayed_worker.is_alive():
+                    raise RuntimeError("delayed bridge worker did not exit")
+                recorder.event("delayed_handler.joined")
 
             window = runtime["window"]
             managed_url = window.get_current_url()
@@ -725,7 +730,10 @@ def _run_live(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                 "popup_return": payload.get("popup_return"),
             }
             if phase == "wait_delayed_transport":
-                result["delayed_evaluate_observed"] = True
+                result["delayed_handler_joined"] = True
+                result["delayed_evaluate_observed"] = bool(
+                    recorder.get("delayed_return_evaluate_observed", False)
+                )
                 result["delayed_evaluate_error"] = recorder.get(
                     "delayed_return_evaluate_error"
                 )

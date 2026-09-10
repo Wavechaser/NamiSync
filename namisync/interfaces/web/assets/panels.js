@@ -7,16 +7,21 @@ export function createWorkPanel() {
   panel.ariaLabel = "Work area";
 
   const heading = document.createElement("h2");
-  renderText(heading, "Work area");
-  const empty = document.createElement("p");
-  empty.classList.add("nami-shell__empty");
-  renderText(empty, "No task selected.");
-  const guidance = document.createElement("p");
-  guidance.classList.add("nami-shell__guidance");
-  renderText(
-    guidance,
-    "Task details will appear here when a task is available.",
-  );
-  panel.append(heading, empty, guidance);
-  return panel;
+  const body = document.createElement("div");
+  body.classList.add("nami-work-panel__body");
+  panel.append(heading, body);
+
+  function render(task) {
+    renderText(heading, task === null ? "Work area" : task.label);
+    body.replaceChildren();
+    if (task === null) {
+      const empty = document.createElement("p");
+      empty.classList.add("nami-shell__empty");
+      renderText(empty, "No task selected.");
+      body.append(empty);
+    }
+  }
+
+  render(null);
+  return Object.freeze({ element: panel, render });
 }

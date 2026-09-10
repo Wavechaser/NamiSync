@@ -133,7 +133,6 @@ _INITIAL_PROBE = r"""
     work_label: work.getAttribute("aria-label"),
     work_heading: work.querySelector("h2")?.textContent,
     work_empty: work.querySelector(".nami-shell__empty")?.textContent,
-    work_guidance: work.querySelector(".nami-shell__guidance")?.textContent,
     initial_tree_rows: document.querySelectorAll(".nami-tree-row").length,
     initial_task_ids: document.querySelectorAll("[data-task-id]").length,
     initial_session_ids: document.querySelectorAll("[data-session-id]").length,
@@ -179,6 +178,22 @@ _THEME_FOCUS_PROBE = r"""
     popup_role: popup?.getAttribute("role") ?? null,
     selected_value: selected?.dataset.value ?? null,
     value: selector?.dataset.value ?? null,
+    visible: rect !== undefined && rect.width > 0 && rect.height > 0 &&
+      rect.top < innerHeight && rect.bottom > 0,
+  };
+})()
+"""
+
+_CREATE_FOCUS_PROBE = r"""
+(() => {
+  const create = document.querySelector(".nami-task-rail__header .nami-button");
+  const active = document.activeElement;
+  const rect = create?.getBoundingClientRect();
+  return {
+    active: active === create,
+    disabled: create?.disabled ?? null,
+    tag: active?.tagName ?? null,
+    text: create?.textContent ?? null,
     visible: rect !== undefined && rect.width > 0 && rect.height > 0 &&
       rect.top < innerHeight && rect.bottom > 0,
   };
@@ -1163,6 +1178,13 @@ def _begin_probe(
 
     def after_theme_focus(value: object) -> None:
         page["theme_focus"] = value
+        press("Tab", "Tab", 9, after_create_tab)
+
+    def after_create_tab(_value: object) -> None:
+        evaluate(_CREATE_FOCUS_PROBE, after_create_focus)
+
+    def after_create_focus(value: object) -> None:
+        page["create_focus"] = value
         press("Tab", "Tab", 9, after_tree_tab)
 
     def after_tree_tab(_value: object) -> None:

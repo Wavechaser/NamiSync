@@ -131,6 +131,19 @@ stays charged through exact worker exit and matching browser receipt, including
 after origin loss; acknowledgement is cleanup-only and admits no command. DEFENSE
 owns the trusted-base and acknowledgement policy.
 
+The host contains obsolete pywebview return callbacks using that same document
+generation. An existing native worker arms one thread-local return marker only
+after dispatch finishes; the window evaluator consumes it once. Already retired
+returns are skipped. A `JavascriptException` during return evaluation is contained
+only if that captured generation retired; stable-generation JS errors, non-JS
+errors and unrelated evaluations still propagate. No lock spans native evaluation.
+This addresses callback destruction on reload, not an atomic JavaScript delivery
+fence: a JS error racing retirement is treated as obsolete delivery. Command
+effects, replay, response custody and actual worker-exit accounting are unchanged.
+The adapter is pinned to pywebview's fresh-worker, single-return evaluation shape;
+compatibility tests exercise that installed return path. The separately proposed
+asynchronous command boundary in M1_PLAN remains unimplemented.
+
 ### Fixed errors
 
 | Code | Message |
@@ -157,7 +170,7 @@ rows and the wrapper, never handler data. No private detail is appended to error
 
 ## Implemented command map
 
-These nine rows are active in `namisync/interfaces/web/commands.py` and mirrored by
+These eleven rows are active in `namisync/interfaces/web/commands.py` and mirrored by
 the packaged wrapper. Payload/result key sets are exact. SafeInt is a non-Boolean
 integer in `0..9_007_199_254_740_991`; Theme is `system|light|dark`. Except the two
 BOOTSTRAP rows, commands require OPEN.
@@ -167,10 +180,12 @@ BOOTSTRAP rows, commands require OPEN.
 | `shell_ready` | `{}` | `{acknowledged:true}` | BOOTSTRAP; 5 s; none |
 | `readiness_echo` | `{challenge:HexId}` | `{acknowledged:boolean}` | BOOTSTRAP with exact post-open replay; 5 s; one identical-payload retry after false/uncertainty |
 | `pick_folder` | `{purpose:"source"\|"target"}` | `null` or `{id:SlotId,display:string}` | interactive; no deadline or automatic retry |
+| `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error |
+| `list_tasks` | `{}` | `{tasks:[{task_id:TaskId,session_id:null\|HexId,session_state:null\|"active"\|"completed"\|"failed"\|"canceled"\|"refused",session_released:boolean}]}` | 5 s; one identical-payload retry |
 | `start_plan` | `{command_id:HexId,source_id:SlotId,target_id:SlotId,deletion_policy:null\|"trash"\|"additive"}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error; manual Retry retains id |
 | `next_events` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,replay_from:null\|positive-integer}` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,updates:array}` | 30 s client / 25 s server; recovery mints a new drain id |
 | `release_terminal_session` | `{task_id:TaskId,session_id:HexId}` | `{task_id:TaskId,session_id:HexId}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
-| `close_task` | `{task_id:TaskId,session_id:HexId}` | `{task_id:TaskId,session_id:HexId}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
+| `close_task` | `{task_id:TaskId,session_id:null\|HexId}` | `{task_id:TaskId,session_id:null\|HexId,disposition:"pending"\|"closed"}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
 | `read_cosmetic_section` | `{section:"appearance",value_version:1,applied_presentation_revision:SafeInt\|null}` | `{section:"appearance",value_version:1,revision:SafeInt,dirty:boolean,value:{theme:Theme}}` | 5 s; one identical-payload retry |
 | `replace_cosmetic_section` | `{section:"appearance",value_version:1,expected_revision:SafeInt,value:{theme:Theme}}` | same cosmetic snapshot plus `disposition:"applied"\|"noop"\|"conflict"` | 5 s; no mutation retry, read after uncertainty |
 
@@ -181,6 +196,17 @@ an admitted Python handler. Start replay resolves retained wire intent before
 volatile slots: equal id/intent survives expiry; changed wire/resolved intent
 conflicts. Lifecycle release/close uses exact owner identity and idempotent
 recovery, not invented command receipts.
+
+`create_task` publishes a process-live shell with no session, request, plan, or
+result. `list_tasks` reconstructs published blank and session-backed tasks after
+document reinjection; an active session is reported as `active`, while a
+delivered terminal record keeps its actual terminal state before and after
+session release. Blank close uses the exact null-session owner path. A live
+session close first requests task-bound cancellation and returns `pending`; the
+card remains until terminal delivery permits a replayed `closed` disposition.
+Terminal-session release and task close remain distinct operations. The browser
+rejects stale document, navigation, and list generations before adopting task
+state.
 
 ### Slot lifetime
 

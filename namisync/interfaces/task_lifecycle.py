@@ -44,6 +44,12 @@ class TaskStartClaim:
 
 
 @dataclass(frozen=True, slots=True)
+class TaskShellClaim:
+    task_id: str
+    replay: bool
+
+
+@dataclass(frozen=True, slots=True)
 class AdmissionToken:
     identity: int
 
@@ -113,6 +119,7 @@ class _TaskEffect:
     session_id: str | None = None
     admission_identity: int | None = None
     start_failed: bool = False
+    shell_published: bool = False
 
 
 @dataclass(slots=True)
@@ -289,6 +296,89 @@ class TaskLifecycle:
             task.start_failed = True
             if task.session_id is None and task.admission_identity is None:
                 self._tasks.pop(task_id, None)
+            self._condition.notify_all()
+
+    def begin_task_shell(self, command_id: str) -> TaskShellClaim:
+        """Reserve or replay one process-live task without domain work."""
+
+        self._require_command_id(command_id)
+        signature = ("task-shell",)
+        with self._condition:
+            if self._closed:
+                raise RuntimeError("service is closed")
+            if command_id in self._start_receipts:
+                raise LifecycleReceiptConflictError(
+                    "command_id was reused for a different command"
+                )
+            for task in self._tasks.values():
+                if task.command_id != command_id:
+                    continue
+                if task.signature != signature or not task.shell_published:
+                    raise LifecycleReceiptConflictError(
+                        "command_id was reused for a different command"
+                    )
+                if task.session_id is not None or task.admission_identity is not None:
+                    raise LifecycleAssociationError("task shell is unavailable")
+                return TaskShellClaim(task.task_id, True)
+            if len(self._tasks) >= self._task_capacity:
+                raise LifecycleTaskCapacityError("task capacity is exhausted")
+            task_id = self._mint_task_id_locked()
+            self._tasks[task_id] = _TaskEffect(
+                task_id,
+                command_id,
+                signature,
+            )
+            return TaskShellClaim(task_id, False)
+
+    def complete_task_shell(self, claim: TaskShellClaim) -> None:
+        if claim.replay:
+            return
+        with self._condition:
+            task = self._tasks.get(claim.task_id)
+            if (
+                task is None
+                or task.signature != ("task-shell",)
+                or task.shell_published
+                or task.session_id is not None
+                or task.admission_identity is not None
+            ):
+                raise LifecycleAssociationError("task shell claim is stale")
+            task.shell_published = True
+            self._condition.notify_all()
+
+    def abort_task_shell(self, claim: TaskShellClaim) -> None:
+        if claim.replay:
+            return
+        with self._condition:
+            task = self._tasks.get(claim.task_id)
+            if (
+                task is not None
+                and task.signature == ("task-shell",)
+                and not task.shell_published
+                and task.session_id is None
+                and task.admission_identity is None
+            ):
+                self._tasks.pop(claim.task_id, None)
+                self._condition.notify_all()
+
+    def close_task_shell(self, task_id: str) -> None:
+        """Retire one exact published task that never owned a session."""
+
+        if type(task_id) is not str or re.fullmatch(r"task-[0-9a-f]{32}", task_id) is None:
+            raise LifecycleAssociationError("task shell is unavailable")
+        with self._condition:
+            if self._closed:
+                raise LifecycleAssociationError("task shell is unavailable")
+            task = self._tasks.get(task_id)
+            if (
+                task is None
+                or task.signature != ("task-shell",)
+                or not task.shell_published
+                or task.session_id is not None
+                or task.admission_identity is not None
+            ):
+                raise LifecycleAssociationError("task shell is unavailable")
+            self._tasks.pop(task_id, None)
             self._condition.notify_all()
 
     def require_plan(self, request_id: str) -> PlanToken:

@@ -63,8 +63,46 @@ body {
   grid-area: rail;
 }
 
-.nami-task-rail__empty-slot {
+.nami-task-rail__header,
+.nami-task-rail__row {
+  align-items: center;
+  display: flex;
+  gap: var(--space-2);
+}
+
+.nami-task-rail__header {
+  justify-content: space-between;
+}
+
+.nami-task-rail__items {
+  display: grid;
+  gap: var(--space-2);
   margin-block-start: var(--space-4);
+}
+
+.nami-task-rail__row .nami-task-card {
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--space-1);
+  min-inline-size: 0;
+  text-align: start;
+}
+
+.nami-task-card__title,
+.nami-task-card__status {
+  overflow-wrap: anywhere;
+}
+
+.nami-task-card__status {
+  color: var(--color-neutral-foreground-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.nami-task-rail__close {
+  flex: 0 0 auto;
+}
+
+.nami-task-rail__empty-slot {
   min-block-size: 5rem;
 }
 

@@ -1169,6 +1169,8 @@ def _passing_evidence(benchmark):
         "exit_code": 0,
         "production_command_names": [
             "close_task",
+            "create_task",
+            "list_tasks",
             "next_events",
             "pick_folder",
             "read_cosmetic_section",
@@ -1182,6 +1184,8 @@ def _passing_evidence(benchmark):
             "benchmark_report",
             "benchmark_start",
             "close_task",
+            "create_task",
+            "list_tasks",
             "next_events",
             "pick_folder",
             "read_cosmetic_section",

@@ -139,6 +139,7 @@ testWindow.pywebview = {
             result: {
               task_id: request.payload.task_id,
               session_id: request.payload.session_id,
+              ...(isRelease ? {} : { disposition: "closed" }),
             },
           });
         });
@@ -1675,6 +1676,7 @@ const closedReleaseTask = await bridge.closeTask(task("1"), session("a"));
 assert.deepEqual(closedReleaseTask, {
   task_id: task("1"),
   session_id: session("a"),
+  disposition: "closed",
 });
 assert.equal(closeRequests.length, closeCountBeforeRelease + 2);
 assert.deepEqual(scheduledDelays.slice(closeDelayIndex), [100]);

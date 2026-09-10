@@ -117,6 +117,10 @@ const bridgeStub = moduleUrl(`
   export const acknowledgeShellReady = () => globalThis.startupHarness.acknowledgeShell();
   export const echoReadiness = (challenge) => globalThis.startupHarness.echo(challenge);
   export const markBridgeOperational = () => { globalThis.startupHarness.markOperational(); };
+  export const createTask = () => Promise.reject(new Error("unused"));
+  export const closeTask = () => Promise.reject(new Error("unused"));
+  export const listTasks = () => Promise.resolve({ tasks: [] });
+  export const startTaskDrain = () => () => {};
 `);
 globalThis.startupHarness.markOperational = () => {
   operationalMarks += 1;
@@ -138,8 +142,12 @@ const themeStub = moduleUrl(`
     refresh() { return globalThis.startupHarness.refreshTheme(); },
   });
 `);
-const railStub = moduleUrl("export const createTaskRail = () => ({});");
-const panelsStub = moduleUrl("export const createWorkPanel = () => ({});");
+const railStub = moduleUrl(`
+  export const createTaskRail = () => ({ element: {}, render() {} });
+`);
+const panelsStub = moduleUrl(`
+  export const createWorkPanel = () => ({ element: {}, render() {} });
+`);
 const renderStub = moduleUrl(`
   export const renderText = (element, value) => { element.textContent = value; };
 `);
@@ -147,7 +155,7 @@ const renderStub = moduleUrl(`
 let source = await readFile(process.argv[2], "utf8");
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, BridgeTransportError, echoReadiness, markBridgeOperational, whenBridgeApiReady } from "${bridgeStub}";`,
+  `import { acknowledgeShellReady, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, startTaskDrain, whenBridgeApiReady } from "${bridgeStub}";`,
 );
 source = source
   .replace("./readiness.js", readinessStub)

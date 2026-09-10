@@ -329,8 +329,15 @@ async function reportFailure(error) {
   galleryHeader.append(heading, status, themeField);
   app.append(galleryHeader);
 
-  const galleryRail = createTaskRail();
-  const taskSlot = galleryRail.querySelector(".nami-task-rail__empty-slot");
+  const galleryRail = createTaskRail({
+    onCreate() {},
+    onSelect() {},
+    onClose() {},
+  });
+  galleryRail.render([], null, false);
+  const taskSlot = galleryRail.element.querySelector(
+    ".nami-task-rail__empty-slot",
+  );
   if (!(taskSlot instanceof HTMLElement)) {
     throw new TypeError("gallery task rail slot is unavailable");
   }
@@ -360,7 +367,7 @@ async function reportFailure(error) {
     task.append(label, state);
     taskSlot.append(task);
   }
-  app.append(galleryRail);
+  app.append(galleryRail.element);
 
   function icon(name, size = "md") {
     const value = createIcon(document, name, size);
@@ -1743,11 +1750,11 @@ async function reportFailure(error) {
   const selectedBounds = selectedThemeOption.getBoundingClientRect();
   const triggerStyle = getComputedStyle(themeTrigger);
   const popupStyle = getComputedStyle(themePopup);
-  const taskCards = [...galleryRail.querySelectorAll(".nami-task-card")];
-  const selectedTaskCard = galleryRail.querySelector(
+  const taskCards = [...galleryRail.element.querySelectorAll(".nami-task-card")];
+  const selectedTaskCard = galleryRail.element.querySelector(
     '.nami-task-card[aria-selected="true"]',
   );
-  const currentTaskCard = galleryRail.querySelector(
+  const currentTaskCard = galleryRail.element.querySelector(
     '.nami-task-card[aria-current="true"]',
   );
   if (
@@ -1756,7 +1763,7 @@ async function reportFailure(error) {
   ) {
     throw new TypeError("gallery selected task specimens are unavailable");
   }
-  const taskRailBounds = galleryRail.getBoundingClientRect();
+  const taskRailBounds = galleryRail.element.getBoundingClientRect();
   const planBounds = planSection.getBoundingClientRect();
   const accentTokens = Object.fromEntries([
     ["fill", "--color-accent-fill"],
@@ -1855,10 +1862,10 @@ async function reportFailure(error) {
         (task) => task.closest(".nami-card") === null,
       ),
       left_of_work: taskRailBounds.right <= planBounds.left + 0.5,
-      selected_count: galleryRail.querySelectorAll(
+      selected_count: galleryRail.element.querySelectorAll(
         '.nami-task-card[aria-selected="true"]',
       ).length,
-      current_count: galleryRail.querySelectorAll(
+      current_count: galleryRail.element.querySelectorAll(
         '.nami-task-card[aria-current="true"]',
       ).length,
       selected_current_same_card: selectedTaskCard === currentTaskCard,

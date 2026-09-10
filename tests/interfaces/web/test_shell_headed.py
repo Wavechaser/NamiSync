@@ -93,7 +93,7 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert "DesktopInstanceIdentity(arguments.mutex, arguments.title)" in source
     assert "original(window, *appearance_args, **appearance_kwargs)" in source
     assert '"Input.dispatchKeyEvent"' in source
-    assert source.count('press("Tab", "Tab", 9,') == 2
+    assert source.count('press("Tab", "Tab", 9,') == 3
     assert 'document.querySelector("#theme-mode")' in source
     assert 'theme?.querySelector(".nami-combobox__trigger")' in source
     assert "themeTrigger instanceof HTMLButtonElement" in source
@@ -251,7 +251,6 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "work_label",
         "work_heading",
         "work_empty",
-        "work_guidance",
         "initial_tree_rows",
         "initial_task_ids",
         "initial_session_ids",
@@ -269,9 +268,6 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "work_label": "Work area",
         "work_heading": "Work area",
         "work_empty": "No task selected.",
-        "work_guidance": (
-            "Task details will appear here when a task is available."
-        ),
         "initial_tree_rows": 0,
         "initial_task_ids": 0,
         "initial_session_ids": 0,
@@ -311,6 +307,13 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "popup_role": "listbox",
         "selected_value": "system",
         "value": "system",
+        "visible": True,
+    }
+    assert page["create_focus"] == {
+        "active": True,
+        "disabled": False,
+        "tag": "BUTTON",
+        "text": "New task",
         "visible": True,
     }
     assert page["first_focus"] == {
@@ -633,6 +636,7 @@ def _assert_report_schema(result: object) -> None:
         "initial",
         "keyboard_tree",
         "theme_focus",
+        "create_focus",
         "first_focus",
         "second_focus",
         "disclosure_click",
@@ -655,7 +659,6 @@ def _assert_report_schema(result: object) -> None:
         "work_label",
         "work_heading",
         "work_empty",
-        "work_guidance",
         "initial_tree_rows",
         "initial_task_ids",
         "initial_session_ids",
@@ -692,6 +695,13 @@ def _assert_report_schema(result: object) -> None:
         "popup_role",
         "selected_value",
         "value",
+        "visible",
+    }
+    assert set(result["page"]["create_focus"]) == {
+        "active",
+        "disabled",
+        "tag",
+        "text",
         "visible",
     }
     for focus_name in ("first_focus", "second_focus"):

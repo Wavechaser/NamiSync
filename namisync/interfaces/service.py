@@ -87,6 +87,8 @@ from namisync.interfaces.task_port import (
     TaskDeliverySink,
     TaskIntentConflictError,
     TaskSessionReleaseView,
+    TaskShellDeliveryFactory,
+    TaskShellView,
     TaskStartView,
     TaskTerminalDelivery,
     TaskUnavailableError,
@@ -444,6 +446,33 @@ class NamiSyncService:
                 )
             except BaseException:
                 self._lifecycle.abort_task_start(claim.task_id)
+                raise
+
+    def create_task_shell(
+        self,
+        command_id: str,
+        delivery_factory: TaskShellDeliveryFactory,
+    ) -> TaskShellView:
+        """Create one process-live task without starting domain work."""
+
+        if not callable(delivery_factory):
+            raise TypeError("task shell delivery factory must be callable")
+        guard = self._lifecycle.command_guard(command_id)
+        with guard:
+            try:
+                claim = self._lifecycle.begin_task_shell(command_id)
+            except LifecycleReceiptConflictError:
+                raise TaskIntentConflictError(
+                    "task command intent conflicts"
+                ) from None
+            except LifecycleTaskCapacityError as error:
+                raise TaskUnavailableError(str(error)) from None
+            try:
+                delivery_factory(claim.task_id)
+                self._lifecycle.complete_task_shell(claim)
+                return TaskShellView(claim.task_id)
+            except BaseException:
+                self._lifecycle.abort_task_shell(claim)
                 raise
 
     def read_semantic_settings(self) -> SemanticSettingsView:
@@ -1001,6 +1030,20 @@ class NamiSyncService:
         except LifecycleAssociationError:
             raise TaskUnavailableError("task is unavailable") from None
         return TaskSessionReleaseView(task_id, session_id)
+
+    def cancel_task_session(self, task_id: str, session_id: str) -> ControlView:
+        try:
+            self._lifecycle.require_session(session_id, task_id=task_id)
+        except LifecycleAssociationError:
+            raise TaskUnavailableError("task is unavailable") from None
+        return _control_view(self._dispatcher.cancel(session_id))
+
+    def close_task_shell(self, task_id: str) -> TaskShellView:
+        try:
+            self._lifecycle.close_task_shell(task_id)
+        except LifecycleAssociationError:
+            raise TaskUnavailableError("task is unavailable") from None
+        return TaskShellView(task_id)
 
     def close_task(
         self,

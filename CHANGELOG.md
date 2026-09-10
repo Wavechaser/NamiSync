@@ -18,214 +18,29 @@ versioning begins, headings use the version and codename, such as
 M1 expands the reviewed-sync runtime into a complete headless integrity,
 history, and workflow product while building its secured headed WebView2 shell.
 
-### M1 Consolidation
-
-Product, test, and documentation maintenance clarified ownership and removed
-repeated machinery while preserving operational safety and boundary contracts.
-
-#### Product simplification (2026-09-01 – 2026-09-08)
-
-- Removed internal workflow JSON transports and repeated event certification;
-  shared admitted immutable stats, progress, event details, history encoding,
-  and item projections while preserving external and persistence validation.
-- Consolidated task effect ownership, plan retirement, session observation,
-  metadata storage, and idempotent cleanup replay. Fixed the plan-selection
-  retirement race and bounded CLI ingress without changing mutation authority.
-- Shared sync recording finishing, verification terminal projection, event
-  vocabularies, clock contracts, and bounded database query batching. Removed
-  the redundant history update trigger: history schema/shared data epoch is 7,
-  ledger schema is 4, and old or mixed pairs require coordinated reset.
-- Narrowed repeated scan validation; shared MOVE/RECASE rename mechanics and
-  new-file/publication observation; removed named unused executor plumbing.
-  Recording tails, pause/cancel blocks, and mutation-verdict constructors remain
-  shelved. Native/pipeline behavior and settlement policy remain unchanged.
-- Final integrated verification passed 4,862 tests with four unchanged privilege
-  skips, including all 28 headed cases, plus 12 import contracts and the retained
-  30-scenario oracle across three identical runs. Narrow-reduction replay
-  detected 17 faults and passed eight harmless variations. Reviewed temporary
-  branches/worktrees were removed; evidence remains in REDUCTION_FOLLOWUP.
-
-#### Test consolidation (2026-09-01 – 2026-09-07)
-
-- Consolidated boundary, lifecycle, review, inventory, executor, integrity, and
-  browser witnesses around their behavioral owners. Shared fixtures, SQL,
-  selection, theme, and required Node harness setup; retired redundant spelling
-  assertions and temporary migration corpora without losing protected cases.
-- Used isolated cohort ablation, fault probes, harmless variations, and fresh
-  review to distinguish duplicate machinery from detection loss. Preserved the
-  executor settlement oracle, native operation families, source-owner guards,
-  population bounds, snapshot/atomicity checks, and visual/privacy evidence.
-- Corrected headed native-return and reinjection observations separately from
-  consolidation. The refinement closeout passed 4,678 tests with four capability
-  skips, 12 import contracts, and replay of 63 faults plus five harmless
-  variations; TEST_REFINEMENT and TEST_ABLATION retain the qualified evidence.
-
-#### Documentation consolidation (2026-09-05 – 2026-09-09)
-
-- Tested documentation removal against retained answers and counterexamples;
-  separated active contracts from delivery history. BRIDGE and PRESENTATION
-  own their subjects, INTERFACES owns lifecycle/host criteria, and M1_PLAN is
-  the sole remaining delivery register. Superseded plans and studies are archived.
-- Retired aggregate object-graph prescriptions while preserving admission walls
-  and scoped resource-release evidence. The superseded compact-plan memory
-  prerequisite does not govern frontend delivery; no new resource pass is claimed.
-- Scoped the next task slice to page creation, rail/navigation, and safe close;
-  folded later lifecycle closure into integrated verification. Retained fresh
-  Plan-again review after refusal, first manual post-copy verification, and
-  planned capacity/trash information. Deferred terminal domain retries,
-  user-invoked session cleanup, and richer I/O categories to the M2 feature list.
-- Reconciled behavior/status prose, inspected defect ownership, and consolidated
-  this history. Documentation review and link/diff checks do not substitute for
-  implementing or testing the remaining product features.
-
-#### Separate historical criteria from active contracts (2026-08-27)
-
-- Reconstructed a retrospective M0 plan from the final pre-M1 documentation
-  snapshot, preserving historical qualifications and verification notes without
-  treating them as current acceptance evidence.
-- Removed 13 inherited component checklists after checking their later contract
-  prose; retained the few unique current rules and measurement-fixture details
-  in their owning documents. Newer prose prevails over stale criteria.
-- Kept current M1 gates and explicitly deferred ingest criteria separate;
-  updated references to the archived M0 source without changing runtime policy.
-- Relocated all five imported PoC documents to `docs/obsolete/PoC_import/`
-  byte-for-byte, updating references to identify them as historical evidence.
-
-#### Establish layered test operations (2026-08-16)
-
-- Added focused, department, cross-department, ordinary, and complete/headed
-  run policy with short and long department selectors backed by one exhaustive,
-  fail-closed primary-ownership manifest.
-- Reduced evidence-neutral fixture cost through pip-less ordinary wheel
-  installation, success-only junction capability reuse, exact-boundary native
-  verifier data, test-sized log rollover, and lazy headed scenario evidence.
-- Consolidated duplicate coverage and shared helpers without merging behavioral
-  cases; selection-independence guards reject test-tree back edges into
-  collected modules, while lazy-failure guards preserve original headed
-  failures.
-- Left protected custody and settlement evidence, the live 33k-row database
-  scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
-
-#### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
-
-- Centralized fresh root-authority evidence in core while preserving the
-  distinct admission policies and probe timing of scanner, preflight,
-  workflows, executor, and verifier.
-- Corrected and froze executor settlement behavior in a retained three-run,
-  30-scenario oracle before splitting executor and verifier behind stable
-  facades; a typed effect journal, pure reducer, and ownership-aligned tests
-  replaced the monolithic implementation.
-
-### M1 Hardening
-
-Safety, settlement, authority, and measurement work made high-risk release
-claims explicit, independently reviewable, and regression-backed.
-
-#### Bound task inputs, custody, and retained settlement (2026-08-27 – 2026-08-30)
-
-- In scanner, planner, inventory, integrity, and repository paths, admitted raw
-  populations before normalization or retention, detached collaborator results,
-  and applied the shared 120,000-item support target to actual returned values.
-  First excess now fails with the owning workflow's typed result and never saves
-  a partial plan, inventory, or integrity artifact.
-- In dispatcher, service, and the web bridge, attached exact task reservations
-  before scheduling, scoped rollback and compensation to the returned session,
-  bounded document/response custody and receipts, and consumed only the longest
-  admitted drain prefix. Reload, timeout, collision, and reentrant paths cannot
-  release another task's capacity or discard reliable updates.
-- Across the core runner, workflows, history, dispatcher, and service adapters,
-  retired consumed traceback, cause, context, callback, and dependency graphs
-  while preserving public error identity, redaction, fail-stop behavior,
-  cancellation precedence, retry state, and durable watermarks.
-- In execution and integrity, retained reliable outcomes before reentrant work,
-  added a plan-ordered exclusion cursor for pause/resume, revalidated settlement
-  around recording finalization, and replaced repeated candidate reconciliation
-  with one immutable selection-owned identity index.
-- In root resolution, verifier I/O, and runtime shutdown, detached and rechecked
-  mounted-volume facts before effects, bounded verifier chunks to 1 byte–4 MiB,
-  and released or coherently retained all workflow custody maps according to
-  dependency-close success.
-- In core contracts and policy docs, separated cumulative review budgets from
-  producer gates, recorded one-time adoption and scaling-evidence rules, slotted
-  retained immutable values, removed a dormant Python patch-version gate, and
-  kept Python 3.13+ without an upper-version restriction.
-
-#### Close cross-layer contract review findings (2026-08-26 – 2026-08-27)
-
-- Restored execution settlement and continuation authority, then aligned event
-  v5, scalar/native identity, timestamp, reliable-byte, and browser transport
-  contracts so malformed updates fail before custody changes.
-- Made database admission inspect complete WAL-visible topology, reused admitted
-  readers for fresh reads, stored private snapshots beside the local database,
-  and separated payload-free session metadata/results from live continuations.
-- Replaced inferred hash forms with explicit canonical projections, advanced
-  full-width file identity to data epoch 6 with paired-reset guidance, and made
-  JSON/UTF-8 boundaries reject non-scalar Unicode without changing valid bytes.
-- Retired residual adapter/dispatcher exception graphs, removed private legacy
-  event decoders, corrected the stale canonical-plan test vector, and recorded
-  future server-owned sorting and null-evidence rebaseline behavior as accepted
-  but unimplemented product work.
-
-#### Ratify measurement and documentation authority (2026-08-14 – 2026-08-18)
-
-- Separated reasoned targets, live drift guards, named-reference acceptance,
-  and protected release authority; moved their governing policy from universal
-  agent instructions into the defense model, with concise routing left behind.
-- Put consequence and production enforceability ahead of tier selection,
-  separated deterministic protected values from noisy empirical quantities,
-  and froze SH-G-8 v1 as a non-precedential exception rather than a BR-G-45
-  template.
-- Consolidated shell acceptance evidence in its owning gate, reduced the README
-  to product and status summaries, and made category-prefixed commits plus
-  task-level changelog grouping repository conventions.
-- Audited the bug ledger against cause-based categories and consequence-based
-  severity, then made that classification rule explicit for future entries.
-- Recast the architecture reference around durable contracts, layering,
-  coordination, and milestone direction; indexed each standardized contract
-  family to its authoritative core source while removing build/evidence
-  duplication and stale feature status.
-
-#### Establish the threat and tolerance model (2026-08-15)
-
-- Added one normative defense model for supported assumptions, trusted
-  boundaries, hard walls, user authorization, tolerance classes, and explicit
-  residual-risk dispositions.
-- Reconciled the external-writer, TOCTOU, and WebView contracts around a
-  quiescent-root preservation baseline, a trusted packaged renderer with
-  untrusted data, and consequence-based stopping and mitigation rules.
-- Indexed the new authority across the current compact architecture, feature,
-  defect, executor, preflight, interface, bridge, and project documentation
-  without duplicating its policy tables, and archived the stale pre-M0 design
-  review under `docs/obsolete/`.
-
-#### Close the M1 safety and post-refactor audit (2026-08-08 – 2026-08-11)
-
-- Bound scanning, preflight, execution, and verification to freshly re-probed
-  roots and volumes; guarded mounted roots, junction/remount redirection,
-  target/trash parents, long/device/reserved paths, and hostile names.
-- Made publication, backup, non-byte mutation, cancellation, retry, recorder-
-  failure, and hash-mismatch settlement expose durable filesystem, integrity,
-  and ledger truth; expanded the retained oracle after the component split.
-- Hardened SQLite contention and recorder rollback, history receipts and
-  selection, and malformed workflow/persisted inputs, with native race,
-  remount, deep-path, and substitution regressions.
-
-#### Harden integrated lifecycle and durable truth (2026-07-30 – 2026-08-05)
-
-- Shared ordered publication settlement across COPY, UPDATE, and MOVE_UPDATE;
-  retries preserve owned state and disclose only validated backup, publication,
-  and drift truth.
-- Bounded audit, close, cleanup, and repair work; closed service custody,
-  replan, command, cancellation, and shutdown races.
-- Hardened database snapshots and incomplete-scan authority, rejected coercive
-  persisted and bridge JSON, and added temporal/concurrency/recovery stress
-  coverage.
-
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, bounded presentation core, and dormant sync/integrity file-list row renderers;
-later workflow surfaces and beta packaging remain future phases.
+foundation, bounded presentation core, process-live task navigation and closure,
+and dormant sync/integrity file-list row renderers. Workflow content and beta
+packaging remain open.
+
+#### Activate process-live desktop tasks (2026-09-09 – 2026-09-10)
+
+- Added blank task creation, newest-first navigation, retained task enumeration,
+  and explicit close through the existing lifecycle and observer owners.
+- Busy close requests cancellation and retains the card until settlement;
+  failed close remains retryable. Terminal session release preserves the task,
+  and reinjection reconstructs current identities without repeating domain work.
+- Preserved the shared 48-task bound, exact bridge validation and observer
+  custody. Added installed-WebView2 task-shell witnesses and migrated exact
+  command/close-result, gallery, keyboard, native-return and diagnostic-fixture
+  consumers after scope adjudication. The 29-test headed gate and 4,862-test
+  ordinary suite pass, with four existing capability skips in the latter.
+- Contained obsolete pywebview return callbacks across reload using the existing
+  document generation and a one-shot worker marker. Stable-generation JavaScript
+  and non-JS errors remain visible; command effects, receipts and actual worker
+  exit retain their existing owners and bounds.
 
 #### Activate exact core event v5 (2026-08-25)
 
@@ -477,6 +292,209 @@ later workflow surfaces and beta packaging remain future phases.
   before window creation.
 - Enforced exact packaged origins, native navigation/frame/popup guards, and a
   strict bridge boundary resilient to reinjection.
+
+### M1 Consolidation
+
+Product, test, and documentation maintenance clarified ownership and removed
+repeated machinery while preserving operational safety and boundary contracts.
+
+#### Product simplification (2026-09-01 – 2026-09-08)
+
+- Removed internal workflow JSON transports and repeated event certification;
+  shared admitted immutable stats, progress, event details, history encoding,
+  and item projections while preserving external and persistence validation.
+- Consolidated task effect ownership, plan retirement, session observation,
+  metadata storage, and idempotent cleanup replay. Fixed the plan-selection
+  retirement race and bounded CLI ingress without changing mutation authority.
+- Shared sync recording finishing, verification terminal projection, event
+  vocabularies, clock contracts, and bounded database query batching. Removed
+  the redundant history update trigger: history schema/shared data epoch is 7,
+  ledger schema is 4, and old or mixed pairs require coordinated reset.
+- Narrowed repeated scan validation; shared MOVE/RECASE rename mechanics and
+  new-file/publication observation; removed named unused executor plumbing.
+  Recording tails, pause/cancel blocks, and mutation-verdict constructors remain
+  shelved. Native/pipeline behavior and settlement policy remain unchanged.
+- Final integrated verification passed 4,862 tests with four unchanged privilege
+  skips, including all 28 headed cases, plus 12 import contracts and the retained
+  30-scenario oracle across three identical runs. Narrow-reduction replay
+  detected 17 faults and passed eight harmless variations. Reviewed temporary
+  branches/worktrees were removed; evidence remains in REDUCTION_FOLLOWUP.
+
+#### Test consolidation (2026-09-01 – 2026-09-07)
+
+- Consolidated boundary, lifecycle, review, inventory, executor, integrity, and
+  browser witnesses around their behavioral owners. Shared fixtures, SQL,
+  selection, theme, and required Node harness setup; retired redundant spelling
+  assertions and temporary migration corpora without losing protected cases.
+- Used isolated cohort ablation, fault probes, harmless variations, and fresh
+  review to distinguish duplicate machinery from detection loss. Preserved the
+  executor settlement oracle, native operation families, source-owner guards,
+  population bounds, snapshot/atomicity checks, and visual/privacy evidence.
+- Corrected headed native-return and reinjection observations separately from
+  consolidation. The refinement closeout passed 4,678 tests with four capability
+  skips, 12 import contracts, and replay of 63 faults plus five harmless
+  variations; TEST_REFINEMENT and TEST_ABLATION retain the qualified evidence.
+
+#### Documentation consolidation (2026-09-05 – 2026-09-09)
+
+- Tested documentation removal against retained answers and counterexamples;
+  separated active contracts from delivery history. BRIDGE and PRESENTATION
+  own their subjects, INTERFACES owns lifecycle/host criteria, and M1_PLAN is
+  the sole remaining delivery register. Superseded plans and studies are archived.
+- Retired aggregate object-graph prescriptions while preserving admission walls
+  and scoped resource-release evidence. The superseded compact-plan memory
+  prerequisite does not govern frontend delivery; no new resource pass is claimed.
+- Scoped the next task slice to page creation, rail/navigation, and safe close;
+  folded later lifecycle closure into integrated verification. Retained fresh
+  Plan-again review after refusal, first manual post-copy verification, and
+  planned capacity/trash information. Deferred terminal domain retries,
+  user-invoked session cleanup, and richer I/O categories to the M2 feature list.
+- Reconciled behavior/status prose, inspected defect ownership, and consolidated
+  this history. Documentation review and link/diff checks do not substitute for
+  implementing or testing the remaining product features.
+
+#### Separate historical criteria from active contracts (2026-08-27)
+
+- Reconstructed a retrospective M0 plan from the final pre-M1 documentation
+  snapshot, preserving historical qualifications and verification notes without
+  treating them as current acceptance evidence.
+- Removed 13 inherited component checklists after checking their later contract
+  prose; retained the few unique current rules and measurement-fixture details
+  in their owning documents. Newer prose prevails over stale criteria.
+- Kept current M1 gates and explicitly deferred ingest criteria separate;
+  updated references to the archived M0 source without changing runtime policy.
+- Relocated all five imported PoC documents to `docs/obsolete/PoC_import/`
+  byte-for-byte, updating references to identify them as historical evidence.
+
+#### Establish layered test operations (2026-08-16)
+
+- Added focused, department, cross-department, ordinary, and complete/headed
+  run policy with short and long department selectors backed by one exhaustive,
+  fail-closed primary-ownership manifest.
+- Reduced evidence-neutral fixture cost through pip-less ordinary wheel
+  installation, success-only junction capability reuse, exact-boundary native
+  verifier data, test-sized log rollover, and lazy headed scenario evidence.
+- Consolidated duplicate coverage and shared helpers without merging behavioral
+  cases; selection-independence guards reject test-tree back edges into
+  collected modules, while lazy-failure guards preserve original headed
+  failures.
+- Left protected custody and settlement evidence, the live 33k-row database
+  scale guard, CLI lifecycle coverage, and serial execution policy unchanged.
+
+#### Complete the maintenance refactor (2026-08-10 – 2026-08-11)
+
+- Centralized fresh root-authority evidence in core while preserving the
+  distinct admission policies and probe timing of scanner, preflight,
+  workflows, executor, and verifier.
+- Corrected and froze executor settlement behavior in a retained three-run,
+  30-scenario oracle before splitting executor and verifier behind stable
+  facades; a typed effect journal, pure reducer, and ownership-aligned tests
+  replaced the monolithic implementation.
+
+### M1 Hardening
+
+Safety, settlement, authority, and measurement work made high-risk release
+claims explicit, independently reviewable, and regression-backed.
+
+#### Bound task inputs, custody, and retained settlement (2026-08-27 – 2026-08-30)
+
+- In scanner, planner, inventory, integrity, and repository paths, admitted raw
+  populations before normalization or retention, detached collaborator results,
+  and applied the shared 120,000-item support target to actual returned values.
+  First excess now fails with the owning workflow's typed result and never saves
+  a partial plan, inventory, or integrity artifact.
+- In dispatcher, service, and the web bridge, attached exact task reservations
+  before scheduling, scoped rollback and compensation to the returned session,
+  bounded document/response custody and receipts, and consumed only the longest
+  admitted drain prefix. Reload, timeout, collision, and reentrant paths cannot
+  release another task's capacity or discard reliable updates.
+- Across the core runner, workflows, history, dispatcher, and service adapters,
+  retired consumed traceback, cause, context, callback, and dependency graphs
+  while preserving public error identity, redaction, fail-stop behavior,
+  cancellation precedence, retry state, and durable watermarks.
+- In execution and integrity, retained reliable outcomes before reentrant work,
+  added a plan-ordered exclusion cursor for pause/resume, revalidated settlement
+  around recording finalization, and replaced repeated candidate reconciliation
+  with one immutable selection-owned identity index.
+- In root resolution, verifier I/O, and runtime shutdown, detached and rechecked
+  mounted-volume facts before effects, bounded verifier chunks to 1 byte–4 MiB,
+  and released or coherently retained all workflow custody maps according to
+  dependency-close success.
+- In core contracts and policy docs, separated cumulative review budgets from
+  producer gates, recorded one-time adoption and scaling-evidence rules, slotted
+  retained immutable values, removed a dormant Python patch-version gate, and
+  kept Python 3.13+ without an upper-version restriction.
+
+#### Close cross-layer contract review findings (2026-08-26 – 2026-08-27)
+
+- Restored execution settlement and continuation authority, then aligned event
+  v5, scalar/native identity, timestamp, reliable-byte, and browser transport
+  contracts so malformed updates fail before custody changes.
+- Made database admission inspect complete WAL-visible topology, reused admitted
+  readers for fresh reads, stored private snapshots beside the local database,
+  and separated payload-free session metadata/results from live continuations.
+- Replaced inferred hash forms with explicit canonical projections, advanced
+  full-width file identity to data epoch 6 with paired-reset guidance, and made
+  JSON/UTF-8 boundaries reject non-scalar Unicode without changing valid bytes.
+- Retired residual adapter/dispatcher exception graphs, removed private legacy
+  event decoders, corrected the stale canonical-plan test vector, and recorded
+  future server-owned sorting and null-evidence rebaseline behavior as accepted
+  but unimplemented product work.
+
+#### Ratify measurement and documentation authority (2026-08-14 – 2026-08-18)
+
+- Separated reasoned targets, live drift guards, named-reference acceptance,
+  and protected release authority; moved their governing policy from universal
+  agent instructions into the defense model, with concise routing left behind.
+- Put consequence and production enforceability ahead of tier selection,
+  separated deterministic protected values from noisy empirical quantities,
+  and froze SH-G-8 v1 as a non-precedential exception rather than a BR-G-45
+  template.
+- Consolidated shell acceptance evidence in its owning gate, reduced the README
+  to product and status summaries, and made category-prefixed commits plus
+  task-level changelog grouping repository conventions.
+- Audited the bug ledger against cause-based categories and consequence-based
+  severity, then made that classification rule explicit for future entries.
+- Recast the architecture reference around durable contracts, layering,
+  coordination, and milestone direction; indexed each standardized contract
+  family to its authoritative core source while removing build/evidence
+  duplication and stale feature status.
+
+#### Establish the threat and tolerance model (2026-08-15)
+
+- Added one normative defense model for supported assumptions, trusted
+  boundaries, hard walls, user authorization, tolerance classes, and explicit
+  residual-risk dispositions.
+- Reconciled the external-writer, TOCTOU, and WebView contracts around a
+  quiescent-root preservation baseline, a trusted packaged renderer with
+  untrusted data, and consequence-based stopping and mitigation rules.
+- Indexed the new authority across the current compact architecture, feature,
+  defect, executor, preflight, interface, bridge, and project documentation
+  without duplicating its policy tables, and archived the stale pre-M0 design
+  review under `docs/obsolete/`.
+
+#### Close the M1 safety and post-refactor audit (2026-08-08 – 2026-08-11)
+
+- Bound scanning, preflight, execution, and verification to freshly re-probed
+  roots and volumes; guarded mounted roots, junction/remount redirection,
+  target/trash parents, long/device/reserved paths, and hostile names.
+- Made publication, backup, non-byte mutation, cancellation, retry, recorder-
+  failure, and hash-mismatch settlement expose durable filesystem, integrity,
+  and ledger truth; expanded the retained oracle after the component split.
+- Hardened SQLite contention and recorder rollback, history receipts and
+  selection, and malformed workflow/persisted inputs, with native race,
+  remount, deep-path, and substitution regressions.
+
+#### Harden integrated lifecycle and durable truth (2026-07-30 – 2026-08-05)
+
+- Shared ordered publication settlement across COPY, UPDATE, and MOVE_UPDATE;
+  retries preserve owned state and disclose only validated backup, publication,
+  and drift truth.
+- Bounded audit, close, cleanup, and repair work; closed service custody,
+  replan, command, cancellation, and shutdown races.
+- Hardened database snapshots and incomplete-scan authority, rejected coercive
+  persisted and bridge JSON, and added temporal/concurrency/recovery stress
+  coverage.
 
 ### M1 Features
 

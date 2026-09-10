@@ -145,6 +145,7 @@ class Window:
             )
         )
         self.exposed_functions = ()
+        self.evaluate_js = lambda *_args, **_kwargs: None
 
     def expose(self, *functions):
         self.exposed_functions = functions
