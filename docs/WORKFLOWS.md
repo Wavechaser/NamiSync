@@ -12,7 +12,10 @@ direct user deselection remains distinct from safety exclusion, execution
 re-derives the authoritative set, and the workflow-owned typed checkpoints
 preserve that provenance and executor continuation truth.
 Stage 5.5 facade integration is complete and the planning-source ownership wall is
-active. Stage 6 desktop behavior is finalized in `BRIDGE.md`; queue durability,
+active. Shared location-candidate admission and bounded run-derived remembered
+locations are also implemented; their current behavior is owned by INVENTORY
+and DATABASE, with application entry points in INTERFACES. Setup widgets remain
+pending. Stage 6 desktop behavior is finalized in `BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
 ## Stage 6 Second-Half Workflow Contract

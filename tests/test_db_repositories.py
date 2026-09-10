@@ -4,6 +4,7 @@ from collections.abc import Iterator
 from pathlib import Path
 import re
 import sqlite3
+from datetime import timedelta
 
 import pytest
 
@@ -270,6 +271,186 @@ def _insert_mapping_history(
         writer.commit()
     finally:
         writer.close()
+
+
+def _seed_recent_sync_pairs(path: Path):
+    setup = setup_recorder(path, plan(()))
+    setup.recorder.close()
+    writer = connect_ledger_writer(path)
+    identities: list[tuple[int, int, int]] = []
+    try:
+        writer.execute("BEGIN IMMEDIATE")
+        volume_id = int(
+            writer.execute(
+                "SELECT volume_id FROM locations WHERE id = ?",
+                (setup.source_location_id,),
+            ).fetchone()[0]
+        )
+        for index in range(1, 8):
+            source_id = int(
+                writer.execute(
+                    """INSERT INTO locations(
+                           volume_id, volume_relative_path,
+                           volume_relative_path_key, created_at, last_seen_at
+                       ) VALUES (?, ?, ?, ?, ?) RETURNING id""",
+                    (
+                        volume_id,
+                        f"recent-source-{index}",
+                        f"RECENT-SOURCE-{index}",
+                        NOW.isoformat(),
+                        NOW.isoformat(),
+                    ),
+                ).fetchone()[0]
+            )
+            target_id = int(
+                writer.execute(
+                    """INSERT INTO locations(
+                           volume_id, volume_relative_path,
+                           volume_relative_path_key, created_at, last_seen_at
+                       ) VALUES (?, ?, ?, ?, ?) RETURNING id""",
+                    (
+                        volume_id,
+                        f"recent-target-{index}",
+                        f"RECENT-TARGET-{index}",
+                        NOW.isoformat(),
+                        NOW.isoformat(),
+                    ),
+                ).fetchone()[0]
+            )
+            mapping_id = int(
+                writer.execute(
+                    """INSERT INTO mappings(
+                           source_location_id, target_location_id, created_at
+                       ) VALUES (?, ?, ?) RETURNING id""",
+                    (source_id, target_id, NOW.isoformat()),
+                ).fetchone()[0]
+            )
+            started = NOW + timedelta(days=4 if index == 5 else index)
+            writer.execute(
+                """INSERT INTO runs(
+                       run_token, activity_kind, host_id, mapping_id,
+                       source_location_id, target_location_id, started_at,
+                       ended_at, filesystem_status, recording_status,
+                       start_payload_hash
+                   ) VALUES (?, 'sync', ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    f"recent-run-{index}",
+                    setup.host_id,
+                    mapping_id,
+                    source_id,
+                    target_id,
+                    started.isoformat(),
+                    None if index == 3 else started.isoformat(),
+                    (
+                        None,
+                        "failed",
+                        "canceled",
+                        "partial",
+                        "success",
+                        "failed",
+                        "success",
+                    )[index - 1],
+                    None if index == 2 else "ok",
+                    bytes([index]) * 32,
+                ),
+            )
+            identities.append((mapping_id, source_id, target_id))
+        writer.execute(
+            "UPDATE mappings SET deleted_at = ? WHERE id = ?",
+            ((NOW + timedelta(days=7)).isoformat(), identities[-1][0]),
+        )
+        writer.commit()
+    finally:
+        writer.close()
+    return identities
+
+
+def test_recent_sync_activity_is_bounded_ordered_and_provenance_complete(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "ledger.db"
+    identities = _seed_recent_sync_pairs(path)
+
+    statements: list[str] = []
+    with LedgerRepository(path, trace_callback=statements.append) as repository:
+        recent = repository.get_recent_sync_activity()
+
+    expected = [identities[index] for index in (5, 3, 4, 2, 1)]
+    assert len(recent.sources) == len(recent.targets) == len(recent.pairs) == 5
+    assert [row.location.location_id for row in recent.sources] == [
+        row[1] for row in expected
+    ]
+    assert [row.location.location_id for row in recent.targets] == [
+        row[2] for row in expected
+    ]
+    assert [row.mapping_id for row in recent.pairs] == [row[0] for row in expected]
+    assert identities[-1][0] not in {row.mapping_id for row in recent.pairs}
+    recent_selects = [
+        statement
+        for statement in statements
+        if "FROM runs AS run" in statement
+    ]
+    assert len(recent_selects) == 3
+    assert all("LIMIT 5" in statement for statement in recent_selects)
+
+
+def test_recent_sync_activity_uses_one_read_snapshot(tmp_path: Path) -> None:
+    path = tmp_path / "ledger.db"
+    identities = _seed_recent_sync_pairs(path)
+    repository = LedgerRepository(path)
+    original = repository._connection
+    changed = False
+
+    class Connection:
+        def execute(self, statement: str, parameters=()):
+            nonlocal changed
+            if "target.id AS target_location_id" in statement and not changed:
+                changed = True
+                writer = connect_ledger_writer(path)
+                try:
+                    mapping_id, source_id, target_id = identities[0]
+                    host_id = int(
+                        writer.execute("SELECT id FROM hosts ORDER BY id LIMIT 1").fetchone()[0]
+                    )
+                    started = NOW + timedelta(days=20)
+                    writer.execute("BEGIN IMMEDIATE")
+                    writer.execute(
+                        """INSERT INTO runs(
+                               run_token, activity_kind, host_id, mapping_id,
+                               source_location_id, target_location_id, started_at,
+                               start_payload_hash
+                           ) VALUES (?, 'sync', ?, ?, ?, ?, ?, ?)""",
+                        (
+                            "snapshot-later-run",
+                            host_id,
+                            mapping_id,
+                            source_id,
+                            target_id,
+                            started.isoformat(),
+                            b"s" * 32,
+                        ),
+                    )
+                    writer.commit()
+                finally:
+                    writer.close()
+            return original.execute(statement, parameters)
+
+        def __getattr__(self, name: str):
+            return getattr(original, name)
+
+    repository._connection = Connection()  # type: ignore[assignment]
+    try:
+        recent = repository.get_recent_sync_activity()
+    finally:
+        repository.close()
+
+    assert changed
+    assert [row.location.location_id for row in recent.sources] == [
+        row.source.location_id for row in recent.pairs
+    ]
+    assert [row.location.location_id for row in recent.targets] == [
+        row.target.location_id for row in recent.pairs
+    ]
 
 
 def test_integrity_candidate_reader_enforces_complete_population_row_wall(

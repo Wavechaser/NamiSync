@@ -299,7 +299,14 @@ Concurrent handlers synchronize effect admission, drains and retirement without 
 
 The next task/review surface must give users idempotent actions, stale-intent refusal, explicit close, truthful terminal delivery, bounded ingress and populations, and a finite containment/refusal/evidence design. The mechanism is open: future work must record its own bounded delivery register and name its runtime enforcer and evidence. Do not revive complete-owner-graph charging, byte reservations, phase-ahead leases, precharged response capacity, or an exact command-map expansion by citing this document.
 
-Location admission remains a workflow-owned safety outcome: raw candidate text is bounded and classified through the common no-follow admission path; slots are purpose-bound, short-lived opaque references and fresh admission remains required at start. A slot is never a durable authorization or path-policy authority. Exact future Setup and task DTOs belong to their delivery register, not this document.
+Location admission is implemented as a workflow-owned safety outcome: raw
+candidate text is bounded and classified through the common no-follow admission
+path. Current picker-backed starts reach it after command replay; slots remain
+purpose-bound, short-lived opaque references. Remembered-location readback is
+available through application services, while typed/recent Setup commands and
+widgets remain future work. A slot, candidate or remembered identity is never
+durable authorization or path-policy authority. Exact future Setup and task
+DTOs belong to their delivery register, not this document.
 
 ## Evidence and ongoing checks
 

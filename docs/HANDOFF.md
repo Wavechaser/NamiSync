@@ -1,49 +1,50 @@
 # Latest session handoff
 
-## M1-async delivery (2026-09-10)
+## M1-async and M1-5 delivery (2026-09-10)
 
-Delivered on `milestone1` from `74aa6b7` in the atomic commit
-`feat(web): add bounded asynchronous command completion`. M1-4 remains complete
-in `ab453e1`. Native create/start/release/close return admission separately from
-bounded completion. Direct/custom calls, task/session effects, replay identities,
-shutdown recovery and the existing final native-send guard remain intact.
+M1-async is committed on `milestone1` as `675181a`. This M1-5 delivery is
+based on that commit, with the atomic commit title
+`feat(workflows): unify location admission and remembered locations`.
+M1-4 remains complete in `ab453e1`. No recovery branch was needed.
 
-The shared exchange population retains both real worker exits and both delivery
-phases. DocumentChannel separates its single native send from outstanding
-receipts, so absent cosmetic acknowledgement and lost command delivery do not
-block later command completions. Queued, sending and awaiting command receipts
-together remain bounded to 64. No general scheduler or durable command store
-was introduced.
+M1-async adds bounded native admission/completion for create/start/release/close,
+retaining the existing task/session effect owners, replay, recovery and one
+native-send guard. Its final evidence is in `build/m1-async/evidence/`:
+4,884 ordinary tests passed with four existing privilege skips, all 29 installed
+headed tests passed, and neighborhood/import/docs/adversarial checks passed.
+The approved README status update and real-channel logging fixture migration
+are included in that commit.
 
-Verification:
+M1-5 shares workflow-owned typed location admission across current picker plan
+starts and inventory/integrity. Bounds precede task custody; replay precedes
+native work; refusal creates no delivery/session effect. Remounted remembered
+identities are freshly resolved. Durable sync activity supplies at most five
+sources, five targets and five active pairs in one read-only snapshot. Existing
+point-of-use probes remain; candidates and remembered hints grant no authority.
 
-- Interfaces/dispatcher neighborhood: 1655 passed, 3262 deselected in 56.02s
-- Ordinary repository: 4884 passed, 4 skipped, 29 deselected in 211.92s (0:03:31)
-- Installed-wheel real WebView2: 29 passed, 4888 deselected in 130.37s (0:02:10)
-- All twelve import contracts pass; browser timeout/recovery probe, focused
-  transition witnesses, documentation links and diff checks pass.
-- Fresh adversarial review covers the actual diff and raw evidence, including
-  independent receipt custody, exact cleanup, generation races and recovery.
+M1-5 verification:
 
-The four ordinary skips are existing Windows symlink privilege limitations.
-Headed evidence proves the declared app/page contracts, not Windows compositor
-health or a new whole-runtime resource claim. Protected measurement artifacts
-remain unchanged. No collected test module was retired or added.
+- Focused: 680 passed in 23.68s
+- Database/workflows/interfaces neighborhood: 2697 passed, 2248 deselected in 111.58s (0:01:51)
+- Ordinary: 4912 passed, 4 skipped, 29 deselected in 237.83s (0:03:57)
+- Installed-wheel real WebView2: 29 passed, 4916 deselected in 132.51s (0:02:12)
+- All twelve import contracts, documentation/link/diff checks, and independent
+  adversarial review passed. No collected module was added or retired.
 
-Raw evidence, candidate hashes and replay helpers remain under ignored
-`build/m1-async/evidence/` and `inputs/`; the initial failed invocations are
-retained with their causes and corrective evidence. The approved README update
-and real-channel logging fixture migration are included. Applied closure drafts
-are cleaned; task-owned evidence is retained. No recovery branch was needed.
+The ordinary skips remain existing Windows symlink privilege limitations.
+No new timing, whole-runtime resource or compositor-health claim is made.
+The baseline was refreshed on clean `675181a` before M1-5 edits: 44 owner-seam
+and 17 picker tests passed. Raw evidence remains in
+`build/m1-5-design/runs/integrated-675181a-02/`.
 
-M1-5 is authorized next, with its finite scope and gate in M1_PLAN. Before edits,
-record this integrated commit and refresh its retained baseline using
-`build/m1-5-design/inputs/run-retained-baseline.ps1` with a fresh external
-basetemp and the shared runner idle. Recheck replay before slots and candidate
-admission after the task claim; preserve fresh point-of-use probes. Workflow
-types own candidate/recent results; schema, public service-view registry and
-Setup widgets remain outside M1-5.
+M1-5 raw commands/results, final hashes and review remain under
+`build/m1-5/evidence/`, with reproducible inputs under `build/m1-5/inputs/`.
+The first focused failure and subsequent green runs are retained. Review found
+two introduced service regressions, both corrected before closure: exception
+context retention and oversized path custody before validation. Their existing
+or added assertions remain in the final suite. Generated evidence is ignored;
+no unrelated files or branches were cleaned.
 
-Finish M1-5 with its own verification, fresh adversarial review and atomic
-commit, then pause for recap and GUI adjustments. M1-6, historical DOC-2 branch/
-PR work, unrelated files, pushes and PRs are not part of this delivery.
+Pause here for the user's recap and GUI adjustments. Typed/recent Setup widgets,
+picker-time feedback, frozen options and M1-6 onward remain pending. No push,
+PR or further checkpoint implementation is authorized by this delivery.

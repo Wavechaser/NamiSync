@@ -6,10 +6,10 @@ Stage 5.5 recursive scan-scope foundation are implemented. Inventory is not a ne
 sideways-calling operation module: scanner observes, workflows coordinate, and
 database repositories/recorder retain state. The Stage 5 CLI exposes explicit
 location inventory and integrity starts through the shared service; desktop
-actions remain Stage 6. The Setup admission, remembered-location, cached-
-projection, ledger-current evidence, and manual-handoff contracts below are
-accepted Stage 6 targets and are not active until their implementation gates
-close.
+actions remain Stage 6. Shared location-candidate admission and bounded
+remembered-location reads are implemented workflow services. Setup widgets,
+cached desktop projections, ledger-current presentation and manual handoff
+remain accepted Stage 6 targets.
 
 ## Purpose
 
@@ -207,14 +207,17 @@ refuses before hashing.
 
 ## Stage 6 Desktop Contracts (Protocol Subset Active)
 
-Setup admission and recents are owned by INTERFACES; paging by PRESENTATION; external wire encoding by [BRIDGE.md](BRIDGE.md), with safety classification and active bounds in
+Location-candidate admission is owned by the inventory workflow; INTERFACES
+owns its application entry points and future Setup integration. Paging belongs
+to PRESENTATION; external wire encoding to [BRIDGE.md](BRIDGE.md), with safety classification and active bounds in
 [DEFENSE.md](DEFENSE.md). Inventory consumes the shared workflow-owned location
 candidate pipeline and always re-admits a real start; a slot or
 `RootAuthority` is evidence, never cached authorization.
 
 The signed-64 scalar, full-width native identity, and event/persistence epoch
-consumed here are active. Setup, recents, desktop projection, paging, and
-retention behavior below remain accepted but unrealized.
+consumed here are active. Remembered-location readback is implemented; its
+Setup widgets, desktop projection, paging and retention behavior below remain
+accepted but unrealized.
 
 The desktop inventory projection is one canonical server-side view over a
 complete immutable inventory generation. Search, filters, collapse, visible
@@ -338,6 +341,26 @@ Acknowledging missing hides it from the default view but does not delete
 evidence; restore reverses only acknowledgement.
 
 ## Location And Mapping Guidance
+
+The workflow owns one location-candidate route for fresh plan roots and
+inventory/integrity starts. Its immutable typed result distinguishes literal
+input refusal, unsupported locations and current identity-resolution outcomes.
+The owning types and functions live in `namisync/workflows/inventory.py`;
+application adapters do not reinterpret diagnostic strings as states.
+
+Candidate text is bounded before parsing, native observation or ledger access.
+Only a literal absolute local path or an explicit durable location identity is
+admitted. Relative paths, shell/environment/home expansion, URI/device
+namespaces and remote roots do not acquire local path authority. Admission
+checks the root chain without following reparse points before resolving its
+volume identity, refuses files instead of selecting their parents, and keeps
+logical long paths distinct from extended-length native spelling.
+
+A candidate is current evidence, not authorization for later I/O. Remembered
+identity activation resolves current mounts afresh, and inventory/integrity
+recheck their binding when queued work actually starts. Scanner, preflight,
+executor and verifier retain their own point-of-use checks. A refused candidate
+does not register a location, create a mapping/run or add a recent suggestion.
 
 Repository reads return zero/one/many mapping associations. Workflows require
 explicit paired roots when association is ambiguous. Known drive-letter changes

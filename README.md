@@ -41,7 +41,8 @@ classes, and exact residual dispositions live in the defense model.
 
 M1's headless product is implemented and usable through the service and CLI:
 reviewed sync, inventory, integrity baseline/verify/rebaseline, optional
-post-copy verification, and retained history. The Windows desktop shell now has
+post-copy verification, retained history, shared location-candidate admission
+and bounded run-derived remembered locations. The Windows desktop shell now has
 a secured WebView2 host, bounded command/event transport with asynchronous
 completion for small task commands, native folder picking,
 the Fluent/accessibility foundation, process-live blank task creation,
@@ -53,7 +54,7 @@ Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work covers Setup, shared location admission, bounded
+Remaining desktop work covers Setup and its typed/recent inputs, bounded
 plan/execution review, and
 inventory/integrity content within the active task shell. Accepted sorting and rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
@@ -259,7 +260,9 @@ Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, dormant sync/integrity file-list row
 renderers, and a persisted native/page theme override over the refrozen
 cosmetic-state channel. Process-live blank tasks now support newest-first
-navigation, safe cancellation/closure, and retained terminal status. The exact
+navigation, safe cancellation/closure, and retained terminal status. Small task
+commands have bounded asynchronous completion; shared location admission and
+run-derived remembered locations provide the backend for future Setup. The exact
 event-v5/data-epoch-7 protocol cut is active. Setup, workflow content, and beta
 packaging remain open.
 

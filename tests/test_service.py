@@ -3496,6 +3496,75 @@ def _task_capacity_service(
     return service, counts
 
 
+@pytest.mark.parametrize("oversized_role", ("source", "target"))
+def test_task_location_bound_precedes_claim_and_native_admission(
+    oversized_role: str,
+) -> None:
+    class UnclaimedLifecycle(TaskLifecycle):
+        def begin_task_start(self, *_args):
+            pytest.fail("oversized input must not enter task custody")
+
+    service, counts = _task_capacity_service(UnclaimedLifecycle())
+
+    def unexpected_admission(*_args):
+        pytest.fail("oversized input must not reach native candidate admission")
+
+    service._runtime.admit_plan_locations = unexpected_admission
+    paths = {"source": "F:\\source", "target": "F:\\target"}
+    paths[oversized_role] = "F:\\" + "x" * 32768
+    with pytest.raises(service_module.SyncPathInputError):
+        service.start_task_plan(
+            **paths, deletion_policy=None, command_id=f"{97_000:032x}",
+            delivery_factory=lambda _task_id: pytest.fail("unexpected delivery"),
+        )
+    assert (counts.requests, counts.adoptions, counts.submissions) == (0, 0, 0)
+
+
+def test_task_location_refusal_releases_claim_before_retry(tmp_path: Path) -> None:
+    from namisync.workflows import (
+        LocationCandidate,
+        LocationCandidateResult,
+        LocationCandidateState,
+    )
+
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    service, counts = _task_capacity_service()
+    original_admit = service._runtime.admit_plan_locations
+    refusal = LocationCandidateResult(
+        LocationCandidate.literal(str(source)),
+        LocationCandidateState.UNAVAILABLE,
+        detail="Reconnect the source and retry",
+    )
+    deliveries = []
+
+    def factory(task_id):
+        deliveries.append(task_id)
+        return lambda _update: None
+
+    service._runtime.admit_plan_locations = lambda *_args: (refusal, refusal)
+    command_id = f"{97_001:032x}"
+    with pytest.raises(service_module.SyncPathInputError) as captured:
+        service.start_task_plan(
+            str(source), str(target), deletion_policy=None,
+            command_id=command_id, delivery_factory=factory,
+        )
+    assert captured.value.result is refusal
+    assert deliveries == []
+    assert (counts.requests, counts.adoptions, counts.submissions) == (0, 0, 0)
+
+    # Every slot remains available, including a retry of the refused command.
+    service._runtime.admit_plan_locations = original_admit
+    for index in range(TASK_EFFECT_CAPACITY):
+        service.start_task_plan(
+            str(source), str(target), deletion_policy=None,
+            command_id=f"{97_001 + index:032x}", delivery_factory=factory,
+        )
+    assert len(deliveries) == TASK_EFFECT_CAPACITY
+    assert counts.submissions == TASK_EFFECT_CAPACITY
+
+
 def test_application_same_command_joiner_replays_single_48th_task_effect(
     tmp_path: Path,
 ) -> None:

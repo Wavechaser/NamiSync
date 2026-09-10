@@ -58,9 +58,9 @@ never reset user data.
 
 Ledger v4 stores complete file identities as canonical `FileIndex128` text and
 strengthens pair, canonical-domain, and attestation checks. It does not add an
-operation digest. The execution-evidence join and indexed recent-location
-queries described below are accepted but unrealized; process-local recent ids
-remain outside the database.
+operation digest. Bounded recent-location readback uses the existing schema;
+new recent-query indexes and the execution-evidence join remain unrealized.
+Process-local command and task ids remain outside the ledger.
 
 At the active cutover, ledger numeric and native-identity storage follows
 `DEFENSE.md` §1.3 and the mapped bridge decision without a database-local
@@ -563,6 +563,17 @@ for a run.
   canonical fixed representation, never mixed arbitrary ISO text.
 
 ## Inventory And Missing Retention
+
+Remembered-location readback derives source, target and pair suggestions from
+durable sync run activity joined to its active mapping. It excludes soft-deleted
+mappings, deduplicates stable location or pair identities, orders by newest run
+time with an identity tie-break, and applies a five-result SQL limit to each
+collection before materializing values. The three collections share a read
+snapshot. Run outcome does not erase history: failed, canceled, degraded and
+unfinished runs remain eligible, as do offline or remounted locations.
+No write occurs merely from reading, typing, picking or probing. Stored mount
+hints remain non-authoritative labels; workflow activation resolves identity
+again. This adds neither a schema/index migration nor query-time certification.
 
 Missing marking uses temp tables or bounded batches, not a giant `NOT IN` list.
 It runs only after a complete online scan of the declared scope. `FULL` uses an

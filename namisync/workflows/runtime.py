@@ -106,16 +106,23 @@ from .inventory import (
     InventoryDetails,
     InventoryRequest,
     InventoryWorkflowRequest,
+    LocationCandidate,
+    LocationCandidateResult,
+    LocationCandidateState,
     LocationBinding,
     MountedVolumeResolver,
     NativeMountedVolumeResolver,
     Scanner,
+    RememberedLocations,
+    admit_location_candidate as admit_candidate,
     bind_integrity_request,
     bind_inventory_request,
     change_inventory_visibility,
     run_integrity,
     run_inventory,
+    remembered_locations as project_remembered_locations,
     settle_canceled_integrity,
+    validate_location_candidate_pair,
 )
 from .database_pair import (
     DatabasePairContract,
@@ -365,6 +372,40 @@ class LocalWorkflowRuntime:
     def _ensure_database_contracts(self) -> DatabasePairContract:
         with self._database_pair_lock:
             return ensure_database_pair(self.ledger_path, self.history_path)
+
+    def admit_location_candidate(
+        self,
+        candidate: LocationCandidate,
+    ) -> LocationCandidateResult:
+        self._require_open()
+        return admit_candidate(
+            candidate,
+            ledger_path=self.ledger_path,
+            backend=self._scanner_backend,
+            resolver=self._mounted_volume_resolver,
+        )
+
+    def admit_plan_locations(
+        self,
+        source_path: str,
+        target_path: str,
+    ) -> tuple[LocationCandidateResult, LocationCandidateResult]:
+        source_candidate = LocationCandidate.literal(source_path)
+        target_candidate = LocationCandidate.literal(target_path)
+        source = self.admit_location_candidate(source_candidate)
+        target = self.admit_location_candidate(target_candidate)
+        if (
+            source.state is LocationCandidateState.RESOLVED
+            and target.state is LocationCandidateState.RESOLVED
+        ):
+            validate_location_candidate_pair(source, target)
+        return source, target
+
+    def remembered_locations(self) -> RememberedLocations:
+        with self._ledger_read() as repository:
+            return project_remembered_locations(
+                repository.get_recent_sync_activity()
+            )
 
     def create_plan_request(
         self,

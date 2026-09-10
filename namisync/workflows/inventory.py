@@ -59,6 +59,7 @@ from namisync.core.models import (
 )
 from namisync.core.pathing import (
     PathValidationError,
+    lexical_absolute_path,
     lexical_path_chain,
     logical_error_text,
     normalize_relative_path,
@@ -77,6 +78,7 @@ from namisync.core.root_authority import (
     RootAuthorityError,
     RootAuthorityIssue,
     admit_root_chain,
+    current_volume_anchor,
 )
 from namisync.core.review import (
     MAX_PLAN_REVIEW_ROWS,
@@ -114,6 +116,7 @@ from namisync.db.repositories import (
     InventorySnapshot,
     LedgerRepository,
     LocationSnapshot,
+    RecentSyncActivitySnapshot,
 )
 from namisync.modules.scanner import (
     NativeScannerBackend,
@@ -138,6 +141,173 @@ MAX_VOLUME_RESOLUTION_CANDIDATES = (
 _MAX_LOGICAL_DRIVE_STRING_CHARS = _MAX_LOGICAL_DRIVE_ROOTS * 4 + 1
 
 _INTEGRITY_ITEM_ID_UTF8_LIMIT = 2 * len(str(MAX_SIGNED_64)) + 1
+
+
+class LocationCandidateKind(StrEnum):
+    LITERAL_PATH = "literal_path"
+    REMEMBERED_LOCATION = "remembered_location"
+
+
+class LocationCandidateState(StrEnum):
+    RESOLVED = "resolved"
+    INVALID_PATH = "invalid_path"
+    MISSING = "missing"
+    NOT_DIRECTORY = "not_directory"
+    REPARSE = "reparse"
+    PLACEHOLDER = "placeholder"
+    REMOTE = "remote"
+    UNSUPPORTED_VOLUME = "unsupported_volume"
+    OFFLINE = "offline"
+    AMBIGUOUS = "ambiguous"
+    UNAVAILABLE = "unavailable"
+    CHANGED = "changed"
+
+
+@dataclass(frozen=True, slots=True)
+class LocationCandidate:
+    kind: LocationCandidateKind
+    path: str | None = None
+    location_id: int | None = None
+    selected_mount: str | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.kind) is not LocationCandidateKind:
+            raise TypeError("location candidate kind has the wrong type")
+        if self.selected_mount is not None:
+            require_utf16_path(self.selected_mount, "selected volume mount")
+            if not self.selected_mount:
+                raise ValueError("selected volume mount is required when present")
+        if self.kind is LocationCandidateKind.LITERAL_PATH:
+            require_utf16_path(self.path, "location candidate path")
+            if not self.path:
+                raise ValueError("location candidate path is required")
+            if self.location_id is not None:
+                raise ValueError("literal location candidate cannot contain an id")
+            return
+        if self.path is not None:
+            raise ValueError("remembered location candidate cannot contain a path")
+        require_safe_int(self.location_id, "remembered location id")
+        if self.location_id < 1:  # type: ignore[operator]
+            raise ValueError("remembered location id must be positive")
+
+    @classmethod
+    def literal(
+        cls, path: str, *, selected_mount: str | None = None
+    ) -> LocationCandidate:
+        return cls(LocationCandidateKind.LITERAL_PATH, path, None, selected_mount)
+
+    @classmethod
+    def remembered(
+        cls, location_id: int, *, selected_mount: str | None = None
+    ) -> LocationCandidate:
+        return cls(
+            LocationCandidateKind.REMEMBERED_LOCATION,
+            None,
+            location_id,
+            selected_mount,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class LocationCandidateResult:
+    candidate: LocationCandidate
+    state: LocationCandidateState
+    binding: LocationBinding | None = None
+    root_path: str | None = None
+    candidates: tuple[str, ...] = ()
+    detail: str | None = None
+    resolution: VolumeResolution | None = None
+
+    def __post_init__(self) -> None:
+        if type(self.candidate) is not LocationCandidate:
+            raise TypeError("location candidate result has an invalid candidate")
+        if type(self.state) is not LocationCandidateState:
+            raise TypeError("location candidate result has an invalid state")
+        if self.binding is not None:
+            _require_location_binding_fields(self.binding)
+        if self.root_path is not None:
+            require_utf16_path(self.root_path, "admitted location root")
+        if type(self.candidates) is not tuple:
+            raise TypeError("location candidate mounts must be a tuple")
+        for candidate in self.candidates:
+            require_utf16_path(candidate, "location candidate mount")
+        if self.detail is not None and bounded_utf8_text(
+            self.detail,
+            "location candidate detail",
+            maximum_bytes=MAX_DIAGNOSTIC_UTF8_BYTES,
+        ) is None:
+            object.__setattr__(self, "detail", None)
+        if self.state is LocationCandidateState.RESOLVED:
+            if self.binding is None or self.root_path is None:
+                raise ValueError("resolved location candidate lacks its binding")
+        elif self.binding is not None and self.resolution is None:
+            raise ValueError("refused location binding lacks resolution evidence")
+
+
+@dataclass(frozen=True, slots=True)
+class RememberedLocation:
+    location_id: int
+    volume_id: VolumeId
+    volume_relative_path: str
+    mount_hint: str | None
+    last_used_at: datetime
+
+    def __post_init__(self) -> None:
+        require_safe_int(self.location_id, "remembered location id")
+        if self.location_id < 1:
+            raise ValueError("remembered location id must be positive")
+        if type(self.volume_id) is not VolumeId:
+            raise TypeError("remembered location volume has the wrong type")
+        VolumeId(self.volume_id.serial, self.volume_id.fs_type)
+        relative = validate_relative_path(
+            self.volume_relative_path,
+            allow_root=True,
+        )
+        if relative != self.volume_relative_path:
+            raise ValueError("remembered location relative path is not canonical")
+        if self.mount_hint is not None:
+            require_utf16_path(self.mount_hint, "remembered location mount hint")
+        _require_utc(self.last_used_at, "remembered location use time")
+
+
+@dataclass(frozen=True, slots=True)
+class RememberedPair:
+    mapping_id: int
+    source: RememberedLocation
+    target: RememberedLocation
+    last_used_at: datetime
+
+    def __post_init__(self) -> None:
+        require_safe_int(self.mapping_id, "remembered mapping id")
+        if self.mapping_id < 1:
+            raise ValueError("remembered mapping id must be positive")
+        if type(self.source) is not RememberedLocation:
+            raise TypeError("remembered pair source has the wrong type")
+        if type(self.target) is not RememberedLocation:
+            raise TypeError("remembered pair target has the wrong type")
+        if self.source.location_id == self.target.location_id:
+            raise ValueError("remembered pair locations must be distinct")
+        _require_utc(self.last_used_at, "remembered pair use time")
+
+
+@dataclass(frozen=True, slots=True)
+class RememberedLocations:
+    sources: tuple[RememberedLocation, ...]
+    targets: tuple[RememberedLocation, ...]
+    pairs: tuple[RememberedPair, ...]
+
+    def __post_init__(self) -> None:
+        for field_name, values, expected in (
+            ("sources", self.sources, RememberedLocation),
+            ("targets", self.targets, RememberedLocation),
+            ("pairs", self.pairs, RememberedPair),
+        ):
+            if type(values) is not tuple:
+                raise TypeError(f"remembered {field_name} must be a tuple")
+            if len(values) > 5:
+                raise ValueError(f"remembered {field_name} exceed the five-entry limit")
+            if any(type(value) is not expected for value in values):
+                raise TypeError(f"remembered {field_name} contain an invalid value")
 
 
 class VolumeResolutionState(StrEnum):
@@ -815,6 +985,308 @@ class NativeMountedVolumeResolver:
     def probe_root(self, root_path: str) -> None:
         with self._backend.scandir(root_path):
             return
+
+
+def _native_location_refusal(path: str) -> LocationCandidateState | None:
+    if path.startswith("\\\\"):
+        return LocationCandidateState.REMOTE
+    if os.name != "nt":
+        return None
+    import ctypes
+    from ctypes import wintypes
+
+    root = Path(path).anchor
+    if not root:
+        raise OSError("location has no local volume root")
+    get_drive_type = ctypes.WinDLL(
+        "kernel32", use_last_error=True
+    ).GetDriveTypeW
+    get_drive_type.argtypes = [wintypes.LPCWSTR]
+    get_drive_type.restype = wintypes.UINT
+    drive_type = int(get_drive_type(root))
+    if drive_type in {0, 1}:
+        raise OSError("location volume type is unavailable")
+    if drive_type == 4:
+        return LocationCandidateState.REMOTE
+    if drive_type == 5:
+        return LocationCandidateState.UNSUPPORTED_VOLUME
+    return None
+
+
+def _root_issue_state(error: RootAuthorityError) -> LocationCandidateState:
+    if error.issue is RootAuthorityIssue.PLACEHOLDER_COMPONENT:
+        return LocationCandidateState.PLACEHOLDER
+    if error.issue is RootAuthorityIssue.REPARSE_COMPONENT:
+        return LocationCandidateState.REPARSE
+    if error.issue is RootAuthorityIssue.NON_DIRECTORY_COMPONENT:
+        return LocationCandidateState.NOT_DIRECTORY
+    if error.issue is RootAuthorityIssue.COMPONENT_UNAVAILABLE and isinstance(
+        error.__cause__, FileNotFoundError
+    ):
+        return LocationCandidateState.MISSING
+    if error.issue in {
+        RootAuthorityIssue.ANCHOR_CHANGED,
+        RootAuthorityIssue.VOLUME_CHANGED,
+    }:
+        return LocationCandidateState.CHANGED
+    return LocationCandidateState.UNAVAILABLE
+
+
+def _candidate_resolution_result(
+    candidate: LocationCandidate,
+    resolution: VolumeResolution,
+) -> LocationCandidateResult:
+    state = {
+        VolumeResolutionState.RESOLVED: LocationCandidateState.RESOLVED,
+        VolumeResolutionState.OFFLINE: LocationCandidateState.OFFLINE,
+        VolumeResolutionState.AMBIGUOUS: LocationCandidateState.AMBIGUOUS,
+        VolumeResolutionState.ROOT_MISSING: LocationCandidateState.MISSING,
+        VolumeResolutionState.ROOT_UNAVAILABLE: LocationCandidateState.UNAVAILABLE,
+    }[resolution.state]
+    return LocationCandidateResult(
+        candidate,
+        state,
+        binding=resolution.binding,
+        root_path=resolution.root_path,
+        candidates=resolution.candidates,
+        detail=resolution.detail,
+        resolution=resolution if state is not LocationCandidateState.RESOLVED else None,
+    )
+
+
+def admit_location_candidate(
+    candidate: LocationCandidate,
+    *,
+    ledger_path: Path,
+    backend: VolumeBindingBackend,
+    resolver: MountedVolumeResolver,
+) -> LocationCandidateResult:
+    """Freshly classify and bind one literal or remembered local directory."""
+
+    if type(candidate) is not LocationCandidate:
+        raise TypeError("location admission requires LocationCandidate")
+    if candidate.kind is LocationCandidateKind.REMEMBERED_LOCATION:
+        assert candidate.location_id is not None
+        try:
+            with LedgerRepository(ledger_path) as repository:
+                location = repository.get_location(candidate.location_id)
+        except KeyError:
+            return LocationCandidateResult(
+                candidate,
+                LocationCandidateState.MISSING,
+                detail="remembered location no longer exists",
+            )
+        try:
+            binding = _binding_from_location(
+                location,
+                candidate.selected_mount,
+                resolver,
+            )
+        except VolumeResolutionRequired as error:
+            return _candidate_resolution_result(candidate, error.resolution)
+        root_path = _join_volume_root(
+            binding.selected_mount,
+            binding.volume_relative_path,
+        )
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.RESOLVED,
+            binding=binding,
+            root_path=root_path,
+            candidates=binding.expected_mounts,
+        )
+
+    assert candidate.path is not None
+    raw_upper = candidate.path.replace("/", "\\").upper()
+    drive, drive_relative = os.path.splitdrive(candidate.path)
+    if not os.path.isabs(candidate.path) or (
+        os.name == "nt"
+        and (not drive or not drive_relative.startswith(("\\", "/")))
+    ):
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.INVALID_PATH,
+            detail="enter an absolute local directory path",
+        )
+    if raw_upper.startswith(
+        ("\\\\?\\", "\\\\.\\", "\\??\\", "\\\\??\\")
+    ):
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.INVALID_PATH,
+            detail="location path uses an unsupported device namespace",
+        )
+    try:
+        logical = lexical_absolute_path(candidate.path)
+    except PathValidationError as error:
+        detail = str(error)
+        retire_exception_graph(error)
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.INVALID_PATH,
+            detail=detail,
+        )
+    try:
+        native_refusal = _native_location_refusal(logical)
+        if native_refusal is not None:
+            return LocationCandidateResult(
+                candidate,
+                native_refusal,
+                root_path=logical,
+                detail=(
+                    "remote locations are not supported"
+                    if native_refusal is LocationCandidateState.REMOTE
+                    else "this local volume kind is not supported"
+                ),
+            )
+    except OSError as error:
+        detail = logical_error_text(error)
+        retire_exception_graph(error)
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.UNAVAILABLE,
+            root_path=logical,
+            detail=detail,
+        )
+    try:
+        admit_root_chain(RootAuthority(logical))
+    except RootAuthorityError as error:
+        state = _root_issue_state(error)
+        detail = str(error)
+        retire_exception_graph(error)
+        return LocationCandidateResult(
+            candidate,
+            state,
+            root_path=logical,
+            detail=detail,
+        )
+    try:
+        snapshot = validate_volume_snapshot(backend.volume_snapshot(logical))
+    except (OSError, PermissionError) as error:
+        detail = logical_error_text(error)
+        retire_exception_graph(error)
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.UNAVAILABLE,
+            root_path=logical,
+            detail=detail,
+        )
+    try:
+        mount = snapshot.evidence.device_id or current_volume_anchor(logical)
+    except (OSError, PathValidationError) as error:
+        detail = logical_error_text(error)
+        retire_exception_graph(error)
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.UNAVAILABLE,
+            root_path=logical,
+            detail=detail,
+        )
+    try:
+        relative = _relative_to_mount(logical, mount)
+    except ValueError as error:
+        detail = str(error)
+        retire_exception_graph(error)
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.CHANGED,
+            root_path=logical,
+            detail=detail,
+        )
+    try:
+        binding = _binding_from_identity(
+            snapshot.volume_id,
+            relative,
+            mount,
+            candidate.selected_mount,
+            None,
+            resolver,
+        )
+    except VolumeResolutionRequired as error:
+        return _candidate_resolution_result(candidate, error.resolution)
+    root_path = _join_volume_root(
+        binding.selected_mount,
+        binding.volume_relative_path,
+    )
+    return LocationCandidateResult(
+        candidate,
+        LocationCandidateState.RESOLVED,
+        binding=binding,
+        root_path=root_path,
+        candidates=binding.expected_mounts,
+    )
+def remembered_locations(
+    snapshot: RecentSyncActivitySnapshot,
+) -> RememberedLocations:
+    if type(snapshot) is not RecentSyncActivitySnapshot:
+        raise TypeError("remembered locations require recent sync activity")
+
+    def location(value) -> RememberedLocation:
+        row = value.location
+        return RememberedLocation(
+            row.location_id,
+            VolumeId(row.volume_id.serial, row.volume_id.fs_type),
+            row.volume_relative_path,
+            row.mount_hint,
+            value.started_at,
+        )
+
+    sources = tuple(location(value) for value in snapshot.sources)
+    targets = tuple(location(value) for value in snapshot.targets)
+    pairs = tuple(
+        RememberedPair(
+            value.mapping_id,
+            RememberedLocation(
+                value.source.location_id,
+                VolumeId(
+                    value.source.volume_id.serial,
+                    value.source.volume_id.fs_type,
+                ),
+                value.source.volume_relative_path,
+                value.source.mount_hint,
+                value.started_at,
+            ),
+            RememberedLocation(
+                value.target.location_id,
+                VolumeId(
+                    value.target.volume_id.serial,
+                    value.target.volume_id.fs_type,
+                ),
+                value.target.volume_relative_path,
+                value.target.mount_hint,
+                value.started_at,
+            ),
+            value.started_at,
+        )
+        for value in snapshot.pairs
+    )
+    return RememberedLocations(sources, targets, pairs)
+
+
+def validate_location_candidate_pair(
+    source: LocationCandidateResult,
+    target: LocationCandidateResult,
+) -> tuple[LocationCandidateResult, LocationCandidateResult]:
+    if type(source) is not LocationCandidateResult or type(target) is not LocationCandidateResult:
+        raise TypeError("location pair requires candidate results")
+    if (
+        source.state is not LocationCandidateState.RESOLVED
+        or target.state is not LocationCandidateState.RESOLVED
+        or source.root_path is None
+        or target.root_path is None
+    ):
+        raise ValueError("location pair requires two resolved candidates")
+    source_key = _path_key(source.root_path)
+    target_key = _path_key(target.root_path)
+    try:
+        common = os.path.normcase(
+            os.path.commonpath((source_key, target_key))
+        ).rstrip("\\/")
+    except ValueError:
+        common = None
+    if common in {source_key, target_key}:
+        raise ValueError("source and target must be distinct, non-nested directories")
+    return source, target
 
 
 def bind_inventory_request(
@@ -1914,25 +2386,29 @@ def _bind_request_location(
     backend: VolumeBindingBackend,
     resolver: MountedVolumeResolver,
 ) -> LocationBinding:
-    if location_id is not None:
-        with LedgerRepository(ledger_path) as repository:
-            location = repository.get_location(location_id)
-        return _binding_from_location(location, selected_mount, resolver)
-    if root_path is None:
-        raise RuntimeError("validated root-path request lost its path")
-    resolved = backend.resolve_root(root_path)
-    require_utf16_path(resolved, "resolved root path")
-    snapshot = validate_volume_snapshot(backend.volume_snapshot(resolved))
-    mount = snapshot.evidence.device_id or Path(resolved).anchor
-    relative = _relative_to_mount(resolved, mount)
-    return _binding_from_identity(
-        snapshot.volume_id,
-        relative,
-        mount,
-        selected_mount,
-        None,
-        resolver,
+    candidate = (
+        LocationCandidate.remembered(
+            location_id,
+            selected_mount=selected_mount,
+        )
+        if location_id is not None
+        else LocationCandidate.literal(
+            root_path,
+            selected_mount=selected_mount,
+        )
     )
+    result = admit_location_candidate(
+        candidate,
+        ledger_path=ledger_path,
+        backend=backend,
+        resolver=resolver,
+    )
+    if result.state is LocationCandidateState.RESOLVED:
+        assert result.binding is not None
+        return result.binding
+    if result.resolution is not None:
+        raise VolumeResolutionRequired(result.resolution)
+    raise ValueError(result.detail or result.state.value)
 
 
 def _binding_from_location(
@@ -2014,7 +2490,15 @@ def _binding_from_identity(
     resolution = resolve_binding(binding, resolver)
     if resolution.state != VolumeResolutionState.RESOLVED:
         raise VolumeResolutionRequired(resolution)
-    return resolution.binding
+    assert resolution.selected_mount is not None
+    return LocationBinding(
+        binding.volume_id,
+        binding.volume_relative_path,
+        resolution.selected_mount,
+        resolution.candidates,
+        binding.explicit_ambiguity_choice,
+        binding.location_id,
+    )
 
 
 def _admit_inventory_scan_result(

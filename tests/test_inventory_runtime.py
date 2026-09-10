@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Event
@@ -30,6 +31,7 @@ from namisync.core.integrity import (
     ReadStrategy,
     RecordDisposition,
 )
+from namisync.core.models import VolumeId
 from namisync.core.session import (
     Disposition,
     OperationResult,
@@ -39,7 +41,13 @@ from namisync.core.session import (
     SessionState,
 )
 from namisync.db.recorder import LedgerRecorder
-from namisync.db.repositories import LedgerRepository
+from namisync.db.repositories import (
+    LedgerRepository,
+    LocationSnapshot,
+    RecentLocationSnapshot,
+    RecentPairSnapshot,
+    RecentSyncActivitySnapshot,
+)
 from namisync.dispatcher import (
     Dispatcher,
     InProcessResourceLockProvider,
@@ -51,6 +59,10 @@ from namisync.workflows.inventory import (
     IntegrityRequest,
     IntegrityWorkflowRequest,
     InventoryRequest,
+    LocationBinding,
+    LocationCandidate,
+    LocationCandidateResult,
+    LocationCandidateState,
     VolumeResolutionState,
 )
 from namisync.workflows.runtime import (
@@ -90,6 +102,105 @@ def _outcome(
         result=IntegrityResult.VERIFIED,
         recording=recording,
     )
+
+
+def test_plan_location_inputs_are_bounded_before_either_native_admission() -> None:
+    calls: list[LocationCandidate] = []
+
+    class Runtime:
+        def admit_location_candidate(self, candidate: LocationCandidate):
+            calls.append(candidate)
+            raise AssertionError("overlong pair reached native admission")
+
+    with pytest.raises(ValueError, match="UTF-16 path bound"):
+        LocalWorkflowRuntime.admit_plan_locations(
+            Runtime(),  # type: ignore[arg-type]
+            "C:\\source",
+            "D:\\" + "x" * 32_768,
+        )
+
+    assert calls == []
+
+
+def test_plan_pair_overlap_is_checked_after_both_candidate_admissions() -> None:
+    calls: list[LocationCandidate] = []
+    volume = VolumeId("pair-volume", "NTFS")
+
+    def admitted(candidate: LocationCandidate, root: str) -> LocationCandidateResult:
+        binding = LocationBinding(volume, "", root, (root,), False)
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.RESOLVED,
+            binding=binding,
+            root_path=root,
+            candidates=(root,),
+        )
+
+    class Runtime:
+        def admit_location_candidate(
+            self, candidate: LocationCandidate
+        ) -> LocationCandidateResult:
+            calls.append(candidate)
+            root = "C:\\root" if len(calls) == 1 else "C:\\root\\child"
+            return admitted(candidate, root)
+
+    with pytest.raises(ValueError, match="distinct, non-nested"):
+        LocalWorkflowRuntime.admit_plan_locations(
+            Runtime(),  # type: ignore[arg-type]
+            "C:\\root",
+            "C:\\root\\child",
+        )
+
+    assert [candidate.path for candidate in calls] == [
+        "C:\\root",
+        "C:\\root\\child",
+    ]
+
+
+def test_runtime_projects_remembered_locations_from_one_repository_read() -> None:
+    source = LocationSnapshot(
+        7,
+        VolumeId("source-volume", "NTFS"),
+        "source",
+        "C:\\",
+    )
+    target = LocationSnapshot(
+        8,
+        VolumeId("target-volume", "NTFS"),
+        "target",
+        "D:\\",
+    )
+    snapshot = RecentSyncActivitySnapshot(
+        (RecentLocationSnapshot(source, NOW),),
+        (RecentLocationSnapshot(target, NOW),),
+        (RecentPairSnapshot(9, source, target, NOW),),
+    )
+
+    class Repository:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get_recent_sync_activity(self):
+            self.calls += 1
+            return snapshot
+
+    repository = Repository()
+
+    class Runtime:
+        @contextmanager
+        def _ledger_read(self):
+            yield repository
+
+    recent = LocalWorkflowRuntime.remembered_locations(
+        Runtime(),  # type: ignore[arg-type]
+    )
+
+    assert repository.calls == 1
+    assert recent.sources[0].location_id == source.location_id
+    assert recent.targets[0].location_id == target.location_id
+    assert recent.pairs[0].mapping_id == 9
+    assert recent.pairs[0].source == recent.sources[0]
+    assert recent.pairs[0].target == recent.targets[0]
 
 
 def _refresh_inventory(

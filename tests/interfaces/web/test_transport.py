@@ -68,7 +68,7 @@ from namisync.workflows.views import (
     operation_result_view,
 )
 
-from _service_fixtures import make_service
+from _service_fixtures import _admit_test_plan_locations, make_service
 from tests._executor_fixtures import (
     FakeRecorder,
     FixedClock,
@@ -1567,6 +1567,11 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
     class Runtime:
         def __init__(self) -> None:
             self.calls: list[tuple[str, str, str | None]] = []
+            self.admissions: list[tuple[str, str]] = []
+
+        def admit_plan_locations(self, source_path: str, target_path: str):
+            self.admissions.append((source_path, target_path))
+            return _admit_test_plan_locations(source_path, target_path)
 
         def create_plan_request(
             self,
@@ -1669,6 +1674,7 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         "session_id": "5" * 32,
     }
     assert runtime.calls == [(str(source), str(target), None)]
+    assert runtime.admissions == [(str(source), str(target))]
     assert len(service._dispatcher.submissions) == 1
 
     changed_root = dispatcher.dispatch(
@@ -1707,6 +1713,7 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         ERRORS["command_conflict"],
     )
     assert runtime.calls == [(str(source), str(target), None)]
+    assert runtime.admissions == [(str(source), str(target))]
 
 
 def test_br_g_32_origin_and_close_refusals_do_not_inspect_untrusted_body() -> None:

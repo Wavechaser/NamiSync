@@ -33,11 +33,14 @@ from namisync.workflows import (
     REBASELINE_KIND,
     VERIFY_KIND,
     InventoryRequest,
+    LocationCandidate,
+    LocationCandidateResult,
+    LocationCandidateState,
     LocalWorkflowRuntime,
+    RememberedLocations,
     VolumeResolutionRequired,
     default_database_paths,
     integrity_request,
-    validate_sync_paths,
 )
 from namisync.workflows.node_tree import (
     NodeTree,
@@ -123,6 +126,14 @@ def _raise_service_observer_failure(*, interrupted: bool) -> Never:
 
 class SyncPathInputError(ValueError):
     """A source/target pair failed interface-level path validation."""
+
+    def __init__(
+        self,
+        detail: str,
+        result: LocationCandidateResult | None = None,
+    ) -> None:
+        super().__init__(detail)
+        self.result = result
 
 
 class CommandIdConflictError(ValueError):
@@ -323,6 +334,17 @@ class NamiSyncService:
             self._runtime.initialize_database_contracts()
         )
 
+    def admit_location_candidate(
+        self,
+        candidate: LocationCandidate,
+    ) -> LocationCandidateResult:
+        self._require_open()
+        return self._runtime.admit_location_candidate(candidate)
+
+    def remembered_locations(self) -> RememberedLocations:
+        self._require_open()
+        return self._runtime.remembered_locations()
+
     def start_plan(
         self,
         source: str,
@@ -344,21 +366,11 @@ class NamiSyncService:
             )
             if replay is not None:
                 return PlanSession(replay.request_id, replay.session_id)
-            try:
-                source_path, target_path = validate_sync_paths(source, target)
-            except (OSError, ValueError) as error:
-                try:
-                    path_failure_message = str(error)
-                finally:
-                    retire_exception_graph(error)
-            else:
-                path_failure_message = None
-            if path_failure_message is not None:
-                raise SyncPathInputError(path_failure_message) from None
+            source_path, target_path = self._admit_plan_locations(source, target)
             request = self._runtime.create_plan_request(
                 uuid4().hex,
-                str(source_path),
-                str(target_path),
+                source_path,
+                target_path,
                 deletion_policy=deletion_policy,
             )
             session_id, _receipt = self._submit_session(
@@ -386,19 +398,9 @@ class NamiSyncService:
         if not callable(delivery_factory):
             raise TypeError("task delivery factory must be callable")
         signature = (source, target, deletion_policy)
-        try:
-            source_path, target_path = validate_sync_paths(source, target)
-        except (OSError, ValueError) as error:
-            try:
-                path_failure_message = str(error)
-            finally:
-                retire_exception_graph(error)
-        else:
-            path_failure_message = None
-        if path_failure_message is not None:
-            raise SyncPathInputError(path_failure_message) from None
         guard = self._lifecycle.command_guard(command_id)
         with guard:
+            self._require_plan_location_bounds(source, target)
             try:
                 claim = self._lifecycle.begin_task_start(command_id, signature)
             except LifecycleReceiptConflictError:
@@ -416,13 +418,17 @@ class NamiSyncService:
                 )
 
             try:
+                source_path, target_path = self._admit_plan_locations(
+                    source,
+                    target,
+                )
                 sink = delivery_factory(claim.task_id)
                 if not callable(sink):
                     raise TypeError("task delivery factory must return a sink")
                 request = self._runtime.create_plan_request(
                     uuid4().hex,
-                    str(source_path),
-                    str(target_path),
+                    source_path,
+                    target_path,
                     deletion_policy=deletion_policy,
                 )
                 session_id, receipt = self._submit_session(
@@ -1798,6 +1804,53 @@ class NamiSyncService:
             )
         except LifecycleReceiptConflictError as error:
             raise CommandIdConflictError(str(error)) from None
+
+    def _admit_plan_locations(
+        self,
+        source: str,
+        target: str,
+    ) -> tuple[str, str]:
+        failure_detail = None
+        try:
+            admitted = self._runtime.admit_plan_locations(source, target)
+        except (OSError, ValueError) as error:
+            try:
+                failure_detail = str(error)
+            finally:
+                retire_exception_graph(error)
+        if failure_detail is not None:
+            raise SyncPathInputError(failure_detail) from None
+        if (
+            type(admitted) is not tuple
+            or len(admitted) != 2
+            or any(type(item) is not LocationCandidateResult for item in admitted)
+        ):
+            raise TypeError("plan location admission returned invalid results")
+        source_result, target_result = admitted
+        for result in admitted:
+            if result.state is not LocationCandidateState.RESOLVED:
+                raise SyncPathInputError(
+                    result.detail or result.state.value,
+                    result,
+                ) from None
+            if result.root_path is None:
+                raise RuntimeError("resolved plan location lacks its root path")
+        assert source_result.root_path is not None
+        assert target_result.root_path is not None
+        return source_result.root_path, target_result.root_path
+
+    def _require_plan_location_bounds(self, source: str, target: str) -> None:
+        failure_detail = None
+        try:
+            LocationCandidate.literal(source)
+            LocationCandidate.literal(target)
+        except (OSError, ValueError) as error:
+            try:
+                failure_detail = str(error)
+            finally:
+                retire_exception_graph(error)
+        if failure_detail is not None:
+            raise SyncPathInputError(failure_detail) from None
 
     def _require_open(self) -> None:
         lock = getattr(self, "_lock", None)

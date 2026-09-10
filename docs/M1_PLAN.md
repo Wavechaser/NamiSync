@@ -81,7 +81,7 @@ Each checkpoint is a closed register row. A new finding does not enlarge a row; 
 | --- | --- | --- | --- |
 | M1-4 | Process-live blank task creation, navigation and explicit closure through existing lifecycle owners, with generation-aware callback containment. | Delivered in `ab453e1`; ordinary/headed checks and adversarial review passed. Active contracts are in BRIDGE and INTERFACES; concise delivery record below. | Complete |
 | M1-async | Separate bounded command admission from asynchronous completion for create/start/release/close, reusing current task/session effect owners and one shared exchange budget. | After M1-4; default before M1-5, permitted after M1-5 but before M1-6. M1-async-G passed; delivered/excluded outcomes and evidence are below. | Complete |
-| M1-5 | Give Setup and inventory one workflow-owned location-candidate pipeline with typed admission results and bounded remembered locations. | After M1-4, normally after M1-async. Verify parser refusals; leaf/reparse/placeholder and long paths; missing, offline, remount, and clone ambiguity; bounded recents; activation/slot races and purpose mismatch. Review path parsing and TOCTOU. Scanner, preflight, executor, and verifier retain fresh re-probes. | Pending |
+| M1-5 | Give Setup and inventory one workflow-owned location-candidate pipeline with typed admission results and bounded remembered locations. | After M1-4, normally after M1-async. Verify parser refusals; leaf/reparse/placeholder and long paths; missing, offline, remount, and clone ambiguity; bounded recents; activation/slot races and purpose mismatch. Review path parsing and TOCTOU. Scanner, preflight, executor, and verifier retain fresh re-probes. | Complete |
 | M1-6 | Deliver frozen, backend-canonical Setup, typed/picker/recent inputs, standalone inventory creation, serial best-effort pair creation, and explicit Plan-again after fresh reviewed-identity resolution. | Verify bounded inputs, canonical snapshots, immediate invalidation, no global-default mutation or browser filter normalization, partial-pair refusal, mixed batches, replay/recovery, slot/plan-generation races, and headed hostile-text/picker/recent flows. Map needed command behavior in BRIDGE when this activates; do not prescribe the retired 18-command expansion. | Pending |
 | M1-7 | Deliver bounded plan review, selection, execution admission, and the full plan consumer for sibling sorting. A review remains truthful when execution never ran; an admitted attempt keeps its selection committed. | Exercise plan publication, selection and commitment freshness, stale/replayed mutation, admission-failure rollback versus post-admission preflight refusal, fresh Plan-again review after source/target changes, destructive confirmation, controls, windows/anchors/search/filter, and headed production flows. No terminal selection reopening or subset retry. BRIDGE and PRESENTATION define protocol and projection criteria. | Pending |
 | M1-8-capacity | Distinguish recognized disk-capacity I/O failure and stop admission of later executor operations after settling the current operation. | Before M1-8, use the existing failure-policy/Stop and settlement paths; verify direct and wrapped capacity failures, ordinary I/O distinction, current-effect/recording truth, later work left unrun, terminal projection, and unchanged sharing-violation retries. Run executor plus core/workflow/interface consumers and the retained settlement oracle. No general I/O taxonomy or settlement restructuring. | Pending |
@@ -249,8 +249,9 @@ or unsupported namespaces, and remote locations with typed guidance. Preserve
 existing local filesystem capability behavior; this checkpoint does not create
 new optical/unknown-filesystem support or writable-media promises.
 
-Native picker paths already flow through slots into service plan start. On a
-fresh start, perform candidate admission after the command replay/claim boundary
+Native picker paths already flow through slots into service plan start. Pure
+input bounds precede task custody. On a fresh start, perform native candidate
+admission after the command replay/claim boundary
 and before workflow/session work. An equal replay must not probe again or create
 another effect. Slot ids remain purpose-bound, nonconsuming and expiry-bounded;
 pair lookup stays atomic and no slot lock spans native I/O. Typed and remembered
@@ -316,63 +317,41 @@ any correction before commit. Apply AGENTS/DEFENSE hard-wall and numerical
 unplanned-defect stops unchanged. Preserve blocked task-owned work under the
 repository recovery procedure rather than committing an incomplete checkpoint.
 
-**Preimplementation probe receipt (2026-09-10).** The finite baseline additionally
-reads `tests/test_recorder_setup_and_move.py` and `test_recorder_sync.py` for
-durable-run provenance; those modules are probe-only, not implementation scope.
-`pwsh -NoProfile -File build/m1-5-design/run-baseline.ps1` records the exact
-20-selector baseline and five-selector picker corpus: **44 passed** and
-**17 passed**. Raw outputs are `build/m1-5-design/baseline.txt` and `picker.txt`.
-The orchestrator repeated these once to retain reproducible evidence after the
-initial design probe's temporary output was removed; no M1-5 production edit
-preceded either run. This is functional baseline evidence, not performance or
-resource acceptance.
+**Delivered (2026-09-10).** One workflow-owned candidate route now serves
+fresh picker-backed plan starts and inventory/integrity binding. Literal inputs
+are bounded before task custody and native work; typed refusal preserves
+identity context, and accepted candidates carry the final current mount.
+Read-only remembered sources, targets and active pairs each stop at five
+identity-deduplicated durable-run results in one database snapshot. No schema,
+frontend, domain-policy or task/session ownership change was made.
 
-Direct traces confirm that `LedgerRecorder.begin_sync_run` inserts the run in
-the writer transaction and rejects a missing/deleted mapping; repository reads
-already use `mapping.deleted_at IS NULL`. `LocationSnapshot` preserves volume
-identity, root-relative location and a non-authoritative mount hint.
-`resolve_binding` checks the root chain before accessibility and compares the
-mounted-volume set again afterward; queued inventory/integrity reopens that
-evidence before scan/hash. Bridge start replay precedes atomic pair-slot
-resolution. Service direct-plan replay already precedes pair validation;
-task-plan pair validation currently precedes its claim/replay branch. Move that
-validation with candidate work into the guarded fresh-claim path and keep
-admission rollback on refusal. This is a declared seam adaptation, not discovery
-scope during implementation.
+The finite preimplementation corpus covered the named owner/consumer seams,
+including probe-only recorder setup/move and sync tests. Its integrated baseline
+receipt is below. Source tracing and final review confirmed fresh point-of-use
+probes, replay before native admission, purpose-bound atomic slot resolution,
+literal/native path separation, local capability behavior, and run provenance.
+Candidate admission promises an observed directory, never later write capacity
+or authorization. Archived recipes and the non-goals above remain deferred.
 
-The current parser/no-follow/volume-resolution, ledger provenance, and slot
-tests plus these owner traces establish the guarantees to retain. They do not
-claim an exhaustive absence of defects. Existing local capability behavior is
-preserved, including read-only observations: candidate admission promises an
-observed directory, never permission or capacity for a later write. Remote
-roots receive the active model's typed refusal; unknown/no-root observations
-remain unavailable rather than acquiring invented optical support semantics.
-`NativeScannerBackend.volume_snapshot` exposes volume identity, evidence and
-capabilities, not drive kind. Any drive-kind observation needed for mapped-remote
-refusal belongs in the workflow candidate's native admission seam; it does not
-justify a scanner contract or module change.
-
-**Status.** Design boundary frozen after these probes; implementation is
-authorized after M1-async and a final-state seam refresh. M1-5-G and its final implementation
-adversarial review remain pending.
-
-**Overlap refresh (2026-09-10).** The read-only refresh during M1-async's final
-implementation retained the twenty-selector and five-picker corpora:
-**44 passed** and **17 passed**, under
-`build/m1-5-design/refresh-20260910-1428/`. Its async working hashes are
-provisional; record the integrated async commit and rerun these corpora before
-M1-5 edits. No additional production file is needed. Candidate and remembered
-result dataclasses stay workflow-owned and service methods return them directly;
-no new service public-view registry or bridge witness population is introduced.
-Fresh task-plan admission stays after claim/replay, and typed candidate refusal
-aborts the claim before delivery/session work. Repository recent readback uses
-existing schema, with deduplication/ordering and SQL limits before collection
-construction. DATABASE's prospective index wording must distinguish this
-implemented readback from deferred schema-index work; no new index or query-time
-resource certification is part of M1-5. Recheck bridge replay-before-slots and
-the direct-service transport fixture against the final async commit.
+M1-5-G passed: 680 focused tests; 2,697 database/workflows/interfaces tests;
+4,912 ordinary tests with four existing privilege skips; all 29 installed
+WebView2 tests and twelve import contracts. Final documentation/diff and
+independent adversarial review close the same atomic outcome. Two introduced service
+regressions were corrected with retained witnesses: exception-context cleanup
+and raw input bounds before task custody. No test module was added or retired.
+Raw commands/results, candidate identities and review are retained under
+`build/m1-5/evidence/`; inputs remain under `build/m1-5/inputs/`.
 
 ## Investigation and regression map
+
+**M1-5 integrated refresh (2026-09-10).** M1-async is committed as `675181a`
+on `milestone1`. Before M1-5 source edits, the unchanged twenty-selector and
+five-picker corpora passed **44** and **17** tests on that clean commit.
+Commands, raw output and before/after source identities are retained in
+`build/m1-5-design/runs/integrated-675181a-02/`. The first disposable-runner
+invocation omitted its temporary parent directory; the runner was corrected
+and rerun with a fresh identity, without changing product or tests. Candidate
+implementation must preserve the replay/claim and slot seams traced above.
 
 The current service rolls `committing` back only when admission fails;
 post-admission preflight refusal remains committed. `run_plan` saves a plan
@@ -458,20 +437,16 @@ BR-G-44: from a clean checkout, run the complete suite including ordinary-defaul
 exclusions, lint-imports and diff checks. All test_br_g cases must be collected
 and pass without skip/xfail on Windows; narrow selections do not substitute for
 release evidence. TESTS owns collection commands and routing. These requirements
-remain open release obligations, not an assertion that this docs-only migration
+remain open release obligations, not an assertion that this checkpoint delivery
 performed a product release run.
 
 ## Resumption
 
-M1-4 and M1-async are complete. M1-5 is next on `milestone1`.
-The user authorized M1-async followed by M1-5 on 2026-09-10. Work starts from
-`74aa6b7` on `milestone1`, with one reviewed atomic commit per checkpoint.
-Pause for recap and GUI adjustments after M1-5 or an applicable stopping
-condition; no M1-6 implementation is authorized by this delivery.
-
-Before M1-5 coding, refresh its retained baseline and service/start replay
-seams against the integrated M1-async commit, then use M1-5-G. Implementation
-authority already covers that checkpoint; its fresh final review remains required.
-M1-6 still requires the user's fuller specification. HANDOFF owns latest
-operational evidence; AGENTS owns stop/adjudication boundaries. Historical DOC-2
-branch/PR work and unrelated files remain untouched.
+M1-4 and M1-async (`675181a`) are committed on `milestone1`; M1-5-G is closed
+for the atomic delivery described above.
+This delivery stops for the requested recap and GUI adjustments. M1-6 awaits
+the user's fuller specification and authorization; no M1-6 implementation,
+historical DOC-2 branch/PR work, push or PR is part of this delivery.
+HANDOFF owns the latest operational evidence; AGENTS owns stop/adjudication
+boundaries. Future checkpoints use the expansion rule above against this
+integrated state before starting dependent work.

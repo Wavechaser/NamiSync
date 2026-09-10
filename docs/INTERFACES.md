@@ -93,12 +93,15 @@ claims together with both detail maps, after which the service clears the now-
 ownerless session relation. A dependency-close failure preserves all four maps
 for the same serialized retry.
 
-`start_plan` delegates root resolution to the shared workflow gate before
-admission. That gate performs directory I/O with extended-length native
-spelling but returns ordinary logical paths; the service neither imports core
-path policy nor leaks `\\?\` through a plan, view, or missing-root diagnostic.
-Distinct/nonnested validation therefore matches direct workflow callers even
-when either absolute root exceeds the legacy Windows path limit.
+`start_plan` delegates fresh root admission to the shared workflow candidate
+route after checking command replay and before creating a request or session.
+`start_task_plan` bounds both literal inputs before task custody, claims its
+existing task-start identity, returns an equal
+replay immediately, then admits both candidates before creating delivery or
+session work. Refusal aborts that fresh claim. An equal retry therefore performs
+no new root probe or effect. The workflow checks distinct, nonnested roots and
+uses extended-length native I/O while returning ordinary logical paths; the
+service owns no path policy and does not expose native prefixes as user paths.
 
 `start_execution(request_id, *, verify_after_execute=False,
 expected_revision=None, destructive_acknowledged=False, command_id=None)`
@@ -317,7 +320,16 @@ traversal if live replay or durability advanced again. Missing sequence numbers
 may be lossy `Progress` events, which history deliberately does not retain, and
 are not themselves durable history loss.
 
-Location starts bind the five-state resolution synchronously before dispatcher
+`admit_location_candidate()` exposes the workflow-owned typed candidate result
+for literal input or remembered identity; `remembered_locations()` returns its
+bounded source, target and pair suggestions. Their immutable types remain with
+the workflow owner rather than becoming a second service/bridge view registry.
+These are application APIs; typed/recent Setup widgets and their external
+commands remain pending. Reading suggestions or admitting a candidate creates
+no task, session, location, mapping, run or recent activity.
+
+Location starts use the same candidate admission route, preserving their
+existing five-state resolution synchronously before dispatcher
 admission and return a primitive `LocationSession`. An unresolved binding raises
 `LocationResolutionError` with a `LocationResolutionView`; the adapter renders
 offline, ambiguous, missing-root, and unavailable-root guidance without

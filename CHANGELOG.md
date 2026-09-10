@@ -22,7 +22,8 @@ history, and workflow product while building its secured headed WebView2 shell.
 
 Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, process-live task navigation and closure,
-and dormant sync/integrity file-list row renderers. Workflow content and beta
+bounded asynchronous task commands, shared location admission and remembered
+locations, and dormant sync/integrity file-list row renderers. Workflow content and beta
 packaging remain open.
 
 #### Deliver bounded M1 command and location prerequisites (2026-09-10)
@@ -39,8 +40,19 @@ packaging remain open.
   appearance fairness, and browser uncertainty uses existing recovery.
 - Kept command delivery independent of cosmetic acknowledgement and prior
   lost-delivery receipts while preserving one native send and the shared bound.
-  Async closure passed the ordinary suite (4884 passed, 4 skipped, 29 deselected in 211.92s (0:03:31)), installed headed gate
-  (29 passed, 4888 deselected in 130.37s (0:02:10)), affected neighborhood, imports and fresh adversarial review.
+  Async closure passed 4,884 ordinary tests (four existing privilege skips),
+  all 29 installed headed tests, the affected neighborhood, imports and fresh
+  adversarial review.
+- Unified fresh plan and inventory/integrity location admission in the workflow,
+  preserving literal inputs, current identity resolution and point-of-use
+  re-probes. Equal task-plan replays return before location work; fresh refusal
+  rolls back the claim before delivery or session creation.
+- Added read-only, run-derived source/target/pair suggestions, each limited to
+  five results after stable-identity deduplication. Remembered activation resolves
+  identity afresh. Setup widgets, schema indexes and later M1 work remain pending.
+- M1-5 closure passed 4,912 ordinary tests (four existing privilege skips),
+  all 29 installed headed tests, focused and neighborhood checks, imports,
+  documentation checks and independent review.
 - Condensed completed M1-4 into its delivered/excluded outcomes and added
   explicit product-checkpoint status. Ratified lightweight expansion with a
   next-checkpoint design lane that refreshes against the predecessor's final

@@ -56,7 +56,11 @@ from namisync.core.pathing import (
     to_extended_length_path,
 )
 from namisync.core.recording import InventoryCommand
-from namisync.core.root_authority import RootAuthority
+from namisync.core.root_authority import (
+    RootAuthority,
+    RootAuthorityError,
+    RootAuthorityIssue,
+)
 from namisync.core.session import (
     Canceled,
     Disposition,
@@ -88,14 +92,20 @@ from namisync.workflows.inventory import (
     InventoryDetails,
     InventoryRequest,
     InventoryWorkflowRequest,
+    LocationCandidate,
+    LocationCandidateState,
     LocationBinding,
     MAX_MOUNT_CANDIDATES,
     MAX_VOLUME_RESOLUTION_CANDIDATES,
     MountedVolume,
     NativeMountedVolumeResolver,
+    RememberedLocation,
+    RememberedLocations,
+    RememberedPair,
     VolumeResolution,
     VolumeResolutionRequired,
     VolumeResolutionState,
+    admit_location_candidate,
     bind_integrity_request,
     bind_inventory_request,
     resolve_binding,
@@ -104,7 +114,7 @@ from namisync.workflows.inventory import (
     settle_canceled_integrity,
 )
 
-from _db_fixtures import FakeClock, attestation, plan, setup_recorder
+from _db_fixtures import FakeClock, NOW, attestation, plan, setup_recorder
 
 
 VOLUME_ID = VolumeId("inventory-volume", "NTFS")
@@ -258,6 +268,283 @@ def _dependencies(
         host_name="Host",
         save_details=details.append,
     )
+
+
+@pytest.mark.parametrize(
+    "path",
+    (
+        "relative",
+        "~\\folder",
+        "%USERPROFILE%\\folder",
+        "file:///C:/folder",
+        "\\\\?\\C:\\folder",
+        "\\\\.\\C:\\folder",
+    ),
+)
+def test_location_candidate_refuses_nonliteral_absolute_inputs_before_native_work(
+    tmp_path: Path,
+    path: str,
+) -> None:
+    class Backend:
+        def volume_snapshot(self, _root: str) -> VolumeSnapshot:
+            raise AssertionError("invalid path reached native volume work")
+
+    result = admit_location_candidate(
+        LocationCandidate.literal(path),
+        ledger_path=tmp_path / "ledger.db",
+        backend=Backend(),
+        resolver=_Resolver(),
+    )
+
+    assert result.state is LocationCandidateState.INVALID_PATH
+    assert result.binding is None
+
+
+@pytest.mark.parametrize(
+    ("issue", "cause", "state"),
+    (
+        (RootAuthorityIssue.NON_DIRECTORY_COMPONENT, None, LocationCandidateState.NOT_DIRECTORY),
+        (RootAuthorityIssue.REPARSE_COMPONENT, None, LocationCandidateState.REPARSE),
+        (RootAuthorityIssue.PLACEHOLDER_COMPONENT, None, LocationCandidateState.PLACEHOLDER),
+        (RootAuthorityIssue.COMPONENT_UNAVAILABLE, FileNotFoundError(), LocationCandidateState.MISSING),
+        (RootAuthorityIssue.ANCHOR_CHANGED, None, LocationCandidateState.CHANGED),
+        (RootAuthorityIssue.ANCHOR_UNAVAILABLE, PermissionError(), LocationCandidateState.UNAVAILABLE),
+    ),
+)
+def test_location_candidate_classifies_root_authority_issues_without_diagnostic_parsing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    issue: RootAuthorityIssue,
+    cause: BaseException | None,
+    state: LocationCandidateState,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+
+    def refuse(_authority: RootAuthority) -> str:
+        error = RootAuthorityError(issue, str(root), "same diagnostic")
+        if cause is None:
+            raise error
+        raise error from cause
+
+    monkeypatch.setattr(inventory_workflow, "admit_root_chain", refuse)
+    monkeypatch.setattr(
+        inventory_workflow,
+        "_native_location_refusal",
+        lambda _path: None,
+    )
+    result = admit_location_candidate(
+        LocationCandidate.literal(str(root)),
+        ledger_path=tmp_path / "ledger.db",
+        backend=_Backend(root, tmp_path),
+        resolver=_Resolver(tmp_path),
+    )
+
+    assert result.state is state
+    assert result.detail == "same diagnostic"
+
+
+@pytest.mark.parametrize(
+    "state",
+    (LocationCandidateState.REMOTE, LocationCandidateState.UNSUPPORTED_VOLUME),
+)
+def test_location_candidate_refuses_native_location_kind_before_root_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    state: LocationCandidateState,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    monkeypatch.setattr(
+        inventory_workflow,
+        "_native_location_refusal",
+        lambda _path: state,
+    )
+    monkeypatch.setattr(
+        inventory_workflow,
+        "admit_root_chain",
+        lambda _authority: (_ for _ in ()).throw(
+            AssertionError("native refusal reached root probe")
+        ),
+    )
+
+    result = admit_location_candidate(
+        LocationCandidate.literal(str(root)),
+        ledger_path=tmp_path / "ledger.db",
+        backend=_Backend(root, tmp_path),
+        resolver=_Resolver(tmp_path),
+    )
+
+    assert result.state is state
+
+
+def test_location_candidate_accepts_a_long_logical_directory(tmp_path: Path) -> None:
+    mount = tmp_path / "mount"
+    root = mount
+    while len(str(root)) <= 280:
+        root /= "long-directory-name"
+    root.mkdir(parents=True)
+
+    result = admit_location_candidate(
+        LocationCandidate.literal(str(root)),
+        ledger_path=tmp_path / "ledger.db",
+        backend=_Backend(root, mount),
+        resolver=_Resolver(mount),
+    )
+
+    assert result.state is LocationCandidateState.RESOLVED
+    assert result.root_path == str(root)
+
+
+def test_remembered_candidate_uses_final_current_mount_without_writing(
+    tmp_path: Path,
+) -> None:
+    ledger_path = tmp_path / "ledger.db"
+    setup = setup_recorder(ledger_path, plan(()))
+    setup.recorder.close()
+    old_mount = tmp_path / "old-mount"
+    current_mount = tmp_path / "current-mount"
+    (old_mount / "source").mkdir(parents=True)
+    (current_mount / "source").mkdir(parents=True)
+
+    class MovingResolver:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.probed: list[str] = []
+
+        def mounted_volumes(self, volume_id: VolumeId, hints=()):
+            del hints
+            assert volume_id == VolumeId("source-serial", "NTFS")
+            mount = old_mount if self.calls == 0 else current_mount
+            self.calls += 1
+            return (
+                MountedVolume(
+                    str(mount),
+                    VolumeEvidence("Source", str(mount)),
+                ),
+            )
+
+        def probe_root(self, root_path: str) -> None:
+            self.probed.append(root_path)
+
+    with connect_ledger_reader(ledger_path) as connection:
+        before = tuple(
+            connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            for table in ("locations", "mappings", "runs")
+        )
+    resolver = MovingResolver()
+    candidate = LocationCandidate.remembered(setup.source_location_id)
+    result = admit_location_candidate(
+        candidate,
+        ledger_path=ledger_path,
+        backend=SimpleNamespace(),
+        resolver=resolver,  # type: ignore[arg-type]
+    )
+    with connect_ledger_reader(ledger_path) as connection:
+        after = tuple(
+            connection.execute(f"SELECT count(*) FROM {table}").fetchone()[0]
+            for table in ("locations", "mappings", "runs")
+        )
+
+    expected_root = str(current_mount / "source")
+    assert result.state is LocationCandidateState.RESOLVED
+    assert result.candidate is candidate
+    assert result.root_path == expected_root
+    assert result.binding is not None
+    assert result.binding.location_id == setup.source_location_id
+    assert result.binding.selected_mount == str(current_mount)
+    assert result.binding.expected_mounts == (str(current_mount),)
+    assert resolver.probed == [expected_root]
+    assert before == after
+
+
+@pytest.mark.parametrize(
+    ("mount_count", "state"),
+    (
+        (0, LocationCandidateState.OFFLINE),
+        (2, LocationCandidateState.AMBIGUOUS),
+    ),
+)
+def test_remembered_candidate_refusal_retains_durable_identity(
+    tmp_path: Path,
+    mount_count: int,
+    state: LocationCandidateState,
+) -> None:
+    ledger_path = tmp_path / "ledger.db"
+    setup = setup_recorder(ledger_path, plan(()))
+    setup.recorder.close()
+    mounts = tuple(tmp_path / f"mount-{index}" for index in range(mount_count))
+    for mount in mounts:
+        (mount / "source").mkdir(parents=True)
+
+    class Resolver:
+        def mounted_volumes(self, volume_id: VolumeId, hints=()):
+            del hints
+            assert volume_id == VolumeId("source-serial", "NTFS")
+            return tuple(
+                MountedVolume(
+                    str(mount),
+                    VolumeEvidence("Source", str(mount)),
+                )
+                for mount in mounts
+            )
+
+        def probe_root(self, _root_path: str) -> None:
+            raise AssertionError("refused identity reached root probe")
+
+    candidate = LocationCandidate.remembered(setup.source_location_id)
+    result = admit_location_candidate(
+        candidate,
+        ledger_path=ledger_path,
+        backend=SimpleNamespace(),
+        resolver=Resolver(),  # type: ignore[arg-type]
+    )
+
+    assert result.state is state
+    assert result.candidate is candidate
+    assert result.binding is not None
+    assert result.binding.location_id == setup.source_location_id
+    assert result.root_path is None
+
+
+def test_missing_remembered_candidate_retains_requested_identity(tmp_path: Path) -> None:
+    ledger_path = tmp_path / "ledger.db"
+    setup = setup_recorder(ledger_path, plan(()))
+    setup.recorder.close()
+    candidate = LocationCandidate.remembered(999_999)
+
+    result = admit_location_candidate(
+        candidate,
+        ledger_path=ledger_path,
+        backend=SimpleNamespace(),
+        resolver=SimpleNamespace(),
+    )
+
+    assert result.state is LocationCandidateState.MISSING
+    assert result.candidate is candidate
+    assert result.binding is None
+
+
+def test_remembered_location_collections_enforce_the_five_entry_boundary() -> None:
+    location = RememberedLocation(
+        1,
+        VolumeId("recent-volume", "NTFS"),
+        "source",
+        "C:\\",
+        NOW,
+    )
+    target = RememberedLocation(
+        2,
+        VolumeId("recent-volume", "NTFS"),
+        "target",
+        "D:\\",
+        NOW,
+    )
+    pair = RememberedPair(1, location, target, NOW)
+
+    assert RememberedLocations((location,) * 5, (target,), (pair,)).sources
+    with pytest.raises(ValueError, match="five-entry limit"):
+        RememberedLocations((location,) * 6, (), ())
 
 
 def _context() -> RunContext:

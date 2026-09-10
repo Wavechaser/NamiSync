@@ -51,6 +51,7 @@ class InventoryPresence(StrEnum):
 
 
 INVENTORY_POPULATION_ROW_LIMIT = MAX_PLAN_REVIEW_ROWS
+RECENT_SYNC_ACTIVITY_LIMIT = 5
 
 
 class InventoryPopulationLimitError(ValueError):
@@ -139,6 +140,91 @@ class LocationSnapshot:
     volume_id: VolumeId
     volume_relative_path: str
     mount_hint: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class RecentLocationSnapshot:
+    location: LocationSnapshot
+    started_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class RecentPairSnapshot:
+    mapping_id: int
+    source: LocationSnapshot
+    target: LocationSnapshot
+    started_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class RecentSyncActivitySnapshot:
+    sources: tuple[RecentLocationSnapshot, ...]
+    targets: tuple[RecentLocationSnapshot, ...]
+    pairs: tuple[RecentPairSnapshot, ...]
+
+
+_RECENT_LOCATION_SQL = """
+    SELECT location.id AS {role}_location_id,
+           location.volume_relative_path AS {role}_relative_path,
+           volume.serial AS {role}_serial,
+           volume.fs_type AS {role}_fs_type,
+           volume.device_id AS {role}_mount_hint,
+           max(run.started_at) AS recent_started_at
+      FROM runs AS run
+      JOIN mappings AS mapping
+        ON mapping.id = run.mapping_id
+       AND mapping.deleted_at IS NULL
+       AND mapping.source_location_id = run.source_location_id
+       AND mapping.target_location_id = run.target_location_id
+      JOIN locations AS location
+        ON location.id = run.{role}_location_id
+      JOIN volumes AS volume ON volume.id = location.volume_id
+     WHERE run.activity_kind = 'sync'
+     GROUP BY location.id
+     ORDER BY recent_started_at DESC, location.id ASC
+     LIMIT ?
+"""
+
+_RECENT_PAIR_SQL = """
+    SELECT mapping.id AS mapping_id,
+           source.id AS source_location_id,
+           source.volume_relative_path AS source_relative_path,
+           source_volume.serial AS source_serial,
+           source_volume.fs_type AS source_fs_type,
+           source_volume.device_id AS source_mount_hint,
+           target.id AS target_location_id,
+           target.volume_relative_path AS target_relative_path,
+           target_volume.serial AS target_serial,
+           target_volume.fs_type AS target_fs_type,
+           target_volume.device_id AS target_mount_hint,
+           max(run.started_at) AS recent_started_at
+      FROM runs AS run
+      JOIN mappings AS mapping
+        ON mapping.id = run.mapping_id
+       AND mapping.deleted_at IS NULL
+       AND mapping.source_location_id = run.source_location_id
+       AND mapping.target_location_id = run.target_location_id
+      JOIN locations AS source ON source.id = mapping.source_location_id
+      JOIN volumes AS source_volume ON source_volume.id = source.volume_id
+      JOIN locations AS target ON target.id = mapping.target_location_id
+      JOIN volumes AS target_volume ON target_volume.id = target.volume_id
+     WHERE run.activity_kind = 'sync'
+     GROUP BY mapping.id
+     ORDER BY recent_started_at DESC, mapping.id ASC
+     LIMIT ?
+"""
+
+
+def _recent_location(row: sqlite3.Row, role: str) -> LocationSnapshot:
+    return LocationSnapshot(
+        location_id=int(row[f"{role}_location_id"]),
+        volume_id=VolumeId(
+            row[f"{role}_serial"],
+            row[f"{role}_fs_type"],
+        ),
+        volume_relative_path=row[f"{role}_relative_path"],
+        mount_hint=row[f"{role}_mount_hint"],
+    )
 
 
 def _optional_time(value: str | None) -> datetime | None:
@@ -690,6 +776,47 @@ class LedgerRepository:
             volume_relative_path=row["volume_relative_path"],
             mount_hint=row["device_id"],
         )
+
+    def get_recent_sync_activity(self) -> RecentSyncActivitySnapshot:
+        """Return the bounded active-mapping recents from one read snapshot."""
+
+        self._connection.execute("BEGIN")
+        try:
+            sources = tuple(
+                RecentLocationSnapshot(
+                    _recent_location(row, "source"),
+                    decode_utc(row["recent_started_at"]),
+                )
+                for row in self._connection.execute(
+                    _RECENT_LOCATION_SQL.format(role="source"),
+                    (RECENT_SYNC_ACTIVITY_LIMIT,),
+                )
+            )
+            targets = tuple(
+                RecentLocationSnapshot(
+                    _recent_location(row, "target"),
+                    decode_utc(row["recent_started_at"]),
+                )
+                for row in self._connection.execute(
+                    _RECENT_LOCATION_SQL.format(role="target"),
+                    (RECENT_SYNC_ACTIVITY_LIMIT,),
+                )
+            )
+            pairs = tuple(
+                RecentPairSnapshot(
+                    int(row["mapping_id"]),
+                    _recent_location(row, "source"),
+                    _recent_location(row, "target"),
+                    decode_utc(row["recent_started_at"]),
+                )
+                for row in self._connection.execute(
+                    _RECENT_PAIR_SQL,
+                    (RECENT_SYNC_ACTIVITY_LIMIT,),
+                )
+            )
+            return RecentSyncActivitySnapshot(sources, targets, pairs)
+        finally:
+            self._connection.rollback()
 
     def find_location(
         self, volume_id: VolumeId, volume_relative_path: str

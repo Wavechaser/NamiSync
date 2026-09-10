@@ -434,7 +434,7 @@ def test_service_path_refusal_releases_the_validation_error_graph(
         raise error from cause
 
     service = _service(SimpleNamespace())
-    monkeypatch.setattr(service_module, "validate_sync_paths", refuse_paths)
+    monkeypatch.setattr(service._runtime, "admit_plan_locations", refuse_paths)
 
     with pytest.raises(SyncPathInputError) as captured:
         service.start_plan("source", "target")
@@ -887,6 +887,11 @@ def test_br_g_16_plan_retry_replays_before_paths_are_revalidated(
     )
     source.rmdir()
 
+    def unexpected_candidate_probe(*_args):
+        pytest.fail("a receipted plan must replay without candidate admission")
+
+    service._runtime.admit_plan_locations = unexpected_candidate_probe
+
     replay = service.start_plan(
         str(source),
         str(target),
@@ -964,6 +969,11 @@ def test_task_plan_receipt_replay_does_not_recreate_delivery_or_observation(
         command_id=_opaque_id(210),
         delivery_factory=first_factory,
     )
+
+    def unexpected_candidate_probe(*_args):
+        pytest.fail("a receipted task must replay without candidate admission")
+
+    service._runtime.admit_plan_locations = unexpected_candidate_probe
     replay = service.start_task_plan(
         str(source),
         str(target),

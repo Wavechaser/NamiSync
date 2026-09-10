@@ -710,9 +710,10 @@ diagnostic text.
 Current location commands bind one explicit root or retained location id before
 admission. `LocationResolutionError` already carries the five visible states
 (`resolved`, `offline`, `ambiguous`, `root_missing`, `root_unavailable`), exact
-candidate mounts, and corrective detail. The accepted Setup target routes
-native picker selection, typed input, and remembered-location activation
-through one workflow-owned `LocationCandidate` admission service. The UI must
+candidate mounts, and corrective detail. The shared workflow-owned location
+candidate service and bounded remembered-location readback are implemented;
+current picker-backed plan starts use that admission route. Setup's typed and
+remembered inputs and picker-time feedback remain pending UI work. The UI must
 request a user-selected current mount for ambiguity rather than inferring one
 from a mapping or prior task. Its process-local slot is purpose-bound, expires,
 and is freshly re-admitted at every real start; it is not lasting root
