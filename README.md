@@ -52,7 +52,8 @@ Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work covers Setup, bounded plan/execution review, and
+Remaining desktop work covers a bounded asynchronous command boundary before
+Setup, shared location admission, bounded plan/execution review, and
 inventory/integrity content within the active task shell. Accepted sorting and rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.

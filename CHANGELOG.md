@@ -34,7 +34,16 @@ packaging remain open.
 - Designed a separate bounded asynchronous command boundary for concrete M1
   actions, reusing task/session owners and shared exchange custody. The proposal
   defines finite consumers, delivery/recovery bounds and one acceptance gate;
-  it is recommended before M1-5 and remains unimplemented.
+  it is registered after M1-4, normally before M1-5 and always before M1-6,
+  and remains unimplemented.
+- Condensed completed M1-4 into its delivered/excluded outcomes and added
+  explicit product-checkpoint status. Ratified lightweight expansion with a
+  next-checkpoint design lane that refreshes against the predecessor's final
+  state before implementation.
+- Separated repository scope/stop requirements from the installed execute-task
+  skill's probing, in-turn adjudication, bounded waiting and recovery procedure.
+  Unanswered decisions never authorize scope; architectural and hard-wall stops
+  retain their distinct handling.
 
 #### Activate process-live desktop tasks (2026-09-09 – 2026-09-10)
 

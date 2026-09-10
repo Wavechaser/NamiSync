@@ -149,24 +149,60 @@ their contract, and update the matching tests and documentation when it does.
 
 ## Task Containment And Recovery
 
+- This file defines repository boundaries, required outcomes and stop classes.
+  Execution skills prescribe investigation, user interaction, delegation and
+  recovery mechanics within those rules; they cannot expand authority or relax
+  a gate. The repository requirements apply even without a particular skill.
 - Before an audit-driven implementation, hardening or stabilization pass,
   cross-component change, or task with more than one independently committable
   outcome, record a closed checkpoint register in the owning delivery
-  document. Each row has a stable id, one accepted outcome, and named
+  document. Each row has a stable id, one accepted outcome, status, and named
   verification. Record non-goals and any task-specific stop classes beside the
   register. A quantified criterion is closed only when its search domain,
   procedure, and terminal observation are finite. Discovery work may instead
   close over a named corpus and method; its findings are output, not implicit
   implementation scope.
+- Before a pending checkpoint's implementation, elaborate its accepted outcome
+  into a finite production, test and documentation population; current owners
+  and seams; one acceptance gate and coherent commit boundary; relevant archived
+  dispositions/non-goals; and a preimplementation regression study. Regression
+  means a lost guarantee, false state, unauthorized or duplicate effect, or
+  newly unbounded work. Red tests are evidence to investigate, not proof of
+  regression; green tests are not proof of its absence. Final adversarial review
+  is required at every checkpoint.
+- The next checkpoint's design study may overlap the predecessor's final
+  product implementation and its testing, verification and review. Planning
+  remains read-only toward product/test sources and cannot weaken or delay the
+  predecessor's gate. Record the observed revision and revalidate changed seams
+  against the predecessor's final integrated state before dependent product
+  implementation. Planning is not implementation authorization; dependent
+  implementation waits for predecessor completion and the user's active scope.
 - The accepted register is the completion denominator. A checkpoint is
   complete only when every accepted row satisfies its named verification and
   the declared baseline has not regressed. A new finding does not add a row and
   does not by itself authorize a fix; handle it only under the regression,
   bounded pre-existing defect, and stop rules below. If it prevents a named
-  check from passing and those rules do not authorize handling it, stop and
-  request adjudication rather than repairing it merely to recover green. Only
-  an explicit user decision may change the register after implementation
-  starts.
+  check from passing and those rules do not authorize handling it, suspend the
+  dependent implementation and obtain user adjudication. Only an explicit user
+  decision may change the active scope after implementation starts. Acceptance
+  of a future outcome is not permission to change the current checkpoint.
+- Before deciding on a scope-only full stop, thoroughly probe the proposed
+  extension within a named finite corpus: its cause, owners, dependencies,
+  affected consumers (including test helpers outside the initial subtree),
+  preserved guarantees and verification. Present one closed proposal for the
+  known mechanism, not successive first-failure file additions. This is
+  investigation authority, not permission to implement the extension.
+- A narrow, well-understood extension preserving the accepted outcome and its
+  ownership/safety model may seek an explicit decision during the active turn.
+  Larger architectural changes, unresolved boundaries, or a changed safety or
+  effect model require a full stop and reviewable redesign. Assess consequence
+  and mechanism, not file/line count: an exact test-consumer migration can be
+  narrow; new callback-delivery ownership can be architectural. Unanswered
+  requests after a bounded response window require a full stop and recovery,
+  never inferred consent. Existing approval persists; do not ask again for the
+  same unchanged extension. Always-stop classes below take precedence over
+  investigation and waiting. Only independent authorized work may continue
+  while an ordinary scope decision is pending.
 - A regression introduced by the active checkpoint must be corrected before
   its mergeable commit. A bounded pre-existing substantive defect may land as
   a separate fix commit when it does not trigger a stop rule. Treat mechanisms
@@ -176,8 +212,9 @@ their contract, and update the matching tests and documentation when it does.
   the current safety-preserving atomic outcome, begin no further instance fix,
   and produce a mechanism table naming each consequence, owner, and common
   choke point or the reason no common choke point exists. Reorganize the work
-  and obtain review before resuming. A predeclared finite migration does not
-  trigger this rule.
+  and obtain review before resuming. A narrow reorganization may use the in-turn
+  adjudication path above; the required pause and review are not waived. A
+  predeclared finite migration does not trigger this rule.
 - Always stop, preserve the exact work state, and report evidence of supported-
   path data loss or corruption, unauthorized or out-of-root mutation, a
   supported security- or hard-wall escape, false durable or terminal success,
@@ -188,18 +225,16 @@ their contract, and update the matching tests and documentation when it does.
   deferred.
 - Atomic outcome, not diff size, determines commit scope. Do not impose a line-
   count or file-count stop. If one accepted outcome grows beyond its stated
-  mechanism or verification boundary, stop and reorganize it before starting
-  another outcome; do not commit a non-atomic half merely to make the diff
-  smaller.
+  mechanism or verification boundary, suspend dependent work and resolve scope
+  under the adjudication rules before starting another outcome; do not commit
+  a non-atomic half merely to make the diff smaller.
 - If work must stop before a merge-ready commit, preserve only task-owned
-  changes on a disposable branch named
-  `codex/wip-YYYYMMDD-HHMM-<scope>`. Stage exact paths, never `git add -A`, and
-  commit `wip(<scope>): save interrupted state`. The body records the base
-  commit, register row, completed and incomplete work, verification passed,
-  failed, or not run, and excluded dirty or untracked files. A recovery commit
-  is not a review unit: never merge or cherry-pick it as-is. Rebuild its useful
-  changes into coherent commits, apply ordinary readiness checks, and delete
-  the temporary ref only after recovery is reviewed.
+  changes on an isolated disposable recovery branch, with enough provenance,
+  scope, verification and excluded-work information for exact resumption.
+  Preservation must not absorb or destroy unrelated work. A recovery commit is
+  not a review unit: never merge or cherry-pick it as-is. Rebuild useful changes
+  into coherent commits under ordinary readiness checks. Remove recovery refs
+  only after their content is reviewed, integrated and accounted for.
 
 ## Windows Rules
 
