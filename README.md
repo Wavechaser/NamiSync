@@ -42,7 +42,8 @@ classes, and exact residual dispositions live in the defense model.
 M1's headless product is implemented and usable through the service and CLI:
 reviewed sync, inventory, integrity baseline/verify/rebaseline, optional
 post-copy verification, and retained history. The Windows desktop shell now has
-a secured WebView2 host, bounded command/event transport, native folder picking,
+a secured WebView2 host, bounded command/event transport with asynchronous
+completion for small task commands, native folder picking,
 the Fluent/accessibility foundation, process-live blank task creation,
 newest-first navigation and explicit close, and dormant gallery-proven
 sync/integrity file-list row renderers. Setup and user-facing workflow content,
@@ -52,8 +53,8 @@ Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work covers a bounded asynchronous command boundary before
-Setup, shared location admission, bounded plan/execution review, and
+Remaining desktop work covers Setup, shared location admission, bounded
+plan/execution review, and
 inventory/integrity content within the active task shell. Accepted sorting and rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.

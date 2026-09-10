@@ -25,17 +25,22 @@ foundation, bounded presentation core, process-live task navigation and closure,
 and dormant sync/integrity file-list row renderers. Workflow content and beta
 packaging remain open.
 
-#### Bound the next M1 checkpoint designs (2026-09-10)
+#### Deliver bounded M1 command and location prerequisites (2026-09-10)
 
 - Detailed M1-5's finite production, test and documentation population, one
   acceptance gate and atomic outcome, current owners/seams, archived-clause
   dispositions, preimplementation regression probes and final adversarial review.
-  Implementation remains paused for the recap after M1-4.
-- Designed a separate bounded asynchronous command boundary for concrete M1
-  actions, reusing task/session owners and shared exchange custody. The proposal
-  defines finite consumers, delivery/recovery bounds and one acceptance gate;
-  it is registered after M1-4, normally before M1-5 and always before M1-6,
-  and remains unimplemented.
+  The user authorized M1-async followed by M1-5 after the M1-4 recap.
+- Separated native admission and completion for create/start/release/close,
+  preserving direct/custom command behavior and current task/session effect
+  owners. One shared exchange budget retains both worker exits and both delivery
+  phases; reload retires delivery while admitted work continues. The existing
+  document channel carries bounded completions with readiness priority and
+  appearance fairness, and browser uncertainty uses existing recovery.
+- Kept command delivery independent of cosmetic acknowledgement and prior
+  lost-delivery receipts while preserving one native send and the shared bound.
+  Async closure passed the ordinary suite (4884 passed, 4 skipped, 29 deselected in 211.92s (0:03:31)), installed headed gate
+  (29 passed, 4888 deselected in 130.37s (0:02:10)), affected neighborhood, imports and fresh adversarial review.
 - Condensed completed M1-4 into its delivered/excluded outcomes and added
   explicit product-checkpoint status. Ratified lightweight expansion with a
   next-checkpoint design lane that refreshes against the predecessor's final

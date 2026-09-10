@@ -564,6 +564,9 @@ def _patch_primary(
     dispatcher = SimpleNamespace(
         begin_close=lambda: order.append("reject_dispatch"),
         wait_for_handlers=lambda: order.append("wait_handlers"),
+        _bind_document_channel=lambda channel: order.append(
+            ("bind_document_channel", channel)
+        ),
         _retire_document_responses=lambda: order.append(
             "retire_document_responses"
         ),

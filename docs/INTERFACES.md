@@ -593,8 +593,19 @@ pywebview JavaScript callback failures across reload without canceling or
 repeating command effects. Stable-generation JavaScript failures and non-JS
 failures remain visible; handler custody still waits for true worker exit.
 [BRIDGE.md](BRIDGE.md#current-envelopes-and-admission) owns the precise containment
-boundary and its race limitation. This is separate from the proposed future
-asynchronous command boundary.
+boundary and its race limitation. It also protects the small admission return
+for asynchronous commands; asynchronous completion does not remove that race.
+
+The native bridge separates admission from completion only for `create_task`,
+`start_plan`, `release_terminal_session` and `close_task`. CommandSpec owns that
+classification; custom commands and ordinary Python dispatch retain synchronous
+results. The host binds the dispatcher to its existing DocumentChannel after
+construction. Reload retires old completion delivery before a new readiness
+exchange, while admitted handlers continue through their existing task/session
+owners. Close rejects new admission, wakes drain waiters and retires completion
+delivery before waiting for both native and command workers. A bounded wait
+failure leaves shutdown retryable and cannot close the service under live work.
+BRIDGE owns the exact delivery phases, bounds and recovery contract.
 
 One immutable `AppPaths` resolves all GUI artifacts. Production uses `%LOCALAPPDATA%\NamiSync`; tests and development inject an isolated root, including for every headed test. The root contains ledger/history databases, settings and UI state, logs, and WebView2 storage. The data-dir override is application composition input only: it is never browser supplied or persisted as session authority. Pywebview uses private mode and the explicit root-local WebView2 storage path.
 

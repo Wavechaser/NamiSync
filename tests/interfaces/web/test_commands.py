@@ -53,6 +53,7 @@ from namisync.interfaces.web.commands import (
     CommandPayloadError,
     CommandRetry,
     CommandTimeout,
+    CommandWork,
     FieldRequirement,
     PickerUnavailableError,
     PlanningRefusedError,
@@ -335,6 +336,25 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "replace_cosmetic_section",
     )
     assert "test_report" not in commands
+    assert {
+        name for name, spec in commands.items()
+        if spec.work is CommandWork.ASYNC_SMALL
+    } == {
+        "create_task",
+        "start_plan",
+        "release_terminal_session",
+        "close_task",
+    }
+    assert all(
+        spec.work is CommandWork.DIRECT
+        for name, spec in commands.items()
+        if name not in {
+            "create_task",
+            "start_plan",
+            "release_terminal_session",
+            "close_task",
+        }
+    )
     assert (
         commands["shell_ready"].access,
         commands["shell_ready"].command_id,
@@ -492,6 +512,75 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         commands["future_command"] = commands["pick_folder"]  # type: ignore[index]
     with pytest.raises(FrozenInstanceError):
         commands["pick_folder"].retry = CommandRetry.SAME_COMMAND_ONCE  # type: ignore[misc]
+
+
+def test_async_small_real_command_projections_have_exact_bounded_completion_shapes() -> None:
+    commands, _, _ = _commands()
+    cases = (
+        (
+            "create_task",
+            {"command_id": COMMAND_ID},
+            {"task_id": TASK_ID},
+            345,
+        ),
+        (
+            "start_plan",
+            {
+                "command_id": COMMAND_ID,
+                "source_id": SOURCE_ID,
+                "target_id": TARGET_ID,
+                "deletion_policy": None,
+            },
+            {
+                "task_id": TASK_ID,
+                "request_id": "4" * 32,
+                "session_id": "5" * 32,
+            },
+            441,
+        ),
+        (
+            "release_terminal_session",
+            {"task_id": TASK_ID, "session_id": SESSION_ID},
+            {"task_id": TASK_ID, "session_id": SESSION_ID},
+            393,
+        ),
+        (
+            "close_task",
+            {"task_id": TASK_ID, "session_id": SESSION_ID},
+            {
+                "task_id": TASK_ID,
+                "session_id": SESSION_ID,
+                "disposition": "closed",
+            },
+            416,
+        ),
+    )
+
+    for name, payload, expected, expected_bytes in cases:
+        projected = to_primitive_view(_invoke(commands[name], payload))
+        assert projected == expected
+        envelope = {
+            "kind": "namisync.command-completion.v1",
+            "phase": "completion",
+            "generation": MAX_JAVASCRIPT_SAFE_INTEGER,
+            "request_id": "f" * 32,
+            "completion_token": "f" * 32,
+            "response": {
+                "schema_version": 1,
+                "request_id": "f" * 32,
+                "ok": True,
+                "result": projected,
+            },
+        }
+        encoded = json.dumps(
+            envelope,
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        assert len(encoded.encode("utf-8")) == expected_bytes
+        assert len(encoded.encode("utf-8")) <= 65_536
 
 
 def test_br_g_32_command_composition_is_constructor_only() -> None:

@@ -653,6 +653,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original_expose_bridge = host._expose_bridge_api
     original_task_registry = host._task_registry
     original_dispatch = bridge.BridgeDispatcher._dispatch_native
+    original_execute = bridge.BridgeDispatcher._execute_prepared_command
     original_start_task_plan = NamiSyncService.start_task_plan
     original_reobserve_task = NamiSyncService.reobserve_task
     original_release_task_session = NamiSyncService.release_task_session
@@ -695,6 +696,36 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             "dispatcher_type",
             f"{type(value).__module__}.{type(value).__qualname__}",
         )
+
+    def observed_execute(
+        dispatcher: object,
+        request_id: str,
+        name: str,
+        spec: object,
+        prepared: object,
+        **options: object,
+    ) -> object:
+        response = original_execute(
+            dispatcher,
+            request_id,
+            name,
+            spec,
+            prepared,
+            **options,
+        )
+        if (
+            browser_gate is not None
+            and name == "start_plan"
+            and type(response) is dict
+            and response.get("ok") is True
+            and type(response.get("result")) is dict
+        ):
+            result = response["result"]
+            browser_gate.note_task(
+                result.get("task_id"),
+                result.get("session_id"),
+            )
+        return response
 
     def observed_dispatch(dispatcher: object, command_json: str) -> object:
         request = None
@@ -786,19 +817,6 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
             and type(response.get("response")) is dict
         ):
             command_response = response["response"]
-        if (
-            browser_gate is not None
-            and request is not None
-            and request.get("command") == "start_plan"
-            and type(command_response) is dict
-            and command_response.get("ok") is True
-            and type(command_response.get("result")) is dict
-        ):
-            result = command_response["result"]
-            browser_gate.note_task(
-                result.get("task_id"),
-                result.get("session_id"),
-            )
         if start_kind == "first":
             assert browser_gate is not None
             if not browser_gate.uncertain_start_replay_entered.wait(5):
@@ -817,11 +835,14 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     browser_gate.main_stale_response_held = True
             if hold_stale and not browser_gate.main_recovery_entered.wait(5):
                 raise RuntimeError("stale drain recovery did not enter")
-        is_native_ack = (
+        is_transport_ack = (
             type(command_json) is str
-            and bridge._NATIVE_RESPONSE_ACK.fullmatch(command_json) is not None
+            and (
+                bridge._NATIVE_RESPONSE_ACK.fullmatch(command_json) is not None
+                or bridge._COMMAND_COMPLETION_ACK.fullmatch(command_json) is not None
+            )
         )
-        if type(command_json) is str and not is_native_ack:
+        if type(command_json) is str and not is_transport_ack:
             recorder.append("raw_dispatch_bodies", command_json)
             if '"phase":"off_origin_attempt"' in command_json:
                 recorder.set("off_origin_response", command_response)
@@ -1114,6 +1135,13 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         )
         stack.enter_context(
             patch.object(bridge.BridgeDispatcher, "_dispatch_native", observed_dispatch)
+        )
+        stack.enter_context(
+            patch.object(
+                bridge.BridgeDispatcher,
+                "_execute_prepared_command",
+                observed_execute,
+            )
         )
         stack.enter_context(
             patch.object(bridge.NativeDocumentState, "_record", record_document)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections import deque
 from dataclasses import dataclass
 from enum import Enum
 from threading import Lock
@@ -14,7 +15,8 @@ from namisync.interfaces.ui_state import MAX_JAVASCRIPT_SAFE_INTEGER
 
 
 _MAX_DOCUMENT_MESSAGE_BYTES = 65_536
-_Acknowledgment = int | tuple[int, str]
+_MAX_COMMAND_POSTS = 64
+_Acknowledgment = int | tuple[int, str] | tuple[int, str, str, str]
 
 
 class DocumentMessageTooLargeError(ValueError):
@@ -36,6 +38,7 @@ class DocumentChannelBusyError(RuntimeError):
 class DocumentPostKind(Enum):
     REQUIRED = "required"
     REPLACEABLE = "replaceable"
+    COMMAND = "command"
 
 
 class DocumentChannel:
@@ -56,8 +59,12 @@ class DocumentChannel:
         self._lock = Lock()
         self._required: _PendingPost | None = None
         self._replaceable: _PendingPost | None = None
+        self._commands: deque[_PendingPost] = deque()
         self._in_flight: _PendingPost | _AwaitingAcknowledgment | None = None
+        self._replaceable_ack: _AwaitingAcknowledgment | None = None
+        self._command_acks: dict[_Acknowledgment, _AwaitingAcknowledgment] = {}
         self._scheduled_token: object | None = None
+        self._appearance_after_command = False
         self._document_epoch = object()
         self._closed = False
 
@@ -144,6 +151,23 @@ class DocumentChannel:
                 superseded = self._replaceable
                 self._replaceable = pending
                 schedule = self._claim_dispatch_locked()
+            elif kind is DocumentPostKind.COMMAND:
+                command_count = (
+                    len(self._commands)
+                    + len(self._command_acks)
+                    + int(
+                        self._in_flight is not None
+                        and self._in_flight.kind is DocumentPostKind.COMMAND
+                    )
+                )
+                if command_count >= _MAX_COMMAND_POSTS:
+                    refused = DocumentChannelBusyError(
+                        "the command completion queue is full"
+                    )
+                    schedule = None
+                else:
+                    self._commands.append(pending)
+                    schedule = self._claim_dispatch_locked()
             elif self._required is not None or (
                 self._in_flight is not None
                 and self._in_flight.kind is DocumentPostKind.REQUIRED
@@ -204,15 +228,26 @@ class DocumentChannel:
             return False
         with self._lock:
             pending = self._in_flight
-            if (
-                pending is None
-                or pending.kind is not kind
-                or type(pending.acknowledgment) is not type(acknowledgment)
-                or pending.acknowledgment != acknowledgment
-            ):
-                return False
-            self._in_flight = None
+            if not _matches_acknowledgment(pending, kind, acknowledgment):
+                if kind is DocumentPostKind.REPLACEABLE:
+                    pending = self._replaceable_ack
+                    if not _matches_acknowledgment(
+                        pending,
+                        kind,
+                        acknowledgment,
+                    ):
+                        return False
+                    self._replaceable_ack = None
+                elif kind is DocumentPostKind.COMMAND:
+                    pending = self._command_acks.pop(acknowledgment, None)
+                    if pending is None:
+                        return False
+                else:
+                    return False
+            else:
+                self._in_flight = None
             schedule = self._claim_dispatch_locked()
+        assert pending is not None
         pending.complete(None)
         if schedule is not None:
             self._schedule_dispatch(schedule)
@@ -227,11 +262,27 @@ class DocumentChannel:
             self._document_epoch = object()
             required = self._required
             replaceable = self._replaceable
+            commands = tuple(self._commands)
             in_flight = self._in_flight
+            replaceable_ack = self._replaceable_ack
+            command_acks = tuple(self._command_acks.values())
             self._required = None
             self._replaceable = None
+            self._commands.clear()
             self._in_flight = None
-        self._complete_retired((required, replaceable, in_flight))
+            self._replaceable_ack = None
+            self._command_acks.clear()
+            self._appearance_after_command = False
+        self._complete_retired(
+            (
+                required,
+                replaceable,
+                *commands,
+                in_flight,
+                replaceable_ack,
+                *command_acks,
+            )
+        )
 
     def _schedule_dispatch(self, token: object) -> None:
         try:
@@ -252,17 +303,40 @@ class DocumentChannel:
             self._closed = True
             required = self._required
             replaceable = self._replaceable
+            commands = tuple(self._commands)
             in_flight = self._in_flight
+            replaceable_ack = self._replaceable_ack
+            command_acks = tuple(self._command_acks.values())
             self._required = None
             self._replaceable = None
+            self._commands.clear()
             self._in_flight = None
-        self._complete_retired((required, replaceable, in_flight))
+            self._replaceable_ack = None
+            self._command_acks.clear()
+            self._appearance_after_command = False
+        self._complete_retired(
+            (
+                required,
+                replaceable,
+                *commands,
+                in_flight,
+                replaceable_ack,
+                *command_acks,
+            )
+        )
 
     def _claim_dispatch_locked(self) -> object | None:
         if (
             self._scheduled_token is not None
             or self._in_flight is not None
-            or (self._required is None and self._replaceable is None)
+            or (
+                self._required is None
+                and not self._commands
+                and (
+                    self._replaceable is None
+                    or self._replaceable_ack is not None
+                )
+            )
         ):
             return None
         token = object()
@@ -276,9 +350,21 @@ class DocumentChannel:
             pending = self._required
             if pending is not None:
                 self._required = None
-            else:
+            elif (
+                self._appearance_after_command
+                and self._replaceable is not None
+                and self._replaceable_ack is None
+            ):
                 pending = self._replaceable
                 self._replaceable = None
+                self._appearance_after_command = False
+            elif self._commands:
+                pending = self._commands.popleft()
+            elif self._replaceable_ack is None:
+                pending = self._replaceable
+                self._replaceable = None
+            else:
+                pending = None
             self._scheduled_token = None
             if pending is None:
                 return
@@ -296,11 +382,27 @@ class DocumentChannel:
             return
         with self._lock:
             if self._in_flight is pending:
-                self._in_flight = _AwaitingAcknowledgment(
+                awaiting = _AwaitingAcknowledgment(
                     pending.complete,
                     pending.kind,
                     pending.acknowledgment,
                 )
+                if pending.kind is DocumentPostKind.REPLACEABLE:
+                    assert self._replaceable_ack is None
+                    self._replaceable_ack = awaiting
+                    self._in_flight = None
+                elif pending.kind is DocumentPostKind.COMMAND:
+                    assert pending.acknowledgment not in self._command_acks
+                    self._command_acks[pending.acknowledgment] = awaiting
+                    self._in_flight = None
+                    self._appearance_after_command = True
+                else:
+                    self._in_flight = awaiting
+                schedule = self._claim_dispatch_locked()
+            else:
+                schedule = None
+        if schedule is not None:
+            self._schedule_dispatch(schedule)
 
     def _post_to_current_document(
         self,
@@ -337,6 +439,8 @@ class DocumentChannel:
             if self._in_flight is not pending:
                 return
             self._in_flight = None
+            if pending.kind is DocumentPostKind.COMMAND:
+                self._appearance_after_command = True
             schedule = self._claim_dispatch_locked()
         pending.complete(error)
         if schedule is not None:
@@ -349,12 +453,16 @@ class DocumentChannel:
             self._scheduled_token = None
             required = self._required
             replaceable = self._replaceable
+            commands = tuple(self._commands)
             self._required = None
             self._replaceable = None
+            self._commands.clear()
         if required is not None:
             required.complete(error)
         if replaceable is not None:
             replaceable.complete(error)
+        for pending in commands:
+            pending.complete(error)
 
     @staticmethod
     def _complete_retired(posts: tuple[_CompletablePost | None, ...]) -> None:
@@ -387,17 +495,44 @@ class _AwaitingAcknowledgment:
 _CompletablePost = _PendingPost | _AwaitingAcknowledgment
 
 
+def _matches_acknowledgment(
+    pending: _CompletablePost | None,
+    kind: DocumentPostKind,
+    acknowledgment: _Acknowledgment,
+) -> bool:
+    return (
+        pending is not None
+        and pending.kind is kind
+        and type(pending.acknowledgment) is type(acknowledgment)
+        and pending.acknowledgment == acknowledgment
+    )
+
+
 def _is_acknowledgment(kind: DocumentPostKind, value: object) -> bool:
     if kind is DocumentPostKind.REPLACEABLE:
         return type(value) is int and 0 <= value <= MAX_JAVASCRIPT_SAFE_INTEGER
+    if kind is DocumentPostKind.REQUIRED:
+        return (
+            type(value) is tuple
+            and len(value) == 2
+            and type(value[0]) is int
+            and 0 <= value[0] <= MAX_JAVASCRIPT_SAFE_INTEGER
+            and type(value[1]) is str
+            and len(value[1]) == 32
+            and all(character in "0123456789abcdef" for character in value[1])
+        )
     return (
         type(value) is tuple
-        and len(value) == 2
+        and len(value) == 4
         and type(value[0]) is int
         and 0 <= value[0] <= MAX_JAVASCRIPT_SAFE_INTEGER
         and type(value[1]) is str
         and len(value[1]) == 32
         and all(character in "0123456789abcdef" for character in value[1])
+        and type(value[2]) is str
+        and len(value[2]) == 32
+        and all(character in "0123456789abcdef" for character in value[2])
+        and value[3] == "completion"
     )
 
 

@@ -886,6 +886,16 @@ currency inside its queued UI callback. Exact limits, evidence, and delivery
 status belong to `BRIDGE.md`, `INTERFACES.md`, and
 `DESKTOP_UI.md`, not this document.
 
+Command delivery is distinct from task/session effects. An immutable command
+row selects direct or small asynchronous native delivery; ordinary Python
+invocation remains synchronous. An asynchronous exchange owns admission and
+completion delivery plus its actual workers, while the existing lifecycle,
+registry and observer continue to own effect receipts, association and recovery.
+Document replacement retires delivery authority without canceling admitted
+work. Completion uses the existing document channel alongside readiness and
+appearance; a timeout is delivery uncertainty, never evidence that an effect
+did not happen. No generic job scheduler or durable command store is introduced.
+
 See also `COMMANDLINE.md`.
 
 ---

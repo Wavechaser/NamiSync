@@ -195,6 +195,11 @@ class CommandRetry(StrEnum):
     SAME_PAYLOAD_BOUNDED = "same-payload-bounded"
 
 
+class CommandWork(StrEnum):
+    DIRECT = "direct"
+    ASYNC_SMALL = "async-small"
+
+
 class FolderSlotAuthority(Protocol):
     """Consumer contract for the path-owning slot table added separately."""
 
@@ -288,6 +293,7 @@ class CommandSpec:
     timeout: CommandTimeout
     retry: CommandRetry
     phase: CommandPhase = CommandPhase.OPEN
+    work: CommandWork = CommandWork.DIRECT
 
     def invoke(
         self,
@@ -313,6 +319,17 @@ class CommandSpec:
     ) -> object:
         """Invoke while preserving an already admitted response owner."""
 
+        invocation = self.prepare_for_bridge(payload, context=context)
+        return self.invoke_prepared_for_bridge(invocation)
+
+    def prepare_for_bridge(
+        self,
+        payload: object,
+        *,
+        context: object,
+    ) -> object:
+        """Validate one admitted payload before selecting its work owner."""
+
         if (
             type(context) is not ReadinessContext
             or context.phase is not self.phase
@@ -322,10 +339,13 @@ class CommandSpec:
             )
         validated = self.validate_payload(payload)
         if self.phase is CommandPhase.BOOTSTRAP:
-            return self.handler(
-                _BootstrapCommandInvocation(validated, context.generation)
-            )
-        return self.handler(validated)
+            return _BootstrapCommandInvocation(validated, context.generation)
+        return validated
+
+    def invoke_prepared_for_bridge(self, invocation: object) -> object:
+        """Invoke an exact payload already validated at bridge admission."""
+
+        return self.handler(invocation)
 
 
 @dataclass(frozen=True, slots=True)
@@ -672,6 +692,7 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.MUTATION_30_SECONDS,
                 retry=CommandRetry.SAME_COMMAND_ONCE,
+                work=CommandWork.ASYNC_SMALL,
             ),
             "list_tasks": CommandSpec(
                 validate_payload=_validate_empty_payload,
@@ -690,6 +711,7 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.MUTATION_30_SECONDS,
                 retry=CommandRetry.SAME_COMMAND_ONCE,
+                work=CommandWork.ASYNC_SMALL,
             ),
             "next_events": CommandSpec(
                 validate_payload=_validate_next_events,
@@ -708,6 +730,7 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.MUTATION_30_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_BOUNDED,
+                work=CommandWork.ASYNC_SMALL,
             ),
             "close_task": CommandSpec(
                 validate_payload=_validate_close_task,
@@ -717,6 +740,7 @@ def production_command_specs(
                 revision=FieldRequirement.FORBIDDEN,
                 timeout=CommandTimeout.MUTATION_30_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_BOUNDED,
+                work=CommandWork.ASYNC_SMALL,
             ),
             "read_cosmetic_section": CommandSpec(
                 validate_payload=_validate_read_cosmetic_section,

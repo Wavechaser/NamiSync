@@ -107,7 +107,7 @@ from types import SimpleNamespace
 sys.path.insert(0, str(Path.cwd() / "tests" / "interfaces" / "web"))
 
 from _startup_test_support import (
-    StartupHandshakeDocumentChannel,
+    startup_handshake_document_channel,
     drive_startup_handshake,
 )
 from namisync.interfaces import launcher
@@ -245,7 +245,7 @@ host._create_service = lambda _paths: Service()
 host._configure_window_security = configure_security
 host._opaque_window_background = lambda _initial: "#F3F3F3"
 host._configure_window_appearance = lambda _window, *_args: appearance
-host._document_channel = StartupHandshakeDocumentChannel
+host._document_channel = startup_handshake_document_channel
 host._start_webview = start_webview
 startup_errors = []
 launcher._report_startup_error = startup_errors.append

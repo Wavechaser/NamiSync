@@ -7,6 +7,7 @@ import json
 import weakref
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Callable
 
 import pytest
 
@@ -445,6 +446,260 @@ def test_document_replacement_retires_sent_and_queued_ownership() -> None:
     assert len(required) == len(replaceable) == 1
     assert isinstance(required[0], DocumentStaleError)
     assert isinstance(replaceable[0], DocumentStaleError)
+
+
+def test_command_posts_are_fifo_with_readiness_priority_and_appearance_fairness() -> None:
+    native_window, core = _native_window()
+    queued: list[object] = []
+    outcomes: dict[str, list[Exception | None]] = {
+        name: [] for name in ("command1", "command2", "readiness", "appearance")
+    }
+    channel = DocumentChannel(
+        native_window,
+        invoke=lambda _owner, callback: queued.append(callback),
+        require_acknowledgment=True,
+    )
+    command1 = (1, "a" * 32, "b" * 32, "completion")
+    command2 = (1, "c" * 32, "d" * 32, "completion")
+    channel.post(
+        {"kind": "command", "index": 1},
+        still_current=lambda: True,
+        completion=outcomes["command1"].append,
+        kind=DocumentPostKind.COMMAND,
+        acknowledgment=command1,
+    )
+    queued[0]()
+    channel.post(
+        {"kind": "command", "index": 2},
+        still_current=lambda: True,
+        completion=outcomes["command2"].append,
+        kind=DocumentPostKind.COMMAND,
+        acknowledgment=command2,
+    )
+    channel.post(
+        {"kind": "appearance"},
+        still_current=lambda: True,
+        completion=outcomes["appearance"].append,
+        kind=DocumentPostKind.REPLACEABLE,
+        acknowledgment=7,
+    )
+    channel.post(
+        {"kind": "readiness"},
+        still_current=lambda: True,
+        completion=outcomes["readiness"].append,
+        kind=DocumentPostKind.REQUIRED,
+        acknowledgment=(2, "e" * 32),
+    )
+
+    assert [json.loads(value) for value in core.encoded] == [
+        {"index": 1, "kind": "command"}
+    ]
+    assert not channel.acknowledge(
+        DocumentPostKind.COMMAND,
+        (1, "a" * 32, "0" * 32, "completion"),
+    )
+    assert channel.acknowledge(DocumentPostKind.COMMAND, command1)
+    queued[1]()
+    assert json.loads(core.encoded[-1]) == {"kind": "readiness"}
+    assert channel.acknowledge(DocumentPostKind.REQUIRED, (2, "e" * 32))
+    queued[2]()
+    assert json.loads(core.encoded[-1]) == {"kind": "appearance"}
+    assert channel.acknowledge(DocumentPostKind.REPLACEABLE, 7)
+    queued[3]()
+    assert json.loads(core.encoded[-1]) == {"index": 2, "kind": "command"}
+    assert channel.acknowledge(DocumentPostKind.COMMAND, command2)
+    assert all(values == [None] for values in outcomes.values())
+
+
+def test_unacknowledged_appearance_does_not_block_command_completion() -> None:
+    native_window, core = _native_window()
+    queued: list[object] = []
+    appearance: list[Exception | None] = []
+    command: list[Exception | None] = []
+    channel = DocumentChannel(
+        native_window,
+        invoke=lambda _owner, callback: queued.append(callback),
+        require_acknowledgment=True,
+    )
+    command_ack = (1, "a" * 32, "b" * 32, "completion")
+
+    channel.post(
+        {"kind": "appearance"},
+        still_current=lambda: True,
+        completion=appearance.append,
+        kind=DocumentPostKind.REPLACEABLE,
+        acknowledgment=7,
+    )
+    queued[0]()
+    channel.post(
+        {"kind": "command"},
+        still_current=lambda: True,
+        completion=command.append,
+        kind=DocumentPostKind.COMMAND,
+        acknowledgment=command_ack,
+    )
+
+    queued[1]()
+    assert [json.loads(value)["kind"] for value in core.encoded] == [
+        "appearance",
+        "command",
+    ]
+    assert channel.acknowledge(DocumentPostKind.COMMAND, command_ack)
+    assert command == [None]
+    assert appearance == []
+    assert channel.acknowledge(DocumentPostKind.REPLACEABLE, 7)
+    assert appearance == [None]
+
+
+def test_unacknowledged_command_does_not_block_replayed_completion() -> None:
+    native_window, core = _native_window()
+    queued: list[object] = []
+    outcomes: list[list[Exception | None]] = [[], []]
+    channel = DocumentChannel(
+        native_window,
+        invoke=lambda _owner, callback: queued.append(callback),
+        require_acknowledgment=True,
+    )
+    acknowledgments = (
+        (1, "a" * 32, "b" * 32, "completion"),
+        (1, "c" * 32, "d" * 32, "completion"),
+    )
+
+    for index, acknowledgment in enumerate(acknowledgments):
+        channel.post(
+            {"index": index, "kind": "command"},
+            still_current=lambda: True,
+            completion=outcomes[index].append,
+            kind=DocumentPostKind.COMMAND,
+            acknowledgment=acknowledgment,
+        )
+        if index == 0:
+            queued[0]()
+
+    queued[1]()
+    assert [json.loads(value)["index"] for value in core.encoded] == [0, 1]
+    assert channel.acknowledge(DocumentPostKind.COMMAND, acknowledgments[1])
+    assert outcomes == [[], [None]]
+    assert channel.acknowledge(DocumentPostKind.COMMAND, acknowledgments[0])
+    assert outcomes == [[None], [None]]
+
+
+def test_exact_acknowledgment_during_send_does_not_restore_receipt_custody() -> None:
+    native_window, _core = _native_window()
+    outcomes: list[Exception | None] = []
+    acknowledgment = (1, "a" * 32, "b" * 32, "completion")
+
+    class AcknowledgingChannel(DocumentChannel):
+        def _post_to_current_document(
+            self,
+            encoded: str,
+            still_current: Callable[[], bool],
+            document_epoch: object,
+        ) -> Exception | None:
+            failure = super()._post_to_current_document(
+                encoded,
+                still_current,
+                document_epoch,
+            )
+            assert self.acknowledge(DocumentPostKind.COMMAND, acknowledgment)
+            return failure
+
+    channel = AcknowledgingChannel(
+        native_window,
+        require_acknowledgment=True,
+    )
+    channel.post(
+        {"kind": "command"},
+        still_current=lambda: True,
+        completion=outcomes.append,
+        kind=DocumentPostKind.COMMAND,
+        acknowledgment=acknowledgment,
+    )
+
+    assert outcomes == [None]
+    assert not channel.acknowledge(DocumentPostKind.COMMAND, acknowledgment)
+
+
+def test_command_queue_refuses_first_excess_and_reuses_released_capacity() -> None:
+    native_window, _core = _native_window()
+    queued: list[object] = []
+    outcomes: list[list[Exception | None]] = []
+    channel = DocumentChannel(
+        native_window,
+        invoke=lambda _owner, callback: queued.append(callback),
+        require_acknowledgment=True,
+    )
+
+    for index in range(65):
+        completion: list[Exception | None] = []
+        outcomes.append(completion)
+        channel.post(
+            {"index": index},
+            still_current=lambda: True,
+            completion=completion.append,
+            kind=DocumentPostKind.COMMAND,
+            acknowledgment=(
+                1,
+                f"{index:032x}",
+                f"{index + 1:032x}",
+                "completion",
+            ),
+        )
+        if index == 0:
+            queued[0]()
+
+    assert all(values == [] for values in outcomes[:64])
+    assert len(outcomes[64]) == 1
+    assert isinstance(outcomes[64][0], DocumentChannelBusyError)
+    assert channel.acknowledge(
+        DocumentPostKind.COMMAND,
+        (1, "0" * 32, f"{1:032x}", "completion"),
+    )
+    replacement: list[Exception | None] = []
+    channel.post(
+        {"index": 65},
+        still_current=lambda: True,
+        completion=replacement.append,
+        kind=DocumentPostKind.COMMAND,
+        acknowledgment=(1, f"{65:032x}", f"{66:032x}", "completion"),
+    )
+    assert replacement == []
+
+
+@pytest.mark.parametrize("retire", ("replace_document", "close"))
+def test_command_retirement_releases_sent_and_fifo_queued_posts(retire: str) -> None:
+    native_window, core = _native_window()
+    queued: list[object] = []
+    outcomes: list[list[Exception | None]] = [[], []]
+    channel = DocumentChannel(
+        native_window,
+        invoke=lambda _owner, callback: queued.append(callback),
+        require_acknowledgment=True,
+    )
+    acknowledgments = tuple(
+        (1, f"{index:032x}", f"{index + 1:032x}", "completion")
+        for index in range(2)
+    )
+    for index, acknowledgment in enumerate(acknowledgments):
+        channel.post(
+            {"index": index},
+            still_current=lambda: True,
+            completion=outcomes[index].append,
+            kind=DocumentPostKind.COMMAND,
+            acknowledgment=acknowledgment,
+        )
+    queued[0]()
+    queued[1]()
+
+    getattr(channel, retire)()
+
+    assert len(core.encoded) == 2
+    assert all(len(values) == 1 for values in outcomes)
+    assert all(isinstance(values[0], DocumentStaleError) for values in outcomes)
+    assert all(
+        not channel.acknowledge(DocumentPostKind.COMMAND, acknowledgment)
+        for acknowledgment in acknowledgments
+    )
 
 
 @pytest.mark.parametrize("retire", ("replace", "close"))

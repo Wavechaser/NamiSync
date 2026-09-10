@@ -120,7 +120,7 @@ The complete request is bounded to 65,536 UTF-8 bytes before decoding. The compl
 response is bounded to 8,388,608 canonical UTF-8 JSON bytes (sorted keys, compact
 separators, valid Unicode, no nonfinite values) before native construction.
 An excess returns `response_too_large` without undoing an admitted action. At most
-64 handlers are admitted; saturation is `bridge_busy`. Close waits at most 35
+64 exchanges are admitted; saturation is `bridge_busy`. Close waits at most 35
 seconds for quiescence. These active bounds are independent of retired BR-G-45.
 
 After handler reservation, trust recheck, envelope decode and allowlist lookup,
@@ -141,8 +141,74 @@ This addresses callback destruction on reload, not an atomic JavaScript delivery
 fence: a JS error racing retirement is treated as obsolete delivery. Command
 effects, replay, response custody and actual worker-exit accounting are unchanged.
 The adapter is pinned to pywebview's fresh-worker, single-return evaluation shape;
-compatibility tests exercise that installed return path. The separately proposed
-asynchronous command boundary in M1_PLAN remains unimplemented.
+compatibility tests exercise that installed return path. Small asynchronous
+commands still use that native path for their admission return.
+
+### Small asynchronous native commands
+
+Only `create_task`, `start_plan`, `release_terminal_session` and `close_task`
+select the `CommandSpec` small asynchronous work class. Native dispatch
+validates the request and admitted context before starting one command worker.
+Ordinary `BridgeDispatcher.dispatch()` and `CommandSpec.invoke()` remain
+synchronous. Custom rows default to direct delivery, as do bootstrap, picker,
+list, drain and cosmetic commands. A picker display path is not subject to the
+smaller completion-message wall. Exported browser wrappers keep their result,
+deadline and recovery semantics.
+
+The direct native transport remains
+`{transport_version:1,response_token:HexId|null,response:BridgeResponse}`.
+An accepted asynchronous return is
+`{transport_version:1,response_token:HexId,completion:{phase:"completion",generation:SafeInt,request_id:HexId,completion_token:HexId}}`.
+Its current-document completion is
+`{kind:"namisync.command-completion.v1",phase:"completion",generation:SafeInt,request_id:HexId,completion_token:HexId,response:BridgeResponse}`.
+Both objects have exact keys. `BridgeResponse` is the unchanged version-1
+success/error envelope above. Completion cleanup uses the exact canonical
+`ack:completion:<generation>:<request_id>:<completion_token>` string. It bypasses
+normal command admission, origin/readiness and saturation, but can only settle
+matching existing completion custody. It invokes no command. Native-return
+receipt acknowledgment remains a separate phase.
+
+Direct and asynchronous calls share the 64-exchange bound. An asynchronous
+exchange adds at most one worker and one completion; it creates no pending work
+queue. Worker-start refusal invokes no handler. Accepted work continues despite
+reload or close. Slot reuse waits for actual native-worker and command-worker
+exit, native-return acknowledgment/retirement, and completion acknowledgment/
+retirement. Producing a result, timing out, or failing to post is not worker
+death. These count bounds make no whole-runtime memory or thread claim.
+
+The browser registers at most 64 pending attempts before dispatch, retaining at
+most one early completion per entry. Exact admission/completion identity and
+both required cleanup acknowledgments precede live result resolution. Async
+cleanup attempts have a one-second deadline and at most two attempts. Local
+page reinjection counters are separate from the host generation learned from
+validated admission, since a full page reload restarts JavaScript state. An
+unsolicited completion cannot create an entry. Timeout frees the pending entry
+without a tombstone/history table; a valid same-generation late completion is
+cleanup-only and cannot adopt or resolve a result. Replacement retires old
+pending work. Unconfirmed cleanup or delivery remains transport uncertainty,
+using existing effect receipts and task/session reconstruction rather than a
+new effect owner or generic cancellation mechanism.
+
+DocumentChannel owns a separate command FIFO under the same exchange bound and
+one native post owner. Required readiness is selected first; an in-flight native
+send is never preempted. Sent command receipts remain independently bounded:
+queued, sending and awaiting-acknowledgement commands together cannot exceed
+64. Waiting for one receipt cannot block another command's delivery or replay.
+A pending appearance update gets a turn between command posts when its prior
+appearance receipt has retired; one unacknowledged cosmetic message cannot
+block command delivery. Replacement and close retire old queued, sending and
+awaiting-acknowledgement completion delivery;
+callbacks run outside bridge/channel locks. The existing atomic final epoch
+check plus `PostWebMessageAsJson` gate remains under DEFENSE's pinned native
+non-reentrancy premise.
+
+Each complete command message is snapshotted to bridge-safe primitives and
+bounded to 65,536 canonical UTF-8 bytes. Post-effect encoding or size failure
+uses a fixed bounded uncertainty completion, never a pre-effect refusal or a
+repeated handler. Actual post failure retires completion-delivery custody only;
+the browser reaches its existing deadline/recovery path. Shutdown retires and
+wakes delivery before its bounded worker wait, and an unfinished worker keeps
+service shutdown retryable.
 
 ### Fixed errors
 
@@ -165,8 +231,11 @@ asynchronous command boundary in M1_PLAN remains unimplemented.
 | `bridge_unavailable` | NamiSync is closing or this desktop page is no longer trusted. |
 | `internal_error` | NamiSync could not complete the desktop action. |
 
-Structured refusals are definitive. Retry policy belongs to immutable command
-rows and the wrapper, never handler data. No private detail is appended to errors.
+Explicit admission and payload refusals are definitive. `internal_error` after
+admitted work may instead mean uncertain result delivery; the four task-command
+wrappers retain their existing uncertainty recovery. Retry policy belongs to
+immutable command rows and the wrapper, never handler data. No private detail
+is appended to errors.
 
 ## Implemented command map
 

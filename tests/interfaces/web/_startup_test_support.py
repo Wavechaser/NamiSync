@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from threading import Thread
-from types import MappingProxyType
+from types import MappingProxyType, SimpleNamespace
 from unittest.mock import patch
 
 
@@ -55,6 +55,30 @@ class StartupHandshakeDocumentChannel:
         if len(self._messages) != 1:
             raise AssertionError("startup must publish exactly one readiness challenge")
         return self._messages.pop()
+
+
+def startup_handshake_document_channel(window: object) -> object:
+    """Bind the real channel while capturing this fixture's neutral message."""
+
+    from namisync.interfaces.web.document_channel import DocumentChannel
+
+    capture = StartupHandshakeDocumentChannel(window)
+
+    def post(encoded: str) -> None:
+        capture.post(
+            json.loads(encoded),
+            still_current=lambda: True,
+            completion=lambda _error: None,
+        )
+
+    native = SimpleNamespace(browser=SimpleNamespace(webview=SimpleNamespace(
+        CoreWebView2=SimpleNamespace(PostWebMessageAsJson=post),
+    )))
+    return DocumentChannel(
+        native,
+        invoke=lambda _window, callback: callback(),
+        require_acknowledgment=True,
+    )
 
 
 def _exposed_dispatch(window: object) -> Callable[[str], object]:

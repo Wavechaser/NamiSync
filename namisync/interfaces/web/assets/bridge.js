@@ -15,6 +15,10 @@ const SLOT_PATTERN = /^slot-[0-9a-f]{32}$/;
 const TASK_PATTERN = /^task-[0-9a-f]{32}$/;
 const COMMAND_PATTERN = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$/;
 const COMMAND_MAX_LENGTH = 64;
+const ASYNC_COMMAND_MAX_ATTEMPTS = 64;
+const ASYNC_CLEANUP_ACK_TIMEOUT_MS = 1000;
+const COMMAND_COMPLETION_KIND = "namisync.command-completion.v1";
+const COMMAND_COMPLETION_PHASE = "completion";
 const COMMAND_POLICY_JSON = `{
   "shell_ready": {"timeout": "startup-5-seconds", "retry": "none", "phase": "bootstrap"},
   "readiness_echo": {"timeout": "startup-5-seconds", "retry": "same-payload-once", "phase": "bootstrap"},
@@ -151,15 +155,26 @@ let operationalReadiness;
 let resolveOperationalReadiness;
 let bridgeGeneration = 0;
 let operationalGeneration = -1;
+let commandHostGeneration = null;
 const taskDrains = new Map();
+const asyncCommandAttempts = new Map();
+
+const documentMessages = globalThis.chrome?.webview;
+if (typeof documentMessages?.addEventListener === "function") {
+  documentMessages.addEventListener("message", receiveCommandCompletion);
+}
 
 window.addEventListener("pywebviewready", () => {
   bridgeGeneration += 1;
   operationalGeneration = -1;
+  commandHostGeneration = null;
   const resolve = resolveRawReadiness;
   rawReadiness = undefined;
   resolveRawReadiness = undefined;
   resolve?.();
+  for (const attempt of asyncCommandAttempts.values()) {
+    retireAsyncCommandAttempt(attempt);
+  }
   for (const task of taskDrains.values()) {
     if (!task.stopped && !task.terminal && task.pendingTerminalUpdate === null) {
       pauseTaskForBridge(task);
@@ -347,6 +362,7 @@ export async function createTask() {
         payload,
         validateTaskShellResult,
         CREATE_TASK_TIMEOUT_MS,
+        true,
       );
     } catch (error) {
       if (!isUncertainStartPlanFailure(error) || replayUsed) {
@@ -550,6 +566,7 @@ export async function closeTask(taskId, sessionId = null) {
           Object.freeze({ task_id: taskId, session_id: sessionId }),
           (value) => validateTaskCloseResult(value, taskId, sessionId),
           TASK_CLOSE_TIMEOUT_MS,
+          true,
         );
         if (result.disposition === "closed" && task !== undefined) {
           stopTask(task);
@@ -580,16 +597,24 @@ function startPlanAttempt(payload) {
     payload,
     validateStartPlanResult,
     START_PLAN_TIMEOUT_MS,
+    true,
   );
 }
 
-async function dispatchAttempt(command, payload, validateResult, timeoutMs) {
+async function dispatchAttempt(
+  command,
+  payload,
+  validateResult,
+  timeoutMs,
+  asyncSmall = false,
+) {
   return dispatchAttemptWithReadiness(
     command,
     payload,
     validateResult,
     timeoutMs,
     whenBridgeReady,
+    asyncSmall,
   );
 }
 
@@ -608,6 +633,7 @@ async function dispatchAttemptWithReadiness(
   validateResult,
   timeoutMs,
   waitUntilReady,
+  asyncSmall = false,
 ) {
   return createDispatchAttempt(
     command,
@@ -615,6 +641,7 @@ async function dispatchAttemptWithReadiness(
     validateResult,
     timeoutMs,
     waitUntilReady,
+    asyncSmall,
   ).promise;
 }
 
@@ -624,11 +651,13 @@ function createDispatchAttempt(
   validateResult,
   timeoutMs,
   waitUntilReady = whenBridgeReady,
+  asyncSmall = false,
 ) {
   const requestId = mintId();
   const attempt = {
     cancelled: false,
     rejectCancellation: null,
+    asyncEntry: null,
   };
   const request = JSON.stringify({
     schema_version: BRIDGE_SCHEMA_VERSION,
@@ -636,15 +665,47 @@ function createDispatchAttempt(
     command,
     payload,
   });
+  if (asyncSmall) {
+    if (asyncCommandAttempts.size >= ASYNC_COMMAND_MAX_ATTEMPTS) {
+      throw new BridgeCommandError("bridge_busy", ERROR_MESSAGES.bridge_busy);
+    }
+    let resolveCompletion;
+    let rejectCompletion;
+    const completion = new Promise((resolve, reject) => {
+      resolveCompletion = resolve;
+      rejectCompletion = reject;
+    });
+    attempt.asyncEntry = {
+      requestId,
+      browserGeneration: null,
+      hostGeneration: null,
+      completionToken: null,
+      earlyCompletion: null,
+      settling: false,
+      completion,
+      resolveCompletion,
+      rejectCompletion,
+    };
+    asyncCommandAttempts.set(requestId, attempt.asyncEntry);
+  }
+  const dispatchPromise = asyncSmall
+    ? dispatchSmallReadyAttempt(
+      request,
+      requestId,
+      validateResult,
+      attempt,
+      waitUntilReady,
+    )
+    : dispatchReadyAttempt(
+      request,
+      requestId,
+      validateResult,
+      attempt,
+      waitUntilReady,
+    );
   return {
     promise: withDeadline(
-      dispatchReadyAttempt(
-        request,
-        requestId,
-        validateResult,
-        attempt,
-        waitUntilReady,
-      ),
+      dispatchPromise,
       timeoutMs,
       () => cancelAttempt(attempt),
     ),
@@ -706,6 +767,332 @@ async function dispatchReadyAttempt(
     throw new BridgeTransportError();
   }
   return validateResponse(response, requestId, validateResult);
+}
+
+async function dispatchSmallReadyAttempt(
+  request,
+  requestId,
+  validateResult,
+  attempt,
+  waitUntilReady,
+) {
+  const entry = attempt.asyncEntry;
+  if (entry === null || asyncCommandAttempts.get(requestId) !== entry) {
+    throw new BridgeTransportError();
+  }
+  await waitUntilReady();
+  if (attempt.cancelled) {
+    throw new BridgeTransportError();
+  }
+  const generation = bridgeGeneration;
+  entry.browserGeneration = generation;
+  let onReincarnation;
+  const reincarnated = new Promise((resolve, reject) => {
+    void resolve;
+    onReincarnation = () => reject(new BridgeTransportError());
+    window.addEventListener("pywebviewready", onReincarnation, { once: true });
+  });
+  const cancelled = new Promise((resolve, reject) => {
+    void resolve;
+    attempt.rejectCancellation = reject;
+  });
+  try {
+    const api = bridgeApi();
+    if (
+      attempt.cancelled ||
+      generation !== bridgeGeneration ||
+      typeof api?.dispatch !== "function"
+    ) {
+      throw new BridgeTransportError();
+    }
+    // The pending entry and generation are fixed before native admission.
+    const transport = Promise.resolve(api.dispatch(request)).then(
+      (nativeResponse) => detachSmallNativeResponse(
+        api,
+        nativeResponse,
+        generation,
+        entry,
+      ),
+    );
+    const native = await Promise.race([transport, reincarnated, cancelled]);
+    if (native.kind === "direct") {
+      retireAsyncCommandAttempt(entry);
+      return validateResponse(native.response, requestId, validateResult);
+    }
+    const response = await Promise.race([
+      entry.completion,
+      reincarnated,
+      cancelled,
+    ]);
+    if (generation !== bridgeGeneration) {
+      throw new BridgeTransportError();
+    }
+    return validateResponse(response, requestId, validateResult);
+  } catch (error) {
+    if (error instanceof BridgeCommandError) {
+      throw error;
+    }
+    if (error instanceof BridgeTransportError) {
+      throw error;
+    }
+    throw new BridgeTransportError();
+  } finally {
+    attempt.rejectCancellation = null;
+    window.removeEventListener("pywebviewready", onReincarnation);
+    retireAsyncCommandAttempt(entry);
+  }
+}
+
+async function detachSmallNativeResponse(
+  api,
+  nativeResponse,
+  generation,
+  entry,
+) {
+  const direct = isExactObject(nativeResponse, [
+    "transport_version",
+    "response_token",
+    "response",
+  ]);
+  const admitted = isExactObject(nativeResponse, [
+    "transport_version",
+    "response_token",
+    "completion",
+  ]);
+  if (
+    (!direct && !admitted) ||
+    nativeResponse.transport_version !== NATIVE_TRANSPORT_VERSION ||
+    (admitted && nativeResponse.response_token === null) ||
+    (
+      nativeResponse.response_token !== null &&
+      (
+        typeof nativeResponse.response_token !== "string" ||
+        !ID_PATTERN.test(nativeResponse.response_token)
+      )
+    )
+  ) {
+    throw new BridgeTransportError();
+  }
+  const responseToken = nativeResponse.response_token;
+  let value;
+  try {
+    value = direct
+      ? { kind: "direct", response: cloneJsonValue(nativeResponse.response) }
+      : { kind: "admitted", completion: cloneJsonValue(nativeResponse.completion) };
+    if (admitted) {
+      const completion = value.completion;
+      if (
+        !isExactObject(completion, [
+          "phase",
+          "generation",
+          "request_id",
+          "completion_token",
+        ]) ||
+        completion.phase !== COMMAND_COMPLETION_PHASE ||
+        !Number.isSafeInteger(completion.generation) ||
+        completion.generation < 0 ||
+        completion.request_id !== entry.requestId ||
+        typeof completion.completion_token !== "string" ||
+        !ID_PATTERN.test(completion.completion_token) ||
+        (
+          commandHostGeneration !== null &&
+          commandHostGeneration !== completion.generation
+        )
+      ) {
+        throw new BridgeTransportError();
+      }
+      commandHostGeneration = completion.generation;
+      entry.hostGeneration = completion.generation;
+      entry.completionToken = completion.completion_token;
+    }
+  } finally {
+    nativeResponse = null;
+    if (responseToken !== null) {
+      await acknowledgeAsyncCleanup(
+        api,
+        `ack:${responseToken}`,
+        generation,
+      );
+    }
+  }
+  if (generation !== bridgeGeneration) {
+    throw new BridgeTransportError();
+  }
+  if (direct) {
+    return value;
+  }
+  if (entry.earlyCompletion !== null) {
+    void settleCommandCompletion(entry, entry.earlyCompletion);
+  }
+  return { kind: "admitted" };
+}
+
+function receiveCommandCompletion(event) {
+  const message = event?.data;
+  if (!isCommandCompletionMessage(message)) {
+    return;
+  }
+  const entry = asyncCommandAttempts.get(message.request_id);
+  if (entry === undefined) {
+    if (
+      commandHostGeneration !== null &&
+      message.generation === commandHostGeneration
+    ) {
+      void acknowledgeCommandCompletion(message).catch(() => {});
+    }
+    return;
+  }
+  if (
+    entry.browserGeneration !== bridgeGeneration ||
+    (
+      entry.completionToken !== null &&
+      (
+        entry.hostGeneration !== message.generation ||
+        entry.completionToken !== message.completion_token
+      )
+    )
+  ) {
+    return;
+  }
+  let captured;
+  try {
+    captured = cloneJsonValue(message);
+  } catch {
+    return;
+  }
+  if (entry.completionToken === null) {
+    if (entry.earlyCompletion === null) {
+      entry.earlyCompletion = captured;
+    }
+    return;
+  }
+  void settleCommandCompletion(entry, captured);
+}
+
+async function settleCommandCompletion(entry, message) {
+  if (
+    entry.settling ||
+    entry.browserGeneration !== bridgeGeneration ||
+    entry.hostGeneration !== message.generation ||
+    entry.requestId !== message.request_id ||
+    entry.completionToken !== message.completion_token
+  ) {
+    return;
+  }
+  entry.settling = true;
+  try {
+    await acknowledgeCommandCompletion(message);
+  } catch (_error) {
+    if (asyncCommandAttempts.get(entry.requestId) === entry) {
+      asyncCommandAttempts.delete(entry.requestId);
+      entry.rejectCompletion(new BridgeTransportError());
+    }
+    return;
+  }
+  if (asyncCommandAttempts.get(entry.requestId) !== entry) {
+    return;
+  }
+  asyncCommandAttempts.delete(entry.requestId);
+  entry.resolveCompletion(message.response);
+}
+
+async function acknowledgeCommandCompletion(message) {
+  const api = bridgeApi();
+  if (
+    commandHostGeneration === null ||
+    message.generation !== commandHostGeneration ||
+    typeof api?.dispatch !== "function"
+  ) {
+    throw new BridgeTransportError();
+  }
+  const acknowledgment = [
+    "ack",
+    COMMAND_COMPLETION_PHASE,
+    String(message.generation),
+    message.request_id,
+    message.completion_token,
+  ].join(":");
+  return acknowledgeAsyncCleanup(api, acknowledgment, bridgeGeneration);
+}
+
+async function acknowledgeAsyncCleanup(api, acknowledgment, generation) {
+  let firstDeliveryUncertain = false;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (
+      generation !== bridgeGeneration ||
+      typeof api?.dispatch !== "function"
+    ) {
+      throw new BridgeTransportError();
+    }
+    try {
+      const acknowledged = await withDeadline(
+        Promise.resolve(api.dispatch(acknowledgment)),
+        ASYNC_CLEANUP_ACK_TIMEOUT_MS,
+        () => {},
+      );
+      if (
+        acknowledged === true ||
+        (firstDeliveryUncertain && acknowledged === false)
+      ) {
+        return;
+      }
+    } catch (_error) {
+      if (attempt === 0) {
+        firstDeliveryUncertain = true;
+      }
+    }
+  }
+  throw new BridgeTransportError();
+}
+
+function retireAsyncCommandAttempt(entry) {
+  if (asyncCommandAttempts.get(entry.requestId) === entry) {
+    asyncCommandAttempts.delete(entry.requestId);
+  }
+}
+
+function isCommandCompletionMessage(value) {
+  if (
+    !isExactObject(value, [
+      "kind",
+      "phase",
+      "generation",
+      "request_id",
+      "completion_token",
+      "response",
+    ]) ||
+    value.kind !== COMMAND_COMPLETION_KIND ||
+    value.phase !== COMMAND_COMPLETION_PHASE ||
+    !Number.isSafeInteger(value.generation) ||
+    value.generation < 0 ||
+    typeof value.request_id !== "string" ||
+    !ID_PATTERN.test(value.request_id) ||
+    typeof value.completion_token !== "string" ||
+    !ID_PATTERN.test(value.completion_token)
+  ) {
+    return false;
+  }
+  return isCompletionResponse(value.response, value.request_id);
+}
+
+function isCompletionResponse(value, requestId) {
+  if (
+    value?.schema_version !== BRIDGE_SCHEMA_VERSION ||
+    value.request_id !== requestId ||
+    typeof value.ok !== "boolean"
+  ) {
+    return false;
+  }
+  if (value.ok) {
+    return isExactObject(value, ["schema_version", "request_id", "ok", "result"]);
+  }
+  if (
+    !isExactObject(value, ["schema_version", "request_id", "ok", "error"]) ||
+    !isExactObject(value.error, ["code", "message"])
+  ) {
+    return false;
+  }
+  return ERROR_MESSAGES[value.error.code] === value.error.message;
 }
 
 async function detachNativeResponse(api, nativeResponse, generation) {
@@ -773,6 +1160,9 @@ function cancelAttempt(attempt) {
     return;
   }
   attempt.cancelled = true;
+  if (attempt.asyncEntry !== null) {
+    retireAsyncCommandAttempt(attempt.asyncEntry);
+  }
   attempt.rejectCancellation?.(new BridgeTransportError());
 }
 
@@ -1258,6 +1648,8 @@ function runTaskRelease(task) {
       Object.freeze({ task_id: task.taskId, session_id: task.sessionId }),
       (value) => validateTaskIdentityResult(value, task),
       SESSION_RELEASE_TIMEOUT_MS,
+      whenBridgeReady,
+      true,
     );
   } catch (_error) {
     refuseTaskRelease(task, epoch, new BridgeTransportError());

@@ -889,6 +889,7 @@ def run_desktop(
                     )
                     if document_channel is None:
                         channel = _document_channel(window)
+                        dispatcher._bind_document_channel(channel)
                         bind_appearance_channel = getattr(
                             appearance_controller,
                             "_bind_document_channel",

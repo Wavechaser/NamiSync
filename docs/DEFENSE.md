@@ -181,9 +181,12 @@ The following population and process-live admission walls are active now:
   dispatcher sequence, replay, subscriber, or audit mutation.
   `canonical_event_bytes` is the named production enforcer; removing a semantic
   self-validation pass must not remove or move this byte check after mutation.
-- The bridge admits at most 64 concurrent handlers before invoking command
-  work. This ingress concurrency wall is independent of any future task and
-  artifact containment model.
+- The bridge admits at most 64 exchanges before invoking command work. Direct
+  calls and small asynchronous native commands share this count. An async
+  exchange adds at most one command worker and one completion, with no pending
+  work queue; its slot remains charged through both worker exits and both
+  delivery settlements. This count wall does not establish whole-runtime
+  thread or memory acceptance or a task/artifact containment model.
 - The application admits at most 48 active desktop task effects. The
   `TaskLifecycle` count check runs before task publication, delivery-factory
   invocation, workflow work, observer adoption, or dispatcher admission. A
@@ -479,10 +482,13 @@ The current containment obligations are still strict:
 - renderer failure, malformed requests, expired slots, saturation, and teardown
   may degrade only through bounded T1 outcomes.
 
-An exact opaque native-response acknowledgment is cleanup, not dispatch
-authority. It may release matching existing browser custody after document
-trust is lost, but it invokes no handler, exposes no response content, and
-cannot reap custody before that exact native worker exits. Command dispatch
+An exact opaque native-response or asynchronous-completion acknowledgment is
+cleanup, not dispatch authority. It may release matching existing browser
+custody after document trust is lost or ordinary admission is saturated, but
+it invokes no handler and exposes no response content. Async admission and
+completion are separate delivery phases within the existing exchange bound;
+neither acknowledgment can reap an exchange before all its actual workers
+exit and both delivery phases are acknowledged or retired. Command dispatch
 still rechecks committed-origin trust after reserving its handler position.
 
 Desktop transport does not become backend lifecycle authority. The application

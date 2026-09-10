@@ -73,7 +73,13 @@ _MAX_ADMITTED_HANDLERS = 64
 _HANDLER_WAIT_TIMEOUT_SECONDS = 35.0
 _OPAQUE_ID = re.compile(r"[0-9a-f]{32}")
 _NATIVE_RESPONSE_ACK = re.compile(r"ack:([0-9a-f]{32})")
+_COMMAND_COMPLETION_ACK = re.compile(
+    r"ack:completion:(0|[1-9][0-9]{0,15}):([0-9a-f]{32}):([0-9a-f]{32})"
+)
 _NATIVE_TRANSPORT_VERSION = 1
+_COMMAND_COMPLETION_KIND = "namisync.command-completion.v1"
+_COMMAND_COMPLETION_PHASE = "completion"
+_MAX_COMMAND_COMPLETION_BYTES = 65_536
 _COMMAND_NAME = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)*")
 _ERROR_MESSAGES = {
     "invalid_request": "The desktop request is invalid.",
@@ -175,6 +181,18 @@ class _JsonByteBudget:
 class _NativeResponseCustody:
     owner: Thread
     browser_released: bool = False
+    command_owner: Thread | None = None
+    completion_generation: int | None = None
+    completion_request_id: str | None = None
+    completion_token: str | None = None
+    completion_released: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class _AsyncAdmission:
+    generation: int
+    request_id: str
+    completion_token: str
 
 
 _TASK_DRAIN_ADMISSION_ISSUER = object()
@@ -634,6 +652,22 @@ class BridgeDispatcher:
         self._native_responses: dict[str, _NativeResponseCustody] = {}
         self._document_generation = 0
         self._native_return_marker = local()
+        self._document_channel: object | None = None
+
+    def _bind_document_channel(self, channel: object) -> None:
+        """Bind the one current-document completion lane after construction."""
+
+        from .document_channel import DocumentChannel
+
+        if type(channel) is not DocumentChannel:
+            raise TypeError("bridge completion lane must be an exact DocumentChannel")
+        with self._handler_condition:
+            if (
+                self._document_channel is not None
+                and self._document_channel is not channel
+            ):
+                raise RuntimeError("bridge completion lane is already bound")
+            self._document_channel = channel
 
     def dispatch(self, command_json: str) -> dict[str, object]:
         """Return one exact response envelope; never export a Python failure."""
@@ -657,6 +691,17 @@ class BridgeDispatcher:
                 if acknowledgment is not None:
                     return self._acknowledge_native_response(
                         acknowledgment.group(1)
+                    )
+            if type(command_json) is str:
+                acknowledgment = _COMMAND_COMPLETION_ACK.fullmatch(command_json)
+                if acknowledgment is not None:
+                    generation = int(acknowledgment.group(1))
+                    if generation > MAX_JAVASCRIPT_SAFE_INTEGER:
+                        return False
+                    return self._acknowledge_command_completion(
+                        generation,
+                        acknowledgment.group(2),
+                        acknowledgment.group(3),
                     )
 
             if native_generation is None:
@@ -690,6 +735,8 @@ class BridgeDispatcher:
                     if self._native_responses.get(response_token) is custody
                     else None
                 )
+            if type(response) is _AsyncAdmission:
+                return self._native_admission_response(admitted_token, response)
             return self._native_response(admitted_token, response)
         finally:
             if type(owner) is Thread and native_generation is not None:
@@ -805,17 +852,13 @@ class BridgeDispatcher:
                 CommandAdmissionError,
                 CommandConflictError,
                 CommandPayloadError,
+                CommandWork,
                 PickerUnavailableError,
                 PlanningRefusedError,
             )
-            from .drain import (
-                DrainBusyError,
-                ObservationConflictError,
-            )
-            from .slots import SlotUnavailableError
 
             try:
-                result = spec.invoke_for_bridge(
+                prepared = spec.prepare_for_bridge(
                     payload,
                     context=admission.context,
                 )
@@ -825,63 +868,277 @@ class BridgeDispatcher:
             except CommandPayloadError as error:
                 retire_exception_graph(error)
                 return self._failure(request_id, name, "invalid_payload")
-            except SlotUnavailableError as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "slot_unavailable")
-            except PickerUnavailableError as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "picker_unavailable")
-            except CommandConflictError as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "command_conflict")
-            except PlanningRefusedError as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "planning_refused")
-            except TaskUnavailableError as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "task_unavailable")
-            except DrainBusyError as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "drain_busy")
-            except ObservationConflictError as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "observation_conflict")
             except BaseException as error:
                 retire_exception_graph(error)
                 return self._failure(request_id, name, "internal_error")
-            try:
-                if type(result) is _AdmittedTaskDrainResponse:
-                    captured_result = _consume_task_drain_response(result)
-                else:
-                    captured_result = snapshot_bridge_response_result(
-                        result,
-                        request_id,
-                        MAX_BRIDGE_RESPONSE_JSON_BYTES,
-                    )
-            except BridgeResponseTooLargeError as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "response_too_large")
-            except BaseException as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "internal_error")
-            del result
-            try:
-                result = _project_response_value(captured_result, set())
-            except BaseException as error:
-                retire_exception_graph(error)
-                return self._failure(request_id, name, "internal_error")
-            del captured_result
-            return {
-                "schema_version": BRIDGE_SCHEMA_VERSION,
-                "request_id": request_id,
-                "ok": True,
-                "result": result,
-            }
+            if (
+                native_custody is not None
+                and spec.work is CommandWork.ASYNC_SMALL
+            ):
+                assert native_token is not None
+                assert native_generation is not None
+                return self._start_async_command(
+                    request_id=request_id,
+                    name=name,
+                    spec=spec,
+                    prepared=prepared,
+                    custody=native_custody,
+                    native_token=native_token,
+                    generation=native_generation,
+                )
+            return self._execute_prepared_command(
+                request_id,
+                name,
+                spec,
+                prepared,
+            )
         except BaseException as error:
             retire_exception_graph(error)
             return self._failure(None, None, "internal_error")
         finally:
             self._release_handler(native_token)
+
+    def _execute_prepared_command(
+        self,
+        request_id: str,
+        name: str,
+        spec: CommandSpec,
+        prepared: object,
+        *,
+        maximum_json_bytes: int = MAX_BRIDGE_RESPONSE_JSON_BYTES,
+        oversize_code: str = "response_too_large",
+    ) -> dict[str, object]:
+        from .commands import (
+            CommandAdmissionError,
+            CommandConflictError,
+            CommandPayloadError,
+            PickerUnavailableError,
+            PlanningRefusedError,
+        )
+        from .drain import DrainBusyError, ObservationConflictError
+        from .slots import SlotUnavailableError
+
+        try:
+            result = spec.invoke_prepared_for_bridge(prepared)
+        except CommandAdmissionError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "bridge_unavailable")
+        except CommandPayloadError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "invalid_payload")
+        except SlotUnavailableError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "slot_unavailable")
+        except PickerUnavailableError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "picker_unavailable")
+        except CommandConflictError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "command_conflict")
+        except PlanningRefusedError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "planning_refused")
+        except TaskUnavailableError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "task_unavailable")
+        except DrainBusyError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "drain_busy")
+        except ObservationConflictError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "observation_conflict")
+        except BaseException as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "internal_error")
+        try:
+            if type(result) is _AdmittedTaskDrainResponse:
+                captured_result = _consume_task_drain_response(result)
+            else:
+                captured_result = snapshot_bridge_response_result(
+                    result,
+                    request_id,
+                    maximum_json_bytes,
+                )
+        except BridgeResponseTooLargeError as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, oversize_code)
+        except BaseException as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "internal_error")
+        del result
+        try:
+            result = _project_response_value(captured_result, set())
+        except BaseException as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "internal_error")
+        del captured_result
+        return {
+            "schema_version": BRIDGE_SCHEMA_VERSION,
+            "request_id": request_id,
+            "ok": True,
+            "result": result,
+        }
+
+    def _start_async_command(
+        self,
+        *,
+        request_id: str,
+        name: str,
+        spec: CommandSpec,
+        prepared: object,
+        custody: _NativeResponseCustody,
+        native_token: str,
+        generation: int,
+    ) -> _AsyncAdmission | dict[str, object]:
+        if not 0 <= generation <= MAX_JAVASCRIPT_SAFE_INTEGER:
+            return self._failure(request_id, name, "internal_error")
+        try:
+            completion_token = uuid4().hex
+            if _OPAQUE_ID.fullmatch(completion_token) is None:
+                raise RuntimeError("command completion token generation failed")
+        except BaseException as error:
+            retire_exception_graph(error)
+            return self._failure(request_id, name, "internal_error")
+
+        def run() -> None:
+            self._run_async_command(
+                request_id=request_id,
+                name=name,
+                spec=spec,
+                prepared=prepared,
+                custody=custody,
+            )
+
+        worker = Thread(
+            target=run,
+            name=f"namisync-command-{name}",
+            daemon=True,
+        )
+        with self._handler_condition:
+            if (
+                self._native_responses.get(native_token) is not custody
+                or self._document_channel is None
+                or generation != self._document_generation
+                or any(
+                    item.completion_token == completion_token
+                    for item in self._native_responses.values()
+                )
+            ):
+                return self._failure(request_id, name, "bridge_unavailable")
+            custody.command_owner = worker
+            custody.completion_generation = generation
+            custody.completion_request_id = request_id
+            custody.completion_token = completion_token
+            custody.completion_released = False
+        try:
+            worker.start()
+        except BaseException as error:
+            retire_exception_graph(error)
+            with self._handler_condition:
+                custody.command_owner = None
+                custody.completion_generation = None
+                custody.completion_request_id = None
+                custody.completion_token = None
+                custody.completion_released = True
+                self._handler_condition.notify_all()
+            return self._failure(request_id, name, "internal_error")
+        return _AsyncAdmission(generation, request_id, completion_token)
+
+    def _run_async_command(
+        self,
+        *,
+        request_id: str,
+        name: str,
+        spec: CommandSpec,
+        prepared: object,
+        custody: _NativeResponseCustody,
+    ) -> None:
+        response = self._execute_prepared_command(
+            request_id,
+            name,
+            spec,
+            prepared,
+            maximum_json_bytes=_MAX_COMMAND_COMPLETION_BYTES,
+            oversize_code="internal_error",
+        )
+        message = self._command_completion_message(custody, response)
+        try:
+            encoded = json.dumps(
+                message,
+                ensure_ascii=True,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+            if len(encoded) > _MAX_COMMAND_COMPLETION_BYTES:
+                raise BridgeResponseTooLargeError(
+                    "command completion exceeds its document-message ceiling"
+                )
+        except BaseException as error:
+            retire_exception_graph(error)
+            response = self._failure(request_id, name, "internal_error")
+            message = self._command_completion_message(custody, response)
+        with self._handler_condition:
+            channel = self._document_channel
+        if channel is None:
+            self._retire_command_completion(custody)
+            return
+        from .document_channel import DocumentPostKind
+
+        acknowledgment = (
+            custody.completion_generation,
+            custody.completion_request_id,
+            custody.completion_token,
+            _COMMAND_COMPLETION_PHASE,
+        )
+        try:
+            channel.post(
+                message,
+                still_current=lambda: self._command_completion_is_current(custody),
+                completion=lambda _error: self._retire_command_completion(custody),
+                kind=DocumentPostKind.COMMAND,
+                acknowledgment=acknowledgment,
+            )
+        except BaseException as error:
+            retire_exception_graph(error)
+            self._retire_command_completion(custody)
+
+    @staticmethod
+    def _command_completion_message(
+        custody: _NativeResponseCustody,
+        response: dict[str, object],
+    ) -> dict[str, object]:
+        return {
+            "kind": _COMMAND_COMPLETION_KIND,
+            "phase": _COMMAND_COMPLETION_PHASE,
+            "generation": custody.completion_generation,
+            "request_id": custody.completion_request_id,
+            "completion_token": custody.completion_token,
+            "response": response,
+        }
+
+    def _command_completion_is_current(
+        self,
+        custody: _NativeResponseCustody,
+    ) -> bool:
+        with self._handler_condition:
+            return (
+                not custody.completion_released
+                and custody.completion_generation == self._document_generation
+                and any(
+                    current is custody
+                    for current in self._native_responses.values()
+                )
+            )
+
+    def _retire_command_completion(
+        self,
+        custody: _NativeResponseCustody,
+    ) -> None:
+        with self._handler_condition:
+            custody.completion_released = True
+            self._reap_native_returns_locked()
+            self._handler_condition.notify_all()
 
     @staticmethod
     def _native_response(
@@ -892,6 +1149,22 @@ class BridgeDispatcher:
             "transport_version": _NATIVE_TRANSPORT_VERSION,
             "response_token": response_token,
             "response": response,
+        }
+
+    @staticmethod
+    def _native_admission_response(
+        response_token: str | None,
+        admission: _AsyncAdmission,
+    ) -> dict[str, object]:
+        return {
+            "transport_version": _NATIVE_TRANSPORT_VERSION,
+            "response_token": response_token,
+            "completion": {
+                "phase": _COMMAND_COMPLETION_PHASE,
+                "generation": admission.generation,
+                "request_id": admission.request_id,
+                "completion_token": admission.completion_token,
+            },
         }
 
     def _failure(
@@ -974,7 +1247,15 @@ class BridgeDispatcher:
         finished = tuple(
             token
             for token, custody in self._native_responses.items()
-            if custody.browser_released and not custody.owner.is_alive()
+            if (
+                custody.browser_released
+                and not custody.owner.is_alive()
+                and custody.completion_released
+                and (
+                    custody.command_owner is None
+                    or not custody.command_owner.is_alive()
+                )
+            )
         )
         for token in finished:
             del self._native_responses[token]
@@ -992,6 +1273,42 @@ class BridgeDispatcher:
             self._handler_condition.notify_all()
             return True
 
+    def _acknowledge_command_completion(
+        self,
+        generation: int,
+        request_id: str,
+        completion_token: str,
+    ) -> bool:
+        """Retire one exact completion without granting command authority."""
+
+        with self._handler_condition:
+            matches = tuple(
+                custody
+                for custody in self._native_responses.values()
+                if (
+                    not custody.completion_released
+                    and custody.completion_generation == generation
+                    and custody.completion_request_id == request_id
+                    and custody.completion_token == completion_token
+                )
+            )
+            channel = self._document_channel
+        if len(matches) != 1 or channel is None:
+            return False
+        from .document_channel import DocumentPostKind
+
+        return bool(
+            channel.acknowledge(
+                DocumentPostKind.COMMAND,
+                (
+                    generation,
+                    request_id,
+                    completion_token,
+                    _COMMAND_COMPLETION_PHASE,
+                ),
+            )
+        )
+
     def _retire_document_responses(self) -> None:
         """Retire browser custody invalidated by a document generation change."""
 
@@ -999,6 +1316,7 @@ class BridgeDispatcher:
             self._document_generation += 1
             for custody in self._native_responses.values():
                 custody.browser_released = True
+                custody.completion_released = True
             self._reap_native_returns_locked()
             self._handler_condition.notify_all()
 
@@ -1009,8 +1327,13 @@ class BridgeDispatcher:
             self._accepting = False
             for custody in self._native_responses.values():
                 custody.browser_released = True
+                custody.completion_released = True
+            channel = self._document_channel
             self._reap_native_returns_locked()
             self._handler_condition.notify_all()
+        close = getattr(channel, "close", None)
+        if callable(close):
+            close()
 
     def wait_for_handlers(
         self,
@@ -1034,9 +1357,10 @@ class BridgeDispatcher:
                         "bridge handlers did not quiesce before the deadline"
                     )
                 owners = tuple(
-                    custody.owner
+                    owner
                     for custody in self._native_responses.values()
-                    if custody.owner.is_alive()
+                    for owner in (custody.owner, custody.command_owner)
+                    if owner is not None and owner.is_alive()
                 )
                 if not owners:
                     self._handler_condition.wait(remaining)
