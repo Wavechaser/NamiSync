@@ -461,6 +461,166 @@ artifacts. No asynchronous boundary, M1-5 workflow code, new resource budget or
 diagnostic timing acceptance is included. Separate future-design sections are
 documentation outcomes and must not enter the feature commit.
 
+## M1-5 bounded checkpoint detail
+
+**Outcome and acceptance gate.** M1-5-G is one checkpoint gate: Setup's
+current picker-backed plan start and inventory use one workflow-owned location
+candidate admission route, expose typed results, and can read bounded,
+identity-based remembered locations. The gate closes only when the finite
+transition checks below, affected-department and ordinary verification, source
+tracing of preserved guarantees, matching documentation, and a fresh adversarial
+review all pass. A green test run alone does not close it. M1-4 must be reviewed
+and committed before M1-5 implementation begins. The current delivery pauses
+before M1-5 for the user's recap and GUI adjustments; this section is design
+only and does not authorize starting its implementation during this delivery.
+
+**Finite implementation population.** Production changes are confined to
+`namisync/workflows/inventory.py`, `runtime.py`, and `__init__.py`,
+`namisync/db/repositories.py`, and `namisync/interfaces/service.py`.
+Workflow-owned candidate/result types stay with their actual owner; no core
+contract, domain module, schema, settings store, dispatcher, task lifecycle,
+or frontend content change is planned. The existing picker/slot/bridge path is
+a consumer through service plan start, not a new owner of path policy.
+
+The test population is `tests/test_inventory_workflow.py`,
+`test_inventory_runtime.py`, `test_db_repositories.py`, `test_service.py`,
+`test_bridge_service.py`, and their existing `tests/_inventory_fixtures.py`
+and `tests/_service_fixtures.py` support. Existing
+`tests/interfaces/web/test_slots.py` and `test_commands.py` are named consumer
+regression checks. `tests/interfaces/web/test_transport.py` is also admitted for
+its direct-service plan-start runtime fixture: the preimplementation consumer
+trace found that it must model the new admission seam without weakening the
+production service. No collected module is added or retired. Documentation is
+limited to this register, `INVENTORY.md`, `WORKFLOWS.md`, `DATABASE.md`,
+`INTERFACES.md`, `FEATURES.md`, `DESKTOP_UI.md`, `BRIDGE.md`, the README
+current-state/phase summaries, and task-level `CHANGELOG.md`/`HANDOFF.md`.
+Files in this population change only when necessary for the accepted outcome;
+the population is not a cleanup checklist.
+
+**Owners and seams.** `inventory.py` owns candidate parsing/admission,
+`LocationBinding`, current mounted-volume resolution, and inventory/integrity
+binding. Reuse its existing bounded resolver and no-follow root-chain authority;
+typed parser/native refusal must not depend on parsing diagnostic strings.
+`runtime.py` composes the native collaborators and read-only ledger access;
+`service.py` exposes typed application results and integrates fresh plan starts.
+`db/repositories.py` owns bounded SQL readback. Service task claims, command
+receipts, observer ownership, and dispatcher admission remain with their M1-4
+owners. Source/target overlap and canonical path checks remain effective.
+
+Raw text is bounded before parsing/native work, treated literally, and never
+expanded as shell, environment, URI, home, or current-directory syntax. Keep
+long logical paths and the existing extended-length native boundary. Refuse
+files without selecting their parents, redirected/placeholder chains, malformed
+or unsupported namespaces, and remote locations with typed guidance. Preserve
+existing local filesystem capability behavior; this checkpoint does not create
+new optical/unknown-filesystem support or writable-media promises.
+
+Native picker paths already flow through slots into service plan start. On a
+fresh start, perform candidate admission after the command replay/claim boundary
+and before workflow/session work. An equal replay must not probe again or create
+another effect. Slot ids remain purpose-bound, nonconsuming and expiry-bounded;
+pair lookup stays atomic and no slot lock spans native I/O. Typed and remembered
+Setup widgets, picker-time feedback, and standalone-inventory picker controls
+remain M1-6. Inventory/integrity and all scanner, preflight, executor, and verifier
+point-of-use re-probes remain active; neither a candidate nor a remembered
+identity authorizes later filesystem work.
+
+**Remembered locations.** Implement the existing FEATURES outcome of at most
+five recent sources, five targets, and five active pairings, derived only from
+durable ledger run activity. Deduplicate by stable location/pair identity and
+order by latest recorded run time with a deterministic identity tie-break.
+Exclude soft-deleted mappings from the run-derived suggestions; do not discard historical
+failed, canceled, degraded, unfinished, offline, or remounted locations.
+Bound SQL result materialization before constructing presentation collections.
+Typing, picking, probing, and mere candidate admission write no recent record.
+Activation resolves the remembered identity afresh; a stored drive hint is
+never presented as an authoritative current path. Missing/offline/ambiguous
+results keep identity context and cannot become a successful admission.
+
+**Design probes and regression definition.** Before production edits, inspect
+the owners and consumer seams above, and exercise the exact selector corpus
+recorded in the preimplementation receipt below for parser and native-path
+boundaries; file, reparse, placeholder, and long-root behavior; offline, missing,
+remounted and cloned volumes; queued re-resolution; service admission/replay;
+slot purpose/expiry/eviction/concurrent pair resolution; and ledger run/mapping
+provenance. These probes sample the declared regression surfaces; they do not
+claim full-module runs of every file in the implementation population. Record
+the commands and direct owner traces below before freezing implementation.
+Diagnostic outputs, if needed, use ignored
+`build/m1-5-design/` for disposable baseline output and `build/m1-5/` for
+per-command implementation evidence; neither is measurement authority.
+
+A regression is a lost existing guarantee, a false state/evidence claim, an
+unauthorized effect, or newly unbounded work. A red test is a lead that requires
+tracing the reached production seam and consequence; a green test does not
+prove absence. Implementation validates the predeclared surfaces and diagnoses
+failures; it does not initiate a new broad discovery pass. Required new witnesses
+cover every refusal class, long-path acceptance, current remount and clone
+selection, fresh activation/queue probes, all three five-entry boundaries and
+ordering/provenance, and replay before candidate work. Run the database,
+workflows, and interfaces neighborhood, ordinary repository suite, import
+contracts, and `git diff --check`; retain M1-4 headed evidence unless a changed
+production desktop path requires its witness to run again.
+
+**Archived-clause dispositions and non-goals.** Archived candidate DTO shapes,
+assessment/activation command counts, reservation/lease recipes, and aggregate
+retained-graph byte targets are not implementation prerequisites. The active
+literal-input, typed-refusal, fresh-identity, bounded-recent and purpose-bound
+slot outcomes remain binding. Frozen Setup/options, browser normalization,
+multi-pair task creation, inventory panes, fresh Plan-again UI, domain retries,
+cleanup/purge controls, durable tasks, and new resource certification remain
+outside M1-5. No archived clause is used to remove an active guarantee.
+
+**Review, commit and stop rules.** Plan one coherent commit,
+`feat(workflows): unify location admission and remembered locations`, after
+M1-5-G passes. No separate database-only or unused-interface prerequisite commit
+is needed. Any separately authorized bounded pre-existing fix uses its own
+reviewed commit under AGENTS; it does not enlarge this gate. A fresh reviewer
+must inspect the actual final diff, raw verification, parsing/TOCTOU, receipt
+ordering, persisted identity provenance, bounds, and documentation, then confirm
+any correction before commit. Apply AGENTS/DEFENSE hard-wall and numerical
+unplanned-defect stops unchanged. Preserve blocked task-owned work under the
+repository recovery procedure rather than committing an incomplete checkpoint.
+
+**Preimplementation probe receipt (2026-09-10).** The finite baseline additionally
+reads `tests/test_recorder_setup_and_move.py` and `test_recorder_sync.py` for
+durable-run provenance; those modules are probe-only, not implementation scope.
+`pwsh -NoProfile -File build/m1-5-design/run-baseline.ps1` records the exact
+20-selector baseline and five-selector picker corpus: **44 passed** and
+**17 passed**. Raw outputs are `build/m1-5-design/baseline.txt` and `picker.txt`.
+The orchestrator repeated these once to retain reproducible evidence after the
+initial design probe's temporary output was removed; no M1-5 production edit
+preceded either run. This is functional baseline evidence, not performance or
+resource acceptance.
+
+Direct traces confirm that `LedgerRecorder.begin_sync_run` inserts the run in
+the writer transaction and rejects a missing/deleted mapping; repository reads
+already use `mapping.deleted_at IS NULL`. `LocationSnapshot` preserves volume
+identity, root-relative location and a non-authoritative mount hint.
+`resolve_binding` checks the root chain before accessibility and compares the
+mounted-volume set again afterward; queued inventory/integrity reopens that
+evidence before scan/hash. Bridge start replay precedes atomic pair-slot
+resolution. Service direct-plan replay already precedes pair validation;
+task-plan pair validation currently precedes its claim/replay branch. Move that
+validation with candidate work into the guarded fresh-claim path and keep
+admission rollback on refusal. This is a declared seam adaptation, not discovery
+scope during implementation.
+
+The current parser/no-follow/volume-resolution, ledger provenance, and slot
+tests plus these owner traces establish the guarantees to retain. They do not
+claim an exhaustive absence of defects. Existing local capability behavior is
+preserved, including read-only observations: candidate admission promises an
+observed directory, never permission or capacity for a later write. Remote
+roots receive the active model's typed refusal; unknown/no-root observations
+remain unavailable rather than acquiring invented optical support semantics.
+`NativeScannerBackend.volume_snapshot` exposes volume identity, evidence and
+capabilities, not drive kind. Any drive-kind observation needed for mapped-remote
+refusal belongs in the workflow candidate's native admission seam; it does not
+justify a scanner contract or module change.
+
+**Status.** Design boundary frozen after these probes; implementation remains
+paused for the user's recap after M1-4. M1-5-G and its final implementation
+adversarial review remain pending.
 ## Investigation and regression map
 
 The current service rolls `committing` back only when admission fails;

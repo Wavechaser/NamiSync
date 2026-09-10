@@ -25,6 +25,13 @@ foundation, bounded presentation core, process-live task navigation and closure,
 and dormant sync/integrity file-list row renderers. Workflow content and beta
 packaging remain open.
 
+#### Bound the next M1 checkpoint designs (2026-09-10)
+
+- Detailed M1-5's finite production, test and documentation population, one
+  acceptance gate and atomic outcome, current owners/seams, archived-clause
+  dispositions, preimplementation regression probes and final adversarial review.
+  Implementation remains paused for the recap after M1-4.
+
 #### Activate process-live desktop tasks (2026-09-09 – 2026-09-10)
 
 - Added blank task creation, newest-first navigation, retained task enumeration,

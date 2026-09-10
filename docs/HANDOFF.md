@@ -50,15 +50,13 @@ creation privileges (WinError 1314); they are not new test deferrals.
 
 ## Integration and next work
 
-The reviewed M1-4 candidate is being reconstructed from recovery tip `789b338`
-against integration base `83874b68e13eb640fc691bc769f211674c337188` on
-`codex/wip-20260910-0044-m1-task-shell`. No WIP commit may enter integration
-history. Verify a clean exact-path feature commit, fast-forward `milestone1`
-to it, and compare the committed trees. Saved M1-5 and M1-async sections stay
-outside the feature commit and return as separate docs-only commits on
-`milestone1`. Prune the recovery branch only after its outcome and every saved
-design are accounted for. Replace this paragraph with actual integration
-identities and cleanup evidence at final closeout.
+M1-4 was reconstructed from recovery tip `789b338` against integration base
+`83874b68e13eb640fc691bc769f211674c337188` as feature commit `ab453e1`, then
+fast-forwarded into `milestone1`. Both feature and integration trees are
+`05b040dca51a92d63a0667c87d7d664a24d24165`; no WIP commit entered that history.
+The M1-5 design is restored as a separate documentation outcome; the saved
+async section returns next. Prune `codex/wip-20260910-0044-m1-task-shell` only
+after both designs are durably accounted for. Final cleanup remains pending.
 
 Pause before M1-5 for the user's recap and GUI adjustments. M1-5's finite plan
 retains one acceptance gate, current owners/seams, archived-clause dispositions,
