@@ -1,50 +1,45 @@
 # Latest session handoff
 
-## M1-async and M1-5 delivery (2026-09-10)
+## GUI integration tuning (2026-09-11)
 
-M1-async is committed on `milestone1` as `675181a`. This M1-5 delivery is
-based on that commit, with the atomic commit title
-`feat(workflows): unify location admission and remembered locations`.
-M1-4 remains complete in `ab453e1`. No recovery branch was needed.
+GUI-1 restores persistent selection paint and the 3 px accent marker on the live
+rail. The only production change adds `aria-current="page"` to the existing
+ordinary/forced-color task-card state rules; gallery variants and the separate
+Close button remain. Base is clean `e19ed9d` on `milestone1`. The task uses the
+current checkout; the atomic delivery title is
+`fix(web): restore live task rail selection cues`. No worktree, recovery branch,
+push or PR is involved.
 
-M1-async adds bounded native admission/completion for create/start/release/close,
-retaining the existing task/session effect owners, replay, recovery and one
-native-send guard. Its final evidence is in `build/m1-async/evidence/`:
-4,884 ordinary tests passed with four existing privilege skips, all 29 installed
-headed tests passed, and neighborhood/import/docs/adversarial checks passed.
-The approved README status update and real-channel logging fixture migration
-are included in that commit.
+Verification: the pre-fix real installed-wheel task-shell test reproduced
+the missing marker. After the fix, 56 focused checks, the task-shell headed
+witness, 1,503 interface tests and all 12 import contracts passed. Independent
+GUI-1 review approved the actual diff. All 29 installed-wheel interface headed
+tests passed in the final interactive-desktop run (`headed-03.txt`). The first
+attempt failed reading a shared pip cached wheel; the cache-free sandbox retry
+could not enumerate desktop windows. Both failures preceded GUI assertions;
+the final run used `PIP_NO_CACHE_DIR=1` and interactive desktop access. No
+production/test workaround was added. Logs and review receipts are in ignored
+`build/gui-tuning/evidence/`. Diff checks passed; no test module was added or
+retired. No task-created branch, worktree or disposable input needed cleanup.
 
-M1-5 shares workflow-owned typed location admission across current picker plan
-starts and inventory/integrity. Bounds precede task custody; replay precedes
-native work; refusal creates no delivery/session effect. Remounted remembered
-identities are freshly resolved. Durable sync activity supplies at most five
-sources, five targets and five active pairs in one read-only snapshot. Existing
-point-of-use probes remain; candidates and remembered hints grant no authority.
+GUI-D1 remains investigation only. The old HDR fallback from `1fe32b3` still
+wins by specificity; SDR uses black shadows. Mica's host/page is transparent
+while the dropdown surface is opaque. The gallery's normal/opaque specimen
+labels no longer distinguish alpha, and its elevation-8 differs from the real
+dropdown's elevation-16. Source findings passed separate read-only review;
+there is no claim of visual halo reproduction or a proven compositor cause.
 
-M1-5 verification:
+The user sees dropdown halos on natively SDR displays, but not after moving a
+window from HDR to SDR on this computer. After the rail tests finished, they
+disabled HDR globally and reported reliable halos where dropdown shadows overlap
+cards, but not bare Mica. Dark cards use white at 5% alpha; the earlier solid CSS
+background is a fallback, not an opaque underlay. Next diagnostic should record
+Chromium dynamic-range, native material and popup styles, then compare the real
+dropdown shadow over bare Mica, translucent cards and a temporarily opaque card,
+with a shadowless control. That isolates the newly reported overlap condition;
+the renderer/compositor cause remains unconfirmed. No shadow or card correction
+is authorized by the current investigation.
 
-- Focused: 680 passed in 23.68s
-- Database/workflows/interfaces neighborhood: 2697 passed, 2248 deselected in 111.58s (0:01:51)
-- Ordinary: 4912 passed, 4 skipped, 29 deselected in 237.83s (0:03:57)
-- Installed-wheel real WebView2: 29 passed, 4916 deselected in 132.51s (0:02:12)
-- All twelve import contracts, documentation/link/diff checks, and independent
-  adversarial review passed. No collected module was added or retired.
-
-The ordinary skips remain existing Windows symlink privilege limitations.
-No new timing, whole-runtime resource or compositor-health claim is made.
-The baseline was refreshed on clean `675181a` before M1-5 edits: 44 owner-seam
-and 17 picker tests passed. Raw evidence remains in
-`build/m1-5-design/runs/integrated-675181a-02/`.
-
-M1-5 raw commands/results, final hashes and review remain under
-`build/m1-5/evidence/`, with reproducible inputs under `build/m1-5/inputs/`.
-The first focused failure and subsequent green runs are retained. Review found
-two introduced service regressions, both corrected before closure: exception
-context retention and oversized path custody before validation. Their existing
-or added assertions remain in the final suite. Generated evidence is ignored;
-no unrelated files or branches were cleaned.
-
-Pause here for the user's recap and GUI adjustments. Typed/recent Setup widgets,
-picker-time feedback, frozen options and M1-6 onward remain pending. No push,
-PR or further checkpoint implementation is authorized by this delivery.
+M1-4, M1-async and M1-5 remain complete. M1-6 onward is outside this task. README's
+phase synopsis and the substantive defect ledger need no change for this
+presentation correction. Existing Close pending/retry semantics remain binding.

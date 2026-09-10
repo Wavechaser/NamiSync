@@ -1123,6 +1123,8 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
         'not([aria-disabled="true"])',
         '.nami-task-card[aria-current="true"]:'
         'not([aria-disabled="true"])',
+        '.nami-task-card[aria-current="page"]:'
+        'not([aria-disabled="true"])',
     }
     assert (
         "background: var(--color-neutral-surface-selected);"
@@ -1321,6 +1323,37 @@ def test_sh_g_11_components_cover_controls_states_and_non_color_cues() -> None:
     assert "box-shadow" not in selected_task
     assert re.search(r"(?:^|;)\s*color\s*:", selected_task) is None
     assert '.nami-task-card[aria-current="true"]' in source
+    for paired_current_selectors in (
+        '.nami-task-card[aria-current="true"],\n'
+        '.nami-task-card[aria-current="page"] {',
+        '.nami-task-card[aria-current="true"]::before,\n'
+        '.nami-task-card[aria-current="page"]::before {',
+        '.nami-task-card[aria-current="true"]:'
+        'not([aria-disabled="true"]):hover,\n'
+        '.nami-task-card[aria-current="page"]:'
+        'not([aria-disabled="true"]):hover {',
+        '.nami-task-card[aria-current="true"]:'
+        'not([aria-disabled="true"]):active,\n'
+        '.nami-task-card[aria-current="page"]:'
+        'not([aria-disabled="true"]):active {',
+        '.nami-task-card[aria-current="true"]:focus-visible,\n'
+        '.nami-task-card[aria-current="page"]:focus-visible {',
+        '  .nami-task-card[aria-current="true"]:'
+        'not([aria-disabled="true"]),\n'
+        '  .nami-task-card[aria-current="page"]:'
+        'not([aria-disabled="true"]) {',
+        '  .nami-task-card[aria-current="true"]::before,\n'
+        '  .nami-task-card[aria-current="page"]::before {',
+        '  .nami-task-card[aria-current="true"]:'
+        'not([aria-disabled="true"]):active,\n'
+        '  .nami-task-card[aria-current="page"]:'
+        'not([aria-disabled="true"]):hover,\n'
+        '  .nami-task-card[aria-current="page"]:'
+        'not([aria-disabled="true"]):active {',
+        '  .nami-task-card[aria-current="true"]:focus-visible,\n'
+        '  .nami-task-card[aria-current="page"]:focus-visible {',
+    ):
+        assert paired_current_selectors in source
     marker = _block(
         source,
         '.nami-task-card[aria-selected="true"]::before,',

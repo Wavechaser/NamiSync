@@ -37,6 +37,67 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### GUI integration tuning (2026-09-11)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-1 | Restore gallery-equivalent persistent selection fill and accent indicator on the live task rail; retain the Close button. | Pre-fix headed reproducer; 56 focused, 1,503 interface and all 29 installed-wheel headed tests passed; all 12 import contracts, diff checks and fresh adversarial review passed. | Complete |
+| GUI-D1 | Investigate SDR dark flyout haloing and discuss findings without implementing a shadow change. | Current shadow/material CSS, appearance owners, gallery isolation and tests, DESKTOP_UI guidance and originating HDR-fallback commit inspected; separate read-only review confirms source findings, with visual cause unconfirmed. | Complete: discussion only |
+
+GUI-1 is one atomic presentation fix based on clean `e19ed9d` on `milestone1`,
+delivered as `fix(web): restore live task rail selection cues` in that checkout.
+Its finite production population is `namisync/interfaces/web/assets/components.css`;
+test population is `tests/interfaces/web/test_design_tokens.py`,
+`tests/interfaces/web/_task_shell_headed_child.py`, and
+`tests/interfaces/web/test_task_shell_headed.py`. Documentation population is
+this register, `DESKTOP_UI.md`, `CHANGELOG.md`, and the replaced `HANDOFF.md`.
+The live rail owns navigation state through `aria-current="page"`; shared
+component CSS owns paint. Preimplementation inspection found that CSS recognized
+only `aria-current="true"` and `aria-selected="true"`, explaining the missing
+fill and marker despite existing passing navigation checks. The fix adds exact page
+selectors throughout ordinary and forced-color current-state rules, preserving
+the existing gallery variants, pressed/hover behavior and focus indication.
+The headed computed-style assertion failed before the CSS correction and passed after it.
+The acceptance gate above includes selection transfer and persistent marker/fill
+on actual live rail buttons with the separate Close action intact.
+
+Non-goals: close icons or layout redesign, lifecycle/admission changes, shadow or
+material changes, M1-6 onward, and revival of archived presentation recipes.
+The established gallery selection contract is the reference. Lost navigation,
+Close semantics, accessibility state or existing theme behavior is a regression
+to correct within GUI-1. Repository stop classes remain unchanged. GUI-D1 is a
+read-only discovery outcome over the named corpus, not shadow-fix authority.
+Generated diagnostics use ignored `build/gui-tuning/`: `evidence/` holds command
+logs and review receipts; remove only task-created disposable inputs at closure.
+Final headed acceptance is `evidence/headed-03.txt`, run on the interactive
+desktop with pip cache disabled. Earlier attempts hit a shared pip-cache access
+failure, then sandbox desktop enumeration failure; both precede GUI assertions
+and are retained as environment evidence. No production/test workaround or
+whole-runtime/compositor-health claim was added. No test module was added or
+retired, and no task branch or worktree required cleanup.
+
+GUI-D1 source findings: `1fe32b3` introduced the HDR-only shadow suppression;
+the current selectors still win over later base rules by specificity. SDR
+retains black elevation shadows, not a light shadow token. Mica makes the
+WebView controller/page background transparent even though the dropdown surface
+is opaque. The gallery's old normal/opaque isolation surfaces now both resolve
+to the same opaque dark background, so those labels no longer distinguish
+surface alpha; its shadowless comparison remains useful, but its elevation-8
+differs from the production dropdown's elevation-16. No runtime or test
+change is authorized by these observations. The user reports dropdown halos on
+natively SDR displays but no halo when moving this computer's window from HDR
+to SDR; the trigger and compositor cause remain unconfirmed. A controlled
+fresh-launch HDR-off comparison should record Chromium's dynamic-range result,
+native material, and shadow-on/off appearance before choosing a mitigation.
+After the rail gate finished, the user disabled HDR globally and reported a
+reliable distinction: dropdown shadows halo over cards, but not over bare Mica.
+Dark cards use white at 5% alpha; their preceding solid-background declaration
+is a fallback replaced by that translucent value, not an opaque underlay. This
+narrows the next diagnostic to the card/shadow overlap: compare the production
+shadow over bare Mica, the current card and a temporarily opaque card, plus a
+shadowless control. It does not yet establish which renderer/compositor stage
+causes the artifact, and no shadow or card fix was implemented.
+
 ### Documentation reconciliation pass (2026-09-09)
 
 This closed maintenance register covers the accepted frontend decisions and

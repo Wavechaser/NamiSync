@@ -968,10 +968,13 @@ command or synthetic domain state. Slice 5 remains the first real plan surface.
 
 The rail itself is a Mica seam: it has no card background, border, or shadow.
 A resting unselected task card is fully transparent. Hover and selected/current
-rest use the same neutral selection overlay; press temporarily weakens it.
-Selected/current cards retain a 3 px sampled-accent marker,
+rest use the same neutral selection overlay; press temporarily weakens it. The
+live rail's selected navigation button exposes `aria-current="page"`; the
+gallery's `aria-current="true"` and `aria-selected="true"` variants retain the
+same component treatment. Selected/current cards retain a 3 px sampled-accent marker,
 so hover never erases selection. Task cards have no painted border or elevation
-in ordinary themes. In forced colors,
+in ordinary themes. The separate **Close** button remains beside the selected
+card and retains its existing pending-close availability rules. In forced colors,
 every enabled selected/current card pairs the `Highlight` surface with
 `HighlightText` and an opposing marker; disabled cards retain `GrayText`, and
 keyboard focus retains a system-visible outline. Selection is conveyed

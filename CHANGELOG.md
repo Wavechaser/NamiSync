@@ -26,6 +26,19 @@ bounded asynchronous task commands, shared location admission and remembered
 locations, and dormant sync/integrity file-list row renderers. Workflow content and beta
 packaging remain open.
 
+#### Restore live task-rail selection cues (2026-09-11)
+
+- Aligned the live rail's current-page state with the gallery task-card styles:
+  persistent neutral selection fill and a 3 px accent marker, including hover,
+  press, keyboard focus and forced-color treatment. Close remains a text button.
+- Added live installed-wheel selection-paint and transfer assertions alongside
+  the existing navigation/closure checks, retaining the gallery state variants.
+- Verified the pre-fix failure, 56 focused and 1,503 interface checks, all 29
+  installed-wheel headed tests, import contracts and fresh adversarial review.
+- Investigated the SDR dark dropdown halo without changing shadows. The old
+  HDR-only fallback remains intact; the user's display-dependent observation
+  needs a controlled shadow-on/off comparison before choosing a mitigation.
+
 #### Deliver bounded M1 command and location prerequisites (2026-09-10)
 
 - Detailed M1-5's finite production, test and documentation population, one

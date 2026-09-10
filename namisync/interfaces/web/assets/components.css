@@ -652,12 +652,14 @@ body {
 }
 
 .nami-task-card[aria-selected="true"],
-.nami-task-card[aria-current="true"] {
+.nami-task-card[aria-current="true"],
+.nami-task-card[aria-current="page"] {
   background: var(--color-selection-highlight);
 }
 
 .nami-task-card[aria-selected="true"]::before,
-.nami-task-card[aria-current="true"]::before {
+.nami-task-card[aria-current="true"]::before,
+.nami-task-card[aria-current="page"]::before {
   background: var(--color-accent-fill);
   block-size: 1rem;
   border-radius: var(--radius-circular);
@@ -670,12 +672,14 @@ body {
 }
 
 .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
-.nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover {
+.nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover,
+.nami-task-card[aria-current="page"]:not([aria-disabled="true"]):hover {
   background: var(--color-selection-highlight);
 }
 
 .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
-.nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
+.nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active,
+.nami-task-card[aria-current="page"]:not([aria-disabled="true"]):active {
   background: var(--color-selection-highlight-pressed);
 }
 
@@ -685,7 +689,8 @@ body {
 }
 
 .nami-task-card[aria-selected="true"]:focus-visible,
-.nami-task-card[aria-current="true"]:focus-visible {
+.nami-task-card[aria-current="true"]:focus-visible,
+.nami-task-card[aria-current="page"]:focus-visible {
   box-shadow:
     0 0 0 1px var(--color-focus-inner),
     0 0 0 3px var(--color-focus-ring);
@@ -1415,7 +1420,8 @@ body {
   }
 
   .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]),
-  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]) {
+  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]),
+  .nami-task-card[aria-current="page"]:not([aria-disabled="true"]) {
     background: var(--color-neutral-surface-selected);
     box-shadow: none;
     color: var(--color-accent-fill-foreground);
@@ -1423,20 +1429,24 @@ body {
   }
 
   .nami-task-card[aria-selected="true"]::before,
-  .nami-task-card[aria-current="true"]::before {
+  .nami-task-card[aria-current="true"]::before,
+  .nami-task-card[aria-current="page"]::before {
     background: var(--color-accent-fill-foreground);
   }
 
   .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):hover,
   .nami-task-card[aria-selected="true"]:not([aria-disabled="true"]):active,
   .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):hover,
-  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active {
+  .nami-task-card[aria-current="true"]:not([aria-disabled="true"]):active,
+  .nami-task-card[aria-current="page"]:not([aria-disabled="true"]):hover,
+  .nami-task-card[aria-current="page"]:not([aria-disabled="true"]):active {
     background: var(--color-accent-fill);
     color: var(--color-accent-fill-foreground);
   }
 
   .nami-task-card[aria-selected="true"]:focus-visible,
-  .nami-task-card[aria-current="true"]:focus-visible {
+  .nami-task-card[aria-current="true"]:focus-visible,
+  .nami-task-card[aria-current="page"]:focus-visible {
     box-shadow: none;
     outline: 2px solid var(--color-focus-ring);
     outline-offset: 2px;

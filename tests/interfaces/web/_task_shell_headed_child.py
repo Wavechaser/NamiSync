@@ -74,6 +74,45 @@ function statusFor(title) { return rowByTitle(title)?.querySelector(".nami-task-
 function clickNew() { document.querySelector(".nami-task-rail__header .nami-button")?.click(); }
 function clickSelect(title) { rowByTitle(title)?.querySelector(".nami-task-card")?.click(); }
 function clickClose(title) { rowByTitle(title)?.querySelector(".nami-task-rail__close")?.click(); }
+function resolvedBackground(variable) {
+  const witness = document.createElement("span");
+  witness.style.background = `var(${variable})`;
+  document.body.append(witness);
+  const value = getComputedStyle(witness).backgroundColor;
+  witness.remove();
+  return value;
+}
+function selectionAppearance(title) {
+  const row = rowByTitle(title);
+  const card = row?.querySelector(".nami-task-card");
+  const close = row?.querySelector(".nami-task-rail__close");
+  if (card === undefined || card === null) return null;
+  const style = getComputedStyle(card);
+  const marker = getComputedStyle(card, "::before");
+  return {
+    current: card.ariaCurrent,
+    persistentFill: style.backgroundColor === resolvedBackground("--color-selection-highlight"),
+    markerWidth: marker.width,
+    markerAccent: marker.backgroundColor === resolvedBackground("--color-accent-fill"),
+    closeText: close?.textContent ?? null,
+    closeEnabled: close?.disabled === false,
+  };
+}
+function selectedAppearanceSettled(title) {
+  const appearance = selectionAppearance(title);
+  return appearance?.current === "page" &&
+    appearance.persistentFill === true &&
+    appearance.markerWidth === "3px" &&
+    appearance.markerAccent === true;
+}
+function selectionCleared(title) {
+  const card = rowByTitle(title)?.querySelector(".nami-task-card");
+  if (card === undefined || card === null) return false;
+  const marker = getComputedStyle(card, "::before");
+  return card.ariaCurrent === "false" &&
+    getComputedStyle(card).backgroundColor === resolvedBackground("--color-neutral-subtle-background") &&
+    marker.content === "none";
+}
 let rawSequence = 0;
 async function control(action, value = null) {
   rawSequence += 1;
@@ -117,8 +156,13 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await control("checkpoint", "capacity");
   clickSelect("Task 47");
   await until(() => selectedTitle() === "Task 47" && workTitle() === "Task 47", "older task selection");
+  await until(() => selectedAppearanceSettled("Task 47"), "older task selected appearance");
+  const olderAppearance = selectionAppearance("Task 47");
   clickSelect("Task 48");
   await until(() => selectedTitle() === "Task 48" && workTitle() === "Task 48", "newer task return");
+  await until(() => selectedAppearanceSettled("Task 48") && selectionCleared("Task 47"), "transferred task selection appearance");
+  const newerAppearance = selectionAppearance("Task 48");
+  const olderSelectionCleared = selectionCleared("Task 47");
   clickClose("Task 48");
   await until(() => rows().length === 47 && rowByTitle("Task 48") === undefined, "successful close");
   await control("checkpoint", "basic_close");
@@ -143,7 +187,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 46, "delayed create cleanup");
   await control("checkpoint", "navigation_cleanup");
 
-  await control("record", { initial: { newest, blank, refusedCount, retainedAfterFailure, navigationStayed } });
+  await control("record", { initial: { newest, blank, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared } });
   await control("checkpoint", "navigation_recorded");
   await control("arm_create_delay");
   await control("checkpoint", "reinjection_armed");

@@ -90,6 +90,23 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
         "refusedCount": 48,
         "retainedAfterFailure": True,
         "navigationStayed": True,
+        "olderSelectionCleared": True,
+        "olderAppearance": {
+            "current": "page",
+            "persistentFill": True,
+            "markerWidth": "3px",
+            "markerAccent": True,
+            "closeText": "Close",
+            "closeEnabled": True,
+        },
+        "newerAppearance": {
+            "current": "page",
+            "persistentFill": True,
+            "markerWidth": "3px",
+            "markerAccent": True,
+            "closeText": "Close",
+            "closeEnabled": True,
+        },
     }
     assert report["reinjected"] == {
         "count": 47,
