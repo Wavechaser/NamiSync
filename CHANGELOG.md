@@ -31,6 +31,10 @@ packaging remain open.
   acceptance gate and atomic outcome, current owners/seams, archived-clause
   dispositions, preimplementation regression probes and final adversarial review.
   Implementation remains paused for the recap after M1-4.
+- Designed a separate bounded asynchronous command boundary for concrete M1
+  actions, reusing task/session owners and shared exchange custody. The proposal
+  defines finite consumers, delivery/recovery bounds and one acceptance gate;
+  it is recommended before M1-5 and remains unimplemented.
 
 #### Activate process-live desktop tasks (2026-09-09 – 2026-09-10)
 

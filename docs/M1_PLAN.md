@@ -621,6 +621,161 @@ justify a scanner contract or module change.
 **Status.** Design boundary frozen after these probes; implementation remains
 paused for the user's recap after M1-4. M1-5-G and its final implementation
 adversarial review remain pending.
+## M1-async proposed checkpoint (design only)
+
+**Outcome and placement.** Separate bounded command admission from completion
+for concrete small M1 actions, while reusing task/session effect owners.
+Recommend implementing this after M1-4 and before M1-5; the user also permits
+after M1-5, but it must precede M1-6. This delivery stops before either starts.
+This proposal is not M1-4 implementation scope. M1-5 does not require a new
+browser command; its location admission can remain behind existing start-plan
+semantics whichever of the two permitted orders is chosen.
+
+**Finite proposed population.** Production: `interfaces/web/bridge.py`,
+`commands.py`, `host.py`, `document_channel.py`, and `assets/bridge.js` under
+`namisync/`. Keep exported browser wrapper APIs stable. No workflow, core,
+dispatcher, service, lifecycle, observer, persistence, drain, task-view or app
+content changes are planned. The boundary implementation stays in the existing
+bridge component; it introduces no new directory or general scheduler.
+
+Tests: `tests/interfaces/web/test_bridge.py`, `test_commands.py`,
+`test_document_channel.py`, `test_host.py`, `test_frontend_static.py`,
+`test_transport.py`, `test_task_shell_headed.py`, `_task_shell_headed_child.py`,
+`_transport_gate_child.py`, `_frontend_test_support.py`; existing JavaScript
+consumers `tests/assets/bootstrap_test_bridge.js`,
+`bootstrap_test_bridge_probe.mjs`, `app_startup_probe.mjs`,
+`task_shell_probe.mjs`, and `drain_manager_probe.mjs`. These are mechanism and
+exact consumer migrations only; no test module retirement is planned.
+Documentation: this register, BRIDGE, INTERFACES, ARCHITECTURE, DEFENSE,
+CHANGELOG and HANDOFF. Existing service/lifecycle, slots and dispatcher tests
+are regression consumers. Any additional file dependency must be adjudicated
+before implementation rather than silently enlarging this population.
+
+**Owners and work classes.** BridgeDispatcher still validates the complete
+65,536-byte envelope, exact payload, trust and readiness before admission. An
+adapter-local exchange invokes the existing CommandSpec handler once; it owns
+delivery bookkeeping, never task/session association, mutation receipts,
+filesystem authority, compensation or domain cancellation. TaskLifecycle,
+TaskRegistry and SessionObserver retain their existing distinct responsibilities.
+Literal validated request data can be held by a running worker, within the
+ingress bound; no resolved authority or live domain result is cached for replay.
+
+Initially migrate only `create_task`, `start_plan`, `release_terminal_session`
+and `close_task`: their current result fields are bounded opaque identities,
+fixed dispositions and fixed errors. Keep bootstrap, `next_events`, list reads,
+picker and cosmetic rows direct. In particular, a supported long picker display
+path cannot be assumed to fit a 65,536-byte document message. Drain keeps its
+existing 25-second server wait, 30-second browser deadline and 8 MiB response
+bound. M1-6 Setup/inventory/Plan-again and M1-7 selection/execution admission
+choose a class at activation from their full result shape and recovery needs;
+plan windows, large projections and event traffic do not migrate by default.
+
+**Admission and custody.** Extend the existing 64-slot bridge custody rather
+than adding a second admission budget. An async exchange retains its original
+native worker/receipt charge and additionally owns at most one command worker
+and one completion. Start that worker during the admitted transfer; there is
+no pending work queue. Worker-start refusal invokes no handler. Once accepted,
+the worker settles through the existing handler despite reload or window close.
+An exchange is reaped only after the original native worker has exited and its
+admission return is acknowledged/retired, the command worker has actually
+exited, and completion delivery is acknowledged/retired. Result production or
+browser timeout is not worker death. There may be two worker owners during
+transfer; the claim is 64 admitted exchanges and at most 64 new command workers,
+not a new whole-runtime thread or memory certification.
+
+Saturation refuses before creating a command worker. Cleanup acknowledgment
+must bypass ordinary admission, origin/readiness and saturation like current
+native response cleanup: it is an exact exchange/token/phase match and grants
+no command authority. Never introduce an OPEN command whose acknowledgment
+itself requires one of the 64 occupied slots. Native admission receipt and
+completion receipt are distinct phases, not new effect-replay authorities.
+
+**Completion and document generations.** The browser registers an entry using
+its already minted request id before dispatch. Its pending table is capped at
+64 attempts, with at most one early completion per entry while the small native
+admission return is pending. No unsolicited completion creates an entry. Validate
+both phases and resolve only their exact matching generation/id. Preserve the
+existing native response acknowledgment even after a caller's deadline; valid
+late completion is cleanup-only. Timeouts mean uncertain delivery, never that
+an admitted effect did not happen. Replacement retires old browser pending work
+and host completion delivery without canceling admitted handlers.
+
+Use DocumentChannel for bounded current-document completion messages. Add a
+command-delivery lane bounded by the same admitted exchanges, sharing its one
+native post owner. Required readiness takes priority; command completions are
+FIFO, with a pending replaceable appearance update serviced between command
+posts so a stream of completions cannot starve appearance. Replacement/close
+retires all old queued/in-flight completion posts before a new readiness
+challenge can post. Do not hold a bridge/channel lock across native evaluation,
+handler work or another component's callback. This is a finite delivery queue,
+not another job queue or task-result store.
+
+Snapshot each completion to bridge-safe primitive values before posting, with
+the full document envelope bounded to 65,536 canonical UTF-8 bytes. A post-effect
+encoding/size failure must report bounded delivery uncertainty and use the
+existing command recovery route; it cannot assert a pre-effect refusal, undo
+work or invoke the handler again. The proposed small class requires exact
+largest success/error envelope tests. Larger future result shapes stay direct.
+The small admission return still uses pywebview, so M1-4 containment remains
+necessary and no latency claim says that callback must beat a reload.
+
+**Recovery and shutdown.** Create/start uncertainty uses existing same-command
+receipts and list reconstruction; release/close uses retained task/session truth
+and existing idempotent recovery. M1-5 fresh candidate probing must remain after
+receipt lookup. The boundary adds no generic cancel API. Close rejects admission,
+wakes existing drain waiters, retires completion publication, waits for both
+worker owners within the existing bounded quiescence path, then performs service
+shutdown. An unfinished worker leaves close retryable; do not close the service
+under live command work or silently discard an accepted action.
+
+**Design probes and regression surfaces.** The named source corpus is the five
+production files above, current TaskLifecycle/TaskRegistry/SessionObserver,
+service task admission, FolderSlotTable and the listed tests. Inspection found
+the exact native-worker-plus-browser-receipt charge; DocumentChannel's one
+required slot and readiness precedence; host before-load retirement; the
+browser's pre-dispatch request-id minting; picker display retaining full path;
+and the installed-wheel harness's direct native-response assumptions. These
+findings drive the proposed shared charge, command lane, early registration,
+picker exclusion and exact consumer migrations. They are design observations,
+not proof of future implementation.
+
+The preimplementation baseline retained eight existing finite selectors for
+native receipt/death, saturation cleanup, preempted generation entry, document
+replacement/readiness precedence, start replay before slot re-resolution, and
+close with an admitted call. `build/m1-async-design/run-baseline.ps1` ran all
+eight: **8 passed** (`baseline.txt`); pytest also reported that its existing
+repository cache directory was not writable. This is functional baseline
+evidence, not a measurement claim. No async production work preceded the probe.
+Design artifacts stay under ignored
+`build/m1-async-design/`, grouped by command; retain scripts and raw results,
+replace only the same command's rerun output. Implementation must add the finite
+new-mechanism transition matrix: immediate completion before admission return;
+reload before worker start, during handler work, after result/before post,
+after post/before acknowledgment and after acknowledgment; every migrated
+command's lost delivery; shared-capacity first excess; acknowledgment under
+saturation/trust loss; both worker exits; readiness and appearance under queued
+completions; post-effect encoding/size/post failure; and close timeout/retry.
+
+Regressions mean lost active guarantees, false states, unauthorized/duplicate
+effects or newly unbounded work. Probe these surfaces in design before edits;
+do not discover the baseline during implementation. A red test is an indicator,
+not proof of regression, and green tests do not prove absence. New findings
+follow AGENTS containment/stop rules and do not enlarge the denominator.
+
+**Gate, atomic commit and archived dispositions.** M1-async-G is one gate:
+all finite transition witnesses, unchanged M1-4 behavior, affected department
+and ordinary checks, installed-wheel reload/shutdown evidence, import contracts,
+matching docs and a fresh adversarial review must pass before
+`feat(web): add bounded asynchronous command completion`. Required headed proof
+cannot be deferred to a later test commit. A separately authorized independent
+fix may use its own reviewed commit. Review must trace both delivery phases,
+each work class, all retirement paths and actual worker death; reject duplicate
+receipt owners, false refusal after effects, hidden queue growth or weakened
+direct-response limits. No BR-G-45, whole-retained-graph target, phase reservation,
+lease, durable command history, generic cancellation or archived 18-command
+recipe is restored. All active task, response, safety and recovery guarantees
+remain binding.
+
 ## Investigation and regression map
 
 The current service rolls `committing` back only when admission fails;
