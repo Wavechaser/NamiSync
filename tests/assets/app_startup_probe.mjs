@@ -112,6 +112,12 @@ function moduleUrl(source) {
 
 const bridgeStub = moduleUrl(`
   export class BridgeTransportError extends Error {}
+  export class StartPlanUncertainError extends BridgeTransportError {
+    constructor(retry) { super(); this.retry = retry; }
+  }
+  export class TaskCreateUncertainError extends BridgeTransportError {
+    constructor(retry) { super(); this.retry = retry; }
+  }
   globalThis.startupHarness.BridgeTransportError = BridgeTransportError;
   export const whenBridgeApiReady = () => globalThis.startupHarness.whenBridgeApiReady();
   export const acknowledgeShellReady = () => globalThis.startupHarness.acknowledgeShell();
@@ -120,6 +126,23 @@ const bridgeStub = moduleUrl(`
   export const createTask = () => Promise.reject(new Error("unused"));
   export const closeTask = () => Promise.reject(new Error("unused"));
   export const listTasks = () => Promise.resolve({ tasks: [] });
+  export const readSetup = () => Promise.resolve({
+    task_id: null,
+    snapshot: {
+      setup_state: "default", task_kind: null, source: null, target: null, root: null,
+      options: { filters: [], deletion_policy: "trash", trash_on_update: false,
+        preservation: { preserve_ads: false, preserve_created: true, preserve_acl: false },
+        propagate_source_casing: false, verify_after_execute: false },
+      plan_again: null,
+    },
+    recents: { sources: [], targets: [], pairs: [] },
+  });
+  export const admitLocation = () => Promise.reject(new Error("unused"));
+  export const pickFolder = () => Promise.reject(new Error("unused"));
+  export const planAgain = () => Promise.reject(new Error("unused"));
+  export const prepareSetup = () => Promise.reject(new Error("unused"));
+  export const startInventory = () => Promise.reject(new Error("unused"));
+  export const startPlan = () => Promise.reject(new Error("unused"));
   export const startTaskDrain = () => () => {};
 `);
 globalThis.startupHarness.markOperational = () => {
@@ -155,7 +178,7 @@ const renderStub = moduleUrl(`
 let source = await readFile(process.argv[2], "utf8");
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, startTaskDrain, whenBridgeApiReady } from "${bridgeStub}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
 );
 source = source
   .replace("./readiness.js", readinessStub)

@@ -286,6 +286,36 @@ class SemanticSettingsView:
 
 
 @dataclass(frozen=True, slots=True)
+class SetupOptionsView:
+    """Complete backend-canonical options frozen for one Setup start."""
+
+    filters: tuple[str, ...]
+    deletion_policy: str
+    trash_on_update: bool
+    preservation: PreservationSettingsView
+    propagate_source_casing: bool
+    verify_after_execute: bool
+
+    def __post_init__(self) -> None:
+        _require_filter_tuple(self.filters)
+        _require_deletion_policy(self.deletion_policy)
+        _require_exact_bool(self.trash_on_update, "trash_on_update")
+        if type(self.preservation) is not PreservationSettingsView:
+            raise TypeError("preservation must be exact PreservationSettingsView")
+        self.preservation.__post_init__()
+        if self.preservation.preserve_ads:
+            raise ValueError("desktop Setup does not support ADS preservation")
+        _require_exact_bool(
+            self.propagate_source_casing,
+            "propagate_source_casing",
+        )
+        _require_exact_bool(
+            self.verify_after_execute,
+            "verify_after_execute",
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class SemanticSettingsPatchView:
     filters: tuple[str, ...] | None = None
     deletion_policy: str | None = None

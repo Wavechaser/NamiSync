@@ -1212,6 +1212,12 @@ def test_task_lifecycle_port_surface_is_exact() -> None:
         "close_task_shell",
         "cancel_task_session",
         "start_task_plan",
+        "read_setup_options",
+        "prepare_setup_options",
+        "start_task_setup_plan",
+        "start_task_setup_inventory",
+        "start_task_plan_again",
+        "read_plan_setup",
         "reobserve_task",
         "release_task_session",
         "close_task",
@@ -1249,6 +1255,74 @@ def test_lifecycle_task_shell_abort_releases_only_unpublished_claim() -> None:
 
     replacement = lifecycle.begin_task_shell(f"{39_102:032x}")
     assert replacement.task_id != claim.task_id
+
+
+def test_lifecycle_blank_shell_claim_publishes_exact_first_session() -> None:
+    lifecycle = TaskLifecycle()
+    shell = lifecycle.begin_task_shell(f"{39_201:032x}")
+    lifecycle.complete_task_shell(shell)
+    command_id = f"{39_202:032x}"
+    signature = ("inventory", "choice-1")
+
+    claim = lifecycle.begin_task_shell_start(
+        shell.task_id,
+        command_id,
+        "task-inventory",
+        signature,
+    )
+    assert claim.task_id == shell.task_id
+    assert claim.replay is None
+    assert claim.attached_shell
+    with pytest.raises(LifecycleAssociationError, match="unavailable"):
+        lifecycle.close_task_shell(shell.task_id)
+    with pytest.raises(LifecycleAssociationError, match="unavailable"):
+        lifecycle.begin_task_shell_start(
+            shell.task_id,
+            f"{39_203:032x}",
+            "task-inventory",
+            signature,
+        )
+
+    admission = lifecycle.begin_admission(
+        "task-inventory",
+        command_id,
+        signature,
+        task_id=shell.task_id,
+    )
+    session_id = f"{39_204:032x}"
+    request_id = f"{39_205:032x}"
+    lifecycle.attach_session(admission, session_id)
+    _association, receipt = lifecycle.publish_start(
+        admission,
+        session_id,
+        request_id,
+    )
+
+    assert receipt.task_id == shell.task_id
+    assert lifecycle.replay_start(
+        command_id,
+        "task-inventory",
+        signature,
+    ) == receipt
+    assert lifecycle._plans == {}
+
+
+def test_lifecycle_blank_shell_start_abort_restores_same_shell() -> None:
+    lifecycle = TaskLifecycle(task_capacity=1)
+    shell = lifecycle.begin_task_shell(f"{39_301:032x}")
+    lifecycle.complete_task_shell(shell)
+    lifecycle.begin_task_shell_start(
+        shell.task_id,
+        f"{39_302:032x}",
+        "task-plan",
+        ("first",),
+    )
+
+    lifecycle.abort_task_start(shell.task_id)
+
+    lifecycle.close_task_shell(shell.task_id)
+    replacement = lifecycle.begin_task_shell(f"{39_303:032x}")
+    assert replacement.task_id != shell.task_id
 
 
 def test_lifecycle_signatures_retain_only_immutable_scalars() -> None:

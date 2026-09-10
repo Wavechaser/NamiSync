@@ -109,6 +109,7 @@ from namisync.workflows.inventory import (
     bind_integrity_request,
     bind_inventory_request,
     resolve_binding,
+    resolve_reviewed_binding,
     run_integrity,
     run_inventory,
     settle_canceled_integrity,
@@ -271,6 +272,96 @@ def _dependencies(
 
 
 @pytest.mark.parametrize(
+    ("mount_count", "expected"),
+    ((0, VolumeResolutionState.OFFLINE),
+     (1, VolumeResolutionState.RESOLVED),
+     (2, VolumeResolutionState.AMBIGUOUS)),
+)
+def test_reviewed_identity_resolves_current_mounts_without_reusing_old_choice(
+    tmp_path: Path, mount_count: int, expected: VolumeResolutionState,
+) -> None:
+    old, old_clone = tmp_path / "old", tmp_path / "old-clone"
+    retained = replace(
+        _binding(old), expected_mounts=(str(old), str(old_clone)),
+        explicit_ambiguity_choice=True, location_id=17,
+    )
+    current = tuple(tmp_path / f"current-{index}" for index in range(mount_count))
+    for mount in current:
+        (mount / "managed").mkdir(parents=True)
+    resolver = _Resolver(*current)
+
+    result = resolve_reviewed_binding(retained, resolver)
+
+    assert result.state is expected
+    assert result.candidates == tuple(str(mount) for mount in current)
+    assert retained.selected_mount == str(old)
+    if expected is VolumeResolutionState.RESOLVED:
+        assert result.root_path == str(current[0] / "managed")
+        assert result.binding.volume_id == retained.volume_id
+        assert result.binding.volume_relative_path == "managed"
+        assert result.binding.location_id == 17
+        assert result.selected_mount == str(current[0])
+        assert resolver.probed_roots
+        assert set(resolver.probed_roots) == {str(current[0] / "managed")}
+    else:
+        assert result.root_path is None and result.selected_mount is None
+        assert resolver.probed_roots == []
+
+
+@pytest.mark.parametrize("mount_count", (0, 1, 2))
+def test_reviewed_stale_explicit_mount_returns_current_resolution(
+    tmp_path: Path, mount_count: int,
+) -> None:
+    old = tmp_path / "old"
+    binding = _binding(old)
+    current = tuple(tmp_path / f"current-{index}" for index in range(mount_count))
+    resolver = _Resolver(*current)
+
+    result = resolve_reviewed_binding(binding, resolver, selected_mount=str(old))
+
+    assert result.state is (
+        VolumeResolutionState.AMBIGUOUS if mount_count else VolumeResolutionState.OFFLINE
+    )
+    assert result.candidates == tuple(str(mount) for mount in current)
+    assert result.root_path is None
+    assert resolver.probed_roots == []
+    if mount_count:
+        assert result.detail == "selected volume mount is not a current candidate"
+
+
+def test_reviewed_clone_choice_must_be_current_and_missing_root_stays_refused(
+    tmp_path: Path,
+) -> None:
+    retained = _binding(tmp_path / "old")
+    first, second = tmp_path / "first", tmp_path / "second"
+    for mount in (first, second):
+        (mount / "managed").mkdir(parents=True)
+    resolver = _Resolver(first, second)
+    stale = resolve_reviewed_binding(
+        retained, resolver, selected_mount=retained.selected_mount
+    )
+    assert stale.state is VolumeResolutionState.AMBIGUOUS
+    assert resolver.probed_roots == []
+
+    current = resolve_reviewed_binding(
+        retained, resolver, selected_mount=str(second)
+    )
+    assert current.state is VolumeResolutionState.RESOLVED
+    assert current.selected_mount == str(second)
+    assert current.root_path == str(second / "managed")
+    assert current.binding.explicit_ambiguity_choice is True
+    assert current.binding.volume_id == retained.volume_id
+
+    (second / "managed").rmdir()
+    missing = resolve_reviewed_binding(
+        retained, resolver, selected_mount=str(second)
+    )
+    assert missing.state is VolumeResolutionState.ROOT_MISSING
+    assert missing.root_path == str(second / "managed")
+    assert missing.selected_mount is None
+
+
+@pytest.mark.parametrize(
     "path",
     (
         "relative",
@@ -394,6 +485,38 @@ def test_location_candidate_accepts_a_long_logical_directory(tmp_path: Path) -> 
 
     assert result.state is LocationCandidateState.RESOLVED
     assert result.root_path == str(root)
+
+
+def test_location_candidate_admits_native_unicode_path_near_utf16_limit(
+    tmp_path: Path,
+) -> None:
+    mount = tmp_path / "mount"
+    mount.mkdir()
+    root = mount
+    created: list[Path] = []
+    try:
+        for _ in range(134):
+            if len(str(root)) >= 32_000:
+                break
+            root /= "漢" * 240
+            os.mkdir("\\\\?\\" + str(root))
+            created.append(root)
+        literal = str(root)
+        assert 32_000 <= len(literal.encode("utf-16-le")) // 2 <= 32_240
+        assert len(literal.encode("utf-8")) > 65_536
+
+        result = admit_location_candidate(
+            LocationCandidate.literal(literal),
+            ledger_path=tmp_path / "ledger.db",
+            backend=_Backend(root, mount),
+            resolver=_Resolver(mount),
+        )
+
+        assert result.state is LocationCandidateState.RESOLVED
+        assert result.root_path == literal
+    finally:
+        for directory in reversed(created):
+            os.rmdir("\\\\?\\" + str(directory))
 
 
 def test_remembered_candidate_uses_final_current_mount_without_writing(

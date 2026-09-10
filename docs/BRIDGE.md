@@ -146,7 +146,8 @@ commands still use that native path for their admission return.
 
 ### Small asynchronous native commands
 
-Only `create_task`, `start_plan`, `release_terminal_session` and `close_task`
+Only `create_task`, `start_plan`, `start_inventory`, `plan_again`,
+`release_terminal_session` and `close_task`
 select the `CommandSpec` small asynchronous work class. Native dispatch
 validates the request and admitted context before starting one command worker.
 Ordinary `BridgeDispatcher.dispatch()` and `CommandSpec.invoke()` remain
@@ -232,14 +233,14 @@ service shutdown retryable.
 | `internal_error` | NamiSync could not complete the desktop action. |
 
 Explicit admission and payload refusals are definitive. `internal_error` after
-admitted work may instead mean uncertain result delivery; the four task-command
+admitted work may instead mean uncertain result delivery; the task-command
 wrappers retain their existing uncertainty recovery. Retry policy belongs to
 immutable command rows and the wrapper, never handler data. No private detail
 is appended to errors.
 
 ## Implemented command map
 
-These eleven rows are active in `namisync/interfaces/web/commands.py` and mirrored by
+These rows are active in `namisync/interfaces/web/commands.py` and mirrored by
 the packaged wrapper. Payload/result key sets are exact. SafeInt is a non-Boolean
 integer in `0..9_007_199_254_740_991`; Theme is `system|light|dark`. Except the two
 BOOTSTRAP rows, commands require OPEN.
@@ -248,10 +249,15 @@ BOOTSTRAP rows, commands require OPEN.
 | --- | --- | --- | --- |
 | `shell_ready` | `{}` | `{acknowledged:true}` | BOOTSTRAP; 5 s; none |
 | `readiness_echo` | `{challenge:HexId}` | `{acknowledged:boolean}` | BOOTSTRAP with exact post-open replay; 5 s; one identical-payload retry after false/uncertainty |
-| `pick_folder` | `{purpose:"source"\|"target"}` | `null` or `{id:SlotId,display:string}` | interactive; no deadline or automatic retry |
-| `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error |
-| `list_tasks` | `{}` | `{tasks:[{task_id:TaskId,session_id:null\|HexId,session_state:null\|"active"\|"completed"\|"failed"\|"canceled"\|"refused",session_released:boolean}]}` | 5 s; one identical-payload retry |
-| `start_plan` | `{command_id:HexId,source_id:SlotId,target_id:SlotId,deletion_policy:null\|"trash"\|"additive"}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error; manual Retry retains id |
+| `pick_folder` | `{purpose:"source"\|"target"\|"inventory"}` | `null` or `LocationChoice` | interactive; no deadline or automatic retry |
+| `read_setup` | `{task_id:null\|TaskId}` | `{task_id:null\|TaskId,snapshot:SetupSnapshot,recents:null\|RecentLocations}` | 5 s; one identical-payload retry |
+| `prepare_setup` | `{options:SetupOptions}` | canonical `SetupOptions` | 5 s; one identical-payload retry |
+| `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | 5 s; no automatic retry |
+| `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error; manual Retry retains id |
+| `list_tasks` | `{}` | `{tasks:[{task_id:TaskId,task_kind:null\|"sync-plan"\|"inventory",request_id:null\|HexId,session_id:null\|HexId,session_state:null\|"active"\|"completed"\|"failed"\|"canceled"\|"refused",session_released:boolean}]}` | 5 s; one identical-payload retry |
+| `start_plan` | `{task_id:TaskId,command_id:HexId,source_id:SlotId,target_id:SlotId,options:SetupOptions}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error; manual Retry retains id |
+| `start_inventory` | `{task_id:TaskId,command_id:HexId,root_id:SlotId}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
+| `plan_again` | `{task_id:TaskId,command_id:HexId,source_mount:null\|string,target_mount:null\|string}` | `{task_id:TaskId,request_id:HexId,session_id:HexId}` | 30 s; same-command recovery |
 | `next_events` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,replay_from:null\|positive-integer}` | `{task_id:TaskId,session_id:HexId,drain_id:HexId,updates:array}` | 30 s client / 25 s server; recovery mints a new drain id |
 | `release_terminal_session` | `{task_id:TaskId,session_id:HexId}` | `{task_id:TaskId,session_id:HexId}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
 | `close_task` | `{task_id:TaskId,session_id:null\|HexId}` | `{task_id:TaskId,session_id:null\|HexId,disposition:"pending"\|"closed"}` | 30 s; identical-payload recovery at 100/250/500 ms, then visible manual retry |
@@ -259,8 +265,8 @@ BOOTSTRAP rows, commands require OPEN.
 | `replace_cosmetic_section` | `{section:"appearance",value_version:1,expected_revision:SafeInt,value:{theme:Theme}}` | same cosmetic snapshot plus `disposition:"applied"\|"noop"\|"conflict"` | 5 s; no mutation retry, read after uncertainty |
 
 Non-null replay sequences crossing the browser remain JavaScript-safe. Command id
-and revision fields are forbidden unless named. Null deletion policy consumes the
-service setting; mirror is not admitted here. A client deadline does not cancel
+and revision fields are forbidden unless named. Starts submit complete canonical
+options; mirror is not admitted here. A client deadline does not cancel
 an admitted Python handler. Start replay resolves retained wire intent before
 volatile slots: equal id/intent survives expiry; changed wire/resolved intent
 conflicts. Lifecycle release/close uses exact owner identity and idempotent
@@ -277,18 +283,92 @@ Terminal-session release and task close remain distinct operations. The browser
 rejects stale document, navigation, and list generations before adopting task
 state.
 
+The browser retains the existing exact create/start submission after uncertain
+delivery. New task, Setup and its batch coordinator expose the same command's retry closure.
+A retry continues that command
+identity; it cannot substitute newly edited roots/options or silently create a
+replacement batch task. Definitive refusals and uncertain outcomes remain
+distinct. This adds no transport queue, retry loop or durable receipt.
+
 ### Slot lifetime
 
-Only the native picker currently creates slots. A slot holds the real path,
+Resolved typed, picker and remembered candidates create startable slots. An
+ambiguous picker may instead create a non-startable continuation. Both share
+one slot table. A slot holds the candidate,
 purpose, inert display, fixed monotonic expiry 30 minutes after insertion, and
 LRU recency. Lookup is nonconsuming and refreshes recency without extending expiry.
 Sweep expired slots before insert/lookup; at most 32 unexpired entries exist.
 At capacity evict the least recent, breaking ties by slot id. Start resolves both
 live purpose-matching slots under one lock before updating either recency.
 Fabricated, expired, evicted and wrong-purpose ids share `slot_unavailable`.
-The browser sees only id/display and cannot promote display to path authority.
-Workflow admission reprobes resolved roots. Future typed/recent inputs preserve
-that outcome without inheriting the old prospective slot recipe.
+The browser cannot promote display to path authority. Workflow admission
+reprobes candidates at a real start; the slot does not preserve mount authority.
+
+### Setup and location values
+
+`SetupOptions` has exactly `filters`, `deletion_policy`, `trash_on_update`,
+`preservation`, `propagate_source_casing`, and `verify_after_execute`.
+Preservation has exactly `preserve_ads`, `preserve_created`, and `preserve_acl`.
+All switches are booleans, ADS must be false, and deletion is trash or additive.
+Filters contain at most 64 strings, each at most 1,024 UTF-8 bytes and together
+at most 16,384 bytes before normalization. Existing backend `FilterSet` grammar
+and canonicalization apply; the browser never normalizes or deduplicates them.
+Defaults prepopulate the form, and `prepare_setup` freezes one complete value
+per gesture without writing global settings.
+
+`LocationCandidate` is exactly `{kind:"literal_path",path,selected_mount}` or
+`{kind:"remembered_location",location_id,selected_mount}`. A mount is null or
+an explicit current choice; location ids use Scalar64 encoding. `LocationChoice`
+has exactly `purpose`, `state`, `choice_id`, `continuation_id`, `display`, `location_id`,
+`candidates`, and `detail`. Only `resolved` supplies a slot id. Other states are
+`invalid_path`, `missing`, `not_directory`, `reparse`, `placeholder`, `remote`,
+`unsupported_volume`, `offline`, `ambiguous`, `unavailable`, and `changed`.
+Displays and detail are nullable inert strings, candidates are inert mount
+strings, and location id is nullable. Admission and reading recents create no
+task, session, receipt, mapping, run or recent activity.
+
+An ambiguous picker supplies only a nullable `continuation_id`, never a
+startable `choice_id`. The continuation retains first-admission identity and
+the ordered displayed mounts; the browser submits an index after an explicit
+choice. Native code resolves that index, re-admits outside the slot lock, and
+compares volume identity, relative root, location identity and the exact current
+mount tuple before returning a resolved choice. A continuation cannot be used
+for Start. Replacement identity or changed mounts require fresh resolution;
+display text and the initial picker gesture cannot substitute for clone choice.
+The immutable continuation projection and prospective response together must
+fit the existing 8 MiB direct-response bound before insertion or eviction. The same
+32-slot population and fixed expiry apply; long paths never need to return as
+an oversized follow-up request.
+
+`SetupSnapshot` has exactly `setup_state` (default or frozen), `task_kind`,
+`source`, `target`, `root`, `options`, and `plan_again`. A root is null or
+`{display,location_id}`; task kind is null, sync-plan or inventory, and options
+are null or `SetupOptions`. Inventory has only a root and no sync options.
+`plan_again` is null or fresh read-only source/target states and candidate
+mounts (`source_state`, `source_candidates`, `target_state`,
+`target_candidates`). It is separate from the frozen inputs and grants no
+authority. States are resolved, offline, ambiguous, missing, unavailable, or
+changed. Frozen inputs alone do not establish a plan artifact: desktop readback
+returns nonnull `plan_again` only after retrieving that artifact, including when
+its reviewed locations are currently unavailable. `read_setup` with null task
+returns defaults and recent sources,
+targets and pairs; a task id returns one exact snapshot and null recents.
+`RecentLocations` has exactly `sources`, `targets`, and `pairs` arrays, each
+with at most five entries. Each recent location has exactly `location_id`,
+`display`, `last_used_at`; each pair has exactly
+`mapping_id`, `source`, `target`, `last_used_at`. Timestamps use UTC encoding;
+no persisted drive hint crosses the bridge as a current mount.
+
+Plan/inventory start atomically attaches the first session to the exact blank
+task. Refusal leaves that shell available; it does not create a replacement.
+Equal replay precedes volatile choice or native access. Plan again requires the
+old artifact's reviewed bindings and freshly resolves both identities. Optional
+mounts must match their current candidates; they cannot replace roots, options,
+selection or authorization. A changed mount choice uses a new command id.
+Success creates a separate task with frozen options and default selection.
+Async responses remain identity-only; task enumeration never embeds Setup.
+Per-task direct readback keeps valid long inputs out of small completion and
+aggregate task-list limits.
 
 ## Current cosmetic channel
 
@@ -299,14 +379,11 @@ Concurrent handlers synchronize effect admission, drains and retirement without 
 
 The next task/review surface must give users idempotent actions, stale-intent refusal, explicit close, truthful terminal delivery, bounded ingress and populations, and a finite containment/refusal/evidence design. The mechanism is open: future work must record its own bounded delivery register and name its runtime enforcer and evidence. Do not revive complete-owner-graph charging, byte reservations, phase-ahead leases, precharged response capacity, or an exact command-map expansion by citing this document.
 
-Location admission is implemented as a workflow-owned safety outcome: raw
-candidate text is bounded and classified through the common no-follow admission
-path. Current picker-backed starts reach it after command replay; slots remain
-purpose-bound, short-lived opaque references. Remembered-location readback is
-available through application services, while typed/recent Setup commands and
-widgets remain future work. A slot, candidate or remembered identity is never
-durable authorization or path-policy authority. Exact future Setup and task
-DTOs belong to their delivery register, not this document.
+Location admission and typed/picker/recent Setup are implemented through the
+common workflow-owned no-follow path. A slot, candidate or remembered identity
+is never durable authorization or path-policy authority. Future review and
+execution commands must preserve these outcomes without inheriting retired
+representation recipes.
 
 ## Evidence and ongoing checks
 

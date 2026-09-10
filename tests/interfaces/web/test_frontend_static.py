@@ -253,11 +253,12 @@ def test_modules_use_only_local_explicit_js_imports(
         "file_row.js": ["./render.js"],
         "icons.js": [],
         "integrity.js": ["./file_row.js", "./render.js"],
-        "panels.js": ["./render.js"],
+        "panels.js": ["./render.js", "./setup.js"],
         "plan.js": ["./file_row.js", "./render.js"],
         "rail.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
+        "setup.js": ["./render.js"],
         "theme.js": ["./bridge.js", "./render.js"],
         "tree.js": ["./render.js"],
     }
@@ -913,6 +914,48 @@ def test_supplemental_node_tree_probe_uses_production_modules(
 
 
 @pytest.mark.supplemental_node
+def test_setup_form_keeps_stable_controls_and_raw_filter_text() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the Setup probe")
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "setup_probe.mjs"),
+            str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "setup.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+    assert completed.stderr == ""
+
+
+@pytest.mark.supplemental_node
+def test_setup_app_guards_gestures_retries_and_serial_batch_ownership() -> None:
+    node = _node_executable()
+    if node is None:
+        pytest.skip("Node.js is unavailable for the Setup app probe")
+    completed = subprocess.run(
+        [
+            str(node),
+            str(PROJECT_ROOT / "tests" / "assets" / "setup_app_probe.mjs"),
+            str(PROJECT_ROOT / "namisync" / "interfaces" / "web" / "assets" / "app.js"),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=20,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr
+    assert completed.stdout == "ok\n"
+    assert completed.stderr == ""
+
+
+@pytest.mark.supplemental_node
 def test_supplemental_node_inert_text_rejects_before_coercion() -> None:
     node = _node_executable()
     if node is None:
@@ -984,12 +1027,18 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
     assert 'byte.toString(16).padStart(2, "0")' in source
     assert source.count('"pick_folder"') == 2
     assert source.count('"start_plan"') == 2
-    assert source.count("return await startPlanAttempt(payload);") == 2
+    assert source.count('"start_inventory"') == 2
+    assert source.count('"plan_again"') == 4
+    assert source.count('"read_setup"') == 3
+    assert source.count('"prepare_setup"') == 3
+    assert source.count('"admit_location"') == 2
+    assert "function submitStart(payload, command, timeoutMs)" in source
     assert "new StartPlanUncertainError(submit)" in source
     assert "generation !== bridgeGeneration" in source
     assert 'typeof sourceId !== "string"' in source
     assert 'typeof targetId !== "string"' in source
-    assert 'typeof value.id === "string"' in source
+    assert "function validateLocationChoice(value)" in source
+    assert "function validateSetupReadResult(value)" in source
     assert 'typeof value.request_id === "string"' in source
     assert 'typeof value.session_id === "string"' in source
     assert "Object.getPrototypeOf(value) !== Object.prototype" in source

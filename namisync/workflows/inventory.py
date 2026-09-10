@@ -2411,6 +2411,29 @@ def _bind_request_location(
     raise ValueError(result.detail or result.state.value)
 
 
+def resolve_reviewed_binding(
+    binding: LocationBinding,
+    resolver: MountedVolumeResolver,
+    *,
+    selected_mount: str | None = None,
+) -> VolumeResolution:
+    """Resolve retained identity while requiring a fresh clone choice."""
+
+    binding = _snapshot_location_binding(binding)
+    try:
+        fresh = _binding_from_identity(
+            binding.volume_id,
+            binding.volume_relative_path,
+            binding.selected_mount,
+            selected_mount,
+            binding.location_id,
+            resolver,
+        )
+    except VolumeResolutionRequired as error:
+        return error.resolution
+    return resolve_binding(fresh, resolver)
+
+
 def _binding_from_location(
     location: LocationSnapshot,
     selected_mount: str | None,
@@ -2478,7 +2501,22 @@ def _binding_from_identity(
         )
     chosen = selected_mount or candidates[0]
     if _path_key(chosen) not in {_path_key(path) for path in candidates}:
-        raise ValueError("selected volume mount is not a current candidate")
+        provisional = LocationBinding(
+            volume_id,
+            relative,
+            candidates[0],
+            candidates,
+            False,
+            location_id,
+        )
+        raise VolumeResolutionRequired(
+            VolumeResolution(
+                VolumeResolutionState.AMBIGUOUS,
+                provisional,
+                candidates=candidates,
+                detail="selected volume mount is not a current candidate",
+            )
+        )
     binding = LocationBinding(
         volume_id,
         relative,

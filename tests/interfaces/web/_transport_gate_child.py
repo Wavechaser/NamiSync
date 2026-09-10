@@ -458,6 +458,10 @@ def _test_spec(
             target_id = payload["target_id"]
             source_keys = payload["source_keys"]
             target_keys = payload["target_keys"]
+            choice_keys = [
+                "candidates", "choice_id", "continuation_id", "detail",
+                "display", "location_id", "purpose", "state",
+            ]
             source_display = payload["source_display"]
             target_display = payload["target_display"]
             plan = payload["plan"]
@@ -469,8 +473,8 @@ def _test_spec(
                 and _SLOT_ID.fullmatch(source_id) is not None
                 and type(target_id) is str
                 and _SLOT_ID.fullmatch(target_id) is not None
-                and source_keys == ["display", "id"]
-                and target_keys == ["display", "id"]
+                and source_keys == choice_keys
+                and target_keys == choice_keys
                 and type(source_display) is str
                 and type(target_display) is str
                 and type(plan) is dict
@@ -654,7 +658,7 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original_task_registry = host._task_registry
     original_dispatch = bridge.BridgeDispatcher._dispatch_native
     original_execute = bridge.BridgeDispatcher._execute_prepared_command
-    original_start_task_plan = NamiSyncService.start_task_plan
+    original_start_task_setup_plan = NamiSyncService.start_task_setup_plan
     original_reobserve_task = NamiSyncService.reobserve_task
     original_release_task_session = NamiSyncService.release_task_session
     original_close_task = NamiSyncService.close_task
@@ -962,26 +966,33 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         registry.close_task = close_task  # type: ignore[method-assign]
         return registry
 
-    def start_task_plan(
+    def start_task_setup_plan(
         service: object,
-        source: str,
-        target: str,
+        task_id: str,
+        source: object,
+        target: object,
+        options: object,
         *,
-        deletion_policy: str | None,
         command_id: str,
+        signature: tuple[object, ...],
         delivery_factory,
     ) -> object:
+        deletion_policy = options.deletion_policy
         recorder.append(
             "service_start_plan_calls",
             {
-                "source": source,
-                "target": target,
+                "source": source.path,
+                "target": target.path,
                 "deletion_policy": deletion_policy,
                 "command_id": command_id,
             },
         )
-        if deletion_policy == "trash" and browser_gate is not None:
-            task_id = f"task-{command_id}"
+        controlled_transport = False
+        if browser_gate is not None:
+            with browser_gate.lock:
+                controlled_transport = browser_gate.uncertain_command_id is not None
+        if deletion_policy == "trash" and controlled_transport:
+            assert browser_gate is not None
             observation_sink = delivery_factory(task_id)
             role, request_id, session_id = browser_gate.start_controlled(
                 observation_sink
@@ -995,22 +1006,53 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
                     "session_id": session_id,
                 },
             )
-            from namisync.interfaces.task_port import TaskStartView
+            from namisync.interfaces.task_port import (
+                TaskSetupLocationView,
+                TaskSetupSnapshotView,
+                TaskStartOutcome,
+                TaskStartView,
+            )
 
-            return TaskStartView(task_id, request_id, session_id)
+            return TaskStartOutcome(
+                TaskStartView(task_id, request_id, session_id),
+                TaskSetupSnapshotView(
+                    "frozen",
+                    "sync-plan",
+                    TaskSetupLocationView(source.path, None),
+                    TaskSetupLocationView(target.path, None),
+                    None,
+                    options,
+                ),
+            )
         if deletion_policy == "additive":
-            task_id = f"task-{command_id}"
             delivery_factory(task_id)
-            from namisync.interfaces.task_port import TaskStartView
+            from namisync.interfaces.task_port import (
+                TaskSetupLocationView,
+                TaskSetupSnapshotView,
+                TaskStartOutcome,
+                TaskStartView,
+            )
 
             recorder.set("controlled_plan_session", "b" * 32)
-            return TaskStartView(task_id, "a" * 32, "b" * 32)
-        return original_start_task_plan(
+            return TaskStartOutcome(
+                TaskStartView(task_id, "a" * 32, "b" * 32),
+                TaskSetupSnapshotView(
+                    "frozen",
+                    "sync-plan",
+                    TaskSetupLocationView(source.path, None),
+                    TaskSetupLocationView(target.path, None),
+                    None,
+                    options,
+                ),
+            )
+        return original_start_task_setup_plan(
             service,
+            task_id,
             source,
             target,
-            deletion_policy=deletion_policy,
+            options,
             command_id=command_id,
+            signature=signature,
             delivery_factory=delivery_factory,
         )
 
@@ -1151,7 +1193,11 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
         stack.enter_context(patch.object(host, "_log_startup_renderer", log_renderer))
         if arguments.mode == "transport":
             stack.enter_context(
-                patch.object(NamiSyncService, "start_task_plan", start_task_plan)
+                patch.object(
+                    NamiSyncService,
+                    "start_task_setup_plan",
+                    start_task_setup_plan,
+                )
             )
             stack.enter_context(
                 patch.object(NamiSyncService, "reobserve_task", reobserve_task)

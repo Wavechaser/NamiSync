@@ -30,6 +30,7 @@ from namisync.interfaces.task_port import (
     TaskShellView,
     TaskStartView,
     TaskSummaryView,
+    TaskSetupSnapshotView,
 )
 from namisync.interfaces.web.readiness import (
     CommandPhase,
@@ -56,6 +57,7 @@ from namisync.interfaces.service import (
     SelectionPreviewView,
     SemanticSettingsPatchView,
     SemanticSettingsView,
+    SetupOptionsView,
     SessionEventView,
     SessionRecordView,
     ShutdownView,
@@ -79,6 +81,12 @@ from namisync.workflows.views import (
     PhaseResultView,
     RecordingIssueView,
     ReviewFactLimitView,
+)
+from namisync.workflows.inventory import (
+    LocationCandidate,
+    LocationCandidateResult,
+    LocationCandidateState,
+    RememberedLocations,
 )
 
 
@@ -107,6 +115,7 @@ SERVICE_PUBLIC_VIEW_DATACLASSES: frozenset[type[object]] = frozenset(
         SelectionPreviewView,
         SemanticSettingsPatchView,
         SemanticSettingsView,
+        SetupOptionsView,
         SessionEventView,
         SessionRecordView,
         ShutdownView,
@@ -203,9 +212,23 @@ class CommandWork(StrEnum):
 class FolderSlotAuthority(Protocol):
     """Consumer contract for the path-owning slot table added separately."""
 
-    def store(self, path: str, *, purpose: str) -> tuple[str, str]: ...
+    def store(
+        self,
+        candidate: LocationCandidate | str,
+        *,
+        purpose: str,
+        display: str | None = None,
+    ) -> tuple[str, str]: ...
 
-    def resolve_pair(self, source_id: str, target_id: str) -> tuple[str, str]: ...
+    def resolve_pair(self, source_id: str, target_id: str): ...
+
+    def resolve(self, slot_id: str, *, purpose: str) -> LocationCandidate: ...
+
+    def store_continuation(self, candidate, result, *, purpose: str, admit) -> str: ...
+
+    def resolve_continuation(
+        self, slot_id: str, *, purpose: str, mount_index: int
+    ): ...
 
 
 class TaskAuthority(Protocol):
@@ -213,10 +236,26 @@ class TaskAuthority(Protocol):
 
     def list_tasks(self) -> TaskListView: ...
 
+    def read_setup_options(self) -> SetupOptionsView: ...
+
+    def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView: ...
+
+    def remembered_locations(self) -> RememberedLocations: ...
+
+    def admit_location_candidate(self, candidate: LocationCandidate) -> LocationCandidateResult: ...
+
+    def read_task_setup(self, task_id: str) -> TaskSetupSnapshotView: ...
+
+    def start_setup_plan(self, *args, **kwargs) -> TaskStartView: ...
+
+    def start_setup_inventory(self, *args, **kwargs) -> TaskStartView: ...
+
+    def start_plan_again(self, *args, **kwargs) -> TaskStartView: ...
+
     def replay_start(
         self,
         command_id: str,
-        wire_intent: tuple[str, str, str | None],
+        wire_intent: tuple[object, ...],
     ) -> TaskStartView | None: ...
 
     def start_plan(
@@ -366,10 +405,44 @@ class _PickFolderPayload:
 
 @dataclass(frozen=True, slots=True)
 class _StartPlanPayload:
+    task_id: str
     command_id: str
     source_id: str
     target_id: str
-    deletion_policy: str | None
+    options: SetupOptionsView
+
+
+@dataclass(frozen=True, slots=True)
+class _ReadSetupPayload:
+    task_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class _PrepareSetupPayload:
+    options: SetupOptionsView
+
+
+@dataclass(frozen=True, slots=True)
+class _AdmitLocationPayload:
+    purpose: str
+    candidate: LocationCandidate | None
+    continuation_id: str | None = None
+    mount_index: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class _StartInventoryPayload:
+    task_id: str
+    command_id: str
+    root_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _PlanAgainPayload:
+    task_id: str
+    command_id: str
+    source_mount: str | None
+    target_mount: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -499,26 +572,112 @@ def production_command_specs(
             raise PickerUnavailableError(
                 "native folder picker returned invalid data"
             ) from error
-        slot_id, display = slots.store(selected[0], purpose=payload.purpose)
+        return _admit_location_choice(
+            payload.purpose,
+            LocationCandidate.literal(selected[0]),
+            registry,
+            slots,
+            allow_continuation=True,
+        )
+
+    def admit_location(payload: object) -> object:
+        if type(payload) is not _AdmitLocationPayload:
+            raise TypeError("admit_location received an unvalidated payload")
+        if payload.candidate is not None:
+            return _admit_location_choice(
+                payload.purpose, payload.candidate, registry, slots
+            )
+        assert payload.continuation_id is not None
+        assert payload.mount_index is not None
+        candidate, binding, candidates, selected_mount = slots.resolve_continuation(
+            payload.continuation_id,
+            purpose=payload.purpose,
+            mount_index=payload.mount_index,
+        )
+        if candidate.path is not None:
+            selected = LocationCandidate.literal(
+                candidate.path, selected_mount=selected_mount
+            )
+        else:
+            assert candidate.location_id is not None
+            selected = LocationCandidate.remembered(
+                candidate.location_id, selected_mount=selected_mount
+            )
+        fresh = registry.admit_location_candidate(selected)
+        if type(fresh) is not LocationCandidateResult:
+            raise RuntimeError("location service returned invalid data")
+        changed = (
+            fresh.binding is None
+            or fresh.binding.volume_id != binding.volume_id
+            or fresh.binding.volume_relative_path != binding.volume_relative_path
+            or fresh.binding.location_id != binding.location_id
+            or fresh.candidates != candidates
+        )
+        if fresh.state is LocationCandidateState.AMBIGUOUS and changed:
+            return _changed_location_choice(payload.purpose, fresh)
+        if fresh.state is not LocationCandidateState.RESOLVED:
+            return _location_choice_wire(
+                payload.purpose,
+                fresh,
+                None,
+                None,
+                fresh.root_path,
+                None if fresh.binding is None else fresh.binding.location_id,
+            )
         if (
-            not isinstance(slot_id, str)
-            or _SLOT_ID.fullmatch(slot_id) is None
-            or not isinstance(display, str)
+            changed
+            or fresh.binding.selected_mount != selected_mount
         ):
-            raise RuntimeError("folder slot authority returned invalid data")
+            return _changed_location_choice(payload.purpose, fresh)
+        return _admit_location_choice(
+            payload.purpose, selected, registry, slots, admitted=fresh
+        )
+
+    def prepare_setup(payload: object) -> object:
+        if type(payload) is not _PrepareSetupPayload:
+            raise TypeError("prepare_setup received an unvalidated payload")
         try:
-            display.encode("utf-8")
-        except UnicodeEncodeError as error:
-            raise RuntimeError("folder slot authority returned invalid data") from error
-        return {"id": slot_id, "display": display}
+            result = registry.prepare_setup_options(payload.options)
+        except (TypeError, ValueError) as error:
+            raise PlanningRefusedError("Setup options were refused") from error
+        return _setup_options_to_wire(result)
+
+    def read_setup(payload: object) -> object:
+        if type(payload) is not _ReadSetupPayload:
+            raise TypeError("read_setup received an unvalidated payload")
+        if payload.task_id is None:
+            snapshot = TaskSetupSnapshotView(
+                "default",
+                None,
+                None,
+                None,
+                None,
+                registry.read_setup_options(),
+            )
+            return {
+                "task_id": None,
+                "snapshot": _setup_snapshot_to_wire(snapshot),
+                "recents": _remembered_locations_to_wire(
+                    registry.remembered_locations()
+                ),
+            }
+        return {
+            "task_id": payload.task_id,
+            "snapshot": _setup_snapshot_to_wire(
+                registry.read_task_setup(payload.task_id)
+            ),
+            "recents": None,
+        }
 
     def start_plan(payload: object) -> object:
         if not isinstance(payload, _StartPlanPayload):
             raise TypeError("start_plan received an unvalidated payload")
         wire_intent = (
+            "start-plan",
+            payload.task_id,
             payload.source_id,
             payload.target_id,
-            payload.deletion_policy,
+            _setup_options_signature(payload.options),
         )
         try:
             result = registry.replay_start(payload.command_id, wire_intent)
@@ -533,10 +692,11 @@ def production_command_specs(
                     if result is None:
                         raise
                 else:
-                    result = registry.start_plan(
+                    result = registry.start_setup_plan(
+                        payload.task_id,
                         source,
                         target,
-                        deletion_policy=payload.deletion_policy,
+                        payload.options,
                         command_id=payload.command_id,
                         wire_intent=wire_intent,
                     )
@@ -550,6 +710,73 @@ def production_command_specs(
             ) from error
         if not _is_valid_task_start(result):
             raise RuntimeError("planning service returned invalid data")
+        return result
+
+    def start_inventory(payload: object) -> object:
+        if type(payload) is not _StartInventoryPayload:
+            raise TypeError("start_inventory received an unvalidated payload")
+        wire_intent = (
+            "start-inventory",
+            payload.task_id,
+            payload.root_id,
+        )
+        try:
+            result = registry.replay_start(payload.command_id, wire_intent)
+            if result is None:
+                try:
+                    root = slots.resolve(payload.root_id, purpose="inventory")
+                except SlotUnavailableError:
+                    result = registry.replay_start(payload.command_id, wire_intent)
+                    if result is None:
+                        raise
+                else:
+                    result = registry.start_setup_inventory(
+                        payload.task_id,
+                        root,
+                        command_id=payload.command_id,
+                        wire_intent=wire_intent,
+                    )
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError(
+                "start_inventory command id conflicts with retained intent"
+            ) from error
+        except SyncPathInputError as error:
+            raise PlanningRefusedError(
+                "start_inventory root was refused"
+            ) from error
+        if not _is_valid_task_start(result):
+            raise RuntimeError("inventory service returned invalid data")
+        return result
+
+    def plan_again(payload: object) -> object:
+        if type(payload) is not _PlanAgainPayload:
+            raise TypeError("plan_again received an unvalidated payload")
+        wire_intent = (
+            "plan-again",
+            payload.task_id,
+            payload.source_mount,
+            payload.target_mount,
+        )
+        try:
+            result = registry.replay_start(payload.command_id, wire_intent)
+            if result is None:
+                result = registry.start_plan_again(
+                    payload.task_id,
+                    source_mount=payload.source_mount,
+                    target_mount=payload.target_mount,
+                    command_id=payload.command_id,
+                    wire_intent=wire_intent,
+                )
+        except (CommandIdConflictError, TaskIntentConflictError) as error:
+            raise CommandConflictError(
+                "plan_again command id conflicts with retained intent"
+            ) from error
+        except (SyncPathInputError, KeyError, ValueError) as error:
+            raise PlanningRefusedError(
+                "plan_again reviewed roots were refused"
+            ) from error
+        if not _is_valid_task_start(result):
+            raise RuntimeError("Plan-again service returned invalid data")
         return result
 
     def create_task(payload: object) -> object:
@@ -684,6 +911,33 @@ def production_command_specs(
                 timeout=CommandTimeout.INTERACTIVE,
                 retry=CommandRetry.NONE,
             ),
+            "read_setup": CommandSpec(
+                validate_payload=_validate_read_setup,
+                handler=read_setup,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "prepare_setup": CommandSpec(
+                validate_payload=_validate_prepare_setup,
+                handler=prepare_setup,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.SAME_PAYLOAD_ONCE,
+            ),
+            "admit_location": CommandSpec(
+                validate_payload=_validate_admit_location,
+                handler=admit_location,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.NONE,
+            ),
             "create_task": CommandSpec(
                 validate_payload=_validate_create_task,
                 handler=create_task,
@@ -706,6 +960,26 @@ def production_command_specs(
             "start_plan": CommandSpec(
                 validate_payload=_validate_start_plan,
                 handler=start_plan,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.MUTATION_30_SECONDS,
+                retry=CommandRetry.SAME_COMMAND_ONCE,
+                work=CommandWork.ASYNC_SMALL,
+            ),
+            "start_inventory": CommandSpec(
+                validate_payload=_validate_start_inventory,
+                handler=start_inventory,
+                access=CommandAccess.MUTATING,
+                command_id=FieldRequirement.REQUIRED,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.MUTATION_30_SECONDS,
+                retry=CommandRetry.SAME_COMMAND_ONCE,
+                work=CommandWork.ASYNC_SMALL,
+            ),
+            "plan_again": CommandSpec(
+                validate_payload=_validate_plan_again,
+                handler=plan_again,
                 access=CommandAccess.MUTATING,
                 command_id=FieldRequirement.REQUIRED,
                 revision=FieldRequirement.FORBIDDEN,
@@ -785,39 +1059,156 @@ def _validate_pick_folder(value: object) -> _PickFolderPayload:
     if not isinstance(value, dict) or set(value) != {"purpose"}:
         raise CommandPayloadError("pick_folder payload is invalid")
     purpose = value["purpose"]
-    if type(purpose) is not str or purpose not in {"source", "target"}:
+    if type(purpose) is not str or purpose not in {
+        "source",
+        "target",
+        "inventory",
+    }:
         raise CommandPayloadError("pick_folder payload is invalid")
     return _PickFolderPayload(purpose)
 
 
 def _validate_start_plan(value: object) -> _StartPlanPayload:
     if not isinstance(value, dict) or set(value) != {
+        "task_id",
         "command_id",
         "source_id",
         "target_id",
-        "deletion_policy",
+        "options",
     }:
         raise CommandPayloadError("start_plan payload is invalid")
+    task_id = value["task_id"]
     command_id = value["command_id"]
     source_id = value["source_id"]
     target_id = value["target_id"]
-    deletion_policy = value["deletion_policy"]
+    options = value["options"]
+    if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+        raise CommandPayloadError("start_plan payload is invalid")
     if type(command_id) is not str or _OPAQUE_ID.fullmatch(command_id) is None:
         raise CommandPayloadError("start_plan payload is invalid")
     if type(source_id) is not str or _SLOT_ID.fullmatch(source_id) is None:
         raise CommandPayloadError("start_plan payload is invalid")
     if type(target_id) is not str or _SLOT_ID.fullmatch(target_id) is None:
         raise CommandPayloadError("start_plan payload is invalid")
-    if deletion_policy is not None and (
-        type(deletion_policy) is not str
-        or deletion_policy not in {"trash", "additive"}
-    ):
-        raise CommandPayloadError("start_plan payload is invalid")
     return _StartPlanPayload(
+        task_id=task_id,
         command_id=command_id,
         source_id=source_id,
         target_id=target_id,
-        deletion_policy=deletion_policy,
+        options=_validate_setup_options(options, "start_plan"),
+    )
+
+
+def _validate_read_setup(value: object) -> _ReadSetupPayload:
+    if type(value) is not dict or set(value) != {"task_id"}:
+        raise CommandPayloadError("read_setup payload is invalid")
+    task_id = value["task_id"]
+    if task_id is not None and (
+        type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None
+    ):
+        raise CommandPayloadError("read_setup payload is invalid")
+    return _ReadSetupPayload(task_id)
+
+
+def _validate_prepare_setup(value: object) -> _PrepareSetupPayload:
+    if type(value) is not dict or set(value) != {"options"}:
+        raise CommandPayloadError("prepare_setup payload is invalid")
+    return _PrepareSetupPayload(
+        _validate_setup_options(value["options"], "prepare_setup")
+    )
+
+
+def _validate_admit_location(value: object) -> _AdmitLocationPayload:
+    if type(value) is not dict:
+        raise CommandPayloadError("admit_location payload is invalid")
+    keys = set(value)
+    if keys not in (
+        {"purpose", "candidate"},
+        {"purpose", "continuation_id", "mount_index"},
+    ):
+        raise CommandPayloadError("admit_location payload is invalid")
+    purpose = value["purpose"]
+    if type(purpose) is not str or purpose not in {
+        "source",
+        "target",
+        "inventory",
+    }:
+        raise CommandPayloadError("admit_location payload is invalid")
+    if keys == {"purpose", "candidate"}:
+        return _AdmitLocationPayload(
+            purpose,
+            _validate_location_candidate(value["candidate"]),
+        )
+    if keys == {"purpose", "continuation_id", "mount_index"}:
+        continuation_id = value["continuation_id"]
+        mount_index = value["mount_index"]
+        if (
+            type(continuation_id) is not str
+            or _SLOT_ID.fullmatch(continuation_id) is None
+            or type(mount_index) is not int
+            or mount_index < 0
+        ):
+            raise CommandPayloadError("admit_location payload is invalid")
+        return _AdmitLocationPayload(
+            purpose, None, continuation_id, mount_index
+        )
+    raise CommandPayloadError("admit_location payload is invalid")
+
+
+def _validate_start_inventory(value: object) -> _StartInventoryPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id",
+        "command_id",
+        "root_id",
+    }:
+        raise CommandPayloadError("start_inventory payload is invalid")
+    task_id = value["task_id"]
+    command_id = value["command_id"]
+    root_id = value["root_id"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or type(command_id) is not str
+        or _OPAQUE_ID.fullmatch(command_id) is None
+        or type(root_id) is not str
+        or _SLOT_ID.fullmatch(root_id) is None
+    ):
+        raise CommandPayloadError("start_inventory payload is invalid")
+    return _StartInventoryPayload(task_id, command_id, root_id)
+
+
+def _validate_plan_again(value: object) -> _PlanAgainPayload:
+    if type(value) is not dict or set(value) != {
+        "task_id",
+        "command_id",
+        "source_mount",
+        "target_mount",
+    }:
+        raise CommandPayloadError("plan_again payload is invalid")
+    task_id = value["task_id"]
+    command_id = value["command_id"]
+    source_mount = value["source_mount"]
+    target_mount = value["target_mount"]
+    if (
+        type(task_id) is not str
+        or _TASK_ID.fullmatch(task_id) is None
+        or type(command_id) is not str
+        or _OPAQUE_ID.fullmatch(command_id) is None
+    ):
+        raise CommandPayloadError("plan_again payload is invalid")
+    for mount in (source_mount, target_mount):
+        if mount is not None:
+            try:
+                LocationCandidate.literal(mount)
+            except (TypeError, ValueError) as error:
+                raise CommandPayloadError(
+                    "plan_again payload is invalid"
+                ) from error
+    return _PlanAgainPayload(
+        task_id,
+        command_id,
+        source_mount,
+        target_mount,
     )
 
 
@@ -881,6 +1272,301 @@ def _validate_release_terminal_session(
     if type(session_id) is not str or _OPAQUE_ID.fullmatch(session_id) is None:
         raise CommandPayloadError("release_terminal_session payload is invalid")
     return _ReleaseTerminalSessionPayload(task_id, session_id)
+
+
+def _validate_setup_options(value: object, command: str) -> SetupOptionsView:
+    if type(value) is not dict or set(value) != {
+        "filters",
+        "deletion_policy",
+        "trash_on_update",
+        "preservation",
+        "propagate_source_casing",
+        "verify_after_execute",
+    }:
+        raise CommandPayloadError(f"{command} payload is invalid")
+    filters = value["filters"]
+    preservation = value["preservation"]
+    if (
+        type(filters) is not list
+        or not all(type(pattern) is str for pattern in filters)
+        or type(preservation) is not dict
+        or set(preservation) != {
+            "preserve_ads",
+            "preserve_created",
+            "preserve_acl",
+        }
+    ):
+        raise CommandPayloadError(f"{command} payload is invalid")
+    try:
+        return SetupOptionsView(
+            tuple(filters),
+            value["deletion_policy"],
+            value["trash_on_update"],
+            PreservationSettingsView(
+                preservation["preserve_ads"],
+                preservation["preserve_created"],
+                preservation["preserve_acl"],
+            ),
+            value["propagate_source_casing"],
+            value["verify_after_execute"],
+        )
+    except (TypeError, ValueError, UnicodeError) as error:
+        raise CommandPayloadError(f"{command} payload is invalid") from error
+
+
+def _validate_location_candidate(value: object) -> LocationCandidate:
+    if type(value) is not dict or "kind" not in value:
+        raise CommandPayloadError("admit_location payload is invalid")
+    kind = value["kind"]
+    selected_mount = value.get("selected_mount")
+    try:
+        if kind == "literal_path" and set(value) == {
+            "kind",
+            "path",
+            "selected_mount",
+        }:
+            return LocationCandidate.literal(
+                value["path"],
+                selected_mount=selected_mount,
+            )
+        if kind == "remembered_location" and set(value) == {
+            "kind",
+            "location_id",
+            "selected_mount",
+        }:
+            location_id = value["location_id"]
+            if (
+                type(location_id) is not str
+                or not location_id.isascii()
+                or not location_id.isdecimal()
+                or str(int(location_id)) != location_id
+                or int(location_id) < 1
+                or int(location_id) > (1 << 63) - 1
+            ):
+                raise ValueError("remembered location id is invalid")
+            return LocationCandidate.remembered(
+                int(location_id),
+                selected_mount=selected_mount,
+            )
+    except (TypeError, ValueError, UnicodeError) as error:
+        raise CommandPayloadError("admit_location payload is invalid") from error
+    raise CommandPayloadError("admit_location payload is invalid")
+
+
+def _admit_location_choice(
+    purpose: str,
+    candidate: LocationCandidate,
+    registry: TaskAuthority,
+    slots: FolderSlotAuthority,
+    *,
+    admitted: LocationCandidateResult | None = None,
+    allow_continuation: bool = False,
+) -> dict[str, object]:
+    result = (
+        registry.admit_location_candidate(candidate)
+        if admitted is None
+        else admitted
+    )
+    if type(result) is not LocationCandidateResult:
+        raise RuntimeError("location service returned invalid data")
+    choice_id = None
+    continuation_id = None
+    display = result.root_path
+    if result.state is LocationCandidateState.RESOLVED:
+        assert result.root_path is not None
+        stored = slots.store(
+            candidate,
+            purpose=purpose,
+            display=result.root_path,
+        )
+        if (
+            type(stored) is not tuple
+            or len(stored) != 2
+            or type(stored[0]) is not str
+            or _SLOT_ID.fullmatch(stored[0]) is None
+            or type(stored[1]) is not str
+        ):
+            raise RuntimeError("folder slot authority returned invalid data")
+        choice_id, stored_display = stored
+        if stored_display != result.root_path:
+            raise RuntimeError("folder slot authority changed location display")
+    elif result.state is LocationCandidateState.AMBIGUOUS and allow_continuation:
+        display = candidate.path
+
+        def admit_response(
+            slot_id: str,
+            retained: dict[str, object],
+        ) -> object:
+            from .bridge import snapshot_bridge_response_result
+
+            admitted = snapshot_bridge_response_result(
+                {
+                    "continuation": retained,
+                    "response": _location_choice_wire(
+                        purpose, result, None, slot_id, display
+                    ),
+                },
+                "0" * 32,
+            )
+            if type(admitted) is not dict or set(admitted) != {
+                "continuation", "response",
+            }:
+                raise RuntimeError(
+                    "bridge response admission returned invalid continuation state"
+                )
+            return admitted["continuation"]
+
+        continuation_id = slots.store_continuation(
+            candidate,
+            result,
+            purpose=purpose,
+            admit=admit_response,
+        )
+    location_id = (
+        result.binding.location_id
+        if result.binding is not None
+        else candidate.location_id
+    )
+    return _location_choice_wire(
+        purpose, result, choice_id, continuation_id, display, location_id
+    )
+
+
+def _location_choice_wire(
+    purpose: str,
+    result: LocationCandidateResult,
+    choice_id: str | None,
+    continuation_id: str | None,
+    display: str | None,
+    location_id: int | None = None,
+) -> dict[str, object]:
+    return {
+        "purpose": purpose,
+        "state": result.state.value,
+        "choice_id": choice_id,
+        "continuation_id": continuation_id,
+        "display": display,
+        "location_id": None if location_id is None else str(location_id),
+        "candidates": list(result.candidates),
+        "detail": result.detail,
+    }
+
+
+def _changed_location_choice(
+    purpose: str,
+    result: LocationCandidateResult,
+) -> dict[str, object]:
+    return {
+        "purpose": purpose,
+        "state": "changed",
+        "choice_id": None,
+        "continuation_id": None,
+        "display": result.root_path,
+        "location_id": (
+            None
+            if result.binding is None or result.binding.location_id is None
+            else str(result.binding.location_id)
+        ),
+        "candidates": list(result.candidates),
+        "detail": result.detail or "The selected volume identity changed.",
+    }
+
+
+def _setup_options_to_wire(value: SetupOptionsView) -> dict[str, object]:
+    if type(value) is not SetupOptionsView:
+        raise RuntimeError("Setup authority returned invalid options")
+    value.__post_init__()
+    return {
+        "filters": list(value.filters),
+        "deletion_policy": value.deletion_policy,
+        "trash_on_update": value.trash_on_update,
+        "preservation": {
+            "preserve_ads": value.preservation.preserve_ads,
+            "preserve_created": value.preservation.preserve_created,
+            "preserve_acl": value.preservation.preserve_acl,
+        },
+        "propagate_source_casing": value.propagate_source_casing,
+        "verify_after_execute": value.verify_after_execute,
+    }
+
+
+def _setup_options_signature(value: SetupOptionsView) -> tuple[object, ...]:
+    """Project complete Setup options into the domain-blind replay alphabet."""
+
+    return (
+        value.filters,
+        value.deletion_policy,
+        value.trash_on_update,
+        (
+            value.preservation.preserve_ads,
+            value.preservation.preserve_created,
+            value.preservation.preserve_acl,
+        ),
+        value.propagate_source_casing,
+        value.verify_after_execute,
+    )
+
+
+def _setup_snapshot_to_wire(value: TaskSetupSnapshotView) -> dict[str, object]:
+    if type(value) is not TaskSetupSnapshotView:
+        raise RuntimeError("task authority returned invalid Setup snapshot")
+    value.__post_init__()
+
+    def location(item):
+        return None if item is None else {
+            "display": item.display,
+            "location_id": item.location_id,
+        }
+
+    readiness = value.plan_again
+    return {
+        "setup_state": value.setup_state,
+        "task_kind": value.task_kind,
+        "source": location(value.source),
+        "target": location(value.target),
+        "root": location(value.root),
+        "options": (
+            None if value.options is None else _setup_options_to_wire(value.options)
+        ),
+        "plan_again": None if readiness is None else {
+            "source_state": readiness.source_state,
+            "source_candidates": list(readiness.source_candidates),
+            "target_state": readiness.target_state,
+            "target_candidates": list(readiness.target_candidates),
+        },
+    }
+
+
+def _remembered_locations_to_wire(value: RememberedLocations) -> dict[str, object]:
+    if type(value) is not RememberedLocations:
+        raise RuntimeError("location service returned invalid recents")
+
+    def location(item):
+        if item.mount_hint is None:
+            display = item.volume_relative_path or "Volume root"
+        elif item.volume_relative_path:
+            display = item.mount_hint.rstrip("\\/") + "\\" + item.volume_relative_path
+        else:
+            display = item.mount_hint
+        return {
+            "location_id": str(item.location_id),
+            "display": display,
+            "last_used_at": item.last_used_at.isoformat(),
+        }
+
+    return {
+        "sources": [location(item) for item in value.sources],
+        "targets": [location(item) for item in value.targets],
+        "pairs": [
+            {
+                "mapping_id": str(item.mapping_id),
+                "source": location(item.source),
+                "target": location(item.target),
+                "last_used_at": item.last_used_at.isoformat(),
+            }
+            for item in value.pairs
+        ],
+    }
 
 
 def _validate_read_cosmetic_section(

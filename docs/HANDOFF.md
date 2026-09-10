@@ -1,45 +1,53 @@
 # Latest session handoff
 
-## GUI integration tuning (2026-09-11)
+## M1-6 Setup delivery (2026-09-11)
 
-GUI-1 restores persistent selection paint and the 3 px accent marker on the live
-rail. The only production change adds `aria-current="page"` to the existing
-ordinary/forced-color task-card state rules; gallery variants and the separate
-Close button remain. Base is clean `e19ed9d` on `milestone1`. The task uses the
-current checkout; the atomic delivery title is
-`fix(web): restore live task rail selection cues`. No worktree, recovery branch,
-push or PR is involved.
+M1-6 is delivered on `milestone1`, based on `b98dce4`, in the atomic commit
+`feat(web): deliver frozen task setup and location flows`. Final independent
+adversarial review passed. The exact commit, parent, tree and clean-state check
+are recorded in `build/m1-6/evidence/integration-receipt.json`. Pause before M1-7; do not
+begin its expansion or implementation without the user's next instruction.
+No push, PR, halo mitigation, change to native window material or global-settings
+mutation is included.
 
-Verification: the pre-fix real installed-wheel task-shell test reproduced
-the missing marker. After the fix, 56 focused checks, the task-shell headed
-witness, 1,503 interface tests and all 12 import contracts passed. Independent
-GUI-1 review approved the actual diff. All 29 installed-wheel interface headed
-tests passed in the final interactive-desktop run (`headed-03.txt`). The first
-attempt failed reading a shared pip cached wheel; the cache-free sandbox retry
-could not enumerate desktop windows. Both failures preceded GUI assertions;
-the final run used `PIP_NO_CACHE_DIR=1` and interactive desktop access. No
-production/test workaround was added. Logs and review receipts are in ignored
-`build/gui-tuning/evidence/`. Diff checks passed; no test module was added or
-retired. No task-created branch, worktree or disposable input needed cleanup.
+Delivered: backend-canonical frozen Setup; typed/picker/recent folders and pairs;
+standalone inventory; serial best-effort pairs; fresh reviewed-identity Plan again;
+stable command recovery, first-session attachment and current-generation guards.
+The approved picker continuation shares the existing slot population and requires
+fresh indexed identity checks; retained state plus response is admitted before eviction.
 
-GUI-D1 remains investigation only. The old HDR fallback from `1fe32b3` still
-wins by specificity; SDR uses black shadows. Mica's host/page is transparent
-while the dropdown surface is opaque. The gallery's normal/opaque specimen
-labels no longer distinguish alpha, and its elevation-8 differs from the real
-dropdown's elevation-16. Source findings passed separate read-only review;
-there is no claim of visual halo reproduction or a proven compositor cause.
+Verification:
 
-The user sees dropdown halos on natively SDR displays, but not after moving a
-window from HDR to SDR on this computer. After the rail tests finished, they
-disabled HDR globally and reported reliable halos where dropdown shadows overlap
-cards, but not bare Mica. Dark cards use white at 5% alpha; the earlier solid CSS
-background is a fallback, not an opaque underlay. Next diagnostic should record
-Chromium dynamic-range, native material and popup styles, then compare the real
-dropdown shadow over bare Mica, translucent cards and a temporarily opaque card,
-with a shadowless control. That isolates the newly reported overlap condition;
-the renderer/compositor cause remains unconfirmed. No shadow or card correction
-is authorized by the current investigation.
+- Focused: 1027 passed, 2 deselected in 28.13s.
+- Database/workflow/interface neighborhood: 2731 passed, 2249 deselected in 113.29s (0:01:53).
+- Ordinary repository: 4946 passed, 4 skipped, 30 deselected in 212.33s (0:03:32).
+- All installed interface headed tests: 30 passed, 4950 deselected in 150.10s (0:02:30).
+- All 12 import contracts; exact scope, local links, unchanged BUGS header and
+  whitespace checks. Final five-gate source/test hashes and closure document
+  hashes are recorded in `build/m1-6/evidence/closure-candidate.json`.
 
-M1-4, M1-async and M1-5 remain complete. M1-6 onward is outside this task. README's
-phase synopsis and the substantive defect ledger need no change for this
-presentation correction. Existing Close pending/retry semantics remain binding.
+The four ordinary skips are unchanged core/tool symlink cases refused by Windows
+privilege (WinError 1314); no M1-6/bridge case was skipped. This is checkpoint
+evidence, not complete release or compositor-health acceptance. The real headed
+flow seeds one completed no-op sync through LedgerRecorder in its temporary
+ledger, then preserves the remembered identity through inventory Start.
+Screenshots preserve controller alpha and cannot establish composed Mica quality.
+
+The M1-5 section is condensed, and BUGS contains the requested substantive
+rendering entry with its original header/policy intact. GUI-D2/D3 found reported
+Advanced Color and transparent-host dependencies at fixed 10 bpc, without
+establishing a renderer cause. Mica remains required; investigation is deferred
+indefinitely. Preserve the unrelated Mica/opaque diagnostic windows and the
+user's display settings. Original GUI notes remain in
+`build/m1-6/inputs/inherited-HANDOFF.md` and `inherited-M1_PLAN.md`, with diagnostics
+in `build/gui-tuning/halo-10bit/`.
+
+The complete accepted M1-6 study is archived in `obsolete/M1_6_SETUP.md`;
+M1_PLAN now retains outcomes, exclusions and evidence. Ignored `build/m1-6/`
+contains frozen scope, raw commands/results, review dispositions and screenshots.
+Successful gate directories: `focused-final05`, `neighborhood-final04`, `ordinary-final04`, `headed-final03`, `imports-final02`.
+Earlier red runs are diagnostic only. No test was retired, no protected
+transport authority changed, and no recovery branch or worktree was created.
+Applied temporary scripts are removed at final cleanup; reusable runners and
+evidence remain. Future test runs use one shared pytest/Node slot, fresh external
+basetemps and `PIP_NO_CACHE_DIR=1`.

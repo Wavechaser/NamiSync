@@ -8,7 +8,16 @@ from threading import Event, Lock, Thread
 
 import pytest
 
+from namisync.core.models import VolumeId
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
+from namisync.workflows import (
+    LocationBinding,
+    LocationCandidate,
+    LocationCandidateResult,
+    LocationCandidateState,
+    VolumeResolution,
+    VolumeResolutionState,
+)
 
 
 def _token(value: int) -> str:
@@ -26,6 +35,28 @@ class _Clock:
 def _tokens(start: int = 0):
     values = count(start)
     return lambda: _token(next(values))
+
+
+def _ambiguous(path: str = r"C:\source") -> tuple[LocationCandidate, LocationCandidateResult]:
+    candidate = LocationCandidate.literal(path)
+    binding = LocationBinding(
+        VolumeId("serial", "NTFS"), "folder", "C:\\", ("C:\\", "D:\\"), True
+    )
+    resolution = VolumeResolution(
+        VolumeResolutionState.AMBIGUOUS,
+        binding,
+        candidates=("C:\\", "D:\\"),
+        detail="Choose a current mount",
+    )
+    return candidate, LocationCandidateResult(
+        candidate,
+        LocationCandidateState.AMBIGUOUS,
+        binding,
+        None,
+        ("C:\\", "D:\\"),
+        "Choose a current mount",
+        resolution,
+    )
 
 
 def test_br_g_32_slots_are_opaque_nonconsuming_and_purpose_bound() -> None:
@@ -211,6 +242,65 @@ def test_br_g_32_slot_capacity_is_bounded_under_concurrent_insertion() -> None:
     assert len(results) == 128
     assert len(set(results)) == 128
     assert len(table._entries) == 32
+
+
+def test_br_g_32_ambiguity_continuation_shares_capacity_and_is_not_startable() -> None:
+    table = FolderSlotTable(token=_tokens())
+    candidate, result = _ambiguous()
+    admissions = []
+    continuation = table.store_continuation(
+        candidate,
+        result,
+        purpose="source",
+        admit=lambda slot_id, retained: (
+            admissions.append((slot_id, retained)) or retained
+        ),
+    )
+
+    with pytest.raises(SlotUnavailableError):
+        table.resolve(continuation, purpose="source")
+    with pytest.raises(SlotUnavailableError):
+        table.resolve_continuation(
+            continuation, purpose="target", mount_index=0
+        )
+    assert table.resolve_continuation(
+        continuation, purpose="source", mount_index=1
+    ) == (candidate, result.binding, result.candidates, "D:\\")
+    assert admissions == [(continuation, {
+        "candidate": {
+            "kind": "literal_path",
+            "path": r"C:\source",
+            "location_id": None,
+            "selected_mount": None,
+        },
+        "binding": {
+            "volume_id": {"serial": "serial", "fs_type": "NTFS"},
+            "volume_relative_path": "folder",
+            "selected_mount": "C:\\",
+            "expected_mounts": ("C:\\", "D:\\"),
+            "explicit_ambiguity_choice": True,
+            "location_id": None,
+        },
+        "candidates": ("C:\\", "D:\\"),
+    })]
+
+
+def test_br_g_32_continuation_response_admission_precedes_eviction() -> None:
+    table = FolderSlotTable(token=_tokens())
+    retained = [table.store(f"path-{index}", purpose="source")[0] for index in range(32)]
+    candidate, result = _ambiguous()
+
+    with pytest.raises(RuntimeError, match="too large"):
+        table.store_continuation(
+            candidate,
+            result,
+            purpose="source",
+            admit=lambda _slot_id, _retained: (
+                _ for _ in ()
+            ).throw(RuntimeError("too large")),
+        )
+
+    assert set(table._entries) == set(retained)
 
 
 def test_br_g_32_concurrent_resolution_and_churn_is_atomic_and_bounded() -> None:

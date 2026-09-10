@@ -14,7 +14,9 @@ from typing import get_args, get_type_hints
 
 import pytest
 
+import namisync.interfaces.web.bridge as bridge_module
 from namisync.core.session import OperationResult, SessionState
+from namisync.core.models import VolumeId
 from namisync.core.events import (
     DeliveryClass,
     delivery_class,
@@ -36,6 +38,8 @@ from namisync.interfaces.service import (
     PlanSession,
     SessionRecordView,
     SyncPathInputError,
+    PreservationSettingsView,
+    SetupOptionsView,
 )
 from namisync.interfaces.web.bridge import (
     BridgeProtocolError,
@@ -43,6 +47,7 @@ from namisync.interfaces.web.bridge import (
     _admit_task_drain_response_prefix,
     _consume_task_drain_response,
     _peek_task_drain_response,
+    snapshot_bridge_response_result,
     to_primitive_view,
 )
 from namisync.interfaces.web.commands import (
@@ -74,11 +79,21 @@ from namisync.interfaces.web.drain import (
     TaskShellView,
     TaskStartView,
     TaskSummaryView,
+    TaskSetupSnapshotView,
     _TaskDrainResponseCodec,
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.interfaces.web.readiness import CommandPhase, ReadinessContext
-from namisync.workflows import PLAN_KIND
+from namisync.workflows import (
+    PLAN_KIND,
+    LocationBinding,
+    LocationCandidate,
+    LocationCandidateResult,
+    LocationCandidateState,
+    RememberedLocations,
+    VolumeResolution,
+    VolumeResolutionState,
+)
 from namisync.workflows.models import HistoryEventPageView, HistoryEventView
 from namisync.workflows.views import (
     PhaseResultView, RecordingIssueView, ReviewFactLimitView, SessionEventView,
@@ -88,6 +103,7 @@ from tests.interfaces.web._public_view_witnesses import (
     PUBLIC_VIEW_WITNESSES,
     iter_public_view_witnesses,
 )
+from _service_fixtures import make_service
 
 
 SOURCE_ID = "slot-11111111111111111111111111111111"
@@ -98,6 +114,37 @@ SESSION_ID = "5" * 32
 DRAIN_ID = "d6" * 16
 BOOTSTRAP_CONTEXT = ReadinessContext(CommandPhase.BOOTSTRAP, 7)
 OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 7)
+SETUP_OPTIONS = SetupOptionsView(
+    (),
+    "trash",
+    True,
+    PreservationSettingsView(False, True, False),
+    False,
+    False,
+)
+SETUP_OPTIONS_SIGNATURE = (
+    (),
+    "trash",
+    True,
+    (False, True, False),
+    False,
+    False,
+)
+
+
+def _setup_options_payload() -> dict[str, object]:
+    return {
+        "filters": [],
+        "deletion_policy": "trash",
+        "trash_on_update": True,
+        "preservation": {
+            "preserve_ads": False,
+            "preserve_created": True,
+            "preserve_acl": False,
+        },
+        "propagate_source_casing": False,
+        "verify_after_execute": False,
+    }
 
 
 def _invoke(spec, payload: object, *, context: object = OPEN_CONTEXT) -> object:
@@ -109,14 +156,17 @@ class _Slots:
         self.stored: list[tuple[str, str]] = []
         self.resolved: list[tuple[str, str]] = []
 
-    def store(self, path: str, *, purpose: str) -> tuple[str, str]:
-        self.stored.append((path, purpose))
+    def store(self, candidate, *, purpose: str, display=None) -> tuple[str, str]:
+        self.stored.append((candidate, purpose))
         slot_id = SOURCE_ID if purpose == "source" else TARGET_ID
-        return slot_id, f"Selected {purpose} \U0001f30a"
+        return slot_id, display or f"Selected {purpose} \U0001f30a"
 
     def resolve_pair(self, source_id: str, target_id: str) -> tuple[str, str]:
         self.resolved.append((source_id, target_id))
-        return r"C:\private\source", r"D:\private\target"
+        return LocationCandidate.literal(r"C:\private\source"), LocationCandidate.literal(r"D:\private\target")
+
+    def resolve(self, slot_id: str, *, purpose: str):
+        return LocationCandidate.literal(r"C:\private\inventory")
 
 
 class _Service:
@@ -132,6 +182,34 @@ class _Service:
         self.calls.append(("list",))
         return TaskListView(())
 
+    def read_setup_options(self):
+        return SETUP_OPTIONS
+
+    def prepare_setup_options(self, value):
+        return value
+
+    def remembered_locations(self):
+        return RememberedLocations((), (), ())
+
+    def admit_location_candidate(self, candidate):
+        path = candidate.path or r"C:\remembered"
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.RESOLVED,
+            LocationBinding(
+                VolumeId("serial", "NTFS"),
+                "",
+                path,
+                (path,),
+                False,
+                candidate.location_id,
+            ),
+            path,
+        )
+
+    def read_task_setup(self, task_id):
+        return TaskSetupSnapshotView("default", None, None, None, None, SETUP_OPTIONS)
+
     def replay_start(
         self,
         command_id: str,
@@ -140,23 +218,58 @@ class _Service:
         self.replays.append((command_id, wire_intent))
         return None
 
-    def start_plan(
+    def start_setup_plan(
         self,
+        task_id,
         source: str,
         target: str,
+        options,
         *,
-        deletion_policy: str | None = None,
         command_id: str | None = None,
-        wire_intent: tuple[str, str, str | None] | None = None,
+        wire_intent=None,
     ) -> TaskStartView:
         self.calls.append(
-            (source, target, deletion_policy, command_id, wire_intent)
+            (task_id, source, target, options, command_id, wire_intent)
         )
         return TaskStartView(
             task_id=TASK_ID,
             request_id="4" * 32,
             session_id="5" * 32,
         )
+
+    def start_setup_inventory(
+        self,
+        task_id,
+        root,
+        *,
+        command_id,
+        wire_intent,
+    ):
+        self.calls.append(
+            ("inventory", task_id, root, command_id, wire_intent)
+        )
+        return TaskStartView(task_id, "4" * 32, "5" * 32)
+
+    def start_plan_again(
+        self,
+        task_id,
+        *,
+        source_mount,
+        target_mount,
+        command_id,
+        wire_intent,
+    ):
+        self.calls.append(
+            (
+                "plan-again",
+                task_id,
+                source_mount,
+                target_mount,
+                command_id,
+                wire_intent,
+            )
+        )
+        return TaskStartView("task-" + "4" * 32, "6" * 32, "7" * 32)
 
     def drain(
         self,
@@ -326,9 +439,14 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "shell_ready",
         "readiness_echo",
         "pick_folder",
+        "read_setup",
+        "prepare_setup",
+        "admit_location",
         "create_task",
         "list_tasks",
         "start_plan",
+        "start_inventory",
+        "plan_again",
         "next_events",
         "release_terminal_session",
         "close_task",
@@ -342,6 +460,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
     } == {
         "create_task",
         "start_plan",
+        "start_inventory",
+        "plan_again",
         "release_terminal_session",
         "close_task",
     }
@@ -351,6 +471,8 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         if name not in {
             "create_task",
             "start_plan",
+            "start_inventory",
+            "plan_again",
             "release_terminal_session",
             "close_task",
         }
@@ -442,6 +564,21 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         CommandTimeout.MUTATION_30_SECONDS,
         CommandRetry.SAME_COMMAND_ONCE,
     )
+    for command_name in ("start_inventory", "plan_again"):
+        command = commands[command_name]
+        assert (
+            command.access,
+            command.command_id,
+            command.revision,
+            command.timeout,
+            command.retry,
+        ) == (
+            CommandAccess.MUTATING,
+            FieldRequirement.REQUIRED,
+            FieldRequirement.FORBIDDEN,
+            CommandTimeout.MUTATION_30_SECONDS,
+            CommandRetry.SAME_COMMAND_ONCE,
+        )
     assert (
         commands["next_events"].access,
         commands["next_events"].command_id,
@@ -526,10 +663,11 @@ def test_async_small_real_command_projections_have_exact_bounded_completion_shap
         (
             "start_plan",
             {
+                "task_id": TASK_ID,
                 "command_id": COMMAND_ID,
                 "source_id": SOURCE_ID,
                 "target_id": TARGET_ID,
-                "deletion_policy": None,
+                "options": _setup_options_payload(),
             },
             {
                 "task_id": TASK_ID,
@@ -579,6 +717,7 @@ def test_async_small_real_command_projections_have_exact_bounded_completion_shap
             separators=(",", ":"),
             allow_nan=False,
         )
+
         assert len(encoded.encode("utf-8")) == expected_bytes
         assert len(encoded.encode("utf-8")) <= 65_536
 
@@ -1172,11 +1311,16 @@ def test_br_g_32_folder_picker_returns_only_opaque_presentation_data() -> None:
     result = _invoke(commands["pick_folder"], {"purpose": "source"})
 
     assert result == {
-        "id": SOURCE_ID,
-        "display": "Selected source \U0001f30a",
+        "purpose": "source",
+        "state": "resolved",
+        "choice_id": SOURCE_ID,
+        "continuation_id": None,
+        "display": private_path,
+        "location_id": None,
+        "candidates": [],
+        "detail": None,
     }
-    assert private_path not in repr(result)
-    assert slots.stored == [(private_path, "source")]
+    assert slots.stored == [(LocationCandidate.literal(private_path), "source")]
 
 
 def test_br_g_32_folder_picker_cancel_creates_no_slot() -> None:
@@ -1184,6 +1328,324 @@ def test_br_g_32_folder_picker_cancel_creates_no_slot() -> None:
 
     assert _invoke(commands["pick_folder"], {"purpose": "target"}) is None
     assert slots.stored == []
+
+
+def test_br_g_32_ambiguous_picker_requires_opaque_fresh_continuation(
+    monkeypatch,
+) -> None:
+    candidate = LocationCandidate.literal(r"C:\private\source")
+    first_binding = LocationBinding(
+        VolumeId("serial", "NTFS"),
+        "folder",
+        "C:\\",
+        ("C:\\", "D:\\"),
+        True,
+    )
+    candidates = first_binding.expected_mounts
+    first_resolution = VolumeResolution(
+        VolumeResolutionState.AMBIGUOUS,
+        first_binding,
+        candidates=candidates,
+        detail="Choose a current mount",
+    )
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.admissions = []
+            self.changed = False
+
+        def admit_location_candidate(self, value):
+            self.admissions.append(value)
+            if value.selected_mount is None:
+                return LocationCandidateResult(
+                    value,
+                    LocationCandidateState.AMBIGUOUS,
+                    first_binding,
+                    None,
+                    candidates,
+                    "Choose a current mount",
+                    first_resolution,
+                )
+            return LocationCandidateResult(
+                value,
+                LocationCandidateState.RESOLVED,
+                LocationBinding(
+                    first_binding.volume_id,
+                    first_binding.volume_relative_path,
+                    value.selected_mount,
+                    candidates,
+                    False,
+                ),
+                value.selected_mount + "folder",
+                candidates,
+            )
+
+    service = Service()
+    slots = FolderSlotTable(token=iter(("1" * 32, "2" * 32)).__next__)
+    admitted_containers = []
+    snapshot_response = bridge_module.snapshot_bridge_response_result
+
+    def capture_admission(value, request_id, maximum_json_bytes=None):
+        admitted_containers.append(value)
+        if maximum_json_bytes is None:
+            return snapshot_response(value, request_id)
+        return snapshot_response(value, request_id, maximum_json_bytes)
+
+    monkeypatch.setattr(
+        bridge_module,
+        "snapshot_bridge_response_result",
+        capture_admission,
+    )
+    commands = production_command_specs(
+        picker=lambda: (candidate.path,),
+        slots=slots,
+        registry=service,
+        cosmetics=_Cosmetics(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    ambiguous = _invoke(commands["pick_folder"], {"purpose": "source"})
+    assert ambiguous["choice_id"] is None
+    assert ambiguous["continuation_id"] == "slot-" + "1" * 32
+    assert len(admitted_containers) == 1
+    admitted_container = admitted_containers[0]
+    assert set(admitted_container) == {"continuation", "response"}
+    assert admitted_container["response"] == ambiguous
+    assert set(admitted_container["continuation"]) == {
+        "candidate", "binding", "candidates",
+    }
+    resolved = _invoke(
+        commands["admit_location"],
+        {
+            "purpose": "source",
+            "continuation_id": ambiguous["continuation_id"],
+            "mount_index": 1,
+        },
+    )
+    assert resolved["state"] == "resolved"
+    assert resolved["choice_id"] == "slot-" + "2" * 32
+    assert resolved["continuation_id"] is None
+    assert service.admissions == [
+        candidate,
+        LocationCandidate.literal(candidate.path, selected_mount="D:\\"),
+    ]
+    service.changed = True
+
+    original = service.admit_location_candidate
+
+    def changed_mount_admission(value):
+        result = original(value)
+        if value.selected_mount is None:
+            return result
+        changed_mount = "D:\\" if value.selected_mount == "C:\\" else "C:\\"
+        return LocationCandidateResult(
+            value,
+            LocationCandidateState.RESOLVED,
+            LocationBinding(
+                first_binding.volume_id,
+                first_binding.volume_relative_path,
+                changed_mount,
+                candidates,
+                False,
+            ),
+            changed_mount + "folder",
+            candidates,
+        )
+    service.admit_location_candidate = changed_mount_admission
+    changed = _invoke(
+        commands["admit_location"],
+        {
+            "purpose": "source",
+            "continuation_id": ambiguous["continuation_id"],
+            "mount_index": 0,
+        },
+    )
+    assert changed["state"] == "changed"
+    assert changed["choice_id"] is None
+    assert changed["continuation_id"] is None
+
+    def ambiguous_admission(value):
+        return LocationCandidateResult(
+            value,
+            LocationCandidateState.AMBIGUOUS,
+            first_binding,
+            None,
+            candidates,
+            "Choose a current mount",
+            first_resolution,
+        )
+
+    service.admit_location_candidate = ambiguous_admission
+    still_ambiguous = _invoke(
+        commands["admit_location"],
+        {
+            "purpose": "source",
+            "continuation_id": ambiguous["continuation_id"],
+            "mount_index": 0,
+        },
+    )
+    assert still_ambiguous["state"] == "ambiguous"
+    assert still_ambiguous["choice_id"] is None
+    assert still_ambiguous["continuation_id"] is None
+
+    reordered = ("D:\\", "C:\\")
+    reordered_binding = LocationBinding(
+        first_binding.volume_id,
+        first_binding.volume_relative_path,
+        reordered[0],
+        reordered,
+        True,
+    )
+    reordered_resolution = VolumeResolution(
+        VolumeResolutionState.AMBIGUOUS,
+        reordered_binding,
+        candidates=reordered,
+        detail="Choose a current mount",
+    )
+    service.admit_location_candidate = lambda value: LocationCandidateResult(
+        value,
+        LocationCandidateState.AMBIGUOUS,
+        reordered_binding,
+        None,
+        reordered,
+        "Choose a current mount",
+        reordered_resolution,
+    )
+    changed_order = _invoke(
+        commands["admit_location"],
+        {
+            "purpose": "source",
+            "continuation_id": ambiguous["continuation_id"],
+            "mount_index": 0,
+        },
+    )
+    assert changed_order["state"] == "changed"
+    assert changed_order["candidates"] == list(reordered)
+
+    offline_resolution = VolumeResolution(
+        VolumeResolutionState.OFFLINE,
+        first_binding,
+        candidates=(),
+        detail="recorded volume is not mounted",
+    )
+    service.admit_location_candidate = lambda value: LocationCandidateResult(
+        value,
+        LocationCandidateState.OFFLINE,
+        first_binding,
+        None,
+        (),
+        "recorded volume is not mounted",
+        offline_resolution,
+    )
+    disappeared = _invoke(
+        commands["admit_location"],
+        {
+            "purpose": "source",
+            "continuation_id": ambiguous["continuation_id"],
+            "mount_index": 0,
+        },
+    )
+    assert disappeared["state"] == "offline"
+    assert disappeared["candidates"] == []
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {
+            "candidate": {
+                "kind": "literal_path",
+                "path": r"C:\source",
+                "selected_mount": None,
+            },
+        },
+        {"purpose": "source"},
+        {
+            "purpose": "source",
+            "continuation_id": SOURCE_ID,
+            "mount_index": 0,
+            "unexpected": None,
+        },
+    ],
+)
+def test_br_g_32_admit_location_validates_exact_keys_before_indexing(
+    payload: object,
+) -> None:
+    commands, _, service = _commands()
+
+    with pytest.raises(CommandPayloadError, match="admit_location payload"):
+        _invoke(commands["admit_location"], payload)
+
+    assert service.calls == []
+
+
+def test_br_g_32_synthetic_escape_projection_admits_combined_size_before_eviction() -> None:
+    mount_paths = tuple(
+        "\x01" * 32_765 + f"{index:02d}"
+        for index in range(27)
+    )
+    candidate = LocationCandidate.literal(r"C:\private\source")
+    binding = LocationBinding(
+        VolumeId("serial", "NTFS"),
+        "folder",
+        mount_paths[0],
+        mount_paths,
+        True,
+    )
+    resolution = VolumeResolution(
+        VolumeResolutionState.AMBIGUOUS,
+        binding,
+        candidates=mount_paths,
+        detail="Choose a current mount",
+    )
+    result = LocationCandidateResult(
+        candidate,
+        LocationCandidateState.AMBIGUOUS,
+        binding,
+        None,
+        mount_paths,
+        "Choose a current mount",
+        resolution,
+    )
+    public_choice = {
+        "purpose": "source",
+        "state": "ambiguous",
+        "choice_id": None,
+        "continuation_id": "slot-" + f"{32:032x}",
+        "display": candidate.path,
+        "location_id": None,
+        "candidates": list(mount_paths),
+        "detail": "Choose a current mount",
+    }
+    assert snapshot_bridge_response_result(public_choice, "0" * 32) == public_choice
+
+    class Service(_Service):
+        def admit_location_candidate(self, value):
+            assert value == candidate
+            return result
+
+    tokens = iter(f"{index:032x}" for index in range(64))
+    slots = FolderSlotTable(token=tokens.__next__)
+    retained = {
+        slots.store(f"path-{index}", purpose="source")[0]
+        for index in range(32)
+    }
+    commands = production_command_specs(
+        picker=lambda: (candidate.path,),
+        slots=slots,
+        registry=Service(),
+        cosmetics=_Cosmetics(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    with pytest.raises(BridgeResponseTooLargeError):
+        _invoke(commands["pick_folder"], {"purpose": "source"})
+
+    assert set(slots._entries) == retained
 
 
 @pytest.mark.parametrize(
@@ -1241,8 +1703,8 @@ def test_br_g_32_folder_picker_refuses_invalid_slot_authority_results(
     stored: object,
 ) -> None:
     class InvalidSlots(_Slots):
-        def store(self, path: str, *, purpose: str):
-            del path, purpose
+        def store(self, candidate, *, purpose: str, display=None):
+            del candidate, purpose, display
             return stored
 
     slots = InvalidSlots()
@@ -1262,10 +1724,11 @@ def test_br_g_32_folder_picker_refuses_invalid_slot_authority_results(
 def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
     commands, slots, service = _commands()
     payload = {
+        "task_id": TASK_ID,
         "command_id": COMMAND_ID,
         "source_id": SOURCE_ID,
         "target_id": TARGET_ID,
-        "deletion_policy": None,
+        "options": _setup_options_payload(),
     }
 
     result = _invoke(commands["start_plan"], payload)
@@ -1277,33 +1740,269 @@ def test_br_g_32_start_plan_resolves_slots_and_delegates_once() -> None:
     )
     assert slots.resolved == [(SOURCE_ID, TARGET_ID)]
     assert service.replays == [
-        (COMMAND_ID, (SOURCE_ID, TARGET_ID, None))
+        (
+            COMMAND_ID,
+            (
+                "start-plan",
+                TASK_ID,
+                SOURCE_ID,
+                TARGET_ID,
+                SETUP_OPTIONS_SIGNATURE,
+            ),
+        )
     ]
     assert service.calls == [
         (
-            r"C:\private\source",
-            r"D:\private\target",
-            None,
+            TASK_ID,
+            LocationCandidate.literal(r"C:\private\source"),
+            LocationCandidate.literal(r"D:\private\target"),
+            SETUP_OPTIONS,
             COMMAND_ID,
-            (SOURCE_ID, TARGET_ID, None),
+            (
+                "start-plan",
+                TASK_ID,
+                SOURCE_ID,
+                TARGET_ID,
+                SETUP_OPTIONS_SIGNATURE,
+            ),
         )
     ]
     assert "private" not in repr(payload)
+
+
+def test_br_g_32_real_task_commands_use_domain_blind_scalar_signatures() -> None:
+    class Runtime:
+        def __init__(self) -> None:
+            self.artifacts: dict[str, object] = {}
+
+        def prepare_setup_options(self, value):
+            value.__post_init__()
+            return value
+
+        def admit_location_candidate(self, candidate):
+            assert candidate.path is not None
+            root = candidate.path
+            mount = root[:3]
+            binding = LocationBinding(
+                VolumeId(root[0].lower(), "NTFS"),
+                root[3:],
+                mount,
+                (mount,),
+                False,
+            )
+            return LocationCandidateResult(
+                candidate,
+                LocationCandidateState.RESOLVED,
+                binding,
+                root,
+                (mount,),
+            )
+
+        def admit_plan_locations(self, source, target):
+            return source, target
+
+        def create_plan_request(
+            self,
+            request_id,
+            source_path,
+            target_path,
+            **values,
+        ):
+            request = SimpleNamespace(
+                request_id=request_id,
+                source_path=source_path,
+                target_path=target_path,
+                options=values["options"],
+                source_binding=values["source_binding"],
+                target_binding=values["target_binding"],
+                verify_after_execute=values["verify_after_execute"],
+            )
+            self.artifacts[request_id] = SimpleNamespace(request=request)
+            return request
+
+        def get_plan(self, request_id):
+            return self.artifacts[request_id]
+
+        def resolve_reviewed_location(self, binding, *, selected_mount=None):
+            mount = selected_mount or binding.selected_mount
+            return VolumeResolution(
+                VolumeResolutionState.RESOLVED,
+                binding,
+                mount + binding.volume_relative_path,
+                mount,
+                candidates=binding.expected_mounts,
+            )
+
+        def drop_execution_details(self, _run_id):
+            pass
+
+        def drop_inventory_details(self, _request_id):
+            pass
+
+        def close(self):
+            pass
+
+    class Dispatcher:
+        def __init__(self) -> None:
+            self.submissions: list[tuple[str, object]] = []
+
+        def submit(self, kind, request, *, attach=None):
+            self.submissions.append((kind, request))
+            session_id = f"{700 + len(self.submissions):032x}"
+            if attach is not None:
+                attach(session_id, SimpleNamespace(close=lambda: None))
+            return session_id
+
+    class Observer:
+        def adopt(self, _session_id, _sink, _stream):
+            return lambda: None
+
+        def release(self, _session_id):
+            pass
+
+        def close(self):
+            pass
+
+    runtime = Runtime()
+    dispatcher = Dispatcher()
+    service = make_service(
+        runtime=runtime,
+        dispatcher=dispatcher,
+        observer=Observer(),
+    )
+    registry = TaskRegistry(service)
+    slot_tokens = iter(f"{value:032x}" for value in range(1, 20))
+    slots = FolderSlotTable(token=slot_tokens.__next__)
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=slots,
+        registry=registry,
+        cosmetics=_Cosmetics(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    plan_shell = _invoke(
+        commands["create_task"], {"command_id": "b1" * 16}
+    )
+    source_id, _ = slots.store(
+        LocationCandidate.literal(r"C:\source"), purpose="source"
+    )
+    target_id, _ = slots.store(
+        LocationCandidate.literal(r"D:\target"), purpose="target"
+    )
+    options = {
+        "filters": ["a/*", "b/*"],
+        "deletion_policy": "additive",
+        "trash_on_update": False,
+        "preservation": {
+            "preserve_ads": False,
+            "preserve_created": False,
+            "preserve_acl": True,
+        },
+        "propagate_source_casing": True,
+        "verify_after_execute": True,
+    }
+    plan_payload = {
+        "task_id": plan_shell.task_id,
+        "command_id": "b2" * 16,
+        "source_id": source_id,
+        "target_id": target_id,
+        "options": options,
+    }
+    plan_signature = (
+        "start-plan",
+        plan_shell.task_id,
+        source_id,
+        target_id,
+        (
+            ("a/*", "b/*"),
+            "additive",
+            False,
+            (False, False, True),
+            True,
+            True,
+        ),
+    )
+    planned = _invoke(commands["start_plan"], plan_payload)
+    assert _invoke(commands["start_plan"], plan_payload) == planned
+    assert service._lifecycle.replay_start(
+        "b2" * 16, "task-plan", plan_signature
+    ).task_id == plan_shell.task_id
+    with pytest.raises(CommandConflictError):
+        _invoke(
+            commands["start_plan"],
+            {
+                **plan_payload,
+                "options": {**options, "verify_after_execute": False},
+            },
+        )
+
+    inventory_shell = _invoke(
+        commands["create_task"], {"command_id": "b3" * 16}
+    )
+    root_id, _ = slots.store(
+        LocationCandidate.literal(r"E:\inventory"), purpose="inventory"
+    )
+    inventory_signature = (
+        "start-inventory",
+        inventory_shell.task_id,
+        root_id,
+    )
+    inventoried = _invoke(
+        commands["start_inventory"],
+        {
+            "task_id": inventory_shell.task_id,
+            "command_id": "b4" * 16,
+            "root_id": root_id,
+        },
+    )
+    assert inventoried.task_id == inventory_shell.task_id
+    assert service._lifecycle.replay_start(
+        "b4" * 16, "task-inventory", inventory_signature
+    ).task_id == inventory_shell.task_id
+
+    plan_again_signature = (
+        "plan-again",
+        plan_shell.task_id,
+        None,
+        None,
+    )
+    replanned = _invoke(
+        commands["plan_again"],
+        {
+            "task_id": plan_shell.task_id,
+            "command_id": "b5" * 16,
+            "source_mount": None,
+            "target_mount": None,
+        },
+    )
+    assert replanned.task_id != plan_shell.task_id
+    assert service._lifecycle.replay_start(
+        "b5" * 16, "task-plan", plan_again_signature
+    ).task_id == replanned.task_id
+    assert [kind for kind, _request in dispatcher.submissions] == [
+        "sync-plan",
+        "inventory",
+        "sync-plan",
+    ]
 
 
 @pytest.mark.parametrize(
     "payload",
     [
         {
+            "task_id": TASK_ID,
             "source_id": SOURCE_ID,
             "target_id": TARGET_ID,
-            "deletion_policy": None,
+            "options": _setup_options_payload(),
         },
         {
+            "task_id": TASK_ID,
             "command_id": COMMAND_ID,
             "source_id": SOURCE_ID,
             "target_id": TARGET_ID,
-            "deletion_policy": None,
+            "options": _setup_options_payload(),
             "revision": 0,
         },
     ],
@@ -1331,53 +2030,57 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
         def __call__(self) -> float:
             return self.now
 
-    class Service:
+    class Service(_Service):
         def __init__(self) -> None:
-            self.calls = []
+            super().__init__()
+            self.retained = None
+            self.intent = None
 
-        def start_task_plan(
+        def replay_start(self, command_id, wire_intent):
+            self.replays.append((command_id, wire_intent))
+            if self.intent is not None and wire_intent != self.intent:
+                raise TaskIntentConflictError("task command intent conflicts")
+            return self.retained
+
+        def start_setup_plan(
             self,
+            task_id,
             source,
             target,
+            options,
             *,
-            deletion_policy,
             command_id,
-            delivery_factory,
+            wire_intent,
         ):
-            del deletion_policy
-            self.calls.append((source, target, command_id))
-            task_id = "task-" + "a" * 32
-            assert callable(delivery_factory(task_id))
-            return TaskStartView(task_id, "8" * 32, "9" * 32)
+            self.calls.append((task_id, source, target, options, command_id))
+            self.intent = wire_intent
+            self.retained = TaskStartView(task_id, "8" * 32, "9" * 32)
+            return self.retained
 
     clock = Clock()
     slot_tokens = iter(f"{value:032x}" for value in range(1, 100))
     slots = FolderSlotTable(clock=clock, token=lambda: next(slot_tokens))
-    source_id, _ = slots.store(r"C:\source", purpose="source")
-    target_id, _ = slots.store(r"D:\target", purpose="target")
-    service = Service()
-    registry = TaskRegistry(
-        service,
-        response_codec=_TaskDrainResponseCodec(
-            BridgeResponseTooLargeError,
-            _admit_task_drain_response_prefix,
-            _peek_task_drain_response,
-            _consume_task_drain_response,
-        ),
+    source_id, _ = slots.store(
+        LocationCandidate.literal(r"C:\source"), purpose="source"
     )
+    target_id, _ = slots.store(
+        LocationCandidate.literal(r"D:\target"), purpose="target"
+    )
+    service = Service()
     commands = production_command_specs(
         picker=lambda: None,
         slots=slots,
-        registry=registry,
+        registry=service,
         cosmetics=_Cosmetics(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
     )
     payload = {
+        "task_id": TASK_ID,
         "command_id": COMMAND_ID,
         "source_id": source_id,
         "target_id": target_id,
-        "deletion_policy": None,
+        "options": _setup_options_payload(),
     }
 
     lost_response = _invoke(commands["start_plan"], payload)
@@ -1386,16 +2089,30 @@ def test_br_g_32_start_plan_replays_before_volatile_slots_are_resolved(
     else:
         for value in range(32):
             purpose = "source" if value % 2 == 0 else "target"
-            slots.store(f"C:\\replacement-{value}", purpose=purpose)
+            slots.store(
+                LocationCandidate.literal(f"C:\\replacement-{value}"),
+                purpose=purpose,
+            )
     with pytest.raises(SlotUnavailableError):
         slots.resolve_pair(source_id, target_id)
 
     replay = _invoke(commands["start_plan"], payload)
 
     assert replay == lost_response
-    assert service.calls == [(r"C:\source", r"D:\target", COMMAND_ID)]
+    assert service.calls == [
+        (
+            TASK_ID,
+            LocationCandidate.literal(r"C:\source"),
+            LocationCandidate.literal(r"D:\target"),
+            SETUP_OPTIONS,
+            COMMAND_ID,
+        )
+    ]
     with pytest.raises(CommandConflictError):
-        _invoke(commands["start_plan"], {**payload, "deletion_policy": "trash"})
+        _invoke(
+            commands["start_plan"],
+            {**payload, "options": {**_setup_options_payload(), "filters": ["x"]}},
+        )
 
 
 def test_br_g_33_next_events_delegates_exact_authority_and_returns_typed_view() -> None:
@@ -1618,7 +2335,7 @@ def test_br_g_32_start_plan_maps_only_typed_service_refusals(
     adapter_error: type[Exception],
 ) -> None:
     class RefusingService(_Service):
-        def start_plan(self, *args: object, **kwargs: object) -> PlanSession:
+        def start_setup_plan(self, *args: object, **kwargs: object) -> PlanSession:
             del args, kwargs
             raise service_error
 
@@ -1634,10 +2351,11 @@ def test_br_g_32_start_plan_maps_only_typed_service_refusals(
     with pytest.raises(adapter_error) as captured:
         _invoke(commands["start_plan"],
             {
+                "task_id": TASK_ID,
                 "command_id": COMMAND_ID,
                 "source_id": SOURCE_ID,
                 "target_id": TARGET_ID,
-                "deletion_policy": None,
+                "options": _setup_options_payload(),
             }
         )
 
@@ -1646,7 +2364,7 @@ def test_br_g_32_start_plan_maps_only_typed_service_refusals(
 
 def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None:
     class BrokenService(_Service):
-        def start_plan(self, *args: object, **kwargs: object) -> PlanSession:
+        def start_setup_plan(self, *args: object, **kwargs: object) -> PlanSession:
             del args, kwargs
             raise ValueError("incidental implementation defect")
 
@@ -1662,10 +2380,11 @@ def test_br_g_32_start_plan_does_not_reclassify_incidental_value_error() -> None
     with pytest.raises(ValueError, match="incidental implementation defect"):
         _invoke(commands["start_plan"],
             {
+                "task_id": TASK_ID,
                 "command_id": COMMAND_ID,
                 "source_id": SOURCE_ID,
                 "target_id": TARGET_ID,
-                "deletion_policy": None,
+                "options": _setup_options_payload(),
             }
         )
 
@@ -1686,7 +2405,7 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
     result: object,
 ) -> None:
     class InvalidService(_Service):
-        def start_plan(self, *args: object, **kwargs: object):
+        def start_setup_plan(self, *args: object, **kwargs: object):
             del args, kwargs
             return result
 
@@ -1701,11 +2420,12 @@ def test_br_g_32_start_plan_refuses_invalid_service_result_schema(
 
     with pytest.raises(RuntimeError, match="invalid data"):
         _invoke(commands["start_plan"],
-            {
-                "command_id": COMMAND_ID,
-                "source_id": SOURCE_ID,
-                "target_id": TARGET_ID,
-                "deletion_policy": None,
+                {
+                    "task_id": TASK_ID,
+                    "command_id": COMMAND_ID,
+                    "source_id": SOURCE_ID,
+                    "target_id": TARGET_ID,
+                    "options": _setup_options_payload(),
             }
         )
 

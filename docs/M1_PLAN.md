@@ -20,10 +20,10 @@ remaining frontend delivery scope.
 
 The secured desktop host and transport, presentation foundation, current service/CLI surface, and implemented ledger/history boundary are active. The frozen v1 event-and-transport custody claim remains closed at its bridge evidence owner. That closure does not establish whole-runtime containment.
 
-The process-live desktop task shell is active. Finish shared location admission
-and frozen Setup, reviewed execution, execution/inventory projections, integrity
-controls and first manual post-copy verification, then release closure. These
-remain unrealized frontend outcomes. The history page, global-settings mutation
+The process-live desktop task shell, shared location admission and frozen Setup
+are active, including plan/inventory starts and Plan again. Finish reviewed
+execution, execution/inventory projections, integrity controls and first manual
+post-copy verification, then release closure. These remain unrealized frontend outcomes. The history page, global-settings mutation
 page, drag-and-drop, file-scoped planning, durable task survival across a process
 restart, durable sort preferences, status/progress or global-flat sorting, and
 compare-and-accept rebaseline semantics remain deferred. User-facing terminal
@@ -43,6 +43,27 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | --- | --- | --- | --- |
 | GUI-1 | Restore gallery-equivalent persistent selection fill and accent indicator on the live task rail; retain the Close button. | Pre-fix headed reproducer; 56 focused, 1,503 interface and all 29 installed-wheel headed tests passed; all 12 import contracts, diff checks and fresh adversarial review passed. | Complete |
 | GUI-D1 | Investigate SDR dark flyout haloing and discuss findings without implementing a shadow change. | Current shadow/material CSS, appearance owners, gallery isolation and tests, DESKTOP_UI guidance and originating HDR-fallback commit inspected; separate read-only review confirms source findings, with visual cause unconfirmed. | Complete: discussion only |
+| GUI-D2 | Investigate the reported dark-only halo on 10-bpc-or-higher SDR output, distinguishing display depth from automatic color management. | Inspected Windows/NVIDIA settings, production/gallery owners, Microsoft/Chromium primary sources and diagnostic host media state. User's repeated comparison confirms automatic color management off removes the halo; native probes confirm WCG to ordinary SDR transition at unchanged 10 bpc. Findings and limitations recorded in HANDOFF; exact renderer cause remains unconfirmed. | Complete: discussion only |
+| GUI-D3 | Compare transparent Mica and fully opaque diagnostic hosts with identical gallery cards/shadows, at 10-bit SDR with automatic color management enabled. | Native controller alpha confirmed 0/255; opaque fallback and Mica landed. Paired card reports and popup shadow/surface/border/filter match; native probe confirms WCG at 10 bpc, HDR off. User reports opaque window does not appear to produce halo. Screenshots inspected without claiming a pixel-equivalent comparison or proven renderer fault. | Complete: diagnostic only |
+
+GUI-D2 authorizes diagnostic-only files in ignored `build/gui-tuning/halo-10bit/`
+under its local conventions, plus findings in this register and HANDOFF.
+No production/test change, driver installation, global browser flag, or shipped
+shadow workaround is included. Any temporary diagnostic setting is restored;
+unrelated user windows/data remain untouched. Existing stop rules apply.
+
+GUI-D3 extends the same diagnostic directory and findings documents only. Its
+finite population is a process-local gallery launcher, separate data/evidence
+for each host, and native display-state evidence. Production/test sources stay
+unchanged. Opacity removes both native Mica and controller transparency through
+the existing fallback; cards and shadow CSS remain identical. Final review must
+distinguish a host-opacity dependency from proof of a particular renderer fault.
+
+The unresolved dark flyout halo is tracked in
+[BUGS.md](BUGS.md#desktop-material-composition) at the user's request. GUI-D2/D3
+established reported Advanced Color/transparent-host dependencies, not a
+specific renderer cause or correction. Mica remains required; the issue is
+deferred indefinitely and adds no M1-6 implementation or release gate.
 
 GUI-1 is one atomic presentation fix based on clean `e19ed9d` on `milestone1`,
 delivered as `fix(web): restore live task rail selection cues` in that checkout.
@@ -143,7 +164,7 @@ Each checkpoint is a closed register row. A new finding does not enlarge a row; 
 | M1-4 | Process-live blank task creation, navigation and explicit closure through existing lifecycle owners, with generation-aware callback containment. | Delivered in `ab453e1`; ordinary/headed checks and adversarial review passed. Active contracts are in BRIDGE and INTERFACES; concise delivery record below. | Complete |
 | M1-async | Separate bounded command admission from asynchronous completion for create/start/release/close, reusing current task/session effect owners and one shared exchange budget. | After M1-4; default before M1-5, permitted after M1-5 but before M1-6. M1-async-G passed; delivered/excluded outcomes and evidence are below. | Complete |
 | M1-5 | Give Setup and inventory one workflow-owned location-candidate pipeline with typed admission results and bounded remembered locations. | After M1-4, normally after M1-async. Verify parser refusals; leaf/reparse/placeholder and long paths; missing, offline, remount, and clone ambiguity; bounded recents; activation/slot races and purpose mismatch. Review path parsing and TOCTOU. Scanner, preflight, executor, and verifier retain fresh re-probes. | Complete |
-| M1-6 | Deliver frozen, backend-canonical Setup, typed/picker/recent inputs, standalone inventory creation, serial best-effort pair creation, and explicit Plan-again after fresh reviewed-identity resolution. | Verify bounded inputs, canonical snapshots, immediate invalidation, no global-default mutation or browser filter normalization, partial-pair refusal, mixed batches, replay/recovery, slot/plan-generation races, and headed hostile-text/picker/recent flows. Map needed command behavior in BRIDGE when this activates; do not prescribe the retired 18-command expansion. | Pending |
+| M1-6 | Deliver frozen, backend-canonical Setup, typed/picker/recent inputs, standalone inventory creation, serial best-effort pair creation, and explicit Plan-again after fresh reviewed-identity resolution. | Verify bounded inputs, canonical snapshots, immediate invalidation, no global-default mutation or browser filter normalization, partial-pair refusal, mixed batches, replay/recovery, slot/plan-generation races, and headed hostile-text/picker/recent flows. Map needed command behavior in BRIDGE when this activates; do not prescribe the retired 18-command expansion. | Complete |
 | M1-7 | Deliver bounded plan review, selection, execution admission, and the full plan consumer for sibling sorting. A review remains truthful when execution never ran; an admitted attempt keeps its selection committed. | Exercise plan publication, selection and commitment freshness, stale/replayed mutation, admission-failure rollback versus post-admission preflight refusal, fresh Plan-again review after source/target changes, destructive confirmation, controls, windows/anchors/search/filter, and headed production flows. No terminal selection reopening or subset retry. BRIDGE and PRESENTATION define protocol and projection criteria. | Pending |
 | M1-8-capacity | Distinguish recognized disk-capacity I/O failure and stop admission of later executor operations after settling the current operation. | Before M1-8, use the existing failure-policy/Stop and settlement paths; verify direct and wrapped capacity failures, ordinary I/O distinction, current-effect/recording truth, later work left unrun, terminal projection, and unchanged sharing-violation retries. Run executor plus core/workflow/interface consumers and the retained settlement oracle. No general I/O taxonomy or settlement restructuring. | Pending |
 | M1-8 | Deliver live and retained execution review with bounded item windows, exact execution overlays, task/item recording issues, terminal axes, current ledger evidence, capacity/generic-I/O messages, and informational trash location. | Test filesystem/recording combinations, overlay and omission invariants, Gap plus terminal reconciliation, navigation/re-observation, generic unrun presentation, yellow capacity without hiding known failures, bounded evidence queries, and post-copy overlay independence. Trash counts require complete outcome evidence; location-only fallback must not assert a planned count, scan all trash, or imply purge. | Pending |
@@ -255,164 +276,69 @@ results remain in ignored `build/m1-async/inputs/` and `evidence/`.
 HANDOFF records the final counts and immediate next work. These functional
 checks do not change protected measurement authority or close release gates.
 
-## M1-5 bounded checkpoint detail
+## M1-5 delivered
 
-**Outcome and acceptance gate.** M1-5-G is one checkpoint gate: Setup's
-current picker-backed plan start and inventory use one workflow-owned location
-candidate admission route, expose typed results, and can read bounded,
-identity-based remembered locations. The gate closes only when the finite
-transition checks below, affected-department and ordinary verification, source
-tracing of preserved guarantees, matching documentation, and a fresh adversarial
-review all pass. A green test run alone does not close it. M1-4 must be reviewed
-and committed before M1-5 implementation begins; M1-async normally precedes
-M1-5, with the permitted alternate order recorded above. The user authorized
-this delivery on 2026-09-10; M1-5 starts after M1-async closes and its affected
-design seams are refreshed.
+Delivered in `e19ed9d` on `milestone1` after M1-async. Fresh picker-backed
+plan starts and inventory/integrity share typed location admission. Inputs
+are literal and bounded; current volume identity, remount/clone resolution,
+no-follow admission and existing point-of-use re-probes remain effective.
+Remembered sources, targets and active pairs derive from durable sync activity,
+each limited to five identity-deduplicated results. Remembered hints grant no
+authority, and merely selecting or admitting a location writes no recent record.
 
-**Finite implementation population.** Production changes are confined to
-`namisync/workflows/inventory.py`, `runtime.py`, and `__init__.py`,
-`namisync/db/repositories.py`, and `namisync/interfaces/service.py`.
-Workflow-owned candidate/result types stay with their actual owner; no core
-contract, domain module, schema, settings store, dispatcher, task lifecycle,
-or frontend content change is planned. The existing picker/slot/bridge path is
-a consumer through service plan start, not a new owner of path policy.
+Task refusal creates no delivery/session effect; equal replay performs no new
+native admission. Two introduced service regressions were corrected before
+delivery: exception-context retention and oversized input entering task custody.
+Preimplementation probes were refreshed on integrated `675181a` before coding.
+Closure passed 680 focused, 2,697 neighborhood and 4,912 ordinary tests (four
+existing privilege skips), all 29 installed WebView2 tests, twelve import
+contracts, documentation checks and independent adversarial review.
 
-The test population is `tests/test_inventory_workflow.py`,
-`test_inventory_runtime.py`, `test_db_repositories.py`, `test_service.py`,
-`test_bridge_service.py`, and their existing `tests/_inventory_fixtures.py`
-and `tests/_service_fixtures.py` support. Existing
-`tests/interfaces/web/test_slots.py` and `test_commands.py` are named consumer
-regression checks. `tests/interfaces/web/test_transport.py` is also admitted for
-its direct-service plan-start runtime fixture: the preimplementation consumer
-trace found that it must model the new admission seam without weakening the
-production service. No collected module is added or retired. Documentation is
-limited to this register, `INVENTORY.md`, `WORKFLOWS.md`, `DATABASE.md`,
-`INTERFACES.md`, `FEATURES.md`, `DESKTOP_UI.md`, `BRIDGE.md`, the README
-current-state/phase summaries, and task-level `CHANGELOG.md`/`HANDOFF.md`.
-Files in this population change only when necessary for the accepted outcome;
-the population is not a cleanup checklist.
+No Setup widgets, frozen options, Plan-again UI, schema/index changes, domain
+policy changes or new resource certification were delivered. Retired DTO,
+reservation and command-count recipes were not revived. Raw evidence remains
+under `build/m1-5/evidence/`; later checkpoints implement the remaining user
+outcomes through their own accepted gates.
 
-**Owners and seams.** `inventory.py` owns candidate parsing/admission,
-`LocationBinding`, current mounted-volume resolution, and inventory/integrity
-binding. Reuse its existing bounded resolver and no-follow root-chain authority;
-typed parser/native refusal must not depend on parsing diagnostic strings.
-`runtime.py` composes the native collaborators and read-only ledger access;
-`service.py` exposes typed application results and integrates fresh plan starts.
-`db/repositories.py` owns bounded SQL readback. Service task claims, command
-receipts, observer ownership, and dispatcher admission remain with their M1-4
-owners. Source/target overlap and canonical path checks remain effective.
+## M1-6 delivery
 
-Raw text is bounded before parsing/native work, treated literally, and never
-expanded as shell, environment, URI, home, or current-directory syntax. Keep
-long logical paths and the existing extended-length native boundary. Refuse
-files without selecting their parents, redirected/placeholder chains, malformed
-or unsupported namespaces, and remote locations with typed guidance. Preserve
-existing local filesystem capability behavior; this checkpoint does not create
-new optical/unknown-filesystem support or writable-media promises.
+M1-6 delivers backend-canonical frozen Setup with typed, picker and run-derived
+recent folders/pairs; task-local options; standalone inventory; serial
+best-effort pair creation; and fresh-identity Plan again in a new task.
+Existing task/session owners attach the first session to a blank task and
+preserve stable replay, recovery, close and admission bounds. Picker ambiguity
+uses the user-approved purpose-bound continuation within the existing slot
+population; an explicit current mount is required before Start.
 
-Native picker paths already flow through slots into service plan start. Pure
-input bounds precede task custody. On a fresh start, perform native candidate
-admission after the command replay/claim boundary
-and before workflow/session work. An equal replay must not probe again or create
-another effect. Slot ids remain purpose-bound, nonconsuming and expiry-bounded;
-pair lookup stays atomic and no slot lock spans native I/O. Typed and remembered
-Setup widgets, picker-time feedback, and standalone-inventory picker controls
-remain M1-6. Inventory/integrity and all scanner, preflight, executor, and verifier
-point-of-use re-probes remain active; neither a candidate nor a remembered
-identity authorizes later filesystem work.
+Whole-gesture revisions prevent stale edits from restoring folder authority.
+Form and batch starts exclude one another; uncertainty retains the same command
+for retry. Per-task readback restores frozen inputs, and plan readiness requires
+an actual artifact. Global defaults remain unchanged.
 
-**Remembered locations.** Implement the existing FEATURES outcome of at most
-five recent sources, five targets, and five active pairings, derived only from
-durable ledger run activity. Deduplicate by stable location/pair identity and
-order by latest recorded run time with a deterministic identity tie-break.
-Exclude soft-deleted mappings from the run-derived suggestions; do not discard historical
-failed, canceled, degraded, unfinished, offline, or remounted locations.
-Bound SQL result materialization before constructing presentation collections.
-Typing, picking, probing, and mere candidate admission write no recent record.
-Activation resolves the remembered identity afresh; a stored drive hint is
-never presented as an authoritative current path. Missing/offline/ambiguous
-results keep identity context and cannot become a successful admission.
+The same checkpoint condenses M1-5's delivered history and records the substantive
+transparent-host rendering issue in BUGS without changing its header/policy.
+Its cause remains unconfirmed and investigation is deferred indefinitely.
+Changes to native Mica/material or global settings, durable tasks, M1-7
+review/execution, inventory projections and new resource certification remain
+excluded. Retired
+command-count, reservation and aggregate-owner-graph recipes remain retired.
 
-**Design probes and regression definition.** Before production edits, inspect
-the owners and consumer seams above, and exercise the exact selector corpus
-recorded in the preimplementation receipt below for parser and native-path
-boundaries; file, reparse, placeholder, and long-root behavior; offline, missing,
-remounted and cloned volumes; queued re-resolution; service admission/replay;
-slot purpose/expiry/eviction/concurrent pair resolution; and ledger run/mapping
-provenance. These probes sample the declared regression surfaces; they do not
-claim full-module runs of every file in the implementation population. Record
-the commands and direct owner traces below before freezing implementation.
-Diagnostic outputs, if needed, use ignored
-`build/m1-5-design/` for disposable baseline output and `build/m1-5/` for
-per-command implementation evidence; neither is measurement authority.
+M1-6-G verification: 1027 passed, 2 deselected in 28.13s; neighborhood
+2731 passed, 2249 deselected in 113.29s (0:01:53); ordinary 4946 passed, 4 skipped, 30 deselected in 212.33s (0:03:32);
+installed headed 30 passed, 4950 deselected in 150.10s (0:02:30); all 12 import contracts.
+The four ordinary skips are unchanged core/tool symlink cases lacking Windows
+privilege (WinError 1314); no M1-6 or bridge gate was skipped. This checkpoint is
+not release-wide or compositor-health acceptance. Final independent adversarial
+review and documentation/hash checks passed before its atomic commit.
 
-A regression is a lost existing guarantee, a false state/evidence claim, an
-unauthorized effect, or newly unbounded work. A red test is a lead that requires
-tracing the reached production seam and consequence; a green test does not
-prove absence. Implementation validates the predeclared surfaces and diagnoses
-failures; it does not initiate a new broad discovery pass. Required new witnesses
-cover every refusal class, long-path acceptance, current remount and clone
-selection, fresh activation/queue probes, all three five-entry boundaries and
-ordering/provenance, and replay before candidate work. Run the database,
-workflows, and interfaces neighborhood, ordinary repository suite, import
-contracts, and `git diff --check`; retain M1-4 headed evidence unless a changed
-production desktop path requires its witness to run again.
-
-**Archived-clause dispositions and non-goals.** Archived candidate DTO shapes,
-assessment/activation command counts, reservation/lease recipes, and aggregate
-retained-graph byte targets are not implementation prerequisites. The active
-literal-input, typed-refusal, fresh-identity, bounded-recent and purpose-bound
-slot outcomes remain binding. Frozen Setup/options, browser normalization,
-multi-pair task creation, inventory panes, fresh Plan-again UI, domain retries,
-cleanup/purge controls, durable tasks, and new resource certification remain
-outside M1-5. No archived clause is used to remove an active guarantee.
-
-**Review, commit and stop rules.** Plan one coherent commit,
-`feat(workflows): unify location admission and remembered locations`, after
-M1-5-G passes. No separate database-only or unused-interface prerequisite commit
-is needed. Any separately authorized bounded pre-existing fix uses its own
-reviewed commit under AGENTS; it does not enlarge this gate. A fresh reviewer
-must inspect the actual final diff, raw verification, parsing/TOCTOU, receipt
-ordering, persisted identity provenance, bounds, and documentation, then confirm
-any correction before commit. Apply AGENTS/DEFENSE hard-wall and numerical
-unplanned-defect stops unchanged. Preserve blocked task-owned work under the
-repository recovery procedure rather than committing an incomplete checkpoint.
-
-**Delivered (2026-09-10).** One workflow-owned candidate route now serves
-fresh picker-backed plan starts and inventory/integrity binding. Literal inputs
-are bounded before task custody and native work; typed refusal preserves
-identity context, and accepted candidates carry the final current mount.
-Read-only remembered sources, targets and active pairs each stop at five
-identity-deduplicated durable-run results in one database snapshot. No schema,
-frontend, domain-policy or task/session ownership change was made.
-
-The finite preimplementation corpus covered the named owner/consumer seams,
-including probe-only recorder setup/move and sync tests. Its integrated baseline
-receipt is below. Source tracing and final review confirmed fresh point-of-use
-probes, replay before native admission, purpose-bound atomic slot resolution,
-literal/native path separation, local capability behavior, and run provenance.
-Candidate admission promises an observed directory, never later write capacity
-or authorization. Archived recipes and the non-goals above remain deferred.
-
-M1-5-G passed: 680 focused tests; 2,697 database/workflows/interfaces tests;
-4,912 ordinary tests with four existing privilege skips; all 29 installed
-WebView2 tests and twelve import contracts. Final documentation/diff and
-independent adversarial review close the same atomic outcome. Two introduced service
-regressions were corrected with retained witnesses: exception-context cleanup
-and raw input bounds before task custody. No test module was added or retired.
-Raw commands/results, candidate identities and review are retained under
-`build/m1-5/evidence/`; inputs remain under `build/m1-5/inputs/`.
+Delivery is one `feat(web): deliver frozen task setup and location flows` commit
+on `milestone1`, based on `b98dce4`. The accepted study is retained in
+[the archive](obsolete/M1_6_SETUP.md). Exact commands, candidate hashes, raw
+results, review dispositions and screenshots are in ignored `build/m1-6/`;
+successful gate directories are `focused-final05`, `neighborhood-final04`, `ordinary-final04`, `headed-final03`, `imports-final02`.
+No test was retired and no recovery branch or worktree was created.
 
 ## Investigation and regression map
-
-**M1-5 integrated refresh (2026-09-10).** M1-async is committed as `675181a`
-on `milestone1`. Before M1-5 source edits, the unchanged twenty-selector and
-five-picker corpora passed **44** and **17** tests on that clean commit.
-Commands, raw output and before/after source identities are retained in
-`build/m1-5-design/runs/integrated-675181a-02/`. The first disposable-runner
-invocation omitted its temporary parent directory; the runner was corrected
-and rerun with a fresh identity, without changing product or tests. Candidate
-implementation must preserve the replay/claim and slot seams traced above.
 
 The current service rolls `committing` back only when admission fails;
 post-admission preflight refusal remains committed. `run_plan` saves a plan
@@ -503,11 +429,7 @@ performed a product release run.
 
 ## Resumption
 
-M1-4 and M1-async (`675181a`) are committed on `milestone1`; M1-5-G is closed
-for the atomic delivery described above.
-This delivery stops for the requested recap and GUI adjustments. M1-6 awaits
-the user's fuller specification and authorization; no M1-6 implementation,
-historical DOC-2 branch/PR work, push or PR is part of this delivery.
-HANDOFF owns the latest operational evidence; AGENTS owns stop/adjudication
-boundaries. Future checkpoints use the expansion rule above against this
-integrated state before starting dependent work.
+M1-4, M1-async (`675181a`), M1-5 (`e19ed9d`), GUI-1 (`b98dce4`) and M1-6
+are delivered on `milestone1`. Pause before M1-7. Its expansion and implementation require a new
+user instruction. No halo workaround, push or PR is part of this delivery.
+HANDOFF owns current operational context; AGENTS owns containment boundaries.

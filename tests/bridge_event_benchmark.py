@@ -1916,16 +1916,21 @@ def _summarize(
         <= _MEMORY_MAX_BLIND_INTERVAL_SECONDS
     )
     production_names = [
+        "admit_location",
         "close_task",
         "create_task",
         "list_tasks",
         "next_events",
         "pick_folder",
+        "plan_again",
+        "prepare_setup",
         "read_cosmetic_section",
+        "read_setup",
         "readiness_echo",
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_inventory",
         "start_plan",
     ]
     combined_names = sorted(

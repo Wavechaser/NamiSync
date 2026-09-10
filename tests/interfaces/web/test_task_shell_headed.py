@@ -86,7 +86,7 @@ def test_m1_4_installed_task_shell_navigation_closure_and_recovery(
 
     assert report["initial"] == {
         "newest": ["Task 48", "Task 47", "Task 46"],
-        "blank": True,
+        "setupVisible": True,
         "refusedCount": 48,
         "retainedAfterFailure": True,
         "navigationStayed": True,

@@ -35,12 +35,21 @@ const bridge = await import(moduleUrl);
 
 const sourceId = `slot-${"1".repeat(32)}`;
 const targetId = `slot-${"2".repeat(32)}`;
+const taskId = `task-${"1".repeat(32)}`;
+const options = Object.freeze({
+  filters: [],
+  deletion_policy: "trash",
+  trash_on_update: false,
+  preservation: Object.freeze({ preserve_ads: false, preserve_created: false, preserve_acl: false }),
+  propagate_source_casing: false,
+  verify_after_execute: false,
+});
 const requests = [];
 const acknowledgments = [];
 let uncertainResponses = 0;
 let holdNextResponse = false;
 let resolveLateResponse = null;
-const planning = bridge.startPlan(sourceId, targetId, null);
+const planning = bridge.startPlan(taskId, sourceId, targetId, options);
 
 await Promise.resolve();
 assert.equal(timers.size, 1, "the first start-plan attempt owns one deadline");
@@ -75,7 +84,7 @@ testWindow.pywebview = {
           request_id: request.request_id,
           ok: true,
           result: {
-            task_id: `task-${"2".repeat(32)}`,
+            task_id: taskId,
             request_id: "3".repeat(32),
             session_id: "4".repeat(32),
           },
@@ -99,7 +108,7 @@ assert.equal(requests.length, 0, "raw injection does not admit normal commands")
 bridge.markBridgeOperational();
 
 assert.deepEqual(await planning, {
-  task_id: `task-${"2".repeat(32)}`,
+  task_id: taskId,
   request_id: "3".repeat(32),
   session_id: "4".repeat(32),
 });
@@ -107,9 +116,10 @@ assert.equal(requests.length, 1, "only the fresh replay may dispatch");
 assert.equal(requests[0].command, "start_plan");
 assert.deepEqual(Object.keys(requests[0].payload).sort(), [
   "command_id",
-  "deletion_policy",
+  "options",
   "source_id",
   "target_id",
+  "task_id",
 ]);
 assert.equal("revision" in requests[0].payload, false);
 assert.equal(timers.size, 0, "the completed replay clears its deadline");
@@ -123,9 +133,11 @@ assert.equal(
 // and the identical command id and original wire intent. No revision is
 // invented for this session-creating command.
 uncertainResponses = 1;
-const uncertainPlanning = bridge.startPlan(sourceId, targetId, "additive");
+const uncertainPlanning = bridge.startPlan(taskId, sourceId, targetId, {
+  ...options, deletion_policy: "additive",
+});
 assert.deepEqual(await uncertainPlanning, {
-  task_id: `task-${"2".repeat(32)}`,
+  task_id: taskId,
   request_id: "3".repeat(32),
   session_id: "4".repeat(32),
 });
@@ -137,13 +149,14 @@ assert.equal(uncertainAttempts[1].command, "start_plan");
 assert.deepEqual(uncertainAttempts[0].payload, uncertainAttempts[1].payload);
 assert.deepEqual(Object.keys(uncertainAttempts[0].payload).sort(), [
   "command_id",
-  "deletion_policy",
+  "options",
   "source_id",
   "target_id",
+  "task_id",
 ]);
 assert.equal(uncertainAttempts[0].payload.source_id, sourceId);
 assert.equal(uncertainAttempts[0].payload.target_id, targetId);
-assert.equal(uncertainAttempts[0].payload.deletion_policy, "additive");
+assert.equal(uncertainAttempts[0].payload.options.deletion_policy, "additive");
 assert.match(uncertainAttempts[0].payload.command_id, /^[0-9a-f]{32}$/);
 assert.equal("revision" in uncertainAttempts[0].payload, false);
 assert.equal(timers.size, 0, "both uncertain attempts clear their deadlines");
@@ -152,7 +165,7 @@ assert.equal(timers.size, 0, "both uncertain attempts clear their deadlines");
 // non-null wrapper is detached and acknowledged even though the retry already
 // supplied the domain result.
 holdNextResponse = true;
-const latePlanning = bridge.startPlan(sourceId, targetId, "trash");
+const latePlanning = bridge.startPlan(taskId, sourceId, targetId, options);
 for (let turn = 0; turn < 8 && resolveLateResponse === null; turn += 1) {
   await Promise.resolve();
 }
@@ -162,7 +175,7 @@ const [lateTimer, expireLate] = timers.entries().next().value;
 timers.delete(lateTimer);
 expireLate();
 assert.deepEqual(await latePlanning, {
-  task_id: `task-${"2".repeat(32)}`,
+  task_id: taskId,
   request_id: "3".repeat(32),
   session_id: "4".repeat(32),
 });
@@ -233,7 +246,7 @@ function success(request) {
     let result;
     if (request.command === "create_task") result = { task_id: `task-${identity}` };
     else if (request.command === "start_plan") {
-      result = { task_id: `task-${identity}`, request_id: identity, session_id: identity };
+      result = { task_id: request.payload.task_id, request_id: identity, session_id: identity };
     } else if (request.command === "close_task") {
       result = { ...request.payload, disposition: "closed" };
     } else {
@@ -312,7 +325,7 @@ for (const command of ["create_task", "start_plan", "close_task", "release_termi
   const sessionId = (++wireId).toString(16).padStart(32, "0");
   let work;
   if (command === "create_task") work = asyncBridge.createTask();
-  else if (command === "start_plan") work = asyncBridge.startPlan(sourceId, targetId);
+  else if (command === "start_plan") work = asyncBridge.startPlan(taskId, sourceId, targetId, options);
   else if (command === "close_task") work = asyncBridge.closeTask(taskId);
   else asyncBridge.startTaskDrain(taskId, sessionId, () => {}, (error) => { throw error; },
     { terminal: true, sessionReleased: false });

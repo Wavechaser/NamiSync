@@ -38,6 +38,7 @@ const [bridge, bootstrapModule, renderModule] = await Promise.all([
 ]);
 const {
   closeTask,
+  createTask,
   dispatchInteractive,
   markBridgeOperational,
   pickFolder,
@@ -50,6 +51,18 @@ await bootstrapTestBridge();
 const { renderText } = renderModule;
 
 const REPORT_COMMAND = "test_report";
+const BASE_OPTIONS = Object.freeze({
+  filters: Object.freeze([]),
+  deletion_policy: "trash",
+  trash_on_update: true,
+  preservation: Object.freeze({
+    preserve_ads: false,
+    preserve_created: true,
+    preserve_acl: false,
+  }),
+  propagate_source_casing: false,
+  verify_after_execute: false,
+});
 let browserStage = "bootstrap";
 const status = document.querySelector("#status");
 const hostileTarget = document.querySelector("#hostile-text");
@@ -149,8 +162,16 @@ async function report(payload, validator) {
   return dispatchInteractive(REPORT_COMMAND, Object.freeze(payload), validator);
 }
 
+async function startTestPlan(sourceId, targetId, deletionPolicy = "trash") {
+  const task = await createTask();
+  return startPlan(task.task_id, sourceId, targetId, {
+    ...BASE_OPTIONS,
+    deletion_policy: deletionPolicy,
+  });
+}
+
 async function proveConcurrentDrain(sourceId, targetId) {
-  const plan = await startPlan(sourceId, targetId, "additive");
+  const plan = await startTestPlan(sourceId, targetId, "additive");
   const drainId = globalThis.crypto.randomUUID().replaceAll("-", "").toLowerCase();
   let drainSettled = false;
   void dispatchInteractive(
@@ -203,7 +224,7 @@ async function proveBrowserGate(sourceId, targetId) {
   await report({ phase: "arm_start_uncertainty" }, validAccepted);
   browserStage = "start-plan-uncertainty";
   setTimeout(injectRendererOnlyReturnTableLoss, 50);
-  const mainPlan = await startPlan(sourceId, targetId, "trash");
+  const mainPlan = await startTestPlan(sourceId, targetId);
 
   const mainAccepted = [];
   const mainRefusals = [];
@@ -274,7 +295,7 @@ async function proveBrowserGate(sourceId, targetId) {
 
   const busyAccepted = [];
   const busyRefusals = [];
-  const busyPlan = await startPlan(sourceId, targetId, "trash");
+  const busyPlan = await startTestPlan(sourceId, targetId);
   browserStage = "finite-busy-recovery";
   const stopBusy = startTaskDrain(
     busyPlan.task_id,
@@ -297,7 +318,7 @@ async function proveBrowserGate(sourceId, targetId) {
 
   const malformedAccepted = [];
   const malformedRefusals = [];
-  const malformedPlan = await startPlan(sourceId, targetId, "trash");
+  const malformedPlan = await startTestPlan(sourceId, targetId);
   browserStage = "finite-malformed-recovery";
   const stopMalformed = startTaskDrain(
     malformedPlan.task_id,
@@ -374,17 +395,17 @@ async function run() {
   if (source === null || target === null) {
     throw new Error("native folder selection was cancelled");
   }
-  const plan = await startPlan(source.id, target.id, null);
+  const plan = await startTestPlan(source.choice_id, target.choice_id);
   browserStage = "browser-gate";
-  const browserGate = await proveBrowserGate(source.id, target.id);
-  await proveConcurrentDrain(source.id, target.id);
+  const browserGate = await proveBrowserGate(source.choice_id, target.choice_id);
+  await proveConcurrentDrain(source.choice_id, target.choice_id);
   browserStage = "final-report";
   await report(
     {
       phase: "complete",
       observed: hostileTarget.textContent,
-      source_id: source.id,
-      target_id: target.id,
+      source_id: source.choice_id,
+      target_id: target.choice_id,
       source_keys: Object.keys(source).sort(),
       target_keys: Object.keys(target).sort(),
       source_display: source.display,

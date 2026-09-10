@@ -17,6 +17,7 @@ from namisync.interfaces.task_port import (
     _validate_task_observation,
     TaskCloseRequestView,
     TaskCloseView,
+    TaskDeliveryFactory,
     TaskDeliveryUpdate,
     TaskDrainView,
     TaskEventUpdateView,
@@ -27,6 +28,8 @@ from namisync.interfaces.task_port import (
     TaskSessionReleaseView,
     TaskShellView,
     TaskStartView,
+    TaskStartOutcome,
+    TaskSetupSnapshotView,
     TaskSummaryView,
     TaskTerminalDelivery,
     TaskUnavailableError,
@@ -35,8 +38,10 @@ from namisync.interfaces.task_port import (
 from namisync.workflows.views import (
     SessionEventView,
     SessionRecordView,
+    SetupOptionsView,
     validate_session_record_view,
 )
+from namisync.workflows.inventory import LocationCandidate, RememberedLocations
 
 from ._exception_graph import retire_exception_graph as _retire_exception_graph
 
@@ -172,6 +177,10 @@ class _TaskState:
     closing: bool = False
     recovery_caller: int | None = None
     response_capture_caller: int | None = None
+    start_command_id: str | None = None
+    task_kind: str | None = None
+    request_id: str | None = None
+    setup: TaskSetupSnapshotView | None = None
 
     def sink(self, generation: int) -> Callable[[TaskDeliveryUpdate], None]:
         def accept(update: TaskDeliveryUpdate) -> None:
@@ -255,7 +264,7 @@ class _TaskState:
 @dataclass(slots=True)
 class _StartResponse:
     command_id: str
-    wire_intent: tuple[str, str, str | None] | None
+    wire_intent: tuple[object, ...] | None
     participants: int = 0
     complete: bool = False
     delivery_retiring: bool = False
@@ -442,6 +451,8 @@ class TaskRegistry:
                 task.session_id,
                 session_state,
                 task.session_released,
+                task.task_kind,
+                task.request_id,
             )
 
     def start_plan(
@@ -559,7 +570,7 @@ class TaskRegistry:
     def replay_start(
         self,
         command_id: str,
-        wire_intent: tuple[str, str, str | None],
+        wire_intent: tuple[object, ...],
     ) -> TaskStartView | None:
         """Return an exact retained wire replay before volatile slots resolve."""
 
@@ -580,6 +591,300 @@ class TaskRegistry:
             return self._await_start_response(entry)
         finally:
             self._leave_start_response(entry)
+
+    def read_setup_options(self) -> SetupOptionsView:
+        return self._lifecycle.read_setup_options()
+
+    def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView:
+        return self._lifecycle.prepare_setup_options(value)
+
+    def remembered_locations(self) -> RememberedLocations:
+        return self._lifecycle.remembered_locations()
+
+    def admit_location_candidate(self, candidate: LocationCandidate):
+        return self._lifecycle.admit_location_candidate(candidate)
+
+    def read_task_setup(self, task_id: str) -> TaskSetupSnapshotView:
+        if type(task_id) is not str or _TASK_ID.fullmatch(task_id) is None:
+            raise TaskUnavailableError("task is unavailable")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+        with task.condition:
+            snapshot = task.setup
+            request_id = task.request_id
+            kind = task.task_kind
+        if snapshot is None:
+            return TaskSetupSnapshotView(
+                "default",
+                None,
+                None,
+                None,
+                None,
+                self._lifecycle.read_setup_options(),
+            )
+        if kind == "sync-plan" and request_id is not None:
+            try:
+                return self._lifecycle.read_plan_setup(request_id)
+            except KeyError:
+                pass
+        return snapshot
+
+    def start_setup_plan(
+        self,
+        task_id: str,
+        source: LocationCandidate,
+        target: LocationCandidate,
+        options: SetupOptionsView,
+        *,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        return self._start_existing_task(
+            task_id,
+            command_id,
+            wire_intent,
+            lambda factory: self._lifecycle.start_task_setup_plan(
+                task_id,
+                source,
+                target,
+                options,
+                command_id=command_id,
+                signature=wire_intent,
+                delivery_factory=factory,
+            ),
+        )
+
+    def start_setup_inventory(
+        self,
+        task_id: str,
+        root: LocationCandidate,
+        *,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        return self._start_existing_task(
+            task_id,
+            command_id,
+            wire_intent,
+            lambda factory: self._lifecycle.start_task_setup_inventory(
+                task_id,
+                root,
+                command_id=command_id,
+                signature=wire_intent,
+                delivery_factory=factory,
+            ),
+        )
+
+    def start_plan_again(
+        self,
+        old_task_id: str,
+        *,
+        source_mount: str | None,
+        target_mount: str | None,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+    ) -> TaskStartView:
+        with self._condition:
+            old = self._tasks.get(old_task_id)
+        if old is None:
+            raise TaskUnavailableError("task is unavailable")
+        with old.condition:
+            if old.task_kind != "sync-plan" or old.request_id is None:
+                raise TaskUnavailableError("task is unavailable")
+            request_id = old.request_id
+        return self._start_new_task(
+            command_id,
+            wire_intent,
+            lambda factory: self._lifecycle.start_task_plan_again(
+                old_task_id,
+                request_id,
+                source_mount=source_mount,
+                target_mount=target_mount,
+                command_id=command_id,
+                signature=wire_intent,
+                delivery_factory=factory,
+            ),
+        )
+
+    def _start_existing_task(
+        self,
+        task_id: str,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+        starter: Callable[[TaskDeliveryFactory], object],
+    ) -> TaskStartView:
+        _require_opaque_id(command_id, "task command id")
+        with self._condition:
+            if self._closing:
+                raise TaskUnavailableError("task registry is closing")
+            retained = self._start_responses.get(command_id)
+            if retained is not None:
+                if retained.wire_intent != wire_intent:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                retained.participants += 1
+        if retained is not None:
+            try:
+                return self._await_start_response(retained)
+            finally:
+                self._leave_start_response(retained)
+        response: _StartResponse | None = None
+        with self._condition:
+            task = self._tasks.get(task_id)
+        if task is None:
+            raise TaskUnavailableError("task is unavailable")
+
+        def delivery_factory(delivered_task_id: str):
+            nonlocal response
+            if delivered_task_id != task_id:
+                raise ObservationConflictError("task lifecycle changed its task")
+            with self._condition:
+                if self._closing or self._tasks.get(task_id) is not task:
+                    raise TaskUnavailableError("task is unavailable")
+                if command_id in self._start_responses:
+                    raise RuntimeError("application repeated a task delivery factory")
+                response = _StartResponse(command_id, wire_intent, participants=1)
+                self._start_responses[command_id] = response
+                self._condition.notify_all()
+            with task.condition:
+                if task.session_id is not None or task.closing:
+                    raise TaskUnavailableError("task is unavailable")
+                task.transition = True
+                task.start_command_id = command_id
+                return task.sink(task.generation)
+
+        candidate: object | None = None
+        result: TaskStartView | None = None
+        failure_code: str | None = None
+        try:
+            candidate = starter(delivery_factory)
+            result = self._publish_setup_start(command_id, candidate, task)
+        except BaseException as error:
+            if response is None:
+                raise
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            with task.condition:
+                task.transition = False
+                task.start_command_id = None
+                task.condition.notify_all()
+        if response is None:
+            if type(candidate) is TaskStartView:
+                return self._validate_and_publish_start(
+                    command_id,
+                    candidate,
+                    None,
+                )
+            assert result is not None
+            return result
+        with self._condition:
+            response.result = result
+            response.failure_code = failure_code
+            response.complete = True
+            self._condition.notify_all()
+        try:
+            if result is not None:
+                return result
+            assert failure_code is not None
+            _raise_start_failure(failure_code)
+        finally:
+            self._leave_start_response(response)
+
+    def _start_new_task(
+        self,
+        command_id: str,
+        wire_intent: tuple[object, ...],
+        starter: Callable[[TaskDeliveryFactory], object],
+    ) -> TaskStartView:
+        retained = self.replay_start(command_id, wire_intent)
+        if retained is not None:
+            return retained
+        response: _StartResponse | None = None
+        provisional: _TaskState | None = None
+
+        def delivery_factory(task_id: str):
+            nonlocal response, provisional
+            with self._condition:
+                if self._closing:
+                    raise TaskUnavailableError("task registry is closing")
+                response = _StartResponse(command_id, wire_intent, participants=1)
+                provisional = _TaskState(task_id, command_id, self._clock)
+                provisional.start_command_id = command_id
+                self._start_responses[command_id] = response
+                self._provisional[task_id] = provisional
+                self._condition.notify_all()
+                return provisional.sink(provisional.generation)
+
+        result: TaskStartView | None = None
+        failure_code: str | None = None
+        try:
+            candidate = starter(delivery_factory)
+            if type(candidate) is TaskStartOutcome:
+                assert provisional is not None
+                provisional.setup = candidate.snapshot
+                provisional.task_kind = candidate.snapshot.task_kind
+                provisional.request_id = candidate.start.request_id
+                candidate = candidate.start
+            result = self._validate_and_publish_start(
+                command_id,
+                candidate,
+                provisional,
+            )
+        except BaseException as error:
+            if response is None:
+                raise
+            failure_code = _classify_start_failure(error)
+            _retire_exception_graph(error)
+            if provisional is not None:
+                self._discard_provisional(provisional)
+        if response is None:
+            assert result is not None
+            return result
+        with self._condition:
+            response.result = result
+            response.failure_code = failure_code
+            response.complete = True
+            self._condition.notify_all()
+        try:
+            if result is not None:
+                return result
+            assert failure_code is not None
+            _raise_start_failure(failure_code)
+        finally:
+            self._leave_start_response(response)
+
+    def _publish_setup_start(
+        self,
+        command_id: str,
+        candidate: object,
+        task: _TaskState,
+    ) -> TaskStartView:
+        if type(candidate) is not TaskStartOutcome:
+            if type(candidate) is TaskStartView:
+                return self._validate_and_publish_start(command_id, candidate, None)
+            raise RuntimeError("task lifecycle returned invalid Setup data")
+        candidate.__post_init__()
+        result = candidate.start
+        if result.task_id != task.task_id:
+            raise ObservationConflictError("task lifecycle changed its task")
+        with task.condition:
+            if task.closing:
+                raise TaskUnavailableError("task is unavailable")
+            for update in task.queue:
+                if update.session_id != result.session_id:
+                    raise ObservationConflictError(
+                        "task observation does not match admitted session"
+                    )
+            task.session_id = result.session_id
+            task.task_kind = candidate.snapshot.task_kind
+            task.request_id = result.request_id
+            task.setup = candidate.snapshot
+            task.transition = False
+            task.condition.notify_all()
+        return result
 
     def _await_start_response(self, entry: _StartResponse) -> TaskStartView:
         with self._condition:
@@ -657,6 +962,9 @@ class TaskRegistry:
                     "task terminal record does not match admitted session"
                 )
             provisional.session_id = candidate.session_id
+            if provisional.task_kind is None:
+                provisional.task_kind = "sync-plan"
+            provisional.request_id = candidate.request_id
             provisional.condition.notify_all()
         with self._condition:
             if self._closing:
@@ -993,7 +1301,9 @@ class TaskRegistry:
                         if close_receipt is not None:
                             self._close_receipts.move_to_end(receipt_key)
                             return TaskSessionReleaseView(task_id, session_id)
-                        response = self._start_responses.get(task.command_id)
+                        response = self._start_responses.get(
+                            task.start_command_id or task.command_id
+                        )
                         if (
                             self._closing
                             or response is None
@@ -1139,7 +1449,8 @@ class TaskRegistry:
                     return receipt
                 if self._closing:
                     raise TaskUnavailableError("task registry is closing")
-                response = self._start_responses.get(task.command_id)
+                response_key = task.start_command_id or task.command_id
+                response = self._start_responses.get(response_key)
                 if response is None:
                     raise RuntimeError("task start response is unavailable")
                 if not response.delivery_retiring:
@@ -1167,9 +1478,9 @@ class TaskRegistry:
                 response.delivery_retiring = False
                 if (
                     self._closing
-                    and self._start_responses.get(task.command_id) is response
+                    and self._start_responses.get(response_key) is response
                 ):
-                    self._start_responses.pop(task.command_id, None)
+                    self._start_responses.pop(response_key, None)
                 self._condition.notify_all()
             raise
         with self._condition:
@@ -1180,8 +1491,8 @@ class TaskRegistry:
             if self._tasks.get(task_id) is task:
                 self._tasks.pop(task_id, None)
             response.delivery_retiring = False
-            if self._start_responses.get(task.command_id) is response:
-                self._start_responses.pop(task.command_id, None)
+            if self._start_responses.get(response_key) is response:
+                self._start_responses.pop(response_key, None)
             self._condition.notify_all()
         return result
 
@@ -1227,10 +1538,14 @@ def _tag_update(update: TaskDeliveryUpdate) -> TaskUpdateView:
 
 
 def _wire_policy_conflicts(
-    first: tuple[str, str, str | None] | None,
-    second: tuple[str, str, str | None] | None,
+    first: tuple[object, ...] | None,
+    second: tuple[object, ...] | None,
 ) -> bool:
-    return first is not None and second is not None and first[2] != second[2]
+    if first is None or second is None:
+        return False
+    if len(first) == len(second) == 3:
+        return first[2] != second[2]
+    return first != second
 
 
 def _require_opaque_id(value: object, label: str) -> None:

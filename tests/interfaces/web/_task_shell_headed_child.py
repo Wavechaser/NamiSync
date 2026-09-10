@@ -149,7 +149,12 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   clickNew();
   await until(() => rows().length === 48, "second new task");
   const newest = rows().slice(0, 3).map((row) => row.querySelector(".nami-task-card__title")?.textContent);
-  const blank = document.querySelector(".nami-work-panel__body")?.children.length === 0;
+  const setup = await until(() => {
+    const value = document.querySelector(".nami-work-panel__body .nami-setup");
+    return value instanceof HTMLElement && value.checkVisibility() ? value : null;
+  }, "live Setup form");
+  const setupVisible = setup.querySelector("#setup-source-path") instanceof HTMLInputElement &&
+    setup.querySelector("#setup-target-path") instanceof HTMLInputElement;
   clickNew();
   await until(() => document.querySelector("#host-status")?.textContent?.includes("could not be created"), "capacity refusal");
   const refusedCount = rows().length;
@@ -187,7 +192,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 46, "delayed create cleanup");
   await control("checkpoint", "navigation_cleanup");
 
-  await control("record", { initial: { newest, blank, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared } });
+  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared } });
   await control("checkpoint", "navigation_recorded");
   await control("arm_create_delay");
   await control("checkpoint", "reinjection_armed");

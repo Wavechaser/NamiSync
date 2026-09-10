@@ -4,7 +4,7 @@ This document owns the implemented CLI and desktop adapters, service/task lifecy
 
 `BRIDGE.md` owns external desktop protocol, transport, retry/recovery, and its exact evidence. `PRESENTATION.md` owns tree/view/search/sort/selection behavior and visual scale evidence. The frozen v1 event-and-transport custody result is scoped to its bridge evidence and does not establish whole-runtime containment. The former BR-G-45 aggregate terminal-artifact model is retired. SH-G-15 remains an open, scoped release criterion defined below.
 
-The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live blank task pages with creation, navigation, reconstruction, and explicit close. Frozen Setup, plan/execution review, inventory projections, manual post-copy verification, and the history/settings pages remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
+The active service and CLI support sync, inventory, baseline, verify and rebaseline. The desktop exposes the bounded host/transport foundation and process-live tasks with frozen Setup, typed/picker/recent locations, plan and standalone inventory starts, Plan again, navigation, reconstruction, and explicit close. Plan/execution review, inventory projections, manual post-copy verification, and the history/settings pages remain accepted but unrealized outcomes. Their delivery register is [M1_PLAN.md](M1_PLAN.md).
 
 
 ## Purpose
@@ -114,10 +114,10 @@ internal replacement of an artifact under one request resets user selection
 and advances that request's revision monotonically, even when deterministic
 operation ids repeat. Recognized selection command ids remain retry tombstones
 across that replacement, so a lost response cannot reapply old intent to the
-new artifact. In the accepted, unrealized desktop flow, changed Setup
+new artifact. In the desktop flow, changed Setup
 or explicit Plan again creates a new task, while the old plan slot stays
 immutable. Plan again asks the backend to resolve the retained plan's reviewed
-volume identities into fresh Setup slots; it never submits the old display path
+volume identities into freshly admitted roots; it never submits the old display path
 or copies selection state. Only a failed admission restores `reviewing` today;
 a preflight refusal after successful admission leaves selection committed. M1
 does not add terminal subset retry or reopen that committed selection. Its
@@ -324,8 +324,8 @@ are not themselves durable history loss.
 for literal input or remembered identity; `remembered_locations()` returns its
 bounded source, target and pair suggestions. Their immutable types remain with
 the workflow owner rather than becoming a second service/bridge view registry.
-These are application APIs; typed/recent Setup widgets and their external
-commands remain pending. Reading suggestions or admitting a candidate creates
+Typed/picker/recent Setup commands adapt these application APIs. Reading
+suggestions or admitting a candidate creates
 no task, session, location, mapping, run or recent activity.
 
 Location starts use the same candidate admission route, preserving their
@@ -371,7 +371,7 @@ an active direct close or full task close rather than replaying a closing
 session; task replay remains available during terminal-session release.
 
 The adapter may independently retain bounded transport-response replay for
-`start_plan`. One entry contains only command id, wire intent, in-flight/result
+plan/inventory starts and Plan again. One entry contains only command id, wire intent, in-flight/result
 delivery state, and an exact `TaskStartView`; it contains no resolved root,
 session association, compensation, observer resource, or cleanup authority. A
 retained successful response may therefore replay before resolving expired or
@@ -387,6 +387,23 @@ supplies it to the factory before publication or dispatcher admission. A
 factory may create provisional adapter state; its own call frame discards that
 state on failure, and no application or service rollback refers back into the
 adapter. The web registry enumerates only successfully published tasks.
+
+The same lifecycle owner atomically claims a published blank task for its first
+plan or inventory session, preserving attach-before-schedulability. Competing
+starts cannot attach two sessions; refusal rolls back that claim and leaves the
+original shell. Close joins the existing owner transition. Inventory records
+its own kind and retires its exact detail without inventing a plan or mapping.
+Task enumeration stays lightweight; `read_setup` returns one default/frozen
+snapshot, keeping roots and options out of aggregate lists and small async
+responses. The browser's serial pair coordinator uses ordinary independent
+starts and never rolls back previously admitted rows.
+
+Picker ambiguity uses a non-startable continuation in the adapter's existing
+bounded slot table. It retains reviewed identity and current mount ordering,
+accepts only an explicit indexed choice, then repeats workflow admission before
+publishing a resolved slot. It introduces no application receipt, session or
+durable activity. Exact continuation encoding, expiry and prepublication size
+admission are owned by BRIDGE.
 
 A task-bound release consumes a truthful adapter terminal-delivery fact, advances
 application settlement, confirms service-observer release, closes Dispatcher
@@ -508,9 +525,11 @@ invalid patch cannot poison the atomic settings file.
 The currently active `start_plan(..., deletion_policy=None)` captures the
 complete stored snapshot once; an explicit deletion override changes only that
 plan, and review exposes the complete frozen snapshot while commit/execution
-never reread settings. At the accepted desktop Setup cutover, the bridge
+never reread settings. Desktop Setup uses the same backend canonicalization: the bridge
 submits one complete raw Setup value and freezes only the backend-derived
-canonical snapshot. It leaves global settings unchanged; exact Setup fields
+canonical snapshot. ADS is projected unavailable/off and mirror has no desktop
+control. Linked verification defaults off and freezes with that task. Setup
+leaves global settings unchanged; exact Setup fields
 remain bridge authority.
 
 `classify_result(OperationResultView)` returns a primitive
@@ -609,7 +628,8 @@ boundary and its race limitation. It also protects the small admission return
 for asynchronous commands; asynchronous completion does not remove that race.
 
 The native bridge separates admission from completion only for `create_task`,
-`start_plan`, `release_terminal_session` and `close_task`. CommandSpec owns that
+`start_plan`, `start_inventory`, `plan_again`, `release_terminal_session` and
+`close_task`. CommandSpec owns that
 classification; custom commands and ordinary Python dispatch retain synchronous
 results. The host binds the dispatcher to its existing DocumentChannel after
 construction. Reload retires old completion delivery before a new readiness

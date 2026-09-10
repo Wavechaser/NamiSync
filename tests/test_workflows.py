@@ -69,9 +69,55 @@ from namisync.workflows.models import (
     VerifyContinuation,
 )
 from namisync.workflows.runtime import LocalWorkflowRuntime
+from namisync.workflows.inventory import LocationBinding, LocationCandidate
+from namisync.workflows.views import (
+    PreservationSettingsView,
+    SemanticSettingsPatchView,
+    SetupOptionsView,
+)
 
 
 NOW = datetime(2026, 7, 19, tzinfo=timezone.utc)
+
+
+@pytest.mark.parametrize("persisted_defaults", (False, True))
+def test_prepare_setup_options_canonicalizes_task_snapshot_without_settings_write(
+    tmp_path: Path,
+    persisted_defaults: bool,
+) -> None:
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        if persisted_defaults:
+            runtime.commit_semantic_settings(
+                SemanticSettingsPatchView(deletion_policy="additive")
+            )
+        assert runtime.settings_path.exists() is persisted_defaults
+        original_bytes = runtime.settings_path.read_bytes() if persisted_defaults else None
+        original_mtime = runtime.settings_path.stat().st_mtime_ns if persisted_defaults else None
+        before = runtime.read_semantic_settings()
+        prepared = runtime.prepare_setup_options(
+            SetupOptionsView(
+                ("b\\*", "a/*", "b/*"), "trash", True,
+                PreservationSettingsView(False, True, True), True, True,
+            )
+        )
+        assert prepared.filters == ("a\\*", "b\\*")
+        assert prepared.preservation == PreservationSettingsView(False, True, True)
+        assert prepared.verify_after_execute is True
+        assert runtime.read_semantic_settings() == before
+        assert runtime.settings_path.exists() is persisted_defaults
+        if persisted_defaults:
+            assert runtime.settings_path.read_bytes() == original_bytes
+            assert runtime.settings_path.stat().st_mtime_ns == original_mtime
+        with pytest.raises(ValueError, match="does not support ADS"):
+            runtime.prepare_setup_options(
+                SetupOptionsView(
+                    (), "trash", False,
+                    PreservationSettingsView(True, False, False), False, False,
+                )
+            )
+    finally:
+        runtime.close()
 
 
 def _empty_world() -> ObservedWorld:
@@ -183,6 +229,105 @@ def test_prepare_plan_retains_a_detached_identity_checkpoint(
         assert result.status is SessionState.COMPLETED
     finally:
         runtime.close()
+
+
+@pytest.mark.parametrize("changed_volume", (False, True))
+def test_plan_publication_requires_the_admitted_volume_bindings(
+    tmp_path: Path,
+    changed_volume: bool,
+) -> None:
+    source, target = tmp_path / "source", tmp_path / "target"
+    source.mkdir()
+    target.mkdir()
+    runtime = LocalWorkflowRuntime(tmp_path / "ledger.db", tmp_path / "history.db")
+    try:
+        source_binding = runtime.admit_location_candidate(
+            LocationCandidate.literal(str(source))
+        ).binding
+        target_binding = runtime.admit_location_candidate(
+            LocationCandidate.literal(str(target))
+        ).binding
+        assert source_binding is not None and target_binding is not None
+        request = PlanRequest(
+            "c" * 32, str(source), str(target), SyncOptions(),
+            source_binding, target_binding, True,
+        )
+        checkpoint = runtime.prepare_plan(request).checkpoint
+        assert checkpoint.source_binding == source_binding
+        assert checkpoint.target_binding == target_binding
+        assert checkpoint.verify_after_execute is True
+        original_scanner = runtime._deps.scanner
+        scanned: list[str] = []
+
+        def scan(*args, **kwargs):
+            observed = original_scanner(*args, **kwargs)
+            scanned.append(observed.root.path)
+            if changed_volume and observed.root.path == str(source):
+                assert observed.volume_id is not None
+                assert observed.volume_id.serial != "replacement-volume"
+                observed = replace(
+                    observed,
+                    volume_id=VolumeId(
+                        "replacement-volume", observed.volume_id.fs_type
+                    ),
+                )
+            return observed
+
+        runtime._deps = replace(runtime._deps, scanner=scan)
+        if changed_volume:
+            runtime._deps = replace(
+                runtime._deps,
+                planner=lambda *_args, **_kwargs: pytest.fail(
+                    "changed reviewed volume reached planning"
+                ),
+            )
+            with pytest.raises(ValueError, match="changed reviewed location identity"):
+                runtime.open_plan(checkpoint).run(
+                    RunContext(lambda _event: None, lambda: None)
+                )
+            assert scanned == [str(source), str(target)]
+            with pytest.raises(KeyError):
+                runtime.get_plan(request.request_id)
+        else:
+            result = runtime.open_plan(checkpoint).run(
+                RunContext(lambda _event: None, lambda: None)
+            )
+            assert result.status is SessionState.COMPLETED
+            retained = runtime.get_plan(request.request_id).request
+            assert retained.source_binding == source_binding
+            assert retained.target_binding == target_binding
+            assert retained.verify_after_execute is True
+    finally:
+        runtime.close()
+
+
+@pytest.mark.parametrize("case", (
+    "source-only", "target-only", "integer-verify", "null-verify", "wrong-binding",
+))
+def test_direct_plan_rejects_incomplete_setup_contract_before_scanning(case: str) -> None:
+    binding = LocationBinding(VolumeId("source", "NTFS"), "source", "C:\\", ("C:\\",), False)
+    request = PlanRequest(
+        "d" * 32, r"C:\source", r"D:\target", SyncOptions(),
+        object() if case == "wrong-binding" else binding if case == "source-only" else None,
+        binding if case in {"target-only", "wrong-binding"} else None,
+        1 if case == "integer-verify" else None if case == "null-verify" else False,
+    )
+
+    def unreachable(*_args, **_kwargs):
+        pytest.fail("invalid Setup request reached scan or artifact publication")
+
+    error = ValueError if case.endswith("only") else TypeError
+    message = (
+        "bindings must be paired" if case.endswith("only")
+        else "binding must be exact" if case == "wrong-binding"
+        else "verify_after_execute"
+    )
+    with pytest.raises(error, match=message):
+        sync_workflow.run_plan(
+            request,
+            RunContext(unreachable, lambda: None),
+            SimpleNamespace(scanner=unreachable, save_plan=unreachable),
+        )
 
 
 class _PrivatePathFrameValue:

@@ -1,9 +1,10 @@
 # Desktop UI
 
 The secured host, theme/accessibility foundation, generic tree renderer and
-file-row gallery are implemented. Setup and production plan/execution/inventory/
-integrity task content remains unrealized; process-live blank task pages are
-active, while history and global settings pages are deferred. Current v5 item progress is reduced by the bridge, while production
+file-row gallery are implemented. Process-live tasks expose frozen Setup and
+typed/picker/recent plan and standalone inventory starts. Production
+plan/execution/inventory/integrity review content remains unrealized, while
+history and global settings pages are deferred. Current v5 item progress is reduced by the bridge, while production
 row binding remains future work.
 
 This document owns visual/user interaction behavior. BRIDGE owns exact transport,
@@ -642,7 +643,7 @@ sink; it does not expose raw dispatcher streams to JavaScript. It must
 unsubscribe the exact terminal session on release or task close and close every
 remaining observation before service shutdown.
 
-The target submits complete Setup and freezes the native canonical result;
+The desktop submits complete Setup and freezes the native canonical result;
 defaults only prepopulate the page and Setup never writes global settings.
 Session starts create or attach to a process-live task, and bounded readback
 reconstructs the rail/pane after navigation. Exact Setup, task authority, and
@@ -712,15 +713,14 @@ admission. `LocationResolutionError` already carries the five visible states
 (`resolved`, `offline`, `ambiguous`, `root_missing`, `root_unavailable`), exact
 candidate mounts, and corrective detail. The shared workflow-owned location
 candidate service and bounded remembered-location readback are implemented;
-current picker-backed plan starts use that admission route. Setup's typed and
-remembered inputs and picker-time feedback remain pending UI work. The UI must
+typed, picker and remembered Setup inputs use that admission route. The UI must
 request a user-selected current mount for ambiguity rather than inferring one
 from a mapping or prior task. Its process-local slot is purpose-bound, expires,
 and is freshly re-admitted at every real start; it is not lasting root
 authority.
 
 Semantic settings and UI state are deliberately separate. Existing service/CLI
-callers may read and partially commit semantic settings. The accepted desktop
+callers may read and partially commit semantic settings. Desktop
 Setup reads them only as initial values and freezes per-task overrides without
 writing the file. The ratified `ui_state.py` replacement owns a strict,
 section-versioned cosmetic document; schema v1 contains only the appearance
@@ -844,16 +844,18 @@ selectors, ZWNJ/ZWJ, and long labels remain exact.
 
 ## Interaction contract
 
-### Accepted Setup and location flow
+### Setup and location flow
 
-This remains visually inactive until the Setup surface is implemented. Setup exposes
+Setup selects Sync plan or Inventory before folder admission. The selected mode
+sets the picker purpose; changing it invalidates prior folder authority. Inventory
+uses one root and shows that exact frozen root after admission. Sync Setup exposes
 trash/additive deletion, trash-on-update, filters, creation-time and ACL
 preservation, source-casing propagation, and linked verification. Mirror has no
 control. ADS is visibly unavailable and frozen off; the page never implies a
-disabled checked option will be honored. Accepted Setup behavior is defined here; future exact Setup/filter DTOs are reopened at implementation. Wire encoding is
+disabled checked option will be honored. Wire encoding is
 owned by [BRIDGE.md](BRIDGE.md).
 
-A path row remains editable until explicit native admission. Editing an
+A path row remains editable before its task starts. Editing an
 accepted path immediately drops the page's slot reference and marks it
 unresolved; the UI never silently reuses cached authority. Validation runs on
 Enter, blur, completed paste, picker/remembered selection, or start—not each
@@ -861,6 +863,11 @@ keystroke. Refusal keeps the row editable and gives action-guiding typed
 feedback. A selected file remains visible with `not-directory`; it is never
 silently converted to its parent. Native code owns parsing, volume support, and
 no-follow admission.
+
+When a picked folder has multiple current mounted copies, Setup presents the
+current mount choices. Choosing one continues that exact selection through a
+short-lived opaque reference and fresh native identity checks. It cannot start
+work until resolved, silently choose the first mount, or reuse a stale choice.
 
 Setup shows recent sources, targets, and active pairs derived from ledger runs.
 Unresolved remembered locations remain visible with stable identity context,
@@ -870,6 +877,22 @@ has a stable command id and independent outcome, and completed rows are never
 rolled back. Same-document navigation keeps the coordinator; document
 replacement may stop only rows not yet submitted, while admitted tasks are
 rediscovered from task enumeration.
+
+One active gesture owns its frozen row/options snapshot. Additional batch rows
+and overlapping starts wait for it to finish. Uncertain creation or start keeps
+the exact command's Retry action and remains distinct from refusal; retry never
+substitutes edited input or creates a replacement intent.
+
+Core folder rows and the primary action appear first; an Options group reveals
+the full task-local choices. Start admits unresolved nonempty rows automatically.
+Stable form elements retain focus and drafts through rail, drain and navigation
+updates; response revisions cannot restore an edited row's old choice. The
+page retains one coordinator of at most 48 pairs, not a batch in every task.
+After a start, per-task readback shows the backend-frozen locations and options.
+Plan again reads fresh availability for the reviewed identities, requests an
+explicit current mount when ambiguous, and starts a separate plan with the
+same frozen options and default selection. It copies no execution authority.
+Terminal status alone never fabricates an empty or ready review.
 
 Slice 4 establishes only the presentation core and honest shell frame. It adds
 no presentation command or placeholder plan, inventory, history, or control
@@ -1001,8 +1024,8 @@ M1-4 activates task page creation, selection/navigation, rail interactions, and
 explicit closure. The rail is newest-first, keeps stable process-local labels
 and card elements across re-observation, and restores published blank,
 active-session, and terminal/released tasks after document reinjection. Page
-bodies remain blank until their owning delivery checkpoint activates Setup,
-review, execution, or inventory content. Task identity, activity/terminal state,
+bodies now show editable or frozen Setup; review, execution and inventory
+content await their owning checkpoints. Task identity, activity/terminal state,
 and pending/failed close remain truthful and observable; this slice does not
 prebuild those later content projections. Stale create, close, list, and drain
 responses cannot replace current-generation state or steal a later selection.

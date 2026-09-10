@@ -15,10 +15,13 @@ import pytest
 import namisync.interfaces.service as service_module
 import namisync.workflows.sync as sync_workflow_module
 from namisync.core.integrity import RecordDisposition
-from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode
+from namisync.core.models import EntryKind, ScanWarning, ScanWarningCode, VolumeId
 from namisync.core.pathing import to_extended_length_path
-from namisync.core.planning import BlockedReason, OperationKind, OperationReason
-from namisync.core.session import SessionState
+from namisync.core.planning import (
+    BlockedReason, DeletionPolicy, FilterSet, OperationKind, OperationReason,
+    PreservationPolicy, SyncOptions,
+)
+from namisync.core.session import OperationResult, SessionId, SessionRecord, SessionState
 from namisync.db.repositories import InventoryPresence, InventorySnapshot
 from namisync.dispatcher import SessionNotFound
 from namisync.interfaces.service import (
@@ -28,6 +31,9 @@ from namisync.interfaces.service import (
     NamiSyncService,
     SyncPathInputError,
 )
+from namisync.interfaces.task_port import (
+    TaskStartOutcome, TaskTerminalDelivery,
+)
 from namisync.interfaces.task_lifecycle import (
     LifecycleAssociationError,
     TaskLifecycle,
@@ -36,6 +42,15 @@ from namisync.workflows.node_tree import (
     NodeTreeKind,
     NodeTreeMember,
     build_node_tree,
+)
+from namisync.workflows import (
+    InventoryRequest,
+    LocationBinding, LocationCandidate, LocationCandidateResult,
+    LocationCandidateState, PlanRequest, VolumeResolution,
+    VolumeResolutionState,
+)
+from namisync.workflows.views import (
+    PreservationSettingsView, SetupOptionsView, session_record_view,
 )
 
 from _service_fixtures import make_service
@@ -989,6 +1004,238 @@ def test_task_plan_receipt_replay_does_not_recreate_delivery_or_observation(
     assert observer.adoptions[0][1] is first_sink
     assert factory_calls == [("first", first.task_id)]
 
+
+def test_m1_6_plan_again_preserves_frozen_setup_and_resets_selection() -> None:
+    copied = operation(OperationKind.COPY, source=file_stat())
+    plan_value = plan((copied,))
+    source_binding = LocationBinding(
+        VolumeId("source", "NTFS"), "src", "C:\\", ("C:\\",), False, 7
+    )
+    target_binding = LocationBinding(
+        VolumeId("target", "NTFS"), "dst", "D:\\", ("D:\\",), False, 8
+    )
+    old_options = SyncOptions(
+        deletion_policy=DeletionPolicy.ADDITIVE,
+        preservation=PreservationPolicy(False, False, True),
+        filters=FilterSet(("*.tmp",)),
+        trash_on_update=False,
+        propagate_source_casing=True,
+    )
+    old_request = PlanRequest(
+        REQUEST_ID, "C:\\src", "D:\\dst", old_options,
+        source_binding, target_binding, True,
+    )
+
+    class Runtime(_PlanRuntime):
+        def __init__(self):
+            super().__init__(SimpleNamespace(plan=plan_value, request=old_request))
+            self.artifacts = {REQUEST_ID: self.artifact}
+            self.created = []
+            self.default_reads = 0
+
+        def read_setup_options(self):
+            self.default_reads += 1
+            return SetupOptionsView(
+                (),
+                "trash",
+                True,
+                PreservationSettingsView(False, True, False),
+                False,
+                False,
+            )
+
+        def get_plan(self, request_id):
+            return self.artifacts[request_id]
+
+        def resolve_reviewed_location(self, binding, *, selected_mount=None):
+            del selected_mount
+            return VolumeResolution(
+                VolumeResolutionState.RESOLVED,
+                binding,
+                binding.selected_mount + binding.volume_relative_path,
+                binding.selected_mount,
+                candidates=binding.expected_mounts,
+            )
+
+        def create_plan_request(self, request_id, source_path, target_path, **kwargs):
+            request = PlanRequest(
+                request_id, source_path, target_path, kwargs["options"],
+                kwargs["source_binding"], kwargs["target_binding"],
+                kwargs["verify_after_execute"],
+            )
+            self.created.append(request)
+            self.artifacts[request_id] = SimpleNamespace(plan=plan_value, request=request)
+            return request
+
+    class Observer:
+        def adopt(self, session_id, sink, stream):
+            del session_id, sink, stream
+            return lambda: None
+        def release(self, session_id):
+            del session_id
+        def close(self):
+            pass
+
+    runtime = Runtime()
+    dispatcher = _Dispatcher()
+    service = _service(runtime, dispatcher)
+    service._observer = Observer()
+    changed_defaults = service.read_setup_options()
+    assert changed_defaults.deletion_policy == "trash"
+    assert changed_defaults != SetupOptionsView(
+        old_options.filters.patterns,
+        old_options.deletion_policy.value,
+        old_options.trash_on_update,
+        PreservationSettingsView(
+            False,
+            old_options.preservation.preserve_created,
+            old_options.preservation.preserve_acl,
+        ),
+        old_options.propagate_source_casing,
+        old_request.verify_after_execute,
+    )
+    service.mutate_selection(
+        REQUEST_ID,
+        0,
+        deselect=(str(copied.op_id),),
+    )
+    old_selection = service.preview_selection(REQUEST_ID)
+    assert old_selection.user_deselected == (str(copied.op_id),)
+
+    started = service.start_task_plan_again(
+        "task-" + "a" * 32,
+        REQUEST_ID,
+        source_mount=None,
+        target_mount=None,
+        command_id=_opaque_id(301),
+        signature=("plan-again", REQUEST_ID),
+        delivery_factory=lambda _task_id: (lambda _update: None),
+    )
+
+    assert type(started) is TaskStartOutcome
+    assert started.start.task_id != "task-" + "a" * 32
+    assert started.start.session_id != PLAN_SESSION_ID
+    request = runtime.created[0]
+    assert request.request_id == started.start.request_id != REQUEST_ID
+    assert request.options == old_options
+    assert request.verify_after_execute
+    assert runtime.default_reads == 1
+    assert service.preview_selection(REQUEST_ID) == old_selection
+    fresh = service.preview_selection(request.request_id)
+    assert fresh.selected_operation_ids == (str(copied.op_id),)
+    assert fresh.user_deselected == ()
+    assert fresh.revision == 0
+
+    del runtime.artifacts[REQUEST_ID]
+    runtime.resolve_reviewed_location = lambda *_args, **_kwargs: pytest.fail(
+        "equal replay must precede reviewed-artifact and native resolution"
+    )
+    replay = service.start_task_plan_again(
+        "task-" + "a" * 32,
+        REQUEST_ID,
+        source_mount=None,
+        target_mount=None,
+        command_id=_opaque_id(301),
+        signature=("plan-again", REQUEST_ID),
+        delivery_factory=lambda _task_id: pytest.fail(
+            "equal replay must not recreate delivery"
+        ),
+    )
+    assert replay == started.start
+    assert len(dispatcher.submissions) == 1
+    assert runtime.default_reads == 1
+
+
+def test_m1_6_task_inventory_has_no_plan_and_retires_exact_details() -> None:
+    root = r"C:\inventory"
+    binding = LocationBinding(
+        VolumeId("inventory", "NTFS"), "inventory", "C:\\", ("C:\\",), False
+    )
+
+    class Runtime:
+        def __init__(self):
+            self.dropped = []
+
+        def admit_location_candidate(self, candidate):
+            return LocationCandidateResult(
+                candidate, LocationCandidateState.RESOLVED, binding, root, ("C:\\",)
+            )
+
+        def drop_inventory_details(self, request_id):
+            self.dropped.append(request_id)
+
+        def drop_execution_details(self, run_id):
+            pytest.fail(f"inventory must not own execution details: {run_id}")
+
+        def close(self):
+            pass
+
+    class Dispatcher(_Dispatcher):
+        record = None
+
+        def get(self, session_id):
+            assert self.record is not None
+            assert str(self.record.session_id) == session_id
+            return self.record
+
+        def shutdown(self, timeout):
+            del timeout
+            return SimpleNamespace(complete=True, unfinished=(), custody_released=True)
+
+    class Observer:
+        def adopt(self, session_id, sink, stream):
+            del session_id, sink, stream
+            return lambda: None
+        def release(self, session_id):
+            del session_id
+        def close(self):
+            pass
+
+    runtime = Runtime()
+    dispatcher = Dispatcher()
+    service = _service(runtime, dispatcher)
+    service._observer = Observer()
+    shell = service.create_task_shell(_opaque_id(310), lambda _task_id: None)
+    started = service.start_task_setup_inventory(
+        shell.task_id,
+        LocationCandidate.literal(root),
+        command_id=_opaque_id(311),
+        signature=("inventory", "root-choice"),
+        delivery_factory=lambda _task_id: (lambda _update: None),
+    )
+    assert type(started) is TaskStartOutcome
+    assert service._lifecycle._plans == {}
+    assert service._plan_selections == {}
+    request = dispatcher.submissions[0][1]
+    assert type(request) is InventoryRequest
+    assert request == InventoryRequest(
+        request_id=started.start.request_id,
+        root_path=root,
+        selected_mount="C:\\",
+    )
+    assert not hasattr(request, "source_path")
+    assert not hasattr(request, "target_path")
+
+    dispatcher.record = SessionRecord(
+        session_id=SessionId(started.start.session_id),
+        kind="inventory",
+        state=SessionState.COMPLETED,
+        resources=(),
+        checkpoint=None,
+        supports_pause=False,
+        admission_order=1,
+        created_at=NOW,
+        started_at=NOW,
+        ended_at=NOW,
+        result=OperationResult(SessionState.COMPLETED),
+    )
+    service.release_task_session(
+        shell.task_id,
+        started.start.session_id,
+        TaskTerminalDelivery(session_record_view(dispatcher.record)),
+    )
+    assert runtime.dropped == [started.start.request_id]
+    assert dispatcher.closed == [started.start.session_id]
 
 def test_br_g_16_shutdown_does_not_repopulate_a_late_session_receipt() -> None:
     entered = Event()

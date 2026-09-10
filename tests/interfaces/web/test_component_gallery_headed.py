@@ -2132,16 +2132,21 @@ def _run_gallery_mode(
         "namisync.interfaces.web.bridge.BridgeDispatcher"
     )
     assert result["production_command_names"] == [
+        "admit_location",
         "close_task",
         "create_task",
         "list_tasks",
         "next_events",
         "pick_folder",
+        "plan_again",
+        "prepare_setup",
         "read_cosmetic_section",
+        "read_setup",
         "readiness_echo",
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_inventory",
         "start_plan",
     ]
     assert result["combined_mapping_type"] == "mappingproxy"

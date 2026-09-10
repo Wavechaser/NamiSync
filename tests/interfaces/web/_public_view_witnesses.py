@@ -26,6 +26,7 @@ from namisync.interfaces.service import (
     SelectionPreviewView,
     SemanticSettingsPatchView,
     SemanticSettingsView,
+    SetupOptionsView,
     SessionEventView,
     SessionRecordView,
     ShutdownView,
@@ -89,6 +90,27 @@ PRESERVATION_JSON = {
     "preserve_ads": True,
     "preserve_created": False,
     "preserve_acl": True,
+}
+SETUP_PRESERVATION = PreservationSettingsView(False, True, False)
+SETUP_OPTIONS = SetupOptionsView(
+    ("*.tmp",),
+    "trash",
+    True,
+    SETUP_PRESERVATION,
+    False,
+    False,
+)
+SETUP_OPTIONS_JSON = {
+    "filters": ["*.tmp"],
+    "deletion_policy": "trash",
+    "trash_on_update": True,
+    "preservation": {
+        "preserve_ads": False,
+        "preserve_created": True,
+        "preserve_acl": False,
+    },
+    "propagate_source_casing": False,
+    "verify_after_execute": False,
 }
 SEMANTIC_SETTINGS = SemanticSettingsView(
     ("*.tmp", f"*{HOSTILE_TEXT}*"),
@@ -741,6 +763,9 @@ PUBLIC_VIEW_WITNESSES: dict[
     PreservationSettingsView: (
         PublicViewWitness("preservation-settings", PRESERVATION, PRESERVATION_JSON),
     ),
+    SetupOptionsView: (
+        PublicViewWitness("setup-options", SETUP_OPTIONS, SETUP_OPTIONS_JSON),
+    ),
     SemanticSettingsView: (
         PublicViewWitness(
             "semantic-settings",
@@ -1082,6 +1107,8 @@ PUBLIC_VIEW_WITNESSES: dict[
                 "session_id": None,
                 "session_state": None,
                 "session_released": False,
+                "task_kind": None,
+                "request_id": None,
             },
         ),
     ),
@@ -1096,6 +1123,8 @@ PUBLIC_VIEW_WITNESSES: dict[
                         "session_id": None,
                         "session_state": None,
                         "session_released": False,
+                        "task_kind": None,
+                        "request_id": None,
                     }
                 ]
             },

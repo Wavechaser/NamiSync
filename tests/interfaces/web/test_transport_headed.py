@@ -1008,8 +1008,12 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     dom = report["dom"]
 
     assert report["observed"].encode("utf-8") == evidence.corpus.encode("utf-8")
-    assert report["source_keys"] == ["display", "id"]
-    assert report["target_keys"] == ["display", "id"]
+    choice_keys = [
+        "candidates", "choice_id", "continuation_id", "detail",
+        "display", "location_id", "purpose", "state",
+    ]
+    assert report["source_keys"] == choice_keys
+    assert report["target_keys"] == choice_keys
     assert report["source_display"] == str(evidence.source)
     assert report["target_display"] == str(evidence.target)
     assert dom["element_children"] == 0
@@ -1017,29 +1021,39 @@ def test_br_g_32_hostile_text_crosses_real_return_transport_and_production_text_
     assert dom["script_count_after"] == dom["script_count_before"]
     assert dom["hostile_marker_defined"] is False
     assert result["production_command_names"] == [
+        "admit_location",
         "close_task",
         "create_task",
         "list_tasks",
         "next_events",
         "pick_folder",
+        "plan_again",
+        "prepare_setup",
         "read_cosmetic_section",
+        "read_setup",
         "readiness_echo",
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_inventory",
         "start_plan",
     ]
     assert result["combined_command_names"] == [
+        "admit_location",
         "close_task",
         "create_task",
         "list_tasks",
         "next_events",
         "pick_folder",
+        "plan_again",
+        "prepare_setup",
         "read_cosmetic_section",
+        "read_setup",
         "readiness_echo",
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_inventory",
         "start_plan",
         "test_report",
     ]
@@ -1083,7 +1097,7 @@ def test_br_g_32_native_picker_keeps_real_paths_in_server_slots(
         (call["source"], call["target"], call["deletion_policy"])
         for call in calls
     ] == [
-        (str(evidence.source), str(evidence.target), None),
+        (str(evidence.source), str(evidence.target), "trash"),
         (str(evidence.source), str(evidence.target), "trash"),
         (str(evidence.source), str(evidence.target), "trash"),
         (str(evidence.source), str(evidence.target), "trash"),
@@ -1115,16 +1129,21 @@ def test_br_g_32_origin_recheck_rejects_dispatch_independently(
     assert result["final_document_url"].endswith("/off_origin.html")
     assert result["final_document_url"] in result["committed_sources"]
     assert result["production_command_names"] == [
+        "admit_location",
         "close_task",
         "create_task",
         "list_tasks",
         "next_events",
         "pick_folder",
+        "plan_again",
+        "prepare_setup",
         "read_cosmetic_section",
+        "read_setup",
         "readiness_echo",
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_inventory",
         "start_plan",
     ]
     assert result["dispatcher_type"] == (
@@ -1302,10 +1321,11 @@ def test_br_g_33_real_webview2_recovers_only_from_explicit_transport_evidence(
     assert first["request_id"] != second["request_id"]
     assert first["payload"] == second["payload"]
     assert set(first["payload"]) == {
+        "task_id",
         "command_id",
         "source_id",
         "target_id",
-        "deletion_policy",
+        "options",
     }
 
 
@@ -1450,7 +1470,7 @@ def _run_transport_scenario(
             (call["source"], call["target"], call["deletion_policy"])
             for call in calls
         ] == [
-            (str(source), str(target), None),
+            (str(source), str(target), "trash"),
             (str(source), str(target), "trash"),
             (str(source), str(target), "trash"),
             (str(source), str(target), "trash"),

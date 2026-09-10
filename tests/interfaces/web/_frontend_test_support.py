@@ -29,6 +29,7 @@ INITIAL_ASSETS = {
     "rail.js",
     "readiness.js",
     "render.js",
+    "setup.js",
     "tokens.css",
     "theme.js",
     "tree.js",

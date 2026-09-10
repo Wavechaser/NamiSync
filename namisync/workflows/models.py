@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import ClassVar, Mapping, TypeAlias
+from typing import TYPE_CHECKING, ClassVar, Mapping, TypeAlias
 
 from namisync.core.execution import (
     ExecutionSet,
@@ -32,6 +32,9 @@ from namisync.workflows.views import (
     SemanticSettingsView,
 )
 
+if TYPE_CHECKING:
+    from namisync.workflows.inventory import LocationBinding
+
 
 @dataclass(frozen=True, slots=True)
 class PlanRequest:
@@ -39,6 +42,9 @@ class PlanRequest:
     source_path: str
     target_path: str
     options: SyncOptions = SyncOptions()
+    source_binding: LocationBinding | None = None
+    target_binding: LocationBinding | None = None
+    verify_after_execute: bool = False
 
 
 @dataclass(frozen=True, slots=True)

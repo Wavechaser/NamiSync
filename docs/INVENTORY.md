@@ -7,8 +7,9 @@ sideways-calling operation module: scanner observes, workflows coordinate, and
 database repositories/recorder retain state. The Stage 5 CLI exposes explicit
 location inventory and integrity starts through the shared service; desktop
 actions remain Stage 6. Shared location-candidate admission and bounded
-remembered-location reads are implemented workflow services. Setup widgets,
-cached desktop projections, ledger-current presentation and manual handoff
+remembered-location reads are implemented workflow services. Desktop Setup
+starts standalone inventory on a typed, picked or remembered root; cached
+desktop projections, ledger-current presentation and manual handoff
 remain accepted Stage 6 targets.
 
 ## Purpose
@@ -208,16 +209,17 @@ refuses before hashing.
 ## Stage 6 Desktop Contracts (Protocol Subset Active)
 
 Location-candidate admission is owned by the inventory workflow; INTERFACES
-owns its application entry points and future Setup integration. Paging belongs
+owns its application entry points and Setup integration. Paging belongs
 to PRESENTATION; external wire encoding to [BRIDGE.md](BRIDGE.md), with safety classification and active bounds in
 [DEFENSE.md](DEFENSE.md). Inventory consumes the shared workflow-owned location
 candidate pipeline and always re-admits a real start; a slot or
 `RootAuthority` is evidence, never cached authorization.
 
 The signed-64 scalar, full-width native identity, and event/persistence epoch
-consumed here are active. Remembered-location readback is implemented; its
-Setup widgets, desktop projection, paging and retention behavior below remain
-accepted but unrealized.
+consumed here are active. Remembered-location readback and Setup widgets are
+implemented. A standalone inventory task freezes only its admitted root,
+without sync options or a fabricated source/target pair. Desktop projection,
+paging and retention behavior below remain accepted but unrealized.
 
 The desktop inventory projection is one canonical server-side view over a
 complete immutable inventory generation. Search, filters, collapse, visible

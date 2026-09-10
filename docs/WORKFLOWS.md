@@ -14,8 +14,9 @@ preserve that provenance and executor continuation truth.
 Stage 5.5 facade integration is complete and the planning-source ownership wall is
 active. Shared location-candidate admission and bounded run-derived remembered
 locations are also implemented; their current behavior is owned by INVENTORY
-and DATABASE, with application entry points in INTERFACES. Setup widgets remain
-pending. Stage 6 desktop behavior is finalized in `BRIDGE.md`; queue durability,
+and DATABASE, with application entry points in INTERFACES. Desktop Setup now
+freezes complete backend-canonical options and reviewed location bindings.
+Stage 6 desktop wire behavior is owned by `BRIDGE.md`; queue durability,
 maintenance/retention, replay, undo/repair, and ingest remain later work.
 
 ## Stage 6 Second-Half Workflow Contract
@@ -330,6 +331,16 @@ selection reopening are deferred, not implicit workflow recovery. Explicit
 Plan again resolves the retained reviewed location identities into fresh Setup,
 then creates a new task with fresh scans and default selection, requiring new
 review rather than replacing the old artifact or carrying authorization.
+
+Desktop plan requests retain the exact admitted source/target `LocationBinding`
+values and linked-verification choice. Preparation and artifact publication
+validate these against the observed plan roots and volume identities; a
+pre-scan remembered match alone cannot authorize a mismatched artifact.
+Existing direct callers may omit bindings, but those legacy artifacts cannot
+be used for Plan again. Fresh Plan again resolves the retained identities,
+accepts only explicit current ambiguity choices, and keeps the old canonical
+options without rereading settings. Equal successful command replay returns
+before accessing the old artifact or current native mounts.
 
 ### M0 implementation
 

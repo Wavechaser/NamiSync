@@ -25,9 +25,14 @@ const COMMAND_POLICY_JSON = `{
   "pick_folder": {"timeout": "interactive", "retry": "none", "phase": "open"},
   "create_task": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
   "list_tasks": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "read_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "prepare_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "admit_location": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "read_cosmetic_section": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "replace_cosmetic_section": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "start_plan": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
+  "start_inventory": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
+  "plan_again": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
   "next_events": {"timeout": "drain-30-seconds", "retry": "none", "phase": "open"},
   "release_terminal_session": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"},
   "close_task": {"timeout": "mutation-30-seconds", "retry": "same-payload-bounded", "phase": "open"}
@@ -56,6 +61,16 @@ const CREATE_TASK_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.create_task.timeout];
 const LIST_TASKS_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.list_tasks.timeout];
+const SETUP_READ_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.read_setup.timeout];
+const SETUP_PREPARE_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.prepare_setup.timeout];
+const LOCATION_ADMIT_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.admit_location.timeout];
+const INVENTORY_START_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.start_inventory.timeout];
+const PLAN_AGAIN_TIMEOUT_MS =
+  TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.plan_again.timeout];
 const DRAIN_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.next_events.timeout];
 const SESSION_RELEASE_TIMEOUT_MS =
@@ -63,6 +78,8 @@ const SESSION_RELEASE_TIMEOUT_MS =
 const TASK_CLOSE_TIMEOUT_MS =
   TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.close_task.timeout];
 const DRAIN_MAX_UPDATES = 64;
+const LOCATION_MOUNT_CANDIDATE_LIMIT = 27;
+const PLAN_AGAIN_MOUNT_CANDIDATE_LIMIT = 53;
 const DRAIN_RECOVERY_DELAYS_MS = Object.freeze([
   50,
   100,
@@ -89,6 +106,15 @@ const TASK_RECORDING_REASONS_V5 = Object.freeze([
 ]);
 const DISPOSITIONS = Object.freeze(["ran", "unrun"]);
 const THEMES = Object.freeze(["system", "light", "dark"]);
+const LOCATION_PURPOSES = Object.freeze(["source", "target", "inventory"]);
+const LOCATION_STATES = Object.freeze([
+  "resolved", "invalid_path", "missing", "not_directory", "reparse",
+  "placeholder", "remote", "unsupported_volume", "offline", "ambiguous",
+  "unavailable", "changed",
+]);
+const PLAN_AGAIN_STATES = Object.freeze([
+  "resolved", "offline", "ambiguous", "missing", "unavailable", "changed",
+]);
 const COSMETIC_DISPOSITIONS = Object.freeze(["applied", "noop", "conflict"]);
 const APPEARANCE_SECTION = "appearance";
 const APPEARANCE_VALUE_VERSION = 1;
@@ -282,14 +308,24 @@ export function markBridgeOperational() {
 }
 
 export async function pickFolder(purpose) {
-  if (purpose !== "source" && purpose !== "target") {
-    throw new TypeError("purpose must be source or target");
+  if (!isLocationPurpose(purpose)) {
+    throw new TypeError("purpose must be source, target, or inventory");
   }
   return dispatchInteractive(
     "pick_folder",
     Object.freeze({ purpose }),
-    validatePickFolderResult,
+    (value) => value === null || (
+      validateLocationChoice(value) && value.purpose === purpose
+    ),
   );
+}
+
+export class TaskCreateUncertainError extends BridgeTransportError {
+  constructor(retry) {
+    super("The task-creation response could not be confirmed.");
+    this.name = "TaskCreateUncertainError";
+    this.retry = retry;
+  }
 }
 
 export function dispatchInteractive(command, payload, validateResult) {
@@ -306,55 +342,56 @@ export function dispatchInteractive(command, payload, validateResult) {
   return dispatchAttempt(command, payload, validateResult, null);
 }
 
-export async function startPlan(sourceId, targetId, deletionPolicy = null) {
+export function startPlan(taskId, sourceId, targetId, options) {
   if (
-    typeof sourceId !== "string" ||
-    typeof targetId !== "string" ||
-    !SLOT_PATTERN.test(sourceId) ||
-    !SLOT_PATTERN.test(targetId)
+    typeof taskId !== "string" || !TASK_PATTERN.test(taskId) ||
+    typeof sourceId !== "string" || !SLOT_PATTERN.test(sourceId) ||
+    typeof targetId !== "string" || !SLOT_PATTERN.test(targetId) ||
+    !isSetupOptions(options)
   ) {
-    throw new TypeError("startPlan requires source and target slot ids");
+    throw new TypeError("startPlan requires task, choices, and complete options");
   }
-  if (
-    deletionPolicy !== null &&
-    deletionPolicy !== "trash" &&
-    deletionPolicy !== "additive"
-  ) {
-    throw new TypeError("deletionPolicy must be null, trash, or additive");
-  }
-  const payload = Object.freeze({
+  return submitStart(Object.freeze({
+    task_id: taskId,
     command_id: mintId(),
     source_id: sourceId,
     target_id: targetId,
-    deletion_policy: deletionPolicy,
-  });
-  let automaticReplayUsed = false;
-  const submit = async () => {
-    try {
-      return await startPlanAttempt(payload);
-    } catch (error) {
-      if (!isUncertainStartPlanFailure(error)) {
-        throw error;
-      }
-      if (!automaticReplayUsed) {
-        automaticReplayUsed = true;
-        try {
-          return await startPlanAttempt(payload);
-        } catch (replayError) {
-          if (!isUncertainStartPlanFailure(replayError)) {
-            throw replayError;
-          }
-        }
-      }
-      throw new StartPlanUncertainError(submit);
-    }
-  };
-  return submit();
+    options: freezeJson(options),
+  }), "start_plan", START_PLAN_TIMEOUT_MS);
+}
+
+export function startInventory(taskId, rootId) {
+  if (
+    typeof taskId !== "string" || !TASK_PATTERN.test(taskId) ||
+    typeof rootId !== "string" || !SLOT_PATTERN.test(rootId)
+  ) {
+    throw new TypeError("startInventory requires a task and inventory choice");
+  }
+  return submitStart(Object.freeze({
+    task_id: taskId,
+    command_id: mintId(),
+    root_id: rootId,
+  }), "start_inventory", INVENTORY_START_TIMEOUT_MS);
+}
+
+export function planAgain(taskId, sourceMount = null, targetMount = null) {
+  if (
+    typeof taskId !== "string" || !TASK_PATTERN.test(taskId) ||
+    !isOptionalPath(sourceMount) || !isOptionalPath(targetMount)
+  ) {
+    throw new TypeError("planAgain requires a task and optional current mounts");
+  }
+  return submitStart(Object.freeze({
+    task_id: taskId,
+    command_id: mintId(),
+    source_mount: sourceMount,
+    target_mount: targetMount,
+  }), "plan_again", PLAN_AGAIN_TIMEOUT_MS);
 }
 
 export async function createTask() {
   const payload = Object.freeze({ command_id: mintId() });
-  let replayUsed = false;
+  let automaticReplayUsed = false;
   const submit = async () => {
     try {
       return await dispatchAttempt(
@@ -365,11 +402,22 @@ export async function createTask() {
         true,
       );
     } catch (error) {
-      if (!isUncertainStartPlanFailure(error) || replayUsed) {
-        throw error;
+      if (!isUncertainStartPlanFailure(error)) throw error;
+      if (!automaticReplayUsed) {
+        automaticReplayUsed = true;
+        try {
+          return await dispatchAttempt(
+            "create_task",
+            payload,
+            validateTaskShellResult,
+            CREATE_TASK_TIMEOUT_MS,
+            true,
+          );
+        } catch (replayError) {
+          if (!isUncertainStartPlanFailure(replayError)) throw replayError;
+        }
       }
-      replayUsed = true;
-      return submit();
+      throw new TaskCreateUncertainError(submit);
     }
   };
   return submit();
@@ -591,14 +639,84 @@ export async function closeTask(taskId, sessionId = null) {
   return submit();
 }
 
-function startPlanAttempt(payload) {
-  return dispatchAttempt(
-    "start_plan",
-    payload,
-    validateStartPlanResult,
-    START_PLAN_TIMEOUT_MS,
-    true,
+function submitStart(payload, command, timeoutMs) {
+  let automaticReplayUsed = false;
+  const validateResult = (value) => (
+    validateStartPlanResult(value)
+    && (command === "plan_again"
+      ? value.task_id !== payload.task_id
+      : value.task_id === payload.task_id)
   );
+  const submit = async () => {
+    try {
+      return await dispatchAttempt(command, payload, validateResult, timeoutMs, true);
+    } catch (error) {
+      if (!isUncertainStartPlanFailure(error)) throw error;
+      if (!automaticReplayUsed) {
+        automaticReplayUsed = true;
+        try {
+          return await dispatchAttempt(command, payload, validateResult, timeoutMs, true);
+        } catch (replayError) {
+          if (!isUncertainStartPlanFailure(replayError)) throw replayError;
+        }
+      }
+      throw new StartPlanUncertainError(submit);
+    }
+  };
+  return submit();
+}
+
+export function admitLocation(purpose, value) {
+  if (!isLocationPurpose(purpose)) {
+    throw new TypeError("admitLocation requires a valid purpose");
+  }
+  let payload;
+  if (isLocationCandidate(value)) {
+    payload = Object.freeze({ purpose, candidate: freezeJson(value) });
+  } else if (isLocationContinuation(value)) {
+    payload = Object.freeze({
+      purpose,
+      continuation_id: value.continuation_id,
+      mount_index: value.mount_index,
+    });
+  } else {
+    throw new TypeError("admitLocation requires a candidate or continuation choice");
+  }
+  return dispatchAttempt(
+    "admit_location",
+    payload,
+    (result) => validateLocationChoice(result) && result.purpose === purpose,
+    LOCATION_ADMIT_TIMEOUT_MS,
+  );
+}
+
+export async function readSetup(taskId = null) {
+  if (taskId !== null && (typeof taskId !== "string" || !TASK_PATTERN.test(taskId))) {
+    throw new TypeError("readSetup requires a task id or null");
+  }
+  const payload = Object.freeze({ task_id: taskId });
+  const validateResult = (value) => (
+    validateSetupReadResult(value) && value.task_id === taskId
+  );
+  try {
+    return await dispatchAttempt("read_setup", payload, validateResult, SETUP_READ_TIMEOUT_MS);
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return dispatchAttempt("read_setup", payload, validateResult, SETUP_READ_TIMEOUT_MS);
+}
+
+export async function prepareSetup(options) {
+  if (!isSetupOptions(options)) {
+    throw new TypeError("prepareSetup requires complete Setup options");
+  }
+  const payload = Object.freeze({ options: freezeJson(options) });
+  try {
+    return await dispatchAttempt("prepare_setup", payload, validateSetupOptions, SETUP_PREPARE_TIMEOUT_MS);
+  } catch (error) {
+    if (!(error instanceof BridgeTransportError)) throw error;
+  }
+  return dispatchAttempt("prepare_setup", payload, validateSetupOptions, SETUP_PREPARE_TIMEOUT_MS);
 }
 
 async function dispatchAttempt(
@@ -1224,14 +1342,91 @@ function validateResponse(response, requestId, validateResult) {
   throw new BridgeCommandError(response.error.code, expectedMessage);
 }
 
-function validatePickFolderResult(value) {
-  return (
-    value === null ||
-    (isExactObject(value, ["id", "display"]) &&
-      typeof value.id === "string" &&
-      SLOT_PATTERN.test(value.id) &&
-      isValidUnicode(value.display))
-  );
+function validateSetupReadResult(value) {
+  if (!isExactObject(value, ["task_id", "snapshot", "recents"])) return false;
+  if (value.task_id !== null && (typeof value.task_id !== "string" || !TASK_PATTERN.test(value.task_id))) return false;
+  if (!validateSetupSnapshot(value.snapshot)) return false;
+  if (value.task_id === null) return validateRecents(value.recents);
+  return value.recents === null;
+}
+
+function validateRecents(value) {
+  return isExactObject(value, ["sources", "targets", "pairs"])
+    && Array.isArray(value.sources)
+    && Array.isArray(value.targets)
+    && Array.isArray(value.pairs)
+    && value.sources.length <= 5 && value.targets.length <= 5 && value.pairs.length <= 5
+    && value.sources.every(validateRecentLocation)
+    && value.targets.every(validateRecentLocation)
+    && value.pairs.every((pair) => isExactObject(pair, ["mapping_id", "source", "target", "last_used_at"])
+    && isLocationId(pair.mapping_id) && validateRecentLocation(pair.source)
+      && validateRecentLocation(pair.target) && isUtcTimestamp(pair.last_used_at));
+}
+
+function validateRecentLocation(value) {
+  return isExactObject(value, ["location_id", "display", "last_used_at"])
+    && isLocationId(value.location_id) && isValidUnicode(value.display)
+    && isUtcTimestamp(value.last_used_at);
+}
+
+function validateSetupSnapshot(value) {
+  if (!isExactObject(value, ["setup_state", "task_kind", "source", "target", "root", "options", "plan_again"])) return false;
+  if (!["default", "frozen"].includes(value.setup_state) || ![null, "sync-plan", "inventory"].includes(value.task_kind)) return false;
+  if (![value.source, value.target, value.root].every(validateSetupLocation)) return false;
+  if (value.options !== null && !validateSetupOptions(value.options)) return false;
+  if (value.plan_again !== null && !validatePlanAgainReadiness(value.plan_again)) return false;
+  if (value.setup_state === "default") {
+    return value.task_kind === null
+      && value.source === null && value.target === null && value.root === null
+      && value.options !== null && value.plan_again === null;
+  }
+  if (value.task_kind === "sync-plan") {
+    return value.source !== null && value.target !== null && value.root === null
+      && value.options !== null;
+  }
+  if (value.task_kind === "inventory") {
+    return value.source === null && value.target === null && value.root !== null
+      && value.options === null && value.plan_again === null;
+  }
+  return false;
+}
+
+function validateSetupLocation(value) {
+  return value === null || (isExactObject(value, ["display", "location_id"])
+    && isValidUnicode(value.display)
+    && (value.location_id === null || isLocationId(value.location_id)));
+}
+
+function validatePlanAgainReadiness(value) {
+  return isExactObject(value, ["source_state", "source_candidates", "target_state", "target_candidates"])
+    && PLAN_AGAIN_STATES.includes(value.source_state)
+    && PLAN_AGAIN_STATES.includes(value.target_state)
+    && validatePathList(value.source_candidates, PLAN_AGAIN_MOUNT_CANDIDATE_LIMIT)
+    && validatePathList(value.target_candidates, PLAN_AGAIN_MOUNT_CANDIDATE_LIMIT);
+}
+
+function validateLocationChoice(value) {
+  if (!isExactObject(value, ["purpose", "state", "choice_id", "continuation_id", "display", "location_id", "candidates", "detail"])) return false;
+  if (!isLocationPurpose(value.purpose) || !LOCATION_STATES.includes(value.state)
+    || !validatePathList(value.candidates)
+    || (value.display !== null && !isValidUnicode(value.display))
+    || (value.location_id !== null && !isLocationId(value.location_id))
+    || (value.detail !== null && !isValidUnicode(value.detail))) return false;
+  if (value.state === "resolved") {
+    return typeof value.choice_id === "string" && SLOT_PATTERN.test(value.choice_id)
+      && value.continuation_id === null;
+  }
+  if (value.state === "ambiguous") {
+    return value.choice_id === null
+      && (value.continuation_id === null
+        || (typeof value.continuation_id === "string"
+          && SLOT_PATTERN.test(value.continuation_id)));
+  }
+  return value.choice_id === null && value.continuation_id === null;
+}
+
+function validateSetupOptions(value) {
+  return isSetupOptions(value);
 }
 
 function validateStartPlanResult(value) {
@@ -1257,7 +1452,7 @@ function validateTaskShellResult(value) {
 function validateTaskSummary(value) {
   return (
     isExactObject(value, [
-      "task_id", "session_id", "session_state", "session_released",
+      "task_id", "session_id", "session_state", "session_released", "task_kind", "request_id",
     ]) &&
     typeof value.task_id === "string" &&
     TASK_PATTERN.test(value.task_id) &&
@@ -1267,6 +1462,9 @@ function validateTaskSummary(value) {
       value.session_state,
     ) &&
     typeof value.session_released === "boolean" &&
+    [null, "sync-plan", "inventory"].includes(value.task_kind) &&
+    (value.request_id === null || (typeof value.request_id === "string" && ID_PATTERN.test(value.request_id))) &&
+    ((value.task_kind === null) === (value.request_id === null)) &&
     ((value.session_state === null) === (value.session_id === null)) &&
     !(value.session_released && [null, "active"].includes(value.session_state))
   );
@@ -2336,6 +2534,70 @@ function isExactObject(value, keys) {
   }
   const actual = Object.keys(value);
   return actual.length === keys.length && keys.every((key) => actual.includes(key));
+}
+
+function isLocationId(value) {
+  return isScalar64(value) && value !== "0";
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    && Object.getPrototypeOf(value) === Object.prototype;
+}
+
+function isLocationPurpose(value) {
+  return typeof value === "string" && LOCATION_PURPOSES.includes(value);
+}
+
+function isOptionalPath(value) {
+  return value === null || (typeof value === "string" && value.length > 0 && isValidUnicode(value));
+}
+
+function validatePathList(value, maximumCount = LOCATION_MOUNT_CANDIDATE_LIMIT) {
+  return Array.isArray(value) && value.length <= maximumCount && value.every((item) => typeof item === "string" && item.length > 0 && isValidUnicode(item));
+}
+
+function isLocationCandidate(value) {
+  if (!isPlainObject(value)) return false;
+  if (isExactObject(value, ["kind", "path", "selected_mount"])) {
+    return value.kind === "literal_path" && typeof value.path === "string" && value.path.length > 0
+      && isValidUnicode(value.path) && isOptionalPath(value.selected_mount);
+  }
+  return isExactObject(value, ["kind", "location_id", "selected_mount"])
+    && value.kind === "remembered_location" && isLocationId(value.location_id)
+    && isOptionalPath(value.selected_mount);
+}
+
+function isLocationContinuation(value) {
+  return isPlainObject(value)
+    && isExactObject(value, ["continuation_id", "mount_index"])
+    && typeof value.continuation_id === "string"
+    && SLOT_PATTERN.test(value.continuation_id)
+    && Number.isSafeInteger(value.mount_index)
+    && value.mount_index >= 0;
+}
+
+function isSetupOptions(value) {
+  return isExactObject(value, ["filters", "deletion_policy", "trash_on_update", "preservation", "propagate_source_casing", "verify_after_execute"])
+    && Array.isArray(value.filters) && value.filters.length <= 64
+    && value.filters.every((filter) => typeof filter === "string" && filter.length > 0 && isValidUnicode(filter) && new TextEncoder().encode(filter).length <= 1024)
+    && new TextEncoder().encode(value.filters.join("")).length <= 16384
+    && ["trash", "additive"].includes(value.deletion_policy)
+    && typeof value.trash_on_update === "boolean"
+    && isExactObject(value.preservation, ["preserve_ads", "preserve_created", "preserve_acl"])
+    && value.preservation.preserve_ads === false
+    && typeof value.preservation.preserve_created === "boolean"
+    && typeof value.preservation.preserve_acl === "boolean"
+    && typeof value.propagate_source_casing === "boolean"
+    && typeof value.verify_after_execute === "boolean";
+}
+
+function freezeJson(value) {
+  if (Array.isArray(value)) return Object.freeze(value.map(freezeJson));
+  if (isPlainObject(value)) {
+    return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, item]) => [key, freezeJson(item)])));
+  }
+  return value;
 }
 
 function isValidUnicode(value) {

@@ -745,6 +745,19 @@ defect, and move implementation-level test choreography out of the log.
 
 ## INTERFACES
 
+### Desktop material composition
+
+- MINOR - DEFERRED (2026-09-11). Transparent-host color composition
+  interaction. The user reports dark flyout shadow halos over cards with Mica,
+  SDR automatic color management enabled and 10-bpc output. Repeated same-display
+  comparisons remove the halo with automatic color management off at unchanged
+  10 bpc; native probes confirm the Advanced Color/WCG transition. A fully opaque
+  diagnostic host also appears unaffected with matching card and popup CSS.
+  Cause: unconfirmed interaction in the transparent presentation path; evidence
+  does not identify WebView2, Mica, DWM or driver fault. Mica is retained and no
+  workaround is implemented. Investigation is deferred indefinitely, with no
+  M1-6 fix scheduled. GUI-D2/D3 evidence remains in `build/gui-tuning/halo-10bit/`.
+
 ### Application task lifecycle
 
 - MODERATE - FIXED (2026-09-02). Plan-selection retirement race. A selection

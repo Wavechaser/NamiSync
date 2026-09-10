@@ -127,8 +127,21 @@ const railSource = (await readFile(process.argv[3], "utf8"))
   .replace("./render.js", renderUrl);
 const panelSource = (await readFile(process.argv[4], "utf8"))
   .replace("./render.js", renderUrl);
+const setupUrl = moduleUrl(`
+  export function createSetupPanel() {
+    const element = new HTMLElement("div");
+    return { element, render() {} };
+  }
+`);
+const preparedPanelSource = panelSource.replace("./setup.js", setupUrl);
 const bridgeUrl = moduleUrl(`
   export class BridgeTransportError extends Error {}
+  export class StartPlanUncertainError extends BridgeTransportError {
+    constructor(retry) { super(); this.retry = retry; }
+  }
+  export class TaskCreateUncertainError extends BridgeTransportError {
+    constructor(retry) { super(); this.retry = retry; }
+  }
   export const acknowledgeShellReady = () => Promise.resolve({ acknowledged: true });
   export const echoReadiness = () => Promise.resolve({ acknowledged: true });
   export const whenBridgeApiReady = () => Promise.resolve();
@@ -136,6 +149,23 @@ const bridgeUrl = moduleUrl(`
   export const createTask = () => globalThis.taskHarness.createTask();
   export const closeTask = (...args) => globalThis.taskHarness.closeTask(...args);
   export const listTasks = () => globalThis.taskHarness.listTasks();
+  export const readSetup = (taskId = null) => Promise.resolve({
+    task_id: taskId,
+    snapshot: {
+      setup_state: "default", task_kind: null, source: null, target: null, root: null,
+      options: { filters: [], deletion_policy: "trash", trash_on_update: false,
+        preservation: { preserve_ads: false, preserve_created: true, preserve_acl: false },
+        propagate_source_casing: false, verify_after_execute: false },
+      plan_again: null,
+    },
+    recents: taskId === null ? { sources: [], targets: [], pairs: [] } : null,
+  });
+  export const admitLocation = () => Promise.reject(new BridgeTransportError());
+  export const pickFolder = () => Promise.reject(new BridgeTransportError());
+  export const prepareSetup = () => Promise.reject(new BridgeTransportError());
+  export const startPlan = () => Promise.reject(new BridgeTransportError());
+  export const startInventory = () => Promise.reject(new BridgeTransportError());
+  export const planAgain = () => Promise.reject(new BridgeTransportError());
   export const startTaskDrain = (...args) => globalThis.taskHarness.startTaskDrain(...args);
 `);
 const readinessUrl = moduleUrl(`
@@ -154,14 +184,14 @@ const themeUrl = moduleUrl(`
 let appSource = await readFile(process.argv[2], "utf8");
 appSource = appSource.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, startTaskDrain, whenBridgeApiReady } from "${bridgeUrl}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeUrl}";`,
 );
 appSource = appSource
   .replace("./readiness.js", readinessUrl)
   .replace("./appearance.js", appearanceUrl)
   .replace("./theme.js", themeUrl)
   .replace("./rail.js", moduleUrl(railSource))
-  .replace("./panels.js", moduleUrl(panelSource))
+  .replace("./panels.js", moduleUrl(preparedPanelSource))
   .replace("./render.js", renderUrl);
 
 function walk(root) {

@@ -1,7 +1,13 @@
 """Workflow coordination and local M0 composition for NamiSync."""
 
 from namisync.core.integrity import IntegrityMode
-from namisync.core.planning import DeletionPolicy, SyncOptions
+from namisync.core.models import VolumeId
+from namisync.core.planning import (
+    DeletionPolicy,
+    FilterSet,
+    PreservationPolicy,
+    SyncOptions,
+)
 from namisync.workflows.inventory import (
     IntegrityRequest,
     InventoryDetails,
@@ -10,12 +16,14 @@ from namisync.workflows.inventory import (
     LocationCandidateKind,
     LocationCandidateResult,
     LocationCandidateState,
+    LocationBinding,
     RememberedLocation,
     RememberedLocations,
     RememberedPair,
     VolumeResolution,
     VolumeResolutionRequired,
     VolumeResolutionState,
+    resolve_reviewed_binding,
 )
 from namisync.workflows.database_pair import DatabasePairContract
 from namisync.workflows.models import (
@@ -80,6 +88,7 @@ __all__ = [
     "EXECUTION_KIND",
     "ExecutionDetails",
     "ExecutionRequest",
+    "FilterSet",
     "HistoryEventPageView",
     "HistoryEventView",
     "HistoryItemPageView",
@@ -93,19 +102,24 @@ __all__ = [
     "LocationCandidateKind",
     "LocationCandidateResult",
     "LocationCandidateState",
+    "LocationBinding",
     "LocalWorkflowRuntime",
     "PLAN_KIND",
     "PlanRequest",
     "PlanReview",
+    "PreservationPolicy",
     "REBASELINE_KIND",
     "RememberedLocation",
     "RememberedLocations",
     "RememberedPair",
     "SyncDependencies",
+    "SyncOptions",
     "VERIFY_KIND",
     "VolumeResolution",
     "VolumeResolutionRequired",
     "VolumeResolutionState",
+    "VolumeId",
+    "resolve_reviewed_binding",
     "default_database_paths",
     "integrity_request",
     "run_execution",

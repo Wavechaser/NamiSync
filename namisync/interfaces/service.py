@@ -25,20 +25,26 @@ from namisync.workflows import (
     BASELINE_KIND,
     DatabasePairContract,
     EXECUTION_KIND,
+    DeletionPolicy,
+    FilterSet,
     HistoryEventPageView,
     HistoryItemPageView,
     HistoryRunSummaryView,
     INVENTORY_KIND,
     PLAN_KIND,
+    PreservationPolicy,
     REBASELINE_KIND,
     VERIFY_KIND,
     InventoryRequest,
     LocationCandidate,
     LocationCandidateResult,
     LocationCandidateState,
+    LocationBinding,
     LocalWorkflowRuntime,
     RememberedLocations,
+    SyncOptions,
     VolumeResolutionRequired,
+    VolumeResolutionState,
     default_database_paths,
     integrity_request,
 )
@@ -63,6 +69,7 @@ from namisync.workflows.views import (
     PreservationSettingsView,
     SemanticSettingsPatchView,
     SemanticSettingsView,
+    SetupOptionsView,
     SessionEventView,
     SessionRecordView,
     inventory_row_view,
@@ -89,10 +96,14 @@ from namisync.interfaces.task_port import (
     TaskDeliveryFactory,
     TaskDeliverySink,
     TaskIntentConflictError,
+    PlanAgainReadinessView,
     TaskSessionReleaseView,
     TaskShellDeliveryFactory,
     TaskShellView,
     TaskStartView,
+    TaskSetupLocationView,
+    TaskSetupSnapshotView,
+    TaskStartOutcome,
     TaskTerminalDelivery,
     TaskUnavailableError,
 )
@@ -344,6 +355,359 @@ class NamiSyncService:
     def remembered_locations(self) -> RememberedLocations:
         self._require_open()
         return self._runtime.remembered_locations()
+
+    def read_setup_options(self) -> SetupOptionsView:
+        self._require_open()
+        return self._runtime.read_setup_options()
+
+    def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView:
+        self._require_open()
+        return self._runtime.prepare_setup_options(value)
+
+    def start_task_setup_plan(
+        self,
+        task_id: str,
+        source: LocationCandidate,
+        target: LocationCandidate,
+        options: SetupOptionsView,
+        *,
+        command_id: str,
+        signature: tuple[object, ...],
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView | TaskStartOutcome:
+        """Attach one fully admitted plan to an exact published blank task."""
+
+        if not callable(delivery_factory):
+            raise TypeError("task delivery factory must be callable")
+        with self._lifecycle.command_guard(command_id):
+            replay = self._lifecycle.replay_start(
+                command_id,
+                "task-plan",
+                signature,
+            )
+            if replay is not None:
+                if replay.task_id != task_id:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                return TaskStartView(task_id, replay.request_id, replay.session_id)
+            canonical = self._runtime.prepare_setup_options(options)
+            source_result = self._runtime.admit_location_candidate(source)
+            target_result = self._runtime.admit_location_candidate(target)
+            refused = next(
+                (
+                    value
+                    for value in (source_result, target_result)
+                    if value.state is not LocationCandidateState.RESOLVED
+                ),
+                None,
+            )
+            if refused is not None:
+                raise SyncPathInputError(
+                    refused.detail or refused.state.value,
+                    refused,
+                )
+            try:
+                self._runtime.admit_plan_locations(
+                    source_result.root_path,
+                    target_result.root_path,
+                )
+            except ValueError as error:
+                raise SyncPathInputError(str(error)) from error
+            assert source_result.root_path is not None
+            assert target_result.root_path is not None
+            assert source_result.binding is not None
+            assert target_result.binding is not None
+            try:
+                self._lifecycle.begin_task_shell_start(
+                    task_id,
+                    command_id,
+                    "task-plan",
+                    signature,
+                )
+            except LifecycleReceiptConflictError:
+                raise TaskIntentConflictError("task command intent conflicts") from None
+            except LifecycleAssociationError as error:
+                raise TaskUnavailableError("task is unavailable") from error
+            try:
+                sink = delivery_factory(task_id)
+                if not callable(sink):
+                    raise TypeError("task delivery factory must return a sink")
+                request = self._runtime.create_plan_request(
+                    uuid4().hex,
+                    source_result.root_path,
+                    target_result.root_path,
+                    options=_setup_sync_options(canonical),
+                    source_binding=source_result.binding,
+                    target_binding=target_result.binding,
+                    verify_after_execute=canonical.verify_after_execute,
+                )
+                session_id, receipt = self._submit_session(
+                    PLAN_KIND,
+                    request,
+                    effect_kind="task-plan",
+                    command_id=command_id,
+                    signature=signature,
+                    request_id=request.request_id,
+                    observation_sink=sink,
+                    task_id=task_id,
+                )
+                start = TaskStartView(task_id, receipt.request_id, str(session_id))
+                snapshot = TaskSetupSnapshotView(
+                    "frozen",
+                    "sync-plan",
+                    _setup_location(source_result),
+                    _setup_location(target_result),
+                    None,
+                    canonical,
+                )
+                return TaskStartOutcome(start, snapshot)
+            except BaseException:
+                self._lifecycle.abort_task_start(task_id)
+                raise
+
+    def start_task_setup_inventory(
+        self,
+        task_id: str,
+        root: LocationCandidate,
+        *,
+        command_id: str,
+        signature: tuple[object, ...],
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView | TaskStartOutcome:
+        """Attach one standalone inventory session to a blank task."""
+
+        if not callable(delivery_factory):
+            raise TypeError("task delivery factory must be callable")
+        with self._lifecycle.command_guard(command_id):
+            replay = self._lifecycle.replay_start(
+                command_id,
+                "task-inventory",
+                signature,
+            )
+            if replay is not None:
+                if replay.task_id != task_id:
+                    raise TaskIntentConflictError("task command intent conflicts")
+                return TaskStartView(task_id, replay.request_id, replay.session_id)
+            admitted = self._runtime.admit_location_candidate(root)
+            if admitted.state is not LocationCandidateState.RESOLVED:
+                raise SyncPathInputError(
+                    admitted.detail or admitted.state.value,
+                    admitted,
+                )
+            assert admitted.root_path is not None
+            assert admitted.binding is not None
+            try:
+                self._lifecycle.begin_task_shell_start(
+                    task_id,
+                    command_id,
+                    "task-inventory",
+                    signature,
+                )
+            except LifecycleReceiptConflictError:
+                raise TaskIntentConflictError("task command intent conflicts") from None
+            except LifecycleAssociationError as error:
+                raise TaskUnavailableError("task is unavailable") from error
+            try:
+                sink = delivery_factory(task_id)
+                if not callable(sink):
+                    raise TypeError("task delivery factory must return a sink")
+                request_id = uuid4().hex
+                request = InventoryRequest(
+                    request_id=request_id,
+                    root_path=(
+                        admitted.root_path
+                        if admitted.binding.location_id is None
+                        else None
+                    ),
+                    location_id=admitted.binding.location_id,
+                    selected_mount=admitted.binding.selected_mount,
+                )
+                session_id, receipt = self._submit_session(
+                    INVENTORY_KIND,
+                    request,
+                    effect_kind="task-inventory",
+                    command_id=command_id,
+                    signature=signature,
+                    request_id=request_id,
+                    observation_sink=sink,
+                    task_id=task_id,
+                    detail_owner=("inventory", request_id),
+                )
+                start = TaskStartView(task_id, receipt.request_id, str(session_id))
+                snapshot = TaskSetupSnapshotView(
+                    "frozen",
+                    "inventory",
+                    None,
+                    None,
+                    _setup_location(admitted),
+                    None,
+                )
+                return TaskStartOutcome(start, snapshot)
+            except BaseException:
+                self._lifecycle.abort_task_start(task_id)
+                raise
+
+    def read_plan_setup(self, request_id: str) -> TaskSetupSnapshotView:
+        artifact = self._runtime.get_plan(request_id)
+        request = artifact.request
+        source_binding = request.source_binding
+        target_binding = request.target_binding
+        readiness = None
+        if (
+            type(source_binding) is LocationBinding
+            and type(target_binding) is LocationBinding
+        ):
+            source = self._runtime.resolve_reviewed_location(source_binding)
+            target = self._runtime.resolve_reviewed_location(target_binding)
+            readiness = PlanAgainReadinessView(
+                _plan_again_state(source.state),
+                tuple(source.candidates),
+                _plan_again_state(target.state),
+                tuple(target.candidates),
+            )
+        return TaskSetupSnapshotView(
+            "frozen",
+            "sync-plan",
+            TaskSetupLocationView(
+                request.source_path,
+                None
+                if source_binding is None or source_binding.location_id is None
+                else str(source_binding.location_id),
+            ),
+            TaskSetupLocationView(
+                request.target_path,
+                None
+                if target_binding is None or target_binding.location_id is None
+                else str(target_binding.location_id),
+            ),
+            None,
+            _setup_options_from_request(request.options, request.verify_after_execute),
+            readiness,
+        )
+
+    def start_task_plan_again(
+        self,
+        old_task_id: str,
+        request_id: str,
+        *,
+        source_mount: str | None,
+        target_mount: str | None,
+        command_id: str,
+        signature: tuple[object, ...],
+        delivery_factory: TaskDeliveryFactory,
+    ) -> TaskStartView | TaskStartOutcome:
+        """Create a new plan task from freshly resolved reviewed identities."""
+
+        if not callable(delivery_factory):
+            raise TypeError("task delivery factory must be callable")
+        with self._lifecycle.command_guard(command_id):
+            replay = self._lifecycle.replay_start(
+                command_id,
+                "task-plan",
+                signature,
+            )
+            if replay is not None:
+                return TaskStartView(
+                    replay.task_id,
+                    replay.request_id,
+                    replay.session_id,
+                )
+            artifact = self._runtime.get_plan(request_id)
+            old = artifact.request
+            if (
+                type(old.source_binding) is not LocationBinding
+                or type(old.target_binding) is not LocationBinding
+            ):
+                raise SyncPathInputError(
+                    "reviewed location identity is unavailable"
+                )
+            source = self._runtime.resolve_reviewed_location(
+                old.source_binding,
+                selected_mount=source_mount,
+            )
+            target = self._runtime.resolve_reviewed_location(
+                old.target_binding,
+                selected_mount=target_mount,
+            )
+            refused = next(
+                (
+                    value
+                    for value in (source, target)
+                    if value.state is not VolumeResolutionState.RESOLVED
+                ),
+                None,
+            )
+            if refused is not None:
+                raise SyncPathInputError(
+                    refused.detail or _plan_again_state(refused.state)
+                )
+            assert source.root_path is not None
+            assert target.root_path is not None
+            try:
+                claim = self._lifecycle.begin_task_start(command_id, signature)
+            except LifecycleReceiptConflictError:
+                raise TaskIntentConflictError("task command intent conflicts") from None
+            except LifecycleTaskCapacityError as error:
+                raise TaskUnavailableError(str(error)) from None
+            if claim.replay is not None:
+                replay = claim.replay
+                return TaskStartView(
+                    claim.task_id,
+                    replay.request_id,
+                    replay.session_id,
+                )
+            try:
+                sink = delivery_factory(claim.task_id)
+                if not callable(sink):
+                    raise TypeError("task delivery factory must return a sink")
+                request = self._runtime.create_plan_request(
+                    uuid4().hex,
+                    source.root_path,
+                    target.root_path,
+                    options=old.options,
+                    source_binding=source.binding,
+                    target_binding=target.binding,
+                    verify_after_execute=old.verify_after_execute,
+                )
+                session_id, receipt = self._submit_session(
+                    PLAN_KIND,
+                    request,
+                    effect_kind="task-plan",
+                    command_id=command_id,
+                    signature=signature,
+                    request_id=request.request_id,
+                    observation_sink=sink,
+                    task_id=claim.task_id,
+                )
+                start = TaskStartView(
+                    claim.task_id,
+                    receipt.request_id,
+                    str(session_id),
+                )
+                snapshot = TaskSetupSnapshotView(
+                    "frozen",
+                    "sync-plan",
+                    TaskSetupLocationView(
+                        source.root_path,
+                        None
+                        if source.binding.location_id is None
+                        else str(source.binding.location_id),
+                    ),
+                    TaskSetupLocationView(
+                        target.root_path,
+                        None
+                        if target.binding.location_id is None
+                        else str(target.binding.location_id),
+                    ),
+                    None,
+                    _setup_options_from_request(
+                        old.options,
+                        old.verify_after_execute,
+                    ),
+                )
+                return TaskStartOutcome(start, snapshot)
+            except BaseException:
+                self._lifecycle.abort_task_start(claim.task_id)
+                raise
 
     def start_plan(
         self,
@@ -2119,6 +2483,65 @@ def _location_resolution_view(resolution) -> LocationResolutionView:
     )
 
 
+def _setup_sync_options(value: SetupOptionsView) -> SyncOptions:
+    value.__post_init__()
+    return SyncOptions(
+        deletion_policy=DeletionPolicy(value.deletion_policy),
+        preservation=PreservationPolicy(
+            preserve_ads=False,
+            preserve_created=value.preservation.preserve_created,
+            preserve_acl=value.preservation.preserve_acl,
+        ),
+        filters=FilterSet(value.filters),
+        trash_on_update=value.trash_on_update,
+        propagate_source_casing=value.propagate_source_casing,
+    )
+
+
+def _setup_options_from_request(
+    value: SyncOptions,
+    verify_after_execute: bool,
+) -> SetupOptionsView:
+    if type(value) is not SyncOptions:
+        raise TypeError("plan Setup options must be exact SyncOptions")
+    return SetupOptionsView(
+        value.filters.patterns,
+        value.deletion_policy.value,
+        value.trash_on_update,
+        PreservationSettingsView(
+            False,
+            value.preservation.preserve_created,
+            value.preservation.preserve_acl,
+        ),
+        value.propagate_source_casing,
+        verify_after_execute,
+    )
+
+
+def _plan_again_state(value: VolumeResolutionState) -> str:
+    return {
+        VolumeResolutionState.RESOLVED: "resolved",
+        VolumeResolutionState.OFFLINE: "offline",
+        VolumeResolutionState.AMBIGUOUS: "ambiguous",
+        VolumeResolutionState.ROOT_MISSING: "missing",
+        VolumeResolutionState.ROOT_UNAVAILABLE: "unavailable",
+    }[value]
+
+
+def _setup_location(value: LocationCandidateResult) -> TaskSetupLocationView:
+    if (
+        value.state is not LocationCandidateState.RESOLVED
+        or value.root_path is None
+        or value.binding is None
+    ):
+        raise ValueError("Setup location requires a resolved candidate")
+    location_id = value.binding.location_id
+    return TaskSetupLocationView(
+        value.root_path,
+        None if location_id is None else str(location_id),
+    )
+
+
 __all__ = [
     "CommandIdConflictError",
     "ControlView",
@@ -2138,6 +2561,7 @@ __all__ = [
     "ScanWarningView",
     "SemanticSettingsPatchView",
     "SemanticSettingsView",
+    "SetupOptionsView",
     "SessionEventView",
     "SessionObserver",
     "SessionRecordView",

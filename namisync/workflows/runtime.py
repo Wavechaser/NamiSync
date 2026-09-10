@@ -121,6 +121,7 @@ from .inventory import (
     run_integrity,
     run_inventory,
     remembered_locations as project_remembered_locations,
+    resolve_reviewed_binding,
     settle_canceled_integrity,
     validate_location_candidate_pair,
 )
@@ -164,6 +165,7 @@ from .views import (
     ResultClassificationFacts,
     SemanticSettingsPatchView,
     SemanticSettingsView,
+    SetupOptionsView,
     classify_result_facts,
     phase_result_view,
     result_item_view,
@@ -407,6 +409,19 @@ class LocalWorkflowRuntime:
                 repository.get_recent_sync_activity()
             )
 
+    def resolve_reviewed_location(
+        self,
+        binding: LocationBinding,
+        *,
+        selected_mount: str | None = None,
+    ):
+        self._require_open()
+        return resolve_reviewed_binding(
+            binding,
+            self._mounted_volume_resolver,
+            selected_mount=selected_mount,
+        )
+
     def create_plan_request(
         self,
         request_id: str,
@@ -414,26 +429,82 @@ class LocalWorkflowRuntime:
         target_path: str,
         *,
         deletion_policy: str | None = None,
+        options: SyncOptions | None = None,
+        source_binding: LocationBinding | None = None,
+        target_binding: LocationBinding | None = None,
+        verify_after_execute: bool = False,
     ) -> PlanRequest:
         """Capture one immutable semantic-settings snapshot for planning."""
 
         self._require_open()
-        settings = self._settings_store.read()
-        if deletion_policy is not None:
-            settings = replace(
-                settings,
-                deletion_policy=DeletionPolicy(deletion_policy),
-            )
+        if type(verify_after_execute) is not bool:
+            raise TypeError("verify_after_execute must be a bool")
+        if options is None:
+            settings = self._settings_store.read()
+            if deletion_policy is not None:
+                settings = replace(
+                    settings,
+                    deletion_policy=DeletionPolicy(deletion_policy),
+                )
+            options = settings.to_sync_options()
+        elif deletion_policy is not None:
+            raise ValueError("complete options cannot override deletion policy")
+        if type(options) is not SyncOptions:
+            raise TypeError("plan options must be exact SyncOptions")
         return PlanRequest(
             request_id=request_id,
             source_path=source_path,
             target_path=target_path,
-            options=settings.to_sync_options(),
+            options=options,
+            source_binding=source_binding,
+            target_binding=target_binding,
+            verify_after_execute=verify_after_execute,
         )
 
     def read_semantic_settings(self) -> SemanticSettingsView:
         self._require_open()
         return _semantic_settings_view(self._settings_store.read())
+
+    def read_setup_options(self) -> SetupOptionsView:
+        """Project task-local desktop defaults without mutating settings."""
+
+        self._require_open()
+        value = self._settings_store.read().to_sync_options()
+        projected = SyncOptions(
+            deletion_policy=value.deletion_policy,
+            preservation=PreservationPolicy(
+                preserve_ads=False,
+                preserve_created=value.preservation.preserve_created,
+                preserve_acl=value.preservation.preserve_acl,
+            ),
+            filters=value.filters,
+            trash_on_update=value.trash_on_update,
+            propagate_source_casing=value.propagate_source_casing,
+        )
+        return _setup_options_view(projected, verify_after_execute=False)
+
+    def prepare_setup_options(self, value: SetupOptionsView) -> SetupOptionsView:
+        """Canonicalize a complete task-local Setup snapshot."""
+
+        self._require_open()
+        if type(value) is not SetupOptionsView:
+            raise TypeError("Setup options must be exact SetupOptionsView")
+        value.__post_init__()
+        options = SyncOptions(
+            deletion_policy=DeletionPolicy(value.deletion_policy),
+            preservation=PreservationPolicy(
+                preserve_ads=False,
+                preserve_created=value.preservation.preserve_created,
+                preserve_acl=value.preservation.preserve_acl,
+            ),
+            filters=FilterSet(value.filters),
+            trash_on_update=value.trash_on_update,
+            propagate_source_casing=value.propagate_source_casing,
+        )
+        return _setup_options_view(
+            options,
+            verify_after_execute=value.verify_after_execute,
+        )
 
     def commit_semantic_settings(
         self,
@@ -467,12 +538,29 @@ class LocalWorkflowRuntime:
         )
         require_utf16_path(request.source_path, "plan source path")
         require_utf16_path(request.target_path, "plan target path")
+        if type(request.verify_after_execute) is not bool:
+            raise TypeError("verify_after_execute must be a bool")
+        if (request.source_binding is None) != (request.target_binding is None):
+            raise ValueError("plan location bindings must be paired")
+        for path, binding in (
+            (request.source_path, request.source_binding),
+            (request.target_path, request.target_binding),
+        ):
+            if binding is None:
+                continue
+            if type(binding) is not LocationBinding:
+                raise TypeError("plan location binding must be exact")
+            if os.path.normcase(_binding_root(binding)) != os.path.normcase(path):
+                raise ValueError("plan location binding changed its root")
         _, retained_options = snapshot_plan_options(options)
         checkpoint = PlanRequest(
             request.request_id,
             request.source_path,
             request.target_path,
             retained_options,
+            request.source_binding,
+            request.target_binding,
+            request.verify_after_execute,
         )
         self._validate_database_roots(
             (checkpoint.source_path, checkpoint.target_path)
@@ -1787,6 +1875,29 @@ def _sync_options_view(value: SyncOptions) -> SemanticSettingsView:
             preserve_acl=value.preservation.preserve_acl,
         ),
         propagate_source_casing=value.propagate_source_casing,
+    )
+
+
+def _setup_options_view(
+    value: SyncOptions,
+    *,
+    verify_after_execute: bool,
+) -> SetupOptionsView:
+    if type(value) is not SyncOptions:
+        raise TypeError("Setup options require exact SyncOptions")
+    if type(verify_after_execute) is not bool:
+        raise TypeError("verify_after_execute must be a bool")
+    return SetupOptionsView(
+        filters=value.filters.patterns,
+        deletion_policy=value.deletion_policy.value,
+        trash_on_update=value.trash_on_update,
+        preservation=PreservationSettingsView(
+            preserve_ads=False,
+            preserve_created=value.preservation.preserve_created,
+            preserve_acl=value.preservation.preserve_acl,
+        ),
+        propagate_source_casing=value.propagate_source_casing,
+        verify_after_execute=verify_after_execute,
     )
 
 

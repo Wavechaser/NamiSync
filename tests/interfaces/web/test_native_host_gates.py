@@ -394,16 +394,21 @@ def test_br_g_30_real_installed_host_assumptions_are_measured(
     assert presentation_revisions == sorted(set(presentation_revisions))
     assert all(revision > 0 for revision in presentation_revisions)
     assert evidence["production_command_names"] == [
+        "admit_location",
         "close_task",
         "create_task",
         "list_tasks",
         "next_events",
         "pick_folder",
+        "plan_again",
+        "prepare_setup",
         "read_cosmetic_section",
+        "read_setup",
         "readiness_echo",
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_inventory",
         "start_plan",
     ]
     assert evidence["combined_command_names"] == sorted(
@@ -981,16 +986,21 @@ def _assert_packaged_popup_evidence(
     assert page["document_token"].startswith("packaged-")
     assert page["ready_count"] >= 2
     assert evidence["production_command_names"] == [
+        "admit_location",
         "close_task",
         "create_task",
         "list_tasks",
         "next_events",
         "pick_folder",
+        "plan_again",
+        "prepare_setup",
         "read_cosmetic_section",
+        "read_setup",
         "readiness_echo",
         "release_terminal_session",
         "replace_cosmetic_section",
         "shell_ready",
+        "start_inventory",
         "start_plan",
     ]
     assert evidence["combined_command_names"] == sorted(

@@ -20,6 +20,7 @@ from _startup_test_support import (
 )
 
 import namisync.interfaces.web.host as host
+from namisync.core.models import VolumeId
 from namisync.interfaces.web.commands import (
     CommandAccess,
     CommandRetry,
@@ -43,6 +44,12 @@ from namisync.interfaces.web.readiness import (
     CommandPhase,
     DesktopReadinessGate,
     ReadinessContext,
+)
+from namisync.workflows import (
+    LocationBinding,
+    LocationCandidate,
+    LocationCandidateResult,
+    LocationCandidateState,
 )
 
 
@@ -205,6 +212,16 @@ class _Service:
         self.order.append("initialize_databases")
         self.state = "ready"
         return SimpleNamespace(state="ready", reason=None, reset_direction=None)
+
+    def admit_location_candidate(self, candidate):
+        root = candidate.path
+        assert root is not None
+        return LocationCandidateResult(
+            candidate,
+            LocationCandidateState.RESOLVED,
+            LocationBinding(VolumeId("serial", "NTFS"), "", root, (root,), False),
+            root,
+        )
 
     def close(self):
         self.order.append("service.close")
@@ -875,10 +892,11 @@ def test_br_g_32_native_folder_picker_is_nonblocking_single_flight() -> None:
                 active -= 1
 
     class Slots:
-        def store(self, path: str, *, purpose: str) -> tuple[str, str]:
-            assert path == r"C:\private\selected"
+        def store(self, candidate, *, purpose: str, display=None) -> tuple[str, str]:
+            assert candidate == LocationCandidate.literal(r"C:\private\selected")
             assert purpose == "source"
-            return "slot-" + "1" * 32, "Selected"
+            assert display == r"C:\private\selected"
+            return "slot-" + "1" * 32, display
 
         def resolve_pair(self, source_id: str, target_id: str):
             raise AssertionError((source_id, target_id))
@@ -916,14 +934,29 @@ def test_br_g_32_native_folder_picker_is_nonblocking_single_flight() -> None:
     release.set()
     worker.join(2.0)
     assert not worker.is_alive()
-    assert first == [{"id": "slot-" + "1" * 32, "display": "Selected"}]
+    assert first == [{
+        "purpose": "source",
+        "state": "resolved",
+        "choice_id": "slot-" + "1" * 32,
+        "continuation_id": None,
+        "display": r"C:\private\selected",
+        "location_id": None,
+        "candidates": [],
+        "detail": None,
+    }]
 
     assert commands["pick_folder"].invoke(
         {"purpose": "source"},
         context=_OPEN_CONTEXT,
     ) == {
-        "id": "slot-" + "1" * 32,
-        "display": "Selected",
+        "purpose": "source",
+        "state": "resolved",
+        "choice_id": "slot-" + "1" * 32,
+        "continuation_id": None,
+        "display": r"C:\private\selected",
+        "location_id": None,
+        "candidates": [],
+        "detail": None,
     }
     assert calls == 2
     assert maximum_active == 1
@@ -984,9 +1017,14 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         "shell_ready",
         "readiness_echo",
         "pick_folder",
+        "read_setup",
+        "prepare_setup",
+        "admit_location",
         "create_task",
         "list_tasks",
         "start_plan",
+        "start_inventory",
+        "plan_again",
         "next_events",
         "release_terminal_session",
         "close_task",
@@ -997,9 +1035,14 @@ def test_br_g_32_host_exposes_only_dispatch_through_function_table() -> None:
         "shell_ready",
         "readiness_echo",
         "pick_folder",
+        "read_setup",
+        "prepare_setup",
+        "admit_location",
         "create_task",
         "list_tasks",
         "start_plan",
+        "start_inventory",
+        "plan_again",
         "next_events",
         "release_terminal_session",
         "close_task",

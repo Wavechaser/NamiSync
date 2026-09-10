@@ -118,6 +118,7 @@ from namisync.modules.planner import (
     snapshot_mapping_snapshot,
     snapshot_plan_options,
 )
+from namisync.workflows.inventory import LocationBinding
 from namisync.modules.preflight import (
     ObservationFileSystem,
     adopt_plan_observed_world,
@@ -357,6 +358,13 @@ def _run_plan(
         )
     ):
         raise TypeError("plan request text fields must be exact strings")
+    if type(request.verify_after_execute) is not bool:
+        raise TypeError("verify_after_execute must be a bool")
+    if (request.source_binding is None) != (request.target_binding is None):
+        raise ValueError("plan location bindings must be paired")
+    for binding in (request.source_binding, request.target_binding):
+        if binding is not None and type(binding) is not LocationBinding:
+            raise TypeError("plan location binding must be exact")
     run_id = validated_run_id(request_id)
     source_root, target_root = _validated_roots(
         source_path,
@@ -374,6 +382,9 @@ def _run_plan(
             source_path,
             target_path,
             retained_options,
+            request.source_binding,
+            request.target_binding,
+            request.verify_after_execute,
         )
         del request, request_id, source_path, target_path, request_options
 
@@ -406,6 +417,23 @@ def _run_plan(
         )
         del target_ignores, source_root, target_root
         admit_retained_plan_scan(target_scan, retained_admission)
+        for scan, binding in (
+            (source_scan, retained_request.source_binding),
+            (target_scan, retained_request.target_binding),
+        ):
+            if binding is None:
+                continue
+            if type(binding) is not LocationBinding:
+                raise TypeError("plan location binding must be exact")
+            if scan.root.path != (
+                binding.selected_mount
+                if not binding.volume_relative_path
+                else os.path.join(
+                    binding.selected_mount,
+                    *binding.volume_relative_path.split("\\"),
+                )
+            ) or scan.volume_id != binding.volume_id:
+                raise ValueError("plan scan changed reviewed location identity")
 
         ctx.emit(PhaseChanged("plan"))
         raw_correspondence = deps.correspondence(

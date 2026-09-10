@@ -41,6 +41,7 @@ class StartReceipt:
 class TaskStartClaim:
     task_id: str
     replay: StartReceipt | None
+    attached_shell: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +121,9 @@ class _TaskEffect:
     admission_identity: int | None = None
     start_failed: bool = False
     shell_published: bool = False
+    start_command_id: str | None = None
+    start_signature: tuple[object, ...] | None = None
+    start_kind: str | None = None
 
 
 @dataclass(slots=True)
@@ -285,8 +289,57 @@ class TaskLifecycle:
                 task_id,
                 command_id,
                 signature,
+                start_command_id=command_id,
+                start_signature=signature,
+                start_kind="task-plan",
             )
             return TaskStartClaim(task_id, None)
+
+    def begin_task_shell_start(
+        self,
+        task_id: str,
+        command_id: str,
+        kind: str,
+        signature: tuple[object, ...],
+    ) -> TaskStartClaim:
+        """Atomically claim the first session of one published blank task."""
+
+        self._require_command_id(command_id)
+        self._require_signature(signature)
+        if type(kind) is not str or not kind:
+            raise ValueError("task start kind must be a nonempty string")
+        replay = self.replay_start(command_id, kind, signature)
+        if replay is not None:
+            if replay.task_id != task_id:
+                raise LifecycleReceiptConflictError(
+                    "task command replay belongs to another task"
+                )
+            return TaskStartClaim(task_id, replay, True)
+        with self._condition:
+            if self._closed:
+                raise RuntimeError("service is closed")
+            if any(
+                task.start_command_id == command_id
+                for task in self._tasks.values()
+            ):
+                raise LifecycleReceiptConflictError(
+                    "command_id was reused for a different task start"
+                )
+            task = self._tasks.get(task_id)
+            if (
+                task is None
+                or task.signature != ("task-shell",)
+                or not task.shell_published
+                or task.session_id is not None
+                or task.admission_identity is not None
+                or task.start_command_id is not None
+            ):
+                raise LifecycleAssociationError("task shell is unavailable")
+            task.start_command_id = command_id
+            task.start_signature = signature
+            task.start_kind = kind
+            task.start_failed = False
+            return TaskStartClaim(task_id, None, True)
 
     def abort_task_start(self, task_id: str) -> None:
         with self._condition:
@@ -295,7 +348,7 @@ class TaskLifecycle:
                 return
             task.start_failed = True
             if task.session_id is None and task.admission_identity is None:
-                self._tasks.pop(task_id, None)
+                self._finish_failed_task_start_locked(task)
             self._condition.notify_all()
 
     def begin_task_shell(self, command_id: str) -> TaskShellClaim:
@@ -341,6 +394,7 @@ class TaskLifecycle:
                 or task.shell_published
                 or task.session_id is not None
                 or task.admission_identity is not None
+                or task.start_command_id is not None
             ):
                 raise LifecycleAssociationError("task shell claim is stale")
             task.shell_published = True
@@ -376,6 +430,7 @@ class TaskLifecycle:
                 or not task.shell_published
                 or task.session_id is not None
                 or task.admission_identity is not None
+                or task.start_command_id is not None
             ):
                 raise LifecycleAssociationError("task shell is unavailable")
             self._tasks.pop(task_id, None)
@@ -554,9 +609,9 @@ class TaskLifecycle:
                         "task is unavailable for admission"
                     )
                 if (
-                    task.command_id != command_id
-                    or task.signature != signature
-                    or kind != "task-plan"
+                    task.start_command_id != command_id
+                    or task.start_signature != signature
+                    or task.start_kind != kind
                 ):
                     raise LifecycleReceiptConflictError(
                         "task admission does not match its effect"
@@ -881,7 +936,11 @@ class TaskLifecycle:
                 raise TypeError("dispatcher_truth_observed must be a bool")
             if self._closed:
                 raise LifecycleAssociationError("session is unavailable")
-            if claim.close_task and association.plan_token is None:
+            if (
+                claim.close_task
+                and association.kind in {"plan", "task-plan"}
+                and association.plan_token is None
+            ):
                 raise RuntimeError("task plan identity is unavailable")
             self._reconcile_terminal_locked(
                 association,
@@ -936,11 +995,12 @@ class TaskLifecycle:
                 return
             if work.claim.close_task:
                 token = association.plan_token
-                if work.plan_token != token or token is None:
-                    raise RuntimeError("task plan identity is unavailable")
-                plan = self._plans.get(token.request_id)
-                if plan is not None and plan.identity == token.identity:
-                    raise RuntimeError("plan retirement remains pending")
+                if work.plan_token != token:
+                    raise RuntimeError("task plan identity changed")
+                if token is not None:
+                    plan = self._plans.get(token.request_id)
+                    if plan is not None and plan.identity == token.identity:
+                        raise RuntimeError("plan retirement remains pending")
                 self._retire_association_locked(association)
             elif association.task_id is None:
                 self._retire_association_locked(association)
@@ -1127,7 +1187,7 @@ class TaskLifecycle:
         if task is not None:
             task.session_id = None
             if task.start_failed:
-                self._tasks.pop(task.task_id, None)
+                self._finish_failed_task_start_locked(task)
 
     def _retire_admission_locked(
         self,
@@ -1145,7 +1205,7 @@ class TaskLifecycle:
                 raise LifecycleAssociationError("task admission is stale")
             task.admission_identity = None
             if task.start_failed and task.session_id is None:
-                self._tasks.pop(task.task_id, None)
+                self._finish_failed_task_start_locked(task)
 
     def _retire_association_locked(
         self,
@@ -1208,6 +1268,15 @@ class TaskLifecycle:
             task_id = f"task-{token}"
             if task_id not in self._tasks:
                 return task_id
+
+    def _finish_failed_task_start_locked(self, task: _TaskEffect) -> None:
+        if task.signature == ("task-shell",) and task.shell_published:
+            task.start_command_id = None
+            task.start_signature = None
+            task.start_kind = None
+            task.start_failed = False
+            return
+        self._tasks.pop(task.task_id, None)
 
     @staticmethod
     def _require_command_id(command_id: str) -> None:

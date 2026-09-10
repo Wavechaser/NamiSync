@@ -22,9 +22,27 @@ history, and workflow product while building its secured headed WebView2 shell.
 
 Stage 6 delivered the secured desktop host, command/event transport, design
 foundation, bounded presentation core, process-live task navigation and closure,
-bounded asynchronous task commands, shared location admission and remembered
-locations, and dormant sync/integrity file-list row renderers. Workflow content and beta
+bounded asynchronous task commands, frozen Setup using shared location admission
+and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
 packaging remain open.
+
+#### Deliver frozen task Setup and location flows (2026-09-11)
+
+- Added editable typed, picker and recent folder inputs, standalone inventory
+  starts, complete backend-canonical task options, and serial best-effort pair
+  creation. Editing invalidates a prior choice; starts re-admit current roots.
+  Defaults only seed Setup and are never changed by a task.
+- Reused task/session ownership to attach the first session to an existing
+  blank task. Async results and task lists stay small; per-task readback restores
+  frozen Setup. Plan again resolves retained reviewed identities afresh, creates
+  a separate task and preserves options without copying selection or authority.
+- Condensed completed M1-5 history and recorded the unresolved transparent-host
+  rendering issue in BUGS with indefinite deferral. No material workaround,
+  M1-7 review/execution content or durable task recovery is included.
+- Verification: 1027 passed, 2 deselected in 28.13s; neighborhood 2731 passed, 2249 deselected in 113.29s (0:01:53);
+  ordinary 4946 passed, 4 skipped, 30 deselected in 212.33s (0:03:32); installed headed 30 passed, 4950 deselected in 150.10s (0:02:30);
+  all 12 import contracts. Four unchanged core/tool symlink cases were skipped
+  for unavailable Windows privilege; final independent adversarial review passed.
 
 #### Restore live task-rail selection cues (2026-09-11)
 
@@ -35,9 +53,11 @@ packaging remain open.
   the existing navigation/closure checks, retaining the gallery state variants.
 - Verified the pre-fix failure, 56 focused and 1,503 interface checks, all 29
   installed-wheel headed tests, import contracts and fresh adversarial review.
-- Investigated the SDR dark dropdown halo without changing shadows. The old
-  HDR-only fallback remains intact; the user's display-dependent observation
-  needs a controlled shadow-on/off comparison before choosing a mitigation.
+- Investigated the SDR dark dropdown halo without changing shadows. User
+  comparisons and native probes identify automatic-color-management and
+  transparent-host dependencies at unchanged 10 bpc, without proving a renderer
+  cause. The opaque diagnostic host appeared unaffected; Mica is retained and
+  investigation is deferred indefinitely in BUGS.
 
 #### Deliver bounded M1 command and location prerequisites (2026-09-10)
 

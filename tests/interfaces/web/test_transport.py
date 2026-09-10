@@ -23,6 +23,7 @@ from namisync.dispatcher.event_bus import EventHub
 from namisync.interfaces.task_lifecycle import (
     TASK_EFFECT_CAPACITY,
 )
+from namisync.interfaces.task_port import TaskIntentConflictError
 from namisync.interfaces.web.bridge import (
     AdmissionGranted,
     AdmissionRefused,
@@ -60,7 +61,7 @@ from namisync.interfaces.web.drain import (
 )
 from namisync.interfaces.web.slots import FolderSlotTable, SlotUnavailableError
 from namisync.modules.executor import NativeFileSystem, execute
-from namisync.workflows import PLAN_KIND
+from namisync.workflows import PLAN_KIND, LocationCandidate
 from namisync.workflows.views import (
     SessionEventView,
     SessionRecordView,
@@ -88,6 +89,21 @@ from _frontend_test_support import _node_executable
 
 REQUEST_ID = "a1" * 16
 OPEN_CONTEXT = ReadinessContext(CommandPhase.OPEN, 0)
+
+
+def _setup_options_payload() -> dict[str, object]:
+    return {
+        "filters": [],
+        "deletion_policy": "trash",
+        "trash_on_update": True,
+        "preservation": {
+            "preserve_ads": False,
+            "preserve_created": True,
+            "preserve_acl": False,
+        },
+        "propagate_source_casing": False,
+        "verify_after_execute": False,
+    }
 ERRORS = {
     "invalid_request": "The desktop request is invalid.",
     "unsupported_version": (
@@ -1554,7 +1570,7 @@ def test_br_g_32_incidental_value_error_remains_internal_error() -> None:
     )
 
 
-def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
+def test_br_g_32_start_plan_receipt_binds_choice_ids_and_options(
     tmp_path: Path,
 ) -> None:
     source = tmp_path / "source"
@@ -1606,30 +1622,35 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
     service = make_service(runtime=runtime, dispatcher=Dispatcher())
 
     class Registry:
-        def replay_start(self, *args: object, **kwargs: object) -> None:
-            del args, kwargs
-            return None
+        def __init__(self) -> None:
+            self.intent = None
+            self.result = None
+            self.calls = []
 
-        def start_plan(self, *args: object, **kwargs: object) -> TaskStartView:
-            kwargs.pop("wire_intent")
-            plan = service.start_plan(*args, **kwargs)
-            return TaskStartView(
-                "task-" + "6" * 32,
-                plan.request_id,
-                plan.session_id,
-            )
+        def replay_start(self, command_id, wire_intent):
+            del command_id
+            if self.intent is not None and wire_intent != self.intent:
+                raise TaskIntentConflictError("task command intent conflicts")
+            return self.result
+
+        def start_setup_plan(
+            self, task_id, source, target, options, *, command_id, wire_intent
+        ):
+            self.calls.append((task_id, source, target, options, command_id))
+            self.intent = wire_intent
+            self.result = TaskStartView(task_id, "4" * 32, "5" * 32)
+            return self.result
 
     tokens = iter(f"{value:032x}" for value in range(10))
     slots = FolderSlotTable(token=lambda: next(tokens))
-    source_id, _ = slots.store(str(source), purpose="source")
-    target_id, _ = slots.store(str(target), purpose="target")
-    replay_source_id, _ = slots.store(str(source), purpose="source")
-    replay_target_id, _ = slots.store(str(target), purpose="target")
-    changed_source_id, _ = slots.store(str(changed_source), purpose="source")
+    source_id, _ = slots.store(LocationCandidate.literal(str(source)), purpose="source")
+    target_id, _ = slots.store(LocationCandidate.literal(str(target)), purpose="target")
+    changed_source_id, _ = slots.store(LocationCandidate.literal(str(changed_source)), purpose="source")
+    registry = Registry()
     commands = production_command_specs(
         picker=lambda: None,
         slots=slots,
-        registry=Registry(),
+        registry=registry,
         cosmetics=object(),
         shell_ready=lambda _generation: None,
         readiness_echo=lambda _generation, _challenge: False,
@@ -1645,10 +1666,11 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
             request_id="d1" * 16,
             command="start_plan",
             payload={
+                "task_id": "task-" + "6" * 32,
                 "command_id": command_id,
                 "source_id": source_id,
                 "target_id": target_id,
-                "deletion_policy": None,
+                "options": _setup_options_payload(),
             },
         )
     )
@@ -1657,10 +1679,11 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
             request_id="d2" * 16,
             command="start_plan",
             payload={
+                "task_id": "task-" + "6" * 32,
                 "command_id": command_id,
-                "source_id": replay_source_id,
-                "target_id": replay_target_id,
-                "deletion_policy": None,
+                "source_id": source_id,
+                "target_id": target_id,
+                "options": _setup_options_payload(),
             },
         )
     )
@@ -1673,19 +1696,18 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         "request_id": first["result"]["request_id"],
         "session_id": "5" * 32,
     }
-    assert runtime.calls == [(str(source), str(target), None)]
-    assert runtime.admissions == [(str(source), str(target))]
-    assert len(service._dispatcher.submissions) == 1
+    assert len(registry.calls) == 1
 
     changed_root = dispatcher.dispatch(
         _request(
             request_id="d3" * 16,
             command="start_plan",
             payload={
+                "task_id": "task-" + "6" * 32,
                 "command_id": command_id,
                 "source_id": changed_source_id,
                 "target_id": target_id,
-                "deletion_policy": None,
+                "options": _setup_options_payload(),
             },
         )
     )
@@ -1694,10 +1716,11 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
             request_id="d4" * 16,
             command="start_plan",
             payload={
+                "task_id": "task-" + "6" * 32,
                 "command_id": command_id,
                 "source_id": source_id,
                 "target_id": target_id,
-                "deletion_policy": "trash",
+                "options": {**_setup_options_payload(), "filters": ["*.tmp"]},
             },
         )
     )
@@ -1712,8 +1735,7 @@ def test_br_g_32_start_plan_receipt_binds_resolved_intent_not_slot_ids(
         "command_conflict",
         ERRORS["command_conflict"],
     )
-    assert runtime.calls == [(str(source), str(target), None)]
-    assert runtime.admissions == [(str(source), str(target))]
+    assert len(registry.calls) == 1
 
 
 def test_br_g_32_origin_and_close_refusals_do_not_inspect_untrusted_body() -> None:

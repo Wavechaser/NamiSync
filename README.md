@@ -46,16 +46,16 @@ and bounded run-derived remembered locations. The Windows desktop shell now has
 a secured WebView2 host, bounded command/event transport with asynchronous
 completion for small task commands, native folder picking,
 the Fluent/accessibility foundation, process-live blank task creation,
-newest-first navigation and explicit close, and dormant gallery-proven
-sync/integrity file-list row renderers. Setup and user-facing workflow content,
+newest-first navigation and explicit close, frozen Setup with typed/picker/recent
+locations, serial plan and standalone inventory starts, Plan again, and dormant
+gallery-proven sync/integrity file-list row renderers. User-facing review content,
 final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
 Desktop release also requires scoped cold-start resource budgets and repeated/
 long-workload leak checks under the [resource acceptance policy](docs/DEFENSE.md#7-quantitative-evidence-and-measurement-authority).
 These remain open and do not promise universal whole-runtime memory containment.
 
-Remaining desktop work covers Setup and its typed/recent inputs, bounded
-plan/execution review, and
+Remaining desktop work covers bounded plan/execution review and
 inventory/integrity content within the active task shell. Accepted sorting and rebaseline
 behavior lives in the [feature catalog](docs/FEATURES.md); the
 [M1 plan](docs/M1_PLAN.md) owns remaining delivery and verification.
@@ -262,8 +262,9 @@ renderers, and a persisted native/page theme override over the refrozen
 cosmetic-state channel. Process-live blank tasks now support newest-first
 navigation, safe cancellation/closure, and retained terminal status. Small task
 commands have bounded asynchronous completion; shared location admission and
-run-derived remembered locations provide the backend for future Setup. The exact
-event-v5/data-epoch-7 protocol cut is active. Setup, workflow content, and beta
+run-derived remembered locations support frozen task Setup, serial pair and
+standalone inventory creation, and fresh-identity Plan again. The exact
+event-v5/data-epoch-7 protocol cut is active. Review content and beta
 packaging remain open.
 
 ### M1 Consolidation
