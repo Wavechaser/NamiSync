@@ -54,9 +54,19 @@ M1-4 was reconstructed from recovery tip `789b338` against integration base
 `83874b68e13eb640fc691bc769f211674c337188` as feature commit `ab453e1`, then
 fast-forwarded into `milestone1`. Both feature and integration trees are
 `05b040dca51a92d63a0667c87d7d664a24d24165`; no WIP commit entered that history.
-The M1-5 design is restored as a separate documentation outcome; the saved
-async section returns next. Prune `codex/wip-20260910-0044-m1-task-shell` only
-after both designs are durably accounted for. Final cleanup remains pending.
+M1-5's design is committed separately as `22fa035`; the asynchronous-boundary
+design is `e24e0ac`. Both restored sections matched their reviewed saved copies
+before cleanup. Source and tests on `milestone1` remain identical to `ab453e1`.
+The recovery branch `codex/wip-20260910-0044-m1-task-shell` was deleted after
+ancestry and integration verification. Its redundant saved sections, completion
+drafts, recovery messages, proposed patches and reconstruction helpers were
+removed through `build/m1-4/cleanup-recovery-drafts.ps1`, which verified exact
+paths and design accounting first. Raw test/audit evidence and verification
+drivers remain; no unrelated branch, worktree or file was removed.
+
+The current checkout is `milestone1`; no push or PR operation was performed.
+Final closeout documentation records this verified state. No additional product
+test rerun is needed after an identical-tree fast-forward and docs-only commits.
 
 Pause before M1-5 for the user's recap and GUI adjustments. M1-5's finite plan
 retains one acceptance gate, current owners/seams, archived-clause dispositions,

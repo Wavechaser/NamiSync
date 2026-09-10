@@ -868,9 +868,10 @@ performed a product release run.
 ## Resumption
 
 M1-4-G is complete and final adversarial review approves the outcome.
-Reconstruct the atomic feature commit, and merge/verify it on `milestone1`.
-Preserve the separately reviewed M1-5 and proposed M1-async designs as
-documentation outcomes, then prune the accounted recovery branch. Pause for recap and GUI
+Feature commit `ab453e1` is integrated and verified on `milestone1`, with no
+WIP ancestry. M1-5 and M1-async designs are separate documentation commits
+`22fa035` and `e24e0ac`; the accounted recovery branch and redundant drafts
+have been removed. Pause for recap and GUI
 adjustments before M1-5. M1-async is design only and awaits later implementation
 authorization; M1-5 implementation also remains paused. M1-6 requires the user's
 subsequent specification.
