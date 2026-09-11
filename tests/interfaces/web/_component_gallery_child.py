@@ -1667,6 +1667,7 @@ def _valid_icon_evidence(value: object) -> bool:
         "sizes",
         "state_samples",
         "mask_images",
+        "mask_loads",
         "system_colors",
     }:
         return False
@@ -1718,6 +1719,9 @@ def _valid_icon_evidence(value: object) -> bool:
             type(name) is str and type(item) is str
             for name, item in value["mask_images"].items()
         )
+        and type(value["mask_loads"]) is dict
+        and set(value["mask_loads"]) == set(value["mask_images"])
+        and all(type(item) is bool for item in value["mask_loads"].values())
         and type(value["system_colors"]) is dict
         and set(value["system_colors"]) == _SYSTEM_COLOR_NAMES
         and all(

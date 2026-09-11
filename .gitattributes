@@ -7,3 +7,5 @@
 /tests/assets/identity_epoch5_vectors.json text eol=lf
 /tests/assets/fluent_tokens/* -text
 /namisync/interfaces/web/assets/icons/* -text
+/namisync/interfaces/web/assets/icons.js text eol=lf
+/namisync/interfaces/web/assets/components.css text eol=lf

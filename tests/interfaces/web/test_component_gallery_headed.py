@@ -20,6 +20,7 @@ from uuid import uuid4
 import pytest
 
 import _component_gallery_child as component_gallery_child
+from _frontend_test_support import ICON_GLYPHS, ICON_MASK_FILES
 from _headed_evidence import EvidencePaths, EvidenceReader, require_host_final
 from conftest import HeadedInstalledWheel
 from namisync.interfaces.web.commands import CommandPayloadError
@@ -1150,6 +1151,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 for state in component_gallery_child._CONTROL_STATES
             ],
             "mask_images": {"info": 'url("/icons/info_20_regular.svg")'},
+            "mask_loads": {"info": True},
             "system_colors": {
                 name: "rgb(255, 255, 255)"
                 for name in component_gallery_child._SYSTEM_COLOR_NAMES
@@ -3245,12 +3247,7 @@ def _assert_icon_registry_evidence(
     forced: bool,
 ) -> None:
     assert icons["registry_frozen"] is True
-    expected_names = {
-        "checkmark-circle",
-        "dismiss-circle",
-        "warning",
-        "info",
-    }
+    expected_names = set(ICON_GLYPHS)
     assert set(icons["registry_names"]) == expected_names
     assert len(icons["registry_names"]) == len(expected_names)
     assert icons["all_registry_created"] is True
@@ -3295,13 +3292,9 @@ def _assert_icon_registry_evidence(
         for sample in icons["state_samples"]
         if sample["state"] != "disabled"
     )
-    expected_files = {
-        "checkmark-circle": "checkmark_circle_20_regular.svg",
-        "dismiss-circle": "dismiss_circle_20_regular.svg",
-        "warning": "warning_20_regular.svg",
-        "info": "info_20_regular.svg",
-    }
+    expected_files = ICON_MASK_FILES
     assert set(icons["mask_images"]) == set(expected_files)
+    assert icons["mask_loads"] == dict.fromkeys(expected_files, True)
     for name, filename in expected_files.items():
         match = re.fullmatch(
             r'''url\(["']?([^"')]+)["']?\)''',

@@ -263,7 +263,9 @@ cosmetic-state channel. Process-live blank tasks now support newest-first
 navigation, safe cancellation/closure, and retained terminal status. Small task
 commands have bounded asynchronous completion; shared location admission and
 run-derived remembered locations support frozen task Setup, serial pair and
-standalone inventory creation, and fresh-identity Plan again. The exact
+standalone inventory creation, and fresh-identity Plan again. A fixed local
+Fluent icon vocabulary, maintained from one offline source catalog, supports
+selective, accessible icon use. The exact
 event-v5/data-epoch-7 protocol cut is active. Review content and beta
 packaging remain open.
 

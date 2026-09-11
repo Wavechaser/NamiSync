@@ -182,12 +182,6 @@ async function reportFailure(error) {
     { key: "disabled" },
     { key: "focused" },
   ]);
-  const ICON_CONTRACT = Object.freeze([
-    "checkmark-circle",
-    "dismiss-circle",
-    "warning",
-    "info",
-  ]);
 
   const [{
     dispatchInteractive,
@@ -1671,6 +1665,25 @@ async function reportFailure(error) {
     const style = getComputedStyle(glyph);
     return { size, width: style.width, height: style.height };
   });
+  const inventory = document.createElement("section");
+  inventory.className = "nami-card";
+  const inventoryTitle = document.createElement("h2");
+  inventoryTitle.textContent = "Icon inventory — 16, 20, 24 px";
+  inventory.append(inventoryTitle);
+  const inventoryIcons = [];
+  for (const name of ICON_NAMES) {
+    const row = document.createElement("p");
+    const label = document.createElement("span");
+    label.textContent = `${name} `;
+    row.append(label);
+    for (const size of ["sm", "md", "lg"]) {
+      const glyph = icon(name, size);
+      row.append(glyph);
+      inventoryIcons.push({ name, size, glyph });
+    }
+    inventory.append(row);
+  }
+  app.append(inventory);
   const galleryIcons = [...document.querySelectorAll(".nami-icon")];
   const stateSamples = CONTROL_STATES.map(({ key: state }) => {
     const control = document.querySelector(`#gallery-control-button-${state}`);
@@ -1688,16 +1701,44 @@ async function reportFailure(error) {
       inherits: iconColor === controlColor,
     };
   });
-  const maskImages = Object.fromEntries(ICON_CONTRACT.map((name) => {
-    const glyph = galleryIcons.find((candidate) =>
-      candidate.classList.contains(`nami-icon--${name}`),
-    );
-    return [name, glyph === undefined ? "" : getComputedStyle(glyph).maskImage];
-  }));
+  const maskImages = Object.fromEntries(inventoryIcons.map(({ name, size, glyph }) =>
+    [`${name}:${size}`, getComputedStyle(glyph).maskImage],
+  ));
+  const maskLoads = {};
+  const decodedMasks = new Set();
+  // Check each asset once, sequentially: this is decode evidence, not a burst
+  // load test of the local asset server. Every glyph/size mapping is retained.
+  for (const [key, value] of Object.entries(maskImages)) {
+    const match = /^url\(["']?([^"')]+)["']?\)$/.exec(value);
+    if (match === null) throw new Error(`Invalid icon mask: ${key}: ${value}`);
+    const url = new URL(match[1], document.baseURI);
+    if (url.origin !== location.origin || !url.pathname.startsWith("/icons/")) {
+      throw new Error(`Nonlocal icon mask: ${key}: ${url.href}`);
+    }
+    if (!decodedMasks.has(url.href)) {
+      const result = await new Promise((resolve) => {
+        const image = new Image();
+        const finish = (event) => resolve({
+          event, width: image.naturalWidth, height: image.naturalHeight,
+        });
+        image.onload = () => finish("load");
+        image.onerror = () => finish("error");
+        image.src = url.href;
+      });
+      if (result.event !== "load" || result.width <= 0 || result.height <= 0) {
+        throw new Error(`Icon decode failed: ${JSON.stringify({
+          key, url: url.href, ...result,
+          resources: performance.getEntriesByName(url.href).map((entry) => entry.toJSON()),
+        })}`);
+      }
+      decodedMasks.add(url.href);
+    }
+    maskLoads[key] = true;
+  }
   const iconEvidence = {
     registry_frozen: Object.isFrozen(ICON_NAMES),
     registry_names: [...ICON_NAMES],
-    all_registry_created: ICON_CONTRACT.every((name) =>
+    all_registry_created: ICON_NAMES.every((name) =>
       galleryIcons.some((glyph) => glyph.classList.contains(`nami-icon--${name}`)),
     ),
     all_current_color: galleryIcons.every((glyph) => {
@@ -1718,6 +1759,7 @@ async function reportFailure(error) {
     sizes: sizeIcons,
     state_samples: stateSamples,
     mask_images: maskImages,
+    mask_loads: maskLoads,
     system_colors: systemColors,
   };
   const mixedStyle = getComputedStyle(mixedCheckbox, "::after");

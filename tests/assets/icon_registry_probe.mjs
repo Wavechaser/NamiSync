@@ -1,29 +1,20 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const [modulePath] = process.argv.slice(2);
-if (!modulePath) {
-  throw new Error("icons.js path is required");
+const [modulePath, catalogPath] = process.argv.slice(2);
+if (!modulePath || !catalogPath) {
+  throw new Error("icons.js and catalog paths are required");
 }
 
 const registry = await import(pathToFileURL(modulePath).href);
 assert.deepEqual(Object.keys(registry).sort(), ["ICON_NAMES", "ICON_SIZES", "createIcon"]);
-assert.deepEqual(registry.ICON_NAMES, [
-  "checkmark-circle",
-  "dismiss-circle",
-  "warning",
-  "info",
-]);
+assert.deepEqual(registry.ICON_NAMES, JSON.parse(readFileSync(catalogPath, "utf8")).glyphs);
 assert.deepEqual(registry.ICON_SIZES, ["sm", "md", "lg"]);
 assert.equal(Object.isFrozen(registry.ICON_NAMES), true);
 assert.equal(Object.isFrozen(registry.ICON_SIZES), true);
 
-const expectedGlyphClass = new Map([
-  ["checkmark-circle", "nami-icon--checkmark-circle"],
-  ["dismiss-circle", "nami-icon--dismiss-circle"],
-  ["warning", "nami-icon--warning"],
-  ["info", "nami-icon--info"],
-]);
+const expectedGlyphClass = new Map(registry.ICON_NAMES.map((name) => [name, `nami-icon--${name}`]));
 
 function fakeDocument() {
   const created = [];

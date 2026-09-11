@@ -116,7 +116,7 @@ Frontend assets are setuptools package data and use plain same-origin ES
 modules. At Slice 2 closure the wheel contained exactly `index.html`, `app.css`,
 `app.js`, `bridge.js`, and `render.js`; `render.js` owns the strict
 `textContent` sink. GUI Break 1 adds exactly `tokens.css`, `components.css`,
-`icons.js`, `appearance.js`, four pinned local SVGs, and their `SOURCE.json` and `LICENSE.txt`
+`icons.js`, `appearance.js`, pinned local SVGs, and their `SOURCE.json` and `LICENSE.txt`
 records under `assets/icons/`. The component-gallery scenario remains test-only
 and absent from the wheel.
 Post-realignment readiness hardening additionally packages `readiness.js` as
@@ -512,18 +512,100 @@ Lifecycle cases do not become file rows. All fixtures pass exact display-ready
 presentation values directly to production components/renderers; they do not
 derive planner, dispatcher, or verifier meaning.
 
-The same break establishes only the icon infrastructure, not the later surface
-icon vocabulary. Four regular 20 px Microsoft Fluent System Icons are vendored
+The icon foundation includes the user's 47-glyph Regular vocabulary, vendored
 locally from `@fluentui/svg-icons@1.1.334` with exact package/file URLs,
 per-file SHA-256 hashes, and license. A frozen
 `icons.js` registry maps visual glyph names to fixed component classes; the
 classes use fixed local CSS masks painted with `currentColor`. `tokens.css`
 owns exact 16/20/24 px `sm`/`md`/`lg` icon sizes and `components.css` owns
 alignment and states.
+Each size selects native artwork rather than scaling a single universal asset.
+The 136 local SVGs cover all 141 glyph/size combinations. Where the pinned
+upstream package has no native size, the fixed mapping scales 20 px artwork:
+Arrow Sync Checkmark at 16, Database Arrow Up at 24, Folder Holder at 16/24,
+and Timeline at 16. These are explicit exceptions, not runtime asset discovery.
+20 px is the default control glyph; 16 px supports compact text/controls, and
+24 px is reserved for deliberately larger controls. Glyph size does not define
+the button's hit target.
 There is no remote load, icon font, runtime registration, inline/generated SVG,
 or data-derived class/asset path. Icons remain decorative beside visible text;
-icon-only controls require their own accessible name. Later slices extend the
-fixed set only when their real controls make a glyph necessary.
+icon-only controls require their own accessible name.
+
+#### Maintaining the icon vocabulary
+
+Edit `tools/icons.json` to add or remove glyphs and declare missing-size
+fallbacks. Then run `.\.venv\Scripts\python.exe tools/icons.py sync`.
+The command authenticates the pinned npm archive and updates
+the native SVGs, SOURCE receipt, fixed JavaScript registry and CSS mappings.
+Do not edit those generated regions or per-file receipts manually. Native
+16/20/24 px artwork is selected automatically; missing sizes require an explicit
+fallback, and a fallback becomes an error when native artwork is available.
+
+Run `.\.venv\Scripts\python.exe tools/icons.py check` to verify generated files
+without writing. Both commands accept `--archive path/to/svg-icons.tgz` for
+offline use; otherwise they download the pinned official archive. The authentic
+archive check proves upstream correspondence; receipt consistency tests alone
+do not. Independent tests cover safety, fallbacks, drift, packaging and rendering
+without a second hand-maintained glyph or hash list.
+
+For an upstream update, review the catalog's version, archive integrity, commit
+and license hash together. The npm archive omits the license file: retain or
+deliberately update the reviewed local `LICENSE.txt`; the tool validates its
+hash and refuses a mismatch. Review the generated diff and run the icon/tool
+tests and installed gallery gate. The catalog and maintenance tool are not
+packaged or loaded by the app. Registration never authorizes placement.
+
+#### Icon placement and meaning
+
+The governing rule is that icons help users differentiate. Their availability
+in the registry is not a reason to display them. Placement, presentation and
+density are stronger constraints than the example actions or glyph mappings
+below. Shared text-and-icon surfaces, including lists and menus,
+remain text-first. Only frequent actions (such as New, Open and Save) or actions
+requiring immediate attention (such as deletion) receive supplementary glyphs.
+Do not decorate every row or assign an icon merely to fill a column. Align text
+consistently when some entries have icons and others do not.
+
+Familiar, unambiguous controls may use only an icon: New, Save, Search, Settings,
+and a contextually clear Close/Clear are examples, not an exhaustive eligibility
+list. Other actions may qualify when their meaning is clear in context. The
+button owns an explicit accessible action name and a tooltip available on hover
+and keyboard focus;
+the glyph remains decorative. An ambiguous action retains visible text. In
+particular, dismissing a panel, clearing an input, and canceling running work
+must remain distinguishable through context and naming even when their glyphs
+are related. Registration does not convert current text buttons automatically.
+
+Operation and status badges already carry their semantic cues; do not add a
+second status icon beside a badge for the same information. A standalone warning
+or error may use an attention icon where no badge already expresses it. Glyph
+shape is not operation authority: creation variants, folder variants, play/sync,
+and database variants require an explicit surface meaning before placement.
+Use one consistent glyph for each action within a context; do not use similar
+variants as interchangeable decoration or to distinguish unrelated actions.
+
+The initial action vocabulary below is a guideline, not a fixed mapping or
+whitelist. A surface may use a different glyph or another well-understood
+icon-only action when that improves recognition in context. Such exceptions
+must preserve the stronger rules: selective emphasis, restrained density,
+clear action meaning and accessibility, and no redundant badge/icon cues.
+The examples do not change current controls or make every occurrence eligible
+for an icon.
+
+| Action | Glyph | Meaning boundary |
+| --- | --- | --- |
+| New item/task | `add` | Creation in the current context; retain text when the kind is unclear. |
+| Browse/open folder | `folder-open` | Folder access or selection, not starting a sync. |
+| Save | `save` | Persist an editable choice; not execute a reviewed plan. |
+| Close/clear | `dismiss` | Local dismissal or clearing, with an explicit contextual name. |
+| Settings | `settings` | Open settings. |
+| Search | `search` | Find/filter in the named scope. |
+| Delete | `delete` | An actual removal action; retain consequence wording where needed. |
+
+Task cancellation is a lifecycle action, not removal or mere dismissal. Keep
+its meaning distinct from `delete` and from closing a panel. The remaining
+registered glyphs are available vocabulary; assign their surface semantics when
+the corresponding interaction is designed, rather than inventing 47 actions.
 
 Native appearance observes Windows light/dark/high-contrast state and live
 `UISettings` `Accent`, `AccentLight1`, `AccentLight2`, and `AccentDark1` values.

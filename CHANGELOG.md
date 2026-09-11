@@ -21,10 +21,28 @@ history, and workflow product while building its secured headed WebView2 shell.
 ### M1 GUI
 
 Stage 6 delivered the secured desktop host, command/event transport, design
-foundation, bounded presentation core, process-live task navigation and closure,
+foundation with a fixed local Fluent icon vocabulary, bounded presentation core, process-live task navigation and closure,
 bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
 packaging remain open.
+
+#### Expand the icon vocabulary and selective usage guidance (2026-09-11)
+
+- Registered all 47 requested Regular Fluent glyphs from the existing pinned
+  package, with 136 native SVGs covering 16/20/24 px and five explicit size
+  fallbacks. Preserved static local masks, provenance, accessibility and status
+  semantics; no blanket icon placement or startup layout change.
+- Established selective placement and restrained density as stronger rules
+  than the flexible action examples and glyph mappings. Badges retain their
+  existing operation/status cues.
+- Replaced per-icon multi-file editing with one JSON catalog and an authenticated
+  archive sync/check tool. Generated registry, CSS and provenance remain fixed
+  shipped source; independent safety and rendering checks remain. Removed the
+  superseded root icon list with user authorization.
+- Verified 61 focused checks, 4,972 ordinary tests (four skips), all 30 installed
+  headed tests, authentic archive correspondence and a zero-change sync. Fresh
+  adversarial review passed.
+
 
 #### Deliver frozen task Setup and location flows (2026-09-11)
 

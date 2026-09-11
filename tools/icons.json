@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "upstream": {
+    "version": "1.1.334",
+    "git_commit": "d7e5f224125e5638df10610d7c2755d709113e55",
+    "integrity": "sha512-VeKTChgi+iyMj4ecbuKRTGlzzTf6x5v5mD25l8+4DVf7f85dydrmEsWmVITRaoKWxGPMDZsiXqWUSCcXPukvEw==",
+    "license_sha256": "69bc45dc42b9acb96a69823adbc6ae538374e3c0bde169b855b32c48eaaef52f"
+  },
+  "glyphs": [
+    "add",
+    "add-circle",
+    "add-square-multiple",
+    "approvals-app",
+    "archive-clock",
+    "arrow-sync",
+    "arrow-sync-checkmark",
+    "checkmark",
+    "checkmark-circle",
+    "clipboard-paste",
+    "copy",
+    "database-arrow-up",
+    "database-checkmark",
+    "delete",
+    "dismiss",
+    "dismiss-circle",
+    "error-circle",
+    "eye",
+    "folder",
+    "folder-holder",
+    "folder-open",
+    "history",
+    "info",
+    "location",
+    "location-ripple",
+    "more-horizontal",
+    "more-vertical",
+    "navigation",
+    "pause",
+    "pause-circle",
+    "pin",
+    "pin-off",
+    "play",
+    "play-circle",
+    "prohibited",
+    "question-circle",
+    "record-stop",
+    "replay",
+    "save",
+    "scan-dash",
+    "search",
+    "settings",
+    "shifts-activity",
+    "subtract",
+    "subtract-circle",
+    "timeline",
+    "warning"
+  ],
+  "fallbacks": {
+    "arrow-sync-checkmark": {
+      "sm": 20
+    },
+    "database-arrow-up": {
+      "lg": 20
+    },
+    "folder-holder": {
+      "sm": 20,
+      "lg": 20
+    },
+    "timeline": {
+      "sm": 20
+    }
+  }
+}

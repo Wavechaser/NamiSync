@@ -2,12 +2,27 @@
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 from pathlib import Path
 
 
 ASSET_ROOT = "namisync/interfaces/web/assets/"
+# Authored development catalog, independent of generated runtime declarations.
+ICON_CATALOG_PATH = Path(__file__).parents[3] / "tools" / "icons.json"
+ICON_CATALOG = json.loads(ICON_CATALOG_PATH.read_text(encoding="utf-8"))
+ICON_GLYPHS = tuple(ICON_CATALOG["glyphs"])
+ICON_MASK_FILES = {
+    f"{glyph}:{size}": (
+        f"{glyph.replace('-', '_')}_{ICON_CATALOG['fallbacks'].get(glyph, {}).get(size, native)}_regular.svg"
+    )
+    for glyph in ICON_GLYPHS
+    for size, native in (("sm", 16), ("md", 20), ("lg", 24))
+}
+ICON_FILES = tuple(sorted(set(ICON_MASK_FILES.values())))
+
+
 INITIAL_ASSETS = {
     "app.css",
     "app.js",
@@ -18,10 +33,7 @@ INITIAL_ASSETS = {
     "icons.js",
     "icons/LICENSE.txt",
     "icons/SOURCE.json",
-    "icons/checkmark_circle_20_regular.svg",
-    "icons/dismiss_circle_20_regular.svg",
-    "icons/info_20_regular.svg",
-    "icons/warning_20_regular.svg",
+    *(f"icons/{filename}" for filename in ICON_FILES),
     "index.html",
     "integrity.js",
     "panels.js",

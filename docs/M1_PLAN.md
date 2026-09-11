@@ -37,6 +37,71 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Startup GUI icon foundation and shadow audit (2026-09-11)
+
+GUI-I2 continues the uncommitted GUI-I1 outcome at the user's request: simplify
+icon maintenance while preserving the exact 47-glyph runtime vocabulary and
+appearance. The accepted outcome is one authored catalog plus an offline
+generator/check command, with no parallel hand-maintained per-icon test catalog.
+Status: complete. Gate: meaningful tool corruption/refusal/drift
+tests, icon consistency/provenance/safety/wheel checks, tools/interfaces tests,
+ordinary suite (new test module registration), installed headed gate and fresh
+adversarial review. No new icons, placements, shadow fix or runtime loading.
+
+Finite population: `tools/icons.py`, `tools/icons.json`, `.gitattributes` LF rules for generated owners, marked generated regions
+in icons.js/components.css, SOURCE/native assets (must retain current bytes),
+existing icon/gallery/test-support consumers, new `tests/test_icon_maintenance.py`
+and its tools-department registration, plus AGENTS, DESKTOP_UI, this register,
+HANDOFF, CHANGELOG and README as needed. Existing GUI-I1 changes are the
+preservation baseline; the user authorized deleting the superseded ICONS.md
+after its 47 names were checked against the catalog. One coherent maintenance-tool outcome
+owns all required migrations. No shipped tool/catalog or new dependency.
+
+Regression study: unknown glyph/size refusal before DOM creation, fixed local
+URLs, currentColor and native-size selection, immutable upstream integrity,
+exact package coverage, semantic restraint and UTF-8/LF preservation remain.
+The generator validates inputs and archive before writes; check is read-only,
+rejects drift, and authenticates against the pinned archive. It must not extract
+arbitrary archive paths, silently invent fallbacks, or remove unrelated files.
+Removing duplicate test constants does not remove independent tests of the
+generator's rules. Existing repository stop rules apply.
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-I2 | Simplify the uncommitted icon foundation with one authored catalog and maintenance sync/check command. | 61 focused checks; 4,972 ordinary tests passed (4 skipped); all 30 installed headed tests passed; authentic pinned-archive check and zero-change sync passed; fresh adversarial review approved. | Complete |
+| GUI-I1 | Import and register the user's ICONS.md glyph vocabulary with deliberate 16/20/24 px artwork selection; establish selective icon semantics. | Pinned package/hash, SVG safety, exact mappings and wheel coverage verified; 1,520 interface tests and all 30 installed headed tests passed. Final independent adversarial review approved. | Complete |
+
+Observed base is M1-6 commit `76ba7d0`; only the user's untracked `ICONS.md`
+pre-exists. GUI-I1 owns fixed local SVGs/SOURCE, icons.js, icon CSS, icon and
+gallery evidence consumers, and documentation in DESKTOP_UI, this register,
+HANDOFF, CHANGELOG and README's phase synopsis. Existing package-data glob must
+cover the exact expanded set; no runtime dependency or dynamic registration is introduced. Keep upstream
+version/license and existing glyph names/API stable. Audit requested size
+availability before selecting fallbacks. One coherent icon-foundation outcome
+includes its tests and docs. GUI-I2 replaces the root list with its JSON catalog
+under the user's explicit cleanup authorization.
+
+Regression study: fixed names and own-property admission must continue rejecting
+unknown/prototype/path input before DOM creation; status/badge meaning, forced
+colors, accessible control names, M1-6 task effects and existing icon consumers
+remain unchanged. Gallery evidence must cover the expanded registry rather than
+silently accepting only its former four glyphs. No blanket surface decoration,
+startup layout rewrite, badge redesign, shadow fix or Mica removal is included.
+
+
+Pinned inventory study confirms all 47 requested Regular names exist in
+`@fluentui/svg-icons@1.1.334`. Use 136 distinct native SVGs for the 141 glyph/size
+combinations; explicit 20 px fallback covers Arrow Sync Checkmark at 16,
+Database Arrow Up at 24, Folder Holder at 16/24, and Timeline at 16. The existing
+four 20 px assets and metadata remain unchanged. Shared size classes select
+fixed per-glyph mask variables; no URL is constructed from runtime input.
+Final GUI-I1 evidence is `build/gui-icons/interfaces-01.txt` and `headed-03.txt`.
+The gallery verifies all 141 mappings and sequentially decodes each of the 136
+unique assets once, without retry. Its earlier concurrent probe recorded one
+unexplained light-mode load failure; the old Boolean evidence cannot establish
+the cause. An earlier shell focus failure passed in isolation and in the final
+full gate without a code change. See HANDOFF for environment/diagnostic limits.
+
 ### Shadow composition audit (2026-09-11)
 
 | ID | Accepted outcome | Named verification | Status |

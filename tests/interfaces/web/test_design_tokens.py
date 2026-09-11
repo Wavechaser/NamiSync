@@ -7,6 +7,8 @@ import json
 import re
 from pathlib import Path
 
+from _frontend_test_support import ICON_FILES, ICON_MASK_FILES
+
 
 ASSET_ROOT = (
     Path(__file__).parents[3]
@@ -884,7 +886,11 @@ def test_sh_g_11_only_tokens_owns_raw_colors_and_palette_consumption() -> None:
         if "--palette-" in path.read_text(encoding="utf-8")
     }
 
-    assert literal_owners == {"tokens.css"}
+    # Pinned native SVG fills only contribute alpha, never application color.
+    assert literal_owners - {"tokens.css"} <= {
+        f"icons/{filename}" for filename in ICON_FILES
+    }
+    assert "mask-mode: alpha;" in COMPONENTS.read_text(encoding="utf-8")
     assert palette_consumers == {"tokens.css"}
 
 
@@ -1819,6 +1825,6 @@ def test_sh_g_11_icon_foundation_uses_shared_sizes_and_fixed_local_masks() -> No
     assert "background-color: currentColor;" in components
     assert "mask-image: var(--nami-icon-mask);" in components
     assert "-webkit-mask-image: var(--nami-icon-mask);" in components
-    assert components.count("--nami-icon-mask: url(") == 4
+    assert len(re.findall(r"--nami-icon-mask-(?:sm|md|lg): url\(", components)) == len(ICON_MASK_FILES)
     assert "http:" not in components
     assert "https:" not in components

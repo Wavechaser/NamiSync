@@ -39,12 +39,20 @@ reused by CLI, queue, or service entry points.
 - `namisync/interfaces/`: CLI, API, and desktop adapters. It imports workflows
   and the dispatcher through the composition root and owns no domain policy.
 - `namisync/interfaces/web/assets/icons/`: fixed local monochrome icon assets
-  selected from pinned `@fluentui/svg-icons@1.1.334`. Upstream filenames,
+  selected from pinned `@fluentui/svg-icons`. The catalog owns the version. Upstream filenames,
   exact package/file URLs, version, per-file SHA-256 hashes, and MIT license
   stay with the assets.
   Runtime registration, remote loading, generated SVG/path markup, and
-  data-derived asset paths are forbidden; adding an icon is a source change to
-  the fixed registry, CSS mask class, provenance, package manifest, and tests.
+  data-derived asset paths are forbidden. `tools/icons.json` is the reviewed
+  development-only catalog of package pin, glyphs and deliberate size fallbacks.
+  `tools/icons.py` verifies upstream archive integrity and copies native SVGs,
+  generating provenance and marked fixed registry/CSS sections offline. Generated
+  outputs remain committed source; the app never loads the catalog or generator.
+  Tests independently check catalog-to-output relationships, SVG safety,
+  packaging and rendering rather than maintaining a second glyph/hash catalog.
+- `tools/icons.py` and `tools/icons.json`: icon maintenance command and its
+  authored selection/package catalog. Tests for the command belong in `tests/`;
+  temporary archives, fixtures and command evidence belong in ignored `build/`.
 - `tests/`: pytest tests mirroring package boundaries where practical.
 - Active focused documentation lives in `docs/`:
   - `DEFENSE.md` for supported assumptions, trusted boundaries, hard walls,
