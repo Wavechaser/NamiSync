@@ -1110,7 +1110,9 @@ def test_component_gallery_report_parser_is_exact_and_nested(
                 "selected_current_same_card": True,
                 "transparent_boundaries": True,
                 "selected_marker_width": 3.0,
+                "selected_marker_height": 24.0,
                 "current_marker_width": 3.0,
+                "current_marker_height": 24.0,
                 "rest_marker_content": "none",
                 "selected_marker_background": "rgb(0, 120, 212)",
             },
@@ -1582,8 +1584,12 @@ def test_sh_g_11_component_gallery_uses_installed_tokens_and_non_color_cues(
                 assert _contrast(focus_color, control["surrounding"]) >= 3.0
                 if control["outline_style"] == "none":
                     focus_colors = _focus_shadow_colors(control)
-                    assert len(focus_colors) == 2
-                    assert _contrast(focus_colors[0], focus_colors[1]) >= 3.0
+                    if control["control"] == "text_input":
+                        assert focus_colors == []
+                        assert len(_inset_shadow_colors(control)) == 1
+                    else:
+                        assert len(focus_colors) == 2
+                        assert _contrast(focus_colors[0], focus_colors[1]) >= 3.0
         controls_by_key = {
             key: {
                 row["state"]: row
@@ -2997,7 +3003,9 @@ def _assert_complete_gallery_matrix(report: dict[str, object]) -> None:
         "selected_current_same_card": True,
         "transparent_boundaries": True,
         "selected_marker_width": 3.0,
+        "selected_marker_height": 24.0,
         "current_marker_width": 3.0,
+        "current_marker_height": 24.0,
         "rest_marker_content": "none",
         "selected_marker_background": combobox["selected_pill_background"],
     }

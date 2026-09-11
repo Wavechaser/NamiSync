@@ -69,7 +69,10 @@ function rowByTitle(title) {
 function selectedTitle() {
   return document.querySelector('.nami-task-card[aria-current="page"] .nami-task-card__title')?.textContent ?? null;
 }
-function workTitle() { return document.querySelector(".nami-work-panel h2")?.textContent ?? null; }
+function workTitle() {
+  const label = document.querySelector(".nami-work-panel")?.getAttribute("aria-label") ?? "";
+  return label.startsWith("Work area — ") ? label.slice("Work area — ".length) : null;
+}
 function statusFor(title) { return rowByTitle(title)?.querySelector(".nami-task-card__status")?.textContent ?? null; }
 function clickNew() { document.querySelector(".nami-task-rail__header .nami-button")?.click(); }
 function clickSelect(title) { rowByTitle(title)?.querySelector(".nami-task-card")?.click(); }
@@ -82,6 +85,11 @@ function resolvedBackground(variable) {
   witness.remove();
   return value;
 }
+function hasFocusRing(element) {
+  const style = getComputedStyle(element);
+  return style.boxShadow !== "none" ||
+    (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0);
+}
 function selectionAppearance(title) {
   const row = rowByTitle(title);
   const card = row?.querySelector(".nami-task-card");
@@ -93,8 +101,9 @@ function selectionAppearance(title) {
     current: card.ariaCurrent,
     persistentFill: style.backgroundColor === resolvedBackground("--color-selection-highlight"),
     markerWidth: marker.width,
+    markerHeight: marker.height,
     markerAccent: marker.backgroundColor === resolvedBackground("--color-accent-fill"),
-    closeText: close?.textContent ?? null,
+    closeLabel: close?.getAttribute("aria-label") ?? null,
     closeEnabled: close?.disabled === false,
   };
 }
@@ -112,6 +121,21 @@ function selectionCleared(title) {
   return card.ariaCurrent === "false" &&
     getComputedStyle(card).backgroundColor === resolvedBackground("--color-neutral-subtle-background") &&
     marker.content === "none";
+}
+function railGeometry(title) {
+  const row = rowByTitle(title);
+  const card = row?.querySelector(".nami-task-card");
+  const close = row?.querySelector(".nami-task-rail__close");
+  if (!(row instanceof HTMLElement) || !(card instanceof HTMLButtonElement) || !(close instanceof HTMLButtonElement)) return null;
+  const rowRect = row.getBoundingClientRect();
+  const cardRect = card.getBoundingClientRect();
+  const closeRect = close.getBoundingClientRect();
+  return {
+    fullWidth: Math.abs(cardRect.left - rowRect.left) <= 1 && Math.abs(cardRect.right - rowRect.right) <= 1,
+    closeInset: closeRect.left > cardRect.left && closeRect.right < cardRect.right,
+    siblingDismiss: close.parentElement === row && close.parentElement === card.parentElement,
+    dismissTransparent: getComputedStyle(close).backgroundColor === "rgba(0, 0, 0, 0)",
+  };
 }
 let rawSequence = 0;
 async function control(action, value = null) {
@@ -155,6 +179,15 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   }, "live Setup form");
   const setupVisible = setup.querySelector("#setup-source-path") instanceof HTMLInputElement &&
     setup.querySelector("#setup-target-path") instanceof HTMLInputElement;
+  const idleGeometry = railGeometry("Task 47");
+  const focusCard = rowByTitle("Task 47")?.querySelector(".nami-task-card");
+  focusCard.focus({focusVisible: false});
+  await sleep(100);
+  const pointerFocusHidden = !hasFocusRing(focusCard);
+  focusCard.blur();
+  focusCard.focus({focusVisible: true});
+  await until(() => hasFocusRing(focusCard), "task card keyboard focus ring");
+  const keyboardFocusVisible = hasFocusRing(focusCard);
   clickNew();
   await until(() => document.querySelector("#host-status")?.textContent?.includes("could not be created"), "capacity refusal");
   const refusedCount = rows().length;
@@ -174,7 +207,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
 
   await control("arm_close_failure");
   clickClose("Task 47");
-  await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__close")?.textContent === "Retry", "failed close recovery");
+  await until(() => rowByTitle("Task 47")?.querySelector(".nami-task-rail__close")?.getAttribute("aria-label") === "Retry close for Task 47", "failed close recovery");
   const retainedAfterFailure = rows().length === 47 && statusFor("Task 47") === "Close did not finish. Retry.";
   clickClose("Task 47");
   await until(() => rows().length === 46 && rowByTitle("Task 47") === undefined, "close retry");
@@ -192,7 +225,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 46, "delayed create cleanup");
   await control("checkpoint", "navigation_cleanup");
 
-  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared } });
+  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible } });
   await control("checkpoint", "navigation_recorded");
   await control("arm_create_delay");
   await control("checkpoint", "reinjection_armed");

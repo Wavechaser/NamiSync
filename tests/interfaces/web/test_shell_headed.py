@@ -266,7 +266,7 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         "rail_heading": "Tasks",
         "rail_empty": "No tasks are available.",
         "work_label": "Work area",
-        "work_heading": "Work area",
+        "work_heading": None,
         "work_empty": "No task selected.",
         "initial_tree_rows": 0,
         "initial_task_ids": 0,

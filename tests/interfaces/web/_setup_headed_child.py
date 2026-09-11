@@ -60,21 +60,34 @@ _EDITABLE_SCRIPT = r"""
     }
     throw new Error(`timed out waiting for ${label}`);
   }
+  const hasFocusRing = (element) => {
+    const style = getComputedStyle(element);
+    return style.boxShadow !== "none" ||
+      (style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0);
+  };
+  const hasOnlyInsetShadow = (element) => {
+    const shadow = getComputedStyle(element).boxShadow;
+    const colors = shadow.match(/rgba?\([^)]*\)/g) ?? [];
+    const insets = shadow.match(/\binset\b/g) ?? [];
+    return colors.length > 0 && colors.length === insets.length;
+  };
   await until(() => document.querySelector("#host-status")?.textContent === "Ready", "host readiness");
   document.querySelector(".nami-task-rail__header .nami-button")?.click();
   const source = await until(() => document.querySelector("#setup-source-path"), "editable source input");
+  const setup = source.closest(".nami-setup");
   const target = document.querySelector("#setup-target-path");
   const options = document.querySelector(".nami-setup__options");
   if (!(source instanceof HTMLInputElement) || !(target instanceof HTMLInputElement) ||
-      !(options instanceof HTMLDivElement) || source.disabled || target.disabled) {
+      !(setup instanceof HTMLDivElement) || !(options instanceof HTMLDivElement) || source.disabled || target.disabled) {
     throw new Error("editable Setup controls are unavailable");
   }
   const cards = document.querySelectorAll(".nami-setup > .nami-setup__card.nami-card");
   const mode = document.querySelector('.nami-setup__mode[role="radiogroup"]');
   const syncMode = mode?.querySelector('[role="radio"][data-value="sync-plan"]');
   const inventoryMode = mode?.querySelector('[role="radio"][data-value="inventory"]');
-  const more = document.querySelector(".nami-setup__more-options");
-  const deletionPolicy = document.querySelector("#setup-deletion-policy");
+  const more = document.querySelector(".nami-setup__more-summary");
+  const advanced = document.querySelector("#setup-advanced-options.nami-setup__advanced-options");
+  const deletionPolicy = document.querySelector(".nami-setup__policy");
   const verifyToggle = document.querySelector('[data-option="verify_after_execute"]');
   const adsToggle = document.querySelector('[data-option="preserve_ads"]');
   const sourceLine = document.querySelector('[data-purpose="source"] .nami-setup__location-line');
@@ -82,44 +95,103 @@ _EDITABLE_SCRIPT = r"""
   const pathControl = document.querySelector('[data-purpose="source"] .nami-setup__path-control');
   const recentTrigger = document.querySelector("#setup-source-recent-trigger");
   const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
+  const targetStatus = document.querySelector('[data-purpose="target"] .nami-setup__location-status');
   const inventoryAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
     .find((item) => item.textContent === "Create inventory");
   const planAgainAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
     .find((item) => item.textContent === "Plan again");
-  if (cards.length !== 2 || !(syncMode instanceof HTMLButtonElement) || !(inventoryMode instanceof HTMLButtonElement) ||
-      !(more instanceof HTMLDetailsElement) || !(sourceLine instanceof HTMLDivElement) ||
-      !(sourceLabel instanceof HTMLLabelElement) || !(pathControl instanceof HTMLDivElement) ||
-      !(recentTrigger instanceof HTMLButtonElement) || !(picker instanceof HTMLButtonElement) ||
-      !(deletionPolicy instanceof HTMLSelectElement) || !(verifyToggle instanceof HTMLInputElement) ||
-      !(adsToggle instanceof HTMLInputElement) || !adsToggle.disabled ||
-      !(inventoryAction instanceof HTMLButtonElement) || !(planAgainAction instanceof HTMLButtonElement)) {
-    throw new Error("Setup layout controls are unavailable");
-  }
+  const missingControls = [];
+  if (cards.length !== 2) missingControls.push("cards");
+  if (!(syncMode instanceof HTMLButtonElement)) missingControls.push("sync-mode");
+  if (!(inventoryMode instanceof HTMLButtonElement)) missingControls.push("inventory-mode");
+  if (!(more instanceof HTMLButtonElement)) missingControls.push("more-button");
+  else if (more.getAttribute("aria-controls") !== "setup-advanced-options") missingControls.push("more-controls");
+  if (!(advanced instanceof HTMLDivElement)) missingControls.push("advanced-panel");
+  if (!(sourceLine instanceof HTMLDivElement)) missingControls.push("source-line");
+  if (!(sourceLabel instanceof HTMLLabelElement)) missingControls.push("source-label");
+  if (!(pathControl instanceof HTMLDivElement)) missingControls.push("path-control");
+  if (!(recentTrigger instanceof HTMLButtonElement)) missingControls.push("recent-trigger");
+  if (!(picker instanceof HTMLButtonElement)) missingControls.push("picker");
+  if (!(deletionPolicy instanceof HTMLDivElement) || deletionPolicy.getAttribute("role") !== "radiogroup") missingControls.push("deletion-policy");
+  if (!(verifyToggle instanceof HTMLInputElement)) missingControls.push("verify-toggle");
+  if (!(adsToggle instanceof HTMLInputElement) || !adsToggle.disabled) missingControls.push("ads-toggle");
+  if (!(inventoryAction instanceof HTMLButtonElement)) missingControls.push("inventory-action");
+  if (!(planAgainAction instanceof HTMLButtonElement)) missingControls.push("plan-again-action");
+  if (!(targetStatus instanceof HTMLParagraphElement)) missingControls.push("target-status");
+  if (missingControls.length > 0) throw new Error(`Setup layout controls are unavailable: ${missingControls.join(", ")}`);
+  const emptyPathHintHidden = targetStatus.textContent === "" && targetStatus.hidden && !targetStatus.checkVisibility();
+  const idlePathStyle = getComputedStyle(source);
+  const idlePathAppearance = [idlePathStyle.backgroundColor, idlePathStyle.borderColor, idlePathStyle.borderRadius, idlePathStyle.boxShadow];
   syncMode.focus();
   syncMode.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowRight", bubbles: true}));
   await until(() => inventoryMode.getAttribute("aria-checked") === "true" && document.activeElement === inventoryMode, "keyboard inventory segment");
   inventoryMode.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowLeft", bubbles: true}));
   await until(() => syncMode.getAttribute("aria-checked") === "true" && document.activeElement === syncMode, "keyboard sync segment");
-  more.querySelector("summary")?.click();
-  if (!more.open) throw new Error("More options disclosure did not open");
+  const closedPrimaryBounds = [deletionPolicy, verifyToggle.closest("label"), more]
+    .map((item) => item.getBoundingClientRect());
+  const advancedClosed = more.getAttribute("aria-expanded") === "false" && advanced.hidden && !advanced.checkVisibility();
+  more.click();
+  await until(() => more.getAttribute("aria-expanded") === "true" && advanced.checkVisibility(), "More options disclosure");
+  const setupBounds = document.querySelector(".nami-setup").getBoundingClientRect();
+  const workBounds = document.querySelector(".nami-work-panel__body").getBoundingClientRect();
+  const primaryBounds = [deletionPolicy, verifyToggle.closest("label"), more]
+    .map((item) => item.getBoundingClientRect());
+  const optionsBounds = options.getBoundingClientRect();
+  const advancedBounds = advanced.getBoundingClientRect();
+  const standardFilter = document.querySelector("#setup-filter");
+  if (!(standardFilter instanceof HTMLInputElement)) throw new Error("Setup standard filter input is unavailable");
+  const filterIdleStyle = getComputedStyle(standardFilter);
+  const filterIdleAppearance = [filterIdleStyle.backgroundColor, filterIdleStyle.borderColor, filterIdleStyle.borderRadius, filterIdleStyle.boxShadow];
+  const pathBounds = source.getBoundingClientRect();
+  const pathControlBounds = pathControl.getBoundingClientRect();
+  const caretBounds = recentTrigger.getBoundingClientRect();
+  const pathFillsRoundedControl = Math.abs(pathBounds.left - pathControlBounds.left) <= 1 &&
+    Math.abs(pathBounds.right - pathControlBounds.right) <= 1 &&
+    parseFloat(getComputedStyle(source).borderRadius) > 0;
+  const caretInsidePath = caretBounds.left > pathBounds.left && caretBounds.right < pathBounds.right &&
+    caretBounds.top > pathBounds.top && caretBounds.bottom < pathBounds.bottom &&
+    parseFloat(getComputedStyle(source).paddingRight) >= caretBounds.width;
+  const advancedLabelsFollowToggles = Array.from(advanced.querySelectorAll(".nami-setup__option")).every((label) => {
+    const control = label.children[0];
+    const caption = label.children[1];
+    if (label.children.length !== 2 || !(control instanceof HTMLInputElement) ||
+        control.getAttribute("role") !== "switch" || !(caption instanceof HTMLSpanElement)) return false;
+    const controlBounds = control.getBoundingClientRect();
+    const captionBounds = caption.getBoundingClientRect();
+    const sharedGap = parseFloat(getComputedStyle(label).columnGap);
+    return captionBounds.left >= controlBounds.right &&
+      Math.abs((captionBounds.left - controlBounds.right) - sharedGap) <= 1 &&
+      captionBounds.top < controlBounds.bottom && captionBounds.bottom > controlBounds.top;
+  });
+  const filterControls = document.querySelector(".nami-setup__filter-controls");
+  const addFilter = filterControls?.querySelector("button");
+  const filterBounds = standardFilter.getBoundingClientRect();
+  const addFilterBounds = addFilter?.getBoundingClientRect();
+  const addFilterInline = addFilter instanceof HTMLButtonElement && addFilterBounds.left > filterBounds.right &&
+    addFilterBounds.top < filterBounds.bottom && addFilterBounds.bottom > filterBounds.top;
   const inlineRects = [sourceLabel, source, recentTrigger, picker].map((item) => item.getBoundingClientRect());
   const inlineControls = inlineRects.every((rect) => rect.top < inlineRects[0].bottom && rect.bottom > inlineRects[0].top);
   const browseOutsidePathControl = picker.getBoundingClientRect().left > pathControl.getBoundingClientRect().right;
   const availabilityRows = await until(() => {
     const values = Array.from(document.querySelectorAll(".nami-setup__recent-pair"));
-    const states = values.map((row) => row.dataset.availability);
-    return values.length === 2 && states.includes("online") && states.includes("offline") ? values : null;
-  }, "online and offline recent-pair probes");
-  const onlinePair = availabilityRows.find((row) => row.dataset.availability === "online");
-  const offlinePair = availabilityRows.find((row) => row.dataset.availability === "offline");
+    return values.length === 2 && values.some((row) =>
+      row.dataset.sourceAvailability === "online" && row.dataset.targetAvailability === "online") &&
+      values.some((row) => row.dataset.sourceAvailability !== row.dataset.targetAvailability) ? values : null;
+  }, "online and mixed recent-pair probes");
+  const onlinePair = availabilityRows.find((row) => row.dataset.sourceAvailability === "online" && row.dataset.targetAvailability === "online");
+  const offlinePair = availabilityRows.find((row) => row.dataset.sourceAvailability !== row.dataset.targetAvailability);
   const offlinePaths = offlinePair.querySelectorAll(".nami-setup__pair-path");
+  const recentHeaders = Array.from(document.querySelectorAll(".nami-setup__recent-pair-table th"));
   const pathStyle = getComputedStyle(offlinePaths[0]);
-  const offlineStatus = offlinePair.querySelector(".nami-setup__availability");
+  const mixedStatuses = Array.from(offlinePair.querySelectorAll(".nami-setup__availability"));
+  const onlineStatuses = Array.from(onlinePair.querySelectorAll(".nami-setup__availability"));
   const neutralColor = getComputedStyle(document.querySelector(".nami-setup__recent-pair-table th")).color;
-  const onlineDot = onlinePair.querySelector(".nami-setup__availability-dot");
-  const offlineDot = offlinePair.querySelector(".nami-setup__availability-dot");
+  const onlineDot = mixedStatuses.find((item) => item.dataset.availability === "online")?.querySelector(".nami-setup__availability-dot");
+  const offlineDot = mixedStatuses.find((item) => item.dataset.availability === "offline")?.querySelector(".nami-setup__availability-dot");
   const onlineSelect = onlinePair.querySelector(".nami-setup__pair-select");
   const offlineSelect = offlinePair.querySelector(".nami-setup__pair-select");
+  const mixedStatusBounds = mixedStatuses.map((item) => item.getBoundingClientRect());
+  const mixedPathBounds = Array.from(offlinePaths).map((item) => item.getBoundingClientRect());
   if (!(onlineSelect instanceof HTMLButtonElement) || !(offlineSelect instanceof HTMLButtonElement) ||
       offlinePair.getAttribute("aria-disabled") !== "true" || !offlineSelect.disabled ||
       onlinePair.getAttribute("aria-disabled") !== "false" || onlineSelect.disabled) {
@@ -131,61 +203,126 @@ _EDITABLE_SCRIPT = r"""
   source.dispatchEvent(new Event("blur", {bubbles: true}));
   await until(() => source.dataset.state !== "unresolved", "typed location refusal");
   const refusedState = source.dataset.state;
+  const refusalHint = document.querySelector('[data-purpose="source"] .nami-setup__location-status');
+  const refusalHintVisible = refusalHint.checkVisibility() && refusalHint.textContent.length > 0;
   source.focus();
   source.value = __SOURCE__;
   source.dispatchEvent(new Event("input", {bubbles: true}));
   source.dispatchEvent(new Event("blur", {bubbles: true}));
   await until(() => source.dataset.state === "resolved", "corrected typed location admission");
+  const routineReadyHintHidden = Array.from(document.querySelectorAll(".nami-setup__location-status"))
+    .every((item) => item.textContent !== "Folder is ready." || !item.checkVisibility());
+  picker.focus({focusVisible: false});
+  source.focus({focusVisible: true});
+  await until(() => hasOnlyInsetShadow(source), "path inset focus underline");
+  await Promise.all(source.getAnimations().map((animation) => animation.finished));
+  const pathFocusShadow = getComputedStyle(source).boxShadow;
+  const pathUsesStandardIdleStyle = idlePathAppearance.every((value, index) => value === filterIdleAppearance[index]);
+  const pathHasNoOuterRing = hasOnlyInsetShadow(source) && !hasFocusRing(pathControl);
+  standardFilter.focus({focusVisible: true});
+  await until(() => hasOnlyInsetShadow(standardFilter), "filter inset focus underline");
+  await Promise.all(standardFilter.getAnimations().map((animation) => animation.finished));
+  const pathMatchesStandardFocus = getComputedStyle(standardFilter).boxShadow === pathFocusShadow;
   recentTrigger.focus();
   recentTrigger.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
   const recentOption = await until(() => document.querySelector("#setup-source-recent-popup [role=option]:focus"), "keyboard recent option");
   const recentPopup = document.querySelector("#setup-source-recent-popup");
+  await until(() => hasFocusRing(recentOption), "recent option keyboard focus ring");
+  const popupOptions = Array.from(recentPopup.querySelectorAll("[role=option]"));
+  const popupOptionsBorderless = popupOptions.every((item) => parseFloat(getComputedStyle(item).borderWidth) === 0);
+  const popupFocusIsExclusive = hasFocusRing(recentOption) && popupOptions
+    .filter((item) => item !== recentOption).every((item) => !hasFocusRing(item));
   const dropdownAnchored = recentPopup.parentElement === pathControl &&
     recentPopup.getBoundingClientRect().left >= pathControl.getBoundingClientRect().left &&
     recentPopup.getBoundingClientRect().right <= pathControl.getBoundingClientRect().right;
   document.querySelector(".nami-setup__refresh-recents").click();
-  await until(() => onlinePair.dataset.availability === "online", "availability refresh completion");
+  await until(() => onlinePair.dataset.sourceAvailability === "online" && onlinePair.dataset.targetAvailability === "online", "availability refresh completion");
   if (recentTrigger.getAttribute("aria-expanded") !== "true" || document.activeElement !== recentOption) {
     throw new Error("unrelated availability refresh replaced recent-folder focus");
   }
   recentOption.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
   await until(() => recentTrigger.getAttribute("aria-expanded") === "false" && document.activeElement === recentTrigger, "recent Escape return");
   const recentKeyboard = document.activeElement === recentTrigger;
-  const filter = document.querySelector("#setup-filter");
+  const filter = standardFilter;
   if (!(filter instanceof HTMLInputElement)) throw new Error("Setup filter is unavailable");
   const hostile = "<img src=x onerror=alert(1)>";
   filter.value = hostile;
   filter.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", bubbles: true}));
   await until(() => Array.from(document.querySelectorAll(".nami-setup__filter-list span"))
     .some((item) => item.textContent === hostile), "inert hostile filter");
-  await until(() => onlinePair.dataset.availability === "online" && !onlineSelect.disabled, "refreshed online pair");
+  await until(() => onlinePair.dataset.sourceAvailability === "online" && onlinePair.dataset.targetAvailability === "online" && !onlineSelect.disabled, "refreshed online pair");
+  onlineSelect.focus({focusVisible: false});
+  await sleep(100);
+  const pointerFocusStyle = getComputedStyle(onlineSelect);
+  const pointerFocusHidden = pointerFocusStyle.boxShadow === "none" &&
+    (pointerFocusStyle.outlineStyle === "none" || parseFloat(pointerFocusStyle.outlineWidth) === 0);
+  onlineSelect.blur();
   onlineSelect.focus({focusVisible: true});
+  await until(() => getComputedStyle(onlineSelect).boxShadow !== "none" ||
+    (getComputedStyle(onlineSelect).outlineStyle !== "none" && parseFloat(getComputedStyle(onlineSelect).outlineWidth) > 0),
+  "recent pair keyboard focus ring");
+  const keyboardFocusStyle = getComputedStyle(onlineSelect);
+  const keyboardFocusVisible = keyboardFocusStyle.boxShadow !== "none" ||
+    (keyboardFocusStyle.outlineStyle !== "none" && parseFloat(keyboardFocusStyle.outlineWidth) > 0);
   return {
     editable: true,
     typed_refusal: refusedState,
     typed_retry_resolved: source.dataset.state === "resolved",
+    routine_ready_hint_hidden: routineReadyHintHidden,
+    empty_path_hint_hidden: emptyPathHintHidden,
+    refusal_hint_visible: refusalHintVisible,
     hostile_filter_inert: document.querySelector("img") === null,
     options_visible: options.checkVisibility(),
     two_setup_cards: cards.length === 2,
+    card_heading_hierarchy: setup.querySelector(':scope > .nami-setup__card > h2')?.textContent === "Setup" &&
+      setup.querySelector('.nami-setup__recent-header > h2')?.textContent === "Recent pairs" &&
+      document.querySelector(".nami-work-panel > h2") === null,
     segmented_keyboard: syncMode.getAttribute("aria-checked") === "true",
     recent_dropdown_keyboard: recentKeyboard,
-    disclosure_open: more.open,
+    disclosure_open: more.getAttribute("aria-expanded") === "true" && !advanced.hidden,
+    disclosure_closed_initially: advancedClosed,
+    setup_aligned_top: Math.abs(setupBounds.top - workBounds.top) <= 2,
+    primary_options_one_line: primaryBounds.every((rect) => rect.top < primaryBounds[0].bottom && rect.bottom > primaryBounds[0].top) &&
+      primaryBounds[0].left < primaryBounds[1].left && primaryBounds[1].right < primaryBounds[2].left,
+    primary_options_stable_open: primaryBounds.every((rect, index) =>
+      Math.abs(rect.left - closedPrimaryBounds[index].left) <= 1 &&
+      Math.abs(rect.top - closedPrimaryBounds[index].top) <= 1 &&
+      Math.abs(rect.width - closedPrimaryBounds[index].width) <= 1),
+    primary_options_bounds: {closed: closedPrimaryBounds.map((rect) => rect.toJSON()),
+      expanded: primaryBounds.map((rect) => rect.toJSON())},
+    advanced_below_full_width: advancedBounds.top >= Math.max(...primaryBounds.map((rect) => rect.bottom)) &&
+      Math.abs(advancedBounds.left - optionsBounds.left) <= 1 && Math.abs(advancedBounds.right - optionsBounds.right) <= 1,
+    advanced_filters_visible: document.querySelector(".nami-setup__filters").checkVisibility(),
+    advanced_labels_follow_toggles: advancedLabelsFollowToggles,
+    add_filter_inline: addFilterInline,
+    path_uses_standard_idle_style: pathUsesStandardIdleStyle,
+    path_matches_standard_focus: pathMatchesStandardFocus,
+    path_has_no_outer_ring: pathHasNoOuterRing,
+    path_fills_rounded_control: pathFillsRoundedControl,
+    caret_inside_path_with_text_space: caretInsidePath,
     inline_location_controls: inlineControls,
     browse_outside_path_control: browseOutsidePathControl,
     dropdown_anchored: dropdownAnchored,
     dropdown_rerender_focus_restored: recentKeyboard,
+    popup_options_borderless: popupOptionsBorderless,
+    popup_focus_is_exclusive: popupFocusIsExclusive,
     picker_icon_only: picker.textContent === "" && picker.getAttribute("aria-label") === "Browse for source folder",
-    advanced_switches: more.querySelectorAll('input[role="switch"]').length === 5,
+    advanced_switches: advanced.querySelectorAll('input[role="switch"]').length === 5,
     primary_options_visible: deletionPolicy.checkVisibility() && verifyToggle.checkVisibility(),
     sync_inapplicable_actions_hidden: !inventoryAction.checkVisibility() && !planAgainAction.checkVisibility(),
-    recent_pair_online_offline: true,
+    recent_pair_online_offline: onlineStatuses.every((item) => item.dataset.availability === "online"),
+    mixed_pair_endpoint_truths: mixedStatuses.map((item) => [item.dataset.endpoint, item.dataset.availability, item.textContent]),
+    recent_pair_two_columns: recentHeaders.map((item) => item.textContent).join("|") === "Folders|Availability",
+    endpoint_statuses_align_with_paths: mixedStatusBounds.length === 2 && mixedPathBounds.length === 2 &&
+      mixedStatusBounds.every((rect, index) => Math.abs(rect.top - mixedPathBounds[index].top) <= 2),
     offline_pair_disabled: offlinePair.getAttribute("aria-disabled") === "true",
     pair_two_line_paths: offlinePaths.length === 2 && offlinePaths[0].getBoundingClientRect().top < offlinePaths[1].getBoundingClientRect().top,
     pair_paths_truncated: pathStyle.textOverflow === "ellipsis" && pathStyle.overflow === "hidden" &&
       Array.from(offlinePaths).every((item) => item.scrollWidth > item.clientWidth && item.title === item.textContent),
     availability_dots_distinct: getComputedStyle(onlineDot).backgroundColor !== getComputedStyle(offlineDot).backgroundColor,
-    availability_text_neutral: getComputedStyle(offlineStatus).color === neutralColor &&
-      getComputedStyle(onlinePair.querySelector(".nami-setup__availability")).color === neutralColor,
+    availability_text_neutral: [...mixedStatuses, ...onlineStatuses].every((item) => getComputedStyle(item).color === neutralColor),
+    pointer_focus_hidden: pointerFocusHidden,
+    keyboard_focus_visible: keyboardFocusVisible,
     pair_button_focused: document.activeElement === onlineSelect,
     source_node_id: source.id,
   };
@@ -225,6 +362,12 @@ _FROZEN_SCRIPT = r"""
   const frozenModeHidden = !mode.checkVisibility();
   const frozenSwitches = Array.from(document.querySelectorAll('.nami-setup__options input[role="switch"]'));
   const frozenPairs = Array.from(document.querySelectorAll(".nami-setup__pair-select"));
+  const frozenRecent = document.querySelector("#setup-source-recent-trigger");
+  const disabledIconControlsTransparent = [frozenRecent, picker].every((control) => {
+    const style = getComputedStyle(control);
+    return control instanceof HTMLButtonElement && control.disabled &&
+      style.backgroundColor === "rgba(0, 0, 0, 0)" && style.borderColor === "rgba(0, 0, 0, 0)";
+  });
   let planAgain;
   try {
     planAgain = await until(() => {
@@ -254,6 +397,7 @@ _FROZEN_SCRIPT = r"""
     frozen_switches_disabled: frozenSwitches.length === 6 && frozenSwitches.every((input) => input.disabled),
     frozen_pairs_disabled: frozenPairs.length === 2 && frozenPairs.every((button) => button.disabled),
     frozen_mode_hidden: frozenModeHidden,
+    disabled_icon_controls_transparent: disabledIconControlsTransparent,
   };
 })()
 """
@@ -284,7 +428,7 @@ _INDEPENDENT_SCRIPT = r"""
   newTask();
   let {source, target} = await editable();
   const recentPair = await until(() => {
-    const value = document.querySelector('.nami-setup__recent-pair[data-availability="online"]');
+    const value = document.querySelector('.nami-setup__recent-pair[data-source-availability="online"][data-target-availability="online"]');
     const button = value?.querySelector(".nami-setup__pair-select");
     return button instanceof HTMLButtonElement && !button.disabled ? button : null;
   }, "online recent pair");
@@ -305,6 +449,9 @@ _INDEPENDENT_SCRIPT = r"""
   const inventory = Array.from(document.querySelectorAll(".nami-setup__actions button"))
     .find((button) => button.textContent === "Create inventory");
   if (!(inventory instanceof HTMLButtonElement)) throw new Error("inventory action is unavailable");
+  const inventoryPlan = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((button) => button.textContent === "Create plan");
+  const inventoryActionVisibility = inventory.checkVisibility() && !inventoryPlan.checkVisibility();
   inventory.click();
   await until(() => source.disabled && document.querySelector(".nami-setup__mode-group")?.hidden && target.value === "" &&
     document.querySelector('[data-purpose="target"]')?.hidden === true &&
@@ -344,6 +491,7 @@ _INDEPENDENT_SCRIPT = r"""
     recent_pair_activated: pairActivated,
     recent_pair_native_button: recentPair.tagName === "BUTTON",
     inventory_without_pair: inventoryWithoutPair,
+    inventory_action_visibility: inventoryActionVisibility,
     inventory_inapplicable_hidden: inventoryInapplicableHidden,
     mixed_batch: true,
     navigation_retains_frozen: true,
@@ -438,7 +586,7 @@ _RELOADED_SCRIPT = r"""
     let source = null;
     for (let attempt = 0; attempt < 80 && source === null; attempt += 1) {
       const value = document.querySelector("#setup-source-path");
-      if (document.querySelector(".nami-work-panel h2")?.textContent === title &&
+      if (document.querySelector(".nami-work-panel")?.getAttribute("aria-label") === `Work area — ${title}` &&
           value instanceof HTMLInputElement) source = value;
       else await sleep(25);
     }
@@ -644,7 +792,7 @@ def _collapse_and_capture_editable(
     from System import Action
 
     settings = json.dumps({
-        "expression": 'document.querySelector(".nami-setup__more-options").open = false;',
+        "expression": 'if (document.querySelector(".nami-setup__more-summary").getAttribute("aria-expanded") === "true") document.querySelector(".nami-setup__more-summary").click();',
         "awaitPromise": False,
         "returnByValue": True,
     })

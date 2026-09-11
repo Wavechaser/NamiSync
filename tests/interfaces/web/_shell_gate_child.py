@@ -131,7 +131,7 @@ _INITIAL_PROBE = r"""
     rail_heading: rail.querySelector("h2")?.textContent,
     rail_empty: rail.querySelector(".nami-shell__empty")?.textContent,
     work_label: work.getAttribute("aria-label"),
-    work_heading: work.querySelector("h2")?.textContent,
+    work_heading: work.querySelector("h2")?.textContent ?? null,
     work_empty: work.querySelector(".nami-shell__empty")?.textContent,
     initial_tree_rows: document.querySelectorAll(".nami-tree-row").length,
     initial_task_ids: document.querySelectorAll("[data-task-id]").length,

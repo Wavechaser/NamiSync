@@ -7,10 +7,9 @@ export function createWorkPanel(setupCallbacks) {
   panel.setAttribute("role", "region");
   panel.ariaLabel = "Work area";
 
-  const heading = document.createElement("h2");
   const body = document.createElement("div");
   body.classList.add("nami-work-panel__body");
-  panel.append(heading, body);
+  panel.append(body);
   const setup = createSetupPanel(setupCallbacks);
   let content = null;
 
@@ -21,7 +20,7 @@ export function createWorkPanel(setupCallbacks) {
   }
 
   function render(task) {
-    renderText(heading, task === null ? "Work area" : task.label);
+    panel.ariaLabel = task === null ? "Work area" : `Work area — ${task.label}`;
     if (task === null) {
       const empty = document.createElement("p");
       empty.classList.add("nami-shell__empty");

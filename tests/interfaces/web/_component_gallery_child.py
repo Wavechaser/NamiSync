@@ -1146,7 +1146,9 @@ def _valid_control_contract(value: object) -> bool:
             "selected_current_same_card",
             "transparent_boundaries",
             "selected_marker_width",
+            "selected_marker_height",
             "current_marker_width",
+            "current_marker_height",
             "rest_marker_content",
             "selected_marker_background",
         }
@@ -1159,8 +1161,12 @@ def _valid_control_contract(value: object) -> bool:
         and task_rail["transparent_boundaries"] is True
         and type(task_rail["selected_marker_width"]) in {int, float}
         and 2.5 <= task_rail["selected_marker_width"] <= 3.5
+        and type(task_rail["selected_marker_height"]) in {int, float}
+        and 23.5 <= task_rail["selected_marker_height"] <= 24.5
         and type(task_rail["current_marker_width"]) in {int, float}
         and 2.5 <= task_rail["current_marker_width"] <= 3.5
+        and type(task_rail["current_marker_height"]) in {int, float}
+        and 23.5 <= task_rail["current_marker_height"] <= 24.5
         and task_rail["rest_marker_content"] in {"none", "normal"}
         and type(task_rail["selected_marker_background"]) is str
         and bool(task_rail["selected_marker_background"])

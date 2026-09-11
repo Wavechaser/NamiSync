@@ -251,7 +251,8 @@ async function loadScenario({
     last_used_at: "2026-09-11T00:00:00+00:00",
   };
   const harness = await loadScenario({ recents: { sources: [], targets: [], pairs: [pair] } });
-  await until(() => harness.model.recentPairAvailability["91"] === "online", "initial online pair");
+  await until(() => harness.model.recentPairAvailability["91"]?.source === "online" &&
+    harness.model.recentPairAvailability["91"]?.target === "online", "initial online pair");
   const observation = (sourceState, targetState, targetId = "93") => ({ pairs: [{
     mapping_id: "91", source_id: "92", target_id: targetId,
     source_state: sourceState, target_state: targetState,
@@ -261,7 +262,7 @@ async function loadScenario({
   let probes = 0;
   harness.probeRecentPairs = () => (++probes === 1 ? old : fresh).promise;
   harness.callbacks.onRefreshRecents();
-  assert.equal(harness.model.recentPairAvailability["91"], "checking");
+  assert.deepEqual(harness.model.recentPairAvailability["91"], { source: "checking", target: "checking" });
   const admissions = () => harness.calls.filter((call) => call[0] === "admit").length;
   const before = admissions();
   await harness.callbacks.onRecentPair(pair);
@@ -271,20 +272,24 @@ async function loadScenario({
   assert.equal(probes, 1, "refreshes coalesce behind the pending request");
   old.resolve(observation("resolved", "resolved"));
   await until(() => probes === 2, "coalesced refresh");
-  assert.equal(harness.model.recentPairAvailability["91"], "checking", "superseded online reply ignored");
+  assert.deepEqual(harness.model.recentPairAvailability["91"], { source: "checking", target: "checking" }, "superseded online reply ignored");
   fresh.resolve(observation("resolved", "offline"));
-  await until(() => harness.model.recentPairAvailability["91"] === "offline", "offline target");
+  await until(() => harness.model.recentPairAvailability["91"]?.source === "online" &&
+    harness.model.recentPairAvailability["91"]?.target === "offline", "offline target");
   await harness.callbacks.onRecentPair(pair);
   assert.equal(admissions(), before, "offline rows cannot acquire choices");
   harness.probeRecentPairs = () => Promise.resolve(observation("resolved", "resolved", "94"));
   harness.callbacks.onRefreshRecents();
-  await until(() => harness.model.recentPairAvailability["91"] === "unknown", "mismatched pair identity ignored");
+  await until(() => harness.model.recentPairAvailability["91"]?.source === "unknown" &&
+    harness.model.recentPairAvailability["91"]?.target === "unknown", "mismatched pair identity ignored");
   harness.probeRecentPairs = () => Promise.resolve(observation("ambiguous", "resolved"));
   harness.callbacks.onRefreshRecents();
-  await until(() => harness.model.recentPairAvailability["91"] === "unavailable", "ambiguous is not offline");
+  await until(() => harness.model.recentPairAvailability["91"]?.source === "unavailable" &&
+    harness.model.recentPairAvailability["91"]?.target === "online", "ambiguous is not offline");
   harness.probeRecentPairs = () => Promise.reject(new Error("probe failed"));
   harness.callbacks.onRefreshRecents();
-  await until(() => harness.model.recentPairAvailability["91"] === "unknown", "failed probe stays unknown");
+  await until(() => harness.model.recentPairAvailability["91"]?.source === "unknown" &&
+    harness.model.recentPairAvailability["91"]?.target === "unknown", "failed probe stays unknown");
   assert.equal(admissions(), before, "status probing never admits a UI choice");
 }
 
@@ -427,7 +432,8 @@ async function loadScenario({
   };
   harness.recents.pairs.push(pair);
   callbacks.onRefreshRecents();
-  await until(() => harness.model.recentPairAvailability["21"] === "online", "recent pair probe");
+  await until(() => harness.model.recentPairAvailability["21"]?.source === "online" &&
+    harness.model.recentPairAvailability["21"]?.target === "online", "recent pair probe");
   callbacks.onRecentPair(pair);
   await until(() => firstModel.target.location?.state === "resolved", "recent pair admission");
   const recentAdmissions = harness.calls.filter((call) => call[0] === "admit").slice(-2);

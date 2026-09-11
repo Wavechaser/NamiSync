@@ -28,6 +28,14 @@ packaging remain open.
 
 #### Reshape Setup and recent-pair selection (2026-09-11)
 
+- Refined alignment and density: removed the repeated task heading and extra
+  dividers, grouped grayscale Trash/Additive with Verify, and placed More options
+  on the right. Recent pairs show a separate availability result per path.
+- Expanded task cards with inset dismiss icons and 24px selection marks;
+  transparent idle icon controls retain hover/press and keyboard-focus feedback.
+- Kept standard path textboxes with inset caret buttons and accented active
+  underlines; removed extra textbox rings, default dropdown-option borders and
+  empty/ready hints. Advanced labels follow their toggles; Add filter is inline.
 - Split Setup and Recent pairs into two cards. Reused the segmented task switch,
   inline path/recent-folder controls and folder-open Browse icons; kept deletion
   and verification visible while folding remaining toggles and filters.

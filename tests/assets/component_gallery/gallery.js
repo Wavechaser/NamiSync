@@ -1918,8 +1918,14 @@ async function reportFailure(error) {
       selected_marker_width: parseFloat(
         getComputedStyle(selectedTaskCard, "::before").width,
       ),
+      selected_marker_height: parseFloat(
+        getComputedStyle(selectedTaskCard, "::before").height,
+      ),
       current_marker_width: parseFloat(
         getComputedStyle(currentTaskCard, "::before").width,
+      ),
+      current_marker_height: parseFloat(
+        getComputedStyle(currentTaskCard, "::before").height,
       ),
       rest_marker_content: getComputedStyle(taskCards[1], "::before").content,
       selected_marker_background: getComputedStyle(

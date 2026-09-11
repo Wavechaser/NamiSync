@@ -123,7 +123,11 @@ function moduleUrl(source) {
 const renderUrl = moduleUrl(
   'export const renderText = (element, text) => { element.textContent = text; };',
 );
+const iconsUrl = moduleUrl(`
+  export const createIcon = (document) => document.createElement("svg");
+`);
 const railSource = (await readFile(process.argv[3], "utf8"))
+  .replace("./icons.js", iconsUrl)
   .replace("./render.js", renderUrl);
 const panelSource = (await readFile(process.argv[4], "utf8"))
   .replace("./render.js", renderUrl);

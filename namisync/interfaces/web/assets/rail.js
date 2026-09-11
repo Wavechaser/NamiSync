@@ -1,3 +1,4 @@
+import { createIcon } from "./icons.js";
 import { renderText } from "./render.js";
 
 function taskStatus(task) {
@@ -85,8 +86,9 @@ export function createTaskRail({ onCreate, onSelect, onClose }) {
         select.append(title, status);
         select.addEventListener("click", () => onSelect(task.taskId));
         const close = document.createElement("button");
-        close.classList.add("nami-button", "nami-task-rail__close");
+        close.classList.add("nami-icon-button", "nami-task-rail__close");
         close.type = "button";
+        close.append(createIcon(document, "dismiss", "sm"));
         close.addEventListener("click", () => onClose(task.taskId));
         row.append(select, close);
         entry = { row, select, title, status, close };
@@ -97,7 +99,7 @@ export function createTaskRail({ onCreate, onSelect, onClose }) {
       renderText(entry.status, taskStatus(task));
       entry.close.disabled = task.closePending;
       entry.close.ariaLabel = `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;
-      renderText(entry.close, task.error === null ? "Close" : "Retry");
+      entry.close.title = entry.close.ariaLabel;
       list.append(entry.row);
     }
   }

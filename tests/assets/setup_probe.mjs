@@ -149,7 +149,7 @@ const model = {
     },
     plan_again: null,
   },
-  recentPairAvailability: { "9": "online" },
+  recentPairAvailability: { "9": { source: "online", target: "online" } },
   options,
   mode: "sync-plan",
   source: {
@@ -178,12 +178,17 @@ function allByClass(root, className, values = []) {
 panel.render(model);
 const locations = allByClass(panel.element, "nami-setup__location");
 const firstSource = byClass(locations[0], "nami-setup__path");
+assert.equal(byClass(locations[1], "nami-setup__location-status").textContent, "");
+assert.equal(byClass(locations[1], "nami-setup__location-status").hidden, true);
 assert.equal(byClass(locations[0], "nami-setup__location-status").textContent, "Choose a mount.");
 const mount = byClass(locations[0], "nami-setup__mount");
 assert.equal(mount.dataset.mountIndex, "0");
 mount.dispatch("click");
 const pair = byClass(panel.element, "nami-setup__recent-pair");
-assert.equal(pair.dataset.availability, "online");
+assert.deepEqual(
+  allByClass(pair, "nami-setup__availability").map((item) => item.dataset.availability),
+  ["online", "online"],
+);
 const pairSelect = byClass(pair, "nami-setup__pair-select");
 pairSelect.focus();
 pairSelect.dispatch("click");
@@ -211,15 +216,39 @@ assert.equal(recentTrigger.disabled, true);
 assert.equal(globalThis.document.activeElement, firstSource, "empty recents restore focus to the editable path");
 model.setup.recents.sources = previousSources;
 panel.render(model);
-const moreOptions = byClass(panel.element, "nami-setup__more-options");
-assert.equal(moreOptions.tagName, "DETAILS");
-assert.equal(byClass(panel.element, "nami-setup__primary-options").children[2].children[0].getAttribute("role"), "switch");
-model.recentPairAvailability = { "9": "offline" };
+const moreOptions = byClass(panel.element, "nami-setup__more-summary");
+const advancedOptions = byClass(panel.element, "nami-setup__advanced-options");
+assert.equal(moreOptions.tagName, "BUTTON");
+assert.equal(moreOptions.getAttribute("aria-controls"), "setup-advanced-options");
+assert.equal(moreOptions.getAttribute("aria-expanded"), "false");
+assert.equal(advancedOptions.hidden, true);
+moreOptions.dispatch("click");
+assert.equal(moreOptions.getAttribute("aria-expanded"), "true");
+assert.equal(advancedOptions.hidden, false);
+assert.ok(allByClass(advancedOptions, "nami-setup__option").every((label) =>
+  label.children.length === 2 && label.children[0].getAttribute("role") === "switch" && label.children[1].tagName === "SPAN"));
+const filterControls = byClass(advancedOptions, "nami-setup__filter-controls");
+assert.deepEqual(filterControls.children.map((item) => item.tagName), ["INPUT", "BUTTON"]);
+panel.render(model);
+assert.equal(moreOptions.getAttribute("aria-expanded"), "true", "advanced disclosure survives a render");
+assert.equal(advancedOptions.hidden, false);
+const deletionPolicy = byClass(panel.element, "nami-setup__policy");
+assert.equal(deletionPolicy.getAttribute("role"), "radiogroup");
+assert.deepEqual(
+  deletionPolicy.children.map((item) => [item.dataset.value, item.getAttribute("role")]),
+  [["trash", "radio"], ["additive", "radio"]],
+);
+assert.equal(byClass(panel.element, "nami-setup__verify-row").children[0].getAttribute("role"), "switch");
+model.recentPairAvailability = { "9": { source: "online", target: "offline" } };
 panel.render(model);
 const offlinePair = byClass(panel.element, "nami-setup__recent-pair");
 assert.equal(offlinePair.getAttribute("aria-disabled"), "true");
 assert.equal(byClass(offlinePair, "nami-setup__pair-select").disabled, true);
-assert.equal(byClass(offlinePair, "nami-setup__availability").children[1].textContent, "Offline");
+assert.deepEqual(
+  allByClass(offlinePair, "nami-setup__availability").map((item) => item.children[1].textContent),
+  ["Online", "Offline"],
+  "a mixed pair retains both endpoint truths while selection is disabled",
+);
 assert.deepEqual(allByClass(offlinePair, "nami-setup__pair-path").map((item) => item.textContent), ["<pair-source>", "pair-target"]);
 const actions = byClass(panel.element, "nami-setup__actions").children;
 const startPlan = actions[0];
@@ -247,7 +276,7 @@ panel.render(model);
 firstSource.value = "C:\\edited";
 firstSource.dispatch("input");
 firstSource.dispatch("keydown", { key: "Enter" });
-const filterInput = byClass(panel.element, "nami-setup__filters").children[1];
+const filterInput = filterControls.children[0];
 filterInput.value = "  no-normalize\\  ";
 filterInput.dispatch("keydown", { key: "Enter" });
 const mode = byClass(panel.element, "nami-setup__mode");

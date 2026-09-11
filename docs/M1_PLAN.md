@@ -94,6 +94,69 @@ evidence retains lifecycle, keyboard, geometry, truncation, neutral-color and
 disabled-row witnesses. Transparent CDP captures support layout inspection,
 not a claim about native Mica or the separately deferred WCG shadow defect.
 
+### Setup and task-rail refinement (2026-09-11)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-S2 | Align Setup at the work-area top; compact primary options with grayscale Trash/Additive switch and right-aligned disclosure; remove surplus dividers and passive focus rings; full-width task cards with inset dismiss icons, 1.5rem selection marks and transparent idle icon controls; show separate source/target availability and only the applicable Create action. | Ordinary suite 4,979 passed, four skipped; final interfaces 1,524 passed; final installed headed suite 30 passed; 12 import contracts; layout inspection and independent adversarial review approved. | Complete |
+
+Base: `9ba6538`; one coherent refinement of GUI-S1. The marker uses 1.5 rem
+(24 CSS px at the default root size), following the user's clarification to
+scale with the interface rather than physical display pixels. Finite production population:
+assets/setup.js, panels.js, rail.js, app.js, app.css and components.css. Existing
+fixed dismiss/folder icons and semantic colors are reused. Test population:
+existing Setup/app/startup/rail browser probes and their static/headed interface
+consumers, plus gallery style assertions where the common component changes.
+The gallery's exact report parser in _component_gallery_child.py accepts the
+added marker-height measurements; its remaining shape/type checks stay exact.
+Documentation: DESKTOP_UI, this register, HANDOFF and the current GUI changelog.
+No backend/protocol change: the existing probe already returns both endpoint
+states. Preserve bounded/coalesced refresh, exact stale-reply rejection, fresh
+admission, task closure/retry semantics, frozen options and batch behavior.
+
+Regression study: native buttons cannot nest, so inset dismiss remains a sibling
+of the full-width selection button. Pointer focus must not erase keyboard focus
+indicators; preserve keyboard navigation and focus restoration. A mixed endpoint
+pair stays disabled while each endpoint truth remains visible. Hidden actions
+must be checked by actual browser visibility, not attributes alone. The screenshot
+also requests removing routine ready hints; keep refusal/action-guiding messages.
+No shadow/Mica workaround, new icon import, task lifecycle or deletion semantics
+change. Existing repository stop rules apply. One reviewed GUI-S2 commit.
+
+User clarification: path inputs remain standard textboxes with the small caret
+inside the right edge. Preserve the normal active accented underline. Ordinary
+textboxes use that underline without an added outer focus ring; retain native
+forced-color focus outlines. Native dropdown-option buttons explicitly reset
+their default border, while keyboard-focused options retain the common focus
+indicator. This replaces the abandoned per-path input-modality treatment; no
+custom path-field focus state is retained. The existing component/gallery focus
+assertions are included in the finite consumer migration.
+
+The installed disclosure check also exposed non-reflected `ariaControls`,
+`ariaLabelledBy` and `ariaDescribedBy` string assignments in Setup. Replace
+those five call sites with their exact inert ARIA attributes. The static sink
+guard admits only these three additional literal names; dynamic names and
+executable/navigation/style attributes remain forbidden. Verify real DOM
+relationships, not JavaScript expando properties.
+
+Final user refinement keeps the same population and commit: inset the caret
+button on all sides, suppress empty-field hints as well as ready hints, align
+advanced captions immediately after their toggles, and put Add filter inline
+after its textbox. Verify actual bounds, hidden hint state, and disabled icon
+transparency in the installed Setup witness; preserve error guidance and filter
+editing behavior.
+
+Delivered with a stable root scrollbar gutter so expansion cannot shift the
+primary row sideways. The installed witness retains exact closed/open bounds
+and measures toggle-caption gaps, inset caret bounds, inline filter controls,
+standard textbox focus, and each endpoint status. No tests were retired;
+existing shell heading consumers now verify its absence and retain the region's
+accessible name. Evidence in ignored build/gui-icons/: gui-s2-ordinary-01.txt,
+gui-s2-interfaces-final-02.txt, gui-s2-setup-final-01.txt and
+gui-s2-headed-all-03.txt. The final interfaces and installed runs cover the
+last layout refinements after the ordinary baseline. Transparent captures are
+layout evidence only; native Mica/WCG shadow investigation remains deferred.
+
 ### Icon removal and upgrade verification (2026-09-11)
 
 | ID | Accepted outcome | Named verification | Status |

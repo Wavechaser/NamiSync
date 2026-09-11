@@ -29,6 +29,7 @@ body {
 .nami-segmented__item,
 .nami-combobox__trigger,
 .nami-combobox__option {
+  border: 0;
   outline: none;
 }
 
@@ -181,7 +182,10 @@ body {
   box-shadow: inset 0 -2px 0 var(--color-accent-fill);
 }
 
-.nami-input:focus-visible,
+.nami-input:focus-visible {
+  box-shadow: inset 0 -2px 0 var(--color-accent-fill);
+}
+
 .nami-select:focus-visible {
   box-shadow:
     inset 0 -2px 0 var(--color-accent-fill),
@@ -934,7 +938,7 @@ body {
 .nami-task-card[aria-current="true"]::before,
 .nami-task-card[aria-current="page"]::before {
   background: var(--color-accent-fill);
-  block-size: 1rem;
+  block-size: 1.5rem;
   border-radius: var(--radius-circular);
   content: "";
   inline-size: 3px;

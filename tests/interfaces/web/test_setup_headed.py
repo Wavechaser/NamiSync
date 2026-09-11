@@ -49,25 +49,52 @@ def test_m1_6_installed_setup_flow(
     assert result["editable"] is True
     assert result["typed_refusal"] in {"invalid_path", "missing", "unavailable"}
     assert result["typed_retry_resolved"] is True
+    assert result["routine_ready_hint_hidden"] is True
+    assert result["empty_path_hint_hidden"] is True
+    assert result["refusal_hint_visible"] is True
     assert result["hostile_filter_inert"] is True
     assert result["two_setup_cards"] is True
+    assert result["card_heading_hierarchy"] is True
     assert result["segmented_keyboard"] is True
     assert result["recent_dropdown_keyboard"] is True
     assert result["disclosure_open"] is True
+    assert result["disclosure_closed_initially"] is True
+    assert result["setup_aligned_top"] is True
+    assert result["primary_options_one_line"] is True
+    assert result["primary_options_stable_open"] is True, result["primary_options_bounds"]
+    assert result["advanced_below_full_width"] is True
+    assert result["advanced_filters_visible"] is True
+    assert result["advanced_labels_follow_toggles"] is True
+    assert result["add_filter_inline"] is True
+    assert result["path_uses_standard_idle_style"] is True
+    assert result["path_matches_standard_focus"] is True
+    assert result["path_has_no_outer_ring"] is True
+    assert result["path_fills_rounded_control"] is True
+    assert result["caret_inside_path_with_text_space"] is True
     assert result["inline_location_controls"] is True
     assert result["browse_outside_path_control"] is True
     assert result["dropdown_anchored"] is True
     assert result["dropdown_rerender_focus_restored"] is True
+    assert result["popup_options_borderless"] is True
+    assert result["popup_focus_is_exclusive"] is True
     assert result["picker_icon_only"] is True
     assert result["advanced_switches"] is True
     assert result["primary_options_visible"] is True
     assert result["sync_inapplicable_actions_hidden"] is True
     assert result["recent_pair_online_offline"] is True
+    assert result["mixed_pair_endpoint_truths"] == [
+        ["source", "offline", "Offline"],
+        ["target", "online", "Online"],
+    ]
+    assert result["recent_pair_two_columns"] is True
+    assert result["endpoint_statuses_align_with_paths"] is True
     assert result["offline_pair_disabled"] is True
     assert result["pair_two_line_paths"] is True
     assert result["pair_paths_truncated"] is True
     assert result["availability_dots_distinct"] is True
     assert result["availability_text_neutral"] is True
+    assert result["pointer_focus_hidden"] is True
+    assert result["keyboard_focus_visible"] is True
     assert result["pair_button_focused"] is True
     assert result["frozen"] is True
     assert result["plan_again_visible"] is True
@@ -76,10 +103,12 @@ def test_m1_6_installed_setup_flow(
     assert result["frozen_switches_disabled"] is True
     assert result["frozen_pairs_disabled"] is True
     assert result["frozen_mode_hidden"] is True
+    assert result["disabled_icon_controls_transparent"] is True
     assert result["recent_activated"] is True
     assert result["recent_pair_activated"] is True
     assert result["recent_pair_native_button"] is True
     assert result["inventory_without_pair"] is True
+    assert result["inventory_action_visibility"] is True
     assert result["inventory_inapplicable_hidden"] is True
     assert result["mixed_batch"] is True
     assert result["navigation_retains_frozen"] is True

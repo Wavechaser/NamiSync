@@ -68,7 +68,10 @@ def _attribute_sink_hits(source: str) -> tuple[str, ...]:
     )
     if len(calls) != len(fixed_names):
         return ("dynamic-attribute-name",)
-    allowed = {"aria-activedescendant", "role"}
+    allowed = {
+        "aria-activedescendant", "aria-controls", "aria-labelledby",
+        "aria-describedby", "role",
+    }
     return tuple(name for name in fixed_names if name not in allowed)
 
 
@@ -255,7 +258,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "integrity.js": ["./file_row.js", "./render.js"],
         "panels.js": ["./render.js", "./setup.js"],
         "plan.js": ["./file_row.js", "./render.js"],
-        "rail.js": ["./render.js"],
+        "rail.js": ["./icons.js", "./render.js"],
         "readiness.js": [],
         "render.js": [],
         "setup.js": ["./icons.js", "./render.js"],
@@ -337,6 +340,10 @@ def test_static_sink_guard_rejects_dynamic_and_authority_attributes() -> None:
     assert _attribute_sink_hits(
         'node.setAttribute("aria-activedescendant", value);'
     ) == ()
+    for name in ("aria-controls", "aria-labelledby", "aria-describedby"):
+        assert _attribute_sink_hits(f'node.setAttribute("{name}", value);') == ()
+    for name in ("onclick", "style", "src", "aria-href"):
+        assert _attribute_sink_hits(f'node.setAttribute("{name}", value);') == (name,)
 
 
 @pytest.mark.supplemental_node
@@ -1219,9 +1226,8 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert 'renderText(heading, "Tasks");' in rail
     assert 'renderText(empty, "No tasks are available.");' in rail
     assert 'emptySlot.classList.add("nami-card", "nami-task-rail__empty-slot");' in rail
-    assert 'ariaLabel = "Work area";' in panels
+    assert 'panel.ariaLabel = task === null ? "Work area" : `Work area — ${task.label}`;' in panels
     assert 'panel.setAttribute("role", "region");' in panels
-    assert 'task === null ? "Work area" : task.label' in panels
     assert 'renderText(empty, "No task selected.");' in panels
     assert "tabIndex" not in rail
     assert "tabIndex" not in panels
@@ -1230,7 +1236,10 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert 'panel.classList.add("nami-work-panel");' in panels
     assert "app.append(rail.element, panel.element);" in app
     assert 'renderText(create, "New task");' in rail
-    assert 'renderText(entry.close, task.error === null ? "Close" : "Retry");' in rail
+    assert 'close.append(createIcon(document, "dismiss", "sm"));' in rail
+    assert 'entry.close.ariaLabel = `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;' in rail
+    assert "entry.close.title = entry.close.ariaLabel;" in rail
+    assert 'document.createElement("h2")' not in panels
     assert "createTask()" in app
     assert "listTasks()" in app
     assert "closeTask(task.taskId, task.sessionId)" in app

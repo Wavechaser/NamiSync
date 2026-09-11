@@ -52,13 +52,13 @@ function createLocationRow(purpose, handlers) {
   input.autocomplete = "off";
   input.spellcheck = false;
   input.id = `setup-${purpose}-path`;
-  input.ariaDescribedBy = `setup-${purpose}-status`;
+  input.setAttribute("aria-describedby", `setup-${purpose}-status`);
   label.htmlFor = input.id;
   renderText(label, purpose === "source" ? "Source" : "Target");
   recentTrigger.id = `setup-${purpose}-recent-trigger`;
   recentTrigger.ariaHasPopup = "listbox";
   recentTrigger.ariaExpanded = "false";
-  recentTrigger.ariaControls = `setup-${purpose}-recent-popup`;
+  recentTrigger.setAttribute("aria-controls", `setup-${purpose}-recent-popup`);
   recentTrigger.title = `Choose a recent ${purpose} folder`;
   recentTrigger.ariaLabel = `Choose a recent ${purpose} folder`;
   caret.classList.add("nami-setup__caret");
@@ -159,9 +159,14 @@ function createLocationRow(purpose, handlers) {
 }
 
 function locationStatus(location) {
-  if (location == null) return "Enter a folder path or choose a recent folder.";
-  if (location.state === "resolved") return "Folder is ready.";
+  if (location == null) return "";
+  if (location.state === "resolved") return "";
   return location.detail ?? "That folder is not available.";
+}
+
+function availabilityLabel(state) {
+  return state === "online" ? "Online" : state === "offline" ? "Offline"
+    : state === "unavailable" ? "Unavailable" : state === "checking" ? "Checking…" : "Could not check";
 }
 
 export function createSetupPanel(callbacks) {
@@ -173,7 +178,7 @@ export function createSetupPanel(callbacks) {
   const root = document.createElement("div");
   const setupCard = document.createElement("section");
   const recentCard = document.createElement("section");
-  const heading = document.createElement("h3");
+  const heading = document.createElement("h2");
   const guidance = document.createElement("p");
   const actionStatus = document.createElement("p");
   const modeGroup = document.createElement("div");
@@ -184,13 +189,17 @@ export function createSetupPanel(callbacks) {
   const target = createLocationRow("target", handlers);
   const options = document.createElement("div");
   const primaryOptions = document.createElement("div");
-  const policyLabel = document.createElement("label");
-  const policy = document.createElement("select");
-  const moreOptions = document.createElement("details");
-  const moreSummary = document.createElement("summary");
+  const policyGroup = document.createElement("div");
+  const policyLabel = document.createElement("p");
+  const policy = document.createElement("div");
+  const policyButtons = new Map();
+  const moreSummary = createButton("More options", "nami-button nami-button--subtle nami-setup__more-summary");
+  const moreCaret = document.createElement("span");
+  const advancedOptions = document.createElement("div");
   const optionsList = document.createElement("div");
   const filters = document.createElement("div");
   const filterLabel = document.createElement("label");
+  const filterControls = document.createElement("div");
   const filterInput = document.createElement("input");
   const addFilter = createButton("Add filter");
   const filterList = document.createElement("ul");
@@ -203,7 +212,7 @@ export function createSetupPanel(callbacks) {
   const planAgainChoices = document.createElement("div");
   const batch = document.createElement("ol");
   const recentHeader = document.createElement("div");
-  const recentHeading = document.createElement("h3");
+  const recentHeading = document.createElement("h2");
   const refreshRecents = createButton("Refresh", "nami-button nami-button--subtle nami-setup__refresh-recents");
   const recentEmpty = document.createElement("p");
   const recentTable = document.createElement("table");
@@ -211,6 +220,7 @@ export function createSetupPanel(callbacks) {
   const recentRows = new Map();
   let locationContext = null;
   let renderedModel = null;
+  let moreExpanded = false;
 
   root.classList.add("nami-work-panel__setup", "nami-setup");
   setupCard.classList.add("nami-card", "nami-setup__card");
@@ -225,7 +235,7 @@ export function createSetupPanel(callbacks) {
   renderText(modeLabel, "Task type");
   mode.classList.add("nami-segmented", "nami-setup__mode");
   mode.setAttribute("role", "radiogroup");
-  mode.ariaLabelledBy = modeLabel.id;
+  mode.setAttribute("aria-labelledby", modeLabel.id);
   [["sync-plan", "Sync plan"], ["inventory", "Inventory"]].forEach(([value, text]) => {
     const button = createButton(text, "nami-segmented__item");
     button.setAttribute("role", "radio");
@@ -246,25 +256,41 @@ export function createSetupPanel(callbacks) {
   modeGroup.append(modeLabel, mode);
   options.classList.add("nami-setup__options");
   primaryOptions.classList.add("nami-setup__primary-options");
-  policyLabel.htmlFor = "setup-deletion-policy";
+  policyLabel.id = "setup-deletion-policy-label";
   renderText(policyLabel, "Deletion policy");
   policy.id = "setup-deletion-policy";
-  policy.classList.add("nami-select");
-  for (const [value, text] of [["trash", "Move removed files to trash"], ["additive", "Keep target-only files"]]) {
-    const item = document.createElement("option");
-    item.value = value;
-    renderText(item, text);
+  policy.classList.add("nami-segmented", "nami-setup__policy");
+  policy.setAttribute("role", "radiogroup");
+  policy.setAttribute("aria-labelledby", policyLabel.id);
+  for (const [value, text] of [["trash", "Trash"], ["additive", "Additive"]]) {
+    const item = createButton(text, "nami-segmented__item");
+    item.setAttribute("role", "radio");
+    item.dataset.value = value;
+    item.addEventListener("click", () => handlers.onOption("deletion_policy", value));
+    item.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+      event.preventDefault();
+      const next = value === "trash" ? "additive" : "trash";
+      if (!policyButtons.get(next).disabled) {
+        handlers.onOption("deletion_policy", next);
+        policyButtons.get(next).focus();
+      }
+    });
+    policyButtons.set(value, item);
     policy.append(item);
   }
-  policy.addEventListener("change", () => handlers.onOption("deletion_policy", policy.value));
+  policyGroup.classList.add("nami-setup__policy-group");
+  policyGroup.append(policyLabel, policy);
   const optionInputs = new Map();
   const verify = createToggle("Verify after copying", "verify_after_execute", handlers.onOption);
+  verify.label.classList.add("nami-setup__verify-row");
   optionInputs.set("verify_after_execute", verify.input);
-  primaryOptions.append(policyLabel, policy, verify.label);
-  moreOptions.classList.add("nami-setup__more-options");
-  moreSummary.classList.add("nami-setup__more-summary");
-  renderText(moreSummary, "More options");
-  moreOptions.append(moreSummary);
+  primaryOptions.append(policyGroup, verify.label, moreSummary);
+  moreSummary.ariaExpanded = "false";
+  moreSummary.setAttribute("aria-controls", "setup-advanced-options");
+  moreCaret.classList.add("nami-setup__more-caret");
+  moreCaret.ariaHidden = "true";
+  moreSummary.append(moreCaret);
   optionsList.classList.add("nami-setup__options-list");
   for (const [key, text] of [["trash_on_update", "Move replaced target files to trash"], ["preserve_created", "Preserve creation time"], ["preserve_acl", "Preserve access control lists"], ["propagate_source_casing", "Use source casing"]]) {
     const toggle = createToggle(text, key, handlers.onOption);
@@ -295,10 +321,20 @@ export function createSetupPanel(callbacks) {
     }
   });
   filters.classList.add("nami-setup__filters");
+  filterControls.classList.add("nami-setup__filter-controls");
   filterList.classList.add("nami-setup__filter-list");
-  filters.append(filterLabel, filterInput, addFilter, filterList);
-  moreOptions.append(optionsList, filters);
-  options.append(primaryOptions, moreOptions);
+  filterControls.append(filterInput, addFilter);
+  filters.append(filterLabel, filterControls, filterList);
+  advancedOptions.classList.add("nami-setup__advanced-options");
+  advancedOptions.id = "setup-advanced-options";
+  advancedOptions.hidden = true;
+  advancedOptions.append(optionsList, filters);
+  options.append(primaryOptions, advancedOptions);
+  moreSummary.addEventListener("click", () => {
+    moreExpanded = !moreExpanded;
+    moreSummary.ariaExpanded = String(moreExpanded);
+    advancedOptions.hidden = !moreExpanded;
+  });
   actions.classList.add("nami-setup__actions");
   actions.append(startPlan, startInventory, addPair, startBatch, planAgain);
   planAgainChoices.classList.add("nami-setup__plan-again-mounts");
@@ -333,7 +369,9 @@ export function createSetupPanel(callbacks) {
   function renderLocation(row, value, recents, editable, text) {
     if (document.activeElement !== row.input && row.input.value !== value.text) row.input.value = value.text;
     row.input.dataset.state = value.location?.state ?? "unresolved";
-    renderText(row.status, locationStatus(value.location));
+    const message = locationStatus(value.location);
+    renderText(row.status, message);
+    row.status.hidden = message.length === 0;
     row.renderRecents(recents, editable);
     renderText(row.label, text);
     row.mounts.replaceChildren();
@@ -361,8 +399,8 @@ export function createSetupPanel(callbacks) {
       }
     }
     values.forEach((pair, index) => {
-      const state = availability?.[pair.mapping_id] ?? "unknown";
-      const online = state === "online";
+      const states = availability?.[pair.mapping_id] ?? { source: "unknown", target: "unknown" };
+      const online = states.source === "online" && states.target === "online";
       let retained = recentRows.get(pair.mapping_id);
       if (retained === undefined) {
         const row = document.createElement("tr");
@@ -370,10 +408,7 @@ export function createSetupPanel(callbacks) {
         const select = createButton("", "nami-button nami-setup__pair-select");
         const sourcePath = document.createElement("span");
         const targetPath = document.createElement("span");
-        const statusCell = document.createElement("td");
-        const statusLayout = document.createElement("span");
-        const dot = document.createElement("span");
-        const statusText = document.createElement("span");
+        const statuses = {};
         row.classList.add("nami-setup__recent-pair");
         row.dataset.mappingId = pair.mapping_id;
         paths.classList.add("nami-setup__pair-folders");
@@ -382,21 +417,31 @@ export function createSetupPanel(callbacks) {
         targetPath.classList.add("nami-setup__pair-path");
         select.append(sourcePath, targetPath);
         paths.append(select);
-        statusLayout.classList.add("nami-setup__availability");
-        dot.classList.add("nami-setup__availability-dot");
-        dot.ariaHidden = "true";
-        statusLayout.append(dot, statusText);
-        statusCell.append(statusLayout);
+        const statusCell = document.createElement("td");
+        statusCell.classList.add("nami-setup__availability-cell");
+        for (const endpoint of ["source", "target"]) {
+          const statusLayout = document.createElement("span");
+          const dot = document.createElement("span");
+          const statusText = document.createElement("span");
+          statusLayout.classList.add("nami-setup__availability");
+          statusLayout.dataset.endpoint = endpoint;
+          dot.classList.add("nami-setup__availability-dot");
+          dot.ariaHidden = "true";
+          statusLayout.append(dot, statusText);
+          statusCell.append(statusLayout);
+          statuses[endpoint] = { layout: statusLayout, text: statusText };
+        }
         row.append(paths, statusCell);
         select.addEventListener("click", () => handlers.onRecentPair(retained.pair));
         row.addEventListener("click", (event) => {
           if (event.target !== select && !select.contains(event.target) && !select.disabled) select.click();
         });
-        retained = { row, select, sourcePath, targetPath, statusText, pair };
+        retained = { row, select, sourcePath, targetPath, statuses, pair };
         recentRows.set(pair.mapping_id, retained);
       }
       retained.pair = pair;
-      retained.row.dataset.availability = state;
+      retained.row.dataset.sourceAvailability = states.source;
+      retained.row.dataset.targetAvailability = states.target;
       retained.row.ariaDisabled = String(!editable || !online);
       retained.select.disabled = !editable || !online;
       renderFilesystemText(retained.sourcePath, pair.source.display);
@@ -404,8 +449,10 @@ export function createSetupPanel(callbacks) {
       renderFilesystemText(retained.targetPath, pair.target.display);
       retained.targetPath.title = pair.target.display;
       retained.select.ariaLabel = `Select recent pair ${pair.source.display} to ${pair.target.display}`;
-      const label = state === "online" ? "Online" : state === "offline" ? "Offline" : state === "unavailable" ? "Unavailable" : state === "checking" ? "Checking…" : "Could not check";
-      renderText(retained.statusText, label);
+      for (const endpoint of ["source", "target"]) {
+        retained.statuses[endpoint].layout.dataset.availability = states[endpoint];
+        renderText(retained.statuses[endpoint].text, availabilityLabel(states[endpoint]));
+      }
       if (recentBody.children[index] !== retained.row) {
         recentBody.insertBefore(retained.row, recentBody.children[index] ?? null);
       }
@@ -517,8 +564,13 @@ export function createSetupPanel(callbacks) {
     refreshRecents.disabled = !controlsEditable;
     const hasOptions = model.options !== null;
     options.hidden = !hasOptions || selectedMode === "inventory";
-    if (hasOptions && document.activeElement !== policy) policy.value = model.options.deletion_policy;
+    moreSummary.ariaExpanded = String(moreExpanded);
+    advancedOptions.hidden = !moreExpanded;
     if (hasOptions) {
+      policyButtons.forEach((button, value) => {
+        button.ariaChecked = String(value === model.options.deletion_policy);
+        button.tabIndex = value === model.options.deletion_policy ? 0 : -1;
+      });
       optionInputs.forEach((input, key) => {
         input.checked = key in model.options ? model.options[key] : model.options.preservation[key];
       });
@@ -526,7 +578,7 @@ export function createSetupPanel(callbacks) {
     } else {
       renderFilters([], false);
     }
-    policy.disabled = !controlsEditable || !hasOptions;
+    policyButtons.forEach((button) => { button.disabled = !controlsEditable || !hasOptions; });
     optionInputs.forEach((input) => { input.disabled = !controlsEditable; });
     ads.input.disabled = true;
     const retryKind = typeof model.attempt?.retry === "function" && !model.attempt.running

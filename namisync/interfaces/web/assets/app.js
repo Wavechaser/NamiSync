@@ -467,7 +467,7 @@ function refreshRecentPairs() {
   recentPairProbeRevision += 1;
   recentPairAvailability = Object.create(null);
   for (const pair of defaultSetup?.recents.pairs ?? []) {
-    recentPairAvailability[pair.mapping_id] = "checking";
+    recentPairAvailability[pair.mapping_id] = { source: "checking", target: "checking" };
   }
   renderTasks();
   recentPairProbePending = true;
@@ -490,15 +490,19 @@ async function runRecentPairProbe() {
     for (const pair of recents.pairs) {
       const observed = result.pairs.find((item) => item.mapping_id === pair.mapping_id
         && item.source_id === pair.source.location_id && item.target_id === pair.target.location_id);
-      const states = observed === undefined ? [] : [observed.source_state, observed.target_state];
-      recentPairAvailability[pair.mapping_id] = observed === undefined ? "unknown"
-        : states.every((state) => state === "resolved") ? "online"
-          : states.some((state) => state === "offline" || state === "missing") ? "offline"
-            : "unavailable";
+      const endpointState = (state) => state === "resolved" ? "online"
+        : state === "offline" || state === "missing" ? "offline"
+          : state === undefined ? "unknown" : "unavailable";
+      recentPairAvailability[pair.mapping_id] = {
+        source: endpointState(observed?.source_state),
+        target: endpointState(observed?.target_state),
+      };
     }
   } catch (_error) {
     if (current()) {
-      for (const pair of recents.pairs) recentPairAvailability[pair.mapping_id] = "unknown";
+      for (const pair of recents.pairs) {
+        recentPairAvailability[pair.mapping_id] = { source: "unknown", target: "unknown" };
+      }
     }
   } finally {
     recentPairProbeRunning = false;
@@ -662,7 +666,8 @@ async function chooseRecentPair(pair) {
   const task = currentTask();
   const form = task?.form;
   if (task === null || !formIsEditable(form) || form.mode !== "sync-plan") return;
-  if (form.batchRunning || recentPairAvailability[pair.mapping_id] !== "online"
+  const availability = recentPairAvailability[pair.mapping_id];
+  if (form.batchRunning || availability?.source !== "online" || availability?.target !== "online"
     || !form.setup.recents.pairs.some((item) => item.mapping_id === pair.mapping_id
       && item.source.location_id === pair.source.location_id
       && item.target.location_id === pair.target.location_id)) return;

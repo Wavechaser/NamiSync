@@ -942,14 +942,28 @@ control. ADS is visibly unavailable and frozen off; the page never implies a
 disabled checked option will be honored. Wire encoding is
 owned by [BRIDGE.md](BRIDGE.md).
 
-Setup and Recent pairs occupy separate cards. The task type uses the gallery's
+Setup and Recent pairs occupy separate cards. Setup starts at the work area's
+top without a repeated task-title heading; the region's accessible name retains
+the selected task identity. The task type uses the gallery's
 segmented radio control, with arrow-key selection. Each path row places its
 Source/Target label on the left, an editable path and recent-folder caret in one
-field, and an accessible folder-open Browse button outside on the right. The
+standard textbox, with its compact caret button inset on all sides and an accessible
+folder-open Browse button outside on the right. The
 recent dropdown supports keyboard navigation, selection and Escape dismissal.
-Plan options have no enclosing outline: deletion policy and the verification
-switch remain visible; More options reveals preservation/update/casing switches
-and exclude filters. Disclosure changes presentation only, never option values.
+Plan options have no enclosing outline or divider: the grayscale Trash/Additive
+segmented control and verification switch sit together on the left; More options
+sits on the right of the same row and reveals preservation/update/casing switches
+and exclude filters below. Each advanced caption follows its toggle directly;
+Add filter sits beside the filter textbox. Disclosure changes presentation only,
+never option values. Only the selected task type's Create action is visible.
+The page reserves scrollbar space so disclosure does not shift controls sideways.
+Empty and resolved paths omit routine hints; refusal and recovery messages remain
+visible. Idle and disabled path-caret and Browse buttons are transparent, with
+task-card hover/press fills when enabled.
+Textboxes retain their normal accented active underline without an extra outer
+ring; forced colors retain a visible outline. Dropdown-option buttons have no
+native resting border, while keyboard-focused options retain the common focus
+indicator.
 
 A path row remains editable before its task starts. Editing an
 accepted path immediately drops the page's slot reference and marks it
@@ -967,12 +981,14 @@ work until resolved, silently choose the first mount, or reuse a stale choice.
 
 Setup shows recent sources, targets, and active pairs derived from ledger runs.
 The recent-pair table reuses file-table surfaces with taller rows, two stacked
-source/target paths in its first column and availability in its second. Long
+source/target paths in its first column and two aligned endpoint statuses in its
+second, without painted row dividers or outside table edges. Long
 paths truncate at the tail and retain the full text in a tooltip. Online uses a
 green solid circle; Offline uses red; accompanying text stays neutral. A missing
-root or absent volume makes a pair Offline. Other resolver refusals show
+root or absent volume makes that endpoint Offline. Other resolver refusals show
 Unavailable, and incomplete/failed probes show Checking/Could not check. Only
-Online pairs can be selected; all rows remain visible. Refresh rechecks these
+pairs with both endpoints Online can be selected; all rows remain visible.
+Refresh rechecks these
 ephemeral observations. It does not start a task or retain folder authority.
 Unresolved remembered locations remain visible with stable identity context,
 never a stale drive hint. Multi-pair creation is a browser coordinator over
@@ -1098,10 +1114,14 @@ A resting unselected task card is fully transparent. Hover and selected/current
 rest use the same neutral selection overlay; press temporarily weakens it. The
 live rail's selected navigation button exposes `aria-current="page"`; the
 gallery's `aria-current="true"` and `aria-selected="true"` variants retain the
-same component treatment. Selected/current cards retain a 3 px sampled-accent marker,
+same component treatment. Selected/current cards retain a 3 px wide, 1.5 rem tall
+(24 CSS px at the default root size) sampled-accent marker,
 so hover never erases selection. Task cards have no painted border or elevation
-in ordinary themes. The separate **Close** button remains beside the selected
-card and retains its existing pending-close availability rules. In forced colors,
+in ordinary themes. Each live card spans the rail column with a dismiss icon
+inset at the right; selection and dismissal remain sibling buttons, never nested
+interactive controls. Dismiss is transparent at rest and uses the task-card
+hover/press fills, with contextual accessible Close/Retry naming and the existing
+pending-close availability rules. In forced colors,
 every enabled selected/current card pairs the `Highlight` surface with
 `HighlightText` and an opposing marker; disabled cards retain `GrayText`, and
 keyboard focus retains a system-visible outline. Selection is conveyed
