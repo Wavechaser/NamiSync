@@ -2,6 +2,17 @@
 
 ## Maintained icon foundation (2026-09-11)
 
+GUI-I3 follow-up starts at `fe3c11c`: verify deletion and a later package-version
+transition without changing the real catalog or shipped assets. Existing tool
+behavior supports both; tests now target complete CLI transitions, including
+receipt/registry/CSS pruning, new artwork/provenance and fallback reconciliation.
+TOOLS documents caller cleanup, nonempty catalog, selected-file regeneration,
+missing artwork refusal and the manually reviewed package-to-Git association
+when upstream omits gitHead. All 29 maintenance tests passed; tools department
+334 passed, 3 skipped (4,672 other tests deselected). The real pinned-archive
+check and fresh adversarial review passed. No tool/runtime change was needed.
+Department log: `build/gui-icons/removal-upgrade-tools-01.txt`.
+
 Base: M1-6 `76ba7d0` on `milestone1`. GUI-I1/I2 form one completed icon
 foundation outcome; GUI-D4 is a separate documentation-only investigation.
 M1-7 and startup layout/control placement changes remain outside this task.

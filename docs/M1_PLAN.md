@@ -37,6 +37,24 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Icon removal and upgrade verification (2026-09-11)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-I3 | Verify catalog removal and package-version migration, document their boundaries, and correct any demonstrated gap. | 29 maintenance tests; tools department 334 passed, 3 skipped; unchanged real-archive check and fresh adversarial review passed. No tool correction needed. | Complete |
+
+Observed base: `fe3c11c`. Finite corpus: tools/icons.py and its catalog,
+tests/test_icon_maintenance.py, fixed registry/CSS consumers, TOOLS and existing
+icon guidance. Implementation population: focused maintenance tests, TOOLS,
+this register, HANDOFF and the existing CHANGELOG task; tool correction only
+if a demonstrated transition failure requires it. One verification/documentation
+commit; no actual package upgrade, glyph removal, runtime change or shadow work.
+Regression study preserves selected bytes/provenance, explicit fallbacks,
+read-only check and refusal before mutation for invalid inputs or modified stale
+files. Existing tests cover pruning but do not yet prove a successful version
+transition end to end. Current fixed asset/caller interfaces remain unchanged.
+Existing repository stop rules apply.
+
 ### Startup GUI icon foundation and shadow audit (2026-09-11)
 
 GUI-I2 continues the uncommitted GUI-I1 outcome at the user's request: simplify

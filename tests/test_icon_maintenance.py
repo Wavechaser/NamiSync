@@ -219,6 +219,91 @@ def test_removed_glyph_prunes_only_unchanged_previously_owned_files(workspace: P
     else:
         assert not list((workspace / ASSETS / "icons").glob("save_*.svg"))
         assert (workspace / ASSETS / "icons/add_16_regular.svg").read_bytes() == _svg(16) + b"\n"
+        receipt = json.loads((workspace / ASSETS / "icons/SOURCE.json").read_bytes())
+        assert set(receipt["files"]) == {f"add_{size}_regular.svg" for size in (16, 20, 24)}
+        assert b"save" not in (workspace / ASSETS / "icons.js").read_bytes()
+        assert b"save" not in (workspace / ASSETS / "components.css").read_bytes()
+        assert _run(workspace, "check") == 0
+
+
+def test_package_upgrade_replaces_artwork_and_requires_retiring_stale_fallback(workspace: Path) -> None:
+    old_archive = _archive(_members()[1:])
+    old_catalog = _catalog(old_archive)
+    old_catalog["fallbacks"] = {"add": {"sm": 20}}
+    (workspace / "upstream.tgz").write_bytes(old_archive)
+    _save_catalog(workspace, old_catalog)
+    assert _run(workspace, "sync") == 0
+    assert not (workspace / ASSETS / "icons/add_16_regular.svg").exists()
+    assert b'--nami-icon-mask-sm: url("./icons/add_20_regular.svg");' in (
+        workspace / ASSETS / "components.css"
+    ).read_bytes()
+
+    updated_members = [
+        (name, payload.replace(b"M1 1H8V8H1Z", b"M2 2H9V9H2Z") + b"\r\n", kind)
+        for name, payload, kind in _members()
+    ]
+    archive = _archive(updated_members, {
+        "name": "@fluentui/svg-icons", "version": "1.2.0", "gitHead": "b" * 40,
+    })
+    catalog = _catalog(archive)
+    catalog["upstream"].update(version="1.2.0", git_commit="b" * 40)
+    catalog["fallbacks"] = {"add": {"sm": 20}}
+    (workspace / "upstream.tgz").write_bytes(archive)
+    _save_catalog(workspace, catalog)
+    before = _snapshot(workspace)
+    assert _run(workspace, "sync") == 1
+    assert _snapshot(workspace) == before
+
+    catalog["fallbacks"] = {}
+    _save_catalog(workspace, catalog)
+    before = _snapshot(workspace)
+    assert _run(workspace, "check") == 1
+    assert _snapshot(workspace) == before
+    assert _run(workspace, "sync") == 0
+    receipt = json.loads((workspace / ASSETS / "icons/SOURCE.json").read_bytes())
+    assert receipt["version"] == "1.2.0"
+    assert receipt["git_commit"] == "b" * 40
+    assert receipt["package_integrity"] == catalog["upstream"]["integrity"]
+    assert receipt["package_integrity"] != old_catalog["upstream"]["integrity"]
+    assert receipt["package_url"] == "https://www.npmjs.com/package/@fluentui/svg-icons/v/1.2.0"
+    assert receipt["package_tarball_url"] == "https://registry.npmjs.org/@fluentui/svg-icons/-/svg-icons-1.2.0.tgz"
+    assert receipt["license_source_url"] == (
+        f"https://raw.githubusercontent.com/microsoft/fluentui-system-icons/{'b' * 40}/LICENSE"
+    )
+    assert set(receipt["files"]) == {f"add_{size}_regular.svg" for size in (16, 20, 24)}
+    for name, upstream, _ in updated_members:
+        filename = name.removeprefix("package/icons/")
+        packaged = upstream[:-2] + b"\n"
+        assert (workspace / ASSETS / "icons" / filename).read_bytes() == packaged
+        assert receipt["files"][filename] == {
+            "source_url": f"https://unpkg.com/@fluentui/svg-icons@1.2.0/icons/{filename}",
+            "upstream_sha256": hashlib.sha256(upstream).hexdigest(),
+            "packaged_sha256": hashlib.sha256(packaged).hexdigest(),
+        }
+    assert b'--nami-icon-mask-sm: url("./icons/add_16_regular.svg");' in (
+        workspace / ASSETS / "components.css"
+    ).read_bytes()
+    assert (workspace / ASSETS / "icons/LICENSE.txt").read_bytes() == LICENSE
+    complete = _snapshot(workspace)
+    assert _run(workspace, "check") == 0
+    assert _snapshot(workspace) == complete
+
+
+@pytest.mark.parametrize("renamed", [False, True])
+def test_upgrade_missing_selected_glyph_refuses_without_writes(workspace: Path, renamed: bool) -> None:
+    assert _run(workspace, "sync") == 0
+    archive = _archive(_members("plus") if renamed else [], {
+        "name": "@fluentui/svg-icons", "version": "1.2.0", "gitHead": "b" * 40,
+    })
+    catalog = _catalog(archive)
+    catalog["upstream"].update(version="1.2.0", git_commit="b" * 40)
+    (workspace / "upstream.tgz").write_bytes(archive)
+    _save_catalog(workspace, catalog)
+    before = _snapshot(workspace)
+
+    assert _run(workspace, "check") == 1
+    assert _run(workspace, "sync") == 1
+    assert _snapshot(workspace) == before
 
 
 def test_unrelated_file_causes_refusal_without_mutation(workspace: Path) -> None:

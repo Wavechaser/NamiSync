@@ -41,6 +41,10 @@ packaging remain open.
   superseded root icon list with user authorization.
 - Registered maintenance command syntax and options in TOOLS.md, linked from
   the desktop icon guidance.
+- Verified removal and package-version transitions with synthetic archives and
+  documented caller cleanup, fallback reconciliation and upgrade refusal rules.
+  All 29 maintenance tests and 334 tools-department tests passed (three skips);
+  pinned-archive check and independent review passed. Tool behavior was sufficient.
 - Verified 61 focused checks, 4,972 ordinary tests (four skips), all 30 installed
   headed tests, authentic archive correspondence and a zero-change sync. Fresh
   adversarial review passed.
