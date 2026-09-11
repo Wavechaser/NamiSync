@@ -14,15 +14,24 @@
     <header class="nami-shell__header">
       <h1>NamiSync</h1>
       <p id="host-status" role="status" aria-live="polite">Starting...</p>
-      <div class="nami-shell__theme">
-        <span class="nami-field__label" id="theme-mode-label">Theme</span>
-        <div class="nami-combobox" data-value="system" id="theme-mode">
-          <button class="nami-combobox__trigger" id="theme-mode-trigger" type="button" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="theme-options" aria-labelledby="theme-mode-label theme-mode-value" disabled>
-            <span id="theme-mode-value">System</span>
-          </button>
-        </div>
-      </div>
     </header>
+    <div class="nami-settings" id="settings-view" hidden>
+      <section class="nami-card nami-settings__card">
+        <h2>Settings</h2>
+        <div class="nami-shell__theme">
+          <span class="nami-field__label" id="theme-mode-label">Theme</span>
+          <div class="nami-combobox" data-value="system" id="theme-mode">
+            <button class="nami-combobox__trigger" id="theme-mode-trigger" type="button" role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-controls="theme-options" aria-labelledby="theme-mode-label theme-mode-value" disabled>
+              <span id="theme-mode-value">System</span>
+            </button>
+          </div>
+        </div>
+      </section>
+      <section class="nami-card nami-settings__card">
+        <h2>About</h2>
+        <p>Version 0.1.0 "Gertrud"</p>
+      </section>
+    </div>
   </main>
   <div class="nami-combobox__popup" id="theme-options" role="listbox" aria-labelledby="theme-mode-label" hidden>
     <div class="nami-combobox__option" id="theme-option-system" role="option" data-value="system" aria-selected="true"><span class="nami-combobox__selection" aria-hidden="true"></span><span>System</span></div>

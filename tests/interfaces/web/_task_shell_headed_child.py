@@ -74,7 +74,7 @@ function workTitle() {
   return label.startsWith("Work area — ") ? label.slice("Work area — ".length) : null;
 }
 function statusFor(title) { return rowByTitle(title)?.querySelector(".nami-task-card__status")?.textContent ?? null; }
-function clickNew() { document.querySelector(".nami-task-rail__header .nami-button")?.click(); }
+function clickNew() { document.querySelector(".nami-task-rail__create")?.click(); }
 function clickSelect(title) { rowByTitle(title)?.querySelector(".nami-task-card")?.click(); }
 function clickClose(title) { rowByTitle(title)?.querySelector(".nami-task-rail__close")?.click(); }
 function resolvedBackground(variable) {
@@ -130,11 +130,16 @@ function railGeometry(title) {
   const rowRect = row.getBoundingClientRect();
   const cardRect = card.getBoundingClientRect();
   const closeRect = close.getBoundingClientRect();
+  const create = document.querySelector(".nami-task-rail__create");
+  const createRect = create.getBoundingClientRect();
+  const headingRect = document.querySelector(".nami-task-rail__header h2").getBoundingClientRect();
   return {
     fullWidth: Math.abs(cardRect.left - rowRect.left) <= 1 && Math.abs(cardRect.right - rowRect.right) <= 1,
     closeInset: closeRect.left > cardRect.left && closeRect.right < cardRect.right,
     siblingDismiss: close.parentElement === row && close.parentElement === card.parentElement,
     dismissTransparent: getComputedStyle(close).backgroundColor === "rgba(0, 0, 0, 0)",
+    createAligned: Math.abs((createRect.top + createRect.bottom) / 2 - (headingRect.top + headingRect.bottom) / 2) <= 1,
+    createLargeIcon: getComputedStyle(create.querySelector(".nami-icon")).width === "24px",
   };
 }
 let rawSequence = 0;
@@ -191,6 +196,29 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   clickNew();
   await until(() => document.querySelector("#host-status")?.textContent?.includes("could not be created"), "capacity refusal");
   const refusedCount = rows().length;
+  const taskList = document.querySelector(".nami-task-rail__items");
+  const settingsButton = document.querySelector(".nami-task-rail__settings");
+  const settingsBefore = settingsButton.getBoundingClientRect();
+  taskList.scrollTop = taskList.scrollHeight;
+  const independentRail = taskList.scrollTop > 0 &&
+    Math.abs(settingsButton.getBoundingClientRect().top - settingsBefore.top) <= 1 &&
+    settingsBefore.bottom <= innerHeight &&
+    taskList.getBoundingClientRect().bottom <= settingsBefore.top &&
+    document.documentElement.scrollHeight <= innerHeight + 1;
+  taskList.scrollTop = 0;
+  const retainedSource = document.querySelector("#setup-source-path");
+  retainedSource.value = "C:\\retained-settings-draft";
+  retainedSource.dispatchEvent(new Event("input", {bubbles: true}));
+  settingsButton.click();
+  await until(() => document.querySelector("#theme-mode-trigger")?.disabled === false, "Settings theme readiness");
+  const settingsSurface = document.querySelector(".nami-work-panel").getAttribute("aria-label") === "Settings" &&
+    document.querySelectorAll("#settings-view > .nami-card").length === 2 &&
+    document.querySelector("#settings-view").textContent.includes('0.1.0 "Gertrud"') &&
+    rows().length === 48 && settingsButton.getAttribute("aria-current") === "page";
+  clickSelect("Task 48");
+  await until(() => workTitle() === "Task 48", "return from Settings");
+  const settingsDraftRetained = document.querySelector("#setup-source-path") === retainedSource &&
+    retainedSource.value === "C:\\retained-settings-draft";
   await control("checkpoint", "capacity");
   clickSelect("Task 47");
   await until(() => selectedTitle() === "Task 47" && workTitle() === "Task 47", "older task selection");
@@ -225,7 +253,7 @@ _INITIAL_SCRIPT = _COMMON_JS + r"""
   await until(() => rows().length === 46, "delayed create cleanup");
   await control("checkpoint", "navigation_cleanup");
 
-  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible } });
+  await control("record", { initial: { newest, setupVisible, refusedCount, retainedAfterFailure, navigationStayed, olderAppearance, newerAppearance, olderSelectionCleared, idleGeometry, pointerFocusHidden, keyboardFocusVisible, independentRail, settingsSurface, settingsDraftRetained } });
   await control("checkpoint", "navigation_recorded");
   await control("arm_create_delay");
   await control("checkpoint", "reinjection_armed");

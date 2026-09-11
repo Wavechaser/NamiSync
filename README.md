@@ -47,7 +47,8 @@ a secured WebView2 host, bounded command/event transport with asynchronous
 completion for small task commands, native folder picking,
 the Fluent/accessibility foundation, process-live blank task creation,
 newest-first navigation and explicit close, frozen Setup with typed/picker/recent
-locations, serial plan and standalone inventory starts, Plan again, and dormant
+locations, serial plan and standalone inventory starts, Plan again, a minimal
+Settings/About page with theme control and independent task-rail scrolling, and dormant
 gallery-proven sync/integrity file-list row renderers. User-facing review content,
 final packaging, and beta
 closure remain open, so the window is not yet the complete desktop product.
@@ -266,7 +267,8 @@ run-derived remembered locations support frozen task Setup, serial pair and
 standalone inventory creation, and fresh-identity Plan again. A fixed local
 Fluent icon vocabulary, maintained from one offline source catalog, supports
 selective, accessible icon use. Setup separates compact path/options controls
-from recent pairs with fresh availability checks. The exact
+from recent pairs with fresh availability checks. Settings/About occupies the
+work area while preserving tasks; the rail scrolls independently. The exact
 event-v5/data-epoch-7 protocol cut is active. Review content and beta
 packaging remain open.
 

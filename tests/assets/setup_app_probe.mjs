@@ -198,7 +198,8 @@ async function loadScenario({
       harness.callbacks = callbacks;
       return {
         element: {},
-        render(task) { harness.task = task; harness.model = task?.form ?? null; },
+        render(task) { harness.task = task; harness.model = task?.form ?? null; harness.settingsVisible = false; },
+        renderSettings() { harness.settingsVisible = true; },
       };
     }
     // scenario ${scenarioId}
@@ -242,6 +243,37 @@ async function loadScenario({
   await import(moduleUrl(`${source}\n// scenario ${scenarioId}`));
   await until(() => harness.model !== null, "initial Setup read");
   return harness;
+}
+
+{
+  const harness = await loadScenario();
+  harness.callbacks.onEdit("source", "C:\\settings-draft");
+  const retained = harness.model;
+  const admission = deferred();
+  harness.admitLocation = () => admission.promise;
+  harness.callbacks.onValidate("source");
+  harness.railCallbacks.onSettings();
+  assert.equal(harness.settingsVisible, true);
+  admission.resolve(choice("source", "1", "C:\\settings-draft"));
+  await until(() => retained.source.location?.state === "resolved", "background admission while Settings is open");
+  assert.equal(harness.settingsVisible, true, "background completion must not replace Settings");
+  harness.railCallbacks.onSelect(TASK_A);
+  await until(() => harness.settingsVisible === false, "return to retained task");
+  assert.equal(harness.model, retained);
+  assert.equal(harness.model.source.text, "C:\\settings-draft");
+
+  const stale = deferred();
+  harness.callbacks.onEdit("source", "C:\\stale-before-clear");
+  harness.admitLocation = () => stale.promise;
+  harness.callbacks.onValidate("source");
+  const callCount = harness.calls.length;
+  harness.callbacks.onEdit("source", "");
+  assert.equal(harness.calls.length, callCount, "local clear does not call the bridge");
+  stale.resolve(choice("source", "2", "C:\\stale-before-clear"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(retained.source.text, "");
+  assert.equal(retained.source.candidate, null);
+  assert.equal(retained.source.location, null, "late admission cannot restore a cleared field");
 }
 
 {

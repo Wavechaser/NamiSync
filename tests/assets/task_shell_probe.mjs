@@ -56,11 +56,12 @@ globalThis.HTMLSelectElement = ElementFake;
 const app = new ElementFake("main");
 const status = new ElementFake("p", "Starting...");
 const theme = new ElementFake("div");
+const settings = new ElementFake("div");
 globalThis.document = {
   documentElement: new ElementFake("html"),
   createElement(tagName) { return new ElementFake(tagName); },
   querySelector(selector) {
-    return selector === "#app" ? app : selector === "#host-status" ? status : theme;
+    return selector === "#app" ? app : selector === "#host-status" ? status : selector === "#settings-view" ? settings : theme;
   },
 };
 
@@ -206,6 +207,10 @@ function byText(text) {
   return walk(app).find((element) => element.textContent === text);
 }
 
+function createButton() {
+  return walk(app).find((element) => element.classList.values.has("nami-task-rail__create"));
+}
+
 function taskButton(label) {
   return walk(app).find(
     (element) => element.tagName === "BUTTON" &&
@@ -216,7 +221,8 @@ function taskButton(label) {
 function taskButtons() {
   return walk(app).filter(
     (element) => element.tagName === "BUTTON" &&
-      element.classList.values.has("nami-task-card"),
+      element.classList.values.has("nami-task-card") &&
+      element.parentNode.classList.values.has("nami-task-rail__row"),
   );
 }
 
@@ -254,7 +260,7 @@ assert.equal(taskButton("Task 2")?.ariaCurrent, "page");
 taskButton("Task 1").click();
 assert.equal(taskButton("Task 1")?.ariaCurrent, "page");
 
-byText("New task").click();
+createButton().click();
 await until(() => creates.length === 1);
 taskButton("Task 2").click();
 creates[0].resolve({ task_id: TASK_C });
@@ -262,7 +268,7 @@ await turns();
 assert.equal(taskButton("Task 2")?.ariaCurrent, "page", "late create must not steal navigation");
 assert.ok(byText("Task 4"));
 
-byText("New task").click();
+createButton().click();
 await until(() => creates.length === 2);
 for (const callback of windowListeners.get("pywebviewready") ?? []) callback();
 await until(() => lists.length === 2);
@@ -293,7 +299,7 @@ assert.equal(taskButton("Task 2"), stableTaskBButton, "reinjection preserves exi
 
 for (const callback of windowListeners.get("pywebviewready") ?? []) callback();
 await until(() => lists.length === 5);
-byText("New task").click();
+createButton().click();
 await until(() => creates.length === 3);
 creates[2].resolve({ task_id: TASK_F });
 await turns();
@@ -374,7 +380,7 @@ assert.deepEqual(
 );
 
 const retainedBeforeCapacityRefusal = taskButtons();
-byText("New task").click();
+createButton().click();
 await until(() => creates.length === 4);
 creates[3].reject(new Error("simulated task capacity refusal"));
 await turns();

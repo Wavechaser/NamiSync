@@ -5,6 +5,7 @@ const GLYPH_CLASSES = Object.freeze({
   "add-square-multiple": "nami-icon--add-square-multiple",
   "approvals-app": "nami-icon--approvals-app",
   "archive-clock": "nami-icon--archive-clock",
+  "arrow-clockwise": "nami-icon--arrow-clockwise",
   "arrow-sync": "nami-icon--arrow-sync",
   "arrow-sync-checkmark": "nami-icon--arrow-sync-checkmark",
   "checkmark": "nami-icon--checkmark",

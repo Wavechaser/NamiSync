@@ -1235,7 +1235,8 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert 'rail.classList.add("nami-card"' not in rail
     assert 'panel.classList.add("nami-work-panel");' in panels
     assert "app.append(rail.element, panel.element);" in app
-    assert 'renderText(create, "New task");' in rail
+    assert 'create.append(createIcon(document, "add-square-multiple", "lg"));' in rail
+    assert 'create.ariaLabel = "New task";' in rail
     assert 'close.append(createIcon(document, "dismiss", "sm"));' in rail
     assert 'entry.close.ariaLabel = `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;' in rail
     assert "entry.close.title = entry.close.ariaLabel;" in rail
@@ -1292,5 +1293,7 @@ def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
     assert "height: 100vh" not in app_css
     for selector, declarations in re.findall(r"([^{}]+)\{([^{}]*)\}", app_css.split(".nami-tree", 1)[0]):
         if "overflow: hidden" in declarations:
-            assert selector.strip() in {".nami-setup__recent", ".nami-setup__pair-path"}
+            assert selector.strip() in {"#app", ".nami-task-rail", ".nami-setup__recent", ".nami-setup__pair-path", ".nami-setup__recent-pair-table"}
+    assert "grid-template-rows: auto minmax(0, 1fr);" in app_css
+    assert "grid-template-rows: auto minmax(0, 1fr) auto;" in app_css
     assert "--palette-" not in app_css

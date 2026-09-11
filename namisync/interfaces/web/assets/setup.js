@@ -33,6 +33,7 @@ function createLocationRow(purpose, handlers) {
   const line = document.createElement("div");
   const pathControl = document.createElement("div");
   const input = document.createElement("input");
+  const clear = createButton("", "nami-button nami-button--icon nami-setup__clear");
   const recentTrigger = createButton("", "nami-button nami-setup__recent-trigger");
   const caret = document.createElement("span");
   const popup = document.createElement("div");
@@ -55,6 +56,9 @@ function createLocationRow(purpose, handlers) {
   input.setAttribute("aria-describedby", `setup-${purpose}-status`);
   label.htmlFor = input.id;
   renderText(label, purpose === "source" ? "Source" : "Target");
+  clear.title = `Clear ${purpose} folder`;
+  clear.ariaLabel = `Clear ${purpose} folder`;
+  clear.append(createIcon(document, "dismiss", "sm"));
   recentTrigger.id = `setup-${purpose}-recent-trigger`;
   recentTrigger.ariaHasPopup = "listbox";
   recentTrigger.ariaExpanded = "false";
@@ -76,7 +80,7 @@ function createLocationRow(purpose, handlers) {
   status.classList.add("nami-field__hint", "nami-setup__location-status");
   status.setAttribute("role", "status");
   mounts.classList.add("nami-setup__mounts");
-  pathControl.append(input, recentTrigger, popup);
+  pathControl.append(input, clear, recentTrigger, popup);
   line.append(label, pathControl, picker);
   field.append(line, status, mounts);
 
@@ -129,11 +133,24 @@ function createLocationRow(purpose, handlers) {
   document.addEventListener?.("pointerdown", (event) => { if (!popup.hidden && !field.contains(event.target)) setOpen(false); });
   document.addEventListener?.("focusin", (event) => { if (!popup.hidden && !field.contains(event.target)) setOpen(false); });
   const validate = () => handlers.onValidate(purpose);
-  input.addEventListener("input", () => handlers.onEdit(purpose, input.value));
-  input.addEventListener("blur", validate);
+  input.addEventListener("input", () => {
+    clear.hidden = input.value.length === 0;
+    handlers.onEdit(purpose, input.value);
+  });
+  input.addEventListener("blur", (event) => {
+    if (event.relatedTarget !== clear) validate();
+  });
   input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); validate(); } });
   input.addEventListener("paste", () => queueMicrotask(validate));
   picker.addEventListener("click", () => handlers.onPick(purpose));
+  clear.addEventListener("pointerdown", (event) => event.preventDefault());
+  clear.addEventListener("click", () => {
+    input.value = "";
+    clear.hidden = true;
+    setOpen(false);
+    handlers.onEdit(purpose, "");
+    input.focus();
+  });
 
   function renderRecents(values, editable) {
     locations = values;
@@ -155,7 +172,7 @@ function createLocationRow(purpose, handlers) {
     }
     if (recentTrigger.disabled) setOpen(false);
   }
-  return { field, label, input, picker, status, mounts, renderRecents, setOpen };
+  return { field, label, input, clear, picker, status, mounts, renderRecents, setOpen };
 }
 
 function locationStatus(location) {
@@ -189,10 +206,6 @@ export function createSetupPanel(callbacks) {
   const target = createLocationRow("target", handlers);
   const options = document.createElement("div");
   const primaryOptions = document.createElement("div");
-  const policyGroup = document.createElement("div");
-  const policyLabel = document.createElement("p");
-  const policy = document.createElement("div");
-  const policyButtons = new Map();
   const moreSummary = createButton("More options", "nami-button nami-button--subtle nami-setup__more-summary");
   const moreCaret = document.createElement("span");
   const advancedOptions = document.createElement("div");
@@ -204,16 +217,16 @@ export function createSetupPanel(callbacks) {
   const addFilter = createButton("Add filter");
   const filterList = document.createElement("ul");
   const actions = document.createElement("div");
-  const startPlan = createButton("Create plan", "nami-button nami-button--primary");
-  const startInventory = createButton("Create inventory", "nami-button nami-button--primary");
-  const addPair = createButton("Add pair");
-  const startBatch = createButton("Create pair batch", "nami-button nami-button--primary");
-  const planAgain = createButton("Plan again");
+  const startPlan = createButton("Create plan", "nami-button nami-button--primary nami-setup__primary-action");
+  const startInventory = createButton("Create inventory", "nami-button nami-button--primary nami-setup__primary-action");
+  const addPair = createButton("Add pair", "nami-button nami-setup__pair-action nami-setup__add-pair");
+  const startBatch = createButton("Create pair batch", "nami-button nami-button--primary nami-setup__pair-action");
+  const planAgain = createButton("Plan again", "nami-button nami-setup__primary-action");
   const planAgainChoices = document.createElement("div");
   const batch = document.createElement("ol");
   const recentHeader = document.createElement("div");
   const recentHeading = document.createElement("h2");
-  const refreshRecents = createButton("Refresh", "nami-button nami-button--subtle nami-setup__refresh-recents");
+  const refreshRecents = createButton("", "nami-button nami-button--subtle nami-button--icon nami-setup__refresh-recents");
   const recentEmpty = document.createElement("p");
   const recentTable = document.createElement("table");
   const recentBody = document.createElement("tbody");
@@ -256,36 +269,15 @@ export function createSetupPanel(callbacks) {
   modeGroup.append(modeLabel, mode);
   options.classList.add("nami-setup__options");
   primaryOptions.classList.add("nami-setup__primary-options");
-  policyLabel.id = "setup-deletion-policy-label";
-  renderText(policyLabel, "Deletion policy");
-  policy.id = "setup-deletion-policy";
-  policy.classList.add("nami-segmented", "nami-setup__policy");
-  policy.setAttribute("role", "radiogroup");
-  policy.setAttribute("aria-labelledby", policyLabel.id);
-  for (const [value, text] of [["trash", "Trash"], ["additive", "Additive"]]) {
-    const item = createButton(text, "nami-segmented__item");
-    item.setAttribute("role", "radio");
-    item.dataset.value = value;
-    item.addEventListener("click", () => handlers.onOption("deletion_policy", value));
-    item.addEventListener("keydown", (event) => {
-      if (!["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
-      event.preventDefault();
-      const next = value === "trash" ? "additive" : "trash";
-      if (!policyButtons.get(next).disabled) {
-        handlers.onOption("deletion_policy", next);
-        policyButtons.get(next).focus();
-      }
-    });
-    policyButtons.set(value, item);
-    policy.append(item);
-  }
-  policyGroup.classList.add("nami-setup__policy-group");
-  policyGroup.append(policyLabel, policy);
   const optionInputs = new Map();
-  const verify = createToggle("Verify after copying", "verify_after_execute", handlers.onOption);
+  const verify = createToggle("Verify execution", "verify_after_execute", handlers.onOption);
+  const additive = createToggle("Additive sync", "deletion_policy", (_key, checked) => {
+    handlers.onOption("deletion_policy", checked ? "additive" : "trash");
+  });
   verify.label.classList.add("nami-setup__verify-row");
+  additive.label.classList.add("nami-setup__additive-row");
   optionInputs.set("verify_after_execute", verify.input);
-  primaryOptions.append(policyGroup, verify.label, moreSummary);
+  primaryOptions.append(verify.label, additive.label, moreSummary);
   moreSummary.ariaExpanded = "false";
   moreSummary.setAttribute("aria-controls", "setup-advanced-options");
   moreCaret.classList.add("nami-setup__more-caret");
@@ -342,6 +334,9 @@ export function createSetupPanel(callbacks) {
   batch.ariaLabel = "Pair creation results";
   recentHeader.classList.add("nami-setup__recent-header");
   renderText(recentHeading, "Recent pairs");
+  refreshRecents.title = "Refresh recent pairs";
+  refreshRecents.ariaLabel = "Refresh recent pairs";
+  refreshRecents.append(createIcon(document, "arrow-clockwise", "sm"));
   recentHeader.append(recentHeading, refreshRecents);
   renderText(recentEmpty, "No recent pairs yet.");
   recentEmpty.classList.add("nami-shell__guidance", "nami-setup__recent-empty");
@@ -387,6 +382,8 @@ export function createSetupPanel(callbacks) {
       row.mounts.append(button);
     });
     row.input.disabled = !editable;
+    row.clear.hidden = row.input.value.length === 0;
+    row.clear.disabled = !editable;
     row.picker.disabled = !editable;
     if (!editable) row.setOpen(false);
   }
@@ -567,10 +564,7 @@ export function createSetupPanel(callbacks) {
     moreSummary.ariaExpanded = String(moreExpanded);
     advancedOptions.hidden = !moreExpanded;
     if (hasOptions) {
-      policyButtons.forEach((button, value) => {
-        button.ariaChecked = String(value === model.options.deletion_policy);
-        button.tabIndex = value === model.options.deletion_policy ? 0 : -1;
-      });
+      additive.input.checked = model.options.deletion_policy === "additive";
       optionInputs.forEach((input, key) => {
         input.checked = key in model.options ? model.options[key] : model.options.preservation[key];
       });
@@ -578,7 +572,7 @@ export function createSetupPanel(callbacks) {
     } else {
       renderFilters([], false);
     }
-    policyButtons.forEach((button) => { button.disabled = !controlsEditable || !hasOptions; });
+    additive.input.disabled = !controlsEditable || !hasOptions;
     optionInputs.forEach((input) => { input.disabled = !controlsEditable; });
     ads.input.disabled = true;
     const retryKind = typeof model.attempt?.retry === "function" && !model.attempt.running

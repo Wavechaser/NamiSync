@@ -87,13 +87,14 @@ _EDITABLE_SCRIPT = r"""
   const inventoryMode = mode?.querySelector('[role="radio"][data-value="inventory"]');
   const more = document.querySelector(".nami-setup__more-summary");
   const advanced = document.querySelector("#setup-advanced-options.nami-setup__advanced-options");
-  const deletionPolicy = document.querySelector(".nami-setup__policy");
   const verifyToggle = document.querySelector('[data-option="verify_after_execute"]');
+  const additiveToggle = document.querySelector('[data-option="deletion_policy"]');
   const adsToggle = document.querySelector('[data-option="preserve_ads"]');
   const sourceLine = document.querySelector('[data-purpose="source"] .nami-setup__location-line');
   const sourceLabel = document.querySelector('[for="setup-source-path"]');
   const pathControl = document.querySelector('[data-purpose="source"] .nami-setup__path-control');
   const recentTrigger = document.querySelector("#setup-source-recent-trigger");
+  const clearSource = document.querySelector('[data-purpose="source"] .nami-setup__clear');
   const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
   const targetStatus = document.querySelector('[data-purpose="target"] .nami-setup__location-status');
   const inventoryAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
@@ -112,14 +113,20 @@ _EDITABLE_SCRIPT = r"""
   if (!(pathControl instanceof HTMLDivElement)) missingControls.push("path-control");
   if (!(recentTrigger instanceof HTMLButtonElement)) missingControls.push("recent-trigger");
   if (!(picker instanceof HTMLButtonElement)) missingControls.push("picker");
-  if (!(deletionPolicy instanceof HTMLDivElement) || deletionPolicy.getAttribute("role") !== "radiogroup") missingControls.push("deletion-policy");
   if (!(verifyToggle instanceof HTMLInputElement)) missingControls.push("verify-toggle");
+  if (!(additiveToggle instanceof HTMLInputElement)) missingControls.push("additive-toggle");
+  if (!(clearSource instanceof HTMLButtonElement)) missingControls.push("source-clear");
   if (!(adsToggle instanceof HTMLInputElement) || !adsToggle.disabled) missingControls.push("ads-toggle");
   if (!(inventoryAction instanceof HTMLButtonElement)) missingControls.push("inventory-action");
   if (!(planAgainAction instanceof HTMLButtonElement)) missingControls.push("plan-again-action");
   if (!(targetStatus instanceof HTMLParagraphElement)) missingControls.push("target-status");
   if (missingControls.length > 0) throw new Error(`Setup layout controls are unavailable: ${missingControls.join(", ")}`);
   const emptyPathHintHidden = targetStatus.textContent === "" && targetStatus.hidden && !targetStatus.checkVisibility();
+  const moreIdleTransparent = getComputedStyle(more).backgroundColor === "rgba(0, 0, 0, 0)";
+  const refreshControl = document.querySelector(".nami-setup__refresh-recents");
+  const refreshIdleTransparent = getComputedStyle(refreshControl).backgroundColor === "rgba(0, 0, 0, 0)" &&
+    refreshControl.textContent === "" && refreshControl.querySelector(".nami-icon--arrow-clockwise") !== null;
+  const refreshSquare = Math.abs(refreshControl.getBoundingClientRect().width - refreshControl.getBoundingClientRect().height) <= 1;
   const idlePathStyle = getComputedStyle(source);
   const idlePathAppearance = [idlePathStyle.backgroundColor, idlePathStyle.borderColor, idlePathStyle.borderRadius, idlePathStyle.boxShadow];
   syncMode.focus();
@@ -127,17 +134,18 @@ _EDITABLE_SCRIPT = r"""
   await until(() => inventoryMode.getAttribute("aria-checked") === "true" && document.activeElement === inventoryMode, "keyboard inventory segment");
   inventoryMode.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowLeft", bubbles: true}));
   await until(() => syncMode.getAttribute("aria-checked") === "true" && document.activeElement === syncMode, "keyboard sync segment");
-  const closedPrimaryBounds = [deletionPolicy, verifyToggle.closest("label"), more]
+  const closedPrimaryBounds = [verifyToggle.closest("label"), additiveToggle.closest("label"), more]
     .map((item) => item.getBoundingClientRect());
   const advancedClosed = more.getAttribute("aria-expanded") === "false" && advanced.hidden && !advanced.checkVisibility();
   more.click();
   await until(() => more.getAttribute("aria-expanded") === "true" && advanced.checkVisibility(), "More options disclosure");
   const setupBounds = document.querySelector(".nami-setup").getBoundingClientRect();
   const workBounds = document.querySelector(".nami-work-panel__body").getBoundingClientRect();
-  const primaryBounds = [deletionPolicy, verifyToggle.closest("label"), more]
+  const primaryBounds = [verifyToggle.closest("label"), additiveToggle.closest("label"), more]
     .map((item) => item.getBoundingClientRect());
   const optionsBounds = options.getBoundingClientRect();
   const advancedBounds = advanced.getBoundingClientRect();
+  const expandedOptionsGap = advancedBounds.top - Math.max(...primaryBounds.map((rect) => rect.bottom));
   const standardFilter = document.querySelector("#setup-filter");
   if (!(standardFilter instanceof HTMLInputElement)) throw new Error("Setup standard filter input is unavailable");
   const filterIdleStyle = getComputedStyle(standardFilter);
@@ -151,6 +159,14 @@ _EDITABLE_SCRIPT = r"""
   const caretInsidePath = caretBounds.left > pathBounds.left && caretBounds.right < pathBounds.right &&
     caretBounds.top > pathBounds.top && caretBounds.bottom < pathBounds.bottom &&
     parseFloat(getComputedStyle(source).paddingRight) >= caretBounds.width;
+  const browseSquare = Math.abs(picker.getBoundingClientRect().width - picker.getBoundingClientRect().height) <= 1;
+  const actionBounds = document.querySelector(".nami-setup__actions").getBoundingClientRect();
+  const primaryAction = document.querySelector(".nami-setup__primary-action:not([hidden])");
+  const pairActions = Array.from(document.querySelectorAll(".nami-setup__pair-action:not([hidden])"));
+  const pairActionsRightAligned = primaryAction instanceof HTMLButtonElement && pairActions.length === 2 &&
+    primaryAction.getBoundingClientRect().left <= actionBounds.left + 1 &&
+    pairActions[0].getBoundingClientRect().left > primaryAction.getBoundingClientRect().right &&
+    Math.abs(pairActions[1].getBoundingClientRect().right - actionBounds.right) <= 1;
   const advancedLabelsFollowToggles = Array.from(advanced.querySelectorAll(".nami-setup__option")).every((label) => {
     const control = label.children[0];
     const caption = label.children[1];
@@ -192,6 +208,30 @@ _EDITABLE_SCRIPT = r"""
   const offlineSelect = offlinePair.querySelector(".nami-setup__pair-select");
   const mixedStatusBounds = mixedStatuses.map((item) => item.getBoundingClientRect());
   const mixedPathBounds = Array.from(offlinePaths).map((item) => item.getBoundingClientRect());
+  const recentTable = document.querySelector(".nami-setup__recent-pair-table");
+  const recentHead = recentTable.querySelector("thead");
+  const tableStyle = getComputedStyle(recentTable);
+  const tokenWitness = document.createElement("span");
+  tokenWitness.style.cssText = `border-radius: var(--radius-medium); font-size: var(--font-size-caption);
+    line-height: var(--line-height-caption); background: var(--color-neutral-surface-selected);`;
+  document.body.append(tokenWitness);
+  const tokenStyle = getComputedStyle(tokenWitness);
+  const expectedRadius = tokenStyle.borderRadius;
+  const expectedFontSize = tokenStyle.fontSize;
+  const expectedLineHeight = tokenStyle.lineHeight;
+  const expectedHeaderFill = tokenStyle.backgroundColor;
+  tokenWitness.style.background = "var(--color-neutral-surface)";
+  const expectedDefaultFill = getComputedStyle(tokenWitness).backgroundColor;
+  tokenWitness.style.background = "var(--color-neutral-surface-subtle)";
+  const expectedSubtleFill = getComputedStyle(tokenWitness).backgroundColor;
+  tokenWitness.remove();
+  const tableGalleryStyle = tableStyle.borderRadius === expectedRadius && parseFloat(tableStyle.borderWidth) === 0 &&
+    tableStyle.overflow === "hidden" && tableStyle.fontSize === expectedFontSize &&
+    tableStyle.lineHeight === expectedLineHeight && getComputedStyle(recentHead).backgroundColor === expectedHeaderFill &&
+    recentHeaders.every((header) => getComputedStyle(header).fontSize === expectedFontSize &&
+      getComputedStyle(header).lineHeight === expectedLineHeight) &&
+    availabilityRows.every((row, index) => getComputedStyle(row).backgroundColor ===
+      (index % 2 === 0 ? expectedDefaultFill : expectedSubtleFill));
   if (!(onlineSelect instanceof HTMLButtonElement) || !(offlineSelect instanceof HTMLButtonElement) ||
       offlinePair.getAttribute("aria-disabled") !== "true" || !offlineSelect.disabled ||
       onlinePair.getAttribute("aria-disabled") !== "false" || onlineSelect.disabled) {
@@ -210,6 +250,19 @@ _EDITABLE_SCRIPT = r"""
   source.dispatchEvent(new Event("input", {bubbles: true}));
   source.dispatchEvent(new Event("blur", {bubbles: true}));
   await until(() => source.dataset.state === "resolved", "corrected typed location admission");
+  const populatedPathBounds = source.getBoundingClientRect();
+  const populatedCaretBounds = recentTrigger.getBoundingClientRect();
+  const clearBounds = clearSource.getBoundingClientRect();
+  const clearImmediatelyBeforeCaret = clearBounds.right <= populatedCaretBounds.left &&
+    populatedCaretBounds.left - clearBounds.right <= 4.1 && clearBounds.top > populatedPathBounds.top &&
+    clearBounds.bottom < populatedPathBounds.bottom;
+  clearSource.click();
+  await until(() => source.value === "" && source.dataset.state === "unresolved", "clear invalidates admitted source");
+  const clearInvalidatesImmediately = source.value === "" && clearSource.hidden && document.activeElement === source;
+  source.value = __SOURCE__;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  source.dispatchEvent(new Event("blur", {bubbles: true}));
+  await until(() => source.dataset.state === "resolved", "readmitted source after clear");
   const routineReadyHintHidden = Array.from(document.querySelectorAll(".nami-setup__location-status"))
     .every((item) => item.textContent !== "Folder is ready." || !item.checkVisibility());
   picker.focus({focusVisible: false});
@@ -255,15 +308,18 @@ _EDITABLE_SCRIPT = r"""
   await sleep(100);
   const pointerFocusStyle = getComputedStyle(onlineSelect);
   const pointerFocusHidden = pointerFocusStyle.boxShadow === "none" &&
-    (pointerFocusStyle.outlineStyle === "none" || parseFloat(pointerFocusStyle.outlineWidth) === 0);
+    (pointerFocusStyle.outlineStyle === "none" || parseFloat(pointerFocusStyle.outlineWidth) === 0) &&
+    getComputedStyle(onlinePair).boxShadow === "none";
   onlineSelect.blur();
   onlineSelect.focus({focusVisible: true});
-  await until(() => getComputedStyle(onlineSelect).boxShadow !== "none" ||
-    (getComputedStyle(onlineSelect).outlineStyle !== "none" && parseFloat(getComputedStyle(onlineSelect).outlineWidth) > 0),
+  await until(() => getComputedStyle(onlinePair).boxShadow !== "none",
   "recent pair keyboard focus ring");
   const keyboardFocusStyle = getComputedStyle(onlineSelect);
-  const keyboardFocusVisible = keyboardFocusStyle.boxShadow !== "none" ||
-    (keyboardFocusStyle.outlineStyle !== "none" && parseFloat(keyboardFocusStyle.outlineWidth) > 0);
+  const focusedRowStyle = getComputedStyle(onlinePair);
+  const keyboardFocusVisible = focusedRowStyle.boxShadow !== "none" && keyboardFocusStyle.boxShadow === "none";
+  const pairRowFocusWhole = focusedRowStyle.boxShadow !== "none" &&
+    Array.from(onlinePair.children).every((cell) => getComputedStyle(cell).backgroundColor === "rgba(0, 0, 0, 0)") &&
+    getComputedStyle(onlineSelect).backgroundColor === "rgba(0, 0, 0, 0)";
   return {
     editable: true,
     typed_refusal: refusedState,
@@ -292,6 +348,11 @@ _EDITABLE_SCRIPT = r"""
       expanded: primaryBounds.map((rect) => rect.toJSON())},
     advanced_below_full_width: advancedBounds.top >= Math.max(...primaryBounds.map((rect) => rect.bottom)) &&
       Math.abs(advancedBounds.left - optionsBounds.left) <= 1 && Math.abs(advancedBounds.right - optionsBounds.right) <= 1,
+    expanded_options_padding: expandedOptionsGap >= 8,
+    more_idle_transparent: moreIdleTransparent,
+    refresh_icon_transparent: refreshIdleTransparent,
+    refresh_square: refreshSquare,
+    recent_row_height: onlinePair.getBoundingClientRect().height,
     advanced_filters_visible: document.querySelector(".nami-setup__filters").checkVisibility(),
     advanced_labels_follow_toggles: advancedLabelsFollowToggles,
     add_filter_inline: addFilterInline,
@@ -300,6 +361,10 @@ _EDITABLE_SCRIPT = r"""
     path_has_no_outer_ring: pathHasNoOuterRing,
     path_fills_rounded_control: pathFillsRoundedControl,
     caret_inside_path_with_text_space: caretInsidePath,
+    clear_immediately_before_caret: clearImmediatelyBeforeCaret,
+    clear_invalidates_immediately: clearInvalidatesImmediately,
+    browse_square: browseSquare,
+    pair_actions_right_aligned: pairActionsRightAligned,
     inline_location_controls: inlineControls,
     browse_outside_path_control: browseOutsidePathControl,
     dropdown_anchored: dropdownAnchored,
@@ -308,11 +373,14 @@ _EDITABLE_SCRIPT = r"""
     popup_focus_is_exclusive: popupFocusIsExclusive,
     picker_icon_only: picker.textContent === "" && picker.getAttribute("aria-label") === "Browse for source folder",
     advanced_switches: advanced.querySelectorAll('input[role="switch"]').length === 5,
-    primary_options_visible: deletionPolicy.checkVisibility() && verifyToggle.checkVisibility(),
+    primary_options_visible: verifyToggle.checkVisibility() && additiveToggle.checkVisibility() &&
+      verifyToggle.closest("label").nextElementSibling === additiveToggle.closest("label") &&
+      verifyToggle.closest("label").textContent === "Verify execution" && additiveToggle.closest("label").textContent === "Additive sync",
     sync_inapplicable_actions_hidden: !inventoryAction.checkVisibility() && !planAgainAction.checkVisibility(),
     recent_pair_online_offline: onlineStatuses.every((item) => item.dataset.availability === "online"),
     mixed_pair_endpoint_truths: mixedStatuses.map((item) => [item.dataset.endpoint, item.dataset.availability, item.textContent]),
     recent_pair_two_columns: recentHeaders.map((item) => item.textContent).join("|") === "Folders|Availability",
+    table_gallery_style: tableGalleryStyle,
     endpoint_statuses_align_with_paths: mixedStatusBounds.length === 2 && mixedPathBounds.length === 2 &&
       mixedStatusBounds.every((rect, index) => Math.abs(rect.top - mixedPathBounds[index].top) <= 2),
     offline_pair_disabled: offlinePair.getAttribute("aria-disabled") === "true",
@@ -323,9 +391,139 @@ _EDITABLE_SCRIPT = r"""
     availability_text_neutral: [...mixedStatuses, ...onlineStatuses].every((item) => getComputedStyle(item).color === neutralColor),
     pointer_focus_hidden: pointerFocusHidden,
     keyboard_focus_visible: keyboardFocusVisible,
+    pair_row_focus_whole: pairRowFocusWhole,
     pair_button_focused: document.activeElement === onlineSelect,
     source_node_id: source.id,
   };
+})()
+"""
+
+
+_POINTER_PREPARE_SCRIPT = r"""
+(() => {
+  const source = document.querySelector("#setup-source-path");
+  const clear = document.querySelector(".nami-setup__clear");
+  const online = document.querySelector('.nami-setup__recent-pair[aria-disabled="false"]');
+  const disabled = document.querySelector('.nami-setup__recent-pair[aria-disabled="true"]');
+  const onlineStatus = online?.querySelector(".nami-setup__availability")?.closest("td");
+  const disabledStatus = disabled?.querySelector(".nami-setup__availability")?.closest("td");
+  if (!(source instanceof HTMLInputElement) || !(clear instanceof HTMLButtonElement) ||
+      !(online instanceof HTMLTableRowElement) || !(disabled instanceof HTMLTableRowElement) ||
+      !(onlineStatus instanceof HTMLTableCellElement) || !(disabledStatus instanceof HTMLTableCellElement)) {
+    throw new Error("native pointer targets are unavailable");
+  }
+  const api = window.pywebview?.api;
+  if (api === undefined || typeof api.dispatch !== "function") throw new Error("native dispatch is unavailable");
+  const dispatch = api.dispatch;
+  const center = (element) => {
+    const rect = element.getBoundingClientRect();
+    return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+  };
+  const resolveColor = (token) => {
+    const witness = document.createElement("span");
+    witness.style.backgroundColor = `var(${token})`;
+    document.body.append(witness);
+    const color = getComputedStyle(witness).backgroundColor;
+    witness.remove();
+    return color;
+  };
+  source.scrollIntoView({block: "center"});
+  source.focus();
+  window.__setupPointerProbe = {
+    api, dispatch, admits: 0,
+    online, disabled,
+    onlineBase: getComputedStyle(online).backgroundColor,
+    disabledBase: getComputedStyle(disabled).backgroundColor,
+    hoverExpected: resolveColor("--color-neutral-surface-hover"),
+    pressedExpected: resolveColor("--color-neutral-surface-pressed"),
+  };
+  api.dispatch = function(request) {
+    try {
+      if (typeof request === "string" && JSON.parse(request).command === "admit_location") {
+        window.__setupPointerProbe.admits += 1;
+      }
+    } catch (_error) {}
+    return dispatch.apply(api, arguments);
+  };
+  return {clear: center(clear)};
+})()
+"""
+
+
+_POINTER_ONLINE_POINT_SCRIPT = r"""
+(() => {
+  const cell = window.__setupPointerProbe.online.querySelector(".nami-setup__availability").closest("td");
+  cell.scrollIntoView({block: "center"});
+  const rect = cell.getBoundingClientRect();
+  return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+})()
+"""
+
+
+_POINTER_DISABLED_POINT_SCRIPT = r"""
+(() => {
+  const cell = window.__setupPointerProbe.disabled.querySelector(".nami-setup__availability").closest("td");
+  cell.scrollIntoView({block: "center"});
+  const rect = cell.getBoundingClientRect();
+  return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+})()
+"""
+
+
+_POINTER_CLEAR_RESULT_SCRIPT = r"""
+(async () => {
+  const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+  const probe = window.__setupPointerProbe;
+  const source = document.querySelector("#setup-source-path");
+  const local = source instanceof HTMLInputElement && source.value === "" &&
+    source.dataset.state === "unresolved" && document.activeElement === source && probe.admits === 0;
+  probe.api.dispatch = probe.dispatch;
+  source.value = __SOURCE__;
+  source.dispatchEvent(new Event("input", {bubbles: true}));
+  source.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", bubbles: true}));
+  for (let attempt = 0; attempt < 400 && source.dataset.state !== "resolved"; attempt += 1) await sleep(25);
+  if (source.dataset.state !== "resolved") throw new Error("source admission was not restored after clear pointer probe");
+  return {ok: local};
+})()
+"""
+
+
+_POINTER_HOVER_RESULT_SCRIPT = r"""
+(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const probe = window.__setupPointerProbe;
+  const row = probe.online;
+  const style = getComputedStyle(row);
+  const transparent = "rgba(0, 0, 0, 0)";
+  probe.hover = style.backgroundColor;
+  probe.hoverOk = probe.hover === probe.hoverExpected && probe.hover !== probe.onlineBase &&
+    Array.from(row.children).every((cell) => getComputedStyle(cell).backgroundColor === transparent) &&
+    getComputedStyle(row.querySelector(".nami-setup__pair-select")).backgroundColor === transparent;
+  return {ok: probe.hoverOk};
+})()
+"""
+
+
+_POINTER_PRESSED_RESULT_SCRIPT = r"""
+(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const probe = window.__setupPointerProbe;
+  probe.pressedOk = getComputedStyle(probe.online).backgroundColor === probe.pressedExpected &&
+    probe.pressedExpected !== probe.hover;
+  return {ok: probe.pressedOk};
+})()
+"""
+
+
+_POINTER_DISABLED_RESULT_SCRIPT = r"""
+(async () => {
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  const probe = window.__setupPointerProbe;
+  const style = getComputedStyle(probe.disabled);
+  const disabledOk = style.backgroundColor === probe.disabledBase && style.boxShadow === "none";
+  const result = Boolean(probe.hoverOk && probe.pressedOk && disabledOk);
+  delete window.__setupPointerProbe;
+  return {ok: result};
 })()
 """
 
@@ -394,7 +592,7 @@ _FROZEN_SCRIPT = r"""
     plan_again_visible: !planAgain.hidden,
     plan_again_new_task: true,
     picker_resolved: source.dataset.state === "resolved",
-    frozen_switches_disabled: frozenSwitches.length === 6 && frozenSwitches.every((input) => input.disabled),
+    frozen_switches_disabled: frozenSwitches.length === 7 && frozenSwitches.every((input) => input.disabled),
     frozen_pairs_disabled: frozenPairs.length === 2 && frozenPairs.every((button) => button.disabled),
     frozen_mode_hidden: frozenModeHidden,
     disabled_icon_controls_transparent: disabledIconControlsTransparent,
@@ -576,7 +774,7 @@ _RELOADED_SCRIPT = r"""
   }
   await until(() => document.querySelector("#host-status")?.textContent === "Ready", "reloaded host readiness");
   await until(() => document.querySelectorAll(".nami-task-rail__row").length === __TASK_COUNT__, "reloaded task identities");
-  const cards = Array.from(document.querySelectorAll(".nami-task-card"));
+  const cards = Array.from(document.querySelectorAll(".nami-task-rail__items .nami-task-card"));
   let reconstructed = false;
   const observations = [];
   for (const card of cards) {
@@ -662,6 +860,134 @@ def _capture(
     task.GetAwaiter().OnCompleted(action)
 
 
+def _devtools(
+    core: object,
+    method: str,
+    parameters: dict[str, object],
+    retained: list[object],
+    continuation: object,
+    on_failure: object,
+) -> None:
+    from System import Action
+
+    task = core.CallDevToolsProtocolMethodAsync(method, json.dumps(parameters))
+
+    def completed() -> None:
+        try:
+            if task.IsFaulted or task.IsCanceled:
+                raise RuntimeError(f"native {method} call failed")
+            continuation(task)
+        except BaseException as error:
+            on_failure(error)
+
+    action = Action(completed)
+    retained.append(action)
+    task.GetAwaiter().OnCompleted(action)
+
+
+def _pointer_checks(
+    core: object,
+    source: Path,
+    retained: list[object],
+    continuation: object,
+    on_failure: object,
+) -> None:
+    evaluate = lambda expression, callback: _devtools(
+        core,
+        "Runtime.evaluate",
+        {"expression": expression, "awaitPromise": True, "returnByValue": True},
+        retained,
+        callback,
+        on_failure,
+    )
+
+    def mouse(event_type: str, point: dict[str, object], callback: object, *, pressed: bool = False) -> None:
+        parameters: dict[str, object] = {
+            "type": event_type,
+            "x": point["x"],
+            "y": point["y"],
+            "button": "left" if event_type != "mouseMoved" else "none",
+            "buttons": 1 if pressed else 0,
+        }
+        if event_type != "mouseMoved":
+            parameters["clickCount"] = 1
+        _devtools(core, "Input.dispatchMouseEvent", parameters, retained, callback, on_failure)
+
+    prepare = _POINTER_PREPARE_SCRIPT
+
+    def result_ok(task: object) -> bool:
+        result = _runtime_value(task)
+        return type(result) is dict and result.get("ok") is True
+
+    def prepared(task: object) -> None:
+        points = _runtime_value(task)
+        if type(points) is not dict or type(points.get("clear")) is not dict:
+            raise RuntimeError("native pointer coordinates are invalid")
+
+        def clear_released(_task: object) -> None:
+            clear_script = _POINTER_CLEAR_RESULT_SCRIPT.replace("__SOURCE__", json.dumps(str(source)))
+
+            def clear_checked(clear_task: object) -> None:
+                clear_local = result_ok(clear_task)
+
+                def online_located(online_task: object) -> None:
+                    online = _runtime_value(online_task)
+                    if type(online) is not dict:
+                        raise RuntimeError("native online-row coordinate is invalid")
+
+                    def online_moved(_task: object) -> None:
+                        def hover_checked(hover_task: object) -> None:
+                            hover_ok = result_ok(hover_task)
+
+                            def online_pressed(_task: object) -> None:
+                                def pressed_checked(pressed_task: object) -> None:
+                                    pressed_ok = result_ok(pressed_task)
+
+                                    def online_released(_task: object) -> None:
+                                        def disabled_located(disabled_task: object) -> None:
+                                            disabled = _runtime_value(disabled_task)
+                                            if type(disabled) is not dict:
+                                                raise RuntimeError("native disabled-row coordinate is invalid")
+
+                                            def disabled_moved(_task: object) -> None:
+                                                def disabled_checked(result_task: object) -> None:
+                                                    pair_states = result_ok(result_task)
+                                                    continuation({
+                                                        "clear_pointer_local": clear_local,
+                                                        "pair_pointer_states": bool(hover_ok and pressed_ok and pair_states),
+                                                    })
+
+                                                evaluate(_POINTER_DISABLED_RESULT_SCRIPT, disabled_checked)
+
+                                            mouse("mouseMoved", disabled, disabled_moved)
+
+                                        evaluate(_POINTER_DISABLED_POINT_SCRIPT, disabled_located)
+
+                                    mouse("mouseReleased", online, online_released)
+
+                                evaluate(_POINTER_PRESSED_RESULT_SCRIPT, pressed_checked)
+
+                            mouse("mousePressed", online, online_pressed, pressed=True)
+
+                        evaluate(_POINTER_HOVER_RESULT_SCRIPT, hover_checked)
+
+                    mouse("mouseMoved", online, online_moved)
+
+                evaluate(_POINTER_ONLINE_POINT_SCRIPT, online_located)
+
+            evaluate(clear_script, clear_checked)
+
+        def clear_pressed(_task: object) -> None:
+            mouse("mouseReleased", points["clear"], clear_released)
+
+        def clear_moved(_task: object) -> None:
+            mouse("mousePressed", points["clear"], clear_pressed, pressed=True)
+
+        mouse("mouseMoved", points["clear"], clear_moved)
+
+    evaluate(prepare, prepared)
+
+
 def _begin(
     window: object,
     recorder: _Recorder,
@@ -741,13 +1067,23 @@ def _begin(
                 retained.append(action)
                 frozen_task.GetAwaiter().OnCompleted(action)
 
-            _capture(
-                core, screenshot_dir / "editable-expanded.png", retained,
-                lambda: _collapse_and_capture_editable(
-                    core, screenshot_dir, retained, begin_frozen,
-                    lambda error: recorder.failure("editable-screenshot", error),
-                ),
-                lambda error: recorder.failure("editable-expanded-screenshot", error),
+            def pointer_done(pointer: dict[str, bool]) -> None:
+                editable.update(pointer)
+                _capture(
+                    core, screenshot_dir / "editable-expanded.png", retained,
+                    lambda: _collapse_and_capture_editable(
+                        core, screenshot_dir, retained, begin_frozen,
+                        lambda error: recorder.failure("editable-screenshot", error),
+                    ),
+                    lambda error: recorder.failure("editable-expanded-screenshot", error),
+                )
+
+            _pointer_checks(
+                core,
+                source,
+                retained,
+                pointer_done,
+                lambda error: recorder.failure("editable-pointer", error),
             )
         except BaseException as error:
             recorder.failure("editable", error)

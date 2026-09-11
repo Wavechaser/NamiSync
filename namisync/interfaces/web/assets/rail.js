@@ -21,8 +21,8 @@ function taskStatus(task) {
   return labels[task.sessionState];
 }
 
-export function createTaskRail({ onCreate, onSelect, onClose }) {
-  if (![onCreate, onSelect, onClose].every((callback) => typeof callback === "function")) {
+export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
+  if (![onCreate, onSelect, onClose, onSettings].every((callback) => typeof callback === "function")) {
     throw new TypeError("task rail callbacks must be callable");
   }
   const rail = document.createElement("nav");
@@ -34,15 +34,25 @@ export function createTaskRail({ onCreate, onSelect, onClose }) {
   const heading = document.createElement("h2");
   renderText(heading, "Tasks");
   const create = document.createElement("button");
-  create.classList.add("nami-button");
+  create.classList.add("nami-button", "nami-task-rail__create");
   create.type = "button";
-  renderText(create, "New task");
+  create.append(createIcon(document, "add-square-multiple", "lg"));
+  create.ariaLabel = "New task";
+  create.title = "New task";
   create.addEventListener("click", onCreate);
   header.append(heading, create);
 
   const list = document.createElement("div");
   list.classList.add("nami-task-rail__items");
-  rail.append(header, list);
+  const settings = document.createElement("button");
+  settings.classList.add("nami-task-card", "nami-task-rail__settings");
+  settings.type = "button";
+  settings.append(createIcon(document, "settings", "sm"));
+  const settingsText = document.createElement("span");
+  renderText(settingsText, "Settings");
+  settings.append(settingsText);
+  settings.addEventListener("click", onSettings);
+  rail.append(header, list, settings);
   const entries = new Map();
   const emptySlot = document.createElement("div");
   emptySlot.classList.add("nami-card", "nami-task-rail__empty-slot");
@@ -51,8 +61,9 @@ export function createTaskRail({ onCreate, onSelect, onClose }) {
   renderText(empty, "No tasks are available.");
   emptySlot.append(empty);
 
-  function render(tasks, selectedTaskId, creating) {
+  function render(tasks, selectedTaskId, creating, settingsVisible = false) {
     create.disabled = creating;
+    settings.ariaCurrent = settingsVisible ? "page" : "false";
     if (tasks.length === 0) {
       for (const entry of entries.values()) {
         entry.row.remove();
@@ -94,7 +105,7 @@ export function createTaskRail({ onCreate, onSelect, onClose }) {
         entry = { row, select, title, status, close };
         entries.set(task.taskId, entry);
       }
-      entry.select.ariaCurrent = task.taskId === selectedTaskId ? "page" : "false";
+      entry.select.ariaCurrent = !settingsVisible && task.taskId === selectedTaskId ? "page" : "false";
       renderText(entry.title, task.label);
       renderText(entry.status, taskStatus(task));
       entry.close.disabled = task.closePending;

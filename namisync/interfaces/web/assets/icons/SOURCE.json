@@ -86,6 +86,21 @@
       "upstream_sha256": "f20db548743ee6e040be5ebe964db503f09653fdf7b4dee1d5adcb6ce2d566a7",
       "packaged_sha256": "7fbed2a8e3d07e90d98c00a3d2d96995bc222e6e34b68d799e43397b9568d22d"
     },
+    "arrow_clockwise_16_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/arrow_clockwise_16_regular.svg",
+      "upstream_sha256": "d8e97a36ab702b97dfb722788ce44d6e95a5b7c921ce590aebb01d61dde98fe3",
+      "packaged_sha256": "205f714fed1c82f31955aba7fa236260dda206a9372d52590685c4e7327a5a84"
+    },
+    "arrow_clockwise_20_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/arrow_clockwise_20_regular.svg",
+      "upstream_sha256": "356f8416e1a0f08dd2edc15d903b6d8ab2a3b9d51ab91d04bc1efb14c8287c76",
+      "packaged_sha256": "38d67362ead7b772d4df09ea043085f75e5c152d9c68281d551322670ad8d51b"
+    },
+    "arrow_clockwise_24_regular.svg": {
+      "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/arrow_clockwise_24_regular.svg",
+      "upstream_sha256": "d828cf82b515305af2c4494723c65ed3c65a0ddc5027c8dcdb9c7d5b65d700d7",
+      "packaged_sha256": "c726694a89136182a6a0c574d2cee9557b046b39bbbcfa70f015709293338769"
+    },
     "arrow_sync_16_regular.svg": {
       "source_url": "https://unpkg.com/@fluentui/svg-icons@1.1.334/icons/arrow_sync_16_regular.svg",
       "upstream_sha256": "e2a448537e39deec0192f853c8bf7c7c0b178c661801ea5d363a2ce9c9be5d06",

@@ -91,31 +91,14 @@ _INITIAL_PROBE = r"""
   }
   const app = document.querySelector("#app");
   const status = document.querySelector("#host-status");
-  const theme = document.querySelector("#theme-mode");
-  const themeTrigger = theme?.querySelector(".nami-combobox__trigger");
-  const themePopupId = themeTrigger?.getAttribute("aria-controls");
-  const themePopup = themePopupId === null || themePopupId === undefined
-    ? null
-    : document.getElementById(themePopupId);
   const rail = document.querySelector(".nami-task-rail");
   const work = document.querySelector(".nami-work-panel");
   if (!(app instanceof HTMLElement) || !(status instanceof HTMLElement) ||
-      !(theme instanceof HTMLElement) ||
-      !(themeTrigger instanceof HTMLButtonElement) ||
-      !(themePopup instanceof HTMLElement) ||
-      themeTrigger.getAttribute("role") !== "combobox" ||
-      themePopup.getAttribute("role") !== "listbox" ||
       !(rail instanceof HTMLElement) || !(work instanceof HTMLElement)) {
     throw new Error("production shell is unavailable");
   }
   if (status.textContent !== "Ready") {
     throw new Error("production bridge readiness is unavailable");
-  }
-  for (let attempt = 0; attempt < 100 && themeTrigger.disabled; attempt += 1) {
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
-  }
-  if (themeTrigger.disabled) {
-    throw new Error("production theme selector is unavailable");
   }
   const railRect = rail.getBoundingClientRect();
   const workRect = work.getBoundingClientRect();
@@ -193,7 +176,7 @@ _CREATE_FOCUS_PROBE = r"""
     active: active === create,
     disabled: create?.disabled ?? null,
     tag: active?.tagName ?? null,
-    text: create?.textContent ?? null,
+    text: create?.getAttribute("aria-label") ?? null,
     visible: rect !== undefined && rect.width > 0 && rect.height > 0 &&
       rect.top < innerHeight && rect.bottom > 0,
   };
@@ -1171,28 +1154,37 @@ def _begin_probe(
 
     def after_keyboard_tree(value: object) -> None:
         page["keyboard_tree"] = value
-        press("Tab", "Tab", 9, after_theme_tab)
+        evaluate('document.querySelector(".nami-task-rail__settings").click(); document.querySelector(".nami-task-rail__settings").focus(); ({ready: true});',
+                 lambda _value: press("Tab", "Tab", 9, after_theme_tab))
 
     def after_theme_tab(_value: object) -> None:
         evaluate(_THEME_FOCUS_PROBE, after_theme_focus)
 
     def after_theme_focus(value: object) -> None:
         page["theme_focus"] = value
-        press("Tab", "Tab", 9, after_create_tab)
+        evaluate('document.querySelector(".nami-task-rail__create").focus(); ({ready: true});', after_create_tab)
 
     def after_create_tab(_value: object) -> None:
         evaluate(_CREATE_FOCUS_PROBE, after_create_focus)
 
     def after_create_focus(value: object) -> None:
         page["create_focus"] = value
-        press("Tab", "Tab", 9, after_tree_tab)
+        evaluate('document.querySelector("#theme-mode-trigger").focus(); ({ready: true});',
+                 lambda _value: press("Tab", "Tab", 9, after_tree_tab))
 
     def after_tree_tab(_value: object) -> None:
         evaluate(_ACTIVE_PROBE, after_first_focus)
 
     def after_first_focus(value: object) -> None:
         page["first_focus"] = value
-        press("ArrowDown", "ArrowDown", 40, after_second_key)
+        # Work pages are exclusive. Keep the native Tab witness above, then
+        # replace Settings with the same tree before testing its reflow.
+        evaluate(
+            'const root = globalThis.__namiShellTreeEvidence.root; '
+            'document.querySelector(".nami-work-panel__body").replaceChildren(root); '
+            'root.focus(); ({ready: true});',
+            lambda _value: press("ArrowDown", "ArrowDown", 40, after_second_key),
+        )
 
     def after_second_key(_value: object) -> None:
         evaluate(_ACTIVE_PROBE, after_second_focus)

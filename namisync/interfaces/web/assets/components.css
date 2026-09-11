@@ -559,6 +559,12 @@ body {
   --nami-icon-mask-lg: url("./icons/archive_clock_24_regular.svg");
 }
 
+.nami-icon--arrow-clockwise {
+  --nami-icon-mask-sm: url("./icons/arrow_clockwise_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/arrow_clockwise_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/arrow_clockwise_24_regular.svg");
+}
+
 .nami-icon--arrow-sync {
   --nami-icon-mask-sm: url("./icons/arrow_sync_16_regular.svg");
   --nami-icon-mask-md: url("./icons/arrow_sync_20_regular.svg");

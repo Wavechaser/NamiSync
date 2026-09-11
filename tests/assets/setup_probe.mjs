@@ -232,13 +232,15 @@ assert.deepEqual(filterControls.children.map((item) => item.tagName), ["INPUT", 
 panel.render(model);
 assert.equal(moreOptions.getAttribute("aria-expanded"), "true", "advanced disclosure survives a render");
 assert.equal(advancedOptions.hidden, false);
-const deletionPolicy = byClass(panel.element, "nami-setup__policy");
-assert.equal(deletionPolicy.getAttribute("role"), "radiogroup");
-assert.deepEqual(
-  deletionPolicy.children.map((item) => [item.dataset.value, item.getAttribute("role")]),
-  [["trash", "radio"], ["additive", "radio"]],
-);
-assert.equal(byClass(panel.element, "nami-setup__verify-row").children[0].getAttribute("role"), "switch");
+const primaryOptions = byClass(panel.element, "nami-setup__primary-options");
+const verifyToggle = byClass(panel.element, "nami-setup__verify-row").children[0];
+const additiveToggle = byClass(panel.element, "nami-setup__additive-row").children[0];
+assert.equal(verifyToggle.getAttribute("role"), "switch");
+assert.equal(additiveToggle.getAttribute("role"), "switch");
+assert.deepEqual(primaryOptions.children.slice(0, 2).map((item) => item.children[1].textContent), ["Verify execution", "Additive sync"]);
+assert.equal(additiveToggle.checked, false);
+additiveToggle.checked = true;
+additiveToggle.dispatch("change");
 model.recentPairAvailability = { "9": { source: "online", target: "offline" } };
 panel.render(model);
 const offlinePair = byClass(panel.element, "nami-setup__recent-pair");
@@ -275,6 +277,18 @@ model.batch = [];
 panel.render(model);
 firstSource.value = "C:\\edited";
 firstSource.dispatch("input");
+const clearSource = byClass(locations[0], "nami-setup__clear");
+assert.equal(clearSource.hidden, false);
+let preventedClearFocus = false;
+clearSource.dispatch("pointerdown", { preventDefault() { preventedClearFocus = true; } });
+assert.equal(preventedClearFocus, true);
+firstSource.dispatch("blur", { relatedTarget: clearSource });
+clearSource.dispatch("click");
+assert.equal(firstSource.value, "");
+assert.equal(clearSource.hidden, true);
+assert.equal(globalThis.document.activeElement, firstSource);
+firstSource.value = "C:\\edited";
+firstSource.dispatch("input");
 firstSource.dispatch("keydown", { key: "Enter" });
 const filterInput = filterControls.children[0];
 filterInput.value = "  no-normalize\\  ";
@@ -292,6 +306,9 @@ assert.deepEqual(events, [
   ["mount", "source", 0],
   ["recent-pair", model.setup.recents.pairs[0]],
   ["recent", "source", model.setup.recents.sources[0]],
+  ["option", "deletion_policy", "additive"],
+  ["edit", "source", "C:\\edited"],
+  ["edit", "source", ""],
   ["edit", "source", "C:\\edited"],
   ["validate", "source"],
   ["add-filter", "  no-normalize\\  "],

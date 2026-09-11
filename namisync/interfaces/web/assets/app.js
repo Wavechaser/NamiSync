@@ -29,10 +29,12 @@ import { renderText } from "./render.js";
 const app = document.querySelector("#app");
 const status = document.querySelector("#host-status");
 const themeSelector = document.querySelector("#theme-mode");
+const settingsView = document.querySelector("#settings-view");
 if (
   !(app instanceof HTMLElement)
   || !(status instanceof HTMLElement)
   || !(themeSelector instanceof HTMLElement)
+  || !(settingsView instanceof HTMLElement)
 ) {
   throw new TypeError("NamiSync shell elements are unavailable");
 }
@@ -52,6 +54,7 @@ installAppearanceReceiver(
 
 const tasks = new Map();
 let selectedTaskId = null;
+let settingsVisible = false;
 let navigationRevision = 0;
 let taskMutationRevision = 0;
 let createAttempt = null;
@@ -82,11 +85,12 @@ const panel = createWorkPanel({
   onAddPair: addCurrentPair,
   onStartBatch: () => { void startPairBatch(); },
   onPlanAgain: () => { void startPlanAgain(); },
-});
+}, settingsView);
 const rail = createTaskRail({
   onCreate: () => { void createBlankTask(); },
   onSelect: selectTask,
   onClose: (taskId) => { void closeRetainedTask(taskId); },
+  onSettings: showSettings,
 });
 app.append(rail.element, panel.element);
 
@@ -110,8 +114,17 @@ function renderTasks() {
     taskArray(),
     selectedTaskId,
     createAttempt?.running === true,
+    settingsVisible,
   );
-  panel.render(selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null);
+  if (settingsVisible) panel.renderSettings();
+  else panel.render(selectedTaskId === null ? null : tasks.get(selectedTaskId) ?? null);
+}
+
+function showSettings() {
+  if (settingsVisible) return;
+  navigationRevision += 1;
+  settingsVisible = true;
+  renderTasks();
 }
 
 function selectTask(taskId) {
@@ -120,6 +133,7 @@ function selectTask(taskId) {
   }
   navigationRevision += 1;
   selectedTaskId = taskId;
+  settingsVisible = false;
   renderTasks();
   void loadTaskSetup(tasks.get(taskId));
 }
@@ -265,6 +279,7 @@ async function createBlankTask() {
     });
     if (navigationRevision === selectionBaseline) {
       selectedTaskId = task.taskId;
+      settingsVisible = false;
     }
     void loadTaskSetup(task);
     if (createAttempt === attempt) createAttempt = null;

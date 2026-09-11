@@ -63,6 +63,11 @@ def test_m1_6_installed_setup_flow(
     assert result["primary_options_one_line"] is True
     assert result["primary_options_stable_open"] is True, result["primary_options_bounds"]
     assert result["advanced_below_full_width"] is True
+    assert result["expanded_options_padding"] is True
+    assert result["more_idle_transparent"] is True
+    assert result["refresh_icon_transparent"] is True
+    assert result["refresh_square"] is True
+    assert result["recent_row_height"] == pytest.approx(64, abs=1)
     assert result["advanced_filters_visible"] is True
     assert result["advanced_labels_follow_toggles"] is True
     assert result["add_filter_inline"] is True
@@ -71,6 +76,13 @@ def test_m1_6_installed_setup_flow(
     assert result["path_has_no_outer_ring"] is True
     assert result["path_fills_rounded_control"] is True
     assert result["caret_inside_path_with_text_space"] is True
+    assert result["clear_immediately_before_caret"] is True
+    assert result["clear_invalidates_immediately"] is True
+    assert result["clear_pointer_local"] is True
+    assert result["pair_pointer_states"] is True
+    assert result["table_gallery_style"] is True
+    assert result["browse_square"] is True
+    assert result["pair_actions_right_aligned"] is True
     assert result["inline_location_controls"] is True
     assert result["browse_outside_path_control"] is True
     assert result["dropdown_anchored"] is True
@@ -95,6 +107,7 @@ def test_m1_6_installed_setup_flow(
     assert result["availability_text_neutral"] is True
     assert result["pointer_focus_hidden"] is True
     assert result["keyboard_focus_visible"] is True
+    assert result["pair_row_focus_whole"] is True
     assert result["pair_button_focused"] is True
     assert result["frozen"] is True
     assert result["plan_again_visible"] is True

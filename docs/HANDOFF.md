@@ -1,63 +1,53 @@
 # Latest session handoff
 
-## Setup and task-rail refinement (2026-09-11)
+## Settings shell and GUI refinement (2026-09-12)
 
-GUI-S2 starts at 9ba6538 on milestone1. User authorized implementation, review
-and commit. M1-6 task effects, frozen options, serial batch starts and fresh
-folder admission remain the baseline. No icon-package upgrade or shadow fix.
+GUI-S3 continues from 76028db on milestone1. User authorized implementation,
+review and commit. Settings is a local work-area page with the existing theme
+selector and a minimal About version line. It preserves tasks, drafts and live
+updates; global semantic settings and legal/about link content remain future work.
+Task items scroll independently above the Settings button; work content scrolls
+separately with stable scrollbar space.
 
-Setup starts at the work-area top without a repeated task heading. Grayscale
-Trash/Additive and Verify sit left, More options right, with advanced choices
-below and no divider. Caret/Browse and inset task dismiss buttons are transparent
-at rest; the task selection mark is 1.5rem tall (24 CSS px by default). Path fields
-remain standard textboxes with an inset trailing caret, including the accented
-active underline. The compact caret button is inset on all sides. Textboxes omit
-the extra outer ring. Dropdown-option buttons
-reset native borders and keep keyboard focus feedback; no custom path-focus state
-is retained. Setup ARIA ID references use real attributes, with only their three
-literal inert names added to the sink guard. Recent pairs retain stacked paths
-and now show each endpoint's own neutral status text and colored dot. Both
-endpoints must be online for selection. Empty and ready hints are suppressed;
-errors and recovery guidance remain. Keyboard focus remains visible.
-Advanced captions immediately follow their toggles; Add filter shares the
-textbox row. Disabled caret and Browse controls stay transparent.
+Setup uses Verify execution then Additive sync (on additive/off trash), with
+spaced advanced options. Compact inset Clear/caret controls, square Browse and
+Refresh, larger New task glyph and right-aligned pair actions follow selective
+icon usage. Clear suppresses its own blur admission and invalidates only local
+state; an earlier in-flight admission reply cannot restore it. Recent pairs use
+gallery typography/corners/surfaces, 64px two-line rows, independent endpoint
+statuses and whole-row hover/press/focus. Disabled pairs remain visible/inert.
 
-The read-only async-small probe_recent_pairs command composes existing recents
-and candidate-resolution primitives: at most five exact pair/endpoint identity
-rows and ten deduplicated resolutions. No slots, continuations, persistence or
-task starts. Setup loads independently; Refresh coalesces without polling, stale
-page/list/identity replies are ignored, and unknown/unavailable rows stay disabled.
-Selecting or starting still freshly admits roots.
+Arrow Clockwise was added through tools/icons.json and the offline maintenance
+tool using the existing pinned archive; no package upgrade or runtime loading.
+PLANNER documents exact exclude-filter syntax and effects; FEATURES no longer
+claims unsupported glob syntax validation. Completed GUI sections in M1_PLAN
+are condensed; unresolved shadow findings and deferred product outcomes remain.
 
-GUI-S2 verification and independent adversarial review passed: ordinary suite
-4,979 passed, four skipped; final interfaces 1,524 passed; final installed headed
-suite 30 passed; 12 import contracts kept. Logs: gui-s2-ordinary-01.txt,
-gui-s2-interfaces-final-02.txt, gui-s2-setup-final-01.txt and
-gui-s2-headed-all-03.txt under build/gui-icons/. Final interface/headed runs
-cover refinements after the ordinary baseline. Stable root scrollbar space
-prevents disclosure-induced sideways movement; exact bounds remain asserted.
-Headed fixtures retain real
-ledger pairs with one removed source to verify mixed endpoint state and long-path
-truncation. Existing typed/picker/mount, frozen/navigation, Plan again, inventory,
-batch and reload witnesses remain.
-Tests use one slot, fresh external basetemps and PIP_NO_CACHE_DIR=1. Avoid window
-interaction during headed tests; logs remain in ignored build/gui-icons/.
-Collapsed, expanded and frozen captures were inspected for layout. Their PNGs
-retain transparent WebView pixels (dark card white at alpha 13/255); a viewer
-that ignores alpha displays white cards, so these are not native Mica color
-evidence. Actual control visibility and neutral status colors have computed
-browser assertions. Setup-scoped hidden styling prevents component display
-rules from exposing inapplicable mode/actions.
+Independent adversarial review approved the product, fixtures and documentation.
+Verification passed: ordinary suite 4,979 passed, four existing skips; all 30
+headed interface tests passed. After the gallery layout correction, all four
+headed gallery tests and its ordinary contract checks passed again. Icon archive
+check and all 12 import contracts passed. Ignored build/gui-icons/gui-s3-* logs
+retain evidence (ordinary-01, headed-all-03, gallery-final-01 and
+gallery-ordinary-final). One pytest/Node slot, fresh external basetemps,
+PIP_NO_CACHE_DIR=1. Real CDP pointer checks forward native
+dispatch unchanged, prove Clear sends zero admission requests, and verify
+whole-row hover/press over status cells. Existing lifecycle/frozen/batch/retry
+witnesses remain; no backend source or protocol change.
 
-GUI-S1 baseline evidence: setup-ordinary-02.txt, setup-headed-all-01.txt and
-setup-imports.txt under build/gui-icons/. M1-7 implementation remains outside
-this session. The development launcher does not hot reload: relaunch to load
-new source after delivery; do not close user-owned windows for testing.
+The gallery keeps natural page height rather than the task shell's fixed-height
+layout; its installed guard rejects overlapping top-level sections. Theme/rail
+fixtures now enter Settings and distinguish task specimens from navigation.
+The shell tree fixture replaces Settings before checking 200% reflow, matching
+exclusive production work pages; no post-zoom focus adjustment masks clipping.
+No tests were retired and no worktree or recovery branch was created.
 
-Prior icon commits: 5e83f9a, fe3c11c and b08a05b. TOOLS owns CLI syntax;
-DESKTOP_UI owns selective placement. Shadow investigation d6b27ec and BUGS retain
-10-bpc WCG SDR findings: broad key shadows over translucent receivers reproduce
-the reported halo; opaque receivers and ambient-only shadows appear unaffected.
-Exact renderer cause remains unproven, Mica remains required, no fix is implemented.
-Ignored build/gui-tuning/halo-10bit/ retains diagnostic artifacts. Display
-settings and user-owned windows are outside this task.
+The development launcher does not hot reload: relaunch after delivery.
+Do not close user-owned windows. Transparent WebView screenshots support
+geometry inspection; their alpha handling is not evidence about native Mica
+colors or compositor health.
+
+The earlier WCG shadow investigation remains diagnostic and unfixed:
+10-bpc WCG SDR dark key shadows over translucent cards can halo. Mica remains
+required; BUGS owns the findings and limitations. No display setting, shadow
+workaround or release gate was changed here.

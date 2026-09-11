@@ -116,7 +116,7 @@ provision.
   non-subjects and do not make a scan incomplete. User filters remain a separate
   fingerprinted planning policy, not a mutable scanner ignore snapshot.
 - **Filter Snapshot in Plans**. Planning applies filters symmetrically, records and fingerprints the resulting snapshot, and never lets later default changes alter a reviewed plan. In the accepted Stage 6 desktop, changing filters creates a new planning task requiring fresh review and commitment.
-- **Bounded Setup Filters**. Setup accepts a bounded list of filters, rejects unsafe or malformed patterns with actionable feedback, and shows the canonical snapshot that planning will freeze. It never silently falls back to newer defaults. `BRIDGE.md` owns the exact admission limits and grammar.
+- **Bounded Setup Filters**. Setup accepts nonempty bounded Unicode glob patterns and retains literal whitespace. Planning freezes their canonical snapshot; later defaults never replace it. [PLANNER.md](PLANNER.md#exclude-filter-syntax-and-effect) explains syntax, examples and symmetric source/target protection; `BRIDGE.md` owns bridge admission.
 
 - **Filter Rule Editor**. The desktop UI will offer a rule editor with a live preview of what a filter set would exclude.
 - **Filter Exclusion Explanation**. Plan review will eventually explain why a filtered file has no operation row; current interfaces do not invent such rows or claim this gap is solved.
@@ -524,7 +524,7 @@ unrealized unless an entry says otherwise.
 - **Desktop Resource Acceptance** *(accepted; unrealized)*. Release requires cold-start resource budgets and repeated/long-workload leak and growth checks on declared supported profiles. Application-owned requests and populations retain independently enforced runtime bounds. This is scoped acceptance, not universal whole-runtime memory containment; DEFENSE section 7 owns the claim policy and INTERFACES SH-G-15 owns the acceptance requirements.
 - **Bridge Responsiveness Envelope**. The desktop bridge has bounded scale, paging, latency, and retained-memory contracts. Execute/control feedback is immediate, progress may be late but never incorrect, and `BRIDGE.md` / `PRESENTATION.md` own the scoped limits and evidence.
 
-- **Global Settings Page**. Global semantic-settings editing remains deferred. Setup uses defaults only to prepopulate a complete task-local choice and never writes global settings.
+- **Settings Surface**. The rail opens a nonmodal Settings/About page with the existing theme preference and initial version line. Tasks and drafts remain available, and the task list scrolls independently above Settings. Global semantic-settings editing remains deferred; Setup choices never write global settings.
 - **Durable Desktop Tasks** *(proposed M2)*. Tasks, Setup, and recoverable session state will survive process closure or restart; process loss will not claim durable task recovery before the M2 recovery contract exists.
 - **Drag-and-Drop Setup**. Dropping folders onto a task will populate its source and destination fields.
 - **Status Layout Refinement**. The task header will unify live and completed detail while promoting activity state over the affected-byte figure.

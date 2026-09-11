@@ -26,10 +26,21 @@ bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
 packaging remain open.
 
-#### Reshape Setup and recent-pair selection (2026-09-11)
+#### Refine task navigation, Settings and Setup (2026-09-11–12)
+
+- Added a minimal Settings/About work page with the existing theme selector,
+  preserving task drafts and activity. Task items scroll independently above
+  the rail's Settings button.
+- Simplified Setup to Verify execution and Additive sync toggles, local path
+  Clear actions, compact transparent icon controls, and right-aligned pair
+  actions. Recent pairs match gallery table styling and interact as whole rows.
+- Added the pinned Arrow Clockwise glyph through icon maintenance, documented
+  exclude-filter syntax and effects, and condensed completed GUI plan history.
+- Preserved the gallery's natural-height layout alongside the bounded task
+  shell, with an installed check against overlapping specimen sections.
 
 - Refined alignment and density: removed the repeated task heading and extra
-  dividers, grouped grayscale Trash/Additive with Verify, and placed More options
+  dividers, grouped the primary options, and placed More options
   on the right. Recent pairs show a separate availability result per path.
 - Expanded task cards with inset dismiss icons and 24px selection marks;
   transparent idle icon controls retain hover/press and keyboard-focus feedback.

@@ -1,7 +1,8 @@
 import { renderText } from "./render.js";
 import { createSetupPanel } from "./setup.js";
 
-export function createWorkPanel(setupCallbacks) {
+export function createWorkPanel(setupCallbacks, settings) {
+  if (!(settings instanceof HTMLElement)) throw new TypeError("settings view must be an element");
   const panel = document.createElement("section");
   panel.classList.add("nami-work-panel");
   panel.setAttribute("role", "region");
@@ -11,6 +12,8 @@ export function createWorkPanel(setupCallbacks) {
   body.classList.add("nami-work-panel__body");
   panel.append(body);
   const setup = createSetupPanel(setupCallbacks);
+  settings.remove();
+  settings.hidden = false;
   let content = null;
 
   function show(value) {
@@ -39,6 +42,11 @@ export function createWorkPanel(setupCallbacks) {
     setup.render(task.form);
   }
 
+  function renderSettings() {
+    panel.ariaLabel = "Settings";
+    show(settings);
+  }
+
   render(null);
-  return Object.freeze({ element: panel, render });
+  return Object.freeze({ element: panel, render, renderSettings });
 }

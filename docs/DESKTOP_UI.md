@@ -84,6 +84,9 @@ development mutex/title and roots all state beneath
 composition does not change the production launcher's arguments, environment
 contract, packaged assets, or desktop behavior. `TOOLS.md` owns its exact
 commands, relaunch loop, diagnostic lifecycle, and process-safety rules.
+The gallery is a natural-height specimen document with page scrolling; it does
+not inherit the task shell's viewport-height limit. Installed gallery checks
+reject overlap between its top-level specimen sections.
 
 Before window creation, the primary host constructs the service and consumes
 the shared database-pair facade. Fresh state initializes ledger then history;
@@ -512,7 +515,7 @@ Lifecycle cases do not become file rows. All fixtures pass exact display-ready
 presentation values directly to production components/renderers; they do not
 derive planner, dispatcher, or verifier meaning.
 
-The icon foundation includes the user's 47-glyph Regular vocabulary, vendored
+The icon foundation includes the selected Regular glyph vocabulary, vendored
 locally from `@fluentui/svg-icons@1.1.334` with exact package/file URLs,
 per-file SHA-256 hashes, and license. A frozen
 `icons.js` registry maps visual glyph names to fixed component classes; the
@@ -520,7 +523,7 @@ classes use fixed local CSS masks painted with `currentColor`. `tokens.css`
 owns exact 16/20/24 px `sm`/`md`/`lg` icon sizes and `components.css` owns
 alignment and states.
 Each size selects native artwork rather than scaling a single universal asset.
-The 136 local SVGs cover all 141 glyph/size combinations. Where the pinned
+The authored catalog and generated receipt record the current coverage. Where the pinned
 upstream package has no native size, the fixed mapping scales 20 px artwork:
 Arrow Sync Checkmark at 16, Database Arrow Up at 24, Folder Holder at 16/24,
 and Timeline at 16. These are explicit exceptions, not runtime asset discovery.
@@ -950,20 +953,28 @@ Source/Target label on the left, an editable path and recent-folder caret in one
 standard textbox, with its compact caret button inset on all sides and an accessible
 folder-open Browse button outside on the right. The
 recent dropdown supports keyboard navigation, selection and Escape dismissal.
-Plan options have no enclosing outline or divider: the grayscale Trash/Additive
-segmented control and verification switch sit together on the left; More options
+Plan options have no enclosing outline or divider: Verify execution and Additive
+sync switches sit together on the left, in that order. Additive on maps to
+`additive`; off maps to `trash`. More options
 sits on the right of the same row and reveals preservation/update/casing switches
 and exclude filters below. Each advanced caption follows its toggle directly;
-Add filter sits beside the filter textbox. Disclosure changes presentation only,
+Add filter sits beside the filter textbox; [PLANNER.md](PLANNER.md#exclude-filter-syntax-and-effect)
+documents pattern syntax and effect. Disclosure changes presentation only,
 never option values. Only the selected task type's Create action is visible.
-The page reserves scrollbar space so disclosure does not shift controls sideways.
+Expanded options have extra spacing below the always-visible switches.
 Empty and resolved paths omit routine hints; refusal and recovery messages remain
-visible. Idle and disabled path-caret and Browse buttons are transparent, with
+visible. Each path has compact inset Clear and recent-folder buttons; Clear
+empties only that local field and invalidates its candidate without a Python
+request, including when the textbox was focused. Browse is square. Idle and
+disabled path-action buttons are transparent, with
 task-card hover/press fills when enabled.
 Textboxes retain their normal accented active underline without an extra outer
 ring; forced colors retain a visible outline. Dropdown-option buttons have no
 native resting border, while keyboard-focused options retain the common focus
-indicator.
+indicator. More options, recent-pair Refresh and New task are also transparent
+at rest and use task-card hover/press fills. The square Refresh uses Arrow Clockwise;
+New task uses the larger Add Square Multiple glyph. Create remains left-aligned;
+Add pair and Create pair batch align right.
 
 A path row remains editable before its task starts. Editing an
 accepted path immediately drops the page's slot reference and marks it
@@ -982,7 +993,9 @@ work until resolved, silently choose the first mount, or reuse a stale choice.
 Setup shows recent sources, targets, and active pairs derived from ledger runs.
 The recent-pair table reuses file-table surfaces with taller rows, two stacked
 source/target paths in its first column and two aligned endpoint statuses in its
-second, without painted row dividers or outside table edges. Long
+second. Corners, caption typography, header fill and alternating row surfaces
+match the gallery plan table, with 4rem (64px by default) two-line rows. Hover, press and keyboard
+focus paint the whole enabled row, never individual cells. Long
 paths truncate at the tail and retain the full text in a tooltip. Online uses a
 green solid circle; Offline uses red; accompanying text stays neutral. A missing
 root or absent volume makes that endpoint Offline. Other resolver refusals show
@@ -1108,6 +1121,19 @@ listeners, invalidates pending work, and makes an already queued frame inert.
 The manifest remains test-only and absent from the wheel. This
 evidence adds no bridge
 command or synthetic domain state. Slice 5 remains the first real plan surface.
+
+The window bounds the shell to its viewport. Task items scroll independently
+between the rail header and the full-width Settings button at the bottom;
+work content has its own scrolling area. The compact New task icon is centered
+beside the Tasks heading. Task text has additional left padding.
+
+Settings is an ordinary work-area page, not a modal. Its Settings card contains
+the existing Theme selector; About initially contains `0.1.0 "Gertrud"`.
+About/license/third-party links remain to be populated with their actual content.
+Opening Settings preserves task identities, drafts, activity and closure state.
+Background task updates do not navigate away from Settings. Clicking a task
+returns to it; an unraced successful New task action opens its new task.
+Global semantic-settings mutation remains deferred.
 
 The rail itself is a Mica seam: it has no card background, border, or shadow.
 A resting unselected task card is fully transparent. Hover and selected/current

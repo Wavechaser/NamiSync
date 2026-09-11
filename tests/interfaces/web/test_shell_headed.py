@@ -93,11 +93,11 @@ def test_shell_gate_child_preserves_the_production_stack_and_is_bounded() -> Non
     assert "DesktopInstanceIdentity(arguments.mutex, arguments.title)" in source
     assert "original(window, *appearance_args, **appearance_kwargs)" in source
     assert '"Input.dispatchKeyEvent"' in source
-    assert source.count('press("Tab", "Tab", 9,') == 3
+    assert source.count('press("Tab", "Tab", 9,') == 2
     assert 'document.querySelector("#theme-mode")' in source
-    assert 'theme?.querySelector(".nami-combobox__trigger")' in source
-    assert "themeTrigger instanceof HTMLButtonElement" in source
-    assert "themePopup.getAttribute(\"role\") !== \"listbox\"" in source
+    assert 'selector?.querySelector(".nami-combobox__trigger")' in source
+    assert 'popup_role: popup?.getAttribute("role")' in source
+    assert 'document.querySelector(".nami-task-rail__settings").click();' in source
     assert "HTMLSelectElement" not in source
     assert '"Input.dispatchMouseEvent"' in source
     assert '"type": "mouseWheel"' in source

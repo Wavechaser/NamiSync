@@ -145,6 +145,41 @@ occurrences remain outside active publication-graph admission.
 Constructors and policy/assignment validators revalidate these contracts so
 forged frozen fields do not bypass them.
 
+## Exclude filter syntax and effect
+
+Setup's Exclude filters field adds one pattern per Add filter click or Enter.
+Patterns are Windows-style root-relative globs, not regular expressions or
+gitignore rules. Matching is case-insensitive for ordinary Windows names;
+both `/` and `\` are separators. Leading and trailing spaces are literal and
+are not trimmed. There is no negation/re-include rule or separate syntax check:
+admission validates nonempty Unicode text and the bounds above.
+
+`*` matches any sequence, including path separators; `?` matches one character;
+`[abc]` matches one listed character and `[!abc]` one unlisted character.
+Backslash is a separator, not an escape. Bracket forms such as `[*]` match a
+literal wildcard. Matching considers the complete relative path and each of
+its ancestors, so matching a directory excludes its descendants too.
+
+| Pattern | Effect |
+| --- | --- |
+| `*.tmp` | Exclude `.tmp` files at any depth. |
+| `build` | Exclude the top-level `build` entry and its entire subtree. |
+| `*\build` | Exclude nested `build` entries and their subtrees; add `build` separately for the top level. |
+| `photos\*.raw` | Exclude matching `.raw` files anywhere below `photos`, including deeper folders. |
+| `report?.txt` | Exclude root-relative names with one character after `report`. |
+
+Filters apply during planning after scanning; they do not prune traversal or
+make an incomplete scan complete. Excluded source entries produce no copy,
+update or directory-creation operation. Excluded target files are protected
+from target-only removal; excluded target directories and ancestors containing
+excluded entries are protected from directory cleanup. Unsupported entries may
+be omitted from plan rows by a filter, but scan-completeness safety still applies.
+
+The plan freezes and fingerprints the canonical filter snapshot: `/` becomes
+`\`, exact duplicate spellings are removed, and patterns are sorted. Case
+variants remain distinct entries even when they match alike. Later edits or
+default changes do not modify an existing reviewed plan.
+
 ## Plan Contract
 
 A plan snapshots roots and `VolumeId` evidence, complete-scan state, filters,

@@ -20,6 +20,7 @@ globalThis.HTMLSelectElement = HTMLSelectElementFake;
 const app = new HTMLElementFake();
 const status = new HTMLElementFake("Starting...");
 const theme = new HTMLSelectElementFake();
+const settings = new HTMLElementFake();
 globalThis.document = {
   documentElement: new HTMLElementFake(),
   querySelector(selector) {
@@ -29,7 +30,7 @@ globalThis.document = {
         ? status
         : selector === "#theme-mode"
           ? theme
-          : null;
+          : selector === "#settings-view" ? settings : null;
   },
 };
 

@@ -37,303 +37,36 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
-### Setup layout and recent-pair availability (2026-09-11)
+### Settings shell and GUI refinement (2026-09-12)
 
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
-| GUI-S1 | Two-card Setup with gallery task switch, inline path/recent dropdown/browse controls, tiered toggle options and a two-column recent-pair availability table that disables unavailable pairs. | 385 focused checks; ordinary suite 4,979 passed, four skipped; installed headed interfaces 30 passed; 12 import contracts; layout captures/computed browser assertions and fresh adversarial review passed. | Complete |
+| GUI-S3 | Minimal Settings/About work page with relocated theme control and preserved tasks; independently scrolling rail above Settings; refined Setup controls, row-wide recent-pair interaction, one refresh glyph, filter documentation and condensed completed GUI history. | Ordinary suite, installed shell/Setup/gallery checks, icon provenance, import contracts and independent adversarial review passed; HANDOFF retains evidence pointers. | Complete |
 
-Observed base: `b08a05b`. One coherent Setup outcome; actual task starts, frozen
-options, remembered identities, batch semantics and fresh start admission remain.
-Deletion policy retains its two explicit choices pending a better agreed control.
-Plan options keep deletion/verify visible; remaining toggles and filters fold.
-No shadow workaround, Mica removal, task cancellation or plan/execution redesign.
+Delivered from 76028db: Settings preserves task identity, drafts and live updates;
+About initially contains only the version line. Clear invalidates a local path
+without admission, including rejection of stale replies. Existing task custody,
+frozen options, fresh admission, batch effects and navigation restrictions remain.
+The gallery retains natural document height, with an overlap guard, while the
+production rail and work area scroll independently. DESKTOP_UI owns the controls,
+PLANNER owns exclude-filter syntax. No backend setting, legal content, lifecycle
+change or Mica/shadow workaround was added.
 
-Initial finite population: setup.js, panels.js, app.css, app.js, tokens.css
-(two availability-fill aliases preserving palette ownership) and existing
-Setup/bridge/gallery test consumers; DESKTOP_UI, INTERFACES/BRIDGE if the probe
-contract needs them, this register, HANDOFF and the existing GUI changelog.
-Read-only study includes M1-6 location-resolution owners and bounded bridge
-contracts to identify the existing availability seam before probe implementation.
-Any exact added probe population is recorded before that lane starts. Do not
-reuse admission choices as availability authority or turn a status probe into
-a start, stored selection or periodic unbounded scan. Checking/unknown states
-must not claim online, stale replies must not affect a replaced form, and start
-continues to re-admit roots. Final acceptance preserves existing Setup lifecycle
-evidence while adding keyboard dropdown/switch/disclosure, inline geometry,
-truncated paths, neutral availability text and disabled unavailable rows.
-Existing repository stop rules apply; no independently discovered feature scope.
+### Completed GUI integration
 
-Probe study resolves the added population to commands.py and its command-policy/
-handler tests, bridge.js and its interactive/static/async consumers, app.js and
-setup_app_probe.mjs (plus app_startup_probe.mjs's explicit bridge stub), and
-BRIDGE/INTERFACES documentation. Use existing remembered_locations and fresh
-admit_location_candidate resolver directly; no new service/workflow API and no
-FolderSlotAuthority allocation. `probe_recent_pairs {}` is a read-only
-async-small five-second/no-retry command returning at most five exact
-mapping/source/target IDs and raw source/target states, deduplicating at most
-ten location probes. Setup loads first; one coalesced browser probe refreshes
-on recent-list reload or explicit Refresh, without a timer. Reply generation
-and exact identity tuples prevent stale application. Resolved/resolved is
-Online, absent volume/root is Offline, other refusal is Unavailable; pending
-or failed checks remain disabled and do not claim reachability.
+| IDs | Delivered |
+| --- | --- |
+| GUI-1, GUI-S1, GUI-S2 | Gallery-consistent task selection cues; two-card Setup with task switch, path recents, Browse, progressive options and per-endpoint recent-pair availability; full-width task cards with inset dismiss; standard textbox focus and stable disclosure layout. |
+| GUI-I1, GUI-I2, GUI-I3 | Selective Fluent icon vocabulary and size fallbacks, one authored catalog with offline sync/check maintenance, provenance/safety/packaging checks, and documented removal/version-upgrade workflow. |
+| GUI-D1–GUI-D4 | Diagnostic shadow audit: dark dropdown key shadows over translucent cards can halo in 10-bpc WCG SDR; disabling automatic color management or using an opaque host removes the reported effect. Ambient-only/opaque receivers appear unaffected. No exact renderer cause or fix established. |
 
-Integrated command-list migration includes the exact exposure expectations in
-test_host, test_native_host_gates, test_transport_headed,
-test_component_gallery_headed, test_bridge_event_benchmark and its shared
-tests/bridge_event_benchmark.py validator. These remain
-exact lists with the one accepted read-only command added; exposure policy and
-benchmark authority are unchanged. Setup-scoped hidden styling preserves real
-mode/action visibility against component display rules, covered by headed
-computed-visibility assertions.
-
-Closeout evidence is in ignored build/gui-icons/setup-ordinary-02.txt,
-setup-headed-all-01.txt and setup-imports.txt. The ordinary run includes the
-interface department and the exact command-list consumer migration. Headed
-evidence retains lifecycle, keyboard, geometry, truncation, neutral-color and
-disabled-row witnesses. Transparent CDP captures support layout inspection,
-not a claim about native Mica or the separately deferred WCG shadow defect.
-
-### Setup and task-rail refinement (2026-09-11)
-
-| ID | Accepted outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| GUI-S2 | Align Setup at the work-area top; compact primary options with grayscale Trash/Additive switch and right-aligned disclosure; remove surplus dividers and passive focus rings; full-width task cards with inset dismiss icons, 1.5rem selection marks and transparent idle icon controls; show separate source/target availability and only the applicable Create action. | Ordinary suite 4,979 passed, four skipped; final interfaces 1,524 passed; final installed headed suite 30 passed; 12 import contracts; layout inspection and independent adversarial review approved. | Complete |
-
-Base: `9ba6538`; one coherent refinement of GUI-S1. The marker uses 1.5 rem
-(24 CSS px at the default root size), following the user's clarification to
-scale with the interface rather than physical display pixels. Finite production population:
-assets/setup.js, panels.js, rail.js, app.js, app.css and components.css. Existing
-fixed dismiss/folder icons and semantic colors are reused. Test population:
-existing Setup/app/startup/rail browser probes and their static/headed interface
-consumers, plus gallery style assertions where the common component changes.
-The gallery's exact report parser in _component_gallery_child.py accepts the
-added marker-height measurements; its remaining shape/type checks stay exact.
-Documentation: DESKTOP_UI, this register, HANDOFF and the current GUI changelog.
-No backend/protocol change: the existing probe already returns both endpoint
-states. Preserve bounded/coalesced refresh, exact stale-reply rejection, fresh
-admission, task closure/retry semantics, frozen options and batch behavior.
-
-Regression study: native buttons cannot nest, so inset dismiss remains a sibling
-of the full-width selection button. Pointer focus must not erase keyboard focus
-indicators; preserve keyboard navigation and focus restoration. A mixed endpoint
-pair stays disabled while each endpoint truth remains visible. Hidden actions
-must be checked by actual browser visibility, not attributes alone. The screenshot
-also requests removing routine ready hints; keep refusal/action-guiding messages.
-No shadow/Mica workaround, new icon import, task lifecycle or deletion semantics
-change. Existing repository stop rules apply. One reviewed GUI-S2 commit.
-
-User clarification: path inputs remain standard textboxes with the small caret
-inside the right edge. Preserve the normal active accented underline. Ordinary
-textboxes use that underline without an added outer focus ring; retain native
-forced-color focus outlines. Native dropdown-option buttons explicitly reset
-their default border, while keyboard-focused options retain the common focus
-indicator. This replaces the abandoned per-path input-modality treatment; no
-custom path-field focus state is retained. The existing component/gallery focus
-assertions are included in the finite consumer migration.
-
-The installed disclosure check also exposed non-reflected `ariaControls`,
-`ariaLabelledBy` and `ariaDescribedBy` string assignments in Setup. Replace
-those five call sites with their exact inert ARIA attributes. The static sink
-guard admits only these three additional literal names; dynamic names and
-executable/navigation/style attributes remain forbidden. Verify real DOM
-relationships, not JavaScript expando properties.
-
-Final user refinement keeps the same population and commit: inset the caret
-button on all sides, suppress empty-field hints as well as ready hints, align
-advanced captions immediately after their toggles, and put Add filter inline
-after its textbox. Verify actual bounds, hidden hint state, and disabled icon
-transparency in the installed Setup witness; preserve error guidance and filter
-editing behavior.
-
-Delivered with a stable root scrollbar gutter so expansion cannot shift the
-primary row sideways. The installed witness retains exact closed/open bounds
-and measures toggle-caption gaps, inset caret bounds, inline filter controls,
-standard textbox focus, and each endpoint status. No tests were retired;
-existing shell heading consumers now verify its absence and retain the region's
-accessible name. Evidence in ignored build/gui-icons/: gui-s2-ordinary-01.txt,
-gui-s2-interfaces-final-02.txt, gui-s2-setup-final-01.txt and
-gui-s2-headed-all-03.txt. The final interfaces and installed runs cover the
-last layout refinements after the ordinary baseline. Transparent captures are
-layout evidence only; native Mica/WCG shadow investigation remains deferred.
-
-### Icon removal and upgrade verification (2026-09-11)
-
-| ID | Accepted outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| GUI-I3 | Verify catalog removal and package-version migration, document their boundaries, and correct any demonstrated gap. | 29 maintenance tests; tools department 334 passed, 3 skipped; unchanged real-archive check and fresh adversarial review passed. No tool correction needed. | Complete |
-
-Observed base: `fe3c11c`. Finite corpus: tools/icons.py and its catalog,
-tests/test_icon_maintenance.py, fixed registry/CSS consumers, TOOLS and existing
-icon guidance. Implementation population: focused maintenance tests, TOOLS,
-this register, HANDOFF and the existing CHANGELOG task; tool correction only
-if a demonstrated transition failure requires it. One verification/documentation
-commit; no actual package upgrade, glyph removal, runtime change or shadow work.
-Regression study preserves selected bytes/provenance, explicit fallbacks,
-read-only check and refusal before mutation for invalid inputs or modified stale
-files. Existing tests cover pruning but do not yet prove a successful version
-transition end to end. Current fixed asset/caller interfaces remain unchanged.
-Existing repository stop rules apply.
-
-### Startup GUI icon foundation and shadow audit (2026-09-11)
-
-GUI-I2 continues the uncommitted GUI-I1 outcome at the user's request: simplify
-icon maintenance while preserving the exact 47-glyph runtime vocabulary and
-appearance. The accepted outcome is one authored catalog plus an offline
-generator/check command, with no parallel hand-maintained per-icon test catalog.
-Status: complete. Gate: meaningful tool corruption/refusal/drift
-tests, icon consistency/provenance/safety/wheel checks, tools/interfaces tests,
-ordinary suite (new test module registration), installed headed gate and fresh
-adversarial review. No new icons, placements, shadow fix or runtime loading.
-
-Finite population: `tools/icons.py`, `tools/icons.json`, `.gitattributes` LF rules for generated owners, marked generated regions
-in icons.js/components.css, SOURCE/native assets (must retain current bytes),
-existing icon/gallery/test-support consumers, new `tests/test_icon_maintenance.py`
-and its tools-department registration, plus AGENTS, DESKTOP_UI, this register,
-HANDOFF, CHANGELOG and README as needed. Existing GUI-I1 changes are the
-preservation baseline; the user authorized deleting the superseded ICONS.md
-after its 47 names were checked against the catalog. One coherent maintenance-tool outcome
-owns all required migrations. No shipped tool/catalog or new dependency.
-
-Regression study: unknown glyph/size refusal before DOM creation, fixed local
-URLs, currentColor and native-size selection, immutable upstream integrity,
-exact package coverage, semantic restraint and UTF-8/LF preservation remain.
-The generator validates inputs and archive before writes; check is read-only,
-rejects drift, and authenticates against the pinned archive. It must not extract
-arbitrary archive paths, silently invent fallbacks, or remove unrelated files.
-Removing duplicate test constants does not remove independent tests of the
-generator's rules. Existing repository stop rules apply.
-
-| ID | Accepted outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| GUI-I2 | Simplify the uncommitted icon foundation with one authored catalog and maintenance sync/check command. | 61 focused checks; 4,972 ordinary tests passed (4 skipped); all 30 installed headed tests passed; authentic pinned-archive check and zero-change sync passed; fresh adversarial review approved. | Complete |
-| GUI-I1 | Import and register the user's ICONS.md glyph vocabulary with deliberate 16/20/24 px artwork selection; establish selective icon semantics. | Pinned package/hash, SVG safety, exact mappings and wheel coverage verified; 1,520 interface tests and all 30 installed headed tests passed. Final independent adversarial review approved. | Complete |
-
-Observed base is M1-6 commit `76ba7d0`; only the user's untracked `ICONS.md`
-pre-exists. GUI-I1 owns fixed local SVGs/SOURCE, icons.js, icon CSS, icon and
-gallery evidence consumers, and documentation in DESKTOP_UI, this register,
-HANDOFF, CHANGELOG and README's phase synopsis. Existing package-data glob must
-cover the exact expanded set; no runtime dependency or dynamic registration is introduced. Keep upstream
-version/license and existing glyph names/API stable. Audit requested size
-availability before selecting fallbacks. One coherent icon-foundation outcome
-includes its tests and docs. GUI-I2 replaces the root list with its JSON catalog
-under the user's explicit cleanup authorization.
-
-Regression study: fixed names and own-property admission must continue rejecting
-unknown/prototype/path input before DOM creation; status/badge meaning, forced
-colors, accessible control names, M1-6 task effects and existing icon consumers
-remain unchanged. Gallery evidence must cover the expanded registry rather than
-silently accepting only its former four glyphs. No blanket surface decoration,
-startup layout rewrite, badge redesign, shadow fix or Mica removal is included.
-
-
-Pinned inventory study confirms all 47 requested Regular names exist in
-`@fluentui/svg-icons@1.1.334`. Use 136 distinct native SVGs for the 141 glyph/size
-combinations; explicit 20 px fallback covers Arrow Sync Checkmark at 16,
-Database Arrow Up at 24, Folder Holder at 16/24, and Timeline at 16. The existing
-four 20 px assets and metadata remain unchanged. Shared size classes select
-fixed per-glyph mask variables; no URL is constructed from runtime input.
-Final GUI-I1 evidence is `build/gui-icons/interfaces-01.txt` and `headed-03.txt`.
-The gallery verifies all 141 mappings and sequentially decodes each of the 136
-unique assets once, without retry. Its earlier concurrent probe recorded one
-unexplained light-mode load failure; the old Boolean evidence cannot establish
-the cause. An earlier shell focus failure passed in isolation and in the final
-full gate without a code change. See HANDOFF for environment/diagnostic limits.
-
-### Shadow composition audit (2026-09-11)
-
-| ID | Accepted outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| GUI-D4 | Re-audit our shadow layers, color and alpha composition for an application defect exposed by WCG. | Source audit found matching Fluent black shadow tokens and no inherited popup opacity/duplicate elevation. Paired Mica diagnostics confirmed native alpha-zero white/black; user observes halos on single/nested translucent receivers with key/combined shadows, not ambient/none or opaque receivers, with no noticeable white/black difference. Native probe confirms 10-bpc WCG SDR. Exact blend fault remains unproven. | Complete: diagnostic only |
-
-GUI-D4 does not authorize production/test changes. Existing stop rules apply.
-Its temporary comparison wrappers/scenario and evidence use the existing ignored
-`build/gui-tuning/halo-10bit/` conventions. The scenario derives from observed
-`76ba7d0`, independent of simultaneous icon-gallery edits. Native Mica remains;
-only each diagnostic process's controller hidden RGB and receiving samples vary.
-
-### GUI integration tuning (2026-09-11)
-
-| ID | Accepted outcome | Named verification | Status |
-| --- | --- | --- | --- |
-| GUI-1 | Restore gallery-equivalent persistent selection fill and accent indicator on the live task rail; retain the Close button. | Pre-fix headed reproducer; 56 focused, 1,503 interface and all 29 installed-wheel headed tests passed; all 12 import contracts, diff checks and fresh adversarial review passed. | Complete |
-| GUI-D1 | Investigate SDR dark flyout haloing and discuss findings without implementing a shadow change. | Current shadow/material CSS, appearance owners, gallery isolation and tests, DESKTOP_UI guidance and originating HDR-fallback commit inspected; separate read-only review confirms source findings, with visual cause unconfirmed. | Complete: discussion only |
-| GUI-D2 | Investigate the reported dark-only halo on 10-bpc-or-higher SDR output, distinguishing display depth from automatic color management. | Inspected Windows/NVIDIA settings, production/gallery owners, Microsoft/Chromium primary sources and diagnostic host media state. User's repeated comparison confirms automatic color management off removes the halo; native probes confirm WCG to ordinary SDR transition at unchanged 10 bpc. Findings and limitations recorded in HANDOFF; exact renderer cause remains unconfirmed. | Complete: discussion only |
-| GUI-D3 | Compare transparent Mica and fully opaque diagnostic hosts with identical gallery cards/shadows, at 10-bit SDR with automatic color management enabled. | Native controller alpha confirmed 0/255; opaque fallback and Mica landed. Paired card reports and popup shadow/surface/border/filter match; native probe confirms WCG at 10 bpc, HDR off. User reports opaque window does not appear to produce halo. Screenshots inspected without claiming a pixel-equivalent comparison or proven renderer fault. | Complete: diagnostic only |
-
-GUI-D2 authorizes diagnostic-only files in ignored `build/gui-tuning/halo-10bit/`
-under its local conventions, plus findings in this register and HANDOFF.
-No production/test change, driver installation, global browser flag, or shipped
-shadow workaround is included. Any temporary diagnostic setting is restored;
-unrelated user windows/data remain untouched. Existing stop rules apply.
-
-GUI-D3 extends the same diagnostic directory and findings documents only. Its
-finite population is a process-local gallery launcher, separate data/evidence
-for each host, and native display-state evidence. Production/test sources stay
-unchanged. Opacity removes both native Mica and controller transparency through
-the existing fallback; cards and shadow CSS remain identical. Final review must
-distinguish a host-opacity dependency from proof of a particular renderer fault.
-
-The unresolved dark flyout halo is tracked in
-[BUGS.md](BUGS.md#desktop-material-composition) at the user's request. GUI-D2/D3
-established reported Advanced Color/transparent-host dependencies, not a
-specific renderer cause or correction. Mica remains required; the issue is
-unfixed and adds no M1-6 implementation or release gate. GUI-D4 reopens the
-bounded investigation only; it does not authorize a workaround.
-
-GUI-1 is one atomic presentation fix based on clean `e19ed9d` on `milestone1`,
-delivered as `fix(web): restore live task rail selection cues` in that checkout.
-Its finite production population is `namisync/interfaces/web/assets/components.css`;
-test population is `tests/interfaces/web/test_design_tokens.py`,
-`tests/interfaces/web/_task_shell_headed_child.py`, and
-`tests/interfaces/web/test_task_shell_headed.py`. Documentation population is
-this register, `DESKTOP_UI.md`, `CHANGELOG.md`, and the replaced `HANDOFF.md`.
-The live rail owns navigation state through `aria-current="page"`; shared
-component CSS owns paint. Preimplementation inspection found that CSS recognized
-only `aria-current="true"` and `aria-selected="true"`, explaining the missing
-fill and marker despite existing passing navigation checks. The fix adds exact page
-selectors throughout ordinary and forced-color current-state rules, preserving
-the existing gallery variants, pressed/hover behavior and focus indication.
-The headed computed-style assertion failed before the CSS correction and passed after it.
-The acceptance gate above includes selection transfer and persistent marker/fill
-on actual live rail buttons with the separate Close action intact.
-
-Non-goals: close icons or layout redesign, lifecycle/admission changes, shadow or
-material changes, M1-6 onward, and revival of archived presentation recipes.
-The established gallery selection contract is the reference. Lost navigation,
-Close semantics, accessibility state or existing theme behavior is a regression
-to correct within GUI-1. Repository stop classes remain unchanged. GUI-D1 is a
-read-only discovery outcome over the named corpus, not shadow-fix authority.
-Generated diagnostics use ignored `build/gui-tuning/`: `evidence/` holds command
-logs and review receipts; remove only task-created disposable inputs at closure.
-Final headed acceptance is `evidence/headed-03.txt`, run on the interactive
-desktop with pip cache disabled. Earlier attempts hit a shared pip-cache access
-failure, then sandbox desktop enumeration failure; both precede GUI assertions
-and are retained as environment evidence. No production/test workaround or
-whole-runtime/compositor-health claim was added. No test module was added or
-retired, and no task branch or worktree required cleanup.
-
-GUI-D1 source findings: `1fe32b3` introduced the HDR-only shadow suppression;
-the current selectors still win over later base rules by specificity. SDR
-retains black elevation shadows, not a light shadow token. Mica makes the
-WebView controller/page background transparent even though the dropdown surface
-is opaque. The gallery's old normal/opaque isolation surfaces now both resolve
-to the same opaque dark background, so those labels no longer distinguish
-surface alpha; its shadowless comparison remains useful, but its elevation-8
-differs from the production dropdown's elevation-16. No runtime or test
-change is authorized by these observations. The user reports dropdown halos on
-natively SDR displays but no halo when moving this computer's window from HDR
-to SDR; the trigger and compositor cause remain unconfirmed. A controlled
-fresh-launch HDR-off comparison should record Chromium's dynamic-range result,
-native material, and shadow-on/off appearance before choosing a mitigation.
-After the rail gate finished, the user disabled HDR globally and reported a
-reliable distinction: dropdown shadows halo over cards, but not over bare Mica.
-Dark cards use white at 5% alpha; their preceding solid-background declaration
-is a fallback replaced by that translucent value, not an opaque underlay. This
-narrows the next diagnostic to the card/shadow overlap: compare the production
-shadow over bare Mica, the current card and a temporarily opaque card, plus a
-shadowless control. It does not yet establish which renderer/compositor stage
-causes the artifact, and no shadow or card fix was implemented.
+[DESKTOP_UI.md](DESKTOP_UI.md) owns current controls and icon placement;
+[TOOLS.md](TOOLS.md) owns icon maintenance. Recent-pair availability is a bounded,
+coalesced read-only observation, not admission authority; starts re-admit roots.
+[BUGS.md](BUGS.md#desktop-material-composition) retains the unresolved shadow
+issue and investigation boundaries. Mica remains required; no workaround or
+new release gate was added. Superseded GUI implementation studies and test-run
+counts are retained in Git history rather than this delivery register.
 
 ### Documentation reconciliation pass (2026-09-09)
 

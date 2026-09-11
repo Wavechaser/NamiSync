@@ -217,6 +217,7 @@ async function reportFailure(error) {
     throw new Error("the gallery cosmetic seed is unavailable");
   }
   await waitForTheme(expectedTheme);
+  document.querySelector(".nami-task-rail__settings").click();
   const themeSelector = document.querySelector("#theme-mode");
   const themeTrigger = themeSelector?.querySelector(".nami-combobox__trigger");
   const alternateOption = document.querySelector(
@@ -312,6 +313,10 @@ async function reportFailure(error) {
     throw new TypeError("installed page app root is unavailable");
   }
   app.replaceChildren();
+  // The specimen gallery is a document, not a viewport-bounded task page.
+  app.style.blockSize = "auto";
+  app.style.gridTemplateRows = "none";
+  app.style.overflow = "visible";
   const galleryHeader = document.createElement("header");
   galleryHeader.className = "nami-shell__header";
   const heading = document.createElement("h1");
@@ -327,6 +332,7 @@ async function reportFailure(error) {
     onCreate() {},
     onSelect() {},
     onClose() {},
+    onSettings() {},
   });
   galleryRail.render([], null, false);
   const taskSlot = galleryRail.element.querySelector(
@@ -1792,7 +1798,7 @@ async function reportFailure(error) {
   const selectedBounds = selectedThemeOption.getBoundingClientRect();
   const triggerStyle = getComputedStyle(themeTrigger);
   const popupStyle = getComputedStyle(themePopup);
-  const taskCards = [...galleryRail.element.querySelectorAll(".nami-task-card")];
+  const taskCards = [...taskSlot.querySelectorAll(".nami-task-card")];
   const selectedTaskCard = galleryRail.element.querySelector(
     '.nami-task-card[aria-selected="true"]',
   );
@@ -1940,6 +1946,15 @@ async function reportFailure(error) {
   optionStatePopup.remove();
 
   galleryStage = "report";
+  const sectionBounds = [...app.querySelectorAll(":scope > [data-gallery-section]")]
+    .map((section) => section.getBoundingClientRect());
+  for (const [index, bounds] of sectionBounds.entries()) {
+    if (sectionBounds.slice(index + 1).some((other) =>
+      Math.min(bounds.right, other.right) - Math.max(bounds.left, other.left) > 1
+      && Math.min(bounds.bottom, other.bottom) - Math.max(bounds.top, other.top) > 1)) {
+      throw new Error("gallery specimen sections overlap");
+    }
+  }
   const reportParts = [
     { name: "lifecycles", value: lifecycles },
     { name: "intents", value: intents },
