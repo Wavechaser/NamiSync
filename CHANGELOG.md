@@ -39,6 +39,8 @@ packaging remain open.
   archive sync/check tool. Generated registry, CSS and provenance remain fixed
   shipped source; independent safety and rendering checks remain. Removed the
   superseded root icon list with user authorization.
+- Registered maintenance command syntax and options in TOOLS.md, linked from
+  the desktop icon guidance.
 - Verified 61 focused checks, 4,972 ordinary tests (four skips), all 30 installed
   headed tests, authentic archive correspondence and a zero-change sync. Fresh
   adversarial review passed.

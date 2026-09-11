@@ -533,6 +533,8 @@ icon-only controls require their own accessible name.
 
 #### Maintaining the icon vocabulary
 
+See [TOOLS.md](TOOLS.md#icon-maintenance) for the command syntax and options.
+
 Edit `tools/icons.json` to add or remove glyphs and declare missing-size
 fallbacks. Then run `.\.venv\Scripts\python.exe tools/icons.py sync`.
 The command authenticates the pinned npm archive and updates

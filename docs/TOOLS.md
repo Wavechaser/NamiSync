@@ -1,10 +1,49 @@
 # Development Tools
 
-`tools/` contains two distinct development-only surfaces. `python -m tools`
+`tools/` contains development-only utilities. `python -m tools`
 owns the executor/verifier measurement harness and deterministic corpus
 generator. `tools/gui.ps1` is a standalone editable-source desktop convenience
-launcher. Neither is part of the shipped `namisync` package, and both are
-covered by pytest without turning their output into product acceptance.
+launcher. `tools/icons.py` maintains the fixed local icon vocabulary from
+`tools/icons.json`. None is part of the shipped `namisync` package. Pytest covers
+their behavior; measurement output remains subject to the authority rules below.
+
+## Icon maintenance
+
+Edit `tools/icons.json` to select glyph names and declare missing-size fallbacks,
+then synchronize and review the generated diff:
+
+```powershell
+.\.venv\Scripts\python.exe tools/icons.py sync
+.\.venv\Scripts\python.exe tools/icons.py check
+
+# Use an already downloaded pinned npm archive without network access
+.\.venv\Scripts\python.exe tools/icons.py sync --archive "build/gui-icons/svg-icons-1.1.334.tgz"
+.\.venv\Scripts\python.exe tools/icons.py check --archive "build/gui-icons/svg-icons-1.1.334.tgz"
+
+# Optional explicit checkout root; otherwise inferred from the script's location
+.\.venv\Scripts\python.exe tools/icons.py check --root "F:\GitHubRepositories\NamiSync"
+.\.venv\Scripts\python.exe tools/icons.py --help
+```
+
+Both commands accept `--archive` and `--root`. Without `--archive`, the command
+downloads the official npm archive pinned by the catalog. It verifies SHA-512
+integrity before parsing selected members; it never extracts arbitrary archive
+paths. Native 16/20/24 px selection is automatic. Missing sizes require explicit
+20 px fallbacks; obsolete fallbacks are refused when native artwork exists.
+
+`sync` updates native SVGs, SOURCE provenance, and marked JavaScript/CSS regions.
+It removes only unchanged stale assets owned by the previous receipt. Do not
+hand-edit these generated outputs. `check` writes nothing and exits with status
+1 for drift or invalid input, or 0 when outputs match. A successful sync also
+exits 0. The tool is not a runtime loader and introduces no app dependency.
+
+For package updates, review the catalog's version, integrity, commit and license
+hash together. The archive omits the license file: retain or deliberately update
+the reviewed local `LICENSE.txt`; a missing file or hash mismatch is refused.
+Archive verification establishes upstream correspondence; receipt consistency
+tests alone do not. Run the icon/tool tests and installed gallery gate described
+in [TESTS.md](TESTS.md). Placement policy and icon semantics remain owned by
+[DESKTOP_UI.md](DESKTOP_UI.md#icon-placement-and-meaning).
 
 ## Editable GUI launcher
 

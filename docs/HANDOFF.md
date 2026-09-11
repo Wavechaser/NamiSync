@@ -23,7 +23,7 @@ Check is read-only. Git pins the two generated code owners to LF so Windows
 checkout conversion does not create false drift. The app never loads or packages the tool/catalog. Tests use
 the authored catalog for inventory expectations and independent synthetic
 archives for generator rules; authenticity still requires the official archive
-check. See DESKTOP_UI for update/license instructions.
+check. TOOLS owns CLI syntax/options; DESKTOP_UI owns placement and meaning.
 
 Final verification: 61 focused passed (4 headed deselected); 4,972 ordinary
 passed, 4 skipped, 30 headed deselected; all 30 installed headed tests passed.
