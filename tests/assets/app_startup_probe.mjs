@@ -138,6 +138,7 @@ const bridgeStub = moduleUrl(`
     recents: { sources: [], targets: [], pairs: [] },
   });
   export const admitLocation = () => Promise.reject(new Error("unused"));
+  export const probeRecentPairs = () => Promise.resolve({ pairs: [] });
   export const pickFolder = () => Promise.reject(new Error("unused"));
   export const planAgain = () => Promise.reject(new Error("unused"));
   export const prepareSetup = () => Promise.reject(new Error("unused"));
@@ -178,7 +179,7 @@ const renderStub = moduleUrl(`
 let source = await readFile(process.argv[2], "utf8");
 source = source.replace(
   /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
+  `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeStub}";`,
 );
 source = source
   .replace("./readiness.js", readinessStub)

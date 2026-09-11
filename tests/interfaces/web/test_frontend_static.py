@@ -258,7 +258,7 @@ def test_modules_use_only_local_explicit_js_imports(
         "rail.js": ["./render.js"],
         "readiness.js": [],
         "render.js": [],
-        "setup.js": ["./render.js"],
+        "setup.js": ["./icons.js", "./render.js"],
         "theme.js": ["./bridge.js", "./render.js"],
         "tree.js": ["./render.js"],
     }
@@ -1030,6 +1030,7 @@ def test_br_g_32_browser_wrapper_owns_exact_ids_response_checks_and_retry() -> N
     assert source.count('"start_inventory"') == 2
     assert source.count('"plan_again"') == 4
     assert source.count('"read_setup"') == 3
+    assert source.count('"probe_recent_pairs"') == 2
     assert source.count('"prepare_setup"') == 3
     assert source.count('"admit_location"') == 2
     assert "function submitStart(payload, command, timeoutMs)" in source
@@ -1226,7 +1227,7 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert "tabIndex" not in panels
     assert 'rail.classList.add("nami-task-rail");' in rail
     assert 'rail.classList.add("nami-card"' not in rail
-    assert 'panel.classList.add("nami-card", "nami-work-panel");' in panels
+    assert 'panel.classList.add("nami-work-panel");' in panels
     assert "app.append(rail.element, panel.element);" in app
     assert 'renderText(create, "New task");' in rail
     assert 'renderText(entry.close, task.error === null ? "Close" : "Retry");' in rail
@@ -1280,5 +1281,7 @@ def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
     assert app_css.count("min-inline-size: 0;") >= 2
     assert "min-block-size: 100vh;" in app_css
     assert "height: 100vh" not in app_css
-    assert "overflow: hidden" not in app_css.split(".nami-tree", 1)[0]
+    for selector, declarations in re.findall(r"([^{}]+)\{([^{}]*)\}", app_css.split(".nami-tree", 1)[0]):
+        if "overflow: hidden" in declarations:
+            assert selector.strip() in {".nami-setup__recent", ".nami-setup__pair-path"}
     assert "--palette-" not in app_css

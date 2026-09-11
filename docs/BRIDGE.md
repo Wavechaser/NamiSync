@@ -147,7 +147,7 @@ commands still use that native path for their admission return.
 ### Small asynchronous native commands
 
 Only `create_task`, `start_plan`, `start_inventory`, `plan_again`,
-`release_terminal_session` and `close_task`
+`release_terminal_session`, `close_task` and `probe_recent_pairs`
 select the `CommandSpec` small asynchronous work class. Native dispatch
 validates the request and admitted context before starting one command worker.
 Ordinary `BridgeDispatcher.dispatch()` and `CommandSpec.invoke()` remain
@@ -251,6 +251,7 @@ BOOTSTRAP rows, commands require OPEN.
 | `readiness_echo` | `{challenge:HexId}` | `{acknowledged:boolean}` | BOOTSTRAP with exact post-open replay; 5 s; one identical-payload retry after false/uncertainty |
 | `pick_folder` | `{purpose:"source"\|"target"\|"inventory"}` | `null` or `LocationChoice` | interactive; no deadline or automatic retry |
 | `read_setup` | `{task_id:null\|TaskId}` | `{task_id:null\|TaskId,snapshot:SetupSnapshot,recents:null\|RecentLocations}` | 5 s; one identical-payload retry |
+| `probe_recent_pairs` | `{}` | `{pairs:[{mapping_id:LocationId,source_id:LocationId,target_id:LocationId,source_state:LocationState,target_state:LocationState}]}` | async-small; 5 s; no automatic retry |
 | `prepare_setup` | `{options:SetupOptions}` | canonical `SetupOptions` | 5 s; one identical-payload retry |
 | `admit_location` | `{purpose:"source"\|"target"\|"inventory",candidate:LocationCandidate}` or `{purpose:"source"\|"target"\|"inventory",continuation_id:SlotId,mount_index:SafeInt}` | `LocationChoice` | 5 s; no automatic retry |
 | `create_task` | `{command_id:HexId}` | `{task_id:TaskId}` | 30 s; one same-command replay after uncertainty/reinjection/internal_error; manual Retry retains id |
@@ -271,6 +272,18 @@ an admitted Python handler. Start replay resolves retained wire intent before
 volatile slots: equal id/intent survives expiry; changed wire/resolved intent
 conflicts. Lifecycle release/close uses exact owner identity and idempotent
 recovery, not invented command receipts.
+
+`probe_recent_pairs` reads at most five remembered pairs, deduplicates at most
+ten endpoint resolutions, and returns only exact IDs and raw states. LocationId
+is a canonical positive decimal string in the existing signed 64-bit identity
+domain. LocationState uses the same closed state vocabulary as LocationChoice.
+The result forbids additional fields and duplicate mapping IDs. No choice slot,
+continuation, task, session or durable record is created. Its worker uses the
+existing resolver directly, separately from the initial Setup read. The browser
+coalesces refreshes, rejects replaced-page/list observations and matches all
+three IDs before displaying a status. A five-second deadline marks the status
+unknown; it does not cancel native work or authorize automatic retries. Online
+does not replace fresh admission when selecting or starting.
 
 `create_task` publishes a process-live shell with no session, request, plan, or
 result. `list_tasks` reconstructs published blank and session-backed tasks after

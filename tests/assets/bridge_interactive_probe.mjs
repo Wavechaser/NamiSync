@@ -114,6 +114,7 @@ const moduleUrl = `data:text/javascript;base64,${Buffer.from(source).toString("b
 const bridge = await import(moduleUrl);
 bridge.markBridgeOperational();
 
+
 const invalidCommands = [
   null,
   "",
@@ -470,3 +471,30 @@ assert.deepEqual(
   Array(3).fill(createAttempts[0].payload.command_id),
   "manual task-create recovery reuses the exact command intent",
 );
+
+const recentPairProbe = { pairs: [{
+  mapping_id: "1", source_id: "2", target_id: "3",
+  source_state: "resolved", target_state: "offline",
+}] };
+testWindow.failCommand("probe_recent_pairs", 1);
+const probeFailureCount = testWindow.requests.length;
+await assert.rejects(bridge.probeRecentPairs(), bridge.BridgeTransportError);
+assert.equal(testWindow.requests.length, probeFailureCount + 1, "transport failure does not retry the probe");
+testWindow.queueResults("probe_recent_pairs", recentPairProbe);
+assert.deepEqual(await bridge.probeRecentPairs(), recentPairProbe);
+for (const invalid of [
+  { pairs: [...recentPairProbe.pairs, ...recentPairProbe.pairs] },
+  { pairs: Array.from({ length: 6 }, (_, index) => ({
+    ...recentPairProbe.pairs[0], mapping_id: String(index + 1),
+    source_id: String(20 + index * 2), target_id: String(21 + index * 2),
+  })) },
+  { pairs: [{ ...recentPairProbe.pairs[0], source_state: "online" }] },
+  { pairs: [{ ...recentPairProbe.pairs[0], source_id: "02" }] },
+  { pairs: [{ ...recentPairProbe.pairs[0], target_id: "2" }] },
+  { pairs: [{ ...recentPairProbe.pairs[0], choice_id: "not-authority" }] },
+]) {
+  testWindow.queueResults("probe_recent_pairs", invalid);
+  const count = testWindow.requests.length;
+  await assert.rejects(bridge.probeRecentPairs(), bridge.BridgeTransportError);
+  assert.equal(testWindow.requests.length, count + 1, "probe does not retry");
+}

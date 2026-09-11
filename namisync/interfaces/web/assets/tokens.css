@@ -186,6 +186,8 @@
   --lifecycle-neutral-foreground: var(--color-neutral-foreground-secondary);
   --lifecycle-active-foreground: var(--color-accent-fill);
   --lifecycle-completed-foreground: var(--palette-green-main);
+  --availability-online-fill: var(--palette-green-main);
+  --availability-offline-fill: var(--palette-red-main);
   --lifecycle-attention-foreground: var(--palette-yellow-main);
   --lifecycle-canceled-background: var(--color-neutral-surface-selected);
   --lifecycle-canceled-foreground: var(--color-neutral-foreground-secondary);

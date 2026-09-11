@@ -3,7 +3,7 @@ import { createSetupPanel } from "./setup.js";
 
 export function createWorkPanel(setupCallbacks) {
   const panel = document.createElement("section");
-  panel.classList.add("nami-card", "nami-work-panel");
+  panel.classList.add("nami-work-panel");
   panel.setAttribute("role", "region");
   panel.ariaLabel = "Work area";
 

@@ -328,6 +328,14 @@ Typed/picker/recent Setup commands adapt these application APIs. Reading
 suggestions or admitting a candidate creates
 no task, session, location, mapping, run or recent activity.
 
+The desktop's separate `probe_recent_pairs` read composes remembered pairs and
+the existing fresh candidate resolver without issuing choice/continuation slots.
+It returns at most five pair identity tuples and raw endpoint states, deduping
+at most ten location probes. Availability is presentation evidence only; selecting
+an online pair and starting still use ordinary fresh admission. The browser
+loads Setup before probing, coalesces refreshes and rejects superseded or
+identity-mismatched observations. No background polling is introduced.
+
 Location starts use the same candidate admission route, preserving their
 existing five-state resolution synchronously before dispatcher
 admission and return a primitive `LocationSession`. An unresolved binding raises

@@ -91,6 +91,8 @@ from namisync.workflows import (
     LocationCandidateResult,
     LocationCandidateState,
     RememberedLocations,
+    RememberedLocation,
+    RememberedPair,
     VolumeResolution,
     VolumeResolutionState,
 )
@@ -440,6 +442,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "readiness_echo",
         "pick_folder",
         "read_setup",
+        "probe_recent_pairs",
         "prepare_setup",
         "admit_location",
         "create_task",
@@ -464,6 +467,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
         "plan_again",
         "release_terminal_session",
         "close_task",
+        "probe_recent_pairs",
     }
     assert all(
         spec.work is CommandWork.DIRECT
@@ -475,6 +479,7 @@ def test_br_g_32_production_command_table_is_exact_immutable_and_policy_complete
             "plan_again",
             "release_terminal_session",
             "close_task",
+            "probe_recent_pairs",
         }
     )
     assert (
@@ -1328,6 +1333,95 @@ def test_br_g_32_folder_picker_cancel_creates_no_slot() -> None:
 
     assert _invoke(commands["pick_folder"], {"purpose": "target"}) is None
     assert slots.stored == []
+
+
+def test_probe_recent_pairs_deduplicates_bounded_locations_and_projects_raw_states(
+) -> None:
+    used_at = datetime(2026, 9, 11, tzinfo=timezone.utc)
+    locations = tuple(
+        RememberedLocation(
+            index,
+            VolumeId(f"volume-{index}", "NTFS"),
+            f"folder-{index}",
+            f"{chr(64 + index)}:\\",
+            used_at,
+        )
+        for index in range(1, 11)
+    )
+    target_indexes = (5, 5, 7, 8, 9)
+    pairs = tuple(
+        RememberedPair(index, locations[index - 1], locations[target_index], used_at)
+        for index, target_index in enumerate(target_indexes, start=1)
+    )
+    projected_states = (
+        LocationCandidateState.RESOLVED,
+        LocationCandidateState.OFFLINE,
+        LocationCandidateState.AMBIGUOUS,
+        LocationCandidateState.MISSING,
+        LocationCandidateState.NOT_DIRECTORY,
+        LocationCandidateState.REPARSE,
+        LocationCandidateState.PLACEHOLDER,
+        LocationCandidateState.REMOTE,
+        LocationCandidateState.UNSUPPORTED_VOLUME,
+        LocationCandidateState.UNAVAILABLE,
+    )
+
+    class Service(_Service):
+        def __init__(self) -> None:
+            super().__init__()
+            self.admissions: list[LocationCandidate] = []
+
+        def remembered_locations(self):
+            return RememberedLocations((), (), pairs)
+
+        def admit_location_candidate(self, candidate):
+            self.admissions.append(candidate)
+            state = projected_states[candidate.location_id - 1]
+            if state is not LocationCandidateState.RESOLVED:
+                return LocationCandidateResult(candidate, state)
+            return super().admit_location_candidate(candidate)
+
+    service = Service()
+    slots = _Slots()
+    commands = production_command_specs(
+        picker=lambda: None,
+        slots=slots,
+        registry=service,
+        cosmetics=_Cosmetics(),
+        shell_ready=lambda _generation: None,
+        readiness_echo=lambda _generation, _challenge: False,
+    )
+
+    assert _invoke(commands["probe_recent_pairs"], {}) == {
+        "pairs": [
+            {
+                "mapping_id": str(index),
+                "source_id": str(index),
+                "target_id": str(target_indexes[index - 1] + 1),
+                "source_state": projected_states[index - 1].value,
+                "target_state": projected_states[target_indexes[index - 1]].value,
+            }
+            for index in range(1, 6)
+        ]
+    }
+    assert service.admissions == [
+        LocationCandidate.remembered(index)
+        for index in (1, 6, 2, 3, 8, 4, 9, 5, 10)
+    ]
+    assert slots.stored == []
+    assert slots.resolved == []
+
+
+@pytest.mark.parametrize("payload", [None, [], {"unexpected": None}])
+def test_probe_recent_pairs_rejects_nonempty_or_nonobject_payload(
+    payload: object,
+) -> None:
+    commands, _, service = _commands()
+
+    with pytest.raises(CommandPayloadError, match="probe_recent_pairs payload"):
+        _invoke(commands["probe_recent_pairs"], payload)
+
+    assert service.calls == []
 
 
 def test_br_g_32_ambiguous_picker_requires_opaque_fresh_continuation(

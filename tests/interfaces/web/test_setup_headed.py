@@ -50,13 +50,37 @@ def test_m1_6_installed_setup_flow(
     assert result["typed_refusal"] in {"invalid_path", "missing", "unavailable"}
     assert result["typed_retry_resolved"] is True
     assert result["hostile_filter_inert"] is True
+    assert result["two_setup_cards"] is True
+    assert result["segmented_keyboard"] is True
+    assert result["recent_dropdown_keyboard"] is True
+    assert result["disclosure_open"] is True
+    assert result["inline_location_controls"] is True
+    assert result["browse_outside_path_control"] is True
+    assert result["dropdown_anchored"] is True
+    assert result["dropdown_rerender_focus_restored"] is True
+    assert result["picker_icon_only"] is True
+    assert result["advanced_switches"] is True
+    assert result["primary_options_visible"] is True
+    assert result["sync_inapplicable_actions_hidden"] is True
+    assert result["recent_pair_online_offline"] is True
+    assert result["offline_pair_disabled"] is True
+    assert result["pair_two_line_paths"] is True
+    assert result["pair_paths_truncated"] is True
+    assert result["availability_dots_distinct"] is True
+    assert result["availability_text_neutral"] is True
+    assert result["pair_button_focused"] is True
     assert result["frozen"] is True
     assert result["plan_again_visible"] is True
     assert result["plan_again_new_task"] is True
     assert result["picker_resolved"] is True
+    assert result["frozen_switches_disabled"] is True
+    assert result["frozen_pairs_disabled"] is True
+    assert result["frozen_mode_hidden"] is True
     assert result["recent_activated"] is True
     assert result["recent_pair_activated"] is True
+    assert result["recent_pair_native_button"] is True
     assert result["inventory_without_pair"] is True
+    assert result["inventory_inapplicable_hidden"] is True
     assert result["mixed_batch"] is True
     assert result["navigation_retains_frozen"] is True
     assert result["picker_ambiguous"] is True
@@ -66,7 +90,7 @@ def test_m1_6_installed_setup_flow(
     assert result["frozen_before_capture"] is True
     assert result["reload_task_count"] == result["task_count_before_reload"]
     assert result["reload_frozen_reconstructed"] is True
-    assert set(result["screenshots"]) == {"editable", "frozen"}
+    assert set(result["screenshots"]) == {"editable", "editable-expanded", "frozen"}
 
 
 def _run_setup_scenario(

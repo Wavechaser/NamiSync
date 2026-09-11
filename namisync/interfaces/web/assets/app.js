@@ -10,6 +10,7 @@ import {
   pickFolder,
   planAgain,
   prepareSetup,
+  probeRecentPairs,
   readSetup,
   StartPlanUncertainError,
   startInventory,
@@ -56,6 +57,11 @@ let taskMutationRevision = 0;
 let createAttempt = null;
 let nextTaskNumber = 1;
 let defaultSetup = null;
+let defaultSetupRevision = 0;
+let recentPairAvailability = Object.create(null);
+let recentPairProbeRevision = 0;
+let recentPairProbeRunning = false;
+let recentPairProbePending = false;
 let pageBatch = null;
 
 const panel = createWorkPanel({
@@ -64,6 +70,7 @@ const panel = createWorkPanel({
   onPick: pickLocation,
   onRecent: chooseRecentLocation,
   onRecentPair: chooseRecentPair,
+  onRefreshRecents: refreshRecentPairs,
   onMode: editMode,
   onOption: editOption,
   onAddFilter: addFilter,
@@ -88,6 +95,9 @@ function taskArray() {
 }
 
 function renderTasks() {
+  for (const task of tasks.values()) {
+    if (task.form !== null) task.form.recentPairAvailability = recentPairAvailability;
+  }
   if (pageBatch !== null) {
     for (const task of tasks.values()) {
       if (task.form !== null) {
@@ -434,8 +444,12 @@ async function loadTaskSetup(task) {
 }
 
 async function loadDefaultSetup() {
+  const revision = ++defaultSetupRevision;
+  const epoch = startupEpoch;
   try {
-    defaultSetup = await readSetup();
+    const result = await readSetup();
+    if (revision !== defaultSetupRevision || epoch !== startupEpoch) return;
+    defaultSetup = result;
     for (const task of tasks.values()) {
       if (task.form === null && task.taskKind === null) {
         void loadTaskSetup(task);
@@ -443,9 +457,53 @@ async function loadDefaultSetup() {
         task.form.setup = { ...task.form.setup, recents: defaultSetup.recents };
       }
     }
-    renderTasks();
+    refreshRecentPairs();
   } catch (_error) {
     // Task-specific reads retain the existing action-guiding error path.
+  }
+}
+
+function refreshRecentPairs() {
+  recentPairProbeRevision += 1;
+  recentPairAvailability = Object.create(null);
+  for (const pair of defaultSetup?.recents.pairs ?? []) {
+    recentPairAvailability[pair.mapping_id] = "checking";
+  }
+  renderTasks();
+  recentPairProbePending = true;
+  void runRecentPairProbe();
+}
+
+async function runRecentPairProbe() {
+  if (recentPairProbeRunning || !recentPairProbePending) return;
+  recentPairProbePending = false;
+  const recents = defaultSetup?.recents;
+  if (recents === undefined || recents.pairs.length === 0) return;
+  recentPairProbeRunning = true;
+  const revision = recentPairProbeRevision;
+  const epoch = startupEpoch;
+  const current = () => revision === recentPairProbeRevision
+    && epoch === startupEpoch && defaultSetup?.recents === recents;
+  try {
+    const result = await probeRecentPairs();
+    if (!current()) return;
+    for (const pair of recents.pairs) {
+      const observed = result.pairs.find((item) => item.mapping_id === pair.mapping_id
+        && item.source_id === pair.source.location_id && item.target_id === pair.target.location_id);
+      const states = observed === undefined ? [] : [observed.source_state, observed.target_state];
+      recentPairAvailability[pair.mapping_id] = observed === undefined ? "unknown"
+        : states.every((state) => state === "resolved") ? "online"
+          : states.some((state) => state === "offline" || state === "missing") ? "offline"
+            : "unavailable";
+    }
+  } catch (_error) {
+    if (current()) {
+      for (const pair of recents.pairs) recentPairAvailability[pair.mapping_id] = "unknown";
+    }
+  } finally {
+    recentPairProbeRunning = false;
+    if (current()) renderTasks();
+    if (recentPairProbePending) void runRecentPairProbe();
   }
 }
 
@@ -604,6 +662,10 @@ async function chooseRecentPair(pair) {
   const task = currentTask();
   const form = task?.form;
   if (task === null || !formIsEditable(form) || form.mode !== "sync-plan") return;
+  if (form.batchRunning || recentPairAvailability[pair.mapping_id] !== "online"
+    || !form.setup.recents.pairs.some((item) => item.mapping_id === pair.mapping_id
+      && item.source.location_id === pair.source.location_id
+      && item.target.location_id === pair.target.location_id)) return;
   for (const [rowName, recent] of [["source", pair.source], ["target", pair.target]]) {
     const row = form[rowName];
     row.text = recent.display;
@@ -1146,6 +1208,10 @@ function ensureStartup({
 
 window.addEventListener("pywebviewready", () => {
   startupEpoch += 1;
+  recentPairProbeRevision += 1;
+  recentPairProbePending = false;
+  recentPairAvailability = Object.create(null);
+  renderTasks();
   if (pageBatch !== null) {
     pageBatch.generation += 1;
     for (const row of pageBatch.rows) {

@@ -633,6 +633,35 @@ def production_command_specs(
             payload.purpose, selected, registry, slots, admitted=fresh
         )
 
+    def probe_recent_pairs(payload: object) -> object:
+        if payload is not None:
+            raise TypeError("probe_recent_pairs received an unvalidated payload")
+        recents = registry.remembered_locations()
+        if type(recents) is not RememberedLocations:
+            raise RuntimeError("location service returned invalid recents")
+        states: dict[int, str] = {}
+        pairs: list[dict[str, object]] = []
+        for pair in recents.pairs:
+            for location in (pair.source, pair.target):
+                if location.location_id in states:
+                    continue
+                result = registry.admit_location_candidate(
+                    LocationCandidate.remembered(location.location_id)
+                )
+                if type(result) is not LocationCandidateResult:
+                    raise RuntimeError("location service returned invalid data")
+                states[location.location_id] = result.state.value
+            pairs.append(
+                {
+                    "mapping_id": str(pair.mapping_id),
+                    "source_id": str(pair.source.location_id),
+                    "target_id": str(pair.target.location_id),
+                    "source_state": states[pair.source.location_id],
+                    "target_state": states[pair.target.location_id],
+                }
+            )
+        return {"pairs": pairs}
+
     def prepare_setup(payload: object) -> object:
         if type(payload) is not _PrepareSetupPayload:
             raise TypeError("prepare_setup received an unvalidated payload")
@@ -920,6 +949,16 @@ def production_command_specs(
                 timeout=CommandTimeout.LOCAL_5_SECONDS,
                 retry=CommandRetry.SAME_PAYLOAD_ONCE,
             ),
+            "probe_recent_pairs": CommandSpec(
+                validate_payload=_validate_probe_recent_pairs,
+                handler=probe_recent_pairs,
+                access=CommandAccess.READ_ONLY,
+                command_id=FieldRequirement.FORBIDDEN,
+                revision=FieldRequirement.FORBIDDEN,
+                timeout=CommandTimeout.LOCAL_5_SECONDS,
+                retry=CommandRetry.NONE,
+                work=CommandWork.ASYNC_SMALL,
+            ),
             "prepare_setup": CommandSpec(
                 validate_payload=_validate_prepare_setup,
                 handler=prepare_setup,
@@ -1108,6 +1147,11 @@ def _validate_read_setup(value: object) -> _ReadSetupPayload:
     ):
         raise CommandPayloadError("read_setup payload is invalid")
     return _ReadSetupPayload(task_id)
+
+
+def _validate_probe_recent_pairs(value: object) -> None:
+    if type(value) is not dict or value:
+        raise CommandPayloadError("probe_recent_pairs payload is invalid")
 
 
 def _validate_prepare_setup(value: object) -> _PrepareSetupPayload:

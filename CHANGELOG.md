@@ -26,6 +26,21 @@ bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
 packaging remain open.
 
+#### Reshape Setup and recent-pair selection (2026-09-11)
+
+- Split Setup and Recent pairs into two cards. Reused the segmented task switch,
+  inline path/recent-folder controls and folder-open Browse icons; kept deletion
+  and verification visible while folding remaining toggles and filters.
+- Added a taller two-column recent-pair table with stacked truncated paths and
+  neutral status text beside green/red availability dots. Unavailable rows stay
+  visible and cannot be selected.
+- Added a bounded read-only asynchronous availability probe through the existing
+  location resolver, without choice slots or retained authority. Refresh is
+  coalesced; stale replies are ignored and starts still re-admit roots.
+- Preserved actual hidden-mode/action visibility and keyboard focus through
+  rerenders. Verified with 4,979 ordinary tests (four skips), all 30 installed
+  headed tests, 12 import contracts and independent adversarial review.
+
 #### Expand the icon vocabulary and selective usage guidance (2026-09-11)
 
 - Registered all 47 requested Regular Fluent glyphs from the existing pinned

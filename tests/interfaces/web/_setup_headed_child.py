@@ -66,8 +66,64 @@ _EDITABLE_SCRIPT = r"""
   const target = document.querySelector("#setup-target-path");
   const options = document.querySelector(".nami-setup__options");
   if (!(source instanceof HTMLInputElement) || !(target instanceof HTMLInputElement) ||
-      !(options instanceof HTMLFieldSetElement) || source.disabled || target.disabled) {
+      !(options instanceof HTMLDivElement) || source.disabled || target.disabled) {
     throw new Error("editable Setup controls are unavailable");
+  }
+  const cards = document.querySelectorAll(".nami-setup > .nami-setup__card.nami-card");
+  const mode = document.querySelector('.nami-setup__mode[role="radiogroup"]');
+  const syncMode = mode?.querySelector('[role="radio"][data-value="sync-plan"]');
+  const inventoryMode = mode?.querySelector('[role="radio"][data-value="inventory"]');
+  const more = document.querySelector(".nami-setup__more-options");
+  const deletionPolicy = document.querySelector("#setup-deletion-policy");
+  const verifyToggle = document.querySelector('[data-option="verify_after_execute"]');
+  const adsToggle = document.querySelector('[data-option="preserve_ads"]');
+  const sourceLine = document.querySelector('[data-purpose="source"] .nami-setup__location-line');
+  const sourceLabel = document.querySelector('[for="setup-source-path"]');
+  const pathControl = document.querySelector('[data-purpose="source"] .nami-setup__path-control');
+  const recentTrigger = document.querySelector("#setup-source-recent-trigger");
+  const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
+  const inventoryAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((item) => item.textContent === "Create inventory");
+  const planAgainAction = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((item) => item.textContent === "Plan again");
+  if (cards.length !== 2 || !(syncMode instanceof HTMLButtonElement) || !(inventoryMode instanceof HTMLButtonElement) ||
+      !(more instanceof HTMLDetailsElement) || !(sourceLine instanceof HTMLDivElement) ||
+      !(sourceLabel instanceof HTMLLabelElement) || !(pathControl instanceof HTMLDivElement) ||
+      !(recentTrigger instanceof HTMLButtonElement) || !(picker instanceof HTMLButtonElement) ||
+      !(deletionPolicy instanceof HTMLSelectElement) || !(verifyToggle instanceof HTMLInputElement) ||
+      !(adsToggle instanceof HTMLInputElement) || !adsToggle.disabled ||
+      !(inventoryAction instanceof HTMLButtonElement) || !(planAgainAction instanceof HTMLButtonElement)) {
+    throw new Error("Setup layout controls are unavailable");
+  }
+  syncMode.focus();
+  syncMode.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowRight", bubbles: true}));
+  await until(() => inventoryMode.getAttribute("aria-checked") === "true" && document.activeElement === inventoryMode, "keyboard inventory segment");
+  inventoryMode.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowLeft", bubbles: true}));
+  await until(() => syncMode.getAttribute("aria-checked") === "true" && document.activeElement === syncMode, "keyboard sync segment");
+  more.querySelector("summary")?.click();
+  if (!more.open) throw new Error("More options disclosure did not open");
+  const inlineRects = [sourceLabel, source, recentTrigger, picker].map((item) => item.getBoundingClientRect());
+  const inlineControls = inlineRects.every((rect) => rect.top < inlineRects[0].bottom && rect.bottom > inlineRects[0].top);
+  const browseOutsidePathControl = picker.getBoundingClientRect().left > pathControl.getBoundingClientRect().right;
+  const availabilityRows = await until(() => {
+    const values = Array.from(document.querySelectorAll(".nami-setup__recent-pair"));
+    const states = values.map((row) => row.dataset.availability);
+    return values.length === 2 && states.includes("online") && states.includes("offline") ? values : null;
+  }, "online and offline recent-pair probes");
+  const onlinePair = availabilityRows.find((row) => row.dataset.availability === "online");
+  const offlinePair = availabilityRows.find((row) => row.dataset.availability === "offline");
+  const offlinePaths = offlinePair.querySelectorAll(".nami-setup__pair-path");
+  const pathStyle = getComputedStyle(offlinePaths[0]);
+  const offlineStatus = offlinePair.querySelector(".nami-setup__availability");
+  const neutralColor = getComputedStyle(document.querySelector(".nami-setup__recent-pair-table th")).color;
+  const onlineDot = onlinePair.querySelector(".nami-setup__availability-dot");
+  const offlineDot = offlinePair.querySelector(".nami-setup__availability-dot");
+  const onlineSelect = onlinePair.querySelector(".nami-setup__pair-select");
+  const offlineSelect = offlinePair.querySelector(".nami-setup__pair-select");
+  if (!(onlineSelect instanceof HTMLButtonElement) || !(offlineSelect instanceof HTMLButtonElement) ||
+      offlinePair.getAttribute("aria-disabled") !== "true" || !offlineSelect.disabled ||
+      onlinePair.getAttribute("aria-disabled") !== "false" || onlineSelect.disabled) {
+    throw new Error("recent-pair availability interaction state is incorrect");
   }
   source.focus();
   source.value = "not a native folder";
@@ -80,6 +136,21 @@ _EDITABLE_SCRIPT = r"""
   source.dispatchEvent(new Event("input", {bubbles: true}));
   source.dispatchEvent(new Event("blur", {bubbles: true}));
   await until(() => source.dataset.state === "resolved", "corrected typed location admission");
+  recentTrigger.focus();
+  recentTrigger.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+  const recentOption = await until(() => document.querySelector("#setup-source-recent-popup [role=option]:focus"), "keyboard recent option");
+  const recentPopup = document.querySelector("#setup-source-recent-popup");
+  const dropdownAnchored = recentPopup.parentElement === pathControl &&
+    recentPopup.getBoundingClientRect().left >= pathControl.getBoundingClientRect().left &&
+    recentPopup.getBoundingClientRect().right <= pathControl.getBoundingClientRect().right;
+  document.querySelector(".nami-setup__refresh-recents").click();
+  await until(() => onlinePair.dataset.availability === "online", "availability refresh completion");
+  if (recentTrigger.getAttribute("aria-expanded") !== "true" || document.activeElement !== recentOption) {
+    throw new Error("unrelated availability refresh replaced recent-folder focus");
+  }
+  recentOption.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+  await until(() => recentTrigger.getAttribute("aria-expanded") === "false" && document.activeElement === recentTrigger, "recent Escape return");
+  const recentKeyboard = document.activeElement === recentTrigger;
   const filter = document.querySelector("#setup-filter");
   if (!(filter instanceof HTMLInputElement)) throw new Error("Setup filter is unavailable");
   const hostile = "<img src=x onerror=alert(1)>";
@@ -87,12 +158,35 @@ _EDITABLE_SCRIPT = r"""
   filter.dispatchEvent(new KeyboardEvent("keydown", {key: "Enter", bubbles: true}));
   await until(() => Array.from(document.querySelectorAll(".nami-setup__filter-list span"))
     .some((item) => item.textContent === hostile), "inert hostile filter");
+  await until(() => onlinePair.dataset.availability === "online" && !onlineSelect.disabled, "refreshed online pair");
+  onlineSelect.focus({focusVisible: true});
   return {
     editable: true,
     typed_refusal: refusedState,
     typed_retry_resolved: source.dataset.state === "resolved",
     hostile_filter_inert: document.querySelector("img") === null,
     options_visible: options.checkVisibility(),
+    two_setup_cards: cards.length === 2,
+    segmented_keyboard: syncMode.getAttribute("aria-checked") === "true",
+    recent_dropdown_keyboard: recentKeyboard,
+    disclosure_open: more.open,
+    inline_location_controls: inlineControls,
+    browse_outside_path_control: browseOutsidePathControl,
+    dropdown_anchored: dropdownAnchored,
+    dropdown_rerender_focus_restored: recentKeyboard,
+    picker_icon_only: picker.textContent === "" && picker.getAttribute("aria-label") === "Browse for source folder",
+    advanced_switches: more.querySelectorAll('input[role="switch"]').length === 5,
+    primary_options_visible: deletionPolicy.checkVisibility() && verifyToggle.checkVisibility(),
+    sync_inapplicable_actions_hidden: !inventoryAction.checkVisibility() && !planAgainAction.checkVisibility(),
+    recent_pair_online_offline: true,
+    offline_pair_disabled: offlinePair.getAttribute("aria-disabled") === "true",
+    pair_two_line_paths: offlinePaths.length === 2 && offlinePaths[0].getBoundingClientRect().top < offlinePaths[1].getBoundingClientRect().top,
+    pair_paths_truncated: pathStyle.textOverflow === "ellipsis" && pathStyle.overflow === "hidden" &&
+      Array.from(offlinePaths).every((item) => item.scrollWidth > item.clientWidth && item.title === item.textContent),
+    availability_dots_distinct: getComputedStyle(onlineDot).backgroundColor !== getComputedStyle(offlineDot).backgroundColor,
+    availability_text_neutral: getComputedStyle(offlineStatus).color === neutralColor &&
+      getComputedStyle(onlinePair.querySelector(".nami-setup__availability")).color === neutralColor,
+    pair_button_focused: document.activeElement === onlineSelect,
     source_node_id: source.id,
   };
 })()
@@ -115,7 +209,7 @@ _FROZEN_SCRIPT = r"""
   const button = document.querySelector(".nami-setup__actions .nami-button--primary");
   if (!(source instanceof HTMLInputElement) || !(target instanceof HTMLInputElement) ||
       !(button instanceof HTMLButtonElement)) throw new Error("plan action is unavailable");
-  const picker = document.querySelector('[data-purpose="source"] .nami-setup__location-controls button');
+  const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
   if (!(picker instanceof HTMLButtonElement)) throw new Error("source picker is unavailable");
   picker.focus();
   picker.click();
@@ -125,9 +219,12 @@ _FROZEN_SCRIPT = r"""
   target.dispatchEvent(new Event("blur", {bubbles: true}));
   await until(() => target.dataset.state === "resolved" && !button.disabled, "resolved typed target");
   button.click();
-  const mode = document.querySelector("#setup-task-type");
-  await until(() => source.disabled && target.disabled && mode instanceof HTMLSelectElement && mode.hidden,
+  const mode = document.querySelector(".nami-setup__mode-group");
+  await until(() => source.disabled && target.disabled && mode instanceof HTMLDivElement && mode.hidden,
     "persisted frozen Setup snapshot");
+  const frozenModeHidden = !mode.checkVisibility();
+  const frozenSwitches = Array.from(document.querySelectorAll('.nami-setup__options input[role="switch"]'));
+  const frozenPairs = Array.from(document.querySelectorAll(".nami-setup__pair-select"));
   let planAgain;
   try {
     planAgain = await until(() => {
@@ -140,7 +237,7 @@ _FROZEN_SCRIPT = r"""
       guidance: document.querySelector(".nami-setup > p")?.textContent ?? null,
       action: document.querySelector(".nami-setup__action-status")?.textContent ?? null,
       task_status: document.querySelector('[aria-current="page"] .nami-task-card__status')?.textContent ?? null,
-      mode_hidden: mode instanceof HTMLSelectElement ? mode.hidden : null,
+      mode_hidden: mode instanceof HTMLDivElement ? mode.hidden : null,
     };
     throw new Error(`${error.message}; dom=${JSON.stringify(detail)}`);
   }
@@ -154,6 +251,9 @@ _FROZEN_SCRIPT = r"""
     plan_again_visible: !planAgain.hidden,
     plan_again_new_task: true,
     picker_resolved: source.dataset.state === "resolved",
+    frozen_switches_disabled: frozenSwitches.length === 6 && frozenSwitches.every((input) => input.disabled),
+    frozen_pairs_disabled: frozenPairs.length === 2 && frozenPairs.every((button) => button.disabled),
+    frozen_mode_hidden: frozenModeHidden,
   };
 })()
 """
@@ -183,27 +283,37 @@ _INDEPENDENT_SCRIPT = r"""
 
   newTask();
   let {source, target} = await editable();
-  const recentPair = await until(() => document.querySelector(".nami-setup__recent-pair"), "recent pair");
+  const recentPair = await until(() => {
+    const value = document.querySelector('.nami-setup__recent-pair[data-availability="online"]');
+    const button = value?.querySelector(".nami-setup__pair-select");
+    return button instanceof HTMLButtonElement && !button.disabled ? button : null;
+  }, "online recent pair");
+  recentPair.focus();
   recentPair.click();
   await until(() => source.dataset.state === "resolved" && target.dataset.state === "resolved", "recent pair admission");
   const pairActivated = source.value.length > 0 && target.value.length > 0;
-  const mode = document.querySelector("#setup-task-type");
-  if (!(mode instanceof HTMLSelectElement)) throw new Error("task type selector is unavailable");
-  mode.value = "inventory";
-  mode.dispatchEvent(new Event("change", {bubbles: true}));
-  await until(() => document.querySelector('[for="setup-source-path"]')?.textContent === "Inventory root", "inventory mode");
-  const recent = await until(() => document.querySelector('[data-purpose="source"] .nami-setup__recent'), "recent source");
+  const mode = document.querySelector('.nami-setup__mode [role="radio"][data-value="inventory"]');
+  if (!(mode instanceof HTMLButtonElement)) throw new Error("task type selector is unavailable");
+  mode.click();
+  await until(() => document.querySelector('[for="setup-source-path"]')?.textContent === "Root", "inventory mode");
+  const recentTrigger = await until(() => document.querySelector("#setup-source-recent-trigger"), "recent source trigger");
+  recentTrigger.click();
+  const recent = await until(() => Array.from(document.querySelectorAll('#setup-source-recent-popup [role="option"]'))
+    .find((item) => item.textContent === __SOURCE__), "known online recent source");
   recent.click();
   await until(() => source.dataset.state === "resolved", "recent admission");
   const inventory = Array.from(document.querySelectorAll(".nami-setup__actions button"))
     .find((button) => button.textContent === "Create inventory");
   if (!(inventory instanceof HTMLButtonElement)) throw new Error("inventory action is unavailable");
   inventory.click();
-  await until(() => source.disabled && mode.hidden && target.value === "" &&
+  await until(() => source.disabled && document.querySelector(".nami-setup__mode-group")?.hidden && target.value === "" &&
     document.querySelector('[data-purpose="target"]')?.hidden === true &&
-    document.querySelector('[for="setup-source-path"]')?.textContent === "Inventory root", "frozen inventory");
+    document.querySelector('[for="setup-source-path"]')?.textContent === "Root", "frozen inventory");
   const inventoryWithoutPair = target.value === "" &&
     document.querySelector('[data-purpose="target"]')?.hidden === true;
+  const inventoryInapplicableHidden = !document.querySelector('[data-purpose="target"]').checkVisibility() &&
+    !document.querySelector(".nami-setup__recent-pairs").checkVisibility() &&
+    !document.querySelector(".nami-setup__options").checkVisibility();
 
   newTask();
   ({source, target} = await editable());
@@ -232,7 +342,9 @@ _INDEPENDENT_SCRIPT = r"""
   return {
     recent_activated: true,
     recent_pair_activated: pairActivated,
+    recent_pair_native_button: recentPair.tagName === "BUTTON",
     inventory_without_pair: inventoryWithoutPair,
+    inventory_inapplicable_hidden: inventoryInapplicableHidden,
     mixed_batch: true,
     navigation_retains_frozen: true,
   };
@@ -266,7 +378,7 @@ _AMBIGUITY_SCRIPT = r"""
   target.dispatchEvent(new Event("input", {bubbles: true}));
   target.dispatchEvent(new Event("blur", {bubbles: true}));
   await until(() => target.dataset.state === "resolved", "ambiguity target admission");
-  const picker = document.querySelector('[data-purpose="source"] .nami-setup__location-controls button');
+  const picker = document.querySelector('[data-purpose="source"] .nami-setup__picker');
   if (!(picker instanceof HTMLButtonElement)) throw new Error("ambiguity picker is unavailable");
   picker.focus();
   picker.click();
@@ -284,11 +396,11 @@ _AMBIGUITY_SCRIPT = r"""
   frozenTask.click();
   await until(() => {
     const frozenSource = document.querySelector("#setup-source-path");
-    const mode = document.querySelector("#setup-task-type");
+    const mode = document.querySelector(".nami-setup__mode-group");
     const planAgain = Array.from(document.querySelectorAll(".nami-setup__actions button"))
       .find((button) => button.textContent === "Plan again");
     return frozenSource instanceof HTMLInputElement && frozenSource.disabled &&
-      mode instanceof HTMLSelectElement && mode.hidden &&
+      mode instanceof HTMLDivElement && mode.hidden &&
       planAgain instanceof HTMLButtonElement && !planAgain.hidden;
   }, "frozen task before screenshot and reload");
   return {
@@ -482,8 +594,12 @@ def _begin(
                 frozen_task.GetAwaiter().OnCompleted(action)
 
             _capture(
-                core, screenshot_dir / "editable.png", retained, begin_frozen,
-                lambda error: recorder.failure("editable-screenshot", error),
+                core, screenshot_dir / "editable-expanded.png", retained,
+                lambda: _collapse_and_capture_editable(
+                    core, screenshot_dir, retained, begin_frozen,
+                    lambda error: recorder.failure("editable-screenshot", error),
+                ),
+                lambda error: recorder.failure("editable-expanded-screenshot", error),
             )
         except BaseException as error:
             recorder.failure("editable", error)
@@ -509,11 +625,40 @@ def _begin_reloaded(window: object, recorder: _Recorder, retained: list[object],
         try:
             reloaded = _runtime_value(task)
             state["stage"] = "complete"
-            recorder.ready({**report, **reloaded, "screenshots": ["editable", "frozen"]})
+            recorder.ready({**report, **reloaded, "screenshots": ["editable", "editable-expanded", "frozen"]})
         except BaseException as error:
             recorder.failure("reload", error)
 
     action = Action(reloaded_done)
+    retained.append(action)
+    task.GetAwaiter().OnCompleted(action)
+
+
+def _collapse_and_capture_editable(
+    core: object,
+    screenshot_dir: Path,
+    retained: list[object],
+    continuation: object,
+    on_failure: object,
+) -> None:
+    from System import Action
+
+    settings = json.dumps({
+        "expression": 'document.querySelector(".nami-setup__more-options").open = false;',
+        "awaitPromise": False,
+        "returnByValue": True,
+    })
+    task = core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", settings)
+
+    def collapsed() -> None:
+        try:
+            if task.IsFaulted or task.IsCanceled:
+                raise RuntimeError("collapsing editable Setup failed")
+            _capture(core, screenshot_dir / "editable.png", retained, continuation, on_failure)
+        except BaseException as error:
+            on_failure(error)
+
+    action = Action(collapsed)
     retained.append(action)
     task.GetAwaiter().OnCompleted(action)
 
@@ -639,7 +784,7 @@ class _AmbiguousRegistry:
         )
 
 
-def _seed_recent_pair(paths: object, source: Path, target: Path) -> None:
+def _seed_recent_pair(paths: object, source: Path, target: Path, *, token: str) -> None:
     from namisync.core.evidence import RecordingStatus
     from namisync.core.models import VolumeEvidence
     from namisync.core.planning import selection_digest
@@ -671,7 +816,7 @@ def _seed_recent_pair(paths: object, source: Path, target: Path) -> None:
         assert source_value.binding is not None and source_value.root_path is not None
         assert target_value.binding is not None and target_value.root_path is not None
         request = runtime.create_plan_request(
-            "e" * 32,
+            token * 32,
             source_value.root_path,
             target_value.root_path,
             source_binding=source_value.binding,
@@ -696,7 +841,7 @@ def _seed_recent_pair(paths: object, source: Path, target: Path) -> None:
     ):
         raise RuntimeError("headed recent seed lacks native volume evidence")
     now = clock.now()
-    run_token = "f" * 32
+    run_token = token * 32
     with LedgerRecorder(paths.ledger, clock=clock) as recorder:
         host_id = recorder.ensure_host(HostCommand("setup-headed", "Setup headed", now))
         source_volume = recorder.observe_volume(VolumeCommand(
@@ -742,10 +887,16 @@ def _run(arguments: argparse.Namespace, recorder: _Recorder) -> int:
     original_commands = host._production_commands
     ambiguous = arguments.source.parent / "ambiguous-picker"
     picked_source = arguments.source.parent / "picked-source"
+    offline_source = arguments.source.parent / ("offline-source-" + "s" * 72)
+    offline_target = arguments.source.parent / ("offline-target-" + "t" * 72)
     ambiguous.mkdir(parents=True, exist_ok=True)
     picked_source.mkdir(parents=True, exist_ok=True)
+    offline_source.mkdir(parents=True, exist_ok=True)
+    offline_target.mkdir(parents=True, exist_ok=True)
     paths = AppPaths.from_root(arguments.data_dir)
-    _seed_recent_pair(paths, arguments.source, arguments.target)
+    _seed_recent_pair(paths, arguments.source, arguments.target, token="e")
+    _seed_recent_pair(paths, offline_source, offline_target, token="d")
+    offline_source.rmdir()
     picker_calls = 0
 
     def picker() -> list[str]:

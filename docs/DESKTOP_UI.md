@@ -942,6 +942,15 @@ control. ADS is visibly unavailable and frozen off; the page never implies a
 disabled checked option will be honored. Wire encoding is
 owned by [BRIDGE.md](BRIDGE.md).
 
+Setup and Recent pairs occupy separate cards. The task type uses the gallery's
+segmented radio control, with arrow-key selection. Each path row places its
+Source/Target label on the left, an editable path and recent-folder caret in one
+field, and an accessible folder-open Browse button outside on the right. The
+recent dropdown supports keyboard navigation, selection and Escape dismissal.
+Plan options have no enclosing outline: deletion policy and the verification
+switch remain visible; More options reveals preservation/update/casing switches
+and exclude filters. Disclosure changes presentation only, never option values.
+
 A path row remains editable before its task starts. Editing an
 accepted path immediately drops the page's slot reference and marks it
 unresolved; the UI never silently reuses cached authority. Validation runs on
@@ -957,6 +966,14 @@ short-lived opaque reference and fresh native identity checks. It cannot start
 work until resolved, silently choose the first mount, or reuse a stale choice.
 
 Setup shows recent sources, targets, and active pairs derived from ledger runs.
+The recent-pair table reuses file-table surfaces with taller rows, two stacked
+source/target paths in its first column and availability in its second. Long
+paths truncate at the tail and retain the full text in a tooltip. Online uses a
+green solid circle; Offline uses red; accompanying text stays neutral. A missing
+root or absent volume makes a pair Offline. Other resolver refusals show
+Unavailable, and incomplete/failed probes show Checking/Could not check. Only
+Online pairs can be selected; all rows remain visible. Refresh rechecks these
+ephemeral observations. It does not start a task or retain folder authority.
 Unresolved remembered locations remain visible with stable identity context,
 never a stale drive hint. Multi-pair creation is a browser coordinator over
 ordinary serial plan starts: one gesture freezes one options snapshot, each row
@@ -970,8 +987,8 @@ and overlapping starts wait for it to finish. Uncertain creation or start keeps
 the exact command's Retry action and remains distinct from refusal; retry never
 substitutes edited input or creates a replacement intent.
 
-Core folder rows and the primary action appear first; an Options group reveals
-the full task-local choices. Start admits unresolved nonempty rows automatically.
+Core folder rows and the primary action appear first; More options reveals
+the remaining task-local choices. Start admits unresolved nonempty rows automatically.
 Stable form elements retain focus and drafts through rail, drain and navigation
 updates; response revisions cannot restore an edited row's old choice. The
 page retains one coordinator of at most 48 pairs, not a batch in every task.

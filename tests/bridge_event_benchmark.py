@@ -1924,6 +1924,7 @@ def _summarize(
         "pick_folder",
         "plan_again",
         "prepare_setup",
+        "probe_recent_pairs",
         "read_cosmetic_section",
         "read_setup",
         "readiness_echo",

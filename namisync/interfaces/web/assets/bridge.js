@@ -26,6 +26,7 @@ const COMMAND_POLICY_JSON = `{
   "create_task": {"timeout": "mutation-30-seconds", "retry": "same-command-once", "phase": "open"},
   "list_tasks": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "read_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
+  "probe_recent_pairs": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "prepare_setup": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
   "admit_location": {"timeout": "local-5-seconds", "retry": "none", "phase": "open"},
   "read_cosmetic_section": {"timeout": "local-5-seconds", "retry": "same-payload-once", "phase": "open"},
@@ -717,6 +718,29 @@ export async function prepareSetup(options) {
     if (!(error instanceof BridgeTransportError)) throw error;
   }
   return dispatchAttempt("prepare_setup", payload, validateSetupOptions, SETUP_PREPARE_TIMEOUT_MS);
+}
+
+export function probeRecentPairs() {
+  return dispatchAttempt(
+    "probe_recent_pairs", {}, validateRecentPairProbe,
+    TIMEOUT_MS_BY_POLICY[COMMAND_POLICY_CONTRACT.probe_recent_pairs.timeout], true,
+  );
+}
+
+function validateRecentPairProbe(value) {
+  const states = new Set([
+    "resolved", "invalid_path", "missing", "not_directory", "reparse",
+    "placeholder", "remote", "unsupported_volume", "offline", "ambiguous",
+    "unavailable", "changed",
+  ]);
+  return isExactObject(value, ["pairs"]) && Array.isArray(value.pairs)
+    && value.pairs.length <= 5
+    && value.pairs.every((pair) => isExactObject(pair, [
+      "mapping_id", "source_id", "target_id", "source_state", "target_state",
+    ]) && isLocationId(pair.mapping_id) && isLocationId(pair.source_id)
+      && isLocationId(pair.target_id) && pair.source_id !== pair.target_id
+      && states.has(pair.source_state) && states.has(pair.target_state))
+    && new Set(value.pairs.map((pair) => pair.mapping_id)).size === value.pairs.length;
 }
 
 async function dispatchAttempt(

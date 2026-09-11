@@ -37,6 +37,63 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Setup layout and recent-pair availability (2026-09-11)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-S1 | Two-card Setup with gallery task switch, inline path/recent dropdown/browse controls, tiered toggle options and a two-column recent-pair availability table that disables unavailable pairs. | 385 focused checks; ordinary suite 4,979 passed, four skipped; installed headed interfaces 30 passed; 12 import contracts; layout captures/computed browser assertions and fresh adversarial review passed. | Complete |
+
+Observed base: `b08a05b`. One coherent Setup outcome; actual task starts, frozen
+options, remembered identities, batch semantics and fresh start admission remain.
+Deletion policy retains its two explicit choices pending a better agreed control.
+Plan options keep deletion/verify visible; remaining toggles and filters fold.
+No shadow workaround, Mica removal, task cancellation or plan/execution redesign.
+
+Initial finite population: setup.js, panels.js, app.css, app.js, tokens.css
+(two availability-fill aliases preserving palette ownership) and existing
+Setup/bridge/gallery test consumers; DESKTOP_UI, INTERFACES/BRIDGE if the probe
+contract needs them, this register, HANDOFF and the existing GUI changelog.
+Read-only study includes M1-6 location-resolution owners and bounded bridge
+contracts to identify the existing availability seam before probe implementation.
+Any exact added probe population is recorded before that lane starts. Do not
+reuse admission choices as availability authority or turn a status probe into
+a start, stored selection or periodic unbounded scan. Checking/unknown states
+must not claim online, stale replies must not affect a replaced form, and start
+continues to re-admit roots. Final acceptance preserves existing Setup lifecycle
+evidence while adding keyboard dropdown/switch/disclosure, inline geometry,
+truncated paths, neutral availability text and disabled unavailable rows.
+Existing repository stop rules apply; no independently discovered feature scope.
+
+Probe study resolves the added population to commands.py and its command-policy/
+handler tests, bridge.js and its interactive/static/async consumers, app.js and
+setup_app_probe.mjs (plus app_startup_probe.mjs's explicit bridge stub), and
+BRIDGE/INTERFACES documentation. Use existing remembered_locations and fresh
+admit_location_candidate resolver directly; no new service/workflow API and no
+FolderSlotAuthority allocation. `probe_recent_pairs {}` is a read-only
+async-small five-second/no-retry command returning at most five exact
+mapping/source/target IDs and raw source/target states, deduplicating at most
+ten location probes. Setup loads first; one coalesced browser probe refreshes
+on recent-list reload or explicit Refresh, without a timer. Reply generation
+and exact identity tuples prevent stale application. Resolved/resolved is
+Online, absent volume/root is Offline, other refusal is Unavailable; pending
+or failed checks remain disabled and do not claim reachability.
+
+Integrated command-list migration includes the exact exposure expectations in
+test_host, test_native_host_gates, test_transport_headed,
+test_component_gallery_headed, test_bridge_event_benchmark and its shared
+tests/bridge_event_benchmark.py validator. These remain
+exact lists with the one accepted read-only command added; exposure policy and
+benchmark authority are unchanged. Setup-scoped hidden styling preserves real
+mode/action visibility against component display rules, covered by headed
+computed-visibility assertions.
+
+Closeout evidence is in ignored build/gui-icons/setup-ordinary-02.txt,
+setup-headed-all-01.txt and setup-imports.txt. The ordinary run includes the
+interface department and the exact command-list consumer migration. Headed
+evidence retains lifecycle, keyboard, geometry, truncation, neutral-color and
+disabled-row witnesses. Transparent CDP captures support layout inspection,
+not a claim about native Mica or the separately deferred WCG shadow defect.
+
 ### Icon removal and upgrade verification (2026-09-11)
 
 | ID | Accepted outcome | Named verification | Status |

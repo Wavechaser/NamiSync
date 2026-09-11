@@ -115,7 +115,13 @@ async function loadScenario({
     task: null,
     calls: [],
     snapshot,
-    recents,
+    recents: structuredClone(recents),
+    probeRecentPairs() {
+      return Promise.resolve({ pairs: harness.recents.pairs.map((pair) => ({
+        mapping_id: pair.mapping_id, source_id: pair.source.location_id,
+        target_id: pair.target.location_id, source_state: "resolved", target_state: "resolved",
+      })) });
+    },
     windowListeners,
     listTasks: () => Promise.resolve({ tasks: [initialSummary] }),
     readSetup(taskId = null) {
@@ -178,6 +184,7 @@ async function loadScenario({
     export const pickFolder = (...args) => harness.pickFolder(...args);
     export const planAgain = (...args) => harness.planAgain(...args);
     export const prepareSetup = (...args) => harness.prepareSetup(...args);
+    export const probeRecentPairs = () => harness.probeRecentPairs();
     export const readSetup = (...args) => harness.readSetup(...args);
     export const startInventory = (...args) => harness.startInventory(...args);
     export const startPlan = (...args) => harness.startPlan(...args);
@@ -223,7 +230,7 @@ async function loadScenario({
   let source = await readFile(process.argv[2], "utf8");
   source = source.replace(
     /import \{[\s\S]*?\} from "\.\/bridge\.js";/,
-    `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeUrl}";`,
+    `import { acknowledgeShellReady, admitLocation, BridgeTransportError, closeTask, createTask, echoReadiness, listTasks, markBridgeOperational, pickFolder, planAgain, prepareSetup, probeRecentPairs, readSetup, StartPlanUncertainError, startInventory, startPlan, startTaskDrain, TaskCreateUncertainError, whenBridgeApiReady } from "${bridgeUrl}";`,
   );
   source = source
     .replace("./readiness.js", readinessUrl)
@@ -235,6 +242,50 @@ async function loadScenario({
   await import(moduleUrl(`${source}\n// scenario ${scenarioId}`));
   await until(() => harness.model !== null, "initial Setup read");
   return harness;
+}
+
+{
+  const pair = {
+    mapping_id: "91", source: { location_id: "92", display: "S:\\source", last_used_at: "2026-09-11T00:00:00+00:00" },
+    target: { location_id: "93", display: "T:\\target", last_used_at: "2026-09-11T00:00:00+00:00" },
+    last_used_at: "2026-09-11T00:00:00+00:00",
+  };
+  const harness = await loadScenario({ recents: { sources: [], targets: [], pairs: [pair] } });
+  await until(() => harness.model.recentPairAvailability["91"] === "online", "initial online pair");
+  const observation = (sourceState, targetState, targetId = "93") => ({ pairs: [{
+    mapping_id: "91", source_id: "92", target_id: targetId,
+    source_state: sourceState, target_state: targetState,
+  }] });
+  const old = deferred();
+  const fresh = deferred();
+  let probes = 0;
+  harness.probeRecentPairs = () => (++probes === 1 ? old : fresh).promise;
+  harness.callbacks.onRefreshRecents();
+  assert.equal(harness.model.recentPairAvailability["91"], "checking");
+  const admissions = () => harness.calls.filter((call) => call[0] === "admit").length;
+  const before = admissions();
+  await harness.callbacks.onRecentPair(pair);
+  assert.equal(admissions(), before, "checking rows cannot acquire choices");
+  harness.callbacks.onRefreshRecents();
+  harness.callbacks.onRefreshRecents();
+  assert.equal(probes, 1, "refreshes coalesce behind the pending request");
+  old.resolve(observation("resolved", "resolved"));
+  await until(() => probes === 2, "coalesced refresh");
+  assert.equal(harness.model.recentPairAvailability["91"], "checking", "superseded online reply ignored");
+  fresh.resolve(observation("resolved", "offline"));
+  await until(() => harness.model.recentPairAvailability["91"] === "offline", "offline target");
+  await harness.callbacks.onRecentPair(pair);
+  assert.equal(admissions(), before, "offline rows cannot acquire choices");
+  harness.probeRecentPairs = () => Promise.resolve(observation("resolved", "resolved", "94"));
+  harness.callbacks.onRefreshRecents();
+  await until(() => harness.model.recentPairAvailability["91"] === "unknown", "mismatched pair identity ignored");
+  harness.probeRecentPairs = () => Promise.resolve(observation("ambiguous", "resolved"));
+  harness.callbacks.onRefreshRecents();
+  await until(() => harness.model.recentPairAvailability["91"] === "unavailable", "ambiguous is not offline");
+  harness.probeRecentPairs = () => Promise.reject(new Error("probe failed"));
+  harness.callbacks.onRefreshRecents();
+  await until(() => harness.model.recentPairAvailability["91"] === "unknown", "failed probe stays unknown");
+  assert.equal(admissions(), before, "status probing never admits a UI choice");
 }
 
 {
@@ -374,6 +425,9 @@ async function loadScenario({
     target: { location_id: "23", display: "T:\\recent", last_used_at: "2026-09-11T00:00:00+00:00" },
     last_used_at: "2026-09-11T00:00:00+00:00",
   };
+  harness.recents.pairs.push(pair);
+  callbacks.onRefreshRecents();
+  await until(() => harness.model.recentPairAvailability["21"] === "online", "recent pair probe");
   callbacks.onRecentPair(pair);
   await until(() => firstModel.target.location?.state === "resolved", "recent pair admission");
   const recentAdmissions = harness.calls.filter((call) => call[0] === "admit").slice(-2);
