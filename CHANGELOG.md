@@ -57,7 +57,11 @@ packaging remain open.
   comparisons and native probes identify automatic-color-management and
   transparent-host dependencies at unchanged 10 bpc, without proving a renderer
   cause. The opaque diagnostic host appeared unaffected; Mica is retained and
-  investigation is deferred indefinitely in BUGS.
+  the unresolved issue is tracked in BUGS.
+- Re-audited shadow composition and ran paired Mica diagnostics. User observes
+  the WCG SDR halo with broad key shadows over translucent receivers, not opaque
+  receivers; alpha-zero white/black makes no noticeable difference. No wrong
+  shadow token or duplicate elevation was found, and no rendering fix is claimed.
 
 #### Deliver bounded M1 command and location prerequisites (2026-09-10)
 

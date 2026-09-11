@@ -37,6 +37,18 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Shadow composition audit (2026-09-11)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-D4 | Re-audit our shadow layers, color and alpha composition for an application defect exposed by WCG. | Source audit found matching Fluent black shadow tokens and no inherited popup opacity/duplicate elevation. Paired Mica diagnostics confirmed native alpha-zero white/black; user observes halos on single/nested translucent receivers with key/combined shadows, not ambient/none or opaque receivers, with no noticeable white/black difference. Native probe confirms 10-bpc WCG SDR. Exact blend fault remains unproven. | Complete: diagnostic only |
+
+GUI-D4 does not authorize production/test changes. Existing stop rules apply.
+Its temporary comparison wrappers/scenario and evidence use the existing ignored
+`build/gui-tuning/halo-10bit/` conventions. The scenario derives from observed
+`76ba7d0`, independent of simultaneous icon-gallery edits. Native Mica remains;
+only each diagnostic process's controller hidden RGB and receiving samples vary.
+
 ### GUI integration tuning (2026-09-11)
 
 | ID | Accepted outcome | Named verification | Status |
@@ -63,7 +75,8 @@ The unresolved dark flyout halo is tracked in
 [BUGS.md](BUGS.md#desktop-material-composition) at the user's request. GUI-D2/D3
 established reported Advanced Color/transparent-host dependencies, not a
 specific renderer cause or correction. Mica remains required; the issue is
-deferred indefinitely and adds no M1-6 implementation or release gate.
+unfixed and adds no M1-6 implementation or release gate. GUI-D4 reopens the
+bounded investigation only; it does not authorize a workaround.
 
 GUI-1 is one atomic presentation fix based on clean `e19ed9d` on `milestone1`,
 delivered as `fix(web): restore live task rail selection cues` in that checkout.

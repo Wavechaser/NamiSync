@@ -399,12 +399,15 @@ Elevated surfaces use a dedicated flyout boundary rather than the accessible
 control-stroke role: black 6% in Light and black 20% in Dark, with opaque
 Light/Dark stroke fallbacks. Dialogs and menus keep their ordinary black
 elevation shadows in SDR. On a high-dynamic-range display, a dark transparent
-WebView2/Mica composition suppresses those CSS shadows because Windows HDR
-alpha compositing can otherwise produce a bright perimeter halo; the subtle
-flyout boundary remains. The test-only gallery places normal, shadowless, and
-opaque-base flyout specimens side by side so an HDR operator can distinguish a
-shadow-compositing defect from a surface-alpha defect. This is a platform
-fallback, not a claim that SDR shadows are defective.
+WebView2/Mica composition suppresses those CSS shadows as a workaround for an
+observed bright perimeter halo; the subtle flyout boundary remains. A related
+SDR Advanced Color reproduction is tracked in
+[BUGS.md](BUGS.md#desktop-material-composition); its precise renderer cause is
+unconfirmed, and the current workaround remains HDR-only. The gallery's
+historical normal/opaque flyout labels do not currently isolate popup alpha:
+both fills are opaque. Its shadowless control remains useful. Dedicated
+GUI-D4 diagnostics instead vary receiver alpha and the individual shadow
+layers while retaining Mica; M1_PLAN records their findings and limits.
 
 Three file-list surface modules are deliberately inactive.
 `file_row.js` owns the shared row skeleton; `plan.js` exports only

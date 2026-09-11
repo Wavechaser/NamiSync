@@ -755,8 +755,11 @@ defect, and move implementation-level test choreography out of the log.
   diagnostic host also appears unaffected with matching card and popup CSS.
   Cause: unconfirmed interaction in the transparent presentation path; evidence
   does not identify WebView2, Mica, DWM or driver fault. Mica is retained and no
-  workaround is implemented. Investigation is deferred indefinitely, with no
-  M1-6 fix scheduled. GUI-D2/D3 evidence remains in `build/gui-tuning/halo-10bit/`.
+  workaround is implemented. Follow-up GUI-D4 isolates the user's halo to key
+  or combined shadows over single/nested translucent receivers; ambient-only,
+  shadowless and opaque receivers appear unaffected. Alpha-zero black/white
+  controller RGB makes no noticeable difference. Fix remains deferred;
+  GUI-D2–D4 evidence is in `build/gui-tuning/halo-10bit/`.
 
 ### Application task lifecycle
 
