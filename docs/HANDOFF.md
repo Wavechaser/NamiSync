@@ -1,33 +1,24 @@
 # Latest session handoff
 
-## Agent instruction maintenance (2026-09-12)
+## Scrollbars and batch feedback (2026-09-12)
 
-AI-1 is complete. AGENTS.md owns execution boundaries; the personal execute-task
-skill owns operating mechanics. Routine choices and direct consumers within the
-accepted mechanism/verification boundary need no repeated approval. Exclusions,
-changed ownership/safety/effect models and numerical recurrence stops remain.
-Future structural settlement work retains the three-run stability gate and
-independent review; only the historical monolith prerequisite retired.
+Baseline 1bbbeb4 on milestone1. User authorized implementation, review and
+commits for GUI-S4/S5; broader batch housing remains investigation-only (GUI-D5).
 
-Outside the repository, only the personal execute-task/SKILL.md and
-claude-code-reviewer/SKILL.md changed. GPT-5.6 cost preference, explicit-only
-invocation metadata, Claude defaults and read-only review remain. Supplied
-skills, global AGENTS.md and product/test sources were untouched. Personal skills
-are local edits, excluded from the repository documentation commit.
+S4 found a supported WebView2 FluentOverlay environment option in the bundled
+SDK, but pinned pywebview has no environment-options initialization hook.
+Browser flags are documented as development-only. No host, dependency, vendor,
+environment or scrollbar CSS change was made. DESKTOP_UI records the supported
+native route and CSS alternative; independent review closes this docs-only row.
 
-Both skill-creator validators passed using PyYAML installed temporarily under
-ignored build/instruction-validation; project dependencies were unchanged.
-Diff and adversarial scenario review checked in-bound consumers, exclusions,
-changed safety/ownership, recurrence stops, unanswered decisions, existing Claude
-authorization and completion. No Claude query or live agent behavior trial ran.
-Git whitespace and exact staged-scope checks precede commit. No product tests
-were needed for this instruction-only change. README's phase synopsis is unchanged.
+S5 is being implemented: 60px recent rows, matching folder-column insets,
+consistent disabled-cell hover, path-labelled batch rows scoped to their
+originating task, and local removal before submission. The global 48-row bound,
+single serial runner and exact uncertain retries remain. The originating task
+must retain unresolved batch reconciliation rather than hide it on close.
+Tests and final product review are still pending; prior GUI-S3 green results
+are not this delivery's verification. Root owns one pytest/Node slot.
 
-Immediate product context: GUI-S3 is complete; next frontend outcomes remain in
-M1_PLAN. Prior GUI evidence remains in build/gui-icons/gui-s3-* logs (ordinary-01,
-headed-all-03, gallery-final-01, gallery-ordinary-final): 4,979 ordinary tests
-passed with four existing skips, all 30 headed interface tests passed, and final
-gallery/icon/import checks passed. These are prior-session results, not reruns
-here. Relaunch the development app after product edits; do not close user-owned
-windows. The WCG shadow finding remains diagnostic and unfixed in BUGS.md;
-Mica and release gates are unchanged.
+Relaunch the development app after edits; do not close user-owned windows.
+The WCG shadow finding remains diagnostic and unfixed in BUGS.md. Mica, bridge
+security, domain behavior and release gates are unchanged.

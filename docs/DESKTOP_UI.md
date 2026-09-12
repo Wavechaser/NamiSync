@@ -88,6 +88,19 @@ The gallery is a natural-height specimen document with page scrolling; it does
 not inherit the task shell's viewport-height limit. Installed gallery checks
 reject overlap between its top-level specimen sections.
 
+Scrollbar styling remains browser-default. The bundled WebView2 SDK supports
+[`ScrollBarStyle = FluentOverlay`](https://learn.microsoft.com/en-us/dotnet/api/microsoft.web.webview2.core.corewebview2environmentoptions.scrollbarstyle),
+but pinned pywebview 6.2.1 creates its environment through
+`CoreWebView2CreationProperties` and `EnsureCoreWebView2Async(None)` without an
+environment-options hook. Changing the scrollbar after initialization is not
+the supported API path. No vendor patch or environment override is installed;
+Microsoft classifies the Fluent scrollbar browser flag as
+[development-only](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/webview-features-flags).
+A future supported environment hook is the preferred native route. CSS thumb/
+track styling can approximate the appearance while retaining browser scrolling,
+but is a separate visual change requiring forced-color, pointer and keyboard
+checks; it does not promise native overlay animation or system-preference parity.
+
 Before window creation, the primary host constructs the service and consumes
 the shared database-pair facade. Fresh state initializes ledger then history;
 ready state continues; refused state runs the bounded finalizer and shows the

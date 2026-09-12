@@ -38,6 +38,9 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–12)
 
+- Investigated native Fluent overlay scrollbars: the pinned wrapper does not
+  expose the required environment option. Kept browser-default scrolling and
+  recorded native-hook and CSS alternatives without a workaround.
 - Added a minimal Settings/About work page with the existing theme selector,
   preserving task drafts and activity. Task items scroll independently above
   the rail's Settings button.
