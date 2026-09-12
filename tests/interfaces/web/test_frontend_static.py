@@ -1238,7 +1238,8 @@ def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
     assert 'create.append(createIcon(document, "add-square-multiple", "lg"));' in rail
     assert 'create.ariaLabel = "New task";' in rail
     assert 'close.append(createIcon(document, "dismiss", "sm"));' in rail
-    assert 'entry.close.ariaLabel = `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;' in rail
+    assert 'entry.close.ariaLabel = batchCloseReason ?? `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;' in rail
+    assert 'entry.close.disabled = task.closePending || batchCloseReason !== null;' in rail
     assert "entry.close.title = entry.close.ariaLabel;" in rail
     assert 'document.createElement("h2")' not in panels
     assert "createTask()" in app

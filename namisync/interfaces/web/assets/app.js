@@ -83,6 +83,7 @@ const panel = createWorkPanel({
   onStartPlan: () => { void startCurrentPlan(); },
   onStartInventory: () => { void startCurrentInventory(); },
   onAddPair: addCurrentPair,
+  onRemoveBatchRow: removeBatchRow,
   onStartBatch: () => { void startPairBatch(); },
   onPlanAgain: () => { void startPlanAgain(); },
 }, settingsView);
@@ -100,15 +101,20 @@ function taskArray() {
 
 function renderTasks() {
   for (const task of tasks.values()) {
-    if (task.form !== null) task.form.recentPairAvailability = recentPairAvailability;
-  }
-  if (pageBatch !== null) {
-    for (const task of tasks.values()) {
-      if (task.form !== null) {
-        task.form.batchRunning = pageBatch.running !== null;
-        if (task.form.editable) task.form.batch = pageBatch.rows;
-      }
+    if (task.form !== null) {
+      task.form.recentPairAvailability = recentPairAvailability;
+      task.form.batchRunning = pageBatch !== null && pageBatch.running !== null;
+      task.form.batch = task.form.editable && pageBatch !== null
+        ? pageBatch.rows.filter((row) => row.originTaskId === task.taskId)
+        : [];
+      task.form.batchCount = pageBatch?.rows.length ?? 0;
+      task.form.batchPending = pageBatch?.rows.some((row) => row.originTaskId === task.taskId
+        && ["queued", "submitting", "uncertain"].includes(row.state)) ?? false;
+      task.form.batchPending ||= batchTaskBlockReason(task.taskId) !== null;
+      task.form.batchMessage = batchTaskStartMessage(task.taskId);
+      task.form.closePending = task.closePending;
     }
+    task.batchCloseReason = batchTaskBlockReason(task.taskId);
   }
   rail.render(
     taskArray(),
@@ -312,6 +318,7 @@ async function closeRetainedTask(taskId) {
   if (task === undefined || task.closePending) {
     return;
   }
+  if (batchTaskBlockReason(taskId) !== null) return;
   const epoch = startupEpoch;
   task.closePending = true;
   task.error = null;
@@ -330,6 +337,9 @@ async function closeRetainedTask(taskId) {
       return;
     }
     if (result.disposition === "closed") {
+      if (pageBatch !== null) {
+        pageBatch.rows = pageBatch.rows.filter((row) => row.originTaskId !== taskId);
+      }
       task.stopDrain?.();
       tasks.delete(taskId);
       if (selectedTaskId === taskId) {
@@ -414,6 +424,10 @@ function createForm(snapshot, recents) {
     source: root(inventory ? snapshot.root : snapshot.source),
     target: root(snapshot.target),
     batch: [],
+    batchCount: 0,
+    batchPending: false,
+    batchMessage: null,
+    closePending: false,
     batchRunning: false,
     editable: snapshot.setup_state === "default" && snapshot.task_kind === null,
     mode: inventory ? "inventory" : "sync-plan",
@@ -536,6 +550,34 @@ function currentForm() {
 
 function formIsEditable(form) {
   return form !== null && form.editable && form.attempt === null;
+}
+
+function originHasPendingBatch(taskId) {
+  return pageBatch?.rows.some((row) => row.originTaskId === taskId
+    && ["queued", "submitting", "uncertain"].includes(row.state)) ?? false;
+}
+
+function batchTaskBlockReason(taskId) {
+  if (pageBatch?.running?.originTaskId === taskId) {
+    return "Wait for this task's active batch submission before closing.";
+  }
+  const retained = pageBatch?.rows.find((row) => ["submitting", "uncertain"].includes(row.state)
+    && (row.originTaskId === taskId || row.taskId === taskId));
+  return retained === undefined
+    ? null
+    : "Resolve this task's submitting or uncertain batch pair before closing.";
+}
+
+function batchTaskStartMessage(taskId) {
+  const row = pageBatch?.rows.find((value) => ["submitting", "uncertain"].includes(value.state)
+    && value.taskId === taskId && value.originTaskId !== taskId);
+  if (row !== undefined) {
+    const origin = tasks.get(row.originTaskId);
+    return `Resolve the batch request in ${origin?.label ?? "its originating task"} before starting this task separately.`;
+  }
+  return originHasPendingBatch(taskId)
+    ? "Create, remove, or retry this task's batch pairs before starting it separately."
+    : null;
 }
 
 function locationPurpose(form, rowName) {
@@ -872,7 +914,8 @@ async function startCurrentPlan() {
   const task = currentTask();
   const form = task?.form;
   if (
-    task === null || form === null || !form.editable || form.mode !== "sync-plan" ||
+    task === null || task.closePending || form === null || !form.editable || form.mode !== "sync-plan" ||
+    (originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null) ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
   if (form.attempt !== null) {
@@ -904,7 +947,8 @@ async function startCurrentInventory() {
   const task = currentTask();
   const form = task?.form;
   if (
-    task === null || form === null || !form.editable || form.mode !== "inventory" ||
+    task === null || task.closePending || form === null || !form.editable || form.mode !== "inventory" ||
+    (originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null) ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
   if (form.attempt !== null) {
@@ -929,14 +973,16 @@ async function startCurrentInventory() {
 }
 
 function addCurrentPair() {
+  const task = currentTask();
   const form = currentForm();
   if (
-    !formIsEditable(form) || form.mode !== "sync-plan" ||
+    task === null || task.closePending || !formIsEditable(form) || form.mode !== "sync-plan" ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
   if (pageBatch === null) pageBatch = { rows: [], generation: 0, running: null };
   if (pageBatch.rows.length >= 48) return;
   pageBatch.rows.push({
+    originTaskId: task.taskId,
     source: snapshotLocationRow(form.source),
     target: snapshotLocationRow(form.target),
     state: "queued",
@@ -950,6 +996,14 @@ function addCurrentPair() {
     recents: null,
     message: "Ready to create.",
   });
+  renderTasks();
+}
+
+function removeBatchRow(row) {
+  if (pageBatch === null || row?.state !== "queued") return;
+  const index = pageBatch.rows.indexOf(row);
+  if (index < 0 || row.originTaskId !== selectedTaskId) return;
+  pageBatch.rows.splice(index, 1);
   renderTasks();
 }
 
@@ -1052,17 +1106,19 @@ async function startBatchRow(row, context) {
 }
 
 async function startPairBatch() {
+  const task = currentTask();
   const form = currentForm();
   const batch = pageBatch;
   if (
-    !formIsEditable(form) || form.mode !== "sync-plan" || form.attempt !== null ||
+    task === null || task.closePending || !formIsEditable(form) || form.mode !== "sync-plan" || form.attempt !== null ||
     batch === null || batch.running !== null
   ) return;
-  const rows = batch.rows.filter((row) => ["queued", "uncertain"].includes(row.state));
+  const rows = batch.rows.filter((row) => row.originTaskId === task.taskId
+    && ["queued", "uncertain"].includes(row.state));
   if (rows.length === 0) return;
   const queued = rows.filter((row) => row.state === "queued");
   if (queued.length > 0 && form.options === null) return;
-  const owner = {};
+  const owner = { originTaskId: task.taskId };
   const generation = batch.generation;
   const epoch = startupEpoch;
   const optionsInput = queued.length === 0 ? null : cloneOptions(form.options);
@@ -1071,7 +1127,8 @@ async function startPairBatch() {
     snapshot: form.setup,
     recents: defaultSetup?.recents ?? form.setup.recents,
     options: null,
-    canSubmit: () => currentBatchRun(batch, owner, generation) && epoch === startupEpoch,
+    canSubmit: () => currentBatchRun(batch, owner, generation) && epoch === startupEpoch
+      && tasks.get(task.taskId) === task && !task.closePending,
   };
   batch.running = owner;
   renderTasks();
@@ -1079,6 +1136,7 @@ async function startPairBatch() {
     if (optionsInput !== null) context.options = await prepareSetup(optionsInput);
     for (const row of rows) {
       if (!currentBatchRun(batch, owner, generation) || epoch !== startupEpoch) break;
+      if (!batch.rows.includes(row)) continue;
       if (!["queued", "uncertain"].includes(row.state)) continue;
       await startBatchRow(row, context);
       renderTasks();
@@ -1115,7 +1173,8 @@ async function startPlanAgain() {
   const task = currentTask();
   const form = task?.form;
   if (
-    task === null || form?.canPlanAgain !== true ||
+    task === null || task.closePending || form?.canPlanAgain !== true ||
+    originHasPendingBatch(task.taskId) || batchTaskBlockReason(task.taskId) !== null ||
     (pageBatch !== null && pageBatch.running !== null)
   ) return;
   if (form.attempt !== null) {

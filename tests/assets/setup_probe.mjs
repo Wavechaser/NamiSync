@@ -124,6 +124,7 @@ const panel = createSetupPanel({
   onStartPlan: () => events.push(["start-plan"]),
   onStartInventory: () => events.push(["start-inventory"]),
   onAddPair: () => events.push(["add-pair"]),
+  onRemoveBatchRow: (row) => events.push(["remove-batch", row]),
   onStartBatch: () => events.push(["start-batch"]),
   onPlanAgain: () => events.push(["plan-again"]),
 });
@@ -254,6 +255,7 @@ assert.deepEqual(
 assert.deepEqual(allByClass(offlinePair, "nami-setup__pair-path").map((item) => item.textContent), ["<pair-source>", "pair-target"]);
 const actions = byClass(panel.element, "nami-setup__actions").children;
 const startPlan = actions[0];
+const addPair = actions[2];
 const startBatch = actions[3];
 assert.equal(startPlan.disabled, true, "an ambiguous row requires an explicit mount choice");
 model.source.location = null;
@@ -263,12 +265,34 @@ assert.equal(startPlan.disabled, false, "nonempty unadmitted rows stay startable
 model.source.location = { state: "missing", choice_id: null, detail: "Reconnect this folder.", candidates: [] };
 panel.render(model);
 assert.equal(startPlan.disabled, false, "a missing row stays startable for a fresh retry");
-model.batch = [{ state: "queued", message: "Ready to create." }];
+const queuedBatchRow = {
+  source: { text: "C:\\batch-source" }, target: { text: "D:\\batch-target" },
+  state: "queued", message: "Ready to create.",
+};
+model.batch = [queuedBatchRow];
 model.batchRunning = true;
 panel.render(model);
+const renderedBatch = byClass(panel.element, "nami-setup__batch-row");
+assert.deepEqual(allByClass(renderedBatch, "nami-setup__batch-path").map((item) =>
+  [item.children[0].textContent, item.children[1].textContent, item.title]), [
+  ["Source: ", "C:\\batch-source", "C:\\batch-source"], ["Target: ", "D:\\batch-target", "D:\\batch-target"],
+]);
+assert.equal(byClass(renderedBatch, "nami-setup__batch-status").textContent, "Ready to create.");
+byClass(renderedBatch, "nami-setup__batch-remove").dispatch("click");
 assert.equal(startPlan.disabled, true, "active batch disables form start");
 assert.equal(startBatch.disabled, true, "active batch disables reentrant batch start");
 model.batchRunning = false;
+model.batchCount = 48;
+panel.render(model);
+assert.equal(addPair.disabled, true, "the page-wide batch cap disables Add pair");
+model.batchCount = 1;
+model.closePending = true;
+panel.render(model);
+assert.equal(startBatch.disabled, true, "pending origin close disables batch start");
+model.attempt = { kind: "sync-plan", running: false, retry() {} };
+panel.render(model);
+assert.equal(startPlan.disabled, true, "pending origin close disables exact form retry");
+model.closePending = false;
 model.attempt = { kind: "sync-plan", running: true, retry: null };
 panel.render(model);
 assert.equal(startBatch.disabled, true, "active form attempt disables batch start");
@@ -307,6 +331,7 @@ assert.deepEqual(events, [
   ["recent-pair", model.setup.recents.pairs[0]],
   ["recent", "source", model.setup.recents.sources[0]],
   ["option", "deletion_policy", "additive"],
+  ["remove-batch", queuedBatchRow],
   ["edit", "source", "C:\\edited"],
   ["edit", "source", ""],
   ["edit", "source", "C:\\edited"],

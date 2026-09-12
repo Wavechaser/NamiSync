@@ -42,34 +42,17 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | GUI-S4 | Investigate native Fluent overlay scrollbar support in the pinned host; enable it only through a narrow supported integration, otherwise retain current behavior and document alternatives. | Official API and pinned initialization path inspected: pywebview lacks the environment-options hook. No product change; DESKTOP_UI records native/CSS options. Independent review passed. | Complete |
-| GUI-S5 | Recent pairs use 60px rows, increased folder-column inset and consistent disabled-row hover; batch rows identify both paths, stay with their originating Setup, and allow removal before submission. | Focused batch/browser and installed Setup checks, interfaces department, ordinary integration suite and independent review. | Implementation |
-| GUI-D5 | Assess better housing for batch composition and status without implementing a new batching surface. | Inspect existing Setup/task lifecycle and compare a finite set of UI options and their tradeoffs. | Study |
+| GUI-S5 | Recent pairs use 60px rows, increased folder-column inset and consistent disabled-row hover; batch rows identify both paths, stay with their originating Setup, and allow removal before submission. | Focused browser checks, ordinary suite including interfaces, all installed headed checks and independent review passed. HANDOFF records evidence. | Complete |
+| GUI-D5 | Assess better housing for batch composition and status without implementing a new batching surface. | Existing Setup/coordinator/rail inspected; DESKTOP_UI compares conditional disclosure, action popover, page tray and dedicated page. No new surface implemented. | Complete |
 
-Baseline 1bbbeb4. S4 owns only the host's pre-initialization appearance seam and
-its direct test consumers; no dependency upgrade, vendor patch, security change,
-forced CSS replacement or Mica workaround. S5 owns app/setup state, shared Setup
-styles and their direct browser/installed consumers. Preserve the page-wide
-48-pair bound, serial admission, exact uncertain-request retry, frozen options,
-fresh location checks and retained task truth. Removal is local only while queued;
-it cannot claim cancellation of a dispatched or uncertain effect. Study close,
-navigation and page-replacement transitions before implementing ownership.
-DESKTOP_UI, this register, CHANGELOG and HANDOFF own matching documentation;
-README changes only if its product synopsis needs adjustment. Each implementation
-row is one coherent commit; D5 records recommendations only. Existing repository
-stop rules apply, and no broader batch layout is authorized here.
-
-S5 study: tag rows with their originating task inside the existing global
-coordinator; explicitly clear unrelated forms' row projections, and filter a
-start to its origin while retaining global serial ownership. Queued removal
-checks membership/state again immediately before submission. Explicit origin
-close discards queued rows, but cannot hide submitting/uncertain reconciliation:
-disable that close with a reason until the request settles or is retried. No
-dispatched effect is canceled or replayed by removal. Population includes the
-rail close-state consumer plus app/setup browser probes and installed Setup/rail
-helpers. CSS restores transparent disabled path cells at hover/press specificity;
-native pointer evidence must cover both unavailable-row cells. Table geometry
-checks pin 60px rows and equal increased header/content folder inset. One S5
-commit closes these task-scoped corrections with matching subject documentation.
+Delivered from 1bbbeb4: native scrollbar integration was assessed and deferred
+without a workaround (`1159abc`). Batch rows now retain origin identity inside
+the existing page-wide 48-pair coordinator; queued removal never cancels a
+submitted effect. Origin/adopted-task controls keep unresolved requests visible
+and preserve exact retry. Pending close cannot start a batch. Recent pairs use
+60px rows, 12px folder insets and uniform disabled-cell feedback. DESKTOP_UI owns
+the details and nonbinding batch-housing options. No backend/protocol change,
+vendor patch, dependency upgrade, scrollbar CSS or Mica workaround was added.
 
 ### Agent instruction maintenance (2026-09-12)
 

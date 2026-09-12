@@ -108,8 +108,9 @@ export function createTaskRail({ onCreate, onSelect, onClose, onSettings }) {
       entry.select.ariaCurrent = !settingsVisible && task.taskId === selectedTaskId ? "page" : "false";
       renderText(entry.title, task.label);
       renderText(entry.status, taskStatus(task));
-      entry.close.disabled = task.closePending;
-      entry.close.ariaLabel = `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;
+      const batchCloseReason = typeof task.batchCloseReason === "string" ? task.batchCloseReason : null;
+      entry.close.disabled = task.closePending || batchCloseReason !== null;
+      entry.close.ariaLabel = batchCloseReason ?? `${task.error === null ? "Close" : "Retry close for"} ${task.label}`;
       entry.close.title = entry.close.ariaLabel;
       list.append(entry.row);
     }

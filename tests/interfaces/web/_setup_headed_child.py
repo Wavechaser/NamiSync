@@ -353,6 +353,9 @@ _EDITABLE_SCRIPT = r"""
     refresh_icon_transparent: refreshIdleTransparent,
     refresh_square: refreshSquare,
     recent_row_height: onlinePair.getBoundingClientRect().height,
+    recent_folder_inset: parseFloat(getComputedStyle(onlineSelect).paddingInlineStart) ===
+      parseFloat(getComputedStyle(recentHeaders[0]).paddingInlineStart)
+      ? parseFloat(getComputedStyle(onlineSelect).paddingInlineStart) : -1,
     advanced_filters_visible: document.querySelector(".nami-setup__filters").checkVisibility(),
     advanced_labels_follow_toggles: advancedLabelsFollowToggles,
     add_filter_inline: addFilterInline,
@@ -520,9 +523,10 @@ _POINTER_DISABLED_RESULT_SCRIPT = r"""
   await new Promise((resolve) => setTimeout(resolve, 150));
   const probe = window.__setupPointerProbe;
   const style = getComputedStyle(probe.disabled);
-  const disabledOk = style.backgroundColor === probe.disabledBase && style.boxShadow === "none";
+  const disabledOk = style.backgroundColor === probe.disabledBase && style.boxShadow === "none" &&
+    Array.from(probe.disabled.children).every((cell) => getComputedStyle(cell).backgroundColor === "rgba(0, 0, 0, 0)") &&
+    getComputedStyle(probe.disabled.querySelector(".nami-setup__pair-select")).backgroundColor === "rgba(0, 0, 0, 0)";
   const result = Boolean(probe.hoverOk && probe.pressedOk && disabledOk);
-  delete window.__setupPointerProbe;
   return {ok: result};
 })()
 """
@@ -671,6 +675,22 @@ _INDEPENDENT_SCRIPT = r"""
   target.value = __TARGET__;
   target.dispatchEvent(new Event("input", {bubbles: true}));
   add.click();
+  add.click();
+  const queuedRows = Array.from(document.querySelectorAll(".nami-setup__batch-row"));
+  const queuedPathsVisible = queuedRows.length === 3 && queuedRows.every((row) => {
+    const paths = Array.from(row.querySelectorAll(".nami-setup__batch-path"));
+    return paths.length === 2 && paths.every((path, index) =>
+      path.querySelector(".nami-setup__batch-path-label")?.textContent === (index === 0 ? "Source: " : "Target: ") &&
+      path.querySelector(".nami-setup__batch-path-value")?.textContent === path.title);
+  });
+  const removable = queuedRows.at(-1)?.querySelector(".nami-setup__batch-remove");
+  if (!(removable instanceof HTMLButtonElement) || removable.disabled) throw new Error("queued batch removal is unavailable");
+  if (!removable.querySelector(".nami-icon--dismiss") || removable.ariaLabel !== "Remove queued pair" ||
+      getComputedStyle(removable).backgroundColor !== "rgba(0, 0, 0, 0)") {
+    throw new Error("queued batch removal is not a transparent dismiss control");
+  }
+  removable.click();
+  await until(() => document.querySelectorAll(".nami-setup__batch-row").length === 2, "queued batch removal");
   const batch = Array.from(document.querySelectorAll(".nami-setup__actions button"))
     .find((button) => button.textContent === "Create pair batch");
   if (!(batch instanceof HTMLButtonElement)) throw new Error("batch action is unavailable");
@@ -692,6 +712,8 @@ _INDEPENDENT_SCRIPT = r"""
     inventory_action_visibility: inventoryActionVisibility,
     inventory_inapplicable_hidden: inventoryInapplicableHidden,
     mixed_batch: true,
+    batch_paths_visible: queuedPathsVisible,
+    queued_batch_removable: true,
     navigation_retains_frozen: true,
   };
 })()
@@ -919,6 +941,39 @@ def _pointer_checks(
         result = _runtime_value(task)
         return type(result) is dict and result.get("ok") is True
 
+    def check_disabled_cells(done: object) -> None:
+        observations: list[bool] = []
+
+        def locate(path_cell: bool) -> None:
+            script = _POINTER_DISABLED_POINT_SCRIPT
+            if path_cell:
+                script = script.replace('.querySelector(".nami-setup__availability").closest("td")',
+                                        '.querySelector(".nami-setup__pair-select")')
+
+            def located(task: object) -> None:
+                point = _runtime_value(task)
+
+                def inspected(result: object) -> None:
+                    observations.append(result_ok(result))
+                    if not path_cell:
+                        locate(True)
+                    else:
+                        mouse("mousePressed", point, lambda _task: evaluate(
+                            _POINTER_DISABLED_RESULT_SCRIPT, pressed_checked), pressed=True)
+
+                def pressed_checked(result: object) -> None:
+                    observations.append(result_ok(result))
+                    mouse("mouseReleased", point, lambda _task: evaluate(
+                        'delete window.__setupPointerProbe; ({ok: true});',
+                        lambda _result: done(all(observations))))
+
+                mouse("mouseMoved", point, lambda _task: evaluate(
+                    _POINTER_DISABLED_RESULT_SCRIPT, inspected))
+
+            evaluate(script, located)
+
+        locate(False)
+
     def prepared(task: object) -> None:
         points = _runtime_value(task)
         if type(points) is not dict or type(points.get("clear")) is not dict:
@@ -944,24 +999,10 @@ def _pointer_checks(
                                     pressed_ok = result_ok(pressed_task)
 
                                     def online_released(_task: object) -> None:
-                                        def disabled_located(disabled_task: object) -> None:
-                                            disabled = _runtime_value(disabled_task)
-                                            if type(disabled) is not dict:
-                                                raise RuntimeError("native disabled-row coordinate is invalid")
-
-                                            def disabled_moved(_task: object) -> None:
-                                                def disabled_checked(result_task: object) -> None:
-                                                    pair_states = result_ok(result_task)
-                                                    continuation({
-                                                        "clear_pointer_local": clear_local,
-                                                        "pair_pointer_states": bool(hover_ok and pressed_ok and pair_states),
-                                                    })
-
-                                                evaluate(_POINTER_DISABLED_RESULT_SCRIPT, disabled_checked)
-
-                                            mouse("mouseMoved", disabled, disabled_moved)
-
-                                        evaluate(_POINTER_DISABLED_POINT_SCRIPT, disabled_located)
+                                        check_disabled_cells(lambda pair_states: continuation({
+                                            "clear_pointer_local": clear_local,
+                                            "pair_pointer_states": bool(hover_ok and pressed_ok and pair_states),
+                                        }))
 
                                     mouse("mouseReleased", online, online_released)
 

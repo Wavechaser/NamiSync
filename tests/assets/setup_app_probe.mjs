@@ -147,6 +147,10 @@ async function loadScenario({
       harness.calls.push(["create"]);
       return Promise.resolve({ task_id: TASK_B });
     },
+    closeTask(...values) {
+      harness.calls.push(["close", ...values]);
+      return Promise.resolve({ disposition: "closed" });
+    },
     startPlan(...values) {
       harness.calls.push(["start-plan", ...values]);
       return Promise.resolve({ task_id: values[0], request_id: "4".repeat(32), session_id: "5".repeat(32) });
@@ -176,7 +180,7 @@ async function loadScenario({
     harness.TaskCreateUncertainError = TaskCreateUncertainError;
     export const acknowledgeShellReady = () => Promise.resolve({ acknowledged: true });
     export const admitLocation = (...args) => harness.admitLocation(...args);
-    export const closeTask = () => Promise.reject(new Error("unused"));
+    export const closeTask = (...args) => harness.closeTask(...args);
     export const createTask = () => harness.createTask();
     export const echoReadiness = () => Promise.resolve({ acknowledged: true });
     export const listTasks = () => harness.listTasks();
@@ -210,7 +214,7 @@ async function loadScenario({
       harness.railCallbacks = callbacks;
       return {
         element: {},
-        render(_tasks, _selected, creating) { harness.createStates.push(creating); },
+        render(tasks, _selected, creating) { harness.createStates.push(creating); harness.railTasks = tasks; },
       };
     }
     // scenario ${scenarioId}
@@ -332,6 +336,7 @@ async function loadScenario({
     harness.calls.push(["create"]);
     return Promise.reject(new harness.TaskCreateUncertainError(() => {
       createRetries += 1;
+      harness.listTasks = () => Promise.resolve({ tasks: [summary(TASK_A), summary(TASK_B)] });
       return Promise.resolve({ task_id: TASK_B });
     }));
   };
@@ -353,6 +358,66 @@ async function loadScenario({
   await until(() => createRetries === 1, "same new-task retry closure");
   assert.ok(harness.createStates.includes(true), "New task is disabled while its request runs");
   assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
+}
+
+{
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\closing-source");
+  callbacks.onEdit("target", "D:\\closing-target");
+  callbacks.onAddPair();
+  const closing = deferred();
+  harness.closeTask = (...values) => {
+    harness.calls.push(["close", ...values]);
+    return closing.promise;
+  };
+  harness.railCallbacks.onClose(TASK_A);
+  await until(() => harness.model.closePending, "origin close pending");
+  callbacks.onStartBatch();
+  await turns();
+  assert.equal(harness.calls.some((call) => call[0] === "prepare" || call[0] === "admit"), false);
+  assert.equal(harness.model.batch[0].state, "queued", "a pending close cannot launch queued batch work");
+  closing.resolve({ task_id: TASK_A, session_id: null, disposition: "closed" });
+  await until(() => !harness.railTasks.some((task) => task.taskId === TASK_A), "origin close completion");
+}
+
+{
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\capacity-source");
+  callbacks.onEdit("target", "D:\\capacity-target");
+  for (let index = 0; index < 48; index += 1) callbacks.onAddPair();
+  assert.equal(harness.model.batchCount, 48);
+  harness.railCallbacks.onCreate();
+  await until(() => harness.task?.taskId === TASK_B && harness.model !== null, "capacity second origin");
+  callbacks.onEdit("source", "E:\\other-source");
+  callbacks.onEdit("target", "F:\\other-target");
+  callbacks.onAddPair();
+  assert.equal(harness.model.batchCount, 48, "the 48-pair cap is page-wide across origins");
+  assert.deepEqual(harness.model.batch, []);
+}
+
+{
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\origin-source");
+  callbacks.onEdit("target", "D:\\origin-target");
+  callbacks.onAddPair();
+  const originRow = harness.model.batch[0];
+  harness.railCallbacks.onCreate();
+  await until(() => harness.task?.taskId === TASK_B && harness.model !== null, "fresh second task");
+  assert.deepEqual(harness.model.batch, [], "a fresh task does not inherit another Setup's batch");
+  callbacks.onRemoveBatchRow(originRow);
+  harness.railCallbacks.onSelect(TASK_A);
+  assert.equal(harness.model.batch[0], originRow, "cross-origin removal is refused and navigation restores the origin batch");
+  callbacks.onRemoveBatchRow(originRow);
+  assert.deepEqual(harness.model.batch, [], "queued origin row is removable");
+  callbacks.onAddPair();
+  harness.railCallbacks.onClose(TASK_A);
+  await until(() => harness.calls.some((call) => call[0] === "close"), "origin close");
+  for (const callback of harness.windowListeners.get("pywebviewready") ?? []) callback();
+  await until(() => harness.task?.taskId === TASK_A && harness.model !== null, "closed origin rehydration fixture");
+  assert.deepEqual(harness.model.batch, [], "confirmed origin close discards its queued rows");
 }
 
 {
@@ -596,6 +661,7 @@ for (const sessionState of ["active", "failed"]) {
     harness.calls.push(["create"]);
     return Promise.reject(new harness.TaskCreateUncertainError(() => {
       createRetries += 1;
+      harness.listTasks = () => Promise.resolve({ tasks: [summary(TASK_A), summary(TASK_B)] });
       return Promise.resolve({ task_id: TASK_B });
     }));
   };
@@ -614,10 +680,27 @@ for (const sessionState of ["active", "failed"]) {
   prepare.resolve(structuredClone(DEFAULT_OPTIONS));
   await until(() => harness.model.batch[0].state === "uncertain", "create uncertainty retained");
   assert.equal(harness.model.batch[0].stage, "creating");
+  assert.match(harness.railTasks.find((task) => task.taskId === TASK_A).batchCloseReason, /uncertain/);
+  harness.railCallbacks.onClose(TASK_A);
+  await turns();
+  assert.equal(harness.calls.some((call) => call[0] === "close"), false, "uncertain origin cannot be closed");
   callbacks.onStartBatch();
-  await until(() => harness.model.batch[0].stage === "starting", "start uncertainty retained");
+  await until(() => harness.model.batch[0].stage === "starting" &&
+    harness.model.batch[0].state === "uncertain" && !harness.model.batchRunning &&
+    harness.railTasks.some((task) => task.taskId === TASK_B), "start uncertainty and child retained");
   assert.equal(createRetries, 1);
   assert.equal(harness.calls.filter((call) => call[0] === "create").length, 1);
+  harness.railCallbacks.onSelect(TASK_B);
+  assert.match(harness.model.batchMessage, /Task 1/, "the child points back to its batch origin");
+  const startsBeforeBlockedChild = harness.calls.filter((call) => call[0] === "start-plan").length;
+  callbacks.onStartPlan();
+  harness.railCallbacks.onClose(TASK_B);
+  await turns();
+  assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, startsBeforeBlockedChild,
+    "the uncertain batch child cannot start a separate plan");
+  assert.equal(harness.calls.some((call) => call[0] === "close"), false,
+    "the uncertain batch child cannot close before exact retry settles");
+  harness.railCallbacks.onSelect(TASK_A);
   callbacks.onStartBatch();
   await until(() => startRetries === 1 && harness.model.batch[0].state === "created", "batch start retry");
   assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, 1);
@@ -641,15 +724,14 @@ for (const sessionState of ["active", "failed"]) {
     return prepareCalls === 1 ? formPrepare.promise : Promise.resolve(structuredClone(options));
   };
   callbacks.onStartPlan();
-  await until(() => prepareCalls === 1, "active form owner");
-  callbacks.onStartBatch();
   await turns();
-  assert.equal(harness.calls.filter((call) => call[0] === "create").length, 0,
-    "active form attempt blocks batch submission");
+  assert.equal(prepareCalls, 0, "a pending origin batch blocks a separate form start");
+  assert.match(harness.model.batchMessage, /remove, or retry/);
+  callbacks.onRemoveBatchRow(harness.model.batch[0]);
+  callbacks.onStartPlan();
+  await until(() => prepareCalls === 1, "form starts after queued batch removal");
   formPrepare.resolve(structuredClone(DEFAULT_OPTIONS));
   await until(() => harness.model.attempt === null, "form owner released");
-  callbacks.onStartBatch();
-  await until(() => harness.calls.some((call) => call[0] === "create"), "batch resumes after form owner");
 }
 
 {
@@ -697,6 +779,8 @@ for (const sessionState of ["active", "failed"]) {
   callbacks.onStartBatch();
   await until(() => harness.calls.filter((call) => call[0] === "create").length === 1, "first serial create");
   assert.equal(harness.calls.some((call) => call[0] === "start-plan"), false);
+  callbacks.onRemoveBatchRow(harness.model.batch[1]);
+  assert.equal(harness.model.batch.length, 1, "a later queued row is removable during the serial run");
   for (const callback of harness.windowListeners.get("pywebviewready") ?? []) callback();
   firstCreate.resolve({ task_id: TASK_B });
   await until(() => harness.model.batch.every((row) => row.state === "stopped"), "replacement stops unsent work");

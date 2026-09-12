@@ -41,6 +41,12 @@ packaging remain open.
 - Investigated native Fluent overlay scrollbars: the pinned wrapper does not
   expose the required environment option. Kept browser-default scrolling and
   recorded native-hook and CSS alternatives without a workaround.
+- Scoped batch feedback to its originating Setup, labelled both paths, and
+  allowed queued-row removal without canceling submitted requests. Pending
+  reconciliation remains accessible; fresh tasks no longer inherit messages.
+- Reduced recent pairs to 60px rows with matching folder-column insets and
+  consistent unavailable-row hover behavior. Broader batch housing remains
+  discussion-only.
 - Added a minimal Settings/About work page with the existing theme selector,
   preserving task drafts and activity. Task items scroll independently above
   the rail's Settings button.

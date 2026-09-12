@@ -67,7 +67,8 @@ def test_m1_6_installed_setup_flow(
     assert result["more_idle_transparent"] is True
     assert result["refresh_icon_transparent"] is True
     assert result["refresh_square"] is True
-    assert result["recent_row_height"] == pytest.approx(64, abs=1)
+    assert result["recent_row_height"] == pytest.approx(60, abs=1)
+    assert result["recent_folder_inset"] == pytest.approx(12, abs=1)
     assert result["advanced_filters_visible"] is True
     assert result["advanced_labels_follow_toggles"] is True
     assert result["add_filter_inline"] is True

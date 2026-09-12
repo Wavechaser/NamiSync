@@ -1007,7 +1007,8 @@ Setup shows recent sources, targets, and active pairs derived from ledger runs.
 The recent-pair table reuses file-table surfaces with taller rows, two stacked
 source/target paths in its first column and two aligned endpoint statuses in its
 second. Corners, caption typography, header fill and alternating row surfaces
-match the gallery plan table, with 4rem (64px by default) two-line rows. Hover, press and keyboard
+match the gallery plan table, with 3.75rem (60px by default) two-line rows and
+12px folder-column header/content insets. Hover, press and keyboard
 focus paint the whole enabled row, never individual cells. Long
 paths truncate at the tail and retain the full text in a tooltip. Online uses a
 green solid circle; Offline uses red; accompanying text stays neutral. A missing
@@ -1024,8 +1025,10 @@ rolled back. Same-document navigation keeps the coordinator; document
 replacement may stop only rows not yet submitted, while admitted tasks are
 rediscovered from task enumeration.
 
-One active gesture owns its frozen row/options snapshot. Additional batch rows
-and overlapping starts wait for it to finish. Uncertain creation or start keeps
+One active batch gesture owns its frozen row/options snapshot. Additional batch
+rows and new form starts wait for it to finish; each form also rejects overlapping
+gestures on that same task. This is not a global queue for independent form
+attempts already underway. Uncertain creation or start keeps
 the exact command's Retry action and remains distinct from refusal; retry never
 substitutes edited input or creates a replacement intent.
 
@@ -1033,12 +1036,33 @@ Core folder rows and the primary action appear first; More options reveals
 the remaining task-local choices. Start admits unresolved nonempty rows automatically.
 Stable form elements retain focus and drafts through rail, drain and navigation
 updates; response revisions cannot restore an edited row's old choice. The
-page retains one coordinator of at most 48 pairs, not a batch in every task.
+page retains one coordinator of at most 48 pairs. Each row belongs to its
+originating task, and only that Setup displays or starts those rows. Rows show
+source and target paths with their creation status. Remove discards a queued
+row locally, including while an earlier row is being prepared; the runner
+rechecks row membership before submission. Submitted or uncertain requests
+cannot be removed. Closing the origin discards its queued rows, but its close
+control remains unavailable during preparation or while submitting/uncertain
+rows need reconciliation. An adopted task also cannot close or submit a fresh
+form while its batch start needs reconciliation; guidance names the origin.
+The close control explains that reason. Exact uncertain-request retry remains
+available on the origin, and navigation never transfers the rows to a new task.
 After a start, per-task readback shows the backend-frozen locations and options.
 Plan again reads fresh availability for the reviewed identities, requests an
 explicit current mount when ambiguous, and starts a separate plan with the
 same frozen options and default selection. It copies no execution authority.
 Terminal status alone never fabricates an empty or ready review.
+
+Batch housing investigation (GUI-D5, discussion only): a compact disclosure
+beside the pair actions could show a count/status summary and expand a bounded,
+scrollable list only when pairs exist. An anchored popover would preserve more
+Setup space, but long paths and persistent failure attention need care when it
+closes. A page-level tray would keep batch progress visible across task navigation,
+but introduces another persistent navigation surface. A dedicated Batch page is
+more structure than the current creation-only coordinator needs. Prefer the
+conditional disclosure for a small follow-up: pending composition stays near
+its actions, while created tasks remain the task rail's responsibility. These
+options are not implemented or newly accepted delivery requirements.
 
 Slice 4 establishes only the presentation core and honest shell frame. It adds
 no presentation command or placeholder plan, inventory, history, or control

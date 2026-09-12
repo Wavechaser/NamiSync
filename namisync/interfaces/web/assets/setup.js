@@ -2,7 +2,7 @@ import { createIcon } from "./icons.js";
 import { renderFilesystemText, renderText } from "./render.js";
 
 const MAX_BATCH_PAIRS = 48;
-const CALLBACKS = ["onEdit", "onValidate", "onPick", "onRecent", "onRecentPair", "onRefreshRecents", "onMode", "onOption", "onAddFilter", "onRemoveFilter", "onMount", "onPlanAgainMount", "onStartPlan", "onStartInventory", "onAddPair", "onStartBatch", "onPlanAgain"];
+const CALLBACKS = ["onEdit", "onValidate", "onPick", "onRecent", "onRecentPair", "onRefreshRecents", "onMode", "onOption", "onAddFilter", "onRemoveFilter", "onMount", "onPlanAgainMount", "onStartPlan", "onStartInventory", "onAddPair", "onRemoveBatchRow", "onStartBatch", "onPlanAgain"];
 
 function createButton(text, classes = "nami-button") {
   const button = document.createElement("button");
@@ -476,9 +476,37 @@ export function createSetupPanel(callbacks) {
     batch.replaceChildren();
     rows.forEach((value) => {
       const item = document.createElement("li");
+      const sourcePath = document.createElement("span");
+      const targetPath = document.createElement("span");
+      const message = document.createElement("span");
+      const remove = createButton("");
+      remove.ariaLabel = "Remove queued pair";
+      remove.title = "Remove queued pair";
+      remove.append(createIcon(document, "dismiss", "sm"));
       item.classList.add("nami-setup__batch-row");
       item.dataset.state = value.state;
-      renderText(item, value.message);
+      sourcePath.classList.add("nami-setup__batch-path");
+      targetPath.classList.add("nami-setup__batch-path");
+      message.classList.add("nami-setup__batch-status");
+      remove.classList.add("nami-setup__batch-remove");
+      for (const [path, labelText, text] of [
+        [sourcePath, "Source", value.source.text], [targetPath, "Target", value.target.text],
+      ]) {
+        const label = document.createElement("span");
+        const pathValue = document.createElement("span");
+        label.classList.add("nami-setup__batch-path-label");
+        pathValue.classList.add("nami-setup__batch-path-value");
+        renderText(label, `${labelText}: `);
+        renderFilesystemText(pathValue, text);
+        path.append(label, pathValue);
+      }
+      sourcePath.title = value.source.text;
+      targetPath.title = value.target.text;
+      renderText(message, value.message);
+      remove.disabled = value.state !== "queued";
+      remove.hidden = value.state !== "queued";
+      remove.addEventListener("click", () => handlers.onRemoveBatchRow(value));
+      item.append(sourcePath, targetPath, message, remove);
       batch.append(item);
     });
     batch.hidden = rows.length === 0;
@@ -534,7 +562,7 @@ export function createSetupPanel(callbacks) {
     }
     const editable = model.editable;
     const locked = model.attempt !== null;
-    const controlsEditable = editable && !locked && !model.batchRunning;
+    const controlsEditable = editable && !locked && !model.batchRunning && !model.closePending;
     const selectedMode = setup.task_kind ?? model.mode;
     const recents = setup.recents ?? { sources: [], targets: [], pairs: [] };
     const nextLocationContext = `${selectedMode}\u0000${controlsEditable}\u0000${model.source.text}\u0000${model.target.text}`;
@@ -552,7 +580,7 @@ export function createSetupPanel(callbacks) {
       button.tabIndex = value === selectedMode ? 0 : -1;
       button.disabled = !controlsEditable;
     });
-    renderText(actionStatus, model.actionMessage ?? "");
+    renderText(actionStatus, model.actionMessage ?? model.batchMessage ?? "");
     renderLocation(source, model.source, recents.sources, controlsEditable, selectedMode === "inventory" ? "Root" : "Source");
     renderLocation(target, model.target, recents.targets, controlsEditable, "Target");
     target.field.hidden = selectedMode === "inventory";
@@ -585,20 +613,20 @@ export function createSetupPanel(callbacks) {
     renderText(planAgain, retryKind === "plan-again" ? "Retry Plan again" : "Plan again");
     startPlan.hidden = selectedMode !== "sync-plan" || !editable;
     startPlan.disabled = retryKind === "sync-plan"
-      ? model.batchRunning
-      : !controlsEditable || !model.source.text || !model.target.text || sourceNeedsMount || targetNeedsMount;
+      ? model.batchRunning || model.closePending
+      : !controlsEditable || model.batchPending || !model.source.text || !model.target.text || sourceNeedsMount || targetNeedsMount;
     startInventory.hidden = selectedMode !== "inventory" || !editable;
     startInventory.disabled = retryKind === "inventory"
-      ? model.batchRunning
-      : !controlsEditable || !model.source.text || sourceNeedsMount;
+      ? model.batchRunning || model.closePending
+      : !controlsEditable || model.batchPending || !model.source.text || sourceNeedsMount;
     addPair.hidden = selectedMode !== "sync-plan" || !editable;
     addPair.disabled = !controlsEditable || model.batchRunning
       || (!model.source.text && !model.target.text)
-      || model.batch.length >= MAX_BATCH_PAIRS;
+      || (model.batchCount ?? model.batch.length) >= MAX_BATCH_PAIRS;
     startBatch.hidden = selectedMode !== "sync-plan" || !editable;
     const retryableBatch = model.batch.some((row) => row.state === "uncertain");
     renderText(startBatch, retryableBatch ? "Retry pair batch" : "Create pair batch");
-    startBatch.disabled = model.batchRunning || locked
+    startBatch.disabled = model.closePending || model.batchRunning || locked
       || model.batch.every((row) => !["queued", "uncertain"].includes(row.state));
     planAgain.hidden = !model.canPlanAgain;
     const unresolved = setup.plan_again !== null && [
@@ -606,8 +634,8 @@ export function createSetupPanel(callbacks) {
       [setup.plan_again.target_state, model.planAgainMounts.target],
     ].some(([state, mount]) => state === "ambiguous" && mount === null);
     planAgain.disabled = retryKind === "plan-again"
-      ? model.batchRunning
-      : !model.canPlanAgain || locked || model.batchRunning || unresolved;
+      ? model.batchRunning || model.closePending
+      : model.closePending || !model.canPlanAgain || locked || model.batchRunning || model.batchPending || unresolved;
     renderPlanAgain(setup.plan_again, model.planAgainMounts, !locked && !model.batchRunning);
     renderBatch(model.batch.slice(0, MAX_BATCH_PAIRS));
   }
