@@ -83,6 +83,10 @@ reused by CLI, queue, or service entry points.
   by milestone or released version and then by phase.
 - `AGENTS.md` stays at the repository root as the repository instruction file.
 
+Use this map to select documentation relevant to the task; it is not a required
+reading sequence. Read component contracts when changing their behavior, safety
+policy when touching its boundaries, and delivery registers for checkpoint work.
+
 ## System Integrity Principles
 
 These are product invariants. Preserve them unless the task explicitly changes
@@ -133,15 +137,12 @@ their contract, and update the matching tests and documentation when it does.
   non-byte mutation effects are orthogonal journal entries whose settlement is
   reduced centrally; do not reintroduce parallel ad-hoc state dictionaries or
   sibling-specific settlement branches.
-- Treat executor settlement restructuring as gated work. Before splitting the
-  executor or replacing its retained-state dictionaries with a journal or
-  reducer, the corrected monolith must pass the committed settlement oracle
-  three times with identical normalized traces, no skipped or unclassified
-  scenarios, no snapshot drift, and no unresolved settlement finding. Land any
-  discovered policy fix separately with a persistent regression, then reset
-  and repeat the stability gate. Keep the oracle and its baseline under
-  `tools/` through the full refactor; do not delete them in the split, journal,
-  reducer, verifier, or test-consolidation commits.
+- The executor split and journal/reducer migration are complete; their historical
+  three-run monolith gate is recorded in the changelog. Retain the settlement
+  oracle and its baseline under `tools/`, including during verifier or test
+  consolidation. Future structural settlement work still requires the three-run
+  stability gate and independent review in `docs/EXECUTOR.md` (Settlement
+  Stability Gate), under the protected-evidence policy in `docs/DEFENSE.md`.
 - Use `sqlite3` directly. Do not add an ORM.
 - Keep live SQLite databases local only. Do not place app DBs in cloud-synced
   folders.
@@ -161,6 +162,19 @@ their contract, and update the matching tests and documentation when it does.
   Execution skills prescribe investigation, user interaction, delegation and
   recovery mechanics within those rules; they cannot expand authority or relax
   a gate. The repository requirements apply even without a particular skill.
+- Within the accepted outcome and declared mechanism/verification boundary,
+  choose routine implementation details and update direct consumers without
+  asking again. A file list identifies the known population, not an independent
+  file-count gate: record newly identified consumers before editing them when
+  they remain within that boundary. Explicit exclusions remain binding. Changed
+  outcomes, architectural ownership, safety/effect models or verification
+  boundaries require the scope adjudication below.
+- Continue authorized work through implementation, relevant verification,
+  correction of introduced regressions, required documentation and adversarial
+  review. An intermediate implementation is not completion. Ask about ambiguity
+  when it changes an accepted outcome or boundary; resolve routine choices from
+  current contracts and state material assumptions. Existing authorization
+  covers those steps, subject to the stop classes below.
 - Before an audit-driven implementation, hardening or stabilization pass,
   cross-component change, or task with more than one independently committable
   outcome, record a closed checkpoint register in the owning delivery
@@ -276,11 +290,11 @@ their contract, and update the matching tests and documentation when it does.
   features, safety model, limitations, documentation index, roadmap, or other
   cross-cutting/user-visible behavior. Keep superseded material in
   `docs/obsolete/` rather than leaving it as active guidance.
-- Run the narrowest relevant verification after each change, then broader tests
-  before considering a phase complete.
-- Before declaring work complete, review the result for requirement drift,
-  brittle assumptions, security risks, hidden edge cases, and unnecessary
-  complexity.
+- Run focused verification for the changed behavior and broader checks required
+  by `docs/TESTS.md` and the checkpoint gate. Repeat passed checks when subsequent
+  edits, failures or changed seams invalidate their evidence. For documentation-
+  only edits, check consistency, links and diffs; run product tests only when
+  the edited documentation changes an executable contract or test authority.
 
 ## Measurement Authority
 

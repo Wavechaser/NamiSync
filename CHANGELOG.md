@@ -26,6 +26,16 @@ bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
 packaging remain open.
 
+#### Clarify agent execution boundaries (2026-09-12)
+
+- Clarified routine consumer updates within accepted boundaries, completion and
+  task-relevant documentation/testing. Preserved hard-wall and recurrence stops.
+- Retired the completed monolith prerequisite while retaining the current
+  executor settlement stability gate and protected oracle.
+- Aligned the two personal execution/review skills outside this repository:
+  retained GPT-5.6 cost preference and explicit-only execution invocation;
+  clarified existing review authorization and removed the plan-work dependency.
+
 #### Refine task navigation, Settings and Setup (2026-09-11–12)
 
 - Added a minimal Settings/About work page with the existing theme selector,

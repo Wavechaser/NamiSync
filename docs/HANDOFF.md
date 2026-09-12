@@ -1,53 +1,33 @@
 # Latest session handoff
 
-## Settings shell and GUI refinement (2026-09-12)
+## Agent instruction maintenance (2026-09-12)
 
-GUI-S3 continues from 76028db on milestone1. User authorized implementation,
-review and commit. Settings is a local work-area page with the existing theme
-selector and a minimal About version line. It preserves tasks, drafts and live
-updates; global semantic settings and legal/about link content remain future work.
-Task items scroll independently above the Settings button; work content scrolls
-separately with stable scrollbar space.
+AI-1 is complete. AGENTS.md owns execution boundaries; the personal execute-task
+skill owns operating mechanics. Routine choices and direct consumers within the
+accepted mechanism/verification boundary need no repeated approval. Exclusions,
+changed ownership/safety/effect models and numerical recurrence stops remain.
+Future structural settlement work retains the three-run stability gate and
+independent review; only the historical monolith prerequisite retired.
 
-Setup uses Verify execution then Additive sync (on additive/off trash), with
-spaced advanced options. Compact inset Clear/caret controls, square Browse and
-Refresh, larger New task glyph and right-aligned pair actions follow selective
-icon usage. Clear suppresses its own blur admission and invalidates only local
-state; an earlier in-flight admission reply cannot restore it. Recent pairs use
-gallery typography/corners/surfaces, 64px two-line rows, independent endpoint
-statuses and whole-row hover/press/focus. Disabled pairs remain visible/inert.
+Outside the repository, only the personal execute-task/SKILL.md and
+claude-code-reviewer/SKILL.md changed. GPT-5.6 cost preference, explicit-only
+invocation metadata, Claude defaults and read-only review remain. Supplied
+skills, global AGENTS.md and product/test sources were untouched. Personal skills
+are local edits, excluded from the repository documentation commit.
 
-Arrow Clockwise was added through tools/icons.json and the offline maintenance
-tool using the existing pinned archive; no package upgrade or runtime loading.
-PLANNER documents exact exclude-filter syntax and effects; FEATURES no longer
-claims unsupported glob syntax validation. Completed GUI sections in M1_PLAN
-are condensed; unresolved shadow findings and deferred product outcomes remain.
+Both skill-creator validators passed using PyYAML installed temporarily under
+ignored build/instruction-validation; project dependencies were unchanged.
+Diff and adversarial scenario review checked in-bound consumers, exclusions,
+changed safety/ownership, recurrence stops, unanswered decisions, existing Claude
+authorization and completion. No Claude query or live agent behavior trial ran.
+Git whitespace and exact staged-scope checks precede commit. No product tests
+were needed for this instruction-only change. README's phase synopsis is unchanged.
 
-Independent adversarial review approved the product, fixtures and documentation.
-Verification passed: ordinary suite 4,979 passed, four existing skips; all 30
-headed interface tests passed. After the gallery layout correction, all four
-headed gallery tests and its ordinary contract checks passed again. Icon archive
-check and all 12 import contracts passed. Ignored build/gui-icons/gui-s3-* logs
-retain evidence (ordinary-01, headed-all-03, gallery-final-01 and
-gallery-ordinary-final). One pytest/Node slot, fresh external basetemps,
-PIP_NO_CACHE_DIR=1. Real CDP pointer checks forward native
-dispatch unchanged, prove Clear sends zero admission requests, and verify
-whole-row hover/press over status cells. Existing lifecycle/frozen/batch/retry
-witnesses remain; no backend source or protocol change.
-
-The gallery keeps natural page height rather than the task shell's fixed-height
-layout; its installed guard rejects overlapping top-level sections. Theme/rail
-fixtures now enter Settings and distinguish task specimens from navigation.
-The shell tree fixture replaces Settings before checking 200% reflow, matching
-exclusive production work pages; no post-zoom focus adjustment masks clipping.
-No tests were retired and no worktree or recovery branch was created.
-
-The development launcher does not hot reload: relaunch after delivery.
-Do not close user-owned windows. Transparent WebView screenshots support
-geometry inspection; their alpha handling is not evidence about native Mica
-colors or compositor health.
-
-The earlier WCG shadow investigation remains diagnostic and unfixed:
-10-bpc WCG SDR dark key shadows over translucent cards can halo. Mica remains
-required; BUGS owns the findings and limitations. No display setting, shadow
-workaround or release gate was changed here.
+Immediate product context: GUI-S3 is complete; next frontend outcomes remain in
+M1_PLAN. Prior GUI evidence remains in build/gui-icons/gui-s3-* logs (ordinary-01,
+headed-all-03, gallery-final-01, gallery-ordinary-final): 4,979 ordinary tests
+passed with four existing skips, all 30 headed interface tests passed, and final
+gallery/icon/import checks passed. These are prior-session results, not reruns
+here. Relaunch the development app after product edits; do not close user-owned
+windows. The WCG shadow finding remains diagnostic and unfixed in BUGS.md;
+Mica and release gates are unchanged.

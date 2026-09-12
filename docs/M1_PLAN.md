@@ -37,6 +37,26 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Agent instruction maintenance (2026-09-12)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| AI-1 | Clarify repository execution boundaries and retire the completed monolith prerequisite; update only the personal execute-task and claude-code-reviewer skills to handle those boundaries. | Diff and adversarial scenario review passed; both skill validators passed; Git whitespace and exact staged scope checked before commit. | Complete |
+
+Population: AGENTS.md, this register, CHANGELOG.md and HANDOFF.md; outside the
+repository, only the two named personal SKILL.md files. Repository rules own
+scope, acceptance and stops; execute-task owns operating mechanics. One repository
+documentation commit; personal skill edits remain outside repository history.
+Non-goals: product/test changes, global AGENTS.md, supplied skills, invocation
+metadata, model-family changes, new references or relaxed hard-wall stops.
+Regression study: check routine in-bound consumer edits versus explicit exclusions,
+changed safety/ownership models, repeated findings, unanswered scope questions,
+existing review authorization and completion before reporting. Preserve numerical
+recurrence gates, oracle retention and independent review. The completed split is
+recorded in CHANGELOG's August 10–11 maintenance entry; its historical prerequisite
+must not be presented as a pending operation. No product suite is needed for these
+instruction-only edits; final review must account for each preserved boundary.
+
 ### Settings shell and GUI refinement (2026-09-12)
 
 | ID | Accepted outcome | Named verification | Status |
