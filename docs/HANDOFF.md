@@ -11,7 +11,7 @@ GUI-D6 committed as 10d431e: native Fluent overlay integration, verify-only
 batching and persistent customizable pair presets are deferred to M2. Preset
 records and bridge commands do not exist yet; no runtime behavior was added.
 
-GUI-R2 is complete and independently approved. The development launcher reused
+GUI-R2 committed as 1398490 and independently approved. The development launcher reused
 the installed-host smoke helper, whose unconditional display override exposed
 Ready in development. The override now requires --expose-ready-status; only
 actual smoke readiness witnesses opt in. tools/gui.ps1 stays on the normal
@@ -19,13 +19,16 @@ hidden-Ready path. No production readiness, shutdown or process ownership change
 Evidence in build/gui-icons/: gui-r2-focused-01.txt (55 passed),
 gui-r2-headed-01.txt (11 passed), gui-r2-interfaces-01.txt (1,528 passed).
 
-GUI-S9 implementation is active. Shared CSS owns header/body gutter and column
-alignment for Setup and gallery file lists. Native Setup tables remain single
-tables. One outer horizontal area moves both header and body; the body alone
-owns vertical scrolling. Hidden-overflow headers reserve the same stable gutter
-without displaying a scrollbar. Retain existing first-interaction column resize
-measurement; add no recurring alignment measurements. Always-visible softened
-thin thumbs replace pane-hover reveal logic. M1_PLAN records the finite gates.
+GUI-S9 is verified and independently reviewed. Shared CSS owns stable
+header/body gutters and column alignment for Setup and gallery file lists.
+One outer horizontal scroll area moves both; the body alone scrolls vertically.
+Intrinsic header sizing preserves resized tracks without JS correction loops.
+Native table semantics, five 56px slots and forced-color fallback remain.
+Softened thin thumbs are always visible and widen on direct hover/drag.
+Final root evidence in build/gui-icons/: gui-s9-final-focused.txt (84 passed),
+gui-s9-final-ordinary.txt (4,983 passed, four existing Windows symlink-privilege
+skips; includes interfaces), gui-s9-final-headed.txt (all 30 passed).
+Temporary diagnostic hooks were removed; only ignored evidence artifacts remain.
 
 GUI-S10 follows final shared layout: tighter form label spacing, larger option
 gaps, aligned paired path values and authored #2a2a2a dark disabled fill.

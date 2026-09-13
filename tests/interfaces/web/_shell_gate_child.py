@@ -344,7 +344,9 @@ _SCROLL_TREE_SETUP = r"""
     scrollbar_width: getComputedStyle(root, "::-webkit-scrollbar").width,
     total,
   };
-  state.idleThumbBorder = parseFloat(getComputedStyle(root, "::-webkit-scrollbar-thumb").borderLeftWidth);
+  const idleThumb = getComputedStyle(root, "::-webkit-scrollbar-thumb");
+  state.idleThumbBorder = parseFloat(idleThumb.borderLeftWidth);
+  state.idleThumbPaint = idleThumb.backgroundColor;
   globalThis.__namiScrollTreeEvidence = state;
   await new Promise((resolve) => requestAnimationFrame(resolve));
   const scrollBeforeResize = root.scrollTop;
@@ -465,14 +467,16 @@ _SCROLLBAR_HOVER_EVIDENCE = r"""
   }
   const thumb = getComputedStyle(root, "::-webkit-scrollbar-thumb");
   const colorProbe = document.createElement("span");
-  colorProbe.style.color = "var(--color-neutral-foreground-secondary)";
+  colorProbe.style.color = "var(--color-scrollbar-thumb)";
   root.append(colorProbe);
   const expectedColor = getComputedStyle(colorProbe).color;
   colorProbe.remove();
   state.scrollbarHover = {
+    idle_painted: state.idleThumbPaint !== "rgba(0, 0, 0, 0)",
     wider_than_pane: parseFloat(thumb.borderLeftWidth) > 0 &&
       parseFloat(thumb.borderLeftWidth) < state.idleThumbBorder,
-    paint_matches_token: thumb.backgroundColor === expectedColor,
+    paint_matches_softened: thumb.backgroundColor === expectedColor &&
+      state.idleThumbPaint === expectedColor,
   };
   return {ready: true};
 })()

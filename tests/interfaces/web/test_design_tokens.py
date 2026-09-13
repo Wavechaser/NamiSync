@@ -283,6 +283,10 @@ AUTHORED_SELECTION_VALUES = {
         "--color-selection-highlight-pressed": "rgba(255,255,255,0.04)",
     },
 }
+AUTHORED_SCROLLBAR_VALUES = {
+    "light": {"--color-scrollbar-thumb": "rgba(0,0,0,0.4)"},
+    "dark": {"--color-scrollbar-thumb": "rgba(255,255,255,0.4)"},
+}
 AUTHORED_CARD_VALUES = {
     "light": {
         "--color-card-background": "rgba(255,255,255,0.7)",
@@ -541,6 +545,8 @@ def test_sh_g_11_tokens_route_authored_lights_only_to_new_semantic_roles() -> No
             *AUTHORED_CONTROL_VALUES["dark"].values(),
             *AUTHORED_SELECTION_VALUES["light"].values(),
             *AUTHORED_SELECTION_VALUES["dark"].values(),
+            *AUTHORED_SCROLLBAR_VALUES["light"].values(),
+            *AUTHORED_SCROLLBAR_VALUES["dark"].values(),
             *AUTHORED_CARD_VALUES["light"].values(),
             *AUTHORED_CARD_VALUES["dark"].values(),
             *AUTHORED_FLYOUT_VALUES["light"].values(),
@@ -592,6 +598,9 @@ def test_sh_g_11_fluent_table_matches_pinned_source_transcription() -> None:
     assert AUTHORED_SELECTION_VALUES["light"].items() <= light.items()
     assert AUTHORED_SELECTION_VALUES["dark"].items() <= dark.items()
     assert AUTHORED_SELECTION_VALUES["dark"].items() <= automatic_dark.items()
+    assert AUTHORED_SCROLLBAR_VALUES["light"].items() <= light.items()
+    assert AUTHORED_SCROLLBAR_VALUES["dark"].items() <= dark.items()
+    assert AUTHORED_SCROLLBAR_VALUES["dark"].items() <= automatic_dark.items()
     assert AUTHORED_CARD_VALUES["light"].items() <= light.items()
     assert AUTHORED_CARD_VALUES["dark"].items() <= dark.items()
     assert AUTHORED_CARD_VALUES["dark"].items() <= automatic_dark.items()

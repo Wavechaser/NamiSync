@@ -357,10 +357,11 @@ export function createSetupPanel(callbacks) {
   actions.append(startPlan, startInventory, addPair, planAgain);
   planAgainChoices.classList.add("nami-setup__plan-again-mounts");
   batch.classList.add("nami-setup__batch");
-  batchViewport.classList.add("nami-setup__pair-viewport", "nami-setup__batch-viewport");
-  batchTable.classList.add("nami-table", "nami-setup__pair-table", "nami-setup__batch-table");
+  batchViewport.classList.add("nami-table-scroll", "nami-setup__pair-viewport", "nami-setup__batch-viewport");
+  batchTable.classList.add("nami-table", "nami-table-layout", "nami-setup__pair-table", "nami-setup__batch-table");
   batchTable.ariaLabel = "Pair creation results";
   const batchHead = document.createElement("thead");
+  batchHead.classList.add("nami-table__header");
   const batchHeaderRow = document.createElement("tr");
   ["Folders", "Settings", "Status", "Actions"].forEach((text, index) => {
     const th = document.createElement("th");
@@ -381,6 +382,7 @@ export function createSetupPanel(callbacks) {
     batchHeaderRow.append(th);
   });
   batchHead.append(batchHeaderRow);
+  batchBody.classList.add("nami-table__body");
   batchTable.append(batchHead, batchBody);
   batchViewport.append(batchTable);
   batchActions.classList.add("nami-setup__batch-actions");
@@ -392,9 +394,10 @@ export function createSetupPanel(callbacks) {
   refreshRecents.ariaLabel = "Refresh recent pairs";
   refreshRecents.append(createIcon(document, "arrow-clockwise", "sm"));
   recentHeader.append(recentHeading, refreshRecents);
-  recentTable.classList.add("nami-table", "nami-setup__pair-table", "nami-setup__recent-pair-table");
-  recentViewport.classList.add("nami-setup__pair-viewport", "nami-setup__recent-pair-viewport");
+  recentTable.classList.add("nami-table", "nami-table-layout", "nami-setup__pair-table", "nami-setup__recent-pair-table");
+  recentViewport.classList.add("nami-table-scroll", "nami-setup__pair-viewport", "nami-setup__recent-pair-viewport");
   const thead = document.createElement("thead");
+  thead.classList.add("nami-table__header");
   const headerRow = document.createElement("tr");
   ["Folders", "Availability"].forEach((text) => {
     const th = document.createElement("th");
@@ -403,6 +406,7 @@ export function createSetupPanel(callbacks) {
     headerRow.append(th);
   });
   thead.append(headerRow);
+  recentBody.classList.add("nami-table__body");
   recentTable.append(thead, recentBody);
   recentViewport.append(recentTable);
   setupCard.append(heading, guidance, actionStatus, modeGroup, source.field, target.field, options, actions, batch, planAgainChoices);

@@ -34,8 +34,10 @@ packaging remain open.
   persistent customizable pair presets to M2, keeping their new backend and
   persistence contracts out of the M1 GUI refinement.
 - Added a Fluent-style CSS scrollbar approximation with a fixed small gutter,
-  a thin pane-hover thumb and wider direct-hover/drag thumb. Native scrolling
-  and forced-color defaults remain; hover does not shift content.
+  an always-visible softened thin thumb and wider direct-hover/drag thumb.
+  Tables share stable header/body column widths and reserve the vertical gutter
+  below the header; horizontal scrolling moves both together only when needed.
+  Native scrolling and forced-color defaults remain; hover does not shift content.
 - Added a conditional batch table with paths, attempted settings, short statuses,
   queued removal and explicit clearing of settled results. Single and batch
   creation actions align right; single Create stays disabled while batching.

@@ -742,7 +742,7 @@ def test_plan_row_renderer_is_dormant_and_consumes_only_projected_views(
         layout,
     )
     assert file_grid is not None
-    assert "min-inline-size: 48rem;" in file_grid.group("body")
+    assert "min-inline-size: min-content;" in file_grid.group("body")
     file_rows = re.search(
         r"(?ms)^\.nami-file-list__body > \.nami-file-row\s*"
         r"\{(?P<body>.*?)^\}",
@@ -1303,7 +1303,7 @@ def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
     assert "--palette-" not in app_css
 
 
-def test_gui_s7_scrollbars_keep_fixed_native_geometry_and_forced_color_defaults(
+def test_gui_s9_scrollbars_and_tables_share_fixed_native_geometry(
     built_wheel: BuiltWheel,
 ) -> None:
     assets = _wheel_assets(built_wheel)
@@ -1313,9 +1313,9 @@ def test_gui_s7_scrollbars_keep_fixed_native_geometry_and_forced_color_defaults(
         ".nami-work-panel",
         ".nami-task-rail__items",
         ".nami-setup__recent-popup",
-        ".nami-setup__pair-viewport",
+        ".nami-table-scroll",
+        ".nami-table__body",
         ".nami-tree",
-        ".nami-file-list",
         ".nami-combobox__popup",
     )
 
@@ -1330,11 +1330,14 @@ def test_gui_s7_scrollbars_keep_fixed_native_geometry_and_forced_color_defaults(
         scrollbar_rules,
     )
     assert selector_groups
+    owner_groups = [group for group in selector_groups if ".nami-table__header" not in group]
+    assert owner_groups
     assert all(
         tuple(line.strip().removesuffix(",") for line in group.splitlines())
         == owners
-        for group in selector_groups
+        for group in owner_groups
     )
+    assert ".nami-table__header::-webkit-scrollbar" in scrollbar_rules
     assert "::-webkit-scrollbar {\n    height: 10px;\n    width: 10px;" in scrollbar_rules
     assert (
         "border: 4px solid var(--color-semantic-transparent);"
@@ -1342,10 +1345,7 @@ def test_gui_s7_scrollbars_keep_fixed_native_geometry_and_forced_color_defaults(
     )
     assert "border-width: 2px;" in scrollbar_rules
     assert "background-clip: padding-box;" in scrollbar_rules
-    assert (
-        "background-color: var(--color-neutral-foreground-secondary);"
-        in scrollbar_rules
-    )
+    assert "background-color: var(--color-scrollbar-thumb);" in scrollbar_rules
     assert (
         "background-color: var(--color-neutral-subtle-hover);"
         in scrollbar_rules
@@ -1357,8 +1357,29 @@ def test_gui_s7_scrollbars_keep_fixed_native_geometry_and_forced_color_defaults(
     assert "scrollbar-width" not in components_css
     assert "::-webkit-scrollbar" not in before_scrollbars + after_scrollbars
     assert not re.search(r":hover[^{}]*::-webkit-scrollbar\s*\{", scrollbar_rules)
+    assert not re.search(r"\):hover::-webkit-scrollbar-thumb", scrollbar_rules)
+    assert "color-mix(" not in scrollbar_rules
+    assert ".nami-table-scroll {" in components_css
+    assert "overflow-x: auto;" in components_css
+    assert "overflow-y: hidden;" in components_css
+    assert ".nami-table-layout {" in components_css
+    assert "grid-template-rows: auto minmax(0, 1fr);" in components_css
+    assert ".nami-table__header,\n.nami-table__body {\n  scrollbar-gutter: stable;" in components_css
+    assert ".nami-table__body {\n  overflow-x: hidden;\n  overflow-y: auto;" in components_css
     assert all(
         "scrollbar" not in source
         for name, source in assets.items()
         if name.endswith(".js")
     )
+
+    app_css = assets["app.css"]
+    assert "--nami-table-columns: var(--setup-recent-columns);" in app_css
+    assert "--nami-table-columns: var(--setup-batch-columns);" in app_css
+    setup_table = re.search(
+        r"(?ms)^\.nami-setup__pair-table\s*\{(?P<body>.*?)^\}",
+        app_css,
+    )
+    assert setup_table is not None
+    assert "min-inline-size: 32rem;" in setup_table.group("body")
+    assert app_css.count("min-inline-size: 32rem;") == 1
+    assert "grid-template-columns: var(--nami-table-columns);" in app_css

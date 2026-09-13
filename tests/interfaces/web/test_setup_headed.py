@@ -71,7 +71,7 @@ def test_m1_6_installed_setup_flow(
     assert result["recent_row_height"] == pytest.approx(56, abs=1)
     assert result["recent_viewport_height"] == pytest.approx(308, abs=1)
     assert result["recent_header_height"] == pytest.approx(28, abs=1)
-    assert result["recent_header_sticky"] is True
+    assert result["recent_header_fixed"] is True
     assert result["recent_slots_bounded"] is True
     assert result["recent_folder_inset"] == pytest.approx(12, abs=1)
     assert result["advanced_filters_visible"] is True
@@ -87,6 +87,31 @@ def test_m1_6_installed_setup_flow(
     assert result["clear_pointer_local"] is True
     assert result["pair_pointer_states"] is True, result["pair_pointer_detail"]
     assert result["table_gallery_style"] is True
+    geometry = result["table_geometry"]
+    assert geometry["viewport_x"] == "auto"
+    assert geometry["viewport_y"] == "hidden"
+    assert geometry["header_y"] == "hidden"
+    assert geometry["body_y"] == "auto"
+    assert geometry["header_gutter"] == geometry["body_gutter"] == "stable"
+    assert geometry["viewport_height"] == pytest.approx(308, abs=0.5)
+    assert geometry["header_height"] == pytest.approx(28, abs=0.5)
+    assert geometry["body_height"] == pytest.approx(280, abs=0.5)
+    assert geometry["body_starts_below_header"] is True
+    assert geometry["default_columns_align"] is True
+    assert geometry["narrow_columns_align"] is True
+    assert geometry["narrow_horizontal"] is True
+    assert geometry["narrow_table_height"] == pytest.approx(308, abs=0.5)
+    assert geometry["narrow_body_height"] == pytest.approx(280, abs=0.5)
+    assert geometry["narrow_viewport_height"] > geometry["narrow_table_height"]
+    assert geometry["empty_width"] == geometry["default_width"] == geometry["overflow_width"]
+    assert geometry["body_overflows"] is True
+    assert geometry["header_fixed_during_body_scroll"] is True
+    accessibility = result["table_accessibility"]
+    assert accessibility["table"] >= 1
+    assert accessibility["rowgroup"] >= 1
+    assert accessibility["row"] >= 2
+    assert accessibility["columnheader"] >= 2
+    assert accessibility["cell"] >= 2
     assert result["browse_square"] is True
     assert result["pair_actions_right_aligned"] is True
     assert result["inline_location_controls"] is True
@@ -105,6 +130,7 @@ def test_m1_6_installed_setup_flow(
         ["target", "online", "Online"],
     ]
     assert result["recent_pair_two_columns"] is True
+    assert result["recent_path_button_fills_column"] is True
     assert result["endpoint_statuses_align_with_paths"] is True
     assert result["offline_pair_disabled"] is True
     assert result["pair_two_line_paths"] is True

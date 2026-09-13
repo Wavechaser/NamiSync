@@ -934,6 +934,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             ],
             "notes_resizer_absent": True,
             "initial_layout_frozen": False,
+            "normal_columns_align": True,
             "initial_column_widths": [32.0, 304.0, 80.0, 120.0, 96.0, 240.0],
             "initial_column_lefts": [0.0, 32.0, 336.0, 416.0, 536.0, 632.0],
             "initial_right": 872.0,
@@ -945,6 +946,7 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "pointer_column_lefts": [0.0, 32.0, 328.0, 408.0, 528.0, 624.0],
             "pointer_right": 872.0,
             "column_resize_changes_width": True,
+            "resized_columns_align": True,
             "requested_pointer_delta": -8.0,
             "column_resize_delta": -8.0,
             "column_notes_delta": 8.0,
@@ -957,18 +959,18 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "viewport_narrow_widths": [40.0, 264.0, 80.0, 120.0, 96.0, 240.0],
             "viewport_narrow_right": 840.0,
             "viewport_narrow_right_span": 840.0,
-            "viewport_narrow_list_width": 840.0,
+            "viewport_narrow_list_width": 850.0,
+            "narrow_columns_align": True,
             "viewport_restored_widths": [40.0, 296.0, 80.0, 120.0, 96.0, 240.0],
             "viewport_restored_right": 872.0,
             "notes_minimum_widths": [40.0, 312.0, 80.0, 120.0, 96.0, 224.0],
             "name_minimum_widths": [40.0, 192.0, 80.0, 120.0, 96.0, 344.0],
             "name_minimum": 192.0,
             "notes_minimum": 224.0,
-            "floor_minimum": 768.0,
-            "effective_minimum": 872.0,
             "constrained_column_widths": [40.0, 192.0, 80.0, 120.0, 96.0, 344.0],
-            "constrained_grid_width": 872.0,
+            "constrained_grid_width": 882.0,
             "constrained_right_span": 872.0,
+            "constrained_columns_align": True,
             "header_foreground": "rgb(0, 0, 0)",
             "header_background": "rgb(255, 255, 255)",
             "header_texts": headers,
@@ -980,10 +982,32 @@ def test_component_gallery_report_parser_is_exact_and_nested(
             "checkbox_count": len(rows),
             "body_ends_at_last_row": True,
             "body_height_matches_rows": True,
+            "vertical_body_overflows": True,
+            "vertical_columns_align": True,
+            "vertical_body_below_header": True,
+            "vertical_header_client_width": 566,
+            "vertical_body_client_width": 566,
+            "header_inline_gutter_width": 10.0,
+            "body_inline_gutter_width": 10.0,
+            "empty_header_client_width": 566,
+            "empty_body_client_width": 566,
+            "header_scrollbar_width": "10px",
+            "body_scrollbar_width": "10px",
+            "header_scrollbar_gutter": "stable",
+            "body_scrollbar_gutter": "stable",
+            "outer_scroll_amount": 48.0,
+            "scroll_header_delta": -48.0,
+            "scroll_body_delta": -48.0,
+            "inner_horizontal_scroll_lefts": [0, 0],
+            "max_scroll_header_right": 566.0,
+            "max_scroll_body_right": 566.0,
+            "max_scroll_viewport_right": 576.0,
+            "max_scroll_header_content_right": 566.0,
+            "max_scroll_body_content_right": 566.0,
             "horizontal_overflow": True,
             "overflow_x": "auto",
             "client_width": 576.0,
-            "scroll_width": 960.0,
+            "scroll_width": 882.0,
             "rows": rows,
         }
     report = {
@@ -2714,6 +2738,7 @@ def _assert_file_list_evidence(
     )
     assert evidence["notes_resizer_absent"] is True
     assert evidence["initial_layout_frozen"] is False
+    assert evidence["normal_columns_align"] is True
     assert evidence["frozen_layout_active"] is True
     initial_widths = evidence["initial_column_widths"]
     initial_lefts = evidence["initial_column_lefts"]
@@ -2731,6 +2756,7 @@ def _assert_file_list_evidence(
     pointer_delta = evidence["column_resize_delta"]
     assert -8.5 <= evidence["requested_pointer_delta"] < -0.5
     assert evidence["column_resize_changes_width"] is True
+    assert evidence["resized_columns_align"] is True
     assert -8.5 <= pointer_delta < -0.5
     assert pointer_widths[1] - frozen_widths[1] == pytest.approx(
         pointer_delta,
@@ -2806,9 +2832,11 @@ def _assert_file_list_evidence(
             abs=0.5,
         )
     assert evidence["viewport_narrow_right_span"] == pytest.approx(
-        evidence["viewport_narrow_list_width"],
+        evidence["viewport_narrow_list_width"]
+        - evidence["header_inline_gutter_width"],
         abs=0.75,
     )
+    assert evidence["narrow_columns_align"] is True
     assert restored_widths == pytest.approx(keyboard_widths, abs=0.5)
     assert evidence["viewport_restored_right"] == pytest.approx(
         evidence["keyboard_right"],
@@ -2830,28 +2858,18 @@ def _assert_file_list_evidence(
             keyboard_widths[index],
             abs=0.5,
         )
-    expected_minimum = max(
-        evidence["floor_minimum"],
-        name_minimum_widths[0]
-        + evidence["name_minimum"]
-        + sum(name_minimum_widths[2:]),
-    )
-    assert evidence["effective_minimum"] == pytest.approx(
-        expected_minimum,
-        abs=0.75,
-    )
     assert evidence["constrained_column_widths"] == pytest.approx(
         name_minimum_widths,
         abs=0.5,
     )
-    assert evidence["constrained_grid_width"] == pytest.approx(
-        evidence["effective_minimum"],
-        abs=0.75,
+    assert evidence["constrained_grid_width"] >= (
+        sum(evidence["constrained_column_widths"]) - 0.75
     )
     assert evidence["constrained_right_span"] == pytest.approx(
-        evidence["scroll_width"],
+        evidence["scroll_width"] - evidence["header_inline_gutter_width"],
         abs=1.0,
     )
+    assert evidence["constrained_columns_align"] is True
     assert _contrast(
         evidence["header_foreground"], evidence["header_background"]
     ) >= 4.5
@@ -2867,6 +2885,39 @@ def _assert_file_list_evidence(
     assert evidence["checkbox_count"] == len(expected_order)
     assert evidence["body_ends_at_last_row"] is True
     assert evidence["body_height_matches_rows"] is True
+    assert evidence["vertical_body_overflows"] is True
+    assert evidence["vertical_columns_align"] is True
+    assert evidence["vertical_body_below_header"] is True
+    assert evidence["vertical_header_client_width"] == evidence["vertical_body_client_width"]
+    assert evidence["header_inline_gutter_width"] == evidence["body_inline_gutter_width"]
+    assert evidence["header_inline_gutter_width"] >= 0
+    assert evidence["empty_header_client_width"] == evidence["vertical_header_client_width"]
+    assert evidence["empty_body_client_width"] == evidence["vertical_body_client_width"]
+    assert evidence["header_scrollbar_width"] == evidence["body_scrollbar_width"]
+    if not forced:
+        assert evidence["header_scrollbar_width"] == "10px"
+    assert evidence["header_scrollbar_gutter"] == "stable"
+    assert evidence["body_scrollbar_gutter"] == "stable"
+    assert evidence["outer_scroll_amount"] > 0
+    assert evidence["scroll_header_delta"] == pytest.approx(
+        -evidence["outer_scroll_amount"], abs=0.75
+    )
+    assert evidence["scroll_body_delta"] == pytest.approx(
+        -evidence["outer_scroll_amount"], abs=0.75
+    )
+    assert evidence["inner_horizontal_scroll_lefts"] == [0, 0]
+    assert evidence["max_scroll_header_right"] == pytest.approx(
+        evidence["max_scroll_body_right"], abs=0.75
+    )
+    assert evidence["max_scroll_header_right"] <= (
+        evidence["max_scroll_viewport_right"] + 0.75
+    )
+    assert evidence["max_scroll_header_right"] <= (
+        evidence["max_scroll_header_content_right"] + 0.75
+    )
+    assert evidence["max_scroll_body_right"] <= (
+        evidence["max_scroll_body_content_right"] + 0.75
+    )
     assert evidence["horizontal_overflow"] is True
     assert evidence["overflow_x"] == "auto"
     assert evidence["scroll_width"] > evidence["client_width"] > 0

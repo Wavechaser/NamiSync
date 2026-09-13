@@ -99,15 +99,25 @@ Microsoft classifies the Fluent scrollbar browser flag as
 Native integration is deferred to M2: the feasible Windows-backend change also
 requires coordinated startup, early navigation/HTML-loading and rendering tests,
 which is not justified solely for the M1 scrollbar. Current CSS
-approximates Fluent with a small fixed gutter: the rounded thumb is hidden
-outside pane hover, thin over the pane and wider on direct hover/drag, with no
-extra pressed highlight. The track uses a subtle neutral fill. Wheel, keyboard,
+approximates Fluent with a small fixed gutter: the softened rounded thumb is
+always thin at rest and wider on direct hover/drag, with no extra pressed
+highlight or pane show/hide logic. The track uses a subtle neutral fill. Wheel, keyboard,
 track clicks and dragging remain native; forced colors use browser defaults.
 The fixed gutter avoids hover layout shifts but cannot paint over content like
 native Fluent. CSS also does not reproduce native fade, input-method awareness
 or system-preference parity. Microsoft's [scroll viewer guidance](https://learn.microsoft.com/en-us/windows/apps/develop/ui/controls/scroll-controls)
 describes the thin-to-wide behavior; Chromium's [scrollbar styling guidance](https://developer.chrome.com/docs/css-ui/scrollbar-styling)
 explains the classic gutter introduced by custom scrollbar dimensions.
+
+Tables share a CSS layout with a vertical body scroll area below the header.
+Both header and body reserve the same stable gutter, including when rows fit;
+the header does not display a vertical scrollbar. Shared column tracks keep
+their cells aligned. One outer horizontal scroll area moves both together and
+shows its scrollbar only when needed. This uses the
+[CSS stable-gutter contract](https://www.w3.org/TR/css-overflow-3/#scrollbar-gutter-property),
+including hidden-overflow header compensation, without measuring scrollbar
+widths or repeatedly correcting column positions in JavaScript. File-column
+resize gestures retain their existing initial width snapshot.
 
 Before window creation, the primary host constructs the service and consumes
 the shared database-pair facade. Fresh state initializes ledger then history;

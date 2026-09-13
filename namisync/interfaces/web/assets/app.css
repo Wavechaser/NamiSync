@@ -457,33 +457,57 @@ body {
 .nami-setup__pair-viewport {
   background: var(--color-neutral-surface);
   border-radius: var(--radius-medium);
-  block-size: 19.25rem;
-  overflow: auto;
 }
 
 .nami-setup__pair-table {
+  --nami-table-columns: var(--setup-recent-columns);
   border: 0;
   border-collapse: separate;
   border-spacing: 0;
+  block-size: 19.25rem;
   inline-size: 100%;
+  min-inline-size: 32rem;
   table-layout: fixed;
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
 }
 
+.nami-setup__batch-table {
+  --nami-table-columns: var(--setup-batch-columns);
+}
+
+.nami-setup__pair-table :is(thead, tbody) > tr {
+  display: grid;
+  grid-template-columns: var(--nami-table-columns);
+}
+
 .nami-setup__pair-table thead {
   background: var(--color-neutral-surface-selected);
   color: var(--color-neutral-foreground-secondary);
-  inset-block-start: 0;
-  position: sticky;
   z-index: 1;
 }
 
 .nami-setup__pair-table :is(th, td) {
   background: var(--color-semantic-transparent);
   border: 0;
+  display: flex;
+  min-inline-size: 0;
   padding: var(--space-2) var(--space-3);
   text-align: start;
+}
+
+.nami-setup__pair-table th {
+  align-items: center;
+}
+
+.nami-setup__pair-table td {
+  align-items: stretch;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.nami-setup__pair-placeholder > td {
+  grid-column: 1 / -1;
 }
 
 .nami-setup__pair-table th {
@@ -494,11 +518,6 @@ body {
 
 .nami-setup__pair-table th:first-child {
   padding-inline-start: var(--space-4);
-}
-
-.nami-setup__recent-pair-table th:last-child,
-.nami-setup__recent-pair-table td:last-child {
-  inline-size: 8rem;
 }
 
 .nami-setup__recent-pair,
@@ -538,7 +557,6 @@ body {
 }
 
 .nami-setup__pair-folders {
-  max-inline-size: 0;
   padding: 0 !important;
 }
 
@@ -637,18 +655,6 @@ body {
   padding-inline-start: var(--space-4) !important;
 }
 
-.nami-setup__batch-settings {
-  inline-size: 8rem;
-}
-
-.nami-setup__batch-status-cell {
-  inline-size: 6rem;
-}
-
-.nami-setup__batch-action-cell {
-  inline-size: 3rem;
-}
-
 .nami-setup__batch-path,
 .nami-setup__batch-settings > span {
   display: block;
@@ -721,8 +727,6 @@ body {
 .nami-file-list {
   background: var(--color-neutral-surface);
   border-radius: var(--radius-medium);
-  max-inline-size: 100%;
-  overflow-x: auto;
 }
 
 .nami-file-list__grid {
@@ -733,7 +737,7 @@ body {
   --nami-file-column-secondary: var(--file-column-secondary-default);
   --nami-file-column-notes: var(--file-column-notes-default);
   inline-size: 100%;
-  min-inline-size: 48rem;
+  min-inline-size: min-content;
 }
 
 .nami-file-list__header,

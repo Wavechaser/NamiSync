@@ -387,8 +387,9 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
         ],
         "row_count": 5,
         "scrollbar_hover": {
+            "idle_painted": True,
             "wider_than_pane": True,
-            "paint_matches_token": True,
+            "paint_matches_softened": True,
         },
         "stable_scrollbar_geometry": True,
         "scroll_top": 112,
@@ -749,8 +750,9 @@ def _assert_report_schema(result: object) -> None:
         "scroll_top",
     }
     assert set(result["page"]["scroll_tree"]["scrollbar_hover"]) == {
+        "idle_painted",
         "wider_than_pane",
-        "paint_matches_token",
+        "paint_matches_softened",
     }
     assert set(result["page"]["scroll_tree"]["initial"]) == {
         "accepted",

@@ -62,6 +62,8 @@
   --file-column-primary-default: minmax(8rem, 0.7fr);
   --file-column-secondary-default: minmax(7rem, 0.65fr);
   --file-column-notes-default: minmax(14rem, 1.3fr);
+  --setup-recent-columns: minmax(0, 1fr) 8rem;
+  --setup-batch-columns: minmax(0, 1fr) 8rem 6rem 3rem;
 
   /* Instant reduction and the progress cycle are NamiSync behavior tokens. */
   --motion-duration-instant: 0ms;
@@ -101,6 +103,7 @@
   --color-neutral-surface-selected: #ebebeb;
   --color-neutral-subtle-background: transparent;
   --color-semantic-transparent: transparent;
+  --color-scrollbar-thumb: rgba(0,0,0,0.4);
   --color-neutral-subtle-hover: rgba(255,255,255,0.7);
   --color-neutral-subtle-pressed: rgba(255,255,255,0.5);
   --color-selection-highlight: rgba(0,0,0,0.04);
@@ -230,6 +233,7 @@
   --color-neutral-foreground: #ffffff;
   --color-neutral-foreground-secondary: #d6d6d6;
   --color-neutral-foreground-disabled: #5c5c5c;
+  --color-scrollbar-thumb: rgba(255,255,255,0.4);
   --color-neutral-border: #adadad;
   --color-neutral-border-hover: #bdbdbd;
   --color-neutral-border-pressed: #b3b3b3;
@@ -301,6 +305,7 @@
     --color-neutral-foreground: #ffffff;
     --color-neutral-foreground-secondary: #d6d6d6;
     --color-neutral-foreground-disabled: #5c5c5c;
+    --color-scrollbar-thumb: rgba(255,255,255,0.4);
     --color-neutral-border: #adadad;
     --color-neutral-border-hover: #bdbdbd;
     --color-neutral-border-pressed: #b3b3b3;

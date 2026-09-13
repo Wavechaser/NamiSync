@@ -626,8 +626,6 @@ def _test_report_spec(
         timeout=CommandTimeout.INTERACTIVE,
         retry=CommandRetry.NONE,
     )
-
-
 def _valid_complete_report(
     payload: dict[str, object],
     *,
@@ -1201,6 +1199,7 @@ def _valid_file_list_evidence(
         "resize_handle_labels",
         "notes_resizer_absent",
         "initial_layout_frozen",
+        "normal_columns_align",
         "initial_column_widths",
         "initial_column_lefts",
         "initial_right",
@@ -1212,6 +1211,7 @@ def _valid_file_list_evidence(
         "pointer_column_lefts",
         "pointer_right",
         "column_resize_changes_width",
+        "resized_columns_align",
         "requested_pointer_delta",
         "column_resize_delta",
         "column_notes_delta",
@@ -1225,17 +1225,17 @@ def _valid_file_list_evidence(
         "viewport_narrow_right",
         "viewport_narrow_right_span",
         "viewport_narrow_list_width",
+        "narrow_columns_align",
         "viewport_restored_widths",
         "viewport_restored_right",
         "notes_minimum_widths",
         "name_minimum_widths",
         "name_minimum",
         "notes_minimum",
-        "floor_minimum",
-        "effective_minimum",
         "constrained_column_widths",
         "constrained_grid_width",
         "constrained_right_span",
+        "constrained_columns_align",
         "header_foreground",
         "header_background",
         "header_texts",
@@ -1247,6 +1247,28 @@ def _valid_file_list_evidence(
         "checkbox_count",
         "body_ends_at_last_row",
         "body_height_matches_rows",
+        "vertical_body_overflows",
+        "vertical_columns_align",
+        "vertical_body_below_header",
+        "vertical_header_client_width",
+        "vertical_body_client_width",
+        "header_inline_gutter_width",
+        "body_inline_gutter_width",
+        "empty_header_client_width",
+        "empty_body_client_width",
+        "header_scrollbar_width",
+        "body_scrollbar_width",
+        "header_scrollbar_gutter",
+        "body_scrollbar_gutter",
+        "outer_scroll_amount",
+        "scroll_header_delta",
+        "scroll_body_delta",
+        "inner_horizontal_scroll_lefts",
+        "max_scroll_header_right",
+        "max_scroll_body_right",
+        "max_scroll_viewport_right",
+        "max_scroll_header_content_right",
+        "max_scroll_body_content_right",
         "horizontal_overflow",
         "overflow_x",
         "client_width",
@@ -1331,8 +1353,12 @@ def _valid_file_list_evidence(
         )
         or value["notes_resizer_absent"] is not True
         or value["initial_layout_frozen"] is not False
+        or value["normal_columns_align"] is not True
         or value["frozen_layout_active"] is not True
         or value["column_resize_changes_width"] is not True
+        or value["resized_columns_align"] is not True
+        or value["narrow_columns_align"] is not True
+        or value["constrained_columns_align"] is not True
         or any(
             type(value[name]) not in {int, float}
             or not math.isfinite(value[name])
@@ -1353,10 +1379,18 @@ def _valid_file_list_evidence(
                 "viewport_restored_right",
                 "name_minimum",
                 "notes_minimum",
-                "floor_minimum",
-                "effective_minimum",
                 "constrained_grid_width",
                 "constrained_right_span",
+                "outer_scroll_amount",
+                "scroll_header_delta",
+                "scroll_body_delta",
+                "max_scroll_header_right",
+                "max_scroll_body_right",
+                "max_scroll_viewport_right",
+                "max_scroll_header_content_right",
+                "max_scroll_body_content_right",
+                "header_inline_gutter_width",
+                "body_inline_gutter_width",
             )
         )
         or value["viewport_resize_amount"] <= 0
@@ -1411,6 +1445,27 @@ def _valid_file_list_evidence(
         or value["checkbox_count"] != expected_count
         or value["body_ends_at_last_row"] is not True
         or value["body_height_matches_rows"] is not True
+        or value["vertical_body_overflows"] is not True
+        or value["vertical_columns_align"] is not True
+        or value["vertical_body_below_header"] is not True
+        or value["vertical_header_client_width"] != value["vertical_body_client_width"]
+        or value["header_inline_gutter_width"] != value["body_inline_gutter_width"]
+        or value["header_inline_gutter_width"] < 0
+        or value["empty_header_client_width"] != value["vertical_header_client_width"]
+        or value["empty_body_client_width"] != value["vertical_body_client_width"]
+        or type(value["header_scrollbar_width"]) is not str
+        or not value["header_scrollbar_width"]
+        or value["header_scrollbar_width"] != value["body_scrollbar_width"]
+        or value["header_scrollbar_gutter"] != "stable"
+        or value["body_scrollbar_gutter"] != "stable"
+        or value["outer_scroll_amount"] <= 0
+        or abs(value["scroll_header_delta"] + value["outer_scroll_amount"]) > 0.75
+        or abs(value["scroll_body_delta"] + value["outer_scroll_amount"]) > 0.75
+        or value["inner_horizontal_scroll_lefts"] != [0, 0]
+        or abs(value["max_scroll_header_right"] - value["max_scroll_body_right"]) > 0.75
+        or value["max_scroll_header_right"] > value["max_scroll_viewport_right"] + 0.75
+        or value["max_scroll_header_right"] > value["max_scroll_header_content_right"] + 0.75
+        or value["max_scroll_body_right"] > value["max_scroll_body_content_right"] + 0.75
         or value["horizontal_overflow"] is not True
         or value["overflow_x"] != "auto"
         or type(value["client_width"]) not in {int, float}

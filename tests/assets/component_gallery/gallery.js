@@ -671,13 +671,13 @@ async function reportFailure(error) {
     const heading = document.createElement("h2");
     renderText(heading, title);
     const list = document.createElement("div");
-    list.className = "nami-file-list";
+    list.className = "nami-file-list nami-table-scroll";
     list.setAttribute("role", "table");
     list.setAttribute("aria-label", label);
     const grid = document.createElement("div");
-    grid.className = "nami-file-list__grid";
+    grid.className = "nami-file-list__grid nami-table-layout";
     const header = document.createElement("div");
-    header.className = "nami-file-list__header";
+    header.className = "nami-file-list__header nami-table__header";
     header.setAttribute("role", "row");
     const columnNames = ["selection", "name", "size", "primary", "secondary", "notes"];
     const rootFontSize = parseFloat(
@@ -727,7 +727,7 @@ async function reportFailure(error) {
       header.append(cell);
     }
     const body = document.createElement("div");
-    body.className = "nami-file-list__body";
+    body.className = "nami-file-list__body nami-table__body";
     body.setAttribute("role", "rowgroup");
     for (const definition of definitions) {
       const row = document.createElement("div");
@@ -837,18 +837,12 @@ async function reportFailure(error) {
     const resizeState = {
       frozen: false,
       widths: null,
-      effectiveMinimum: rootFontSize * 48,
     };
     const applyFrozenLayout = () => {
       if (!resizeState.frozen || !Array.isArray(resizeState.widths)) {
         return;
       }
       const widths = resizeState.widths;
-      resizeState.effectiveMinimum = Math.max(
-        rootFontSize * 48,
-        widths[0] + columnMinimums[1] + widths[2] + widths[3]
-          + widths[4] + widths[5],
-      );
       grid.style.cssText = [
         `--nami-file-column-selection: ${widths[0].toFixed(3)}px`,
         "--nami-file-column-name: minmax(12rem, 1fr)",
@@ -856,7 +850,6 @@ async function reportFailure(error) {
         `--nami-file-column-primary: ${widths[3].toFixed(3)}px`,
         `--nami-file-column-secondary: ${widths[4].toFixed(3)}px`,
         `--nami-file-column-notes: ${widths[5].toFixed(3)}px`,
-        `min-inline-size: ${resizeState.effectiveMinimum.toFixed(3)}px`,
       ].join("; ");
       grid.dataset.columnsFrozen = "true";
     };
@@ -1334,9 +1327,24 @@ async function reportFailure(error) {
         listWidth: Number(listBounds.width.toFixed(3)),
       };
     };
+    const columnsAlign = () => {
+      const row = body.firstElementChild;
+      if (!(row instanceof HTMLElement)) return false;
+      const headerLefts = [...header.children].map(
+        (cell) => cell.getBoundingClientRect().left,
+      );
+      const bodyLefts = [...row.children].map(
+        (cell) => cell.getBoundingClientRect().left,
+      );
+      return headerLefts.length === bodyLefts.length
+        && headerLefts.every(
+          (left, index) => Math.abs(left - bodyLefts[index]) <= 0.5,
+        );
+    };
     const initialLayoutFrozen = grid.dataset.columnsFrozen === "true";
     planSection.style.setProperty("inline-size", "70rem");
     const initialGeometry = geometry();
+    const normalColumnsAlign = columnsAlign();
     nameResizer.dispatchEvent(new PointerEvent("pointerdown", {
       bubbles: true,
       clientX: 200,
@@ -1353,6 +1361,7 @@ async function reportFailure(error) {
       clientX: 200 + requestedPointerDelta,
     }));
     const pointerGeometry = geometry();
+    const resizedColumnsAlign = columnsAlign();
     const resizeDelta = pointerGeometry.widths[1] - frozenGeometry.widths[1];
     const notesResizeDelta = pointerGeometry.widths[5]
       - frozenGeometry.widths[5];
@@ -1375,6 +1384,7 @@ async function reportFailure(error) {
       `${keyboardGeometry.listWidth - viewportResizeAmount}px`,
     );
     const viewportNarrowGeometry = geometry();
+    const narrowColumnsAlign = columnsAlign();
     list.style.removeProperty("inline-size");
     const viewportRestoredGeometry = geometry();
 
@@ -1393,10 +1403,10 @@ async function reportFailure(error) {
     window.dispatchEvent(new PointerEvent("pointermove", { clientX: -9800 }));
     window.dispatchEvent(new PointerEvent("pointerup", { clientX: -9800 }));
     const nameMinimumGeometry = geometry();
-    const effectiveMinimum = parseFloat(grid.style.minInlineSize);
 
     list.style.setProperty("inline-size", "36rem");
     const constrainedGeometry = geometry();
+    const constrainedColumnsAlign = columnsAlign();
     const renderedRows = [...body.children];
     const rows = renderedRows.map((row, index) => {
       if (!(row instanceof HTMLElement)) {
@@ -1547,6 +1557,56 @@ async function reportFailure(error) {
       0,
     );
     const headerStyle = getComputedStyle(header);
+    const bodyStyle = getComputedStyle(body);
+    const headerScrollbarStyle = getComputedStyle(
+      header,
+      "::-webkit-scrollbar",
+    );
+    const bodyScrollbarStyle = getComputedStyle(
+      body,
+      "::-webkit-scrollbar",
+    );
+    grid.style.setProperty("block-size", "12rem");
+    const retainedRows = [...body.children];
+    body.replaceChildren();
+    const emptyHeaderClientWidth = header.clientWidth;
+    const emptyBodyClientWidth = body.clientWidth;
+    body.append(...retainedRows);
+    const verticalHeaderBounds = header.getBoundingClientRect();
+    const verticalBodyBounds = body.getBoundingClientRect();
+    const verticalRow = renderedRows[0];
+    const verticalHeaderLefts = headerCells.map((cell) =>
+      Number(cell.getBoundingClientRect().left.toFixed(3)));
+    const verticalBodyLefts = [...verticalRow.children].map((cell) =>
+      Number(cell.getBoundingClientRect().left.toFixed(3)));
+    const verticalBodyOverflows = body.scrollHeight > body.clientHeight;
+    const verticalColumnsAlign = verticalHeaderLefts.every((left, index) =>
+      Math.abs(left - verticalBodyLefts[index]) <= 0.5);
+    const verticalBodyBelowHeader = verticalBodyBounds.top
+      >= verticalHeaderBounds.bottom - 0.5;
+    const verticalHeaderClientWidth = header.clientWidth;
+    const verticalBodyClientWidth = body.clientWidth;
+    const outerScrollStart = list.scrollLeft;
+    const scrollHeaderStart = headerCells[0].getBoundingClientRect().left;
+    const scrollBodyStart = verticalRow.children[0].getBoundingClientRect().left;
+    list.scrollLeft = Math.min(48, list.scrollWidth - list.clientWidth);
+    const outerScrollAmount = list.scrollLeft - outerScrollStart;
+    const scrollHeaderDelta = headerCells[0].getBoundingClientRect().left
+      - scrollHeaderStart;
+    const scrollBodyDelta = verticalRow.children[0].getBoundingClientRect().left
+      - scrollBodyStart;
+    const innerHorizontalScrollLefts = [header.scrollLeft, body.scrollLeft];
+    list.scrollLeft = list.scrollWidth;
+    const maxScrollHeaderRight = headerCells.at(-1).getBoundingClientRect().right;
+    const maxScrollBodyRight = verticalRow.lastElementChild
+      .getBoundingClientRect().right;
+    const maxScrollViewportRight = list.getBoundingClientRect().right;
+    const maxScrollHeaderContentRight = header.getBoundingClientRect().left
+      + header.clientWidth;
+    const maxScrollBodyContentRight = body.getBoundingClientRect().left
+      + body.clientWidth;
+    list.scrollLeft = outerScrollStart;
+    grid.style.removeProperty("block-size");
     const resizerElements = [...header.querySelectorAll(
       ".nami-file-list__column-resizer",
     )];
@@ -1578,6 +1638,7 @@ async function reportFailure(error) {
         '.nami-file-list__column-resizer[data-column="notes"]',
       ) === null,
       initial_layout_frozen: initialLayoutFrozen,
+      normal_columns_align: normalColumnsAlign,
       initial_column_widths: initialGeometry.widths,
       initial_column_lefts: initialGeometry.lefts,
       initial_right: initialGeometry.right,
@@ -1589,6 +1650,7 @@ async function reportFailure(error) {
       pointer_column_lefts: pointerGeometry.lefts,
       pointer_right: pointerGeometry.right,
       column_resize_changes_width: columnResizeChangesWidth,
+      resized_columns_align: resizedColumnsAlign,
       requested_pointer_delta: requestedPointerDelta,
       column_resize_delta: Number(resizeDelta.toFixed(3)),
       column_notes_delta: Number(notesResizeDelta.toFixed(3)),
@@ -1602,18 +1664,18 @@ async function reportFailure(error) {
       viewport_narrow_right: viewportNarrowGeometry.right,
       viewport_narrow_right_span: viewportNarrowGeometry.rightSpan,
       viewport_narrow_list_width: viewportNarrowGeometry.listWidth,
+      narrow_columns_align: narrowColumnsAlign,
       viewport_restored_widths: viewportRestoredGeometry.widths,
       viewport_restored_right: viewportRestoredGeometry.right,
       notes_minimum_widths: notesMinimumGeometry.widths,
       name_minimum_widths: nameMinimumGeometry.widths,
       name_minimum: rootFontSize * 12,
       notes_minimum: rootFontSize * 14,
-      floor_minimum: rootFontSize * 48,
-      effective_minimum: effectiveMinimum,
       constrained_column_widths: constrainedGeometry.widths,
       constrained_grid_width: constrainedGeometry.gridWidth,
       constrained_right_span: constrainedGeometry.right
         - list.getBoundingClientRect().left,
+      constrained_columns_align: constrainedColumnsAlign,
       header_foreground: headerStyle.color,
       header_background: headerStyle.backgroundColor,
       header_texts: headerCells.map((cell) => cell.textContent),
@@ -1627,6 +1689,28 @@ async function reportFailure(error) {
         bodyBounds.bottom - lastRow.getBoundingClientRect().bottom,
       ) < 0.5,
       body_height_matches_rows: Math.abs(bodyBounds.height - rowsHeight) < 0.5,
+      vertical_body_overflows: verticalBodyOverflows,
+      vertical_columns_align: verticalColumnsAlign,
+      vertical_body_below_header: verticalBodyBelowHeader,
+      vertical_header_client_width: verticalHeaderClientWidth,
+      vertical_body_client_width: verticalBodyClientWidth,
+      header_inline_gutter_width: header.offsetWidth - header.clientWidth,
+      body_inline_gutter_width: body.offsetWidth - body.clientWidth,
+      empty_header_client_width: emptyHeaderClientWidth,
+      empty_body_client_width: emptyBodyClientWidth,
+      header_scrollbar_width: headerScrollbarStyle.width,
+      body_scrollbar_width: bodyScrollbarStyle.width,
+      header_scrollbar_gutter: headerStyle.scrollbarGutter,
+      body_scrollbar_gutter: bodyStyle.scrollbarGutter,
+      outer_scroll_amount: outerScrollAmount,
+      scroll_header_delta: scrollHeaderDelta,
+      scroll_body_delta: scrollBodyDelta,
+      inner_horizontal_scroll_lefts: innerHorizontalScrollLefts,
+      max_scroll_header_right: maxScrollHeaderRight,
+      max_scroll_body_right: maxScrollBodyRight,
+      max_scroll_viewport_right: maxScrollViewportRight,
+      max_scroll_header_content_right: maxScrollHeaderContentRight,
+      max_scroll_body_content_right: maxScrollBodyContentRight,
       horizontal_overflow: list.scrollWidth > list.clientWidth,
       overflow_x: getComputedStyle(list).overflowX,
       client_width: list.clientWidth,

@@ -206,14 +206,76 @@ _EDITABLE_SCRIPT = r"""
   const offlineDot = mixedStatuses.find((item) => item.dataset.availability === "offline")?.querySelector(".nami-setup__availability-dot");
   const onlineSelect = onlinePair.querySelector(".nami-setup__pair-select");
   const offlineSelect = offlinePair.querySelector(".nami-setup__pair-select");
+  const recentPathButtonFillsColumn = [onlineSelect, offlineSelect].every((button) => {
+    const cell = button?.closest("td");
+    return button instanceof HTMLButtonElement && cell instanceof HTMLTableCellElement &&
+      button.getBoundingClientRect().width > 0 &&
+      Math.abs(button.getBoundingClientRect().width - cell.getBoundingClientRect().width) <= 0.5;
+  });
   const mixedStatusBounds = mixedStatuses.map((item) => item.getBoundingClientRect());
   const mixedPathBounds = Array.from(offlinePaths).map((item) => item.getBoundingClientRect());
   const recentTable = document.querySelector(".nami-setup__recent-pair-table");
   const recentViewport = recentTable.closest(".nami-setup__pair-viewport");
   const recentHead = recentTable.querySelector("thead");
+  const recentBody = recentTable.querySelector("tbody");
+  const recentHeaderRow = recentHead.querySelector("tr");
   const tableStyle = getComputedStyle(recentTable);
   const viewportStyle = getComputedStyle(recentViewport);
+  const headStyle = getComputedStyle(recentHead);
+  const bodyStyle = getComputedStyle(recentBody);
   const recentPlaceholders = Array.from(recentTable.querySelectorAll(".nami-setup__pair-placeholder"));
+  const pairRows = Array.from(recentBody.children);
+  const firstPairRow = pairRows[0];
+  const columnLefts = (row) => Array.from(row.children).map((cell) =>
+    Number(cell.getBoundingClientRect().left.toFixed(3)));
+  const defaultHeaderLefts = columnLefts(recentHeaderRow);
+  const defaultBodyLefts = columnLefts(firstPairRow);
+  const defaultBodyWidth = recentBody.clientWidth;
+  const priorHidden = pairRows.map((row) => row.hidden);
+  pairRows.forEach((row) => { row.hidden = true; });
+  const emptyBodyWidth = recentBody.clientWidth;
+  pairRows.forEach((row, index) => { row.hidden = priorHidden[index]; });
+  firstPairRow.style.setProperty("block-size", "24rem");
+  const headerTopBeforeBodyScroll = recentHead.getBoundingClientRect().top;
+  recentBody.scrollTop = 40;
+  const headerFixedDuringBodyScroll = Math.abs(
+    recentHead.getBoundingClientRect().top - headerTopBeforeBodyScroll,
+  ) <= 0.5;
+  recentBody.scrollTop = 0;
+  const overflowingBodyWidth = recentBody.clientWidth;
+  const bodyOverflows = recentBody.scrollHeight > recentBody.clientHeight;
+  firstPairRow.style.removeProperty("block-size");
+  recentViewport.style.setProperty("inline-size", "24rem");
+  const narrowHorizontal = recentViewport.scrollWidth > recentViewport.clientWidth;
+  const narrowHeaderLefts = columnLefts(recentHeaderRow);
+  const narrowBodyLefts = columnLefts(firstPairRow);
+  const narrowViewportHeight = recentViewport.getBoundingClientRect().height;
+  const narrowTableHeight = recentTable.getBoundingClientRect().height;
+  const narrowBodyHeight = recentBody.getBoundingClientRect().height;
+  recentViewport.style.removeProperty("inline-size");
+  const tableGeometry = {
+    viewport_x: viewportStyle.overflowX,
+    viewport_y: viewportStyle.overflowY,
+    header_y: headStyle.overflowY,
+    body_y: bodyStyle.overflowY,
+    header_gutter: headStyle.scrollbarGutter,
+    body_gutter: bodyStyle.scrollbarGutter,
+    viewport_height: recentViewport.getBoundingClientRect().height,
+    header_height: recentHead.getBoundingClientRect().height,
+    body_height: recentBody.getBoundingClientRect().height,
+    body_starts_below_header: recentBody.getBoundingClientRect().top >= recentHead.getBoundingClientRect().bottom - 0.5,
+    default_columns_align: defaultHeaderLefts.every((left, index) => Math.abs(left - defaultBodyLefts[index]) <= 0.5),
+    narrow_columns_align: narrowHeaderLefts.every((left, index) => Math.abs(left - narrowBodyLefts[index]) <= 0.5),
+    narrow_horizontal: narrowHorizontal,
+    narrow_viewport_height: narrowViewportHeight,
+    narrow_table_height: narrowTableHeight,
+    narrow_body_height: narrowBodyHeight,
+    empty_width: emptyBodyWidth,
+    default_width: defaultBodyWidth,
+    overflow_width: overflowingBodyWidth,
+    body_overflows: bodyOverflows,
+    header_fixed_during_body_scroll: headerFixedDuringBodyScroll,
+  };
   const tokenWitness = document.createElement("span");
   tokenWitness.style.cssText = `border-radius: var(--radius-medium); font-size: var(--font-size-caption);
     line-height: var(--line-height-caption); background: var(--color-neutral-surface-selected);`;
@@ -229,7 +291,8 @@ _EDITABLE_SCRIPT = r"""
   const expectedSubtleFill = getComputedStyle(tokenWitness).backgroundColor;
   tokenWitness.remove();
   const tableGalleryStyle = viewportStyle.borderRadius === expectedRadius && parseFloat(tableStyle.borderWidth) === 0 &&
-    viewportStyle.overflowY === "auto" && tableStyle.fontSize === expectedFontSize &&
+    viewportStyle.overflowX === "auto" && viewportStyle.overflowY === "hidden" && bodyStyle.overflowY === "auto" &&
+    tableStyle.fontSize === expectedFontSize &&
     tableStyle.lineHeight === expectedLineHeight && getComputedStyle(recentHead).backgroundColor === expectedHeaderFill &&
     recentHeaders.every((header) => getComputedStyle(header).fontSize === expectedFontSize &&
       getComputedStyle(header).lineHeight === expectedLineHeight) &&
@@ -360,7 +423,7 @@ _EDITABLE_SCRIPT = r"""
     recent_row_height: onlinePair.getBoundingClientRect().height,
     recent_viewport_height: recentViewport.getBoundingClientRect().height,
     recent_header_height: recentHead.getBoundingClientRect().height,
-    recent_header_sticky: getComputedStyle(recentHead).position === "sticky",
+    recent_header_fixed: tableGeometry.header_fixed_during_body_scroll,
     recent_slots_bounded: recentPlaceholders.length === 3 && recentPlaceholders.every((row) =>
       row.ariaHidden === "true" && !row.classList.contains("nami-setup__recent-pair") &&
       !row.classList.contains("nami-setup__batch-row")),
@@ -394,7 +457,9 @@ _EDITABLE_SCRIPT = r"""
     recent_pair_online_offline: onlineStatuses.every((item) => item.dataset.availability === "online"),
     mixed_pair_endpoint_truths: mixedStatuses.map((item) => [item.dataset.endpoint, item.dataset.availability, item.textContent]),
     recent_pair_two_columns: recentHeaders.map((item) => item.textContent).join("|") === "Folders|Availability",
+    recent_path_button_fills_column: recentPathButtonFillsColumn,
     table_gallery_style: tableGalleryStyle,
+    table_geometry: tableGeometry,
     endpoint_statuses_align_with_paths: mixedStatusBounds.length === 2 && mixedPathBounds.length === 2 &&
       mixedStatusBounds.every((rect, index) => Math.abs(rect.top - mixedPathBounds[index].top) <= 2),
     offline_pair_disabled: offlinePair.getAttribute("aria-disabled") === "true",
@@ -695,6 +760,7 @@ _INDEPENDENT_SCRIPT = r"""
   const queuedRows = Array.from(document.querySelectorAll(".nami-setup__batch-row"));
   const batchViewport = document.querySelector(".nami-setup__batch-viewport");
   const batchHeader = batchViewport?.querySelector("thead");
+  const batchBody = batchViewport?.querySelector("tbody");
   const queuedPathsVisible = queuedRows.length === 7 && queuedRows.every((row) => {
     const paths = Array.from(row.querySelectorAll(".nami-setup__batch-path"));
     return paths.length === 2 && paths.every((path, index) =>
@@ -709,10 +775,16 @@ _INDEPENDENT_SCRIPT = r"""
   batchViewport.style.inlineSize = "32rem";
   const queuedNarrowFits = fitsViewport();
   batchViewport.style.removeProperty("inline-size");
+  const batchHeaderTop = batchHeader?.getBoundingClientRect().top;
+  if (batchBody instanceof HTMLTableSectionElement) batchBody.scrollTop = 56;
+  const batchHeaderFixed = batchHeader instanceof HTMLTableSectionElement &&
+    Math.abs(batchHeader.getBoundingClientRect().top - batchHeaderTop) <= 0.5;
+  if (batchBody instanceof HTMLTableSectionElement) batchBody.scrollTop = 0;
   const batchSlotsBounded = batchViewport instanceof HTMLElement && batchHeader instanceof HTMLTableSectionElement &&
+    batchBody instanceof HTMLTableSectionElement &&
     Math.abs(batchViewport.getBoundingClientRect().height - 308) <= 1 &&
-    Math.abs(batchHeader.getBoundingClientRect().height - 28) <= 1 && getComputedStyle(batchHeader).position === "sticky" &&
-    batchViewport.scrollHeight > batchViewport.clientHeight && batchViewport.scrollWidth === batchViewport.clientWidth;
+    Math.abs(batchHeader.getBoundingClientRect().height - 28) <= 1 && batchHeaderFixed &&
+    batchBody.scrollHeight > batchBody.clientHeight && batchViewport.scrollWidth === batchViewport.clientWidth;
   const batchColumnWidths = batchCells?.length === 4 &&
     batchCells[0].getBoundingClientRect().width > batchCells[1].getBoundingClientRect().width &&
     Math.abs(batchCells[3].getBoundingClientRect().width - 48) <= 1 &&
@@ -913,6 +985,24 @@ def _runtime_value(task: object) -> dict[str, object]:
     if type(value) is not dict:
         raise RuntimeError("page Setup probe did not return an object")
     return value
+
+
+def _table_accessibility_evidence(task: object) -> dict[str, int]:
+    if task.IsFaulted or task.IsCanceled:
+        raise RuntimeError("native Setup accessibility probe failed")
+    envelope = json.loads(str(task.Result))
+    nodes = envelope.get("nodes") if type(envelope) is dict else None
+    if type(nodes) is not list:
+        raise RuntimeError("native Setup accessibility tree is invalid")
+    counts = {name: 0 for name in ("table", "rowgroup", "row", "columnheader", "cell")}
+    for node in nodes:
+        if type(node) is not dict or node.get("ignored") is True:
+            continue
+        role = node.get("role")
+        name = role.get("value") if type(role) is dict else None
+        if name in counts:
+            counts[name] += 1
+    return counts
 
 
 def _capture(
@@ -1139,23 +1229,42 @@ def _begin(
                                 def ambiguity_done() -> None:
                                     try:
                                         ambiguity = _runtime_value(ambiguity_task)
-                                        report = {**editable, **frozen, **independent, **ambiguity}
-
-                                        def reload_page() -> None:
-                                            state["report"] = report
-                                            state["stage"] = "reload"
-                                            reload_settings = json.dumps({
-                                                "expression": "location.reload();",
-                                                "awaitPromise": False,
-                                                "returnByValue": True,
-                                            })
-                                            core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", reload_settings)
-
-                                        _capture(
-                                            core, screenshot_dir / "frozen.png", retained,
-                                            reload_page,
-                                            lambda error: recorder.failure("frozen-screenshot", error),
+                                        ax_task = core.CallDevToolsProtocolMethodAsync(
+                                            "Accessibility.getFullAXTree", "{}"
                                         )
+
+                                        def accessibility_done() -> None:
+                                            try:
+                                                accessibility = _table_accessibility_evidence(ax_task)
+                                                report = {
+                                                    **editable,
+                                                    **frozen,
+                                                    **independent,
+                                                    **ambiguity,
+                                                    "table_accessibility": accessibility,
+                                                }
+
+                                                def reload_page() -> None:
+                                                    state["report"] = report
+                                                    state["stage"] = "reload"
+                                                    reload_settings = json.dumps({
+                                                        "expression": "location.reload();",
+                                                        "awaitPromise": False,
+                                                        "returnByValue": True,
+                                                    })
+                                                    core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", reload_settings)
+
+                                                _capture(
+                                                    core, screenshot_dir / "frozen.png", retained,
+                                                    reload_page,
+                                                    lambda error: recorder.failure("frozen-screenshot", error),
+                                                )
+                                            except BaseException as error:
+                                                recorder.failure("accessibility", error)
+
+                                        accessibility_action = Action(accessibility_done)
+                                        retained.append(accessibility_action)
+                                        ax_task.GetAwaiter().OnCompleted(accessibility_action)
                                     except BaseException as error:
                                         recorder.failure("ambiguity", error)
 
