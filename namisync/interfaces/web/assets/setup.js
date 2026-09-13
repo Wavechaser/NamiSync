@@ -2,7 +2,7 @@ import { createIcon } from "./icons.js";
 import { renderFilesystemText, renderText } from "./render.js";
 
 const MAX_BATCH_PAIRS = 48;
-const CALLBACKS = ["onEdit", "onValidate", "onPick", "onRecent", "onRecentPair", "onRefreshRecents", "onMode", "onOption", "onAddFilter", "onRemoveFilter", "onMount", "onPlanAgainMount", "onStartPlan", "onStartInventory", "onAddPair", "onRemoveBatchRow", "onStartBatch", "onPlanAgain"];
+const CALLBACKS = ["onEdit", "onValidate", "onPick", "onRecent", "onRecentPair", "onRefreshRecents", "onMode", "onOption", "onAddFilter", "onRemoveFilter", "onMount", "onPlanAgainMount", "onStartPlan", "onStartInventory", "onAddPair", "onRemoveBatchRow", "onClearBatchResults", "onStartBatch", "onPlanAgain"];
 
 function createButton(text, classes = "nami-button") {
   const button = document.createElement("button");
@@ -186,6 +186,30 @@ function availabilityLabel(state) {
     : state === "unavailable" ? "Unavailable" : state === "checking" ? "Checking…" : "Could not check";
 }
 
+function fillPairPlaceholders(body, count, columns) {
+  body.querySelectorAll(".nami-setup__pair-placeholder").forEach((row) => row.remove());
+  for (let index = count; index < 5; index += 1) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+    row.classList.add("nami-setup__pair-placeholder");
+    row.ariaHidden = "true";
+    cell.colSpan = columns;
+    row.append(cell);
+    body.append(row);
+  }
+}
+
+function batchStatus(row) {
+  if (row.state === "queued") return "Ready";
+  if (row.state === "created") return "Created";
+  if (row.state === "refused") return "Failed";
+  if (row.state === "stopped") return "Stopped";
+  if (row.state === "uncertain") return "Retry needed";
+  if (row.stage === "creating") return "Creating task";
+  if (row.stage === "starting") return "Creating plan";
+  return "Checking folders";
+}
+
 export function createSetupPanel(callbacks) {
   const handlers = {};
   CALLBACKS.forEach((name) => {
@@ -199,7 +223,6 @@ export function createSetupPanel(callbacks) {
   const guidance = document.createElement("p");
   const actionStatus = document.createElement("p");
   const modeGroup = document.createElement("div");
-  const modeLabel = document.createElement("p");
   const mode = document.createElement("div");
   const modeButtons = new Map();
   const source = createLocationRow("source", handlers);
@@ -220,15 +243,20 @@ export function createSetupPanel(callbacks) {
   const startPlan = createButton("Create plan", "nami-button nami-button--primary nami-setup__primary-action");
   const startInventory = createButton("Create inventory", "nami-button nami-button--primary nami-setup__primary-action");
   const addPair = createButton("Add pair", "nami-button nami-setup__pair-action nami-setup__add-pair");
-  const startBatch = createButton("Create pair batch", "nami-button nami-button--primary nami-setup__pair-action");
+  const startBatch = createButton("Create batch", "nami-button nami-button--primary nami-setup__pair-action");
   const planAgain = createButton("Plan again", "nami-button nami-setup__primary-action");
   const planAgainChoices = document.createElement("div");
-  const batch = document.createElement("ol");
+  const batch = document.createElement("div");
+  const batchViewport = document.createElement("div");
+  const batchTable = document.createElement("table");
+  const batchBody = document.createElement("tbody");
+  const batchActions = document.createElement("div");
+  const clearBatch = createButton("Clear results", "nami-button nami-button--subtle nami-setup__clear-batch");
   const recentHeader = document.createElement("div");
   const recentHeading = document.createElement("h2");
   const refreshRecents = createButton("", "nami-button nami-button--subtle nami-button--icon nami-setup__refresh-recents");
-  const recentEmpty = document.createElement("p");
   const recentTable = document.createElement("table");
+  const recentViewport = document.createElement("div");
   const recentBody = document.createElement("tbody");
   const recentRows = new Map();
   let locationContext = null;
@@ -240,15 +268,13 @@ export function createSetupPanel(callbacks) {
   recentCard.classList.add("nami-card", "nami-setup__card", "nami-setup__recent-pairs");
   renderText(heading, "Setup");
   heading.tabIndex = -1;
-  renderText(guidance, "Choose folders to create a reviewed plan or inventory task.");
+  guidance.hidden = true;
   actionStatus.classList.add("nami-field__hint", "nami-setup__action-status");
   actionStatus.setAttribute("role", "status");
   modeGroup.classList.add("nami-setup__mode-group");
-  modeLabel.id = "setup-task-type-label";
-  renderText(modeLabel, "Task type");
   mode.classList.add("nami-segmented", "nami-setup__mode");
   mode.setAttribute("role", "radiogroup");
-  mode.setAttribute("aria-labelledby", modeLabel.id);
+  mode.ariaLabel = "Task type";
   [["sync-plan", "Sync plan"], ["inventory", "Inventory"]].forEach(([value, text]) => {
     const button = createButton(text, "nami-segmented__item");
     button.setAttribute("role", "radio");
@@ -266,7 +292,7 @@ export function createSetupPanel(callbacks) {
     modeButtons.set(value, button);
     mode.append(button);
   });
-  modeGroup.append(modeLabel, mode);
+  modeGroup.append(mode);
   options.classList.add("nami-setup__options");
   primaryOptions.classList.add("nami-setup__primary-options");
   const optionInputs = new Map();
@@ -328,19 +354,46 @@ export function createSetupPanel(callbacks) {
     advancedOptions.hidden = !moreExpanded;
   });
   actions.classList.add("nami-setup__actions");
-  actions.append(startPlan, startInventory, addPair, startBatch, planAgain);
+  actions.append(startPlan, startInventory, addPair, planAgain);
   planAgainChoices.classList.add("nami-setup__plan-again-mounts");
   batch.classList.add("nami-setup__batch");
-  batch.ariaLabel = "Pair creation results";
+  batchViewport.classList.add("nami-setup__pair-viewport", "nami-setup__batch-viewport");
+  batchTable.classList.add("nami-table", "nami-setup__pair-table", "nami-setup__batch-table");
+  batchTable.ariaLabel = "Pair creation results";
+  const batchHead = document.createElement("thead");
+  const batchHeaderRow = document.createElement("tr");
+  ["Folders", "Settings", "Status", "Actions"].forEach((text, index) => {
+    const th = document.createElement("th");
+    const label = document.createElement("span");
+    th.scope = "col";
+    th.classList.add([
+      "nami-setup__batch-folders",
+      "nami-setup__batch-settings",
+      "nami-setup__batch-status-cell",
+      "nami-setup__batch-action-cell",
+    ][index]);
+    if (index === 3) {
+      th.ariaLabel = text;
+    } else {
+      renderText(label, text);
+      th.append(label);
+    }
+    batchHeaderRow.append(th);
+  });
+  batchHead.append(batchHeaderRow);
+  batchTable.append(batchHead, batchBody);
+  batchViewport.append(batchTable);
+  batchActions.classList.add("nami-setup__batch-actions");
+  batchActions.append(clearBatch, startBatch);
+  batch.append(batchViewport, batchActions);
   recentHeader.classList.add("nami-setup__recent-header");
   renderText(recentHeading, "Recent pairs");
   refreshRecents.title = "Refresh recent pairs";
   refreshRecents.ariaLabel = "Refresh recent pairs";
   refreshRecents.append(createIcon(document, "arrow-clockwise", "sm"));
   recentHeader.append(recentHeading, refreshRecents);
-  renderText(recentEmpty, "No recent pairs yet.");
-  recentEmpty.classList.add("nami-shell__guidance", "nami-setup__recent-empty");
-  recentTable.classList.add("nami-table", "nami-setup__recent-pair-table");
+  recentTable.classList.add("nami-table", "nami-setup__pair-table", "nami-setup__recent-pair-table");
+  recentViewport.classList.add("nami-setup__pair-viewport", "nami-setup__recent-pair-viewport");
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
   ["Folders", "Availability"].forEach((text) => {
@@ -351,13 +404,15 @@ export function createSetupPanel(callbacks) {
   });
   thead.append(headerRow);
   recentTable.append(thead, recentBody);
-  setupCard.append(heading, guidance, actionStatus, modeGroup, source.field, target.field, options, actions, planAgainChoices, batch);
-  recentCard.append(recentHeader, recentEmpty, recentTable);
+  recentViewport.append(recentTable);
+  setupCard.append(heading, guidance, actionStatus, modeGroup, source.field, target.field, options, actions, batch, planAgainChoices);
+  recentCard.append(recentHeader, recentViewport);
   root.append(setupCard, recentCard);
   startPlan.addEventListener("click", () => handlers.onStartPlan());
   startInventory.addEventListener("click", () => handlers.onStartInventory());
   addPair.addEventListener("click", () => handlers.onAddPair());
   startBatch.addEventListener("click", () => handlers.onStartBatch());
+  clearBatch.addEventListener("click", () => handlers.onClearBatchResults());
   planAgain.addEventListener("click", () => handlers.onPlanAgain());
   refreshRecents.addEventListener("click", () => handlers.onRefreshRecents());
 
@@ -388,6 +443,7 @@ export function createSetupPanel(callbacks) {
     if (!editable) row.setOpen(false);
   }
   function renderRecentPairs(values, availability, editable) {
+    recentBody.querySelectorAll(".nami-setup__pair-placeholder").forEach((row) => row.remove());
     const retainedIds = new Set(values.map((pair) => pair.mapping_id));
     for (const [mappingId, retained] of recentRows) {
       if (!retainedIds.has(mappingId)) {
@@ -405,6 +461,10 @@ export function createSetupPanel(callbacks) {
         const select = createButton("", "nami-button nami-setup__pair-select");
         const sourcePath = document.createElement("span");
         const targetPath = document.createElement("span");
+        const sourceLabel = document.createElement("span");
+        const targetLabel = document.createElement("span");
+        const sourceValue = document.createElement("span");
+        const targetValue = document.createElement("span");
         const statuses = {};
         row.classList.add("nami-setup__recent-pair");
         row.dataset.mappingId = pair.mapping_id;
@@ -412,6 +472,14 @@ export function createSetupPanel(callbacks) {
         select.dataset.mappingId = pair.mapping_id;
         sourcePath.classList.add("nami-setup__pair-path");
         targetPath.classList.add("nami-setup__pair-path");
+        sourceLabel.classList.add("nami-setup__pair-path-label");
+        targetLabel.classList.add("nami-setup__pair-path-label");
+        sourceValue.classList.add("nami-setup__pair-path-value");
+        targetValue.classList.add("nami-setup__pair-path-value");
+        renderText(sourceLabel, "Source: ");
+        renderText(targetLabel, "Target: ");
+        sourcePath.append(sourceLabel, sourceValue);
+        targetPath.append(targetLabel, targetValue);
         select.append(sourcePath, targetPath);
         paths.append(select);
         const statusCell = document.createElement("td");
@@ -433,7 +501,7 @@ export function createSetupPanel(callbacks) {
         row.addEventListener("click", (event) => {
           if (event.target !== select && !select.contains(event.target) && !select.disabled) select.click();
         });
-        retained = { row, select, sourcePath, targetPath, statuses, pair };
+        retained = { row, select, sourcePath, targetPath, sourceValue, targetValue, statuses, pair };
         recentRows.set(pair.mapping_id, retained);
       }
       retained.pair = pair;
@@ -441,9 +509,9 @@ export function createSetupPanel(callbacks) {
       retained.row.dataset.targetAvailability = states.target;
       retained.row.ariaDisabled = String(!editable || !online);
       retained.select.disabled = !editable || !online;
-      renderFilesystemText(retained.sourcePath, pair.source.display);
+      renderFilesystemText(retained.sourceValue, pair.source.display);
       retained.sourcePath.title = pair.source.display;
-      renderFilesystemText(retained.targetPath, pair.target.display);
+      renderFilesystemText(retained.targetValue, pair.target.display);
       retained.targetPath.title = pair.target.display;
       retained.select.ariaLabel = `Select recent pair ${pair.source.display} to ${pair.target.display}`;
       for (const endpoint of ["source", "target"]) {
@@ -454,7 +522,7 @@ export function createSetupPanel(callbacks) {
         recentBody.insertBefore(retained.row, recentBody.children[index] ?? null);
       }
     });
-    recentEmpty.hidden = values.length !== 0; recentTable.hidden = values.length === 0;
+    fillPairPlaceholders(recentBody, values.length, 2);
   }
   function renderFilters(values, editable) {
     filterList.replaceChildren();
@@ -472,10 +540,14 @@ export function createSetupPanel(callbacks) {
     addFilter.disabled = !editable;
   }
 
-  function renderBatch(rows) {
-    batch.replaceChildren();
+  function renderBatch(rows, currentOptions) {
+    batchBody.replaceChildren();
     rows.forEach((value) => {
-      const item = document.createElement("li");
+      const item = document.createElement("tr");
+      const folders = document.createElement("td");
+      const settings = document.createElement("td");
+      const statusCell = document.createElement("td");
+      const actionCell = document.createElement("td");
       const sourcePath = document.createElement("span");
       const targetPath = document.createElement("span");
       const message = document.createElement("span");
@@ -485,6 +557,10 @@ export function createSetupPanel(callbacks) {
       remove.append(createIcon(document, "dismiss", "sm"));
       item.classList.add("nami-setup__batch-row");
       item.dataset.state = value.state;
+      folders.classList.add("nami-setup__batch-folders");
+      settings.classList.add("nami-setup__batch-settings");
+      statusCell.classList.add("nami-setup__batch-status-cell");
+      actionCell.classList.add("nami-setup__batch-action-cell");
       sourcePath.classList.add("nami-setup__batch-path");
       targetPath.classList.add("nami-setup__batch-path");
       message.classList.add("nami-setup__batch-status");
@@ -502,14 +578,31 @@ export function createSetupPanel(callbacks) {
       }
       sourcePath.title = value.source.text;
       targetPath.title = value.target.text;
-      renderText(message, value.message);
+      const displayedOptions = value.options ?? currentOptions;
+      const verifySetting = document.createElement("span");
+      const deletionSetting = document.createElement("span");
+      renderText(verifySetting, `Verify: ${displayedOptions?.verify_after_execute ? "On" : "Off"}`);
+      renderText(deletionSetting, `Deletion: ${displayedOptions?.deletion_policy === "additive" ? "Additive" : "Trash"}`);
+      settings.append(verifySetting, deletionSetting);
+      renderText(message, batchStatus(value));
+      message.title = value.message;
+      statusCell.ariaDescription = value.message;
       remove.disabled = value.state !== "queued";
       remove.hidden = value.state !== "queued";
       remove.addEventListener("click", () => handlers.onRemoveBatchRow(value));
-      item.append(sourcePath, targetPath, message, remove);
-      batch.append(item);
+      folders.append(sourcePath, targetPath);
+      statusCell.append(message);
+      actionCell.append(remove);
+      item.append(folders, settings, statusCell, actionCell);
+      batchBody.append(item);
     });
+    fillPairPlaceholders(batchBody, rows.length, 4);
     batch.hidden = rows.length === 0;
+    const hasPending = rows.some((row) => ["queued", "submitting", "uncertain"].includes(row.state));
+    const hasRetryable = rows.some((row) => ["queued", "uncertain"].includes(row.state));
+    clearBatch.hidden = !rows.some((row) => ["created", "refused", "stopped"].includes(row.state));
+    startBatch.hidden = !hasPending;
+    startBatch.disabled ||= !hasRetryable;
   }
 
   function renderPlanAgain(snapshot, mounts, editable) {
@@ -550,6 +643,7 @@ export function createSetupPanel(callbacks) {
           ? "Planning is in progress. Reviewed folders and options are frozen."
           : "This plan's reviewed folders and options are frozen.";
       renderText(guidance, message);
+      guidance.hidden = false;
     } else if (setup.task_kind === "inventory") {
       renderText(
         guidance,
@@ -557,8 +651,10 @@ export function createSetupPanel(callbacks) {
           ? "Inventory is being created from the selected root."
           : "This inventory's reviewed root is frozen.",
       );
+      guidance.hidden = false;
     } else {
-      renderText(guidance, "Choose folders to create a reviewed plan or inventory task.");
+      renderText(guidance, "");
+      guidance.hidden = true;
     }
     const editable = model.editable;
     const locked = model.attempt !== null;
@@ -581,6 +677,7 @@ export function createSetupPanel(callbacks) {
       button.disabled = !controlsEditable;
     });
     renderText(actionStatus, model.actionMessage ?? model.batchMessage ?? "");
+    actionStatus.hidden = actionStatus.textContent.length === 0;
     renderLocation(source, model.source, recents.sources, controlsEditable, selectedMode === "inventory" ? "Root" : "Source");
     renderLocation(target, model.target, recents.targets, controlsEditable, "Target");
     target.field.hidden = selectedMode === "inventory";
@@ -625,7 +722,7 @@ export function createSetupPanel(callbacks) {
       || (model.batchCount ?? model.batch.length) >= MAX_BATCH_PAIRS;
     startBatch.hidden = selectedMode !== "sync-plan" || !editable;
     const retryableBatch = model.batch.some((row) => row.state === "uncertain");
-    renderText(startBatch, retryableBatch ? "Retry pair batch" : "Create pair batch");
+    renderText(startBatch, retryableBatch ? "Retry batch" : "Create batch");
     startBatch.disabled = model.closePending || model.batchRunning || locked
       || model.batch.every((row) => !["queued", "uncertain"].includes(row.state));
     planAgain.hidden = !model.canPlanAgain;
@@ -637,7 +734,12 @@ export function createSetupPanel(callbacks) {
       ? model.batchRunning || model.closePending
       : model.closePending || !model.canPlanAgain || locked || model.batchRunning || model.batchPending || unresolved;
     renderPlanAgain(setup.plan_again, model.planAgainMounts, !locked && !model.batchRunning);
-    renderBatch(model.batch.slice(0, MAX_BATCH_PAIRS));
+    const originBatchPending = model.batch.some((row) => ["queued", "submitting", "uncertain"].includes(row.state));
+    if (originBatchPending) {
+      startInventory.hidden = true;
+      planAgain.hidden = true;
+    }
+    renderBatch(model.batch.slice(0, MAX_BATCH_PAIRS), model.options);
   }
   return Object.freeze({ element: root, render });
 }

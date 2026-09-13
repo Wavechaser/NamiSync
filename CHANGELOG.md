@@ -26,17 +26,15 @@ bounded asynchronous task commands, frozen Setup using shared location admission
 and remembered locations, and dormant sync/integrity file-list row renderers. Review content and beta
 packaging remain open.
 
-#### Clarify agent execution boundaries (2026-09-12)
+#### Refine task navigation, Settings and Setup (2026-09-11–13)
 
-- Clarified routine consumer updates within accepted boundaries, completion and
-  task-relevant documentation/testing. Preserved hard-wall and recurrence stops.
-- Retired the completed monolith prerequisite while retaining the current
-  executor settlement stability gate and protected oracle.
-- Aligned the two personal execution/review skills outside this repository:
-  retained GPT-5.6 cost preference and explicit-only execution invocation;
-  clarified existing review authorization and removed the plan-work dependency.
-
-#### Refine task navigation, Settings and Setup (2026-09-11–12)
+- Added a conditional batch table with paths, attempted settings, short statuses,
+  queued removal and explicit clearing of settled results. Single and batch
+  creation actions align right; single Create stays disabled while batching.
+  Results remain with their origin.
+- Compacted recent and batch tables to five 56px row slots under 28px headers,
+  with labelled paths and overflow scrolling. Removed routine Setup headings
+  and hid the app's ordinary Ready label.
 
 - Investigated native Fluent overlay scrollbars: the pinned wrapper does not
   expose the required environment option. Kept browser-default scrolling and
@@ -44,9 +42,7 @@ packaging remain open.
 - Scoped batch feedback to its originating Setup, labelled both paths, and
   allowed queued-row removal without canceling submitted requests. Pending
   reconciliation remains accessible; fresh tasks no longer inherit messages.
-- Reduced recent pairs to 60px rows with matching folder-column insets and
-  consistent unavailable-row hover behavior. Broader batch housing remains
-  discussion-only.
+- Matched recent-pair folder-column insets and unavailable-row hover behavior.
 - Added a minimal Settings/About work page with the existing theme selector,
   preserving task drafts and activity. Task items scroll independently above
   the rail's Settings button.
@@ -78,6 +74,16 @@ packaging remain open.
 - Preserved actual hidden-mode/action visibility and keyboard focus through
   rerenders. Verified with 4,979 ordinary tests (four skips), all 30 installed
   headed tests, 12 import contracts and independent adversarial review.
+
+#### Clarify agent execution boundaries (2026-09-12)
+
+- Clarified routine consumer updates within accepted boundaries, completion and
+  task-relevant documentation/testing. Preserved hard-wall and recurrence stops.
+- Retired the completed monolith prerequisite while retaining the current
+  executor settlement stability gate and protected oracle.
+- Aligned the two personal execution/review skills outside this repository:
+  retained GPT-5.6 cost preference and explicit-only execution invocation;
+  clarified existing review authorization and removed the plan-work dependency.
 
 #### Expand the icon vocabulary and selective usage guidance (2026-09-11)
 

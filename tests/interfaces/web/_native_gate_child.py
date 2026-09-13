@@ -79,10 +79,12 @@ _PACKAGED_POPUP_SCRIPT = r"""
         && Object.keys(value).length === 1
         && value.token === "packaged-popup-ok",
     );
-    document.getElementById("host-status").textContent =
+    const status = document.getElementById("host-status");
+    status.textContent =
       result.token === "packaged-popup-ok"
         ? "Packaged popup gate passed"
         : "Packaged popup gate failed";
+    status.hidden = false;
   };
   window.addEventListener("pywebviewready", onReady);
   if (window.pywebview?.api?.dispatch) {

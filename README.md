@@ -47,7 +47,8 @@ a secured WebView2 host, bounded command/event transport with asynchronous
 completion for small task commands, native folder picking,
 the Fluent/accessibility foundation, process-live blank task creation,
 newest-first navigation and explicit close, frozen Setup with typed/picker/recent
-locations, serial plan and standalone inventory starts, Plan again, a minimal
+locations, compact recent-pair and batch tables with retained creation results,
+serial plan and standalone inventory starts, Plan again, a minimal
 Settings/About page with theme control and independent task-rail scrolling, and dormant
 gallery-proven sync/integrity file-list row renderers. User-facing review content,
 final packaging, and beta

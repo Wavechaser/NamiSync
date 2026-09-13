@@ -73,6 +73,7 @@ class ElementFake {
     const visit = (element) => {
       for (const child of element.children) {
         if (selector === "[role=option]" && child.getAttribute?.("role") === "option") matches.push(child);
+        if (selector === ".nami-setup__pair-placeholder" && child.classList?.values.has("nami-setup__pair-placeholder")) matches.push(child);
         visit(child);
       }
     };
@@ -125,6 +126,7 @@ const panel = createSetupPanel({
   onStartInventory: () => events.push(["start-inventory"]),
   onAddPair: () => events.push(["add-pair"]),
   onRemoveBatchRow: (row) => events.push(["remove-batch", row]),
+  onClearBatchResults: () => events.push(["clear-batch"]),
   onStartBatch: () => events.push(["start-batch"]),
   onPlanAgain: () => events.push(["plan-again"]),
 });
@@ -186,6 +188,9 @@ const mount = byClass(locations[0], "nami-setup__mount");
 assert.equal(mount.dataset.mountIndex, "0");
 mount.dispatch("click");
 const pair = byClass(panel.element, "nami-setup__recent-pair");
+const recentPairTable = byClass(panel.element, "nami-setup__recent-pair-table");
+assert.equal(recentPairTable.children[1].children.length, 5, "recent table retains five row slots");
+assert.ok(allByClass(panel.element, "nami-setup__pair-viewport").length === 2);
 assert.deepEqual(
   allByClass(pair, "nami-setup__availability").map((item) => item.dataset.availability),
   ["online", "online"],
@@ -252,11 +257,12 @@ assert.deepEqual(
   ["Online", "Offline"],
   "a mixed pair retains both endpoint truths while selection is disabled",
 );
-assert.deepEqual(allByClass(offlinePair, "nami-setup__pair-path").map((item) => item.textContent), ["<pair-source>", "pair-target"]);
+assert.deepEqual(allByClass(offlinePair, "nami-setup__pair-path-value").map((item) => item.textContent), ["<pair-source>", "pair-target"]);
 const actions = byClass(panel.element, "nami-setup__actions").children;
 const startPlan = actions[0];
 const addPair = actions[2];
-const startBatch = actions[3];
+const startBatch = byClass(panel.element, "nami-setup__batch-actions").children[1];
+assert.equal(startBatch.textContent, "Create batch");
 assert.equal(startPlan.disabled, true, "an ambiguous row requires an explicit mount choice");
 model.source.location = null;
 model.source.candidate = { kind: "literal_path", path: "C:\\typed", selected_mount: null };
@@ -273,12 +279,32 @@ model.batch = [queuedBatchRow];
 model.batchRunning = true;
 panel.render(model);
 const renderedBatch = byClass(panel.element, "nami-setup__batch-row");
+const batchTable = byClass(panel.element, "nami-setup__batch-table");
+assert.deepEqual(batchTable.children[0].children[0].children.map((item) => item.children[0]?.textContent ?? item.ariaLabel),
+  ["Folders", "Settings", "Status", "Actions"]);
+assert.equal(batchTable.children[1].children.length, 5, "batch table retains five row slots");
+assert.deepEqual(byClass(renderedBatch, "nami-setup__batch-settings").children.map((item) => item.textContent),
+  ["Verify: Off", "Deletion: Trash"]);
 assert.deepEqual(allByClass(renderedBatch, "nami-setup__batch-path").map((item) =>
   [item.children[0].textContent, item.children[1].textContent, item.title]), [
   ["Source: ", "C:\\batch-source", "C:\\batch-source"], ["Target: ", "D:\\batch-target", "D:\\batch-target"],
 ]);
-assert.equal(byClass(renderedBatch, "nami-setup__batch-status").textContent, "Ready to create.");
+assert.equal(byClass(renderedBatch, "nami-setup__batch-status").textContent, "Ready");
+assert.equal(byClass(renderedBatch, "nami-setup__batch-status").title, "Ready to create.");
+assert.equal(startPlan.hidden, false);
+assert.equal(startPlan.disabled, true, "a queued batch keeps single Create visible but unavailable");
+assert.equal(startBatch.hidden, false);
 byClass(renderedBatch, "nami-setup__batch-remove").dispatch("click");
+model.batch = [{ ...queuedBatchRow, state: "created", options: { ...options, deletion_policy: "additive", verify_after_execute: true }, message: "Plan task created." }];
+panel.render(model);
+assert.deepEqual(byClass(byClass(panel.element, "nami-setup__batch-row"), "nami-setup__batch-settings").children.map((item) => item.textContent),
+  ["Verify: On", "Deletion: Additive"], "terminal rows retain their attempted settings");
+assert.equal(startPlan.hidden, false, "single Create stays visible after the batch settles");
+assert.equal(startBatch.hidden, true);
+assert.equal(byClass(panel.element, "nami-setup__clear-batch").hidden, false);
+byClass(panel.element, "nami-setup__clear-batch").dispatch("click");
+model.batch = [queuedBatchRow];
+panel.render(model);
 assert.equal(startPlan.disabled, true, "active batch disables form start");
 assert.equal(startBatch.disabled, true, "active batch disables reentrant batch start");
 model.batchRunning = false;
@@ -318,6 +344,8 @@ const filterInput = filterControls.children[0];
 filterInput.value = "  no-normalize\\  ";
 filterInput.dispatch("keydown", { key: "Enter" });
 const mode = byClass(panel.element, "nami-setup__mode");
+assert.equal(mode.ariaLabel, "Task type");
+assert.equal(byClass(panel.element, "nami-setup__action-status").hidden, true);
 mode.children[0].dispatch("keydown", { key: "ArrowRight" });
 panel.render({
   ...model, options: null, editable: false, mode: "inventory",
@@ -332,6 +360,7 @@ assert.deepEqual(events, [
   ["recent", "source", model.setup.recents.sources[0]],
   ["option", "deletion_policy", "additive"],
   ["remove-batch", queuedBatchRow],
+  ["clear-batch"],
   ["edit", "source", "C:\\edited"],
   ["edit", "source", ""],
   ["edit", "source", "C:\\edited"],

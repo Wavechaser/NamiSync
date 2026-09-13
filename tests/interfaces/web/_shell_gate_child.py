@@ -107,6 +107,7 @@ _INITIAL_PROBE = r"""
   }
   return {
     status: status.textContent,
+    status_hidden: !status.checkVisibility(),
     app_live: app.getAttribute("aria-live"),
     status_role: status.getAttribute("role"),
     status_live: status.getAttribute("aria-live"),
@@ -602,6 +603,7 @@ _FINAL_PROBE = r"""
   const renderedRows = [...treeRoot.querySelectorAll(".nami-tree-row")];
   const spacers = [...treeRoot.querySelectorAll(".nami-tree__spacer")];
   renderModule.renderText(status, __COMPLETE_TEXT__);
+  status.hidden = false;
   return {
     focused_before_tree: focusedBeforeTree,
     zoom: {

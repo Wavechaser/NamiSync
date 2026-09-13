@@ -39,6 +39,11 @@ if (
   throw new TypeError("NamiSync shell elements are unavailable");
 }
 
+function renderHostStatus(message) {
+  renderText(status, message);
+  status.hidden = message === "Ready";
+}
+
 const readiness = installReadinessReceiver(window.chrome.webview);
 const themeCombobox = installThemeCombobox(themeSelector);
 const theme = installThemeSelector(themeCombobox);
@@ -84,6 +89,7 @@ const panel = createWorkPanel({
   onStartInventory: () => { void startCurrentInventory(); },
   onAddPair: addCurrentPair,
   onRemoveBatchRow: removeBatchRow,
+  onClearBatchResults: clearBatchResults,
   onStartBatch: () => { void startPairBatch(); },
   onPlanAgain: () => { void startPlanAgain(); },
 }, settingsView);
@@ -265,7 +271,7 @@ async function createBlankTask() {
   createAttempt = attempt;
   attempt.running = true;
   attempt.retry = null;
-  if (retry !== null) renderText(status, "Retrying task creation…");
+  if (retry !== null) renderHostStatus("Retrying task creation…");
   renderTasks();
   try {
     const result = await (retry === null ? createTask() : retry());
@@ -294,16 +300,14 @@ async function createBlankTask() {
     if (error instanceof TaskCreateUncertainError) {
       attempt.running = false;
       attempt.retry = error.retry;
-      renderText(
-        status,
+      renderHostStatus(
         "Task creation could not be confirmed. Select New task to retry the same request.",
       );
       return;
     }
     createAttempt = null;
     if (epoch === startupEpoch) {
-      renderText(
-        status,
+      renderHostStatus(
         "A task could not be created. Close an unused task or wait, then try again.",
       );
     }
@@ -575,9 +579,7 @@ function batchTaskStartMessage(taskId) {
     const origin = tasks.get(row.originTaskId);
     return `Resolve the batch request in ${origin?.label ?? "its originating task"} before starting this task separately.`;
   }
-  return originHasPendingBatch(taskId)
-    ? "Create, remove, or retry this task's batch pairs before starting it separately."
-    : null;
+  return null;
 }
 
 function locationPurpose(form, rowName) {
@@ -1007,6 +1009,13 @@ function removeBatchRow(row) {
   renderTasks();
 }
 
+function clearBatchResults() {
+  if (pageBatch === null || selectedTaskId === null) return;
+  pageBatch.rows = pageBatch.rows.filter((row) => row.originTaskId !== selectedTaskId
+    || !["created", "refused", "stopped"].includes(row.state));
+  renderTasks();
+}
+
 function currentBatchRun(batch, owner, generation) {
   return pageBatch === batch && batch.running === owner && batch.generation === generation;
 }
@@ -1133,7 +1142,13 @@ async function startPairBatch() {
   batch.running = owner;
   renderTasks();
   try {
-    if (optionsInput !== null) context.options = await prepareSetup(optionsInput);
+    if (optionsInput !== null) {
+      context.options = await prepareSetup(optionsInput);
+      for (const row of rows) {
+        if (batch.rows.includes(row) && row.state === "queued") row.options = cloneOptions(context.options);
+      }
+      renderTasks();
+    }
     for (const row of rows) {
       if (!currentBatchRun(batch, owner, generation) || epoch !== startupEpoch) break;
       if (!batch.rows.includes(row)) continue;
@@ -1245,7 +1260,7 @@ async function finishStartup(epoch, readinessBaseline) {
   void loadDefaultSetup();
   void theme.open(appliedPresentationRevision);
   if (status.textContent === "Starting...") {
-    renderText(status, "Ready");
+    renderHostStatus("Ready");
   }
 }
 
@@ -1310,7 +1325,7 @@ window.addEventListener("pywebviewready", () => {
   theme.invalidate();
   rejectSupersededStartup?.(new StartupSupersededError());
   if (status.textContent === "Ready") {
-    renderText(status, "Starting...");
+    renderHostStatus("Starting...");
   }
   void ensureStartup({ rerun: true });
 });

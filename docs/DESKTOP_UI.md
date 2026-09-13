@@ -764,8 +764,9 @@ Native load alone does not open a document. The packaged module installs its
 neutral readiness receiver before the appearance receiver and shell DOM, then
 sends `shell_ready` through the existing sole `dispatch` function. After safe
 base-surface settlement, the host posts a current-generation nonce; the page
-echoes it through `readiness_echo` and shows `Ready` only after a truthful
-acknowledgement. Startup rechecks document-epoch ownership after each wait, so
+echoes it through `readiness_echo` and records `Ready` only after a truthful
+acknowledgement. The ordinary Ready label is hidden; other host status messages
+remain visible. Startup rechecks document-epoch ownership after each wait, so
 a raw API notification cannot advance a superseded attempt. Ordinary commands
 remain unavailable until native security/load, shell acknowledgement, safe
 surface settlement, and the neutral post/echo roundtrip converge. The nonce is
@@ -778,7 +779,7 @@ earlier generation opened, a reload refusal that
 wins while the host remains open records the diagnosis and uses the ordinary
 bounded service-close state machine, preserving active-work teardown. A close
 already in flight retains ownership and the later refusal cannot replace it.
-The visible `Ready` label waits for the bilateral readiness acknowledgement. A
+The internal `Ready` state waits for the bilateral readiness acknowledgement. A
 same-origin reload closes normal admission until the new packaged document
 completes the same handshake; stale timers, acknowledgements, and queued posts
 cannot settle a later generation.
@@ -986,8 +987,11 @@ ring; forced colors retain a visible outline. Dropdown-option buttons have no
 native resting border, while keyboard-focused options retain the common focus
 indicator. More options, recent-pair Refresh and New task are also transparent
 at rest and use task-card hover/press fills. The square Refresh uses Arrow Clockwise;
-New task uses the larger Add Square Multiple glyph. Create remains left-aligned;
-Add pair and Create pair batch align right.
+New task uses the larger Add Square Multiple glyph. Add pair precedes single
+Create at the right. Single Create remains visible but disabled while the origin
+has queued or unresolved batch work. Create batch appears below its table,
+aligned right. Routine introductory guidance and
+the visible Task type caption are omitted; the switch retains its accessible name.
 
 A path row remains editable before its task starts. Editing an
 accepted path immediately drops the page's slot reference and marks it
@@ -1007,8 +1011,13 @@ Setup shows recent sources, targets, and active pairs derived from ledger runs.
 The recent-pair table reuses file-table surfaces with taller rows, two stacked
 source/target paths in its first column and two aligned endpoint statuses in its
 second. Corners, caption typography, header fill and alternating row surfaces
-match the gallery plan table, with 3.75rem (60px by default) two-line rows and
-12px folder-column header/content insets. Hover, press and keyboard
+match the gallery plan table, with 3.5rem (56px by default) two-line rows,
+1.75rem (28px) headers and 12px folder-column header/content insets. Both recent
+and batch tables reserve five row slots, scrolling additional rows beneath a
+sticky header. Empty slots are inert and excluded from accessibility. Both path
+lines carry Source:/Target: labels. The existing recent-activity query returns
+at most five pairs; the shared table also supports larger batch populations.
+Hover, press and keyboard
 focus paint the whole enabled row, never individual cells. Long
 paths truncate at the tail and retain the full text in a tooltip. Online uses a
 green solid circle; Offline uses red; accompanying text stays neutral. A missing
@@ -1038,7 +1047,14 @@ Stable form elements retain focus and drafts through rail, drain and navigation
 updates; response revisions cannot restore an edited row's old choice. The
 page retains one coordinator of at most 48 pairs. Each row belongs to its
 originating task, and only that Setup displays or starts those rows. Rows show
-source and target paths with their creation status. Remove discards a queued
+source and target paths, Verify and deletion settings, and creation status in a
+conditional table under the composition actions. Queued entries reflect the
+draft options; preparation freezes the attempted settings for every selected
+entry. Ordinary statuses are Ready, Created and Failed; in-flight and uncertain
+requests retain truthful intermediate labels. Results remain visible until
+Clear results removes settled receipts, without closing created tasks or
+discarding unresolved requests. The table hides only when no entries remain.
+Remove discards a queued
 row locally, including while an earlier row is being prepared; the runner
 rechecks row membership before submission. Submitted or uncertain requests
 cannot be removed. Closing the origin discards its queued rows, but its close
@@ -1053,16 +1069,9 @@ explicit current mount when ambiguous, and starts a separate plan with the
 same frozen options and default selection. It copies no execution authority.
 Terminal status alone never fabricates an empty or ready review.
 
-Batch housing investigation (GUI-D5, discussion only): a compact disclosure
-beside the pair actions could show a count/status summary and expand a bounded,
-scrollable list only when pairs exist. An anchored popover would preserve more
-Setup space, but long paths and persistent failure attention need care when it
-closes. A page-level tray would keep batch progress visible across task navigation,
-but introduces another persistent navigation surface. A dedicated Batch page is
-more structure than the current creation-only coordinator needs. Prefer the
-conditional disclosure for a small follow-up: pending composition stays near
-its actions, while created tasks remain the task rail's responsibility. These
-options are not implemented or newly accepted delivery requirements.
+The conditional table keeps batch composition near its actions; created tasks
+remain the task rail's responsibility. The earlier popover, page-level tray and
+dedicated Batch page alternatives remain unimplemented.
 
 Slice 4 establishes only the presentation core and honest shell frame. It adds
 no presentation command or placeholder plan, inventory, history, or control

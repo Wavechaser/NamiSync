@@ -50,6 +50,7 @@ def test_m1_6_installed_setup_flow(
     assert result["typed_refusal"] in {"invalid_path", "missing", "unavailable"}
     assert result["typed_retry_resolved"] is True
     assert result["routine_ready_hint_hidden"] is True
+    assert result["host_ready_hidden"] is True
     assert result["empty_path_hint_hidden"] is True
     assert result["refusal_hint_visible"] is True
     assert result["hostile_filter_inert"] is True
@@ -67,7 +68,11 @@ def test_m1_6_installed_setup_flow(
     assert result["more_idle_transparent"] is True
     assert result["refresh_icon_transparent"] is True
     assert result["refresh_square"] is True
-    assert result["recent_row_height"] == pytest.approx(60, abs=1)
+    assert result["recent_row_height"] == pytest.approx(56, abs=1)
+    assert result["recent_viewport_height"] == pytest.approx(308, abs=1)
+    assert result["recent_header_height"] == pytest.approx(28, abs=1)
+    assert result["recent_header_sticky"] is True
+    assert result["recent_slots_bounded"] is True
     assert result["recent_folder_inset"] == pytest.approx(12, abs=1)
     assert result["advanced_filters_visible"] is True
     assert result["advanced_labels_follow_toggles"] is True
@@ -80,7 +85,7 @@ def test_m1_6_installed_setup_flow(
     assert result["clear_immediately_before_caret"] is True
     assert result["clear_invalidates_immediately"] is True
     assert result["clear_pointer_local"] is True
-    assert result["pair_pointer_states"] is True
+    assert result["pair_pointer_states"] is True, result["pair_pointer_detail"]
     assert result["table_gallery_style"] is True
     assert result["browse_square"] is True
     assert result["pair_actions_right_aligned"] is True
@@ -125,6 +130,14 @@ def test_m1_6_installed_setup_flow(
     assert result["inventory_action_visibility"] is True
     assert result["inventory_inapplicable_hidden"] is True
     assert result["mixed_batch"] is True
+    assert result["batch_paths_visible"] is True
+    assert result["batch_slots_bounded"] is True
+    assert result["batch_column_widths"] is True
+    assert result["batch_no_horizontal_overflow"] is True
+    assert result["batch_action_placement"] is True
+    assert result["batch_clear_left_create_right"] is True
+    assert result["batch_clear_hides_settled"] is True
+    assert result["queued_batch_removable"] is True
     assert result["navigation_retains_frozen"] is True
     assert result["picker_ambiguous"] is True
     assert result["picker_mount_index"] == 1

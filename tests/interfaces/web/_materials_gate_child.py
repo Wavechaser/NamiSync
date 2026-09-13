@@ -90,6 +90,7 @@ _PAGE_PROBE = r"""
   secondBody.textContent = "This specimen makes the base-to-card seam visible.";
   second.append(secondHeading, secondBody);
   status.textContent = __COMPLETE_TEXT__;
+  status.hidden = false;
   app.append(heading, first, second, status);
   await new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve)));

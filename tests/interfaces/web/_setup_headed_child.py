@@ -163,10 +163,10 @@ _EDITABLE_SCRIPT = r"""
   const actionBounds = document.querySelector(".nami-setup__actions").getBoundingClientRect();
   const primaryAction = document.querySelector(".nami-setup__primary-action:not([hidden])");
   const pairActions = Array.from(document.querySelectorAll(".nami-setup__pair-action:not([hidden])"));
-  const pairActionsRightAligned = primaryAction instanceof HTMLButtonElement && pairActions.length === 2 &&
-    primaryAction.getBoundingClientRect().left <= actionBounds.left + 1 &&
-    pairActions[0].getBoundingClientRect().left > primaryAction.getBoundingClientRect().right &&
-    Math.abs(pairActions[1].getBoundingClientRect().right - actionBounds.right) <= 1;
+  const pairActionsRightAligned = primaryAction instanceof HTMLButtonElement && pairActions.length === 1 &&
+    pairActions[0].getBoundingClientRect().right < primaryAction.getBoundingClientRect().left &&
+    primaryAction.getBoundingClientRect().left - pairActions[0].getBoundingClientRect().right <= 9 &&
+    Math.abs(primaryAction.getBoundingClientRect().right - actionBounds.right) <= 1;
   const advancedLabelsFollowToggles = Array.from(advanced.querySelectorAll(".nami-setup__option")).every((label) => {
     const control = label.children[0];
     const caption = label.children[1];
@@ -209,8 +209,11 @@ _EDITABLE_SCRIPT = r"""
   const mixedStatusBounds = mixedStatuses.map((item) => item.getBoundingClientRect());
   const mixedPathBounds = Array.from(offlinePaths).map((item) => item.getBoundingClientRect());
   const recentTable = document.querySelector(".nami-setup__recent-pair-table");
+  const recentViewport = recentTable.closest(".nami-setup__pair-viewport");
   const recentHead = recentTable.querySelector("thead");
   const tableStyle = getComputedStyle(recentTable);
+  const viewportStyle = getComputedStyle(recentViewport);
+  const recentPlaceholders = Array.from(recentTable.querySelectorAll(".nami-setup__pair-placeholder"));
   const tokenWitness = document.createElement("span");
   tokenWitness.style.cssText = `border-radius: var(--radius-medium); font-size: var(--font-size-caption);
     line-height: var(--line-height-caption); background: var(--color-neutral-surface-selected);`;
@@ -225,8 +228,8 @@ _EDITABLE_SCRIPT = r"""
   tokenWitness.style.background = "var(--color-neutral-surface-subtle)";
   const expectedSubtleFill = getComputedStyle(tokenWitness).backgroundColor;
   tokenWitness.remove();
-  const tableGalleryStyle = tableStyle.borderRadius === expectedRadius && parseFloat(tableStyle.borderWidth) === 0 &&
-    tableStyle.overflow === "hidden" && tableStyle.fontSize === expectedFontSize &&
+  const tableGalleryStyle = viewportStyle.borderRadius === expectedRadius && parseFloat(tableStyle.borderWidth) === 0 &&
+    viewportStyle.overflowY === "auto" && tableStyle.fontSize === expectedFontSize &&
     tableStyle.lineHeight === expectedLineHeight && getComputedStyle(recentHead).backgroundColor === expectedHeaderFill &&
     recentHeaders.every((header) => getComputedStyle(header).fontSize === expectedFontSize &&
       getComputedStyle(header).lineHeight === expectedLineHeight) &&
@@ -325,6 +328,8 @@ _EDITABLE_SCRIPT = r"""
     typed_refusal: refusedState,
     typed_retry_resolved: source.dataset.state === "resolved",
     routine_ready_hint_hidden: routineReadyHintHidden,
+    host_ready_hidden: document.querySelector("#host-status")?.textContent === "Ready" &&
+      !document.querySelector("#host-status").checkVisibility(),
     empty_path_hint_hidden: emptyPathHintHidden,
     refusal_hint_visible: refusalHintVisible,
     hostile_filter_inert: document.querySelector("img") === null,
@@ -353,6 +358,12 @@ _EDITABLE_SCRIPT = r"""
     refresh_icon_transparent: refreshIdleTransparent,
     refresh_square: refreshSquare,
     recent_row_height: onlinePair.getBoundingClientRect().height,
+    recent_viewport_height: recentViewport.getBoundingClientRect().height,
+    recent_header_height: recentHead.getBoundingClientRect().height,
+    recent_header_sticky: getComputedStyle(recentHead).position === "sticky",
+    recent_slots_bounded: recentPlaceholders.length === 3 && recentPlaceholders.every((row) =>
+      row.ariaHidden === "true" && !row.classList.contains("nami-setup__recent-pair") &&
+      !row.classList.contains("nami-setup__batch-row")),
     recent_folder_inset: parseFloat(getComputedStyle(onlineSelect).paddingInlineStart) ===
       parseFloat(getComputedStyle(recentHeaders[0]).paddingInlineStart)
       ? parseFloat(getComputedStyle(onlineSelect).paddingInlineStart) : -1,
@@ -389,7 +400,8 @@ _EDITABLE_SCRIPT = r"""
     offline_pair_disabled: offlinePair.getAttribute("aria-disabled") === "true",
     pair_two_line_paths: offlinePaths.length === 2 && offlinePaths[0].getBoundingClientRect().top < offlinePaths[1].getBoundingClientRect().top,
     pair_paths_truncated: pathStyle.textOverflow === "ellipsis" && pathStyle.overflow === "hidden" &&
-      Array.from(offlinePaths).every((item) => item.scrollWidth > item.clientWidth && item.title === item.textContent),
+      Array.from(offlinePaths).every((item) => item.scrollWidth > item.clientWidth &&
+        item.title === item.querySelector(".nami-setup__pair-path-value").textContent),
     availability_dots_distinct: getComputedStyle(onlineDot).backgroundColor !== getComputedStyle(offlineDot).backgroundColor,
     availability_text_neutral: [...mixedStatuses, ...onlineStatuses].every((item) => getComputedStyle(item).color === neutralColor),
     pointer_focus_hidden: pointerFocusHidden,
@@ -676,13 +688,41 @@ _INDEPENDENT_SCRIPT = r"""
   target.dispatchEvent(new Event("input", {bubbles: true}));
   add.click();
   add.click();
+  add.click();
+  add.click();
+  add.click();
+  add.click();
   const queuedRows = Array.from(document.querySelectorAll(".nami-setup__batch-row"));
-  const queuedPathsVisible = queuedRows.length === 3 && queuedRows.every((row) => {
+  const batchViewport = document.querySelector(".nami-setup__batch-viewport");
+  const batchHeader = batchViewport?.querySelector("thead");
+  const queuedPathsVisible = queuedRows.length === 7 && queuedRows.every((row) => {
     const paths = Array.from(row.querySelectorAll(".nami-setup__batch-path"));
     return paths.length === 2 && paths.every((path, index) =>
       path.querySelector(".nami-setup__batch-path-label")?.textContent === (index === 0 ? "Source: " : "Target: ") &&
       path.querySelector(".nami-setup__batch-path-value")?.textContent === path.title);
   });
+  const batchCells = queuedRows[0]?.children;
+  const batchTable = batchViewport?.querySelector(".nami-setup__batch-table");
+  const fitsViewport = () => batchViewport.scrollWidth === batchViewport.clientWidth &&
+    batchTable.getBoundingClientRect().right <= batchViewport.getBoundingClientRect().right + 1;
+  const queuedFullWidthFits = fitsViewport();
+  batchViewport.style.inlineSize = "32rem";
+  const queuedNarrowFits = fitsViewport();
+  batchViewport.style.removeProperty("inline-size");
+  const batchSlotsBounded = batchViewport instanceof HTMLElement && batchHeader instanceof HTMLTableSectionElement &&
+    Math.abs(batchViewport.getBoundingClientRect().height - 308) <= 1 &&
+    Math.abs(batchHeader.getBoundingClientRect().height - 28) <= 1 && getComputedStyle(batchHeader).position === "sticky" &&
+    batchViewport.scrollHeight > batchViewport.clientHeight && batchViewport.scrollWidth === batchViewport.clientWidth;
+  const batchColumnWidths = batchCells?.length === 4 &&
+    batchCells[0].getBoundingClientRect().width > batchCells[1].getBoundingClientRect().width &&
+    Math.abs(batchCells[3].getBoundingClientRect().width - 48) <= 1 &&
+    parseFloat(getComputedStyle(batchCells[0]).paddingInlineStart) ===
+      parseFloat(getComputedStyle(batchHeader.querySelector("th")).paddingInlineStart);
+  const createPlan = Array.from(document.querySelectorAll(".nami-setup__actions button"))
+    .find((button) => button.textContent === "Create plan");
+  const batchFooter = document.querySelector(".nami-setup__batch-actions");
+  const batchActionPlacement = createPlan instanceof HTMLButtonElement && createPlan.checkVisibility() && createPlan.disabled &&
+    batchFooter instanceof HTMLElement && batchFooter.checkVisibility();
   const removable = queuedRows.at(-1)?.querySelector(".nami-setup__batch-remove");
   if (!(removable instanceof HTMLButtonElement) || removable.disabled) throw new Error("queued batch removal is unavailable");
   if (!removable.querySelector(".nami-icon--dismiss") || removable.ariaLabel !== "Remove queued pair" ||
@@ -690,15 +730,29 @@ _INDEPENDENT_SCRIPT = r"""
     throw new Error("queued batch removal is not a transparent dismiss control");
   }
   removable.click();
-  await until(() => document.querySelectorAll(".nami-setup__batch-row").length === 2, "queued batch removal");
-  const batch = Array.from(document.querySelectorAll(".nami-setup__actions button"))
-    .find((button) => button.textContent === "Create pair batch");
+  await until(() => document.querySelectorAll(".nami-setup__batch-row").length === 6 &&
+    document.querySelectorAll(".nami-setup__batch-viewport .nami-setup__pair-placeholder").length === 0, "queued batch removal");
+  const batch = Array.from(document.querySelectorAll(".nami-setup__batch-actions button"))
+    .find((button) => button.textContent === "Create batch");
   if (!(batch instanceof HTMLButtonElement)) throw new Error("batch action is unavailable");
+  const createBatchRight = Math.abs(batch.getBoundingClientRect().right - batchFooter.getBoundingClientRect().right) <= 1;
   batch.click();
   await until(() => {
     const states = Array.from(document.querySelectorAll(".nami-setup__batch-row")).map((item) => item.dataset.state);
-    return states.includes("refused") && states.includes("created") ? states : null;
+    return states.length === 6 && states.includes("refused") && states.includes("created") &&
+      states.every((state) => ["refused", "created"].includes(state)) ? states : null;
   }, "mixed serial batch");
+  const settledFullWidthFits = fitsViewport();
+  batchViewport.style.inlineSize = "32rem";
+  const settledNarrowFits = fitsViewport();
+  batchViewport.style.removeProperty("inline-size");
+  const clearBatch = Array.from(document.querySelectorAll(".nami-setup__batch-actions button"))
+    .find((button) => button.textContent === "Clear results");
+  if (!(clearBatch instanceof HTMLButtonElement) || !clearBatch.checkVisibility()) throw new Error("batch clear action is unavailable");
+  const clearLeftCreateRight = Math.abs(clearBatch.getBoundingClientRect().left - batchFooter.getBoundingClientRect().left) <= 1 &&
+    createBatchRight && !batch.checkVisibility();
+  clearBatch.click();
+  await until(() => !document.querySelector(".nami-setup__batch").checkVisibility(), "cleared settled batch");
   const original = Array.from(document.querySelectorAll(".nami-task-card"))
     .find((button) => button.querySelector(".nami-task-card__title")?.textContent === "Task 1");
   if (!(original instanceof HTMLButtonElement)) throw new Error("original frozen task is unavailable");
@@ -713,6 +767,12 @@ _INDEPENDENT_SCRIPT = r"""
     inventory_inapplicable_hidden: inventoryInapplicableHidden,
     mixed_batch: true,
     batch_paths_visible: queuedPathsVisible,
+    batch_slots_bounded: batchSlotsBounded,
+    batch_column_widths: batchColumnWidths,
+    batch_no_horizontal_overflow: queuedFullWidthFits && queuedNarrowFits && settledFullWidthFits && settledNarrowFits,
+    batch_action_placement: batchActionPlacement,
+    batch_clear_left_create_right: clearLeftCreateRight,
+    batch_clear_hides_settled: true,
     queued_batch_removable: true,
     navigation_retains_frozen: true,
   };
@@ -1002,6 +1062,11 @@ def _pointer_checks(
                                         check_disabled_cells(lambda pair_states: continuation({
                                             "clear_pointer_local": clear_local,
                                             "pair_pointer_states": bool(hover_ok and pressed_ok and pair_states),
+                                            "pair_pointer_detail": {
+                                                "hover": _runtime_value(hover_task),
+                                                "pressed": _runtime_value(pressed_task),
+                                                "disabled": pair_states,
+                                            },
                                         }))
 
                                     mouse("mouseReleased", online, online_released)

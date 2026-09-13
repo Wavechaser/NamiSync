@@ -363,6 +363,26 @@ async function loadScenario({
 {
   const harness = await loadScenario();
   const callbacks = harness.callbacks;
+  callbacks.onEdit("source", "C:\\first-source");
+  callbacks.onEdit("target", "D:\\first-target");
+  callbacks.onAddPair();
+  const firstOriginResult = harness.model.batch[0];
+  firstOriginResult.state = "created";
+  harness.railCallbacks.onCreate();
+  await until(() => harness.task?.taskId === TASK_B && harness.model !== null, "clear-results second origin");
+  callbacks.onEdit("source", "E:\\second-source");
+  callbacks.onEdit("target", "F:\\second-target");
+  callbacks.onAddPair();
+  harness.model.batch[0].state = "refused";
+  callbacks.onClearBatchResults();
+  assert.deepEqual(harness.model.batch, [], "Clear results removes this origin's terminal rows");
+  harness.railCallbacks.onSelect(TASK_A);
+  assert.equal(harness.model.batch[0], firstOriginResult, "Clear results retains terminal rows from other origins");
+}
+
+{
+  const harness = await loadScenario();
+  const callbacks = harness.callbacks;
   callbacks.onEdit("source", "C:\\closing-source");
   callbacks.onEdit("target", "D:\\closing-target");
   callbacks.onAddPair();
@@ -726,7 +746,8 @@ for (const sessionState of ["active", "failed"]) {
   callbacks.onStartPlan();
   await turns();
   assert.equal(prepareCalls, 0, "a pending origin batch blocks a separate form start");
-  assert.match(harness.model.batchMessage, /remove, or retry/);
+  assert.equal(harness.model.batchPending, true);
+  assert.equal(harness.model.batchMessage, null, "ordinary origin batch state needs no generic instruction");
   callbacks.onRemoveBatchRow(harness.model.batch[0]);
   callbacks.onStartPlan();
   await until(() => prepareCalls === 1, "form starts after queued batch removal");
@@ -754,8 +775,11 @@ for (const sessionState of ["active", "failed"]) {
   await turns();
   assert.equal(harness.calls.filter((call) => call[0] === "start-plan").length, 0,
     "active batch blocks form submission");
+  harness.model.options.deletion_policy = "additive";
   batchPrepare.resolve(structuredClone(DEFAULT_OPTIONS));
   await until(() => !harness.model.batchRunning, "batch owner released");
+  assert.equal(harness.model.batch[0].options.deletion_policy, "trash",
+    "the row retains the exact options frozen for its batch gesture");
   callbacks.onStartPlan();
   await until(() => harness.calls.some((call) => call[0] === "start-plan" && call[1] === TASK_A),
     "form start resumes after batch owner");

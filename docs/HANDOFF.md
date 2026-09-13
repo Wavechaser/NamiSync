@@ -1,38 +1,43 @@
 # Latest session handoff
 
-## Scrollbars and batch feedback (2026-09-12)
+## Compact Setup tables and scrollbars (2026-09-13)
 
-Baseline 1bbbeb4 on milestone1. User authorized implementation, review and
-commits for GUI-S4/S5; broader batch housing remains investigation-only (GUI-D5).
+Baseline 46da897 on milestone1. User authorized GUI-S6/S7 implementation,
+review and commits. S6 adds conditional batch results with paths, attempted
+Verify/deletion settings, short truthful statuses, queued dismissal and
+terminal-only Clear results. Results remain with their origin until cleared.
+The page-wide 48-row bound, serial runner, fresh admission and exact uncertain
+retry remain unchanged; clearing receipts never closes created tasks.
 
-S4 found a supported WebView2 FluentOverlay environment option in the bundled
-SDK, but pinned pywebview has no environment-options initialization hook.
-Browser flags are documented as development-only. No host, dependency, vendor,
-environment or scrollbar CSS change was made. DESKTOP_UI records the supported
-native route and CSS alternative; independent review closed this docs-only row
-in 1159abc.
+User refinement changed initial 48px rows to 56px and retained single Create
+as disabled during batching. Both tables reserve five row slots under 28px
+headers (308px total). Add pair precedes Create plan at the right; Create batch
+sits below its table at the right. Folder/header insets match. Empty Actions
+headers retain accessible names, and first-row column widths prevent overflow.
+Routine Setup guidance and the ordinary app Ready label are hidden.
 
-S5 is complete: 60px recent rows, matching 12px folder-column insets,
-consistent disabled-cell hover, path-labelled batch rows scoped to their
-originating task, and transparent dismiss removal before submission. The global 48-row bound,
-single serial runner and exact uncertain retries remain. The origin and any
-adopted task retain unresolved reconciliation through close/start guards and
-action-guiding text. Queued removal is rechecked immediately before submission;
-confirmed origin close clears its accounted rows. New tasks receive no old rows.
+S6 verification passed. Independent source review closed the column
+width and missing geometry-assertion findings. Installed receipts exercise
+queued/settled batch overflow at full and 32rem widths, inert recent placeholders,
+56px/28px/308px geometry, native row hover/press and result clearing. Production
+recents remain capped at five; seven actual batch rows exercise overflow.
+The finite host-status consumer migration makes materials/shell/native test
+fixtures explicitly show their own completion markers; production Ready stays
+hidden. One dark gallery measurement failed generically and did not reproduce;
+no gallery/product workaround was added.
 
-Independent adversarial review passed. Verification: 47 focused checks passed;
-ordinary suite 4,979 passed with four existing skips; all 30 headed interface
-tests passed; all 12 import contracts passed. Evidence is in ignored
-build/gui-icons/gui-s5-focused-05.txt, gui-s5-ordinary-01.txt and
-gui-s5-headed-all-01.txt. Native Setup checks include pointer hover/press over
-both unavailable-row cells, 60px/12px geometry and labelled dismiss removal.
-One pytest/Node slot, external unique basetemps and PIP_NO_CACHE_DIR=1 were used.
-Direct consumer fixtures were migrated; no test module was retired. The older
-same-origin form/batch interlock scenario is superseded by the stronger pending-
-batch form-start guard; independent task forms were not globally serialized.
-No worktree or recovery branch was created. The broader batch surface remains
-discussion-only; a conditional bounded disclosure is the suggested next step.
+Final evidence: gui-s6-ordinary-01.txt records 4,979 passed and four existing
+skips; gui-s6-headed-final-01.txt records all three Setup/shell/task-rail checks
+passed. Gallery/material/native checks passed before the Setup assertion in
+gui-s6-headed-all-03.txt; subsequent product edits affected Setup only.
+gui-s6-imports-01.txt records all 12 import contracts kept. Direct tooltip and
+settings-cell consumers were migrated without retiring assertions.
 
-Relaunch the development app after edits; do not close user-owned windows.
-The WCG shadow finding remains diagnostic and unfixed in BUGS.md. Mica, bridge
-security, domain behavior and release gates are unchanged.
+S7 awaits S6 closure. User chose a small fixed scrollbar gutter with a thin-to-wide
+thumb; native overlay parity is not promised. No host flags, vendor changes or
+dependency updates are authorized. Mica and the unresolved WCG shadow diagnosis
+remain unchanged.
+
+Evidence logs use ignored build/gui-icons/gui-s6-* with unique external
+basetemps and PIP_NO_CACHE_DIR=1. Root owns one pytest/Node slot. Do not close
+user-owned windows; relaunch the development app to load committed changes.

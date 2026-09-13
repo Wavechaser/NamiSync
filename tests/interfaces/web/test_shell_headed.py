@@ -242,6 +242,7 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
 
     assert set(initial) == {
         "status",
+        "status_hidden",
         "app_live",
         "status_role",
         "status_live",
@@ -259,6 +260,7 @@ def test_sh_g_7_installed_shell_tree_keyboard_reflow_and_forced_colors(
     }
     assert {name: value for name, value in initial.items() if name != "layout"} == {
         "status": "Ready",
+        "status_hidden": True,
         "app_live": None,
         "status_role": "status",
         "status_live": "polite",
@@ -650,6 +652,7 @@ def _assert_report_schema(result: object) -> None:
     initial = result["page"]["initial"]
     assert set(initial) == {
         "status",
+        "status_hidden",
         "app_live",
         "status_role",
         "status_live",

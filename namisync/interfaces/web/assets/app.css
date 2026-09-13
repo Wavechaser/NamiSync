@@ -418,16 +418,22 @@ body {
 }
 
 .nami-setup__primary-action {
-  order: 1;
-}
-
-.nami-setup__add-pair {
   margin-inline-start: auto;
   order: 2;
 }
 
+.nami-setup__actions:has(.nami-setup__add-pair:not([hidden])) .nami-setup__primary-action {
+  margin-inline-start: 0;
+}
+
+.nami-setup__add-pair {
+  margin-inline-start: auto;
+  order: 1;
+}
+
 .nami-setup__pair-action {
-  order: 3;
+  margin-inline-start: auto;
+  order: 1;
 }
 
 .nami-setup__more-caret {
@@ -448,36 +454,45 @@ body {
   justify-content: space-between;
 }
 
-.nami-setup__recent-pair-table {
+.nami-setup__pair-viewport {
   background: var(--color-neutral-surface);
-  border: 0;
   border-radius: var(--radius-medium);
+  block-size: 19.25rem;
+  overflow: auto;
+}
+
+.nami-setup__pair-table {
+  border: 0;
   border-collapse: separate;
   border-spacing: 0;
   inline-size: 100%;
   table-layout: fixed;
-  overflow: hidden;
   font-size: var(--font-size-caption);
   line-height: var(--line-height-caption);
 }
 
-.nami-setup__recent-pair-table thead {
+.nami-setup__pair-table thead {
   background: var(--color-neutral-surface-selected);
   color: var(--color-neutral-foreground-secondary);
+  inset-block-start: 0;
+  position: sticky;
+  z-index: 1;
 }
 
-.nami-setup__recent-pair-table :is(th, td) {
+.nami-setup__pair-table :is(th, td) {
   background: var(--color-semantic-transparent);
   border: 0;
-  padding: var(--space-3);
+  padding: var(--space-2) var(--space-3);
   text-align: start;
 }
 
-.nami-setup__recent-pair-table th {
+.nami-setup__pair-table th {
+  block-size: 1.75rem;
   font-weight: var(--font-weight-semibold);
+  padding-block: 0;
 }
 
-.nami-setup__recent-pair-table th:first-child {
+.nami-setup__pair-table th:first-child {
   padding-inline-start: var(--space-4);
 }
 
@@ -486,9 +501,11 @@ body {
   inline-size: 8rem;
 }
 
-.nami-setup__recent-pair {
+.nami-setup__recent-pair,
+.nami-setup__batch-row,
+.nami-setup__pair-placeholder {
   background: var(--color-neutral-surface);
-  block-size: 3.75rem;
+  block-size: 3.5rem;
 }
 
 .nami-setup__recent-pair[aria-disabled="false"] {
@@ -510,7 +527,9 @@ body {
     inset 0 0 0 3px var(--color-focus-ring);
 }
 
-.nami-setup__recent-pair:nth-child(even) {
+.nami-setup__recent-pair:nth-child(even),
+.nami-setup__batch-row:nth-child(even),
+.nami-setup__pair-placeholder:nth-child(even) {
   background: var(--color-neutral-surface-subtle);
 }
 
@@ -529,8 +548,8 @@ body {
   border-radius: 0;
   display: block;
   inline-size: 100%;
-  min-block-size: 3.75rem;
-  padding: var(--space-3);
+  min-block-size: 3.5rem;
+  padding: var(--space-2) var(--space-3);
   padding-inline-start: var(--space-4);
   font: inherit;
   text-align: start;
@@ -601,36 +620,54 @@ body {
 
 }
 
-.nami-setup__batch {
-  display: grid;
+.nami-setup__batch-actions {
+  align-items: center;
+  display: flex;
   gap: var(--space-2);
-  margin: 0;
-  padding-inline-start: var(--space-5);
+  justify-content: space-between;
 }
 
 .nami-setup__batch-row {
-  display: grid;
-  gap: var(--space-1) var(--space-3);
-  grid-template-columns: minmax(0, 1fr) auto;
   overflow-wrap: anywhere;
 }
 
+.nami-setup__batch-folders {
+  inline-size: auto;
+  padding-inline-start: var(--space-4) !important;
+}
+
+.nami-setup__batch-settings {
+  inline-size: 8rem;
+}
+
+.nami-setup__batch-status-cell {
+  inline-size: 6rem;
+}
+
+.nami-setup__batch-action-cell {
+  inline-size: 3rem;
+}
+
 .nami-setup__batch-path,
-.nami-setup__batch-status {
-  grid-column: 1;
+.nami-setup__batch-settings > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nami-setup__batch-status {
   color: var(--color-neutral-foreground-secondary);
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nami-setup__batch-remove {
-  align-self: center;
   block-size: 2rem;
   inline-size: 2rem;
   padding: 0;
-  grid-column: 2;
-  grid-row: 1 / 4;
 }
 
 .nami-shell__empty,

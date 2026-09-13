@@ -540,7 +540,10 @@ def test_br_g_32_production_inert_text_helper_owns_text_writes(
     assert renderer.count(".textContent =") == 1
     assert "element.textContent = text;" in renderer
     assert 'import { renderText } from "./render.js";' in assets["app.js"]
-    assert 'renderText(status, "Ready");' in assets["app.js"]
+    assert "function renderHostStatus(message)" in assets["app.js"]
+    assert "renderText(status, message);" in assets["app.js"]
+    assert 'status.hidden = message === "Ready";' in assets["app.js"]
+    assert 'renderHostStatus("Ready");' in assets["app.js"]
     assert re.search(r"\.textContent\s*=(?!=)", assets["app.js"]) is None
     assert "export function renderFilesystemText(element, text)" in renderer
     assert (
@@ -1180,7 +1183,7 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
     )
     assert startup.index(
         "void theme.open(appliedPresentationRevision);"
-    ) < startup.index('renderText(status, "Ready");')
+    ) < startup.index('renderHostStatus("Ready");')
     assert "await theme.open()" not in startup
     assert "void theme.refresh(revision);" in app
     assert 'window.addEventListener("pywebviewready"' in app
@@ -1191,9 +1194,9 @@ def test_ready_transition_cannot_overwrite_a_native_close_status(
     assert "rejectSupersededStartup?.(new StartupSupersededError());" in app
     assert "error instanceof BridgeTransportError" in app
     assert 'status.textContent === "Ready"' in app
-    assert 'renderText(status, "Starting...");' in app
+    assert 'renderHostStatus("Starting...");' in app
     assert 'status.textContent === "Starting..."' in app
-    assert app.count('renderText(status, "Ready")') == 1
+    assert app.count('renderHostStatus("Ready")') == 1
 
 
 def test_sh_g_7_packaged_shell_has_accessible_process_live_blank_tasks(
@@ -1294,7 +1297,7 @@ def test_sh_g_7_shell_layout_reflows_without_fixed_viewport_clipping(
     assert "height: 100vh" not in app_css
     for selector, declarations in re.findall(r"([^{}]+)\{([^{}]*)\}", app_css.split(".nami-tree", 1)[0]):
         if "overflow: hidden" in declarations:
-            assert selector.strip() in {"#app", ".nami-task-rail", ".nami-setup__recent", ".nami-setup__pair-path", ".nami-setup__recent-pair-table"}
+            assert selector.strip() in {"#app", ".nami-task-rail", ".nami-setup__recent", ".nami-setup__pair-path", ".nami-setup__batch-path,\n.nami-setup__batch-settings > span", ".nami-setup__batch-status"}
     assert "grid-template-rows: auto minmax(0, 1fr);" in app_css
     assert "grid-template-rows: auto minmax(0, 1fr) auto;" in app_css
     assert "--palette-" not in app_css
