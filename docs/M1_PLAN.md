@@ -42,7 +42,7 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | ID | Accepted outcome | Named verification | Status |
 | --- | --- | --- | --- |
 | GUI-S11 | Reference Microsoft button/switch strokes and switch thumb states, correct centering and disabled appearance, and ratify the clear-button gallery sample. | 78 focused, 1,528 interface and all 30 installed checks; official source study and independent review passed. | Complete |
-| GUI-S12 | Use pinned Fluent chevrons in Setup, align availability dots, make pointer-open recents neutral, and retain both batch footer actions whenever the batch table exists. | Icon maintenance/provenance checks, Setup behavior and installed geometry/state checks, interface and combined ordinary/headed gates, independent review. | Pending |
+| GUI-S12 | Use pinned Fluent chevrons in Setup, align availability dots, make pointer-open recents neutral, and retain both batch footer actions whenever the batch table exists. | Pinned-archive icon check, 100 focused, 1,528 interface, 4,983 ordinary (4 existing skips), all 30 installed checks and independent review passed. | Complete |
 
 Boundary: browser presentation and local interaction only. No native backend,
 Mica/shadow, dispatcher, admission, batch-runner or persistence changes. Preserve
@@ -59,18 +59,17 @@ source and browser pixel-snapping limitation are recorded in DESKTOP_UI;
 verification observes the installed environment, not a controlled OS DPI matrix.
 Evidence: build/gui-icons/gui-s11-{focused03,interfaces,headed}.txt.
 
-S12 study at 014613c: setup.js unconditionally clamps recent active index to zero
-on open and gives each batch footer button a separate hidden rule. Keep pointer
-opening unselected, enable active treatment only for keyboard navigation, and
-reset it when closing; preserve option choice, Escape/Tab and refresh focus.
-The batch container alone owns visibility; action eligibility remains disabled
-state and preserves running/locked/close/mode guards. Import four directional
-chevrons through tools/icons.json and tools/icons.py at the existing pin, then
-use 16px up/down glyphs at the two Setup controls. App CSS owns centered icon/dot
-geometry, not runtime measurements. Finite consumers: setup.js/app.css, icon
-catalog/generated outputs, setup_probe.mjs and its static gate, existing Setup
-headed probe/assertions, icon/tool/gallery packaging checks; DESKTOP_UI, this
-register, HANDOFF and CHANGELOG. Revalidate against S11 before implementation.
+S12 was studied at 014613c and revalidated against ffc3e6c. It removes the
+automatic first-item highlight on pointer opening while retaining keyboard
+focus, navigation and selection across pointer handoff. The batch container
+owns footer visibility; each action preserves its eligibility guards. Four
+directional Fluent chevrons are generated from the existing pinned catalog;
+Setup uses centered 16px up/down glyphs and CSS-only optical dot alignment.
+Production remains confined to Setup, app styles and generated icon assets;
+the existing Setup/icon/gallery consumers verify it. The composition-action
+geometry probe now scopes its selector to that row, excluding footer buttons
+inside a hidden ancestor without weakening either row's alignment checks.
+Evidence: build/gui-icons/gui-s12-{focused02,interfaces,ordinary,headed}.txt.
 
 ### Scrollbar layout and Setup polish (2026-09-13)
 

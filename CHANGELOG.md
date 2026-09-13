@@ -32,6 +32,9 @@ packaging remain open.
   thumbs with native hover/press proportions and disabled colors, and ratified
   the shared path Clear button in the gallery. Fractional-DPI pixel snapping
   remains browser-owned.
+- Replaced Setup carets with pinned Fluent chevrons, aligned availability dots,
+  and removed automatic pointer-open recent-folder selection. Batch footer
+  actions now stay with their table and disable when they have no work.
 - Tightened Setup path-label spacing, separated option toggles and aligned
   Source/Target values in paired rows. Lightened disabled dark controls to
   #2a2a2a while preserving light and transparent-control styles.

@@ -358,11 +358,12 @@ body {
 }
 
 .nami-setup__caret {
-  block-size: 0.45rem;
-  border-block-end: 1px solid currentColor;
-  border-inline-end: 1px solid currentColor;
-  inline-size: 0.45rem;
-  transform: rotate(45deg) translateY(-0.12rem);
+  margin: auto;
+}
+
+.nami-setup__recent-trigger[aria-expanded="false"] .nami-setup__caret--up,
+.nami-setup__recent-trigger[aria-expanded="true"] .nami-setup__caret--down {
+  display: none;
 }
 
 .nami-setup__picker,
@@ -441,15 +442,12 @@ body {
 }
 
 .nami-setup__more-caret {
-  block-size: 0.45rem;
-  border-block-end: 1px solid currentColor;
-  border-inline-end: 1px solid currentColor;
-  inline-size: 0.45rem;
-  transform: rotate(45deg) translateY(-0.12rem);
+  margin-inline-start: var(--space-1);
 }
 
-.nami-setup__more-summary[aria-expanded="true"] .nami-setup__more-caret {
-  transform: rotate(225deg) translate(-0.12rem, -0.12rem);
+.nami-setup__more-summary[aria-expanded="false"] .nami-setup__more-caret--up,
+.nami-setup__more-summary[aria-expanded="true"] .nami-setup__more-caret--down {
+  display: none;
 }
 
 .nami-setup__recent-header {
@@ -624,6 +622,7 @@ body {
   border-radius: var(--radius-circular);
   flex: 0 0 auto;
   inline-size: 0.5rem;
+  transform: translateY(1px);
 }
 
 .nami-setup__availability[data-availability="online"] .nami-setup__availability-dot {

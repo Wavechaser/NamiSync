@@ -56,6 +56,7 @@ class ElementFake {
   }
 
   setAttribute(name, value) { this.attributes.set(name, String(value)); }
+  removeAttribute(name) { this.attributes.delete(name); }
   getAttribute(name) {
     const reflected = { "aria-expanded": "ariaExpanded", "aria-disabled": "ariaDisabled", "aria-checked": "ariaChecked" }[name];
     return (reflected === undefined ? undefined : this[reflected]) ?? this.attributes.get(name) ?? null;
@@ -141,7 +142,10 @@ const model = {
     setup_state: "default",
     task_kind: null,
     recents: {
-      sources: [{ location_id: "7", display: "<recent>", last_used_at: "2026-09-11T00:00:00+00:00" }],
+      sources: [
+        { location_id: "7", display: "<recent>", last_used_at: "2026-09-11T00:00:00+00:00" },
+        { location_id: "10", display: "second recent", last_used_at: "2026-09-10T00:00:00+00:00" },
+      ],
       targets: [],
       pairs: [{
         mapping_id: "9",
@@ -203,6 +207,8 @@ assert.equal(byClass(panel.element, "nami-setup__pair-select"), pairSelect, "rec
 assert.equal(globalThis.document.activeElement, pairSelect, "recent pair focus survives a render");
 const recentTrigger = byClass(locations[0], "nami-setup__recent-trigger");
 const recentPopup = byClass(locations[0], "nami-setup__recent-popup");
+assert.deepEqual(allByClass(recentTrigger, "nami-setup__caret").map((item) => item.dataset.icon),
+  ["chevron-down", "chevron-up"]);
 recentTrigger.dispatch("keydown", { key: "ArrowDown" });
 assert.equal(recentTrigger.getAttribute("aria-expanded"), "true");
 recentPopup.dispatch("keydown", { key: "Enter" });
@@ -222,11 +228,28 @@ assert.equal(recentTrigger.disabled, true);
 assert.equal(globalThis.document.activeElement, firstSource, "empty recents restore focus to the editable path");
 model.setup.recents.sources = previousSources;
 panel.render(model);
+recentTrigger.dispatch("click");
+const pointerOptions = recentPopup.querySelectorAll("[role=option]");
+assert.ok(pointerOptions.every((option) => option.getAttribute("data-active") === null),
+  "pointer-open recents have no default active treatment");
+recentTrigger.dispatch("keydown", { key: "ArrowUp" });
+assert.equal(globalThis.document.activeElement, pointerOptions[1], "ArrowUp from neutral opens at the last recent");
+assert.equal(pointerOptions[1].getAttribute("data-active"), "");
+pointerOptions[0].dispatch("pointerenter");
+assert.ok(pointerOptions.every((option) => option.getAttribute("data-active") === null),
+  "pointer handoff clears keyboard active treatment");
+recentPopup.dispatch("keydown", { key: "Enter" });
+assert.equal(events.at(-1)[2], previousSources[1], "Enter chooses the still-focused option after pointer handoff");
+assert.equal(recentPopup.hidden, true);
+assert.ok(pointerOptions.every((option) => option.getAttribute("data-active") === null),
+  "choosing a recent resets active treatment before the next open");
 const moreOptions = byClass(panel.element, "nami-setup__more-summary");
 const advancedOptions = byClass(panel.element, "nami-setup__advanced-options");
 assert.equal(moreOptions.tagName, "BUTTON");
 assert.equal(moreOptions.getAttribute("aria-controls"), "setup-advanced-options");
 assert.equal(moreOptions.getAttribute("aria-expanded"), "false");
+assert.deepEqual(allByClass(moreOptions, "nami-setup__more-caret").map((item) => item.dataset.icon),
+  ["chevron-down", "chevron-up"]);
 assert.equal(advancedOptions.hidden, true);
 moreOptions.dispatch("click");
 assert.equal(moreOptions.getAttribute("aria-expanded"), "true");
@@ -294,20 +317,46 @@ assert.equal(byClass(renderedBatch, "nami-setup__batch-status").title, "Ready to
 assert.equal(startPlan.hidden, false);
 assert.equal(startPlan.disabled, true, "a queued batch keeps single Create visible but unavailable");
 assert.equal(startBatch.hidden, false);
+assert.equal(byClass(panel.element, "nami-setup__clear-batch").hidden, false);
+assert.equal(byClass(panel.element, "nami-setup__clear-batch").disabled, true,
+  "Clear results stays visible but disabled for queued-only rows");
 byClass(renderedBatch, "nami-setup__batch-remove").dispatch("click");
 model.batch = [{ ...queuedBatchRow, state: "created", options: { ...options, deletion_policy: "additive", verify_after_execute: true }, message: "Plan task created." }];
 panel.render(model);
 assert.deepEqual(byClass(byClass(panel.element, "nami-setup__batch-row"), "nami-setup__batch-settings").children.map((item) => item.textContent),
   ["Verify: On", "Deletion: Additive"], "terminal rows retain their attempted settings");
 assert.equal(startPlan.hidden, false, "single Create stays visible after the batch settles");
-assert.equal(startBatch.hidden, true);
+assert.equal(startBatch.hidden, false);
+assert.equal(startBatch.disabled, true, "Create batch stays visible but disabled for settled-only rows");
 assert.equal(byClass(panel.element, "nami-setup__clear-batch").hidden, false);
+assert.equal(byClass(panel.element, "nami-setup__clear-batch").disabled, false);
 byClass(panel.element, "nami-setup__clear-batch").dispatch("click");
 model.batch = [queuedBatchRow];
 panel.render(model);
 assert.equal(startPlan.disabled, true, "active batch disables form start");
 assert.equal(startBatch.disabled, true, "active batch disables reentrant batch start");
 model.batchRunning = false;
+model.batch = [{ ...queuedBatchRow, state: "unknown", message: "Unknown state." }];
+panel.render(model);
+assert.equal(startBatch.hidden, false);
+assert.equal(startBatch.disabled, true, "unknown rows cannot start a batch");
+assert.equal(byClass(panel.element, "nami-setup__clear-batch").disabled, true,
+  "unknown rows cannot be cleared as terminal results");
+model.batch = [{ ...queuedBatchRow, state: "uncertain", message: "Retry this request." }];
+panel.render(model);
+assert.equal(startBatch.textContent, "Retry batch");
+assert.equal(startBatch.disabled, false, "an uncertain row exposes the same-command retry");
+model.mode = "inventory";
+panel.render(model);
+assert.equal(startBatch.hidden, false);
+assert.equal(startBatch.disabled, true, "inventory mode retains but disables the batch retry");
+model.mode = "sync-plan";
+model.editable = false;
+panel.render(model);
+assert.equal(startBatch.hidden, false);
+assert.equal(startBatch.disabled, true, "a noneditable form retains but disables the batch retry");
+model.editable = true;
+model.batch = [queuedBatchRow];
 model.batchCount = 48;
 panel.render(model);
 assert.equal(addPair.disabled, true, "the page-wide batch cap disables Add pair");
@@ -358,6 +407,7 @@ assert.deepEqual(events, [
   ["mount", "source", 0],
   ["recent-pair", model.setup.recents.pairs[0]],
   ["recent", "source", model.setup.recents.sources[0]],
+  ["recent", "source", model.setup.recents.sources[1]],
   ["option", "deletion_policy", "additive"],
   ["remove-batch", queuedBatchRow],
   ["clear-batch"],

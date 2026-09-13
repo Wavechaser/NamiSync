@@ -1009,6 +1009,10 @@ Source/Target label in a compact fixed-width track on the left, an editable path
 standard textbox, with its compact caret button inset on all sides and an accessible
 folder-open Browse button outside on the right. The
 recent dropdown supports keyboard navigation, selection and Escape dismissal.
+Pointer opening leaves its items neutral; keyboard navigation highlights the
+focused item, and pointer movement hands highlighting back to hover. The path
+dropdown and More options use centered 16px Fluent down/up chevrons from the
+pinned local directional set.
 Plan options have no enclosing outline or divider: Verify execution and Additive
 sync switches sit together on the left, in that order, with 16px between them. Additive on maps to
 `additive`; off maps to `trash`. More options
@@ -1065,7 +1069,8 @@ at most five pairs; the shared table also supports larger batch populations.
 Hover, press and keyboard
 focus paint the whole enabled row, never individual cells. Long
 paths truncate at the tail and retain the full text in a tooltip. Online uses a
-green solid circle; Offline uses red; accompanying text stays neutral. A missing
+green solid circle; Offline uses red; accompanying text stays neutral. Status
+dots have a 1px downward optical adjustment beside their captions. A missing
 root or absent volume makes that endpoint Offline. Other resolver refusals show
 Unavailable, and incomplete/failed probes show Checking/Could not check. Only
 pairs with both endpoints Online can be selected; all rows remain visible.
@@ -1099,7 +1104,10 @@ entry. Ordinary statuses are Ready, Created and Failed; in-flight and uncertain
 requests retain truthful intermediate labels. Results remain visible until
 Clear results removes settled receipts, without closing created tasks or
 discarding unresolved requests. The table hides only when no entries remain.
-The right-aligned Create batch footer sits 8px below the table.
+The right-aligned Create batch footer sits 8px below the table. Create batch and
+Clear results both remain visible whenever the table exists. They are disabled
+when no eligible creation/retry or settled result is available, respectively;
+creation also retains the existing editing, closure and in-flight guards.
 Remove discards a queued
 row locally, including while an earlier row is being prepared; the runner
 rechecks row membership before submission. Submitted or uncertain requests

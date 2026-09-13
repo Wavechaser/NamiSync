@@ -142,7 +142,13 @@ def test_m1_6_installed_setup_flow(
     assert result["pair_paths_aligned"] is True
     assert result["pair_paths_truncated"] is True
     assert result["availability_dots_distinct"] is True
+    assert result["availability_dots_shifted"] is True
     assert result["availability_text_neutral"] is True
+    assert result["pointer_open_neutral"] is True
+    assert result["pointer_handoff_neutral"] is True
+    assert result["keyboard_resumes_after_pointer"] is True
+    assert result["recent_chevron_geometry"] is True
+    assert result["more_chevron_geometry"] is True
     assert result["pointer_focus_hidden"] is True
     assert result["keyboard_focus_visible"] is True
     assert result["pair_row_focus_whole"] is True
@@ -169,6 +175,7 @@ def test_m1_6_installed_setup_flow(
     assert result["batch_no_horizontal_overflow"] is True
     assert result["batch_action_placement"] is True
     assert result["batch_clear_left_create_right"] is True
+    assert result["batch_footer_actions_retained"] is True
     assert result["batch_clear_hides_settled"] is True
     assert result["queued_batch_removable"] is True
     assert result["navigation_retains_frozen"] is True

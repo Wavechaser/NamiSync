@@ -35,7 +35,8 @@ function createLocationRow(purpose, handlers) {
   const input = document.createElement("input");
   const clear = createButton("", "nami-button nami-button--clear nami-button--icon nami-setup__clear");
   const recentTrigger = createButton("", "nami-button nami-setup__recent-trigger");
-  const caret = document.createElement("span");
+  const caretDown = createIcon(document, "chevron-down", "sm");
+  const caretUp = createIcon(document, "chevron-up", "sm");
   const popup = document.createElement("div");
   const picker = createButton("", "nami-button nami-button--icon nami-setup__picker");
   const status = document.createElement("p");
@@ -65,9 +66,9 @@ function createLocationRow(purpose, handlers) {
   recentTrigger.setAttribute("aria-controls", `setup-${purpose}-recent-popup`);
   recentTrigger.title = `Choose a recent ${purpose} folder`;
   recentTrigger.ariaLabel = `Choose a recent ${purpose} folder`;
-  caret.classList.add("nami-setup__caret");
-  caret.ariaHidden = "true";
-  recentTrigger.append(caret);
+  caretDown.classList.add("nami-setup__caret", "nami-setup__caret--down");
+  caretUp.classList.add("nami-setup__caret", "nami-setup__caret--up");
+  recentTrigger.append(caretDown, caretUp);
   popup.id = `setup-${purpose}-recent-popup`;
   popup.classList.add("nami-combobox__popup", "nami-setup__recent-popup");
   popup.setAttribute("role", "listbox");
@@ -87,18 +88,18 @@ function createLocationRow(purpose, handlers) {
   function setOpen(open, focus = false, restoreFocus = false) {
     const focusWasInside = !popup.hidden && popup.contains(document.activeElement);
     const allowed = open && !recentTrigger.disabled && locations.length > 0;
+    const options = [...popup.querySelectorAll("[role=option]")];
     popup.hidden = !allowed;
     recentTrigger.ariaExpanded = String(allowed);
     if (!allowed) {
       active = -1;
+      options.forEach((option) => option.removeAttribute("data-active"));
       if (focusWasInside && restoreFocus) {
         if (!recentTrigger.disabled) recentTrigger.focus();
         else if (!input.disabled) input.focus();
       }
       return focusWasInside;
     }
-    active = Math.max(0, Math.min(active, locations.length - 1));
-    const options = [...popup.querySelectorAll("[role=option]")];
     options.forEach((option, index) => option.toggleAttribute("data-active", index === active));
     if (focus) options[active]?.focus();
     return false;
@@ -111,7 +112,12 @@ function createLocationRow(purpose, handlers) {
     recentTrigger.focus();
   }
   function move(delta) {
-    active = (active + delta + locations.length) % locations.length;
+    const options = [...popup.querySelectorAll("[role=option]")];
+    const focused = options.indexOf(document.activeElement);
+    const anchor = active >= 0 ? active : focused;
+    active = anchor < 0
+      ? (delta > 0 ? 0 : locations.length - 1)
+      : (anchor + delta + locations.length) % locations.length;
     setOpen(true, true);
   }
   recentTrigger.addEventListener("click", () => setOpen(popup.hidden));
@@ -126,7 +132,11 @@ function createLocationRow(purpose, handlers) {
   popup.addEventListener("keydown", (event) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); move(event.key === "ArrowDown" ? 1 : -1); }
     else if (event.key === "Home" || event.key === "End") { event.preventDefault(); active = event.key === "Home" ? 0 : locations.length - 1; setOpen(true, true); }
-    else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); choose(active); }
+    else if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      const options = [...popup.querySelectorAll("[role=option]")];
+      choose(active >= 0 ? active : options.indexOf(document.activeElement));
+    }
     else if (event.key === "Escape") { event.preventDefault(); setOpen(false); recentTrigger.focus(); }
     else if (event.key === "Tab") setOpen(false);
   });
@@ -166,6 +176,10 @@ function createLocationRow(purpose, handlers) {
         option.dataset.locationId = location.location_id;
         option.tabIndex = -1;
         renderFilesystemText(option, location.display);
+        option.addEventListener("pointerenter", () => {
+          active = -1;
+          popup.querySelectorAll("[role=option]").forEach((item) => item.removeAttribute("data-active"));
+        });
         option.addEventListener("click", () => choose(index));
         popup.append(option);
       });
@@ -230,7 +244,8 @@ export function createSetupPanel(callbacks) {
   const options = document.createElement("div");
   const primaryOptions = document.createElement("div");
   const moreSummary = createButton("More options", "nami-button nami-button--subtle nami-setup__more-summary");
-  const moreCaret = document.createElement("span");
+  const moreCaretDown = createIcon(document, "chevron-down", "sm");
+  const moreCaretUp = createIcon(document, "chevron-up", "sm");
   const advancedOptions = document.createElement("div");
   const optionsList = document.createElement("div");
   const filters = document.createElement("div");
@@ -306,9 +321,9 @@ export function createSetupPanel(callbacks) {
   primaryOptions.append(verify.label, additive.label, moreSummary);
   moreSummary.ariaExpanded = "false";
   moreSummary.setAttribute("aria-controls", "setup-advanced-options");
-  moreCaret.classList.add("nami-setup__more-caret");
-  moreCaret.ariaHidden = "true";
-  moreSummary.append(moreCaret);
+  moreCaretDown.classList.add("nami-setup__more-caret", "nami-setup__more-caret--down");
+  moreCaretUp.classList.add("nami-setup__more-caret", "nami-setup__more-caret--up");
+  moreSummary.append(moreCaretDown, moreCaretUp);
   optionsList.classList.add("nami-setup__options-list");
   for (const [key, text] of [["trash_on_update", "Move replaced target files to trash"], ["preserve_created", "Preserve creation time"], ["preserve_acl", "Preserve access control lists"], ["propagate_source_casing", "Use source casing"]]) {
     const toggle = createToggle(text, key, handlers.onOption);
@@ -602,10 +617,8 @@ export function createSetupPanel(callbacks) {
     });
     fillPairPlaceholders(batchBody, rows.length, 4);
     batch.hidden = rows.length === 0;
-    const hasPending = rows.some((row) => ["queued", "submitting", "uncertain"].includes(row.state));
     const hasRetryable = rows.some((row) => ["queued", "uncertain"].includes(row.state));
-    clearBatch.hidden = !rows.some((row) => ["created", "refused", "stopped"].includes(row.state));
-    startBatch.hidden = !hasPending;
+    clearBatch.disabled = !rows.some((row) => ["created", "refused", "stopped"].includes(row.state));
     startBatch.disabled ||= !hasRetryable;
   }
 
@@ -724,10 +737,9 @@ export function createSetupPanel(callbacks) {
     addPair.disabled = !controlsEditable || model.batchRunning
       || (!model.source.text && !model.target.text)
       || (model.batchCount ?? model.batch.length) >= MAX_BATCH_PAIRS;
-    startBatch.hidden = selectedMode !== "sync-plan" || !editable;
     const retryableBatch = model.batch.some((row) => row.state === "uncertain");
     renderText(startBatch, retryableBatch ? "Retry batch" : "Create batch");
-    startBatch.disabled = model.closePending || model.batchRunning || locked
+    startBatch.disabled = !editable || selectedMode !== "sync-plan" || model.closePending || model.batchRunning || locked
       || model.batch.every((row) => !["queued", "uncertain"].includes(row.state));
     planAgain.hidden = !model.canPlanAgain;
     const unresolved = setup.plan_again !== null && [

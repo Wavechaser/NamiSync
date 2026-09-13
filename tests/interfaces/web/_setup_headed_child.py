@@ -130,6 +130,24 @@ _EDITABLE_SCRIPT = r"""
   const refreshIdleTransparent = getComputedStyle(refreshControl).backgroundColor === "rgba(0, 0, 0, 0)" &&
     refreshControl.textContent === "" && refreshControl.querySelector(".nami-icon--arrow-clockwise") !== null;
   const refreshSquare = Math.abs(refreshControl.getBoundingClientRect().width - refreshControl.getBoundingClientRect().height) <= 1;
+  recentTrigger.click();
+  const pointerOpenedPopup = await until(() => {
+    const popup = document.querySelector("#setup-source-recent-popup");
+    return popup?.checkVisibility() ? popup : null;
+  }, "pointer-open recent popup");
+  const pointerOpenNeutral = Array.from(pointerOpenedPopup.querySelectorAll("[role=option]"))
+    .every((option) => !option.hasAttribute("data-active"));
+  const visibleRecentChevron = recentTrigger.querySelector(".nami-setup__caret--up");
+  const recentChevronBounds = visibleRecentChevron?.getBoundingClientRect();
+  const recentTriggerBounds = recentTrigger.getBoundingClientRect();
+  const recentChevronGeometry = visibleRecentChevron instanceof HTMLElement &&
+    visibleRecentChevron.classList.contains("nami-icon--chevron-up") &&
+    Math.abs(recentChevronBounds.width - 16) <= 0.5 && Math.abs(recentChevronBounds.height - 16) <= 0.5 &&
+    Math.abs((recentChevronBounds.left + recentChevronBounds.right) / 2 -
+      (recentTriggerBounds.left + recentTriggerBounds.right) / 2) <= 0.5 &&
+    Math.abs((recentChevronBounds.top + recentChevronBounds.bottom) / 2 -
+      (recentTriggerBounds.top + recentTriggerBounds.bottom) / 2) <= 0.5;
+  recentTrigger.click();
   const idlePathStyle = getComputedStyle(source);
   const idlePathAppearance = [idlePathStyle.backgroundColor, idlePathStyle.borderColor, idlePathStyle.borderRadius, idlePathStyle.boxShadow];
   syncMode.focus();
@@ -142,6 +160,13 @@ _EDITABLE_SCRIPT = r"""
   const advancedClosed = more.getAttribute("aria-expanded") === "false" && advanced.hidden && !advanced.checkVisibility();
   more.click();
   await until(() => more.getAttribute("aria-expanded") === "true" && advanced.checkVisibility(), "More options disclosure");
+  const visibleMoreChevron = more.querySelector(".nami-setup__more-caret--up");
+  const moreChevronGeometry = visibleMoreChevron instanceof HTMLElement && visibleMoreChevron.checkVisibility() &&
+    visibleMoreChevron.classList.contains("nami-icon--chevron-up") &&
+    Math.abs(visibleMoreChevron.getBoundingClientRect().width - 16) <= 0.5 &&
+    Math.abs(visibleMoreChevron.getBoundingClientRect().height - 16) <= 0.5 &&
+    Math.abs((visibleMoreChevron.getBoundingClientRect().top + visibleMoreChevron.getBoundingClientRect().bottom) / 2 -
+      (more.getBoundingClientRect().top + more.getBoundingClientRect().bottom) / 2) <= 0.5;
   const setupBounds = document.querySelector(".nami-setup").getBoundingClientRect();
   const workBounds = document.querySelector(".nami-work-panel__body").getBoundingClientRect();
   const primaryBounds = [verifyToggle.closest("label"), additiveToggle.closest("label"), more]
@@ -168,9 +193,10 @@ _EDITABLE_SCRIPT = r"""
     caretBounds.top > pathBounds.top && caretBounds.bottom < pathBounds.bottom &&
     parseFloat(getComputedStyle(source).paddingRight) >= caretBounds.width;
   const browseSquare = Math.abs(picker.getBoundingClientRect().width - picker.getBoundingClientRect().height) <= 1;
-  const actionBounds = document.querySelector(".nami-setup__actions").getBoundingClientRect();
-  const primaryAction = document.querySelector(".nami-setup__primary-action:not([hidden])");
-  const pairActions = Array.from(document.querySelectorAll(".nami-setup__pair-action:not([hidden])"));
+  const compositionActions = document.querySelector(".nami-setup__actions");
+  const actionBounds = compositionActions.getBoundingClientRect();
+  const primaryAction = compositionActions.querySelector(".nami-setup__primary-action:not([hidden])");
+  const pairActions = Array.from(compositionActions.querySelectorAll(".nami-setup__pair-action:not([hidden])"));
   const pairActionsRightAligned = primaryAction instanceof HTMLButtonElement && pairActions.length === 1 &&
     pairActions[0].getBoundingClientRect().right < primaryAction.getBoundingClientRect().left &&
     primaryAction.getBoundingClientRect().left - pairActions[0].getBoundingClientRect().right <= 9 &&
@@ -220,6 +246,7 @@ _EDITABLE_SCRIPT = r"""
   const neutralColor = getComputedStyle(document.querySelector(".nami-setup__recent-pair-table th")).color;
   const onlineDot = mixedStatuses.find((item) => item.dataset.availability === "online")?.querySelector(".nami-setup__availability-dot");
   const offlineDot = mixedStatuses.find((item) => item.dataset.availability === "offline")?.querySelector(".nami-setup__availability-dot");
+  const availabilityDotsShifted = [onlineDot, offlineDot].every((dot) => getComputedStyle(dot).transform === "matrix(1, 0, 0, 1, 0, 1)");
   const onlineSelect = onlinePair.querySelector(".nami-setup__pair-select");
   const offlineSelect = offlinePair.querySelector(".nami-setup__pair-select");
   const recentPathButtonFillsColumn = [onlineSelect, offlineSelect].every((button) => {
@@ -368,6 +395,13 @@ _EDITABLE_SCRIPT = r"""
   const popupOptionsBorderless = popupOptions.every((item) => parseFloat(getComputedStyle(item).borderWidth) === 0);
   const popupFocusIsExclusive = hasFocusRing(recentOption) && popupOptions
     .filter((item) => item !== recentOption).every((item) => !hasFocusRing(item));
+  const pointerHandoffOption = popupOptions.at(-1);
+  pointerHandoffOption.dispatchEvent(new PointerEvent("pointerenter"));
+  const pointerHandoffNeutral = popupOptions.every((item) => !item.hasAttribute("data-active"));
+  recentOption.dispatchEvent(new KeyboardEvent("keydown", {key: "ArrowDown", bubbles: true}));
+  const resumedOption = popupOptions[1] ?? popupOptions[0];
+  const keyboardResumesFromFocus = document.activeElement === resumedOption && resumedOption.hasAttribute("data-active");
+  resumedOption.dispatchEvent(new KeyboardEvent("keydown", {key: "Home", bubbles: true}));
   const dropdownAnchored = recentPopup.parentElement === pathControl &&
     recentPopup.getBoundingClientRect().left >= pathControl.getBoundingClientRect().left &&
     recentPopup.getBoundingClientRect().right <= pathControl.getBoundingClientRect().right;
@@ -490,7 +524,13 @@ _EDITABLE_SCRIPT = r"""
       offlinePathValues.every((value, index) => value.scrollWidth > value.clientWidth &&
         offlinePaths[index].title === value.textContent),
     availability_dots_distinct: getComputedStyle(onlineDot).backgroundColor !== getComputedStyle(offlineDot).backgroundColor,
+    availability_dots_shifted: availabilityDotsShifted,
     availability_text_neutral: [...mixedStatuses, ...onlineStatuses].every((item) => getComputedStyle(item).color === neutralColor),
+    pointer_open_neutral: pointerOpenNeutral,
+    pointer_handoff_neutral: pointerHandoffNeutral,
+    keyboard_resumes_after_pointer: keyboardResumesFromFocus,
+    recent_chevron_geometry: recentChevronGeometry,
+    more_chevron_geometry: moreChevronGeometry,
     pointer_focus_hidden: pointerFocusHidden,
     keyboard_focus_visible: keyboardFocusVisible,
     pair_row_focus_whole: pairRowFocusWhole,
@@ -833,6 +873,8 @@ _INDEPENDENT_SCRIPT = r"""
     ? batchFooter.getBoundingClientRect().top - batchViewport.getBoundingClientRect().bottom : -1;
   const batchActionPlacement = createPlan instanceof HTMLButtonElement && createPlan.checkVisibility() && createPlan.disabled &&
     batchFooter instanceof HTMLElement && batchFooter.checkVisibility() && Math.abs(batchActionGap - 8) <= 1;
+  const queuedClear = batchFooter.querySelector(".nami-setup__clear-batch");
+  const queuedFooterActionsRetained = queuedClear instanceof HTMLButtonElement && queuedClear.checkVisibility() && queuedClear.disabled;
   const removable = queuedRows.at(-1)?.querySelector(".nami-setup__batch-remove");
   if (!(removable instanceof HTMLButtonElement) || removable.disabled) throw new Error("queued batch removal is unavailable");
   if (!removable.querySelector(".nami-icon--dismiss") || removable.ariaLabel !== "Remove queued pair" ||
@@ -860,7 +902,7 @@ _INDEPENDENT_SCRIPT = r"""
     .find((button) => button.textContent === "Clear results");
   if (!(clearBatch instanceof HTMLButtonElement) || !clearBatch.checkVisibility()) throw new Error("batch clear action is unavailable");
   const clearLeftCreateRight = Math.abs(clearBatch.getBoundingClientRect().left - batchFooter.getBoundingClientRect().left) <= 1 &&
-    createBatchRight && !batch.checkVisibility();
+    createBatchRight && batch.checkVisibility() && batch.disabled && !clearBatch.disabled;
   clearBatch.click();
   await until(() => !document.querySelector(".nami-setup__batch").checkVisibility(), "cleared settled batch");
   const original = Array.from(document.querySelectorAll(".nami-task-card"))
@@ -883,6 +925,7 @@ _INDEPENDENT_SCRIPT = r"""
     batch_no_horizontal_overflow: queuedFullWidthFits && queuedNarrowFits && settledFullWidthFits && settledNarrowFits,
     batch_action_placement: batchActionPlacement,
     batch_clear_left_create_right: clearLeftCreateRight,
+    batch_footer_actions_retained: queuedFooterActionsRetained,
     batch_clear_hides_settled: true,
     queued_batch_removable: true,
     navigation_retains_frozen: true,

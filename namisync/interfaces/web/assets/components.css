@@ -755,6 +755,30 @@ body {
   --nami-icon-mask-lg: url("./icons/checkmark_circle_24_regular.svg");
 }
 
+.nami-icon--chevron-down {
+  --nami-icon-mask-sm: url("./icons/chevron_down_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/chevron_down_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/chevron_down_24_regular.svg");
+}
+
+.nami-icon--chevron-left {
+  --nami-icon-mask-sm: url("./icons/chevron_left_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/chevron_left_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/chevron_left_24_regular.svg");
+}
+
+.nami-icon--chevron-right {
+  --nami-icon-mask-sm: url("./icons/chevron_right_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/chevron_right_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/chevron_right_24_regular.svg");
+}
+
+.nami-icon--chevron-up {
+  --nami-icon-mask-sm: url("./icons/chevron_up_16_regular.svg");
+  --nami-icon-mask-md: url("./icons/chevron_up_20_regular.svg");
+  --nami-icon-mask-lg: url("./icons/chevron_up_24_regular.svg");
+}
+
 .nami-icon--clipboard-paste {
   --nami-icon-mask-sm: url("./icons/clipboard_paste_16_regular.svg");
   --nami-icon-mask-md: url("./icons/clipboard_paste_20_regular.svg");
