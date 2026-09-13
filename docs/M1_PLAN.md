@@ -43,7 +43,7 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 | --- | --- | --- | --- |
 | GUI-S6 | Conditional batch table retains results until cleared, shows paths/settings/short truthful status and queued removal; both tables use five 56px row slots and 28px headers with matching folder insets. Add pair precedes Create plan at the right; Create plan remains disabled during batching, and Create batch sits below the table at the right. Ordinary Setup guidance and app Ready status are hidden. | Browser behavior probes, installed Setup/shell/gallery checks, ordinary suite and independent adversarial review passed. HANDOFF records evidence. | Complete |
 | GUI-S7 | Best-effort Fluent CSS scrollbars preserve native input, thin idle appearance and stable layout, with rounded hover styling where practical. | Official guidance, focused CSS checks, 1,526 interface tests, all 30 installed scenarios and independent review passed. | Complete |
-| GUI-S8 | Separate the batch footer buttons from the table with a small vertical gap. | Installed Setup geometry and independent diff review. | Pending |
+| GUI-S8 | Separate the batch footer buttons from the table with a small vertical gap. | Both installed Setup checks, 1,526 interface tests and independent review passed. | Complete |
 | GUI-R1 | Complete the S6 host-status visibility migration: native close messages become visible, and legacy smoke fixtures retain a truthful Ready witness. | 118 focused host/harness tests, all 30 installed interface scenarios and independent review passed. | Complete |
 
 GUI-S6 shipped in 28eafcd. Batch receipts remain origin-owned under the existing
@@ -60,10 +60,9 @@ input-mode detection are not claimed. No host flags, dependencies, Mica changes
 or replacement JavaScript scrollbar were introduced. DESKTOP_UI owns the
 behavior and reference links; HANDOFF records verification. Independent review
 and the complete interface/headed gates passed after the GUI-R1 correction.
-GUI-S8 is the user's subsequent spacing refinement: app.css batch-actions margin,
-its existing installed Setup geometry assertion and these delivery docs only.
-Use an 8px token-based gap; preserve table height, footer alignment and action
-guards. One small follow-up commit after S7; no wider layout or behavior change.
+GUI-S8 adds an 8px token-based gap above the batch footer. Installed geometry
+checks preserve table height, footer alignment and action guards; no wider
+layout or behavior changed.
 
 GUI-R1 completes the S6 visibility-consumer migration. The native close renderer
 writes fixed closing/retry guidance before revealing the label; text-write

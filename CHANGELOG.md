@@ -34,10 +34,12 @@ packaging remain open.
 - Added a conditional batch table with paths, attempted settings, short statuses,
   queued removal and explicit clearing of settled results. Single and batch
   creation actions align right; single Create stays disabled while batching.
-  Results remain with their origin.
+  Results remain with their origin. An 8px gap separates the batch table from
+  its footer actions.
 - Compacted recent and batch tables to five 56px row slots under 28px headers,
   with labelled paths and overflow scrolling. Removed routine Setup headings
-  and hid the app's ordinary Ready label.
+  and hid the app's ordinary Ready label while preserving visible native
+  closing and retry guidance.
 
 - Investigated native Fluent overlay scrollbars: the pinned wrapper does not
   expose the required environment option. Recorded the native-hook limitation

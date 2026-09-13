@@ -1060,6 +1060,7 @@ entry. Ordinary statuses are Ready, Created and Failed; in-flight and uncertain
 requests retain truthful intermediate labels. Results remain visible until
 Clear results removes settled receipts, without closing created tasks or
 discarding unresolved requests. The table hides only when no entries remain.
+The right-aligned Create batch footer sits 8px below the table.
 Remove discards a queued
 row locally, including while an earlier row is being prepared; the runner
 rechecks row membership before submission. Submitted or uncertain requests

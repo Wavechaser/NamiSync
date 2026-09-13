@@ -721,8 +721,10 @@ _INDEPENDENT_SCRIPT = r"""
   const createPlan = Array.from(document.querySelectorAll(".nami-setup__actions button"))
     .find((button) => button.textContent === "Create plan");
   const batchFooter = document.querySelector(".nami-setup__batch-actions");
+  const batchActionGap = batchFooter instanceof HTMLElement && batchViewport instanceof HTMLElement
+    ? batchFooter.getBoundingClientRect().top - batchViewport.getBoundingClientRect().bottom : -1;
   const batchActionPlacement = createPlan instanceof HTMLButtonElement && createPlan.checkVisibility() && createPlan.disabled &&
-    batchFooter instanceof HTMLElement && batchFooter.checkVisibility();
+    batchFooter instanceof HTMLElement && batchFooter.checkVisibility() && Math.abs(batchActionGap - 8) <= 1;
   const removable = queuedRows.at(-1)?.querySelector(".nami-setup__batch-remove");
   if (!(removable instanceof HTMLButtonElement) || removable.disabled) throw new Error("queued batch removal is unavailable");
   if (!removable.querySelector(".nami-icon--dismiss") || removable.ariaLabel !== "Remove queued pair" ||
