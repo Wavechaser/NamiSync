@@ -96,7 +96,9 @@ environment-options hook. Changing the scrollbar after initialization is not
 the supported API path. No vendor patch or environment override is installed;
 Microsoft classifies the Fluent scrollbar browser flag as
 [development-only](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/webview-features-flags).
-A future supported environment hook is the preferred native route. Current CSS
+Native integration is deferred to M2: the feasible Windows-backend change also
+requires coordinated startup, early navigation/HTML-loading and rendering tests,
+which is not justified solely for the M1 scrollbar. Current CSS
 approximates Fluent with a small fixed gutter: the rounded thumb is hidden
 outside pane hover, thin over the pane and wider on direct hover/drag, with no
 extra pressed highlight. The track uses a subtle neutral fill. Wheel, keyboard,

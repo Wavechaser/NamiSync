@@ -37,6 +37,61 @@ The prior aggregate complete-owner-graph model and BR-G-45 are retired. No futur
 
 ## Remaining checkpoints
 
+### Scrollbar layout and Setup polish (2026-09-13)
+
+| ID | Accepted outcome | Named verification | Status |
+| --- | --- | --- | --- |
+| GUI-R2 | Development windows hide ordinary Ready; only explicit smoke-test launches expose their readiness witness. | Helper/launcher tests, installed readiness and Setup checks, independent review. | Pending |
+| GUI-S9 | Always-visible softened thin scrollbars widen on hover; tables reserve a stable vertical gutter below their headers through shared column/layout ownership, with horizontal scrolling only as needed. | Finite component/consumer study, browser and installed table/scroll/resize checks, interface and ordinary gates, independent review. | Study |
+| GUI-S10 | Tighten path-label spacing, separate primary and expanded options, align paired path values, and lighten disabled dark buttons to #2a2a2a. | Focused tokens/Setup checks, installed light/dark layout checks, interface gate and independent review. | Pending |
+| GUI-D6 | Record native overlay integration, verify-only batching and persistent customizable pair presets as M2 outcomes. | Active feature/roadmap cross-reference and independent review passed. | Complete |
+
+Non-goals: native backend/dependency changes, new batching or persistence commands,
+Mica/shadow work, and JavaScript measurement loops for column alignment. Existing
+task/admission authority, virtualized row bounds, keyboard/accessibility behavior,
+column resizing and horizontal scrolling must remain intact. Repository stop
+classes apply. Each row is an atomic commit; elaborate S9/S10 from their finite
+consumer studies before implementation.
+
+GUI-D6 records only accepted future outcomes in M2_PROPOSAL and FEATURES,
+with matching DESKTOP_UI, README and changelog references. Presets are deferred:
+existing recent-pair admission can be reused, but durable records and bridge
+commands are not present. No current product behavior or M1 admission contract
+changes. Gate: finite search of these active documents and independent review.
+
+GUI-R2 study at cc5d853 found that tools/gui.ps1 launches the same installed-host
+helper whose unconditional display override exposes Ready for smoke tests.
+Population: _headed_host_child.py, test_slice1_headed.py readiness launches,
+test_headed_native.py and direct launcher guards; TOOLS, this register and HANDOFF.
+Make the override an explicit test-only opt-in, leaving development launches
+unchanged. Preserve literal post-handshake Ready waits, all close/error behavior
+and child-process ownership. No production readiness change is needed. Gate:
+focused helper/launcher tests and installed interface scenarios plus review.
+
+GUI-S9 study at cc5d853 traced Setup's two native tables and the gallery file-list
+composition using production row renderers. Population: components.css shared
+scroll/table structure, app.css consumer track schemas, setup.js class attachment,
+gallery.js file-list composition, and their static/browser/installed consumers
+(frontend static, gallery and Setup probes/headed helpers, shell scrollbar probe).
+DESKTOP_UI, this register, HANDOFF and CHANGELOG own documentation. No new JS
+layout owner: retain a single native table for each Setup surface, shared grid
+tracks for headers/rows, an outer horizontal scroll area and a separate body
+vertical scroll area. A hidden-overflow header reserves the same stable native
+gutter as the body. CSS Overflow 3 explicitly supports this arrangement; no
+scrollbar-width measurement is needed. Keep the first-interaction file-column
+width freeze for resizing, not an alignment correction loop.
+
+Preserve five 56px Setup slots under 28px headers, table/row/header/cell semantics,
+row focus/click/disabled behavior, file-list resizing/disclosure/selection and
+all virtual scroll/sort contracts. The finite gate checks empty/overflow gutter
+stability, header/body alignment during horizontal scroll and column resizing,
+native accessibility roles, and forced-color fallback. Explicit equivalent roles
+on existing elements are the narrow fallback if CSS display changes native
+semantics; otherwise stop and reconsider. Always paint a softened thin thumb,
+widen it on direct hover/drag with unchanged pressed paint, and reserve only the
+vertical gutter. Focused browser/installed checks, interface and ordinary suites,
+then fresh adversarial review close one shared-layout commit.
+
 ### Compact Setup tables and scrollbars (2026-09-13)
 
 | ID | Accepted outcome | Named verification | Status |

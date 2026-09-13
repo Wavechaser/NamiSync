@@ -543,6 +543,9 @@ unrealized unless an entry says otherwise.
 - **Terminal Verification Retry**. Retry terminal verification, including a standalone verification and a request to verify remaining files.
 - **User Session Cleanup**. Let users request cleanup of NamiSync-owned session temporary files and trash.
 - **Richer I/O Failure Types**. Expose more specific typed filesystem I/O causes than the current generic `IO_ERROR` classification.
+- **Native Fluent Overlay Scrollbars**. Replace the CSS approximation through a coordinated WebView2/pywebview Windows startup integration.
+- **Verify-Only Batches**. Compose batches of standalone verification directories, beyond the current source/target pair runner.
+- **Persistent Pair Presets**. Let users create and customize saved sync pairs with the same Setup population and fresh availability behavior as history-derived recent pairs. Persistence and bridge commands remain unrealized; M1 does not add them.
 
 Durable desktop tasks and queued work retain their M2 status in the feature
 sections above. [M2_PROPOSAL.md](M2_PROPOSAL.md) collects the proposed outcomes

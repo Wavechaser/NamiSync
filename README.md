@@ -291,7 +291,8 @@ guarded typed settlement reducer, and layered test operations made internal
 ownership explicit. Consolidated documentation now scopes the remaining M1
 task surfaces, fresh Plan-again recovery, capacity/trash information, and
 integrity controls; terminal domain retries and user-invoked session cleanup
-are proposed for M2.
+are proposed for M2. Native overlay scrollbars, verify-only batches and
+persistent user-defined pair presets are also deferred to M2.
 
 ### M1 Hardening
 

@@ -28,6 +28,9 @@ packaging remain open.
 
 #### Refine task navigation, Settings and Setup (2026-09-11–13)
 
+- Deferred native overlay scrollbar integration, verify-only batching and
+  persistent customizable pair presets to M2, keeping their new backend and
+  persistence contracts out of the M1 GUI refinement.
 - Added a Fluent-style CSS scrollbar approximation with a fixed small gutter,
   a thin pane-hover thumb and wider direct-hover/drag thumb. Native scrolling
   and forced-color defaults remain; hover does not shift content.
